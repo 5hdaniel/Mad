@@ -1,8 +1,9 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, systemPreferences } = require('electron');
 const path = require('path');
 const fs = require('fs').promises;
 const sqlite3 = require('sqlite3');
 const { promisify } = require('util');
+const { exec } = require('child_process');
 
 let mainWindow;
 
@@ -56,6 +57,67 @@ ipcMain.handle('check-permissions', async () => {
     return { hasPermission: true };
   } catch (error) {
     return { hasPermission: false, error: error.message };
+  }
+});
+
+// Request Contacts permission (this CAN show a system prompt)
+ipcMain.handle('request-contacts-permission', async () => {
+  try {
+    // On macOS, request contacts access - this will show a system prompt
+    if (process.platform === 'darwin') {
+      const status = systemPreferences.getMediaAccessStatus('contacts');
+
+      if (status === 'not-determined') {
+        // This will trigger the system permission prompt
+        const granted = await systemPreferences.askForMediaAccess('contacts');
+        return { granted, status: 'prompted' };
+      }
+
+      return { granted: status === 'granted', status };
+    }
+
+    return { granted: false, status: 'not-supported' };
+  } catch (error) {
+    console.error('Error requesting contacts permission:', error);
+    return { granted: false, error: error.message };
+  }
+});
+
+// Open System Settings to Full Disk Access panel
+ipcMain.handle('open-system-settings', async () => {
+  try {
+    if (process.platform === 'darwin') {
+      // Try to open directly to Full Disk Access settings
+      // This uses AppleScript to navigate to the correct panel
+      const script = `
+        tell application "System Settings"
+          activate
+        end tell
+
+        tell application "System Events"
+          tell process "System Settings"
+            try
+              click menu item "Privacy & Security" of menu "View" of menu bar 1
+              delay 0.5
+            end try
+          end tell
+        end tell
+      `;
+
+      exec(`osascript -e '${script}'`, (error) => {
+        if (error) {
+          // Fallback: just open System Settings
+          shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles');
+        }
+      });
+
+      return { success: true };
+    }
+
+    return { success: false, message: 'Not supported on this platform' };
+  } catch (error) {
+    console.error('Error opening system settings:', error);
+    return { success: false, error: error.message };
   }
 });
 
