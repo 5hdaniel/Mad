@@ -628,6 +628,7 @@ ipcMain.handle('get-conversations', async () => {
       const contactMap = await getContactNames();
 
       // Get all chats with their latest message
+      // Filter to only show chats with at least 1 message
       const conversations = await dbAll(`
         SELECT
           chat.ROWID as chat_id,
@@ -642,6 +643,7 @@ ipcMain.handle('get-conversations', async () => {
         LEFT JOIN chat_message_join ON chat.ROWID = chat_message_join.chat_id
         LEFT JOIN message ON chat_message_join.message_id = message.ROWID
         GROUP BY chat.ROWID
+        HAVING message_count > 0 AND last_message_date IS NOT NULL
         ORDER BY last_message_date DESC
       `);
 
