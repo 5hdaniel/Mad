@@ -585,19 +585,32 @@ ipcMain.handle('export-conversations', async (event, conversationIds) => {
         );
 
         // Get messages with attachment info
+        // Note: Some messages have text in 'attributedBody' blob field instead of 'text'
         const messages = await dbAll(`
           SELECT
+            message.ROWID as id,
             message.text,
             message.date,
             message.is_from_me,
             handle.id as sender,
-            message.cache_has_attachments
+            message.cache_has_attachments,
+            message.attributedBody
           FROM message
           JOIN chat_message_join ON message.ROWID = chat_message_join.message_id
           LEFT JOIN handle ON message.handle_id = handle.ROWID
           WHERE chat_message_join.chat_id = ?
           ORDER BY message.date ASC
         `, [chatId]);
+
+        // DEBUG: Log first message to see what data we have
+        if (messages.length > 0) {
+          console.log('Sample message data:', {
+            text: messages[0].text,
+            has_attachments: messages[0].cache_has_attachments,
+            attributedBody_length: messages[0].attributedBody ? messages[0].attributedBody.length : 0,
+            date: messages[0].date
+          });
+        }
 
         // Format messages as text
         let exportContent = `Conversation with: ${chatName}\n`;
@@ -627,10 +640,26 @@ ipcMain.handle('export-conversations', async (event, conversationIds) => {
           let text;
           if (msg.text) {
             text = msg.text;
+          } else if (msg.attributedBody) {
+            // Try to extract text from attributedBody blob
+            // attributedBody is a binary plist/NSKeyedArchiver format
+            // We can try to extract readable text from it
+            try {
+              const bodyText = msg.attributedBody.toString('utf8');
+              // Look for text between NSString markers
+              const textMatch = bodyText.match(/NSString[^\x00]*\x00([^\x00]+)/);
+              if (textMatch && textMatch[1]) {
+                text = textMatch[1].replace(/[\x00-\x1F\x7F-\x9F]/g, ''); // Remove control chars
+              } else {
+                text = '[Message with rich formatting]';
+              }
+            } catch (e) {
+              text = '[Message with rich formatting]';
+            }
           } else if (msg.cache_has_attachments === 1) {
             text = '[Attachment - Photo/Video/File]';
           } else {
-            text = '[Message with no text - may be a reaction or deleted]';
+            text = '[Reaction or system message]';
           }
 
           exportContent += `[${messageDate.toLocaleString()}] ${sender}:\n${text}\n\n`;
