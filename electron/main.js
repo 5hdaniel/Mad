@@ -49,10 +49,16 @@ app.on('activate', () => {
 // Get macOS version information
 ipcMain.handle('get-macos-version', () => {
   try {
+    console.log('======= ELECTRON: Detecting macOS version =======');
+    console.log('Platform:', process.platform);
+
     if (process.platform === 'darwin') {
       const release = os.release(); // e.g., "21.6.0" for macOS 12.5
+      console.log('Raw os.release():', release);
+
       const parts = release.split('.');
       const majorVersion = parseInt(parts[0], 10);
+      console.log('Parsed Darwin major version:', majorVersion);
 
       // Convert Darwin version to macOS version
       // Darwin 20 = macOS 11 (Big Sur)
@@ -68,6 +74,7 @@ ipcMain.handle('get-macos-version', () => {
       if (majorVersion >= 20) {
         macOSVersion = majorVersion - 9; // Darwin 20 = macOS 11
       }
+      console.log('Calculated macOS version:', macOSVersion);
 
       // Name the versions
       const versionNames = {
@@ -80,6 +87,7 @@ ipcMain.handle('get-macos-version', () => {
       };
 
       macOSName = versionNames[macOSVersion] || 'Unknown';
+      console.log('Version name lookup:', macOSName);
 
       // Determine UI style
       // Pre-Ventura: Grid-style System Preferences
@@ -87,7 +95,7 @@ ipcMain.handle('get-macos-version', () => {
       const uiStyle = macOSVersion >= 13 ? 'settings' : 'preferences';
       const appName = macOSVersion >= 13 ? 'System Settings' : 'System Preferences';
 
-      return {
+      const result = {
         version: macOSVersion,
         name: macOSName,
         darwinVersion: majorVersion,
@@ -95,19 +103,31 @@ ipcMain.handle('get-macos-version', () => {
         uiStyle,
         appName
       };
+
+      console.log('Returning version info:', result);
+      console.log('=================================================');
+      return result;
     }
 
+    console.log('Platform is not macOS');
     return {
       version: null,
       name: 'Not macOS',
+      darwinVersion: 0,
+      fullRelease: 'not-macos',
       uiStyle: 'settings',
       appName: 'System Settings'
     };
   } catch (error) {
-    console.error('Error detecting macOS version:', error);
+    console.error('======= ELECTRON: Error detecting macOS version =======');
+    console.error('Error:', error);
+    console.error('Stack:', error.stack);
+    console.error('=======================================================');
     return {
       version: 13,
-      name: 'Unknown',
+      name: 'Unknown (Error)',
+      darwinVersion: 0,
+      fullRelease: 'unknown',
       uiStyle: 'settings',
       appName: 'System Settings'
     };

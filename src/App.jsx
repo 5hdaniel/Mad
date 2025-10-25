@@ -50,19 +50,9 @@ function App() {
 
   return (
     <div className="h-screen flex flex-col bg-gray-50 overflow-hidden">
-      {/* macOS Title Bar */}
-      <div className="flex-shrink-0 bg-gradient-to-b from-gray-100 to-gray-50 border-b border-gray-200 px-4 py-3 flex items-center select-none">
-        {/* Traffic Light Buttons */}
-        <div className="flex gap-2 mr-4">
-          <div className="w-3 h-3 rounded-full bg-red-500 hover:bg-red-600 cursor-pointer"></div>
-          <div className="w-3 h-3 rounded-full bg-yellow-500 hover:bg-yellow-600 cursor-pointer"></div>
-          <div className="w-3 h-3 rounded-full bg-green-500 hover:bg-green-600 cursor-pointer"></div>
-        </div>
-
-        {/* Title */}
-        <div className="flex-1 flex items-center justify-center -ml-16">
-          <h1 className="text-sm font-semibold text-gray-700">{getPageTitle()}</h1>
-        </div>
+      {/* Title Bar */}
+      <div className="flex-shrink-0 bg-gradient-to-b from-gray-100 to-gray-50 border-b border-gray-200 px-4 py-3 flex items-center justify-center select-none">
+        <h1 className="text-sm font-semibold text-gray-700">{getPageTitle()}</h1>
       </div>
 
       {/* Scrollable Content Area */}
