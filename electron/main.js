@@ -731,15 +731,25 @@ ipcMain.handle('export-conversations', async (event, conversationIds) => {
               // The format is: ...NSString[binary][length markers]ACTUAL_TEXT
               const nsStringIndex = bodyText.indexOf('NSString');
               if (nsStringIndex !== -1) {
-                // Skip NSString and some bytes after it (usually 2-10 bytes of metadata)
-                const afterNSString = bodyText.substring(nsStringIndex + 8);
+                // Skip NSString and more metadata bytes to get closer to actual text
+                const afterNSString = bodyText.substring(nsStringIndex + 20);
 
-                // Extract continuous printable text (excluding control characters)
-                const textMatch = afterNSString.match(/[\x20-\x7E\u00A0-\uFFFF]{2,}/);
-                if (textMatch) {
-                  extractedText = textMatch[0]
-                    .replace(/^[^\w\s]+/, '') // Remove leading non-alphanumeric chars
-                    .trim();
+                // Find ALL sequences of printable text
+                const allMatches = afterNSString.match(/[\x20-\x7E\u00A0-\uFFFF]{3,}/g);
+                if (allMatches && allMatches.length > 0) {
+                  // Find the longest match that contains alphanumeric characters
+                  for (const match of allMatches.sort((a, b) => b.length - a.length)) {
+                    const cleaned = match
+                      .replace(/^[^\w\s]+/, '') // Remove leading symbols
+                      .replace(/[^\w\s]+$/, '') // Remove trailing symbols
+                      .trim();
+
+                    // Accept if it has alphanumeric content and is reasonable length
+                    if (cleaned.length >= 2 && /[a-zA-Z0-9]/.test(cleaned)) {
+                      extractedText = cleaned;
+                      break;
+                    }
+                  }
                 }
               }
 
