@@ -301,6 +301,24 @@ async function getContactNames() {
     const dbClose = promisify(db.close.bind(db));
 
     try {
+      // First, let's see what tables exist in the database
+      console.log('Inspecting database schema...');
+      const tables = await dbAll(`
+        SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;
+      `);
+      console.log('Available tables:', tables.map(t => t.name).join(', '));
+
+      // Try to get the schema for common tables
+      if (tables.find(t => t.name === 'ZABCDRECORD')) {
+        const recordSchema = await dbAll(`PRAGMA table_info(ZABCDRECORD);`);
+        console.log('ZABCDRECORD columns:', recordSchema.map(c => c.name).join(', '));
+      }
+
+      if (tables.find(t => t.name === 'ZABCDPHONENUMBER')) {
+        const phoneSchema = await dbAll(`PRAGMA table_info(ZABCDPHONENUMBER);`);
+        console.log('ZABCDPHONENUMBER columns:', phoneSchema.map(c => c.name).join(', '));
+      }
+
       console.log('Querying contacts...');
 
       // Query contacts with phone numbers and emails
@@ -318,7 +336,11 @@ async function getContactNames() {
            OR ZABCDEMAILADDRESS.ZADDRESS IS NOT NULL
       `);
 
-      console.log(`✅ Found ${contacts.length} contact entries`);
+      console.log(`✅ Found ${contacts.length} contact entries from query`);
+
+      // Let's also check the total count of records
+      const totalRecords = await dbAll(`SELECT COUNT(*) as count FROM ZABCDRECORD;`);
+      console.log(`Total records in ZABCDRECORD: ${totalRecords[0].count}`);
 
       // Build a map of phone numbers and emails to contact names
       contacts.forEach(contact => {
