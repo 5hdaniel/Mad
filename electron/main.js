@@ -60,27 +60,16 @@ ipcMain.handle('check-permissions', async () => {
   }
 });
 
-// Request Contacts permission (this CAN show a system prompt)
+// Request Contacts permission - Note: Not available via Electron API
+// Contacts access is handled by Full Disk Access which also grants Messages access
 ipcMain.handle('request-contacts-permission', async () => {
-  try {
-    // On macOS, request contacts access - this will show a system prompt
-    if (process.platform === 'darwin') {
-      const status = systemPreferences.getMediaAccessStatus('contacts');
-
-      if (status === 'not-determined') {
-        // This will trigger the system permission prompt
-        const granted = await systemPreferences.askForMediaAccess('contacts');
-        return { granted, status: 'prompted' };
-      }
-
-      return { granted: status === 'granted', status };
-    }
-
-    return { granted: false, status: 'not-supported' };
-  } catch (error) {
-    console.error('Error requesting contacts permission:', error);
-    return { granted: false, error: error.message };
-  }
+  // Contacts permission isn't available via systemPreferences API
+  // Full Disk Access will provide access to both contacts and messages
+  return {
+    granted: false,
+    status: 'skip',
+    message: 'Contacts access included with Full Disk Access'
+  };
 });
 
 // Open System Settings to Full Disk Access panel
