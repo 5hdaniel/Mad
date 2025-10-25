@@ -120,7 +120,12 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain }) {
           </div>
 
           <button
-            onClick={() => setCurrentStep(2)}
+            onClick={async () => {
+              // Trigger Full Disk Access attempt - this makes the app appear in System Settings
+              console.log('Triggering Full Disk Access attempt...');
+              await window.electron.triggerFullDiskAccess();
+              setCurrentStep(2);
+            }}
             className="w-full bg-primary text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors text-lg"
           >
             Grant Permission
@@ -402,7 +407,7 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain }) {
                   </h3>
                   {!findAppComplete && (
                     <p className="text-sm text-gray-700">
-                      Locate <strong>"Real Estate Archive"</strong> or <strong>"Electron"</strong> in the list
+                      Look for <strong>"Electron"</strong>, <strong>"Code"</strong>, <strong>"iTerm"</strong>, or <strong>"Terminal"</strong> in the Full Disk Access list
                     </p>
                   )}
                 </div>

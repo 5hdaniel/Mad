@@ -134,6 +134,31 @@ ipcMain.handle('get-macos-version', () => {
   }
 });
 
+// Trigger Full Disk Access request by attempting to read Messages database
+// This will cause the app to appear in System Settings > Privacy & Security > Full Disk Access
+ipcMain.handle('trigger-full-disk-access', async () => {
+  try {
+    const messagesDbPath = path.join(
+      process.env.HOME,
+      'Library/Messages/chat.db'
+    );
+
+    console.log('Attempting to access Messages database to trigger Full Disk Access prompt...');
+    console.log('Path:', messagesDbPath);
+
+    // Attempt to read the database - this will fail without permission
+    // but it will cause macOS to add this app to the Full Disk Access list
+    await fs.access(messagesDbPath, fs.constants.R_OK);
+
+    console.log('✅ Full Disk Access already granted!');
+    return { triggered: true, alreadyGranted: true };
+  } catch (error) {
+    console.log('❌ Access denied (expected) - app should now appear in Full Disk Access list');
+    console.log('Error:', error.message);
+    return { triggered: true, alreadyGranted: false };
+  }
+});
+
 // Check permissions for Messages database
 ipcMain.handle('check-permissions', async () => {
   try {

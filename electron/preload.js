@@ -5,6 +5,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('electron', {
   getMacOSVersion: () => ipcRenderer.invoke('get-macos-version'),
   checkPermissions: () => ipcRenderer.invoke('check-permissions'),
+  triggerFullDiskAccess: () => ipcRenderer.invoke('trigger-full-disk-access'),
   requestPermissions: () => ipcRenderer.invoke('request-permissions'),
   requestContactsPermission: () => ipcRenderer.invoke('request-contacts-permission'),
   openSystemSettings: () => ipcRenderer.invoke('open-system-settings'),
