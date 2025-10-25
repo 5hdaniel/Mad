@@ -387,6 +387,32 @@ async function loadContactsFromDatabase(contactsDbPath) {
     `);
     console.log(`✅ Found ${emailsResult.length} emails`);
 
+    // DEBUG: Check for duplicate emails
+    const emailMap = {};
+    emailsResult.forEach(r => {
+      if (!emailMap[r.email]) {
+        emailMap[r.email] = [];
+      }
+      emailMap[r.email].push(`${r.first_name} ${r.last_name}`);
+    });
+
+    const duplicateEmails = Object.entries(emailMap).filter(([email, names]) => names.length > 1);
+    if (duplicateEmails.length > 0) {
+      console.log(`⚠️  WARNING: Found ${duplicateEmails.length} duplicate emails in database!`);
+      console.log('First 3 duplicates:');
+      duplicateEmails.slice(0, 3).forEach(([email, names]) => {
+        console.log(`  ${email} -> [${names.join(', ')}]`);
+      });
+    }
+
+    // Check specifically for paul@pauljdorian.com
+    const paulEmail = emailsResult.find(r => r.email === 'paul@pauljdorian.com');
+    if (paulEmail) {
+      console.log(`\nDEBUG paul@pauljdorian.com:`);
+      console.log(`  Name: ${paulEmail.first_name} ${paulEmail.last_name}`);
+      console.log(`  Organization: ${paulEmail.organization}`);
+    }
+
     // Combine results - each row is now either a phone OR an email, not both
     const contacts = [
       ...phonesResult.map(r => ({ ...r, email: null })),
@@ -441,7 +467,17 @@ async function loadContactsFromDatabase(contactsDbPath) {
 
         // Map emails (lowercase)
         if (contact.email) {
-          contactMap[contact.email.toLowerCase()] = displayName;
+          const emailLower = contact.email.toLowerCase();
+
+          // DEBUG: Check for overwrites
+          if (contactMap[emailLower] && contactMap[emailLower] !== displayName) {
+            console.log(`⚠️  OVERWRITE DETECTED!`);
+            console.log(`  Email: ${contact.email}`);
+            console.log(`  Old name: ${contactMap[emailLower]}`);
+            console.log(`  New name: ${displayName}`);
+          }
+
+          contactMap[emailLower] = displayName;
         }
       }
     });
