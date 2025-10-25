@@ -445,22 +445,61 @@ ipcMain.handle('get-conversations', async () => {
 
       await dbClose();
 
+      // Map conversations and deduplicate by normalized phone number/identifier
+      const conversationMap = new Map();
+
+      conversations.forEach(conv => {
+        const rawContactId = conv.contact_id || conv.chat_identifier;
+        const displayName = resolveContactName(conv.contact_id, conv.chat_identifier, conv.display_name, contactMap);
+
+        // Normalize the identifier (phone or email) for deduplication
+        let normalizedKey;
+        if (rawContactId && rawContactId.includes('@')) {
+          // Email - normalize to lowercase
+          normalizedKey = rawContactId.toLowerCase();
+        } else if (rawContactId) {
+          // Phone - normalize by keeping last 10 digits
+          const digitsOnly = rawContactId.replace(/\D/g, '');
+          normalizedKey = digitsOnly.length > 10 ? digitsOnly.slice(-10) : digitsOnly;
+        } else {
+          // Fallback to chat identifier
+          normalizedKey = conv.chat_identifier || `chat_${conv.chat_id}`;
+        }
+
+        const conversationData = {
+          id: conv.chat_id,
+          name: displayName,
+          contactId: rawContactId,
+          showBothNameAndNumber: displayName !== rawContactId,
+          messageCount: conv.message_count,
+          lastMessageDate: conv.last_message_date
+        };
+
+        // If we already have this contact, keep the one with more recent messages
+        if (conversationMap.has(normalizedKey)) {
+          const existing = conversationMap.get(normalizedKey);
+          if (conv.last_message_date > existing.lastMessageDate) {
+            // This conversation is more recent, replace it
+            conversationData.messageCount = existing.messageCount + conv.message_count;
+            conversationMap.set(normalizedKey, conversationData);
+          } else {
+            // Keep existing, but add message count
+            existing.messageCount += conv.message_count;
+          }
+        } else {
+          conversationMap.set(normalizedKey, conversationData);
+        }
+      });
+
+      // Convert map back to array
+      const deduplicatedConversations = Array.from(conversationMap.values())
+        .sort((a, b) => b.lastMessageDate - a.lastMessageDate);
+
+      console.log(`Deduplicated ${conversations.length} conversations to ${deduplicatedConversations.length}`);
+
       return {
         success: true,
-        conversations: conversations.map(conv => {
-          const rawContactId = conv.contact_id || conv.chat_identifier;
-          const displayName = resolveContactName(conv.contact_id, conv.chat_identifier, conv.display_name, contactMap);
-
-          return {
-            id: conv.chat_id,
-            name: displayName,
-            contactId: rawContactId,
-            // Include both name and raw identifier for display
-            showBothNameAndNumber: displayName !== rawContactId, // true if we resolved to a name
-            messageCount: conv.message_count,
-            lastMessageDate: conv.last_message_date
-          };
-        })
+        conversations: deduplicatedConversations
       };
     } catch (error) {
       await dbClose();
