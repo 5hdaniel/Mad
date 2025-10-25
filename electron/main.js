@@ -333,107 +333,103 @@ async function loadContactsFromDatabase(contactsDbPath) {
     return contactMap;
   }
 
-  console.log('Opening Contacts database...');
-  const db = new sqlite3.Database(contactsDbPath, sqlite3.OPEN_READONLY);
-  const dbAll = promisify(db.all.bind(db));
-  const dbClose = promisify(db.close.bind(db));
-
   try {
-      // First, let's see what tables exist in the database
-      console.log('Inspecting database schema...');
-      const tables = await dbAll(`
-        SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;
-      `);
-      console.log('Available tables:', tables.map(t => t.name).join(', '));
+    console.log('Opening Contacts database...');
+    const db = new sqlite3.Database(contactsDbPath, sqlite3.OPEN_READONLY);
+    const dbAll = promisify(db.all.bind(db));
+    const dbClose = promisify(db.close.bind(db));
 
-      // Try to get the schema for common tables
-      if (tables.find(t => t.name === 'ZABCDRECORD')) {
-        const recordSchema = await dbAll(`PRAGMA table_info(ZABCDRECORD);`);
-        console.log('ZABCDRECORD columns:', recordSchema.map(c => c.name).join(', '));
-      }
+    // First, let's see what tables exist in the database
+    console.log('Inspecting database schema...');
+    const tables = await dbAll(`
+      SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;
+    `);
+    console.log('Available tables:', tables.map(t => t.name).join(', '));
 
-      if (tables.find(t => t.name === 'ZABCDPHONENUMBER')) {
-        const phoneSchema = await dbAll(`PRAGMA table_info(ZABCDPHONENUMBER);`);
-        console.log('ZABCDPHONENUMBER columns:', phoneSchema.map(c => c.name).join(', '));
-      }
-
-      console.log('Querying contacts...');
-
-      // First, try to understand the Z22_OWNER relationship
-      const phoneJoinTest = await dbAll(`
-        SELECT COUNT(*) as count
-        FROM ZABCDPHONENUMBER
-        WHERE ZOWNER IS NOT NULL
-      `);
-      console.log(`Phone numbers with ZOWNER: ${phoneJoinTest[0].count}`);
-
-      const phoneJoinTest2 = await dbAll(`
-        SELECT COUNT(*) as count
-        FROM ZABCDPHONENUMBER
-        WHERE Z22_OWNER IS NOT NULL
-      `);
-      console.log(`Phone numbers with Z22_OWNER: ${phoneJoinTest2[0].count}`);
-
-      // Use the correct foreign key (Z22_OWNER based on macOS version)
-      const contacts = await dbAll(`
-        SELECT
-          ZABCDRECORD.ZFIRSTNAME as first_name,
-          ZABCDRECORD.ZLASTNAME as last_name,
-          ZABCDRECORD.ZORGANIZATION as organization,
-          ZABCDPHONENUMBER.ZFULLNUMBER as phone,
-          ZABCDEMAILADDRESS.ZADDRESS as email
-        FROM ZABCDRECORD
-        LEFT JOIN ZABCDPHONENUMBER ON ZABCDRECORD.Z_PK = ZABCDPHONENUMBER.Z22_OWNER
-        LEFT JOIN ZABCDEMAILADDRESS ON ZABCDRECORD.Z_PK = ZABCDEMAILADDRESS.Z22_OWNER
-        WHERE ZABCDPHONENUMBER.ZFULLNUMBER IS NOT NULL
-           OR ZABCDEMAILADDRESS.ZADDRESS IS NOT NULL
-      `);
-
-      console.log(`✅ Found ${contacts.length} contact entries from query (using Z22_OWNER)`);
-
-      // Let's also check the total count of records
-      const totalRecords = await dbAll(`SELECT COUNT(*) as count FROM ZABCDRECORD;`);
-      console.log(`Total records in ZABCDRECORD: ${totalRecords[0].count}`);
-
-      // Build a map of phone numbers and emails to contact names
-      contacts.forEach(contact => {
-        const firstName = contact.first_name || '';
-        const lastName = contact.last_name || '';
-        const organization = contact.organization || '';
-
-        // Prefer "First Last", fallback to organization, then "First" or "Last"
-        let displayName = '';
-        if (firstName && lastName) {
-          displayName = `${firstName} ${lastName}`;
-        } else if (organization) {
-          displayName = organization;
-        } else if (firstName) {
-          displayName = firstName;
-        } else if (lastName) {
-          displayName = lastName;
-        }
-
-        if (displayName) {
-          // Map phone numbers (normalize by removing non-digits)
-          if (contact.phone) {
-            const normalized = contact.phone.replace(/\D/g, '');
-            contactMap[normalized] = displayName;
-            contactMap[contact.phone] = displayName;
-          }
-
-          // Map emails (lowercase)
-          if (contact.email) {
-            contactMap[contact.email.toLowerCase()] = displayName;
-          }
-        }
-      });
-
-      console.log(`Built contact map with ${Object.keys(contactMap).length} entries`);
-      await dbClose();
-    } catch (error) {
-      console.error('Error querying contacts database:', error);
-      await dbClose();
+    // Try to get the schema for common tables
+    if (tables.find(t => t.name === 'ZABCDRECORD')) {
+      const recordSchema = await dbAll(`PRAGMA table_info(ZABCDRECORD);`);
+      console.log('ZABCDRECORD columns:', recordSchema.map(c => c.name).join(', '));
     }
+
+    if (tables.find(t => t.name === 'ZABCDPHONENUMBER')) {
+      const phoneSchema = await dbAll(`PRAGMA table_info(ZABCDPHONENUMBER);`);
+      console.log('ZABCDPHONENUMBER columns:', phoneSchema.map(c => c.name).join(', '));
+    }
+
+    console.log('Querying contacts...');
+
+    // First, try to understand the Z22_OWNER relationship
+    const phoneJoinTest = await dbAll(`
+      SELECT COUNT(*) as count
+      FROM ZABCDPHONENUMBER
+      WHERE ZOWNER IS NOT NULL
+    `);
+    console.log(`Phone numbers with ZOWNER: ${phoneJoinTest[0].count}`);
+
+    const phoneJoinTest2 = await dbAll(`
+      SELECT COUNT(*) as count
+      FROM ZABCDPHONENUMBER
+      WHERE Z22_OWNER IS NOT NULL
+    `);
+    console.log(`Phone numbers with Z22_OWNER: ${phoneJoinTest2[0].count}`);
+
+    // Use the correct foreign key (Z22_OWNER based on macOS version)
+    const contacts = await dbAll(`
+      SELECT
+        ZABCDRECORD.ZFIRSTNAME as first_name,
+        ZABCDRECORD.ZLASTNAME as last_name,
+        ZABCDRECORD.ZORGANIZATION as organization,
+        ZABCDPHONENUMBER.ZFULLNUMBER as phone,
+        ZABCDEMAILADDRESS.ZADDRESS as email
+      FROM ZABCDRECORD
+      LEFT JOIN ZABCDPHONENUMBER ON ZABCDRECORD.Z_PK = ZABCDPHONENUMBER.Z22_OWNER
+      LEFT JOIN ZABCDEMAILADDRESS ON ZABCDRECORD.Z_PK = ZABCDEMAILADDRESS.Z22_OWNER
+      WHERE ZABCDPHONENUMBER.ZFULLNUMBER IS NOT NULL
+         OR ZABCDEMAILADDRESS.ZADDRESS IS NOT NULL
+    `);
+
+    console.log(`✅ Found ${contacts.length} contact entries from query (using Z22_OWNER)`);
+
+    // Let's also check the total count of records
+    const totalRecords = await dbAll(`SELECT COUNT(*) as count FROM ZABCDRECORD;`);
+    console.log(`Total records in ZABCDRECORD: ${totalRecords[0].count}`);
+
+    // Build a map of phone numbers and emails to contact names
+    contacts.forEach(contact => {
+      const firstName = contact.first_name || '';
+      const lastName = contact.last_name || '';
+      const organization = contact.organization || '';
+
+      // Prefer "First Last", fallback to organization, then "First" or "Last"
+      let displayName = '';
+      if (firstName && lastName) {
+        displayName = `${firstName} ${lastName}`;
+      } else if (organization) {
+        displayName = organization;
+      } else if (firstName) {
+        displayName = firstName;
+      } else if (lastName) {
+        displayName = lastName;
+      }
+
+      if (displayName) {
+        // Map phone numbers (normalize by removing non-digits)
+        if (contact.phone) {
+          const normalized = contact.phone.replace(/\D/g, '');
+          contactMap[normalized] = displayName;
+          contactMap[contact.phone] = displayName;
+        }
+
+        // Map emails (lowercase)
+        if (contact.email) {
+          contactMap[contact.email.toLowerCase()] = displayName;
+        }
+      }
+    });
+
+    console.log(`Built contact map with ${Object.keys(contactMap).length} entries`);
+    await dbClose();
   } catch (error) {
     console.error('Error accessing contacts database:', error);
   }
