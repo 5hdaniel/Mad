@@ -604,12 +604,20 @@ ipcMain.handle('export-conversations', async (event, conversationIds) => {
 
         // DEBUG: Log first message to see what data we have
         if (messages.length > 0) {
-          console.log('Sample message data:', {
-            text: messages[0].text,
-            has_attachments: messages[0].cache_has_attachments,
-            attributedBody_length: messages[0].attributedBody ? messages[0].attributedBody.length : 0,
-            date: messages[0].date
-          });
+          const firstMsg = messages[0];
+          console.log('\n=== Sample Message Debug ===');
+          console.log('Text field:', firstMsg.text);
+          console.log('Has attachments:', firstMsg.cache_has_attachments);
+          console.log('AttributedBody length:', firstMsg.attributedBody ? firstMsg.attributedBody.length : 0);
+
+          if (firstMsg.attributedBody) {
+            // Show first 200 characters of the blob in hex and text
+            const sample = firstMsg.attributedBody.slice(0, 200);
+            console.log('AttributedBody hex sample:', sample.toString('hex').substring(0, 100));
+            console.log('AttributedBody text sample:', sample.toString('utf8').replace(/[\x00-\x1F\x7F-\x9F]/g, '·').substring(0, 100));
+          }
+          console.log('Date:', firstMsg.date);
+          console.log('============================\n');
         }
 
         // Format messages as text
@@ -641,20 +649,51 @@ ipcMain.handle('export-conversations', async (event, conversationIds) => {
           if (msg.text) {
             text = msg.text;
           } else if (msg.attributedBody) {
-            // Try to extract text from attributedBody blob
-            // attributedBody is a binary plist/NSKeyedArchiver format
-            // We can try to extract readable text from it
+            // Extract text from attributedBody blob (NSKeyedArchiver format)
+            // This contains NSAttributedString with the actual message text
             try {
-              const bodyText = msg.attributedBody.toString('utf8');
-              // Look for text between NSString markers
-              const textMatch = bodyText.match(/NSString[^\x00]*\x00([^\x00]+)/);
-              if (textMatch && textMatch[1]) {
-                text = textMatch[1].replace(/[\x00-\x1F\x7F-\x9F]/g, ''); // Remove control chars
+              const bodyBuffer = msg.attributedBody;
+              const bodyText = bodyBuffer.toString('utf8');
+
+              // Method 1: Look for streamtyped text after specific markers
+              // NSAttributedString stores text in various formats
+              let extractedText = null;
+
+              // Try to find text after "NSString" or "streamtyped" markers
+              const patterns = [
+                /streamtyped.{1,50}?\x81([^\x00]+)/s,  // After streamtyped marker
+                /NSString[^\x04-\x06]*[\x04-\x06]([^\x00-\x03]{3,})/s,  // After NSString
+                /\$class.{1,30}?([A-Za-z0-9\s.,!?'"();:@#$%&*\-+=/<>[\]{}]{5,})/s  // After $class marker
+              ];
+
+              for (const pattern of patterns) {
+                const match = bodyText.match(pattern);
+                if (match && match[1]) {
+                  // Clean up the extracted text
+                  extractedText = match[1]
+                    .replace(/[\x00-\x08\x0B-\x1F\x7F-\x9F]/g, '') // Remove control chars except \n
+                    .replace(/\x09/g, ' ') // Replace tabs with spaces
+                    .replace(/\s+/g, ' ') // Normalize whitespace
+                    .trim();
+
+                  // Validate it looks like actual text (not binary garbage)
+                  if (extractedText.length >= 1 && extractedText.length < 10000) {
+                    break;
+                  } else {
+                    extractedText = null;
+                  }
+                }
+              }
+
+              if (extractedText) {
+                text = extractedText;
               } else {
-                text = '[Message with rich formatting]';
+                // Fallback: just show that there's content
+                text = '[Message text - unable to extract from rich format]';
               }
             } catch (e) {
-              text = '[Message with rich formatting]';
+              console.error('Error parsing attributedBody:', e.message);
+              text = '[Message text - parsing error]';
             }
           } else if (msg.cache_has_attachments === 1) {
             text = '[Attachment - Photo/Video/File]';
