@@ -4,6 +4,7 @@ const fs = require('fs').promises;
 const sqlite3 = require('sqlite3');
 const { promisify } = require('util');
 const { exec } = require('child_process');
+const os = require('os');
 
 let mainWindow;
 
@@ -44,6 +45,74 @@ app.on('activate', () => {
 });
 
 // IPC Handlers
+
+// Get macOS version information
+ipcMain.handle('get-macos-version', () => {
+  try {
+    if (process.platform === 'darwin') {
+      const release = os.release(); // e.g., "21.6.0" for macOS 12.5
+      const parts = release.split('.');
+      const majorVersion = parseInt(parts[0], 10);
+
+      // Convert Darwin version to macOS version
+      // Darwin 20 = macOS 11 (Big Sur)
+      // Darwin 21 = macOS 12 (Monterey)
+      // Darwin 22 = macOS 13 (Ventura)
+      // Darwin 23 = macOS 14 (Sonoma)
+      // Darwin 24 = macOS 15 (Sequoia)
+      // Darwin 25 = macOS 16 (future)
+
+      let macOSVersion = 10;
+      let macOSName = 'Unknown';
+
+      if (majorVersion >= 20) {
+        macOSVersion = majorVersion - 9; // Darwin 20 = macOS 11
+      }
+
+      // Name the versions
+      const versionNames = {
+        11: 'Big Sur',
+        12: 'Monterey',
+        13: 'Ventura',
+        14: 'Sonoma',
+        15: 'Sequoia',
+        16: 'Tahoe' // Future version
+      };
+
+      macOSName = versionNames[macOSVersion] || 'Unknown';
+
+      // Determine UI style
+      // Pre-Ventura: Grid-style System Preferences
+      // Ventura+: Sidebar-style System Settings
+      const uiStyle = macOSVersion >= 13 ? 'settings' : 'preferences';
+      const appName = macOSVersion >= 13 ? 'System Settings' : 'System Preferences';
+
+      return {
+        version: macOSVersion,
+        name: macOSName,
+        darwinVersion: majorVersion,
+        fullRelease: release,
+        uiStyle,
+        appName
+      };
+    }
+
+    return {
+      version: null,
+      name: 'Not macOS',
+      uiStyle: 'settings',
+      appName: 'System Settings'
+    };
+  } catch (error) {
+    console.error('Error detecting macOS version:', error);
+    return {
+      version: 13,
+      name: 'Unknown',
+      uiStyle: 'settings',
+      appName: 'System Settings'
+    };
+  }
+});
 
 // Check permissions for Messages database
 ipcMain.handle('check-permissions', async () => {
