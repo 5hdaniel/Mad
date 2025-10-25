@@ -265,42 +265,80 @@ async function getContactNames() {
   const contactMap = {};
 
   try {
-    // Try multiple possible Contacts database locations (varies by macOS version)
-    const possiblePaths = [
-      path.join(process.env.HOME, 'Library/Application Support/AddressBook/AddressBook-v22.abcddb'),
-      path.join(process.env.HOME, 'Library/Application Support/AddressBook/AddressBook-v23.abcddb'),
-      path.join(process.env.HOME, 'Library/Application Support/AddressBook/Sources/*/AddressBook-v22.abcddb'),
-    ];
+    // Search for ALL possible Contacts database files
+    console.log('======= SEARCHING FOR ALL CONTACTS DATABASES =======');
 
-    let contactsDbPath = null;
+    const baseDir = path.join(process.env.HOME, 'Library/Application Support/AddressBook');
+    console.log('Searching in:', baseDir);
 
-    console.log('======= SEARCHING FOR CONTACTS DATABASE =======');
-    for (const testPath of possiblePaths) {
-      console.log('Trying:', testPath);
-      try {
-        await fs.access(testPath);
-        contactsDbPath = testPath;
-        console.log('✅ Found Contacts database at:', testPath);
-        break;
-      } catch {
-        console.log('❌ Not found');
-      }
-    }
-
-    if (!contactsDbPath) {
-      console.log('================================================');
-      console.log('⚠️  Contacts database not found at any location');
-      console.log('Will show phone numbers/emails instead of names');
-      console.log('================================================');
-      return contactMap;
-    }
-
-    console.log('Opening Contacts database...');
-    const db = new sqlite3.Database(contactsDbPath, sqlite3.OPEN_READONLY);
-    const dbAll = promisify(db.all.bind(db));
-    const dbClose = promisify(db.close.bind(db));
+    // Use exec to find all .abcddb files
+    const { exec: execCallback } = require('child_process');
+    const execPromise = promisify(execCallback);
 
     try {
+      const { stdout } = await execPromise(`find "${baseDir}" -name "*.abcddb" 2>/dev/null`);
+      const dbFiles = stdout.trim().split('\n').filter(f => f);
+
+      console.log(`Found ${dbFiles.length} database files:`);
+      dbFiles.forEach(f => console.log(`  - ${f}`));
+
+      // Try each database and count records
+      for (const dbPath of dbFiles) {
+        try {
+          console.log(`\nChecking: ${dbPath}`);
+          const db = new sqlite3.Database(dbPath, sqlite3.OPEN_READONLY);
+          const dbAll = promisify(db.all.bind(db));
+          const dbClose = promisify(db.close.bind(db));
+
+          const recordCount = await dbAll(`SELECT COUNT(*) as count FROM ZABCDRECORD WHERE Z_ENT IS NOT NULL;`);
+          console.log(`  Records: ${recordCount[0].count}`);
+
+          await dbClose();
+
+          // If this database has more records, use it
+          if (recordCount[0].count > 10) {
+            console.log(`  ✅ This looks like the main contacts database!`);
+            return await loadContactsFromDatabase(dbPath);
+          }
+        } catch (err) {
+          console.log(`  ❌ Error reading: ${err.message}`);
+        }
+      }
+    } catch (err) {
+      console.error('Error finding database files:', err.message);
+    }
+
+    // Fallback to old method
+    console.log('\n⚠️  Could not find main contacts database, trying default location...');
+    const defaultPath = path.join(process.env.HOME, 'Library/Application Support/AddressBook/AddressBook-v22.abcddb');
+    return await loadContactsFromDatabase(defaultPath);
+
+  } catch (error) {
+    console.error('Error accessing contacts database:', error);
+    return contactMap;
+  }
+}
+
+// Helper function to load contacts from a specific database
+async function loadContactsFromDatabase(contactsDbPath) {
+  const contactMap = {};
+
+  try {
+    console.log('\n========= LOADING CONTACTS FROM DATABASE =========');
+    console.log('Database path:', contactsDbPath);
+
+    await fs.access(contactsDbPath);
+  } catch {
+    console.log('❌ Database not accessible');
+    return contactMap;
+  }
+
+  console.log('Opening Contacts database...');
+  const db = new sqlite3.Database(contactsDbPath, sqlite3.OPEN_READONLY);
+  const dbAll = promisify(db.all.bind(db));
+  const dbClose = promisify(db.close.bind(db));
+
+  try {
       // First, let's see what tables exist in the database
       console.log('Inspecting database schema...');
       const tables = await dbAll(`
