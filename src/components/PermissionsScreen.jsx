@@ -21,7 +21,14 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain }) {
     try {
       const versionInfo = await window.electron.getMacOSVersion();
       setMacOSInfo(versionInfo);
-      console.log('Detected macOS:', versionInfo);
+      console.log('==================================================');
+      console.log('🔍 macOS Version Detection:');
+      console.log('  macOS Version:', versionInfo.version, `(${versionInfo.name})`);
+      console.log('  Darwin Version:', versionInfo.darwinVersion);
+      console.log('  Full Release:', versionInfo.fullRelease);
+      console.log('  UI Style:', versionInfo.uiStyle);
+      console.log('  App Name:', versionInfo.appName);
+      console.log('==================================================');
     } catch (error) {
       console.error('Error detecting macOS version:', error);
       // Default to modern style if detection fails
@@ -127,6 +134,19 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain }) {
   return (
     <div className="flex items-center justify-center min-h-full py-8">
       <div className="max-w-2xl mx-auto p-8 bg-white rounded-lg shadow-lg">
+        {/* Debug: Show detected OS version */}
+        {macOSInfo && (
+          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-sm font-semibold text-blue-900 mb-2">🔍 Detected Operating System:</p>
+            <div className="text-xs text-blue-800 space-y-1">
+              <p><strong>macOS Version:</strong> {macOSInfo.version} ({macOSInfo.name})</p>
+              <p><strong>Darwin Version:</strong> {macOSInfo.darwinVersion}</p>
+              <p><strong>Full Release:</strong> {macOSInfo.fullRelease}</p>
+              <p><strong>UI Style:</strong> {macOSInfo.uiStyle} ({macOSInfo.appName})</p>
+            </div>
+          </div>
+        )}
+
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-primary/10 rounded-full mb-4">
             <svg className="w-8 h-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
