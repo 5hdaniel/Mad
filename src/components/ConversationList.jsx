@@ -79,8 +79,12 @@ function ConversationList({ onExportComplete }) {
     const macEpoch = new Date('2001-01-01T00:00:00Z').getTime();
     const date = new Date(macEpoch + (timestamp / 1000000));
 
+    // Compare calendar days, not just time differences
     const now = new Date();
-    const diffTime = Math.abs(now - date);
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const messageDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+    const diffTime = today - messageDay;
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
     if (diffDays === 0) return 'Today';
