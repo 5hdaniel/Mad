@@ -10,12 +10,29 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain }) {
   const [findAppComplete, setFindAppComplete] = useState(false);
   const [toggleSwitchComplete, setToggleSwitchComplete] = useState(false);
   const [macOSInfo, setMacOSInfo] = useState(null);
+  const [appInfo, setAppInfo] = useState(null);
 
   // Auto-check permissions and detect macOS version when component loads
   useEffect(() => {
     autoCheckPermissions();
     detectMacOSVersion();
+    detectAppInfo();
   }, []);
+
+  const detectAppInfo = async () => {
+    try {
+      const info = await window.electron.getAppInfo();
+      setAppInfo(info);
+      console.log('==================================================');
+      console.log('🔍 App Information:');
+      console.log('  App Name:', info.name);
+      console.log('  App Path:', info.path);
+      console.log('  Process ID:', info.pid);
+      console.log('==================================================');
+    } catch (error) {
+      console.error('Error detecting app info:', error);
+    }
+  };
 
   const detectMacOSVersion = async () => {
     try {
@@ -406,9 +423,23 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain }) {
                     {findAppComplete ? 'App Located' : 'Find the App'}
                   </h3>
                   {!findAppComplete && (
-                    <p className="text-sm text-gray-700">
-                      Look for <strong>"Electron"</strong>, <strong>"Code"</strong>, <strong>"iTerm"</strong>, or <strong>"Terminal"</strong> in the Full Disk Access list
-                    </p>
+                    <>
+                      <p className="text-sm text-gray-700 mb-2">
+                        Look for <strong>"Electron"</strong>, <strong>"Code"</strong>, <strong>"iTerm"</strong>, or <strong>"Terminal"</strong> in the Full Disk Access list
+                      </p>
+                      {appInfo && (
+                        <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                          <p className="text-xs font-semibold text-blue-900 mb-1">💡 Detected App:</p>
+                          <p className="text-xs text-blue-800"><strong>{appInfo.name}</strong></p>
+                          <p className="text-xs text-blue-700 mt-1 break-all">{appInfo.path}</p>
+                          <div className="mt-2 pt-2 border-t border-blue-300">
+                            <p className="text-xs text-blue-700">
+                              <strong>Note:</strong> If running from VS Code, you may need to grant Full Disk Access to <strong>"Code"</strong>, <strong>"Code Helper"</strong>, or <strong>"Visual Studio Code"</strong> instead.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               </div>

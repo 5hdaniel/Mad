@@ -46,6 +46,33 @@ app.on('activate', () => {
 
 // IPC Handlers
 
+// Get app information for Full Disk Access
+ipcMain.handle('get-app-info', () => {
+  try {
+    const appPath = app.getPath('exe');
+    const appName = app.getName();
+
+    console.log('======= APP INFO =======');
+    console.log('App Name:', appName);
+    console.log('App Path:', appPath);
+    console.log('Process ID:', process.pid);
+    console.log('========================');
+
+    return {
+      name: appName,
+      path: appPath,
+      pid: process.pid
+    };
+  } catch (error) {
+    console.error('Error getting app info:', error);
+    return {
+      name: 'Unknown',
+      path: 'Unknown',
+      pid: 0
+    };
+  }
+});
+
 // Get macOS version information
 ipcMain.handle('get-macos-version', () => {
   try {
