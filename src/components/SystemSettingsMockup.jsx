@@ -110,25 +110,27 @@ function ModernSystemSettings({ step, macOSVersion }) {
                   </div>
                 </div>
 
-                {/* Lock Icon - Bottom Left */}
-                <div className="absolute bottom-6 left-6">
-                  <div className="relative inline-block">
-                    <button className="flex items-center gap-2 text-sm text-gray-700 hover:text-gray-900">
-                      <div className="w-7 h-7 bg-gray-200 rounded-md flex items-center justify-center text-base">
-                        {step === 'unlock' ? '🔒' : '🔓'}
-                      </div>
-                      <span className="text-xs">{step === 'unlock' ? 'Click to make changes' : ''}</span>
-                    </button>
-                    {step === 'unlock' && (
-                      <>
-                        <div className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 rounded-full animate-ping"></div>
-                        <div className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center">
-                          <span className="text-white text-xs font-bold">!</span>
+                {/* Lock Icon - Bottom Left (Hidden in Sequoia 15+) */}
+                {!isSequoia && (
+                  <div className="absolute bottom-6 left-6">
+                    <div className="relative inline-block">
+                      <button className="flex items-center gap-2 text-sm text-gray-700 hover:text-gray-900">
+                        <div className="w-7 h-7 bg-gray-200 rounded-md flex items-center justify-center text-base">
+                          {step === 'unlock' ? '🔒' : '🔓'}
                         </div>
-                      </>
-                    )}
+                        <span className="text-xs">{step === 'unlock' ? 'Click to make changes' : ''}</span>
+                      </button>
+                      {step === 'unlock' && (
+                        <>
+                          <div className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 rounded-full animate-ping"></div>
+                          <div className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center">
+                            <span className="text-white text-xs font-bold">!</span>
+                          </div>
+                        </>
+                      )}
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </div>
           </div>

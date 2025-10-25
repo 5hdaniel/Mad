@@ -134,19 +134,6 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain }) {
   return (
     <div className="flex items-center justify-center min-h-full py-8">
       <div className="max-w-2xl mx-auto p-8 bg-white rounded-lg shadow-lg">
-        {/* Debug: Show detected OS version */}
-        {macOSInfo && (
-          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="text-sm font-semibold text-blue-900 mb-2">🔍 Detected Operating System:</p>
-            <div className="text-xs text-blue-800 space-y-1">
-              <p><strong>macOS Version:</strong> {macOSInfo.version} ({macOSInfo.name})</p>
-              <p><strong>Darwin Version:</strong> {macOSInfo.darwinVersion}</p>
-              <p><strong>Full Release:</strong> {macOSInfo.fullRelease}</p>
-              <p><strong>UI Style:</strong> {macOSInfo.uiStyle} ({macOSInfo.appName})</p>
-            </div>
-          </div>
-        )}
-
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-primary/10 rounded-full mb-4">
             <svg className="w-8 h-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -327,8 +314,8 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain }) {
           </div>
         )}
 
-        {/* Step 3: Unlock Settings */}
-        {openSettingsComplete && (
+        {/* Step 3: Unlock Settings (only for macOS < 15) */}
+        {openSettingsComplete && macOSInfo && macOSInfo.version < 15 && (
           <div className={`border-2 rounded-lg p-6 mb-6 transition-all ${
             unlockSettingsComplete
               ? 'bg-green-50 border-green-300'
@@ -389,8 +376,8 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain }) {
           </div>
         )}
 
-        {/* Step 4: Find App in List */}
-        {unlockSettingsComplete && (
+        {/* Step 4: Find App in List - Shows after unlock for macOS < 15, or after open settings for macOS 15+ */}
+        {((macOSInfo && macOSInfo.version >= 15 && openSettingsComplete) || unlockSettingsComplete) && (
           <div className={`border-2 rounded-lg p-6 mb-6 transition-all ${
             findAppComplete
               ? 'bg-green-50 border-green-300'
@@ -406,7 +393,7 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain }) {
                   </div>
                 ) : (
                   <div className="w-6 h-6 bg-yellow-500 rounded-full flex items-center justify-center mr-3 flex-shrink-0 text-white font-bold text-sm">
-                    4
+                    {macOSInfo && macOSInfo.version >= 15 ? '3' : '4'}
                   </div>
                 )}
                 <div className="flex-1">
@@ -431,7 +418,13 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain }) {
 
                 <div className="flex gap-3">
                   <button
-                    onClick={() => setUnlockSettingsComplete(false)}
+                    onClick={() => {
+                      if (macOSInfo && macOSInfo.version >= 15) {
+                        setOpenSettingsComplete(false);
+                      } else {
+                        setUnlockSettingsComplete(false);
+                      }
+                    }}
                     className="px-4 py-3 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-colors flex items-center gap-2"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -468,7 +461,7 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain }) {
                   </div>
                 ) : (
                   <div className="w-6 h-6 bg-yellow-500 rounded-full flex items-center justify-center mr-3 flex-shrink-0 text-white font-bold text-sm">
-                    5
+                    {macOSInfo && macOSInfo.version >= 15 ? '4' : '5'}
                   </div>
                 )}
                 <div className="flex-1">
