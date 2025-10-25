@@ -396,7 +396,10 @@ async function loadContactsFromDatabase(contactsDbPath) {
     console.log(`Total records in ZABCDRECORD: ${totalRecords[0].count}`);
 
     // Build a map of phone numbers and emails to contact names
-    contacts.forEach(contact => {
+    console.log('\n========= BUILDING CONTACT MAP =========');
+    const nameCount = {};
+
+    contacts.forEach((contact, index) => {
       const firstName = contact.first_name || '';
       const lastName = contact.last_name || '';
       const organization = contact.organization || '';
@@ -414,9 +417,20 @@ async function loadContactsFromDatabase(contactsDbPath) {
       }
 
       if (displayName) {
+        // Count how many times each name appears
+        nameCount[displayName] = (nameCount[displayName] || 0) + 1;
+
         // Map phone numbers (normalize by removing non-digits)
         if (contact.phone) {
           const normalized = contact.phone.replace(/\D/g, '');
+
+          // Only log first 5 contacts for debugging
+          if (index < 5) {
+            console.log(`  Contact: ${displayName}`);
+            console.log(`    Phone (raw): ${contact.phone}`);
+            console.log(`    Phone (normalized): ${normalized}`);
+          }
+
           contactMap[normalized] = displayName;
           contactMap[contact.phone] = displayName;
         }
@@ -428,7 +442,14 @@ async function loadContactsFromDatabase(contactsDbPath) {
       }
     });
 
-    console.log(`Built contact map with ${Object.keys(contactMap).length} entries`);
+    console.log(`\nBuilt contact map with ${Object.keys(contactMap).length} entries`);
+    console.log('Name frequency (top 10):');
+    const sortedNames = Object.entries(nameCount)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10);
+    sortedNames.forEach(([name, count]) => {
+      console.log(`  ${name}: ${count} phone numbers/emails`);
+    });
     await dbClose();
   } catch (error) {
     console.error('Error accessing contacts database:', error);
@@ -444,6 +465,7 @@ function normalizePhoneNumber(phone) {
 }
 
 // Helper function to resolve contact name
+let debugMatchCount = 0;
 function resolveContactName(contactId, chatIdentifier, displayName, contactMap) {
   // If we have a display_name from Messages, use it
   if (displayName) return displayName;
@@ -452,18 +474,33 @@ function resolveContactName(contactId, chatIdentifier, displayName, contactMap) 
   if (contactId) {
     // Try direct match
     if (contactMap[contactId]) {
+      if (debugMatchCount < 5) {
+        console.log(`\n[MATCH] Direct match: ${contactId} -> ${contactMap[contactId]}`);
+        debugMatchCount++;
+      }
       return contactMap[contactId];
     }
 
     // Try normalized phone number match
     const normalized = normalizePhoneNumber(contactId);
     if (normalized && contactMap[normalized]) {
+      if (debugMatchCount < 5) {
+        console.log(`\n[MATCH] Normalized match:`);
+        console.log(`  Input: ${contactId}`);
+        console.log(`  Normalized: ${normalized}`);
+        console.log(`  Result: ${contactMap[normalized]}`);
+        debugMatchCount++;
+      }
       return contactMap[normalized];
     }
 
     // Try lowercase email match
     const lowerEmail = contactId.toLowerCase();
     if (contactMap[lowerEmail]) {
+      if (debugMatchCount < 5) {
+        console.log(`\n[MATCH] Email match: ${contactId} -> ${contactMap[lowerEmail]}`);
+        debugMatchCount++;
+      }
       return contactMap[lowerEmail];
     }
   }
@@ -471,16 +508,31 @@ function resolveContactName(contactId, chatIdentifier, displayName, contactMap) 
   // Try chat_identifier as fallback
   if (chatIdentifier) {
     if (contactMap[chatIdentifier]) {
+      if (debugMatchCount < 5) {
+        console.log(`\n[MATCH] Chat identifier match: ${chatIdentifier} -> ${contactMap[chatIdentifier]}`);
+        debugMatchCount++;
+      }
       return contactMap[chatIdentifier];
     }
 
     const normalized = normalizePhoneNumber(chatIdentifier);
     if (normalized && contactMap[normalized]) {
+      if (debugMatchCount < 5) {
+        console.log(`\n[MATCH] Chat identifier normalized match:`);
+        console.log(`  Input: ${chatIdentifier}`);
+        console.log(`  Normalized: ${normalized}`);
+        console.log(`  Result: ${contactMap[normalized]}`);
+        debugMatchCount++;
+      }
       return contactMap[normalized];
     }
   }
 
   // Final fallback: show the phone/email
+  if (debugMatchCount < 5) {
+    console.log(`\n[NO MATCH] No contact found for: ${contactId || chatIdentifier}`);
+    debugMatchCount++;
+  }
   return contactId || chatIdentifier || 'Unknown';
 }
 
