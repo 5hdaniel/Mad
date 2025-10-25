@@ -723,40 +723,50 @@ ipcMain.handle('export-conversations', async (event, conversationIds) => {
               const bodyBuffer = msg.attributedBody;
               const bodyText = bodyBuffer.toString('utf8');
 
-              // Method 1: Look for streamtyped text after specific markers
-              // NSAttributedString stores text in various formats
+              // Extract readable text after NSString marker
+              // Pattern: NSString is followed by some length bytes, then the actual text
               let extractedText = null;
 
-              // Try to find text after "NSString" or "streamtyped" markers
-              const patterns = [
-                /streamtyped.{1,50}?\x81([^\x00]+)/s,  // After streamtyped marker
-                /NSString[^\x04-\x06]*[\x04-\x06]([^\x00-\x03]{3,})/s,  // After NSString
-                /\$class.{1,30}?([A-Za-z0-9\s.,!?'"();:@#$%&*\-+=/<>[\]{}]{5,})/s  // After $class marker
-              ];
+              // Method 1: Look for text after NSString marker
+              // The format is: ...NSString[binary][length markers]ACTUAL_TEXT
+              const nsStringIndex = bodyText.indexOf('NSString');
+              if (nsStringIndex !== -1) {
+                // Skip NSString and some bytes after it (usually 2-10 bytes of metadata)
+                const afterNSString = bodyText.substring(nsStringIndex + 8);
 
-              for (const pattern of patterns) {
-                const match = bodyText.match(pattern);
-                if (match && match[1]) {
-                  // Clean up the extracted text
-                  extractedText = match[1]
-                    .replace(/[\x00-\x08\x0B-\x1F\x7F-\x9F]/g, '') // Remove control chars except \n
-                    .replace(/\x09/g, ' ') // Replace tabs with spaces
-                    .replace(/\s+/g, ' ') // Normalize whitespace
+                // Extract continuous printable text (excluding control characters)
+                const textMatch = afterNSString.match(/[\x20-\x7E\u00A0-\uFFFF]{2,}/);
+                if (textMatch) {
+                  extractedText = textMatch[0]
+                    .replace(/^[^\w\s]+/, '') // Remove leading non-alphanumeric chars
                     .trim();
+                }
+              }
 
-                  // Validate it looks like actual text (not binary garbage)
-                  if (extractedText.length >= 1 && extractedText.length < 10000) {
-                    break;
-                  } else {
-                    extractedText = null;
+              // Method 2: If method 1 failed, look for text after 'streamtyped'
+              if (!extractedText) {
+                const streamIndex = bodyText.indexOf('streamtyped');
+                if (streamIndex !== -1) {
+                  const afterStream = bodyText.substring(streamIndex + 11);
+                  const textMatch = afterStream.match(/[\x20-\x7E\u00A0-\uFFFF]{2,}/);
+                  if (textMatch) {
+                    extractedText = textMatch[0]
+                      .replace(/^[^\w\s]+/, '')
+                      .trim();
                   }
                 }
               }
 
-              if (extractedText) {
+              // Validate and clean extracted text
+              if (extractedText && extractedText.length >= 1 && extractedText.length < 10000) {
+                // Additional cleaning
+                extractedText = extractedText
+                  .replace(/\x00/g, '') // Remove null bytes
+                  .replace(/[\x01-\x08\x0B-\x1F\x7F]/g, '') // Remove control chars
+                  .trim();
+
                 text = extractedText;
               } else {
-                // Fallback: just show that there's content
                 text = '[Message text - unable to extract from rich format]';
               }
             } catch (e) {
