@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 function PermissionsScreen({ onPermissionsGranted, onCheckAgain }) {
   const [isChecking, setIsChecking] = useState(false);
   const [currentStep, setCurrentStep] = useState(1); // 1: welcome, 2: full disk access
+  const [appleScriptStepComplete, setAppleScriptStepComplete] = useState(false);
 
   // Auto-check permissions when component loads
   useEffect(() => {
@@ -14,6 +15,10 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain }) {
     if (result.hasPermission) {
       onPermissionsGranted();
     }
+  };
+
+  const handleAppleScriptAllow = () => {
+    setAppleScriptStepComplete(true);
   };
 
   const handleOpenSystemSettings = async () => {
@@ -112,102 +117,168 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain }) {
           </p>
         </div>
 
-        {/* AppleScript Permission Dialog Preview */}
-        <div className="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-6 mb-6">
-          <div className="flex items-start mb-4">
-            <svg className="w-6 h-6 text-yellow-600 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-            </svg>
-            <div className="flex-1">
-              <h3 className="font-semibold text-gray-900 mb-2">First, you'll see this permission dialog:</h3>
-              <p className="text-sm text-gray-700 mb-3">
-                When you click the button below, macOS will show this popup asking for permission to open System Settings.
-              </p>
-            </div>
-          </div>
-
-          {/* Mock Dialog */}
-          <div className="bg-white rounded-lg shadow-xl border border-gray-300 p-5 mb-4">
-            <div className="flex items-start mb-4">
-              <svg className="w-12 h-12 text-blue-500 mr-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <div className="flex-1">
-                <p className="text-sm text-gray-800 mb-1">
-                  <strong>"Visual Studio Code"</strong> (or <strong>"Electron"</strong>) wants access to control <strong>"System Events"</strong>.
-                </p>
-                <p className="text-xs text-gray-600 mb-3">
-                  Allowing control will provide access to documents and data in "System Events", and to perform actions within that app.
-                </p>
-                <p className="text-xs text-gray-500 italic">
-                  An application wants to use AppleScript.
-                </p>
-              </div>
-            </div>
-            <div className="flex justify-end gap-3">
-              <div className="px-4 py-2 bg-gray-200 text-gray-700 rounded text-sm">
-                Don't Allow
-              </div>
-              <div className="px-4 py-2 bg-blue-500 text-white rounded text-sm font-semibold shadow-md ring-2 ring-green-400 relative">
-                Allow
-                <div className="absolute -top-2 -right-2">
-                  <svg className="w-6 h-6 text-green-500" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+        {/* Step 1: AppleScript Permission */}
+        <div className={`border-2 rounded-lg p-6 mb-6 transition-all ${
+          appleScriptStepComplete
+            ? 'bg-green-50 border-green-300'
+            : 'bg-yellow-50 border-yellow-300'
+        }`}>
+          <div className="flex items-start justify-between mb-4">
+            <div className="flex items-start flex-1">
+              {appleScriptStepComplete ? (
+                <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center mr-3 flex-shrink-0">
+                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                   </svg>
                 </div>
+              ) : (
+                <div className="w-6 h-6 bg-yellow-500 rounded-full flex items-center justify-center mr-3 flex-shrink-0 text-white font-bold text-sm">
+                  1
+                </div>
+              )}
+              <div className="flex-1">
+                <h3 className="font-semibold text-gray-900 mb-1">
+                  {appleScriptStepComplete ? 'AppleScript Permission Granted' : 'Allow AppleScript Access'}
+                </h3>
+                {!appleScriptStepComplete && (
+                  <p className="text-sm text-gray-700">
+                    When you click "Open System Settings" below, you'll see this permission dialog
+                  </p>
+                )}
               </div>
             </div>
           </div>
 
-          <div className="bg-green-50 border border-green-200 rounded p-3">
-            <p className="text-sm text-green-800 font-semibold flex items-center">
-              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              Click "Allow" to let the app open System Settings for you
+          {!appleScriptStepComplete && (
+            <>
+              {/* macOS-style Dialog */}
+              <div className="mx-auto max-w-md mb-4">
+                <div className="bg-gradient-to-b from-gray-50 to-gray-100 rounded-xl shadow-2xl border border-gray-300 overflow-hidden">
+                  {/* Title Bar */}
+                  <div className="bg-gradient-to-b from-gray-200 to-gray-300 px-4 py-2 flex items-center border-b border-gray-400">
+                    <div className="flex gap-2">
+                      <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                      <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                      <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                    </div>
+                  </div>
+
+                  {/* Dialog Content */}
+                  <div className="p-6">
+                    <div className="flex items-start gap-4 mb-6">
+                      <div className="flex-shrink-0">
+                        <svg className="w-16 h-16 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </div>
+                      <div className="flex-1 pt-1">
+                        <p className="text-sm text-gray-900 mb-2 leading-relaxed">
+                          <strong>"Visual Studio Code"</strong> (or <strong>"Electron"</strong>) wants access to control <strong>"System Events"</strong>.
+                        </p>
+                        <p className="text-xs text-gray-600 mb-3 leading-relaxed">
+                          Allowing control will provide access to documents and data in "System Events", and to perform actions within that app.
+                        </p>
+                        <p className="text-xs text-gray-500 italic">
+                          An application wants to use AppleScript.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Buttons */}
+                    <div className="flex justify-end gap-3">
+                      <button className="px-5 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm font-medium shadow-sm hover:bg-gray-50 transition-colors">
+                        Don't Allow
+                      </button>
+                      <button
+                        onClick={handleAppleScriptAllow}
+                        className="px-5 py-2 bg-blue-500 text-white rounded-lg text-sm font-semibold shadow-md hover:bg-blue-600 transition-colors relative ring-2 ring-green-400 ring-offset-2"
+                      >
+                        Allow
+                        <div className="absolute -top-3 -right-3 animate-bounce">
+                          <svg className="w-7 h-7 text-green-500 drop-shadow-lg" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                          </svg>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3 mt-4">
+                <p className="text-sm text-green-800 font-semibold flex items-center">
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Click "Allow" above to mark this step as complete
+                </p>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Step 2: Full Disk Access - Only show after step 1 is complete */}
+        {appleScriptStepComplete && (
+          <div className="bg-blue-50 border-2 border-blue-300 rounded-lg p-6 mb-6">
+            <div className="flex items-start mb-4">
+              <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center mr-3 flex-shrink-0 text-white font-bold text-sm">
+                2
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-gray-900 mb-2">Grant Full Disk Access in System Settings</h3>
+                <p className="text-sm text-gray-700 mb-4">
+                  Now click the button below to open System Settings, then follow these steps:
+                </p>
+              </div>
+            </div>
+
+            <ol className="space-y-3 text-sm text-gray-700 ml-9">
+              <li className="flex items-start">
+                <span className="inline-flex items-center justify-center w-6 h-6 bg-blue-500 text-white rounded-full text-xs mr-3 flex-shrink-0 mt-0.5">1</span>
+                <span>Click the lock icon and authenticate to make changes</span>
+              </li>
+              <li className="flex items-start">
+                <span className="inline-flex items-center justify-center w-6 h-6 bg-blue-500 text-white rounded-full text-xs mr-3 flex-shrink-0 mt-0.5">2</span>
+                <span>Find <strong>"Real Estate Archive"</strong> (or <strong>"Electron"</strong> in development) in the list</span>
+              </li>
+              <li className="flex items-start">
+                <span className="inline-flex items-center justify-center w-6 h-6 bg-blue-500 text-white rounded-full text-xs mr-3 flex-shrink-0 mt-0.5">3</span>
+                <span>Toggle the switch to <strong>ON</strong> next to the app name</span>
+              </li>
+              <li className="flex items-start">
+                <span className="inline-flex items-center justify-center w-6 h-6 bg-blue-500 text-white rounded-full text-xs mr-3 flex-shrink-0 mt-0.5">4</span>
+                <span>Come back to this app - we'll detect the permission automatically!</span>
+              </li>
+            </ol>
+          </div>
+        )}
+
+        {appleScriptStepComplete && (
+          <>
+            <button
+              onClick={handleOpenSystemSettings}
+              className="w-full bg-primary text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors mb-3"
+            >
+              Open System Settings
+            </button>
+
+            <button
+              onClick={handleCheckPermissions}
+              disabled={isChecking}
+              className="w-full bg-gray-100 text-gray-700 py-3 px-6 rounded-lg font-semibold hover:bg-gray-200 transition-colors disabled:opacity-50"
+            >
+              {isChecking ? 'Checking...' : 'I\'ve Granted Access - Check Again'}
+            </button>
+          </>
+        )}
+
+        {!appleScriptStepComplete && (
+          <div className="bg-gray-100 border border-gray-300 rounded-lg p-4 text-center">
+            <p className="text-sm text-gray-600">
+              Click "Allow" in the dialog above to continue
             </p>
           </div>
-        </div>
-
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6">
-          <p className="text-sm text-gray-700 mb-4">
-            After clicking "Allow", System Settings will open. Then follow these steps:
-          </p>
-
-          <ol className="space-y-3 text-sm text-gray-700">
-            <li className="flex items-start">
-              <span className="inline-flex items-center justify-center w-6 h-6 bg-primary text-white rounded-full text-xs mr-3 flex-shrink-0 mt-0.5">1</span>
-              <span>Click the lock icon and authenticate to make changes</span>
-            </li>
-            <li className="flex items-start">
-              <span className="inline-flex items-center justify-center w-6 h-6 bg-primary text-white rounded-full text-xs mr-3 flex-shrink-0 mt-0.5">2</span>
-              <span>Find <strong>"Real Estate Archive"</strong> (or <strong>"Electron"</strong> in development) in the list</span>
-            </li>
-            <li className="flex items-start">
-              <span className="inline-flex items-center justify-center w-6 h-6 bg-primary text-white rounded-full text-xs mr-3 flex-shrink-0 mt-0.5">3</span>
-              <span>Toggle the switch to <strong>ON</strong> next to the app name</span>
-            </li>
-            <li className="flex items-start">
-              <span className="inline-flex items-center justify-center w-6 h-6 bg-primary text-white rounded-full text-xs mr-3 flex-shrink-0 mt-0.5">4</span>
-              <span>Come back to this app - we'll detect the permission automatically!</span>
-            </li>
-          </ol>
-        </div>
-
-        <button
-          onClick={handleOpenSystemSettings}
-          className="w-full bg-primary text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors mb-3"
-        >
-          Open System Settings
-        </button>
-
-        <button
-          onClick={handleCheckPermissions}
-          disabled={isChecking}
-          className="w-full bg-gray-100 text-gray-700 py-3 px-6 rounded-lg font-semibold hover:bg-gray-200 transition-colors disabled:opacity-50"
-        >
-          {isChecking ? 'Checking...' : 'I\'ve Granted Access - Check Again'}
-        </button>
+        )}
 
         <p className="text-center text-xs text-gray-500 mt-6">
           We'll never share your data. All exports are stored locally on your device.
