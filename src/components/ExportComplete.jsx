@@ -2,7 +2,7 @@ import React from 'react';
 
 function ExportComplete({ result, onStartOver }) {
   return (
-    <div className="flex items-center justify-center h-full">
+    <div className="flex items-center justify-center min-h-full py-8">
       <div className="max-w-2xl mx-auto p-8 bg-white rounded-lg shadow-lg text-center">
         <div className="inline-flex items-center justify-center w-20 h-20 bg-green-100 rounded-full mb-6">
           <svg className="w-10 h-10 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">

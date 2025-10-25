@@ -77,7 +77,7 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain }) {
   // Step 1: Welcome
   if (currentStep === 1) {
     return (
-      <div className="flex items-center justify-center h-full">
+      <div className="flex items-center justify-center min-h-full py-8">
         <div className="max-w-2xl mx-auto p-8 bg-white rounded-lg shadow-lg">
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-20 h-20 bg-primary/10 rounded-full mb-6">
@@ -125,7 +125,7 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain }) {
 
   // Step 2: Full Disk Access (must be done manually)
   return (
-    <div className="flex items-center justify-center h-full">
+    <div className="flex items-center justify-center min-h-full py-8">
       <div className="max-w-2xl mx-auto p-8 bg-white rounded-lg shadow-lg">
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-primary/10 rounded-full mb-4">

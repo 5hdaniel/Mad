@@ -97,7 +97,7 @@ function ConversationList({ onExportComplete }) {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full">
+      <div className="flex items-center justify-center min-h-full py-8">
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
           <p className="text-gray-600">Loading conversations...</p>
@@ -108,7 +108,7 @@ function ConversationList({ onExportComplete }) {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center h-full">
+      <div className="flex items-center justify-center min-h-full py-8">
         <div className="max-w-md mx-auto p-8 bg-white rounded-lg shadow-lg text-center">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-red-100 rounded-full mb-4">
             <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -129,7 +129,7 @@ function ConversationList({ onExportComplete }) {
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col min-h-full">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 p-6">
         <h1 className="text-2xl font-bold text-gray-900 mb-4">Select Conversations to Export</h1>
