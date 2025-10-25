@@ -321,7 +321,22 @@ async function getContactNames() {
 
       console.log('Querying contacts...');
 
-      // Query contacts with phone numbers and emails
+      // First, try to understand the Z22_OWNER relationship
+      const phoneJoinTest = await dbAll(`
+        SELECT COUNT(*) as count
+        FROM ZABCDPHONENUMBER
+        WHERE ZOWNER IS NOT NULL
+      `);
+      console.log(`Phone numbers with ZOWNER: ${phoneJoinTest[0].count}`);
+
+      const phoneJoinTest2 = await dbAll(`
+        SELECT COUNT(*) as count
+        FROM ZABCDPHONENUMBER
+        WHERE Z22_OWNER IS NOT NULL
+      `);
+      console.log(`Phone numbers with Z22_OWNER: ${phoneJoinTest2[0].count}`);
+
+      // Use the correct foreign key (Z22_OWNER based on macOS version)
       const contacts = await dbAll(`
         SELECT
           ZABCDRECORD.ZFIRSTNAME as first_name,
@@ -330,13 +345,13 @@ async function getContactNames() {
           ZABCDPHONENUMBER.ZFULLNUMBER as phone,
           ZABCDEMAILADDRESS.ZADDRESS as email
         FROM ZABCDRECORD
-        LEFT JOIN ZABCDPHONENUMBER ON ZABCDRECORD.Z_PK = ZABCDPHONENUMBER.ZOWNER
-        LEFT JOIN ZABCDEMAILADDRESS ON ZABCDRECORD.Z_PK = ZABCDEMAILADDRESS.ZOWNER
+        LEFT JOIN ZABCDPHONENUMBER ON ZABCDRECORD.Z_PK = ZABCDPHONENUMBER.Z22_OWNER
+        LEFT JOIN ZABCDEMAILADDRESS ON ZABCDRECORD.Z_PK = ZABCDEMAILADDRESS.Z22_OWNER
         WHERE ZABCDPHONENUMBER.ZFULLNUMBER IS NOT NULL
            OR ZABCDEMAILADDRESS.ZADDRESS IS NOT NULL
       `);
 
-      console.log(`✅ Found ${contacts.length} contact entries from query`);
+      console.log(`✅ Found ${contacts.length} contact entries from query (using Z22_OWNER)`);
 
       // Let's also check the total count of records
       const totalRecords = await dbAll(`SELECT COUNT(*) as count FROM ZABCDRECORD;`);
