@@ -359,6 +359,39 @@ async function loadContactsFromDatabase(contactsDbPath) {
 
     console.log('Querying contacts...');
 
+    // === DEBUGGING: Check what's actually in the database ===
+    console.log('\n========= DATABASE DIAGNOSTICS =========');
+
+    // Check total phones in database
+    const totalPhones = await dbAll(`SELECT COUNT(*) as count FROM ZABCDPHONENUMBER;`);
+    console.log(`Total phone records in ZABCDPHONENUMBER table: ${totalPhones[0].count}`);
+
+    // Check total emails in database
+    const totalEmails = await dbAll(`SELECT COUNT(*) as count FROM ZABCDEMAILADDRESS;`);
+    console.log(`Total email records in ZABCDEMAILADDRESS table: ${totalEmails[0].count}`);
+
+    // Check which foreign key fields have values
+    const phonesWithZ22 = await dbAll(`SELECT COUNT(*) as count FROM ZABCDPHONENUMBER WHERE Z22_OWNER IS NOT NULL;`);
+    console.log(`Phone records with Z22_OWNER field: ${phonesWithZ22[0].count}`);
+
+    const phonesWithZOWNER = await dbAll(`SELECT COUNT(*) as count FROM ZABCDPHONENUMBER WHERE ZOWNER IS NOT NULL;`);
+    console.log(`Phone records with ZOWNER field: ${phonesWithZOWNER[0].count}`);
+
+    const emailsWithZ22 = await dbAll(`SELECT COUNT(*) as count FROM ZABCDEMAILADDRESS WHERE Z22_OWNER IS NOT NULL;`);
+    console.log(`Email records with Z22_OWNER field: ${emailsWithZ22[0].count}`);
+
+    const emailsWithZOWNER = await dbAll(`SELECT COUNT(*) as count FROM ZABCDEMAILADDRESS WHERE ZOWNER IS NOT NULL;`);
+    console.log(`Email records with ZOWNER field: ${emailsWithZOWNER[0].count}`);
+
+    // Sample a few phone records to see the data
+    const samplePhones = await dbAll(`SELECT Z_PK, ZFULLNUMBER, Z22_OWNER, ZOWNER FROM ZABCDPHONENUMBER LIMIT 5;`);
+    console.log('\nSample phone records:');
+    samplePhones.forEach(p => {
+      console.log(`  Phone: ${p.ZFULLNUMBER}, Z22_OWNER: ${p.Z22_OWNER}, ZOWNER: ${p.ZOWNER}`);
+    });
+
+    console.log('========================================\n');
+
     // Query phone numbers and emails SEPARATELY to avoid Cartesian product
     // The problem: LEFT JOIN creates duplicate rows when contacts have multiple phones AND emails
     console.log('Fetching phone numbers...');
