@@ -276,18 +276,29 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain }) {
 
             {!openSettingsComplete && (
               <>
-                <button
-                  onClick={async () => {
-                    await window.electron.openSystemSettings();
-                    setOpenSettingsComplete(true);
-                  }}
-                  className="w-full bg-primary text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors mb-3"
-                >
-                  🔓 Open System Settings
-                </button>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setAppleScriptStepComplete(false)}
+                    className="px-4 py-3 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-colors flex items-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                    Back
+                  </button>
+                  <button
+                    onClick={async () => {
+                      await window.electron.openSystemSettings();
+                      setOpenSettingsComplete(true);
+                    }}
+                    className="flex-1 bg-primary text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors"
+                  >
+                    🔓 Open System Settings
+                  </button>
+                </div>
                 <button
                   onClick={() => setOpenSettingsComplete(true)}
-                  className="w-full bg-gray-100 text-gray-700 py-2 px-4 rounded-lg text-sm hover:bg-gray-200 transition-colors"
+                  className="w-full mt-3 bg-gray-100 text-gray-700 py-2 px-4 rounded-lg text-sm hover:bg-gray-200 transition-colors"
                 >
                   I've Opened Settings Manually
                 </button>
@@ -336,12 +347,23 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain }) {
                   step="unlock"
                 />
 
-                <button
-                  onClick={() => setUnlockSettingsComplete(true)}
-                  className="w-full bg-blue-500 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors"
-                >
-                  ✅ Done - I Clicked the Lock
-                </button>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setOpenSettingsComplete(false)}
+                    className="px-4 py-3 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-colors flex items-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                    Back
+                  </button>
+                  <button
+                    onClick={() => setUnlockSettingsComplete(true)}
+                    className="flex-1 bg-blue-500 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors"
+                  >
+                    ✅ Done - I Clicked the Lock
+                  </button>
+                </div>
               </>
             )}
           </div>
@@ -387,12 +409,23 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain }) {
                   step="find-app"
                 />
 
-                <button
-                  onClick={() => setFindAppComplete(true)}
-                  className="w-full bg-blue-500 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors"
-                >
-                  ✅ Done - I Found the App
-                </button>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setUnlockSettingsComplete(false)}
+                    className="px-4 py-3 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-colors flex items-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                    Back
+                  </button>
+                  <button
+                    onClick={() => setFindAppComplete(true)}
+                    className="flex-1 bg-blue-500 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors"
+                  >
+                    ✅ Done - I Found the App
+                  </button>
+                </div>
               </>
             )}
           </div>
@@ -438,23 +471,34 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain }) {
                   step="toggle"
                 />
 
-                <button
-                  onClick={() => {
-                    setToggleSwitchComplete(true);
-                    // Start auto-checking for permissions
-                    const interval = setInterval(async () => {
-                      const result = await window.electron.checkPermissions();
-                      if (result.hasPermission) {
-                        clearInterval(interval);
-                        onPermissionsGranted();
-                      }
-                    }, 2000);
-                    setTimeout(() => clearInterval(interval), 60000);
-                  }}
-                  className="w-full bg-blue-500 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors"
-                >
-                  ✅ Done - I Toggled the Switch
-                </button>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setFindAppComplete(false)}
+                    className="px-4 py-3 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-colors flex items-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                    Back
+                  </button>
+                  <button
+                    onClick={() => {
+                      setToggleSwitchComplete(true);
+                      // Start auto-checking for permissions
+                      const interval = setInterval(async () => {
+                        const result = await window.electron.checkPermissions();
+                        if (result.hasPermission) {
+                          clearInterval(interval);
+                          onPermissionsGranted();
+                        }
+                      }, 2000);
+                      setTimeout(() => clearInterval(interval), 60000);
+                    }}
+                    className="flex-1 bg-blue-500 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors"
+                  >
+                    ✅ Done - I Toggled the Switch
+                  </button>
+                </div>
               </>
             )}
           </div>
