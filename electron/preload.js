@@ -12,5 +12,6 @@ contextBridge.exposeInMainWorld('electron', {
   openSystemSettings: () => ipcRenderer.invoke('open-system-settings'),
   getConversations: () => ipcRenderer.invoke('get-conversations'),
   getMessages: (chatId) => ipcRenderer.invoke('get-messages', chatId),
-  exportConversations: (conversationIds) => ipcRenderer.invoke('export-conversations', conversationIds)
+  exportConversations: (conversationIds) => ipcRenderer.invoke('export-conversations', conversationIds),
+  openFolder: (folderPath) => ipcRenderer.invoke('open-folder', folderPath)
 });

@@ -47,7 +47,7 @@ function ExportComplete({ result, onStartOver }) {
           <button
             onClick={() => {
               // Open the folder in Finder
-              window.electron.exportConversations([]);
+              window.electron.openFolder(result.exportPath);
             }}
             className="flex-1 bg-gray-100 text-gray-700 py-3 px-6 rounded-lg font-semibold hover:bg-gray-200 transition-colors"
           >

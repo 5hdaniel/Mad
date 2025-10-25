@@ -527,13 +527,38 @@ ipcMain.handle('get-messages', async (event, chatId) => {
   }
 });
 
+// Open folder in Finder
+ipcMain.handle('open-folder', async (event, folderPath) => {
+  try {
+    await shell.openPath(folderPath);
+    return { success: true };
+  } catch (error) {
+    console.error('Error opening folder:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 // Export conversations to files
 ipcMain.handle('export-conversations', async (event, conversationIds) => {
   try {
+    // Generate default folder name with timestamp
+    const now = new Date();
+    const timestamp = now.toLocaleString('en-US', {
+      month: '2-digit',
+      day: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    }).replace(/[/:]/g, '-').replace(', ', ' ');
+
+    const defaultFolderName = `Text Messages Export ${timestamp}`;
+
     // Show save dialog
     const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
       title: 'Choose Export Location',
-      defaultPath: path.join(app.getPath('documents'), 'message-exports'),
+      defaultPath: path.join(app.getPath('documents'), defaultFolderName),
       properties: ['createDirectory', 'showOverwriteConfirmation']
     });
 
@@ -558,6 +583,7 @@ ipcMain.handle('export-conversations', async (event, conversationIds) => {
     const contactMap = await getContactNames();
 
     const exportedFiles = [];
+    const exportedContactNames = [];
 
     try {
       for (const chatId of conversationIds) {
@@ -583,6 +609,9 @@ ipcMain.handle('export-conversations', async (event, conversationIds) => {
           chatInfo[0].display_name,
           contactMap
         );
+
+        // Track contact names for folder renaming
+        exportedContactNames.push(chatName);
 
         // Get messages with attachment info
         // Note: Some messages have text in 'attributedBody' blob field instead of 'text'
@@ -715,9 +744,38 @@ ipcMain.handle('export-conversations', async (event, conversationIds) => {
 
       await dbClose();
 
+      // Rename folder if exporting a single contact
+      let finalPath = filePath;
+      if (exportedContactNames.length === 1) {
+        const contactName = exportedContactNames[0];
+        const now = new Date();
+        const timestamp = now.toLocaleString('en-US', {
+          month: '2-digit',
+          day: '2-digit',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false
+        }).replace(/[/:]/g, '-').replace(', ', ' ');
+
+        // Format: "Name text messages export MM-DD-YYYY HH:MM:SS"
+        const newFolderName = `${contactName} text messages export ${timestamp}`;
+        const newPath = path.join(path.dirname(filePath), newFolderName);
+
+        try {
+          await fs.rename(filePath, newPath);
+          finalPath = newPath;
+          console.log(`Renamed export folder to: ${newFolderName}`);
+        } catch (renameError) {
+          console.error('Error renaming folder:', renameError);
+          // Keep original path if rename fails
+        }
+      }
+
       return {
         success: true,
-        exportPath: filePath,
+        exportPath: finalPath,
         filesCreated: exportedFiles
       };
     } catch (error) {
