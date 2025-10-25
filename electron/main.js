@@ -260,6 +260,142 @@ ipcMain.handle('request-permissions', async () => {
   };
 });
 
+// Helper function to get contact names from macOS Contacts database
+async function getContactNames() {
+  const contactMap = {};
+
+  try {
+    // macOS Contacts database location (varies by version)
+    const contactsDbPath = path.join(
+      process.env.HOME,
+      'Library/Application Support/AddressBook/AddressBook-v22.abcddb'
+    );
+
+    console.log('Attempting to access Contacts database:', contactsDbPath);
+
+    // Check if contacts database exists
+    try {
+      await fs.access(contactsDbPath);
+    } catch {
+      console.log('Contacts database not found at default location');
+      return contactMap;
+    }
+
+    const db = new sqlite3.Database(contactsDbPath, sqlite3.OPEN_READONLY);
+    const dbAll = promisify(db.all.bind(db));
+    const dbClose = promisify(db.close.bind(db));
+
+    try {
+      // Query contacts with phone numbers and emails
+      const contacts = await dbAll(`
+        SELECT
+          ZABCDRECORD.ZFIRSTNAME as first_name,
+          ZABCDRECORD.ZLASTNAME as last_name,
+          ZABCDRECORD.ZORGANIZATION as organization,
+          ZABCDPHONENUMBER.ZFULLNUMBER as phone,
+          ZABCDEMAILADDRESS.ZADDRESS as email
+        FROM ZABCDRECORD
+        LEFT JOIN ZABCDPHONENUMBER ON ZABCDRECORD.Z_PK = ZABCDPHONENUMBER.ZOWNER
+        LEFT JOIN ZABCDEMAILADDRESS ON ZABCDRECORD.Z_PK = ZABCDEMAILADDRESS.ZOWNER
+        WHERE ZABCDPHONENUMBER.ZFULLNUMBER IS NOT NULL
+           OR ZABCDEMAILADDRESS.ZADDRESS IS NOT NULL
+      `);
+
+      console.log(`Found ${contacts.length} contact entries`);
+
+      // Build a map of phone numbers and emails to contact names
+      contacts.forEach(contact => {
+        const firstName = contact.first_name || '';
+        const lastName = contact.last_name || '';
+        const organization = contact.organization || '';
+
+        // Prefer "First Last", fallback to organization, then "First" or "Last"
+        let displayName = '';
+        if (firstName && lastName) {
+          displayName = `${firstName} ${lastName}`;
+        } else if (organization) {
+          displayName = organization;
+        } else if (firstName) {
+          displayName = firstName;
+        } else if (lastName) {
+          displayName = lastName;
+        }
+
+        if (displayName) {
+          // Map phone numbers (normalize by removing non-digits)
+          if (contact.phone) {
+            const normalized = contact.phone.replace(/\D/g, '');
+            contactMap[normalized] = displayName;
+            contactMap[contact.phone] = displayName;
+          }
+
+          // Map emails (lowercase)
+          if (contact.email) {
+            contactMap[contact.email.toLowerCase()] = displayName;
+          }
+        }
+      });
+
+      console.log(`Built contact map with ${Object.keys(contactMap).length} entries`);
+      await dbClose();
+    } catch (error) {
+      console.error('Error querying contacts database:', error);
+      await dbClose();
+    }
+  } catch (error) {
+    console.error('Error accessing contacts database:', error);
+  }
+
+  return contactMap;
+}
+
+// Helper function to normalize phone numbers for matching
+function normalizePhoneNumber(phone) {
+  if (!phone) return '';
+  return phone.replace(/\D/g, '');
+}
+
+// Helper function to resolve contact name
+function resolveContactName(contactId, chatIdentifier, displayName, contactMap) {
+  // If we have a display_name from Messages, use it
+  if (displayName) return displayName;
+
+  // Try to find contact name by contactId (phone or email)
+  if (contactId) {
+    // Try direct match
+    if (contactMap[contactId]) {
+      return contactMap[contactId];
+    }
+
+    // Try normalized phone number match
+    const normalized = normalizePhoneNumber(contactId);
+    if (normalized && contactMap[normalized]) {
+      return contactMap[normalized];
+    }
+
+    // Try lowercase email match
+    const lowerEmail = contactId.toLowerCase();
+    if (contactMap[lowerEmail]) {
+      return contactMap[lowerEmail];
+    }
+  }
+
+  // Try chat_identifier as fallback
+  if (chatIdentifier) {
+    if (contactMap[chatIdentifier]) {
+      return contactMap[chatIdentifier];
+    }
+
+    const normalized = normalizePhoneNumber(chatIdentifier);
+    if (normalized && contactMap[normalized]) {
+      return contactMap[normalized];
+    }
+  }
+
+  // Final fallback: show the phone/email
+  return contactId || chatIdentifier || 'Unknown';
+}
+
 // Get conversations from Messages database
 ipcMain.handle('get-conversations', async () => {
   try {
@@ -273,6 +409,10 @@ ipcMain.handle('get-conversations', async () => {
     const dbClose = promisify(db.close.bind(db));
 
     try {
+      // Get contact names from Contacts database
+      console.log('Loading contact names...');
+      const contactMap = await getContactNames();
+
       // Get all chats with their latest message
       const conversations = await dbAll(`
         SELECT
@@ -297,7 +437,7 @@ ipcMain.handle('get-conversations', async () => {
         success: true,
         conversations: conversations.map(conv => ({
           id: conv.chat_id,
-          name: conv.display_name || conv.contact_id || conv.chat_identifier || 'Unknown',
+          name: resolveContactName(conv.contact_id, conv.chat_identifier, conv.display_name, contactMap),
           contactId: conv.contact_id || conv.chat_identifier,
           messageCount: conv.message_count,
           lastMessageDate: conv.last_message_date
