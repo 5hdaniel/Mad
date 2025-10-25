@@ -265,27 +265,44 @@ async function getContactNames() {
   const contactMap = {};
 
   try {
-    // macOS Contacts database location (varies by version)
-    const contactsDbPath = path.join(
-      process.env.HOME,
-      'Library/Application Support/AddressBook/AddressBook-v22.abcddb'
-    );
+    // Try multiple possible Contacts database locations (varies by macOS version)
+    const possiblePaths = [
+      path.join(process.env.HOME, 'Library/Application Support/AddressBook/AddressBook-v22.abcddb'),
+      path.join(process.env.HOME, 'Library/Application Support/AddressBook/AddressBook-v23.abcddb'),
+      path.join(process.env.HOME, 'Library/Application Support/AddressBook/Sources/*/AddressBook-v22.abcddb'),
+    ];
 
-    console.log('Attempting to access Contacts database:', contactsDbPath);
+    let contactsDbPath = null;
 
-    // Check if contacts database exists
-    try {
-      await fs.access(contactsDbPath);
-    } catch {
-      console.log('Contacts database not found at default location');
+    console.log('======= SEARCHING FOR CONTACTS DATABASE =======');
+    for (const testPath of possiblePaths) {
+      console.log('Trying:', testPath);
+      try {
+        await fs.access(testPath);
+        contactsDbPath = testPath;
+        console.log('✅ Found Contacts database at:', testPath);
+        break;
+      } catch {
+        console.log('❌ Not found');
+      }
+    }
+
+    if (!contactsDbPath) {
+      console.log('================================================');
+      console.log('⚠️  Contacts database not found at any location');
+      console.log('Will show phone numbers/emails instead of names');
+      console.log('================================================');
       return contactMap;
     }
 
+    console.log('Opening Contacts database...');
     const db = new sqlite3.Database(contactsDbPath, sqlite3.OPEN_READONLY);
     const dbAll = promisify(db.all.bind(db));
     const dbClose = promisify(db.close.bind(db));
 
     try {
+      console.log('Querying contacts...');
+
       // Query contacts with phone numbers and emails
       const contacts = await dbAll(`
         SELECT
@@ -301,7 +318,7 @@ async function getContactNames() {
            OR ZABCDEMAILADDRESS.ZADDRESS IS NOT NULL
       `);
 
-      console.log(`Found ${contacts.length} contact entries`);
+      console.log(`✅ Found ${contacts.length} contact entries`);
 
       // Build a map of phone numbers and emails to contact names
       contacts.forEach(contact => {
@@ -435,13 +452,20 @@ ipcMain.handle('get-conversations', async () => {
 
       return {
         success: true,
-        conversations: conversations.map(conv => ({
-          id: conv.chat_id,
-          name: resolveContactName(conv.contact_id, conv.chat_identifier, conv.display_name, contactMap),
-          contactId: conv.contact_id || conv.chat_identifier,
-          messageCount: conv.message_count,
-          lastMessageDate: conv.last_message_date
-        }))
+        conversations: conversations.map(conv => {
+          const rawContactId = conv.contact_id || conv.chat_identifier;
+          const displayName = resolveContactName(conv.contact_id, conv.chat_identifier, conv.display_name, contactMap);
+
+          return {
+            id: conv.chat_id,
+            name: displayName,
+            contactId: rawContactId,
+            // Include both name and raw identifier for display
+            showBothNameAndNumber: displayName !== rawContactId, // true if we resolved to a name
+            messageCount: conv.message_count,
+            lastMessageDate: conv.last_message_date
+          };
+        })
       };
     } catch (error) {
       await dbClose();

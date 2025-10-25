@@ -210,6 +210,9 @@ function ConversationList({ onExportComplete }) {
 
                     <div className="flex-1 min-w-0">
                       <h3 className="font-semibold text-gray-900 truncate">{conversation.name}</h3>
+                      {conversation.showBothNameAndNumber && conversation.contactId && (
+                        <p className="text-xs text-gray-400 truncate">{conversation.contactId}</p>
+                      )}
                       <p className="text-sm text-gray-500">
                         {conversation.messageCount || 0} messages · {formatDate(conversation.lastMessageDate)}
                       </p>
