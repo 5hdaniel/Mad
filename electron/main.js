@@ -359,37 +359,41 @@ async function loadContactsFromDatabase(contactsDbPath) {
 
     console.log('Querying contacts...');
 
-    // First, try to understand the Z22_OWNER relationship
-    const phoneJoinTest = await dbAll(`
-      SELECT COUNT(*) as count
-      FROM ZABCDPHONENUMBER
-      WHERE ZOWNER IS NOT NULL
-    `);
-    console.log(`Phone numbers with ZOWNER: ${phoneJoinTest[0].count}`);
-
-    const phoneJoinTest2 = await dbAll(`
-      SELECT COUNT(*) as count
-      FROM ZABCDPHONENUMBER
-      WHERE Z22_OWNER IS NOT NULL
-    `);
-    console.log(`Phone numbers with Z22_OWNER: ${phoneJoinTest2[0].count}`);
-
-    // Use the correct foreign key (Z22_OWNER based on macOS version)
-    const contacts = await dbAll(`
+    // Query phone numbers and emails SEPARATELY to avoid Cartesian product
+    // The problem: LEFT JOIN creates duplicate rows when contacts have multiple phones AND emails
+    console.log('Fetching phone numbers...');
+    const phonesResult = await dbAll(`
       SELECT
         ZABCDRECORD.ZFIRSTNAME as first_name,
         ZABCDRECORD.ZLASTNAME as last_name,
         ZABCDRECORD.ZORGANIZATION as organization,
-        ZABCDPHONENUMBER.ZFULLNUMBER as phone,
+        ZABCDPHONENUMBER.ZFULLNUMBER as phone
+      FROM ZABCDRECORD
+      INNER JOIN ZABCDPHONENUMBER ON ZABCDRECORD.Z_PK = ZABCDPHONENUMBER.Z22_OWNER
+      WHERE ZABCDPHONENUMBER.ZFULLNUMBER IS NOT NULL
+    `);
+    console.log(`✅ Found ${phonesResult.length} phone numbers`);
+
+    console.log('Fetching emails...');
+    const emailsResult = await dbAll(`
+      SELECT
+        ZABCDRECORD.ZFIRSTNAME as first_name,
+        ZABCDRECORD.ZLASTNAME as last_name,
+        ZABCDRECORD.ZORGANIZATION as organization,
         ZABCDEMAILADDRESS.ZADDRESS as email
       FROM ZABCDRECORD
-      LEFT JOIN ZABCDPHONENUMBER ON ZABCDRECORD.Z_PK = ZABCDPHONENUMBER.Z22_OWNER
-      LEFT JOIN ZABCDEMAILADDRESS ON ZABCDRECORD.Z_PK = ZABCDEMAILADDRESS.Z22_OWNER
-      WHERE ZABCDPHONENUMBER.ZFULLNUMBER IS NOT NULL
-         OR ZABCDEMAILADDRESS.ZADDRESS IS NOT NULL
+      INNER JOIN ZABCDEMAILADDRESS ON ZABCDRECORD.Z_PK = ZABCDEMAILADDRESS.Z22_OWNER
+      WHERE ZABCDEMAILADDRESS.ZADDRESS IS NOT NULL
     `);
+    console.log(`✅ Found ${emailsResult.length} emails`);
 
-    console.log(`✅ Found ${contacts.length} contact entries from query (using Z22_OWNER)`);
+    // Combine results - each row is now either a phone OR an email, not both
+    const contacts = [
+      ...phonesResult.map(r => ({ ...r, email: null })),
+      ...emailsResult.map(r => ({ ...r, phone: null }))
+    ];
+
+    console.log(`✅ Total contact entries: ${contacts.length}`);
 
     // Let's also check the total count of records
     const totalRecords = await dbAll(`SELECT COUNT(*) as count FROM ZABCDRECORD;`);
