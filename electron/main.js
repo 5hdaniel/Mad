@@ -553,6 +553,10 @@ ipcMain.handle('export-conversations', async (event, conversationIds) => {
     const dbAll = promisify(db.all.bind(db));
     const dbClose = promisify(db.close.bind(db));
 
+    // Load contact names for resolving names in export
+    console.log('Loading contacts for export...');
+    const contactMap = await getContactNames();
+
     const exportedFiles = [];
 
     try {
@@ -572,15 +576,22 @@ ipcMain.handle('export-conversations', async (event, conversationIds) => {
 
         if (chatInfo.length === 0) continue;
 
-        const chatName = chatInfo[0].display_name || chatInfo[0].contact_id || chatInfo[0].chat_identifier || 'Unknown';
+        // Resolve contact name using the same logic as conversation list
+        const chatName = resolveContactName(
+          chatInfo[0].contact_id,
+          chatInfo[0].chat_identifier,
+          chatInfo[0].display_name,
+          contactMap
+        );
 
-        // Get messages
+        // Get messages with attachment info
         const messages = await dbAll(`
           SELECT
             message.text,
             message.date,
             message.is_from_me,
-            handle.id as sender
+            handle.id as sender,
+            message.cache_has_attachments
           FROM message
           JOIN chat_message_join ON message.ROWID = chat_message_join.message_id
           LEFT JOIN handle ON message.handle_id = handle.ROWID
@@ -600,8 +611,27 @@ ipcMain.handle('export-conversations', async (event, conversationIds) => {
           const macEpoch = new Date('2001-01-01T00:00:00Z').getTime();
           const messageDate = new Date(macEpoch + (msg.date / 1000000));
 
-          const sender = msg.is_from_me ? 'Me' : (msg.sender || 'Unknown');
-          const text = msg.text || '[No text content]';
+          // Resolve sender name
+          let sender;
+          if (msg.is_from_me) {
+            sender = 'Me';
+          } else if (msg.sender) {
+            // Try to resolve sender name from contacts
+            const resolvedName = resolveContactName(msg.sender, null, null, contactMap);
+            sender = resolvedName !== msg.sender ? resolvedName : msg.sender;
+          } else {
+            sender = 'Unknown';
+          }
+
+          // Handle text content
+          let text;
+          if (msg.text) {
+            text = msg.text;
+          } else if (msg.cache_has_attachments === 1) {
+            text = '[Attachment - Photo/Video/File]';
+          } else {
+            text = '[Message with no text - may be a reaction or deleted]';
+          }
 
           exportContent += `[${messageDate.toLocaleString()}] ${sender}:\n${text}\n\n`;
         }
