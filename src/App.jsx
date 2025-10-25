@@ -104,11 +104,11 @@ function App() {
             <div className="space-y-2 text-xs">
               <div className="flex justify-between">
                 <span className="text-gray-600">Version:</span>
-                <span className="font-mono font-semibold text-gray-900">1.0.1</span>
+                <span className="font-mono font-semibold text-gray-900">1.0.2</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">Last Update:</span>
-                <span className="font-mono text-gray-700">Contact Fix</span>
+                <span className="font-mono text-gray-700">Contact & Date Fix</span>
               </div>
               <div className="pt-2 border-t border-gray-200">
                 <p className="text-gray-500 text-xs">
