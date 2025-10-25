@@ -394,6 +394,7 @@ async function loadContactsFromDatabase(contactsDbPath) {
 
     // Query phone numbers and emails SEPARATELY to avoid Cartesian product
     // The problem: LEFT JOIN creates duplicate rows when contacts have multiple phones AND emails
+    // IMPORTANT: Use ZOWNER instead of Z22_OWNER - Z22_OWNER is for unified/linked contacts
     console.log('Fetching phone numbers...');
     const phonesResult = await dbAll(`
       SELECT
@@ -402,7 +403,7 @@ async function loadContactsFromDatabase(contactsDbPath) {
         ZABCDRECORD.ZORGANIZATION as organization,
         ZABCDPHONENUMBER.ZFULLNUMBER as phone
       FROM ZABCDRECORD
-      INNER JOIN ZABCDPHONENUMBER ON ZABCDRECORD.Z_PK = ZABCDPHONENUMBER.Z22_OWNER
+      INNER JOIN ZABCDPHONENUMBER ON ZABCDRECORD.Z_PK = ZABCDPHONENUMBER.ZOWNER
       WHERE ZABCDPHONENUMBER.ZFULLNUMBER IS NOT NULL
     `);
     console.log(`✅ Found ${phonesResult.length} phone numbers`);
@@ -415,7 +416,7 @@ async function loadContactsFromDatabase(contactsDbPath) {
         ZABCDRECORD.ZORGANIZATION as organization,
         ZABCDEMAILADDRESS.ZADDRESS as email
       FROM ZABCDRECORD
-      INNER JOIN ZABCDEMAILADDRESS ON ZABCDRECORD.Z_PK = ZABCDEMAILADDRESS.Z22_OWNER
+      INNER JOIN ZABCDEMAILADDRESS ON ZABCDRECORD.Z_PK = ZABCDEMAILADDRESS.ZOWNER
       WHERE ZABCDEMAILADDRESS.ZADDRESS IS NOT NULL
     `);
     console.log(`✅ Found ${emailsResult.length} emails`);
