@@ -26,3 +26,7 @@ Thumbs.db
 # Environment
 .env
 .env.local
+
+# Project management (using Linear)
+linear-import.csv
+ROADMAP.md
