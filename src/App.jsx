@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import PermissionsScreen from './components/PermissionsScreen';
 import ConversationList from './components/ConversationList';
 import ExportComplete from './components/ExportComplete';
+import UpdateNotification from './components/UpdateNotification';
 
 function App() {
   const [currentStep, setCurrentStep] = useState('permissions'); // permissions, conversations, complete
@@ -119,6 +120,9 @@ function App() {
           </div>
         )}
       </div>
+
+      {/* Update Notification */}
+      <UpdateNotification />
     </div>
   );
 }

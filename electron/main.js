@@ -5,6 +5,12 @@ const sqlite3 = require('sqlite3');
 const { promisify } = require('util');
 const { exec } = require('child_process');
 const os = require('os');
+const { autoUpdater } = require('electron-updater');
+const log = require('electron-log');
+
+// Configure logging for auto-updater
+log.transports.file.level = 'info';
+autoUpdater.logger = log;
 
 let mainWindow;
 
@@ -27,8 +33,48 @@ function createWindow() {
     mainWindow.webContents.openDevTools();
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+
+    // Check for updates 5 seconds after window loads (only in production)
+    setTimeout(() => {
+      autoUpdater.checkForUpdatesAndNotify();
+    }, 5000);
   }
 }
+
+// Auto-updater event handlers
+autoUpdater.on('checking-for-update', () => {
+  log.info('Checking for update...');
+});
+
+autoUpdater.on('update-available', (info) => {
+  log.info('Update available:', info);
+  if (mainWindow) {
+    mainWindow.webContents.send('update-available', info);
+  }
+});
+
+autoUpdater.on('update-not-available', (info) => {
+  log.info('Update not available:', info);
+});
+
+autoUpdater.on('error', (err) => {
+  log.error('Error in auto-updater:', err);
+});
+
+autoUpdater.on('download-progress', (progressObj) => {
+  const message = `Download speed: ${progressObj.bytesPerSecond} - Downloaded ${progressObj.percent.toFixed(2)}%`;
+  log.info(message);
+  if (mainWindow) {
+    mainWindow.webContents.send('update-progress', progressObj);
+  }
+});
+
+autoUpdater.on('update-downloaded', (info) => {
+  log.info('Update downloaded:', info);
+  if (mainWindow) {
+    mainWindow.webContents.send('update-downloaded', info);
+  }
+});
 
 app.whenReady().then(createWindow);
 
@@ -848,4 +894,10 @@ ipcMain.handle('export-conversations', async (event, conversationIds) => {
       error: error.message
     };
   }
+});
+
+// Install update and restart
+ipcMain.on('install-update', () => {
+  log.info('Installing update...');
+  autoUpdater.quitAndInstall();
 });

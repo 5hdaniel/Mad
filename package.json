@@ -26,6 +26,9 @@
     "wait-on": "^8.0.1"
   },
   "dependencies": {
+    "electron-log": "^5.2.2",
+    "electron-updater": "^6.3.9",
+    "node-machine-id": "^1.1.12",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "sqlite3": "^5.1.7"
@@ -33,12 +36,22 @@
   "build": {
     "appId": "com.realestate.archiveapp",
     "productName": "Real Estate Archive",
+    "publish": {
+      "provider": "github",
+      "owner": "5hdaniel",
+      "repo": "Mad",
+      "private": false
+    },
     "mac": {
       "category": "public.app-category.productivity",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
-      "entitlementsInherit": "build/entitlements.mac.plist"
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "target": [
+        "dmg",
+        "zip"
+      ]
     },
     "files": [
       "dist/**/*",

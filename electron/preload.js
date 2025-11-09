@@ -13,5 +13,11 @@ contextBridge.exposeInMainWorld('electron', {
   getConversations: () => ipcRenderer.invoke('get-conversations'),
   getMessages: (chatId) => ipcRenderer.invoke('get-messages', chatId),
   exportConversations: (conversationIds) => ipcRenderer.invoke('export-conversations', conversationIds),
-  openFolder: (folderPath) => ipcRenderer.invoke('open-folder', folderPath)
+  openFolder: (folderPath) => ipcRenderer.invoke('open-folder', folderPath),
+
+  // Auto-update methods
+  onUpdateAvailable: (callback) => ipcRenderer.on('update-available', (_, info) => callback(info)),
+  onUpdateProgress: (callback) => ipcRenderer.on('update-progress', (_, progress) => callback(progress)),
+  onUpdateDownloaded: (callback) => ipcRenderer.on('update-downloaded', (_, info) => callback(info)),
+  installUpdate: () => ipcRenderer.send('install-update')
 });
