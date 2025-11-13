@@ -1049,6 +1049,8 @@ ipcMain.handle('outlook-get-user-email', async () => {
 // Export emails for multiple contacts
 ipcMain.handle('outlook-export-emails', async (event, contacts) => {
   try {
+    console.log(`Starting full audit export for ${contacts.length} contacts`);
+
     if (!outlookService || !outlookService.isAuthenticated()) {
       return {
         success: false,
@@ -1084,12 +1086,27 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
 
     // Create base export directory
     await fs.mkdir(exportPath, { recursive: true });
+    console.log(`Created export folder: ${exportPath}`);
+
+    // Open Messages database for text message export
+    const messagesDbPath = path.join(
+      process.env.HOME,
+      'Library/Messages/chat.db'
+    );
+    const db = new sqlite3.Database(messagesDbPath, sqlite3.OPEN_READONLY);
+    const dbAll = promisify(db.all.bind(db));
+    const dbClose = promisify(db.close.bind(db));
+
+    // Load contact names for resolving names in export
+    console.log('Loading contacts for export...');
+    const { contactMap } = await getContactNames();
 
     const results = [];
 
-    // Export emails for each contact
+    // Export BOTH text messages AND emails for each contact
     for (let i = 0; i < contacts.length; i++) {
       const contact = contacts[i];
+      console.log(`\n=== Processing contact ${i + 1}/${contacts.length}: ${contact.name} ===`);
 
       // Send progress update
       mainWindow.webContents.send('export-progress', {
@@ -1099,64 +1116,211 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
         contactName: contact.name
       });
 
-      if (!contact.emails || contact.emails.length === 0) {
-        results.push({
-          contactName: contact.name,
-          success: false,
-          error: 'No email address found for contact'
-        });
-        continue;
-      }
+      // Create contact folder
+      const sanitizedName = contact.name.replace(/[^a-z0-9 ]/gi, '_');
+      const contactFolder = path.join(exportPath, sanitizedName);
+      await fs.mkdir(contactFolder, { recursive: true });
+      console.log(`Created contact folder: ${contactFolder}`);
 
-      // Export emails for ALL email addresses associated with this contact
+      let textMessageCount = 0;
       let totalEmails = 0;
       let anySuccess = false;
       let errors = [];
 
-      for (const email of contact.emails) {
+      // 1. Export text messages (if chatId exists)
+      if (contact.chatId) {
         try {
-          const result = await outlookService.exportEmailsToAudit(
-            contact.name,
-            email,
-            exportPath,
-            (progress) => {
-              // Forward progress to renderer
-              mainWindow.webContents.send('export-progress', {
-                ...progress,
-                contactName: contact.name,
-                current: i + 1,
-                total: contacts.length
-              });
-            }
-          );
+          console.log(`Exporting text messages for ${contact.name} (chatId: ${contact.chatId})...`);
+          mainWindow.webContents.send('export-progress', {
+            stage: 'text-messages',
+            message: `Exporting text messages for ${contact.name}...`,
+            current: i + 1,
+            total: contacts.length,
+            contactName: contact.name
+          });
 
-          if (result.success) {
+          // Get messages for this chat
+          const messages = await dbAll(`
+            SELECT
+              message.ROWID as id,
+              message.text,
+              message.date,
+              message.is_from_me,
+              handle.id as sender,
+              message.cache_has_attachments,
+              message.attributedBody
+            FROM message
+            JOIN chat_message_join ON message.ROWID = chat_message_join.message_id
+            LEFT JOIN handle ON message.handle_id = handle.ROWID
+            WHERE chat_message_join.chat_id = ?
+            ORDER BY message.date ASC
+          `, [contact.chatId]);
+
+          console.log(`Found ${messages.length} text messages for ${contact.name}`);
+          textMessageCount = messages.length;
+
+          if (messages.length > 0) {
+            // Format messages as text
+            let exportContent = `TEXT MESSAGES WITH: ${contact.name}\n`;
+            exportContent += `Exported: ${new Date().toLocaleString()}\n`;
+            exportContent += `Total Messages: ${messages.length}\n`;
+            exportContent += '='.repeat(80) + '\n\n';
+
+            for (const msg of messages) {
+              // Convert Mac timestamp to readable date
+              const macEpoch = new Date('2001-01-01T00:00:00Z').getTime();
+              const messageDate = new Date(macEpoch + (msg.date / 1000000));
+
+              // Resolve sender name
+              let sender;
+              if (msg.is_from_me) {
+                sender = 'Me';
+              } else if (msg.sender) {
+                const resolvedName = resolveContactName(msg.sender, null, null, contactMap);
+                sender = resolvedName !== msg.sender ? resolvedName : msg.sender;
+              } else {
+                sender = 'Unknown';
+              }
+
+              // Handle text content (same logic as export-conversations)
+              let text;
+              if (msg.text) {
+                text = msg.text;
+              } else if (msg.attributedBody) {
+                try {
+                  const bodyBuffer = msg.attributedBody;
+                  const bodyText = bodyBuffer.toString('utf8');
+                  let extractedText = null;
+
+                  const nsStringIndex = bodyText.indexOf('NSString');
+                  if (nsStringIndex !== -1) {
+                    const afterNSString = bodyText.substring(nsStringIndex + 20);
+                    const allMatches = afterNSString.match(/[\x20-\x7E\u00A0-\uFFFF]{3,}/g);
+                    if (allMatches && allMatches.length > 0) {
+                      for (const match of allMatches.sort((a, b) => b.length - a.length)) {
+                        const cleaned = match
+                          .replace(/^[^\w\s]+/, '')
+                          .replace(/[^\w\s]+$/, '')
+                          .trim();
+                        if (cleaned.length >= 2 && /[a-zA-Z0-9]/.test(cleaned)) {
+                          extractedText = cleaned;
+                          break;
+                        }
+                      }
+                    }
+                  }
+
+                  if (!extractedText) {
+                    const streamIndex = bodyText.indexOf('streamtyped');
+                    if (streamIndex !== -1) {
+                      const afterStream = bodyText.substring(streamIndex + 11);
+                      const textMatch = afterStream.match(/[\x20-\x7E\u00A0-\uFFFF]{2,}/);
+                      if (textMatch) {
+                        extractedText = textMatch[0].replace(/^[^\w\s]+/, '').trim();
+                      }
+                    }
+                  }
+
+                  if (extractedText && extractedText.length >= 1 && extractedText.length < 10000) {
+                    extractedText = extractedText
+                      .replace(/\x00/g, '')
+                      .replace(/[\x01-\x08\x0B-\x1F\x7F]/g, '')
+                      .trim();
+                    text = extractedText;
+                  } else {
+                    text = '[Message text - unable to extract from rich format]';
+                  }
+                } catch (e) {
+                  text = '[Message text - parsing error]';
+                }
+              } else if (msg.cache_has_attachments === 1) {
+                text = '[Attachment - Photo/Video/File]';
+              } else {
+                text = '[Reaction or system message]';
+              }
+
+              exportContent += `[${messageDate.toLocaleString()}] ${sender}:\n${text}\n\n`;
+            }
+
+            // Save text messages file
+            const textFilePath = path.join(contactFolder, 'text_messages.txt');
+            await fs.writeFile(textFilePath, exportContent, 'utf8');
+            console.log(`Saved text messages to: ${textFilePath}`);
             anySuccess = true;
-            totalEmails += result.emailCount || 0;
-          } else if (result.error) {
-            errors.push(result.error);
           }
         } catch (err) {
-          errors.push(err.message);
+          console.error(`Error exporting text messages for ${contact.name}:`, err);
+          errors.push(`Text messages: ${err.message}`);
         }
+      } else {
+        console.log(`No chatId for ${contact.name}, skipping text messages`);
+      }
+
+      // 2. Export emails (if email addresses exist)
+      if (contact.emails && contact.emails.length > 0) {
+        console.log(`Exporting emails for ${contact.name} (${contact.emails.length} email addresses)...`);
+
+        for (const email of contact.emails) {
+          try {
+            console.log(`  - Fetching emails from: ${email}`);
+            const result = await outlookService.exportEmailsToAudit(
+              contact.name,
+              email,
+              exportPath,
+              (progress) => {
+                console.log(`    Progress: ${progress.stage} - ${progress.message || ''}`);
+                // Forward progress to renderer
+                mainWindow.webContents.send('export-progress', {
+                  ...progress,
+                  contactName: contact.name,
+                  current: i + 1,
+                  total: contacts.length
+                });
+              }
+            );
+
+            console.log(`  - Result for ${email}:`, { success: result.success, emailCount: result.emailCount, error: result.error });
+
+            if (result.success) {
+              anySuccess = true;
+              totalEmails += result.emailCount || 0;
+            } else if (result.error) {
+              errors.push(`${email}: ${result.error}`);
+            }
+          } catch (err) {
+            console.error(`  - Error exporting emails from ${email}:`, err);
+            errors.push(`${email}: ${err.message}`);
+          }
+        }
+      } else {
+        console.log(`No email addresses for ${contact.name}, skipping emails`);
       }
 
       results.push({
         contactName: contact.name,
         success: anySuccess,
+        textMessageCount: textMessageCount,
         emailCount: totalEmails,
         error: errors.length > 0 ? errors.join('; ') : null
       });
+
+      console.log(`=== Completed ${contact.name}: ${textMessageCount} texts, ${totalEmails} emails ===\n`);
     }
+
+    // Close database
+    await dbClose();
 
     // Show OS notification when complete
     const successCount = results.filter(r => r.success).length;
     const failCount = results.filter(r => !r.success).length;
 
     new Notification({
-      title: 'Email Export Complete',
-      body: `Exported emails for ${successCount} contact${successCount !== 1 ? 's' : ''}${failCount > 0 ? `. ${failCount} failed.` : ''}`,
+      title: 'Full Audit Export Complete',
+      body: `Exported ${successCount} contact${successCount !== 1 ? 's' : ''}${failCount > 0 ? `. ${failCount} failed.` : ''}`,
     }).show();
+
+    console.log('Export complete!');
+    console.log('Results:', JSON.stringify(results, null, 2));
 
     return {
       success: true,
@@ -1165,7 +1329,8 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
     };
 
   } catch (error) {
-    console.error('Error exporting emails:', error);
+    console.error('Error exporting full audit:', error);
+    console.error('Stack trace:', error.stack);
     return {
       success: false,
       error: error.message

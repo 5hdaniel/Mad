@@ -93,6 +93,7 @@ function OutlookExport({ conversations, selectedIds, onComplete, onCancel }) {
 
       const contactsToExport = selectedConversations.map(conv => ({
         name: conv.name,
+        chatId: conv.id, // Include chatId for text message export
         emails: conv.emails || [],
       }));
 
@@ -168,6 +169,7 @@ function OutlookExport({ conversations, selectedIds, onComplete, onCancel }) {
     const successCount = exportResults.results?.filter(r => r.success).length || 0;
     const failureCount = exportResults.results?.filter(r => !r.success).length || 0;
     const totalEmails = exportResults.results?.reduce((sum, r) => sum + (r.emailCount || 0), 0) || 0;
+    const totalTexts = exportResults.results?.reduce((sum, r) => sum + (r.textMessageCount || 0), 0) || 0;
 
     return (
       <div className="flex items-center justify-center min-h-full py-8">
@@ -177,9 +179,9 @@ function OutlookExport({ conversations, selectedIds, onComplete, onCancel }) {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">Email Export Complete</h2>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Full Audit Export Complete</h2>
           <p className="text-gray-600 mb-6">
-            Successfully exported {totalEmails} emails from {successCount} contacts
+            Successfully exported {totalTexts} text messages and {totalEmails} emails from {successCount} contact{successCount !== 1 ? 's' : ''}
             {failureCount > 0 && ` (${failureCount} failed)`}
           </p>
 
@@ -284,7 +286,7 @@ function OutlookExport({ conversations, selectedIds, onComplete, onCancel }) {
   return (
     <div className="flex flex-col min-h-full">
       <div className="bg-white border-b border-gray-200 p-6">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Export Emails to Audit Folder</h1>
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">Full Audit Export (Messages + Emails)</h1>
         <p className="text-sm text-gray-600">
           Signed in as: <span className="font-semibold">{userEmail}</span>
         </p>
@@ -299,11 +301,11 @@ function OutlookExport({ conversations, selectedIds, onComplete, onCancel }) {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <div>
-                <p className="text-sm font-semibold text-blue-900 mb-1">Export Summary</p>
+                <p className="text-sm font-semibold text-blue-900 mb-1">Full Audit Export</p>
                 <p className="text-sm text-blue-800">
-                  {contactsWithEmail.length} contacts with email addresses will have their emails exported.
-                  {contactsWithoutEmail.length > 0 && (
-                    <> {contactsWithoutEmail.length} contacts don't have email addresses and will be skipped.</>
+                  Exporting text messages and emails for {selectedConversations.length} contact{selectedConversations.length !== 1 ? 's' : ''}.
+                  {contactsWithoutEmail.length > 0 && contactsWithEmail.length > 0 && (
+                    <> {contactsWithoutEmail.length} contact{contactsWithoutEmail.length !== 1 ? 's' : ''} without email addresses will have only text messages exported.</>
                   )}
                 </p>
               </div>
