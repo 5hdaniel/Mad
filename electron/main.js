@@ -924,7 +924,7 @@ ipcMain.handle('outlook-initialize', async () => {
       outlookService = new OutlookService();
     }
 
-    outlookService.initialize(clientId, tenantId);
+    await outlookService.initialize(clientId, tenantId);
 
     return { success: true };
   } catch (error) {

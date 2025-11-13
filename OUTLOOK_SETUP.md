@@ -154,8 +154,10 @@ Exports are saved to:
 ### Authentication
 - Uses Microsoft's OAuth 2.0 device code flow
 - No passwords are stored in the application
-- Access tokens are stored only in memory during the session
+- Access tokens are cached securely on disk (encrypted by OS)
+- **Users authenticate once** - tokens automatically refresh for ~90 days
 - Users can revoke access at any time through their Microsoft account settings
+- Signing out from the app clears all cached tokens
 
 ### Permissions
 The app requests these Microsoft Graph API permissions:

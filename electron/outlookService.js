@@ -1,9 +1,11 @@
 const { PublicClientApplication, InteractionRequiredAuthError } = require('@azure/msal-node');
+const { FilePersistence } = require('@azure/msal-node-extensions');
 const { Client } = require('@microsoft/microsoft-graph-client');
 require('isomorphic-fetch');
 const fs = require('fs');
 const path = require('path');
-const { BrowserWindow } = require('electron');
+const { app, BrowserWindow } = require('electron');
+const os = require('os');
 
 class OutlookService {
   constructor() {
@@ -11,16 +13,39 @@ class OutlookService {
     this.graphClient = null;
     this.authWindow = null;
     this.accessToken = null;
+    this.cacheLocation = null;
   }
 
   /**
    * Initialize MSAL with configuration from environment variables
+   * Includes persistent token caching so users don't have to re-authenticate every time
    */
-  initialize(clientId, tenantId = 'common') {
+  async initialize(clientId, tenantId = 'common') {
+    // Set up cache location in app's user data directory
+    const userDataPath = app.getPath('userData');
+    this.cacheLocation = path.join(userDataPath, 'msal-cache.json');
+
     const msalConfig = {
       auth: {
         clientId: clientId,
         authority: `https://login.microsoftonline.com/${tenantId}`,
+      },
+      cache: {
+        cachePlugin: {
+          beforeCacheAccess: async (cacheContext) => {
+            // Read cache from disk
+            if (fs.existsSync(this.cacheLocation)) {
+              const cacheData = fs.readFileSync(this.cacheLocation, 'utf8');
+              cacheContext.tokenCache.deserialize(cacheData);
+            }
+          },
+          afterCacheAccess: async (cacheContext) => {
+            // Write cache to disk if it changed
+            if (cacheContext.cacheHasChanged) {
+              fs.writeFileSync(this.cacheLocation, cacheContext.tokenCache.serialize());
+            }
+          },
+        },
       },
       system: {
         loggerOptions: {
@@ -34,6 +59,7 @@ class OutlookService {
     };
 
     this.msalInstance = new PublicClientApplication(msalConfig);
+    await this.msalInstance.initialize();
   }
 
   /**
@@ -287,7 +313,7 @@ class OutlookService {
   }
 
   /**
-   * Sign out
+   * Sign out and clear cached tokens
    */
   async signOut() {
     if (this.msalInstance) {
@@ -295,6 +321,11 @@ class OutlookService {
       for (const account of accounts) {
         await this.msalInstance.getTokenCache().removeAccount(account);
       }
+    }
+
+    // Delete cache file from disk
+    if (this.cacheLocation && fs.existsSync(this.cacheLocation)) {
+      fs.unlinkSync(this.cacheLocation);
     }
 
     this.accessToken = null;
