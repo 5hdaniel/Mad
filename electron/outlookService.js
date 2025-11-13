@@ -234,6 +234,117 @@ class OutlookService {
   }
 
   /**
+   * Bulk fetch all emails and count per contact (MUCH faster than individual queries)
+   * Returns a map of email address -> count
+   * @param {Array<string>} contactEmails - Array of email addresses to count for
+   * @param {Function} onProgress - Optional callback for progress updates
+   */
+  async bulkGetEmailCounts(contactEmails, onProgress = null) {
+    if (!this.graphClient) {
+      return {};
+    }
+
+    try {
+      console.log('\n=== Bulk Email Count (Optimized Architecture) ===');
+      console.log(`Fetching ALL emails once and building index for ${contactEmails.length} contacts...`);
+
+      const startTime = Date.now();
+      const counts = {};
+
+      // Initialize all counts to 0
+      contactEmails.forEach(email => {
+        counts[email.toLowerCase()] = 0;
+      });
+
+      // Fetch ALL emails in bulk (metadata only)
+      let totalEmailsFetched = 0;
+      let nextLink = null;
+      let pageCount = 0;
+      const maxPages = 200; // Allow more pages since we're doing this once
+
+      // Progress tracking
+      let lastProgressUpdate = Date.now();
+
+      // Fetch first page
+      let response = await this.graphClient
+        .api('/me/messages')
+        .select('from,toRecipients,ccRecipients')
+        .top(500) // Larger page size for bulk fetch
+        .get();
+
+      do {
+        const emails = response.value || [];
+        totalEmailsFetched += emails.length;
+
+        // Index each email by all participants
+        emails.forEach(email => {
+          const fromEmail = email.from?.emailAddress?.address?.toLowerCase();
+          const toEmails = (email.toRecipients || []).map(r => r.emailAddress?.address?.toLowerCase());
+          const ccEmails = (email.ccRecipients || []).map(r => r.emailAddress?.address?.toLowerCase());
+
+          // Count for sender
+          if (fromEmail && counts.hasOwnProperty(fromEmail)) {
+            counts[fromEmail]++;
+          }
+
+          // Count for recipients
+          [...toEmails, ...ccEmails].forEach(recipientEmail => {
+            if (recipientEmail && counts.hasOwnProperty(recipientEmail)) {
+              counts[recipientEmail]++;
+            }
+          });
+        });
+
+        nextLink = response['@odata.nextLink'];
+        pageCount++;
+
+        // Progress update every 2 seconds
+        const now = Date.now();
+        if (onProgress && (now - lastProgressUpdate > 2000)) {
+          const elapsed = now - startTime;
+          const avgTimePerPage = elapsed / pageCount;
+          const estimatedTotalPages = Math.min(maxPages, pageCount * 2); // Rough estimate
+          const etaMs = avgTimePerPage * (estimatedTotalPages - pageCount);
+          const etaSeconds = Math.round(etaMs / 1000);
+
+          onProgress({
+            emailsFetched: totalEmailsFetched,
+            pagesLoaded: pageCount,
+            eta: etaSeconds
+          });
+
+          lastProgressUpdate = now;
+        }
+
+        // Fetch next page if exists and under limit
+        if (nextLink && pageCount < maxPages) {
+          response = await this.graphClient.api(nextLink).get();
+        } else {
+          if (nextLink) {
+            console.log(`Reached page limit (${maxPages} pages = ${totalEmailsFetched} emails)`);
+          }
+          break;
+        }
+      } while (nextLink && pageCount < maxPages);
+
+      const totalTime = Date.now() - startTime;
+      const timePerEmail = totalEmailsFetched > 0 ? (totalTime / totalEmailsFetched).toFixed(2) : 0;
+
+      console.log('\n=== Bulk Fetch Complete ===');
+      console.log(`Total emails fetched: ${totalEmailsFetched}`);
+      console.log(`Total pages: ${pageCount}`);
+      console.log(`Total time: ${(totalTime / 1000).toFixed(1)}s`);
+      console.log(`Avg time per email: ${timePerEmail}ms`);
+      console.log(`Contacts with emails: ${Object.values(counts).filter(c => c > 0).length}`);
+
+      return counts;
+    } catch (error) {
+      console.error('Error in bulk email count:', error);
+      return {};
+    }
+  }
+
+  /**
    * Search for emails with a specific contact
    * @param {string} contactEmail - Email address to search for
    * @param {number} maxResults - Maximum number of emails to retrieve (default: 100)

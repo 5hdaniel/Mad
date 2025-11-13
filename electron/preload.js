@@ -27,6 +27,8 @@ contextBridge.exposeInMainWorld('electron', {
   outlookIsAuthenticated: () => ipcRenderer.invoke('outlook-is-authenticated'),
   outlookGetUserEmail: () => ipcRenderer.invoke('outlook-get-user-email'),
   outlookGetEmailCount: (contactEmail) => ipcRenderer.invoke('outlook-get-email-count', contactEmail),
+  outlookBulkGetEmailCounts: (contactEmails, enableProgress) => ipcRenderer.invoke('outlook-bulk-get-email-counts', contactEmails, enableProgress),
+  onBulkEmailProgress: (callback) => ipcRenderer.on('outlook-bulk-progress', (_, progress) => callback(progress)),
   outlookExportEmails: (contacts) => ipcRenderer.invoke('outlook-export-emails', contacts),
   outlookSignout: () => ipcRenderer.invoke('outlook-signout'),
   onDeviceCode: (callback) => ipcRenderer.on('device-code-received', (_, info) => callback(info)),
