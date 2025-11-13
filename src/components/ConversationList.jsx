@@ -43,30 +43,27 @@ function ConversationList({ onExportComplete, onOutlookExport, outlookConnected 
     setLoadingEmailCounts(true);
     const counts = {};
 
-    console.log('Loading email counts for', conversations.length, 'conversations');
+    let contactsWithEmail = 0;
+    let totalEmailsFound = 0;
 
     // Load email counts for contacts that have email addresses
     for (const conv of conversations) {
-      console.log('Checking contact:', conv.name, 'Email:', conv.email);
       if (conv.email) {
+        contactsWithEmail++;
         try {
-          console.log('Fetching email count for:', conv.email);
           const result = await window.electron.outlookGetEmailCount(conv.email);
-          console.log('Email count result:', result);
           if (result.success) {
             counts[conv.id] = result.count;
-            console.log(`Found ${result.count} emails for ${conv.name}`);
+            totalEmailsFound += result.count;
           }
         } catch (err) {
           console.error(`Error loading email count for ${conv.email}:`, err);
           counts[conv.id] = 0;
         }
-      } else {
-        console.log(`No email address for ${conv.name}`);
       }
     }
 
-    console.log('Final email counts:', counts);
+    console.log(`Email counts loaded: ${contactsWithEmail} contacts with emails, ${totalEmailsFound} total emails found`);
     setEmailCounts(counts);
     setLoadingEmailCounts(false);
   };

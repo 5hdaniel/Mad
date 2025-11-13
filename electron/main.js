@@ -272,6 +272,7 @@ ipcMain.handle('request-permissions', async () => {
 // Helper function to get contact names from macOS Contacts database
 async function getContactNames() {
   const contactMap = {};
+  const phoneToEmailMap = {};
 
   try {
     // Search for ALL possible Contacts database files
@@ -315,19 +316,20 @@ async function getContactNames() {
 
   } catch (error) {
     console.error('Error accessing contacts database:', error);
-    return contactMap;
+    return { contactMap, phoneToEmailMap };
   }
 }
 
 // Helper function to load contacts from a specific database
 async function loadContactsFromDatabase(contactsDbPath) {
   const contactMap = {};
+  const phoneToEmailMap = {}; // Map phone numbers to email addresses
 
   try {
     await fs.access(contactsDbPath);
   } catch {
     console.log('Database not accessible:', contactsDbPath);
-    return contactMap;
+    return { contactMap, phoneToEmailMap };
   }
 
   try {
@@ -335,43 +337,43 @@ async function loadContactsFromDatabase(contactsDbPath) {
     const dbAll = promisify(db.all.bind(db));
     const dbClose = promisify(db.close.bind(db));
 
-    // Query phone numbers and emails SEPARATELY to avoid Cartesian product
-    // Use ZOWNER instead of Z22_OWNER - Z22_OWNER is for unified/linked contacts
+    // Query to get contacts with both phone numbers and emails
+    // Group by person to associate phones with emails
+    const contactsResult = await dbAll(`
+      SELECT
+        ZABCDRECORD.Z_PK as person_id,
+        ZABCDRECORD.ZFIRSTNAME as first_name,
+        ZABCDRECORD.ZLASTNAME as last_name,
+        ZABCDRECORD.ZORGANIZATION as organization
+      FROM ZABCDRECORD
+      WHERE ZABCDRECORD.Z_PK IS NOT NULL
+    `);
+
     const phonesResult = await dbAll(`
       SELECT
-        ZABCDRECORD.ZFIRSTNAME as first_name,
-        ZABCDRECORD.ZLASTNAME as last_name,
-        ZABCDRECORD.ZORGANIZATION as organization,
+        ZABCDPHONENUMBER.ZOWNER as person_id,
         ZABCDPHONENUMBER.ZFULLNUMBER as phone
-      FROM ZABCDRECORD
-      INNER JOIN ZABCDPHONENUMBER ON ZABCDRECORD.Z_PK = ZABCDPHONENUMBER.ZOWNER
+      FROM ZABCDPHONENUMBER
       WHERE ZABCDPHONENUMBER.ZFULLNUMBER IS NOT NULL
     `);
+
     const emailsResult = await dbAll(`
       SELECT
-        ZABCDRECORD.ZFIRSTNAME as first_name,
-        ZABCDRECORD.ZLASTNAME as last_name,
-        ZABCDRECORD.ZORGANIZATION as organization,
+        ZABCDEMAILADDRESS.ZOWNER as person_id,
         ZABCDEMAILADDRESS.ZADDRESS as email
-      FROM ZABCDRECORD
-      INNER JOIN ZABCDEMAILADDRESS ON ZABCDRECORD.Z_PK = ZABCDEMAILADDRESS.ZOWNER
+      FROM ZABCDEMAILADDRESS
       WHERE ZABCDEMAILADDRESS.ZADDRESS IS NOT NULL
     `);
 
-    // Combine results - each row is now either a phone OR an email, not both
-    const contacts = [
-      ...phonesResult.map(r => ({ ...r, email: null })),
-      ...emailsResult.map(r => ({ ...r, phone: null }))
-    ];
+    await dbClose();
 
-    // Build a map of phone numbers and emails to contact names
+    // Build person map
+    const personMap = {};
+    contactsResult.forEach(person => {
+      const firstName = person.first_name || '';
+      const lastName = person.last_name || '';
+      const organization = person.organization || '';
 
-    contacts.forEach((contact, index) => {
-      const firstName = contact.first_name || '';
-      const lastName = contact.last_name || '';
-      const organization = contact.organization || '';
-
-      // Prefer "First Last", fallback to organization, then "First" or "Last"
       let displayName = '';
       if (firstName && lastName) {
         displayName = `${firstName} ${lastName}`;
@@ -384,28 +386,56 @@ async function loadContactsFromDatabase(contactsDbPath) {
       }
 
       if (displayName) {
-        // Map phone numbers (normalize by removing non-digits)
-        if (contact.phone) {
-          const normalized = contact.phone.replace(/\D/g, '');
-          contactMap[normalized] = displayName;
-          contactMap[contact.phone] = displayName;
-        }
-
-        // Map emails (lowercase)
-        if (contact.email) {
-          const emailLower = contact.email.toLowerCase();
-          contactMap[emailLower] = displayName;
-        }
+        personMap[person.person_id] = {
+          name: displayName,
+          phones: [],
+          emails: []
+        };
       }
     });
 
-    console.log(`Loaded ${Object.keys(contactMap).length} contact entries from Contacts database`);
-    await dbClose();
+    // Add phones to persons
+    phonesResult.forEach(phone => {
+      if (personMap[phone.person_id]) {
+        personMap[phone.person_id].phones.push(phone.phone);
+      }
+    });
+
+    // Add emails to persons
+    emailsResult.forEach(email => {
+      if (personMap[email.person_id]) {
+        personMap[email.person_id].emails.push(email.email);
+      }
+    });
+
+    console.log(`Loaded ${Object.keys(personMap).length} contact entries from Contacts database`);
+
+    // Build maps
+    Object.values(personMap).forEach(person => {
+      // Map phone numbers to name
+      person.phones.forEach(phone => {
+        const normalized = phone.replace(/\D/g, '');
+        contactMap[normalized] = person.name;
+        contactMap[phone] = person.name;
+
+        // Map phone to email (use first email if multiple)
+        if (person.emails.length > 0) {
+          phoneToEmailMap[normalized] = person.emails[0];
+          phoneToEmailMap[phone] = person.emails[0];
+        }
+      });
+
+      // Map emails to name
+      person.emails.forEach(email => {
+        const emailLower = email.toLowerCase();
+        contactMap[emailLower] = person.name;
+      });
+    });
   } catch (error) {
     console.error('Error accessing contacts database:', error);
   }
 
-  return contactMap;
+  return { contactMap, phoneToEmailMap };
 }
 
 // Helper function to normalize phone numbers for matching
@@ -470,7 +500,7 @@ ipcMain.handle('get-conversations', async () => {
     try {
       // Get contact names from Contacts database
       console.log('Loading contact names...');
-      const contactMap = await getContactNames();
+      const { contactMap, phoneToEmailMap } = await getContactNames();
 
       // Get all chats with their latest message
       // Filter to only show chats with at least 1 message
@@ -501,6 +531,17 @@ ipcMain.handle('get-conversations', async () => {
         const rawContactId = conv.contact_id || conv.chat_identifier;
         const displayName = resolveContactName(conv.contact_id, conv.chat_identifier, conv.display_name, contactMap);
 
+        // Determine email address for this contact
+        let email = null;
+        if (rawContactId && rawContactId.includes('@')) {
+          // contactId is already an email
+          email = rawContactId;
+        } else if (rawContactId) {
+          // contactId is a phone - look up email from phoneToEmailMap
+          const normalized = rawContactId.replace(/\D/g, '');
+          email = phoneToEmailMap[normalized] || phoneToEmailMap[rawContactId] || null;
+        }
+
         // Normalize the identifier (phone or email) for deduplication
         let normalizedKey;
         if (rawContactId && rawContactId.includes('@')) {
@@ -519,6 +560,7 @@ ipcMain.handle('get-conversations', async () => {
           id: conv.chat_id,
           name: displayName,
           contactId: rawContactId,
+          email: email, // Add email field
           showBothNameAndNumber: displayName !== rawContactId,
           messageCount: conv.message_count,
           lastMessageDate: conv.last_message_date
