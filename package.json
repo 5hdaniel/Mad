@@ -1,6 +1,6 @@
 {
   "name": "real-estate-archive-app",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Real Estate Archive App - Export iMessage conversations",
   "main": "electron/main.js",
   "scripts": {
