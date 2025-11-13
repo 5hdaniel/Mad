@@ -421,14 +421,14 @@ class OutlookService {
       fs.writeFileSync(filePath, content, 'utf8');
 
       // Also export as JSON for potential future use
-      const jsonFileName = `${sanitizedName}_email_audit.json`;
-      const jsonFilePath = path.join(fullPath, jsonFileName);
+      const jsonFileName = `emails.json`;
+      const jsonFilePath = path.join(contactFolder, jsonFileName);
       fs.writeFileSync(jsonFilePath, JSON.stringify(emails, null, 2), 'utf8');
 
       return {
         success: true,
         emailCount: emails.length,
-        exportPath: fullPath,
+        exportPath: contactFolder,
         files: [fileName, jsonFileName],
       };
 
