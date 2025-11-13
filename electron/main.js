@@ -620,9 +620,20 @@ ipcMain.handle('get-conversations', async () => {
 
       console.log(`Deduplicated ${conversations.length} conversations to ${deduplicatedConversations.length}`);
 
+      // Filter out contacts with no messages in the last 5 years
+      const fiveYearsAgo = Date.now() - (5 * 365 * 24 * 60 * 60 * 1000); // 5 years in milliseconds
+      const macEpoch = new Date('2001-01-01T00:00:00Z').getTime();
+      const fiveYearsAgoMacTime = (fiveYearsAgo - macEpoch) * 1000000; // Convert to Mac timestamp (nanoseconds)
+
+      const recentConversations = deduplicatedConversations.filter(conv => {
+        return conv.lastMessageDate > fiveYearsAgoMacTime;
+      });
+
+      console.log(`Filtered to ${recentConversations.length} contacts with messages in last 5 years (removed ${deduplicatedConversations.length - recentConversations.length} old contacts)`);
+
       return {
         success: true,
-        conversations: deduplicatedConversations
+        conversations: recentConversations
       };
     } catch (error) {
       await dbClose();

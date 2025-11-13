@@ -9,7 +9,7 @@ function ConversationList({ onExportComplete, onOutlookExport, outlookConnected 
   const [error, setError] = useState(null);
   const [emailCounts, setEmailCounts] = useState({});
   const [loadingEmailCounts, setLoadingEmailCounts] = useState(false);
-  const [emailCountProgress, setEmailCountProgress] = useState({ current: 0, total: 0 });
+  const [emailCountProgress, setEmailCountProgress] = useState({ current: 0, total: 0, eta: 0 });
   const [contactInfoModal, setContactInfoModal] = useState(null);
 
   useEffect(() => {
@@ -44,41 +44,88 @@ function ConversationList({ onExportComplete, onOutlookExport, outlookConnected 
   const loadEmailCounts = async () => {
     const contactsWithEmail = conversations.filter(c => c.emails && c.emails.length > 0);
 
+    if (contactsWithEmail.length === 0) {
+      console.log('No contacts with email addresses found');
+      return;
+    }
+
+    console.log(`\n=== Starting Email Count Load ===`);
+    console.log(`Contacts with emails: ${contactsWithEmail.length}`);
+    console.log(`Total email addresses to query: ${contactsWithEmail.reduce((sum, c) => sum + (c.emails?.length || 0), 0)}`);
+
+    const startTime = Date.now();
     setLoadingEmailCounts(true);
     setEmailCountProgress({ current: 0, total: contactsWithEmail.length });
 
-    const counts = {};
-    let totalEmailsFound = 0;
+    try {
+      const counts = {};
+      let totalEmailsFound = 0;
+      let totalQueriesMade = 0;
 
-    // Load email counts for contacts that have email addresses
-    for (let i = 0; i < contactsWithEmail.length; i++) {
-      const conv = contactsWithEmail[i];
+      // Load email counts for contacts that have email addresses
+      for (let i = 0; i < contactsWithEmail.length; i++) {
+        const conv = contactsWithEmail[i];
+        const contactStartTime = Date.now();
 
-      // Update progress
-      setEmailCountProgress({ current: i + 1, total: contactsWithEmail.length });
-
-      // Get count for ALL emails for this contact
-      let totalCount = 0;
-      for (const email of conv.emails) {
-        try {
-          const result = await window.electron.outlookGetEmailCount(email);
-          if (result.success) {
-            totalCount += result.count;
-          }
-        } catch (err) {
-          console.error(`Error loading email count for ${email}:`, err);
+        // Calculate ETA
+        let etaSeconds = 0;
+        if (i > 0) {
+          const elapsed = Date.now() - startTime;
+          const avgTimePerContact = elapsed / i;
+          const remaining = contactsWithEmail.length - i;
+          const etaMs = avgTimePerContact * remaining;
+          etaSeconds = Math.round(etaMs / 1000);
+          console.log(`[${i + 1}/${contactsWithEmail.length}] ${conv.name} (ETA: ${etaSeconds}s)`);
+        } else {
+          console.log(`[${i + 1}/${contactsWithEmail.length}] ${conv.name}`);
         }
+
+        // Update progress with ETA
+        setEmailCountProgress({ current: i + 1, total: contactsWithEmail.length, eta: etaSeconds });
+
+        // Get count for ALL emails for this contact
+        let totalCount = 0;
+        for (const email of conv.emails) {
+          totalQueriesMade++;
+          try {
+            const result = await window.electron.outlookGetEmailCount(email);
+            if (result.success) {
+              totalCount += result.count;
+            }
+          } catch (err) {
+            console.error(`  Error loading email count for ${email}:`, err.message);
+          }
+        }
+
+        const contactTime = Date.now() - contactStartTime;
+        console.log(`  Found ${totalCount} emails (took ${contactTime}ms)`);
+
+        counts[conv.id] = totalCount;
+        totalEmailsFound += totalCount;
+
+        // Update counts in real-time as we load them
+        setEmailCounts({...counts});
       }
 
-      counts[conv.id] = totalCount;
-      totalEmailsFound += totalCount;
+      const totalTime = Date.now() - startTime;
+      const avgTimePerContact = Math.round(totalTime / contactsWithEmail.length);
+      const avgTimePerQuery = Math.round(totalTime / totalQueriesMade);
 
-      // Update counts in real-time as we load them
-      setEmailCounts({...counts});
+      console.log(`\n=== Email Count Load Complete ===`);
+      console.log(`Total time: ${(totalTime / 1000).toFixed(1)}s`);
+      console.log(`Contacts processed: ${contactsWithEmail.length}`);
+      console.log(`API queries made: ${totalQueriesMade}`);
+      console.log(`Total emails found: ${totalEmailsFound}`);
+      console.log(`Average time per contact: ${avgTimePerContact}ms`);
+      console.log(`Average time per query: ${avgTimePerQuery}ms`);
+      console.log(`\nPerformance Note: Currently making ${totalQueriesMade} sequential API calls.`);
+      console.log(`This could be optimized by fetching all emails once and indexing in memory.`);
+    } catch (err) {
+      console.error('Error loading email counts:', err);
+      setError('Failed to load email counts. Please try again.');
+    } finally {
+      setLoadingEmailCounts(false);
     }
-
-    console.log(`Email counts loaded: ${contactsWithEmail.length} contacts with emails, ${totalEmailsFound} total emails found`);
-    setLoadingEmailCounts(false);
   };
 
   const toggleSelection = (id) => {
@@ -260,19 +307,29 @@ function ConversationList({ onExportComplete, onOutlookExport, outlookConnected 
               <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
               <h3 className="text-lg font-semibold text-gray-900 mb-2">Loading Email Counts</h3>
               <p className="text-sm text-gray-600 mb-4">
-                Fetching email counts from Outlook...
+                Querying Outlook mailbox for email counts...
               </p>
               {emailCountProgress.total > 0 && (
                 <>
-                  <p className="text-sm text-gray-700 mb-2">
-                    Contact {emailCountProgress.current} of {emailCountProgress.total}
-                  </p>
-                  <div className="w-full bg-gray-200 rounded-full h-2.5">
+                  <div className="flex items-center justify-between text-sm text-gray-700 mb-2">
+                    <span>Contact {emailCountProgress.current} of {emailCountProgress.total}</span>
+                    <span className="font-semibold">
+                      {Math.round((emailCountProgress.current / emailCountProgress.total) * 100)}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2.5 mb-3">
                     <div
                       className="bg-primary h-2.5 rounded-full transition-all duration-300"
                       style={{ width: `${(emailCountProgress.current / emailCountProgress.total) * 100}%` }}
                     ></div>
                   </div>
+                  {emailCountProgress.eta > 0 && (
+                    <p className="text-xs text-gray-500">
+                      Estimated time remaining: {emailCountProgress.eta > 60
+                        ? `${Math.floor(emailCountProgress.eta / 60)}m ${emailCountProgress.eta % 60}s`
+                        : `${emailCountProgress.eta}s`}
+                    </p>
+                  )}
                 </>
               )}
             </div>
