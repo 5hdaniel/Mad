@@ -539,6 +539,14 @@ ipcMain.handle('get-conversations', async () => {
         const rawContactId = conv.contact_id || conv.chat_identifier;
         const displayName = resolveContactName(conv.contact_id, conv.chat_identifier, conv.display_name, contactMap);
 
+        // Skip group chats - they have chat_identifier like "chat123456789"
+        // Individual chats have phone numbers or emails as identifiers
+        const isGroupChat = conv.chat_identifier && conv.chat_identifier.startsWith('chat') && !conv.chat_identifier.includes('@');
+        if (isGroupChat) {
+          console.log(`Skipping group chat: ${displayName} (${conv.chat_identifier})`);
+          return; // Skip this conversation
+        }
+
         // Get full contact info (all phones and emails)
         let contactInfo = null;
         let phones = [];
