@@ -9,6 +9,7 @@ function ConversationList({ onExportComplete, onOutlookExport, outlookConnected 
   const [error, setError] = useState(null);
   const [emailCounts, setEmailCounts] = useState({});
   const [loadingEmailCounts, setLoadingEmailCounts] = useState(false);
+  const [emailCountProgress, setEmailCountProgress] = useState({ current: 0, total: 0 });
   const [contactInfoModal, setContactInfoModal] = useState(null);
 
   useEffect(() => {
@@ -41,37 +42,42 @@ function ConversationList({ onExportComplete, onOutlookExport, outlookConnected 
   };
 
   const loadEmailCounts = async () => {
-    setLoadingEmailCounts(true);
-    const counts = {};
+    const contactsWithEmail = conversations.filter(c => c.emails && c.emails.length > 0);
 
-    let contactsWithEmail = 0;
+    setLoadingEmailCounts(true);
+    setEmailCountProgress({ current: 0, total: contactsWithEmail.length });
+
+    const counts = {};
     let totalEmailsFound = 0;
 
     // Load email counts for contacts that have email addresses
-    for (const conv of conversations) {
-      if (conv.emails && conv.emails.length > 0) {
-        contactsWithEmail++;
+    for (let i = 0; i < contactsWithEmail.length; i++) {
+      const conv = contactsWithEmail[i];
 
-        // Get count for ALL emails for this contact
-        let totalCount = 0;
-        for (const email of conv.emails) {
-          try {
-            const result = await window.electron.outlookGetEmailCount(email);
-            if (result.success) {
-              totalCount += result.count;
-            }
-          } catch (err) {
-            console.error(`Error loading email count for ${email}:`, err);
+      // Update progress
+      setEmailCountProgress({ current: i + 1, total: contactsWithEmail.length });
+
+      // Get count for ALL emails for this contact
+      let totalCount = 0;
+      for (const email of conv.emails) {
+        try {
+          const result = await window.electron.outlookGetEmailCount(email);
+          if (result.success) {
+            totalCount += result.count;
           }
+        } catch (err) {
+          console.error(`Error loading email count for ${email}:`, err);
         }
-
-        counts[conv.id] = totalCount;
-        totalEmailsFound += totalCount;
       }
+
+      counts[conv.id] = totalCount;
+      totalEmailsFound += totalCount;
+
+      // Update counts in real-time as we load them
+      setEmailCounts({...counts});
     }
 
-    console.log(`Email counts loaded: ${contactsWithEmail} contacts with emails, ${totalEmailsFound} total emails found`);
-    setEmailCounts(counts);
+    console.log(`Email counts loaded: ${contactsWithEmail.length} contacts with emails, ${totalEmailsFound} total emails found`);
     setLoadingEmailCounts(false);
   };
 
@@ -245,6 +251,34 @@ function ConversationList({ onExportComplete, onOutlookExport, outlookConnected 
           </div>
         </div>
       </div>
+
+      {/* Email Count Loading Overlay */}
+      {loadingEmailCounts && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-8">
+            <div className="text-center">
+              <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Loading Email Counts</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Fetching email counts from Outlook...
+              </p>
+              {emailCountProgress.total > 0 && (
+                <>
+                  <p className="text-sm text-gray-700 mb-2">
+                    Contact {emailCountProgress.current} of {emailCountProgress.total}
+                  </p>
+                  <div className="w-full bg-gray-200 rounded-full h-2.5">
+                    <div
+                      className="bg-primary h-2.5 rounded-full transition-all duration-300"
+                      style={{ width: `${(emailCountProgress.current / emailCountProgress.total) * 100}%` }}
+                    ></div>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Conversation List */}
       <div className="flex-1 overflow-y-auto p-6">

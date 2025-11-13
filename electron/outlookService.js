@@ -176,7 +176,7 @@ class OutlookService {
   }
 
   /**
-   * Get email count for a specific contact
+   * Get email count for a specific contact (optimized for speed)
    * @param {string} contactEmail - Email address to search for
    */
   async getEmailCount(contactEmail) {
@@ -185,18 +185,18 @@ class OutlookService {
     }
 
     try {
-      // Fetch messages and filter in memory since Graph API search/filter is problematic
+      // Use smaller page size (50) and metadata only for fast counting
       const emailLower = contactEmail.toLowerCase();
-      let allEmails = [];
+      let totalCount = 0;
       let nextLink = null;
       let pageCount = 0;
       const maxPages = 20; // Limit to prevent infinite loops
 
-      // Fetch first page
+      // Fetch first page - metadata only, no body
       let response = await this.graphClient
         .api('/me/messages')
         .select('from,toRecipients,ccRecipients')
-        .top(500)
+        .top(50)
         .get();
 
       do {
@@ -213,7 +213,7 @@ class OutlookService {
                  ccEmails.includes(emailLower);
         });
 
-        allEmails.push(...matching);
+        totalCount += matching.length;
 
         nextLink = response['@odata.nextLink'];
         pageCount++;
@@ -226,7 +226,7 @@ class OutlookService {
         }
       } while (nextLink && pageCount < maxPages);
 
-      return allEmails.length;
+      return totalCount;
     } catch (error) {
       console.error('Error getting email count:', error);
       return 0;
