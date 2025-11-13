@@ -185,15 +185,17 @@ class OutlookService {
     }
 
     try {
+      // Use search instead of filter for more reliable results
+      const searchQuery = `participants:${contactEmail}`;
+
       const result = await this.graphClient
         .api('/me/messages')
-        .filter(`(from/emailAddress/address eq '${contactEmail}' or toRecipients/any(r: r/emailAddress/address eq '${contactEmail}'))`)
+        .search(searchQuery)
         .select('id')
         .top(999)
-        .count(true)
         .get();
 
-      return result['@odata.count'] || result.value.length || 0;
+      return result.value?.length || 0;
     } catch (error) {
       console.error('Error getting email count:', error);
       return 0;
@@ -211,12 +213,12 @@ class OutlookService {
     }
 
     try {
-      // Search for emails where the contact is either sender or recipient
+      // Use search parameter for more reliable results
       const searchQuery = `participants:${contactEmail}`;
 
       const emails = await this.graphClient
         .api('/me/messages')
-        .filter(`(from/emailAddress/address eq '${contactEmail}' or toRecipients/any(r: r/emailAddress/address eq '${contactEmail}'))`)
+        .search(searchQuery)
         .select('subject,from,toRecipients,ccRecipients,receivedDateTime,bodyPreview,body,hasAttachments,importance')
         .orderby('receivedDateTime DESC')
         .top(maxResults)
