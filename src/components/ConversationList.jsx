@@ -8,6 +8,7 @@ function ConversationList({ onExportComplete, onOutlookExport, outlookConnected 
   const [searchTerm, setSearchTerm] = useState('');
   const [error, setError] = useState(null);
   const [emailCounts, setEmailCounts] = useState({});
+  const [loadingEmailCounts, setLoadingEmailCounts] = useState(false);
 
   useEffect(() => {
     loadConversations();
@@ -39,24 +40,35 @@ function ConversationList({ onExportComplete, onOutlookExport, outlookConnected 
   };
 
   const loadEmailCounts = async () => {
+    setLoadingEmailCounts(true);
     const counts = {};
+
+    console.log('Loading email counts for', conversations.length, 'conversations');
 
     // Load email counts for contacts that have email addresses
     for (const conv of conversations) {
+      console.log('Checking contact:', conv.name, 'Email:', conv.email);
       if (conv.email) {
         try {
+          console.log('Fetching email count for:', conv.email);
           const result = await window.electron.outlookGetEmailCount(conv.email);
+          console.log('Email count result:', result);
           if (result.success) {
             counts[conv.id] = result.count;
+            console.log(`Found ${result.count} emails for ${conv.name}`);
           }
         } catch (err) {
           console.error(`Error loading email count for ${conv.email}:`, err);
           counts[conv.id] = 0;
         }
+      } else {
+        console.log(`No email address for ${conv.name}`);
       }
     }
 
+    console.log('Final email counts:', counts);
     setEmailCounts(counts);
+    setLoadingEmailCounts(false);
   };
 
   const toggleSelection = (id) => {
@@ -208,21 +220,21 @@ function ConversationList({ onExportComplete, onOutlookExport, outlookConnected 
 
           <div className="flex gap-3">
             <button
+              onClick={handleExport}
+              disabled={selectedIds.size === 0 || isExporting}
+              className="bg-white border-2 border-gray-300 text-gray-700 py-2 px-6 rounded-lg font-semibold hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isExporting ? 'Exporting...' : `Export Text Only ${selectedIds.size > 0 ? `(${selectedIds.size})` : ''}`}
+            </button>
+            <button
               onClick={handleOutlookExport}
               disabled={selectedIds.size === 0 || isExporting}
-              className="bg-white border-2 border-primary text-primary py-2 px-6 rounded-lg font-semibold hover:bg-blue-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              className="bg-primary text-white py-2 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
               </svg>
-              Export to Outlook
-            </button>
-            <button
-              onClick={handleExport}
-              disabled={selectedIds.size === 0 || isExporting}
-              className="bg-primary text-white py-2 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isExporting ? 'Exporting...' : `Export Text ${selectedIds.size > 0 ? `(${selectedIds.size})` : ''}`}
+              Export All (Messages & Emails)
             </button>
           </div>
         </div>
@@ -270,8 +282,12 @@ function ConversationList({ onExportComplete, onOutlookExport, outlookConnected 
                       )}
                       <p className="text-sm text-gray-500">
                         {conversation.messageCount || 0} messages
-                        {outlookConnected && conversation.email && emailCounts[conversation.id] !== undefined && (
-                          <> · {emailCounts[conversation.id]} emails</>
+                        {outlookConnected && conversation.email && (
+                          loadingEmailCounts ? (
+                            <> · loading emails...</>
+                          ) : emailCounts[conversation.id] !== undefined ? (
+                            <> · {emailCounts[conversation.id]} emails</>
+                          ) : null
                         )}
                         {' · '}
                         {formatDate(conversation.lastMessageDate)}
