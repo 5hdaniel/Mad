@@ -51,7 +51,10 @@
       "target": [
         "dmg",
         "zip"
-      ]
+      ],
+      "notarize": {
+        "teamId": "SDX736QH45"
+      }
     },
     "files": [
       "dist/**/*",
