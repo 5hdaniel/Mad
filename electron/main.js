@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, systemPreferences } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, systemPreferences, Notification } = require('electron');
 const path = require('path');
 const fs = require('fs').promises;
 const sqlite3 = require('sqlite3');
@@ -1077,7 +1077,17 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
     const results = [];
 
     // Export emails for each contact
-    for (const contact of contacts) {
+    for (let i = 0; i < contacts.length; i++) {
+      const contact = contacts[i];
+
+      // Send progress update
+      mainWindow.webContents.send('export-progress', {
+        stage: 'contact',
+        current: i + 1,
+        total: contacts.length,
+        contactName: contact.name
+      });
+
       if (!contact.emails || contact.emails.length === 0) {
         results.push({
           contactName: contact.name,
@@ -1097,7 +1107,16 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
           const result = await outlookService.exportEmailsToAudit(
             contact.name,
             email,
-            filePath
+            filePath,
+            (progress) => {
+              // Forward progress to renderer
+              mainWindow.webContents.send('export-progress', {
+                ...progress,
+                contactName: contact.name,
+                current: i + 1,
+                total: contacts.length
+              });
+            }
           );
 
           if (result.success) {
@@ -1118,6 +1137,15 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
         error: errors.length > 0 ? errors.join('; ') : null
       });
     }
+
+    // Show OS notification when complete
+    const successCount = results.filter(r => r.success).length;
+    const failCount = results.filter(r => !r.success).length;
+
+    new Notification({
+      title: 'Email Export Complete',
+      body: `Exported emails for ${successCount} contact${successCount !== 1 ? 's' : ''}${failCount > 0 ? `. ${failCount} failed.` : ''}`,
+    }).show();
 
     return {
       success: true,

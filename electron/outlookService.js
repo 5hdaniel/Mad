@@ -303,18 +303,29 @@ class OutlookService {
    * @param {string} contactName - Name of the contact
    * @param {string} contactEmail - Email address of the contact
    * @param {string} exportPath - Path to export folder
+   * @param {Function} onProgress - Optional callback for progress updates
    */
-  async exportEmailsToAudit(contactName, contactEmail, exportPath) {
+  async exportEmailsToAudit(contactName, contactEmail, exportPath, onProgress = null) {
     try {
+      if (onProgress) onProgress({ stage: 'fetching', message: `Fetching emails for ${contactName}...` });
+
       const emails = await this.getEmailsWithContact(contactEmail);
 
       if (emails.length === 0) {
+        if (onProgress) onProgress({ stage: 'complete', message: 'No emails found' });
         return {
           success: true,
           message: 'No emails found for this contact',
           emailCount: 0,
         };
       }
+
+      if (onProgress) onProgress({
+        stage: 'processing',
+        message: `Processing ${emails.length} emails for ${contactName}...`,
+        current: 0,
+        total: emails.length
+      });
 
       // Create audit folder
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);

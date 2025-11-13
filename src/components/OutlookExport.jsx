@@ -9,9 +9,19 @@ function OutlookExport({ conversations, selectedIds, onComplete, onCancel }) {
   const [error, setError] = useState(null);
   const [deviceCode, setDeviceCode] = useState(null);
   const [exportResults, setExportResults] = useState(null);
+  const [exportProgress, setExportProgress] = useState(null);
 
   useEffect(() => {
     initializeOutlook();
+
+    // Listen for export progress updates
+    const progressListener = (progress) => {
+      setExportProgress(progress);
+    };
+
+    if (window.electron.onExportProgress) {
+      window.electron.onExportProgress(progressListener);
+    }
   }, []);
 
   const initializeOutlook = async () => {
@@ -339,6 +349,33 @@ function OutlookExport({ conversations, selectedIds, onComplete, onCancel }) {
           {error && (
             <div className="mb-6 p-4 bg-red-50 rounded-lg">
               <p className="text-sm text-red-800">{error}</p>
+            </div>
+          )}
+
+          {/* Export Progress */}
+          {isExporting && exportProgress && (
+            <div className="mb-6 p-4 bg-blue-50 rounded-lg">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm font-semibold text-blue-900">
+                  {exportProgress.contactName && `Exporting ${exportProgress.contactName}...`}
+                </p>
+                {exportProgress.total && (
+                  <p className="text-sm text-blue-700">
+                    Contact {exportProgress.current} of {exportProgress.total}
+                  </p>
+                )}
+              </div>
+              {exportProgress.message && (
+                <p className="text-sm text-blue-800 mb-3">{exportProgress.message}</p>
+              )}
+              {exportProgress.total && (
+                <div className="w-full bg-blue-200 rounded-full h-2.5">
+                  <div
+                    className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
+                    style={{ width: `${(exportProgress.current / exportProgress.total) * 100}%` }}
+                  ></div>
+                </div>
+              )}
             </div>
           )}
 
