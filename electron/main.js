@@ -528,6 +528,10 @@ ipcMain.handle('get-conversations', async () => {
         ORDER BY last_message_date DESC
       `);
 
+      // Re-open database to query group chat participants
+      const db2 = new sqlite3.Database(messagesDbPath, sqlite3.OPEN_READONLY);
+      const dbAll2 = promisify(db2.all.bind(db2));
+
       await dbClose();
 
       // Map conversations and deduplicate by contact NAME
@@ -535,16 +539,99 @@ ipcMain.handle('get-conversations', async () => {
       // they appear as ONE contact with all their info
       const conversationMap = new Map();
 
-      conversations.forEach(conv => {
+      // Process conversations - track direct chats and group chats separately
+      for (const conv of conversations) {
         const rawContactId = conv.contact_id || conv.chat_identifier;
         const displayName = resolveContactName(conv.contact_id, conv.chat_identifier, conv.display_name, contactMap);
 
-        // Skip group chats - they have chat_identifier like "chat123456789"
+        // Detect group chats - they have chat_identifier like "chat123456789"
         // Individual chats have phone numbers or emails as identifiers
         const isGroupChat = conv.chat_identifier && conv.chat_identifier.startsWith('chat') && !conv.chat_identifier.includes('@');
+
         if (isGroupChat) {
-          console.log(`Skipping group chat: ${displayName} (${conv.chat_identifier})`);
-          return; // Skip this conversation
+          // For group chats, we need to attribute the chat to all participants
+          console.log(`Processing group chat: ${displayName} (${conv.chat_identifier}) with ${conv.message_count} messages`);
+
+          try {
+            // Get all participants in this group chat
+            const participants = await dbAll2(`
+              SELECT DISTINCT handle.id as contact_id
+              FROM chat_handle_join
+              JOIN handle ON chat_handle_join.handle_id = handle.ROWID
+              WHERE chat_handle_join.chat_id = ?
+            `, [conv.chat_id]);
+
+            console.log(`  Found ${participants.length} participants in group chat`);
+
+            // Add this group chat to each participant's statistics
+            for (const participant of participants) {
+              const participantName = resolveContactName(participant.contact_id, participant.contact_id, null, contactMap);
+              const normalizedKey = participantName.toLowerCase().trim();
+
+              // Get or create contact entry
+              if (!conversationMap.has(normalizedKey)) {
+                // Create new contact entry for this participant
+                let contactInfo = null;
+                let phones = [];
+                let emails = [];
+
+                if (participant.contact_id && participant.contact_id.includes('@')) {
+                  const emailLower = participant.contact_id.toLowerCase();
+                  for (const info of Object.values(phoneToContactInfo)) {
+                    if (info.emails && info.emails.some(e => e.toLowerCase() === emailLower)) {
+                      contactInfo = info;
+                      break;
+                    }
+                  }
+                  if (contactInfo) {
+                    phones = contactInfo.phones || [];
+                    emails = contactInfo.emails || [];
+                  } else {
+                    emails = [participant.contact_id];
+                  }
+                } else if (participant.contact_id) {
+                  const normalized = participant.contact_id.replace(/\D/g, '');
+                  contactInfo = phoneToContactInfo[normalized] || phoneToContactInfo[participant.contact_id];
+                  if (contactInfo) {
+                    phones = contactInfo.phones || [];
+                    emails = contactInfo.emails || [];
+                  } else {
+                    phones = [participant.contact_id];
+                  }
+                }
+
+                conversationMap.set(normalizedKey, {
+                  id: null, // Will be set when we find their direct chat
+                  name: participantName,
+                  contactId: participant.contact_id,
+                  phones: phones,
+                  emails: emails,
+                  showBothNameAndNumber: participantName !== participant.contact_id,
+                  messageCount: 0,
+                  lastMessageDate: 0,
+                  directChatCount: 0,
+                  directMessageCount: 0,
+                  groupChatCount: 0,
+                  groupMessageCount: 0
+                });
+              }
+
+              // Add group chat stats to this participant
+              const existing = conversationMap.get(normalizedKey);
+              existing.groupChatCount += 1;
+              existing.groupMessageCount += conv.message_count;
+              existing.messageCount += conv.message_count;
+
+              // Update last message date if this group chat is more recent
+              if (conv.last_message_date > existing.lastMessageDate) {
+                existing.lastMessageDate = conv.last_message_date;
+              }
+            }
+          } catch (err) {
+            console.error(`Error processing group chat ${conv.chat_identifier}:`, err);
+          }
+
+          continue; // Skip to next conversation (don't add group chat as its own contact)
         }
 
         // Get full contact info (all phones and emails)
@@ -595,7 +682,11 @@ ipcMain.handle('get-conversations', async () => {
           emails: emails,
           showBothNameAndNumber: displayName !== rawContactId,
           messageCount: conv.message_count,
-          lastMessageDate: conv.last_message_date
+          lastMessageDate: conv.last_message_date,
+          directChatCount: 1, // This is a direct chat
+          directMessageCount: conv.message_count,
+          groupChatCount: 0,
+          groupMessageCount: 0
         };
 
         // If we already have this contact, merge the data
@@ -613,14 +704,19 @@ ipcMain.handle('get-conversations', async () => {
             existing.lastMessageDate = conv.last_message_date;
           }
 
-          // Add up message counts
+          // Add up message counts and direct chat counts
           existing.messageCount += conv.message_count;
+          existing.directChatCount += 1;
+          existing.directMessageCount += conv.message_count;
           existing.phones = allPhones;
           existing.emails = allEmails;
         } else {
           conversationMap.set(normalizedKey, conversationData);
         }
-      });
+      }
+
+      // Close the second database connection
+      await promisify(db2.close.bind(db2))();
 
       // Convert map back to array
       const deduplicatedConversations = Array.from(conversationMap.values())

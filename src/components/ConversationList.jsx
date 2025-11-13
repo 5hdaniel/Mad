@@ -411,7 +411,28 @@ function ConversationList({ onExportComplete, onOutlookExport, outlookConnected 
                       )}
 
                       <p className="text-sm text-gray-500 mt-1">
-                        {conversation.messageCount || 0} messages
+                        {/* Show chat statistics breakdown */}
+                        {conversation.directChatCount > 0 && conversation.groupChatCount > 0 ? (
+                          // Has both direct and group chats
+                          <>
+                            {conversation.directChatCount} direct message thread{conversation.directChatCount > 1 ? 's' : ''} ({conversation.directMessageCount} message{conversation.directMessageCount !== 1 ? 's' : ''})
+                            {' and '}
+                            {conversation.groupChatCount} group chat thread{conversation.groupChatCount > 1 ? 's' : ''} ({conversation.groupMessageCount} message{conversation.groupMessageCount !== 1 ? 's' : ''})
+                          </>
+                        ) : conversation.directChatCount > 0 ? (
+                          // Only direct chats
+                          <>
+                            {conversation.directChatCount} direct message thread{conversation.directChatCount > 1 ? 's' : ''} ({conversation.directMessageCount} message{conversation.directMessageCount !== 1 ? 's' : ''})
+                          </>
+                        ) : conversation.groupChatCount > 0 ? (
+                          // Only group chats
+                          <>
+                            {conversation.groupChatCount} group chat thread{conversation.groupChatCount > 1 ? 's' : ''} ({conversation.groupMessageCount} message{conversation.groupMessageCount !== 1 ? 's' : ''})
+                          </>
+                        ) : (
+                          // Fallback to old format
+                          <>{conversation.messageCount || 0} messages</>
+                        )}
                         {outlookConnected && conversation.emails?.length > 0 && (
                           loadingEmailCounts ? (
                             <> · loading emails...</>
