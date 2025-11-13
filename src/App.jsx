@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import MicrosoftLogin from './components/MicrosoftLogin';
 import PermissionsScreen from './components/PermissionsScreen';
 import ConversationList from './components/ConversationList';
 import ExportComplete from './components/ExportComplete';
@@ -6,8 +7,9 @@ import OutlookExport from './components/OutlookExport';
 import UpdateNotification from './components/UpdateNotification';
 
 function App() {
-  const [currentStep, setCurrentStep] = useState('permissions'); // permissions, conversations, outlook, complete
+  const [currentStep, setCurrentStep] = useState('microsoft-login'); // microsoft-login, permissions, contacts, outlook, complete
   const [hasPermissions, setHasPermissions] = useState(false);
+  const [outlookConnected, setOutlookConnected] = useState(false);
   const [exportResult, setExportResult] = useState(null);
   const [showVersion, setShowVersion] = useState(false);
   const [conversations, setConversations] = useState([]);
@@ -21,13 +23,32 @@ function App() {
     const result = await window.electron.checkPermissions();
     if (result.hasPermission) {
       setHasPermissions(true);
-      setCurrentStep('conversations');
+    }
+  };
+
+  const handleMicrosoftLogin = (userInfo) => {
+    setOutlookConnected(true);
+    // Check if we already have permissions
+    if (hasPermissions) {
+      setCurrentStep('contacts');
+    } else {
+      setCurrentStep('permissions');
+    }
+  };
+
+  const handleMicrosoftSkip = () => {
+    setOutlookConnected(false);
+    // Check if we already have permissions
+    if (hasPermissions) {
+      setCurrentStep('contacts');
+    } else {
+      setCurrentStep('permissions');
     }
   };
 
   const handlePermissionsGranted = () => {
     setHasPermissions(true);
-    setCurrentStep('conversations');
+    setCurrentStep('contacts');
   };
 
   const handleExportComplete = (result) => {
@@ -53,20 +74,22 @@ function App() {
   };
 
   const handleOutlookCancel = () => {
-    setCurrentStep('conversations');
+    setCurrentStep('contacts');
   };
 
   const handleStartOver = () => {
     setExportResult(null);
-    setCurrentStep('conversations');
+    setCurrentStep('contacts');
   };
 
   const getPageTitle = () => {
     switch (currentStep) {
+      case 'microsoft-login':
+        return 'Connect to Microsoft';
       case 'permissions':
         return 'Setup Permissions';
-      case 'conversations':
-        return 'Select Conversations';
+      case 'contacts':
+        return 'Select Contacts for Export';
       case 'outlook':
         return 'Export to Outlook';
       case 'complete':
@@ -85,6 +108,13 @@ function App() {
 
       {/* Scrollable Content Area */}
       <div className="flex-1 overflow-y-auto relative">
+        {currentStep === 'microsoft-login' && (
+          <MicrosoftLogin
+            onLoginComplete={handleMicrosoftLogin}
+            onSkip={handleMicrosoftSkip}
+          />
+        )}
+
         {currentStep === 'permissions' && (
           <PermissionsScreen
             onPermissionsGranted={handlePermissionsGranted}
@@ -92,10 +122,11 @@ function App() {
           />
         )}
 
-        {currentStep === 'conversations' && (
+        {currentStep === 'contacts' && (
           <ConversationList
             onExportComplete={handleExportComplete}
             onOutlookExport={handleOutlookExport}
+            outlookConnected={outlookConnected}
           />
         )}
 

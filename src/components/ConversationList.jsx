@@ -1,16 +1,23 @@
 import React, { useState, useEffect } from 'react';
 
-function ConversationList({ onExportComplete, onOutlookExport }) {
+function ConversationList({ onExportComplete, onOutlookExport, outlookConnected }) {
   const [conversations, setConversations] = useState([]);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [error, setError] = useState(null);
+  const [emailCounts, setEmailCounts] = useState({});
 
   useEffect(() => {
     loadConversations();
   }, []);
+
+  useEffect(() => {
+    if (outlookConnected && conversations.length > 0) {
+      loadEmailCounts();
+    }
+  }, [outlookConnected, conversations]);
 
   const loadConversations = async () => {
     setIsLoading(true);
@@ -22,13 +29,34 @@ function ConversationList({ onExportComplete, onOutlookExport }) {
       if (result.success) {
         setConversations(result.conversations);
       } else {
-        setError(result.error || 'Failed to load conversations');
+        setError(result.error || 'Failed to load contacts');
       }
     } catch (err) {
       setError(err.message);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const loadEmailCounts = async () => {
+    const counts = {};
+
+    // Load email counts for contacts that have email addresses
+    for (const conv of conversations) {
+      if (conv.email) {
+        try {
+          const result = await window.electron.outlookGetEmailCount(conv.email);
+          if (result.success) {
+            counts[conv.id] = result.count;
+          }
+        } catch (err) {
+          console.error(`Error loading email count for ${conv.email}:`, err);
+          counts[conv.id] = 0;
+        }
+      }
+    }
+
+    setEmailCounts(counts);
   };
 
   const toggleSelection = (id) => {
@@ -51,7 +79,7 @@ function ConversationList({ onExportComplete, onOutlookExport }) {
 
   const handleExport = async () => {
     if (selectedIds.size === 0) {
-      alert('Please select at least one conversation to export');
+      alert('Please select at least one contact to export');
       return;
     }
 
@@ -74,7 +102,7 @@ function ConversationList({ onExportComplete, onOutlookExport }) {
 
   const handleOutlookExport = () => {
     if (selectedIds.size === 0) {
-      alert('Please select at least one conversation to export');
+      alert('Please select at least one contact to export');
       return;
     }
 
@@ -115,7 +143,7 @@ function ConversationList({ onExportComplete, onOutlookExport }) {
       <div className="flex items-center justify-center min-h-full py-8">
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
-          <p className="text-gray-600">Loading conversations...</p>
+          <p className="text-gray-600">Loading contacts...</p>
         </div>
       </div>
     );
@@ -130,7 +158,7 @@ function ConversationList({ onExportComplete, onOutlookExport }) {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </div>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">Error Loading Conversations</h2>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Error Loading Contacts</h2>
           <p className="text-gray-600 mb-6">{error}</p>
           <button
             onClick={loadConversations}
@@ -147,14 +175,14 @@ function ConversationList({ onExportComplete, onOutlookExport }) {
     <div className="flex flex-col min-h-full">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 p-6">
-        <h1 className="text-2xl font-bold text-gray-900 mb-4">Select Conversations to Export</h1>
+        <h1 className="text-2xl font-bold text-gray-900 mb-4">Select Contacts for Export</h1>
 
         {/* Search and Select All */}
         <div className="flex gap-4 mb-4">
           <div className="flex-1 relative">
             <input
               type="text"
-              placeholder="Search conversations..."
+              placeholder="Search contacts..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full px-4 py-2 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
@@ -175,7 +203,7 @@ function ConversationList({ onExportComplete, onOutlookExport }) {
         {/* Selection Info */}
         <div className="flex items-center justify-between">
           <p className="text-sm text-gray-600">
-            {selectedIds.size} of {filteredConversations.length} conversations selected
+            {selectedIds.size} of {filteredConversations.length} contacts selected
           </p>
 
           <div className="flex gap-3">
@@ -207,7 +235,7 @@ function ConversationList({ onExportComplete, onOutlookExport }) {
             <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
             </svg>
-            <p className="text-gray-500">No conversations found</p>
+            <p className="text-gray-500">No contacts found</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-3">
@@ -241,8 +269,16 @@ function ConversationList({ onExportComplete, onOutlookExport }) {
                         <p className="text-xs text-gray-400 truncate">{conversation.contactId}</p>
                       )}
                       <p className="text-sm text-gray-500">
-                        {conversation.messageCount || 0} messages · {formatDate(conversation.lastMessageDate)}
+                        {conversation.messageCount || 0} messages
+                        {outlookConnected && conversation.email && emailCounts[conversation.id] !== undefined && (
+                          <> · {emailCounts[conversation.id]} emails</>
+                        )}
+                        {' · '}
+                        {formatDate(conversation.lastMessageDate)}
                       </p>
+                      {outlookConnected && conversation.email && (
+                        <p className="text-xs text-gray-400 truncate">{conversation.email}</p>
+                      )}
                     </div>
                   </div>
 

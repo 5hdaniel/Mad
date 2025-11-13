@@ -157,6 +157,31 @@ class OutlookService {
   }
 
   /**
+   * Get email count for a specific contact
+   * @param {string} contactEmail - Email address to search for
+   */
+  async getEmailCount(contactEmail) {
+    if (!this.graphClient) {
+      return 0;
+    }
+
+    try {
+      const result = await this.graphClient
+        .api('/me/messages')
+        .filter(`(from/emailAddress/address eq '${contactEmail}' or toRecipients/any(r: r/emailAddress/address eq '${contactEmail}'))`)
+        .select('id')
+        .top(999)
+        .count(true)
+        .get();
+
+      return result['@odata.count'] || result.value.length || 0;
+    } catch (error) {
+      console.error('Error getting email count:', error);
+      return 0;
+    }
+  }
+
+  /**
    * Search for emails with a specific contact
    * @param {string} contactEmail - Email address to search for
    * @param {number} maxResults - Maximum number of emails to retrieve (default: 100)

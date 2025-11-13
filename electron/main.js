@@ -1054,6 +1054,31 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
   }
 });
 
+// Get email count for a contact
+ipcMain.handle('outlook-get-email-count', async (event, contactEmail) => {
+  try {
+    if (!outlookService || !outlookService.isAuthenticated()) {
+      return {
+        success: true,
+        count: 0
+      };
+    }
+
+    const count = await outlookService.getEmailCount(contactEmail);
+    return {
+      success: true,
+      count: count
+    };
+  } catch (error) {
+    console.error('Error getting email count:', error);
+    return {
+      success: false,
+      count: 0,
+      error: error.message
+    };
+  }
+});
+
 // Sign out from Outlook
 ipcMain.handle('outlook-signout', async () => {
   try {
