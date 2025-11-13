@@ -272,7 +272,7 @@ ipcMain.handle('request-permissions', async () => {
 // Helper function to get contact names from macOS Contacts database
 async function getContactNames() {
   const contactMap = {};
-  const phoneToEmailMap = {};
+  const phoneToContactInfo = {};
 
   try {
     // Search for ALL possible Contacts database files
@@ -316,20 +316,20 @@ async function getContactNames() {
 
   } catch (error) {
     console.error('Error accessing contacts database:', error);
-    return { contactMap, phoneToEmailMap };
+    return { contactMap, phoneToContactInfo };
   }
 }
 
 // Helper function to load contacts from a specific database
 async function loadContactsFromDatabase(contactsDbPath) {
   const contactMap = {};
-  const phoneToEmailMap = {}; // Map phone numbers to email addresses
+  const phoneToContactInfo = {}; // Map phone numbers to full contact info (all phones & emails)
 
   try {
     await fs.access(contactsDbPath);
   } catch {
     console.log('Database not accessible:', contactsDbPath);
-    return { contactMap, phoneToEmailMap };
+    return { contactMap, phoneToContactInfo };
   }
 
   try {
@@ -418,11 +418,17 @@ async function loadContactsFromDatabase(contactsDbPath) {
         contactMap[normalized] = person.name;
         contactMap[phone] = person.name;
 
-        // Map phone to email (use first email if multiple)
-        if (person.emails.length > 0) {
-          phoneToEmailMap[normalized] = person.emails[0];
-          phoneToEmailMap[phone] = person.emails[0];
-        }
+        // Map phone to full contact info (ALL phones and emails)
+        phoneToContactInfo[normalized] = {
+          name: person.name,
+          phones: person.phones,
+          emails: person.emails
+        };
+        phoneToContactInfo[phone] = {
+          name: person.name,
+          phones: person.phones,
+          emails: person.emails
+        };
       });
 
       // Map emails to name
@@ -435,7 +441,7 @@ async function loadContactsFromDatabase(contactsDbPath) {
     console.error('Error accessing contacts database:', error);
   }
 
-  return { contactMap, phoneToEmailMap };
+  return { contactMap, phoneToContactInfo };
 }
 
 // Helper function to normalize phone numbers for matching
@@ -500,7 +506,7 @@ ipcMain.handle('get-conversations', async () => {
     try {
       // Get contact names from Contacts database
       console.log('Loading contact names...');
-      const { contactMap, phoneToEmailMap } = await getContactNames();
+      const { contactMap, phoneToContactInfo } = await getContactNames();
 
       // Get all chats with their latest message
       // Filter to only show chats with at least 1 message
@@ -531,15 +537,26 @@ ipcMain.handle('get-conversations', async () => {
         const rawContactId = conv.contact_id || conv.chat_identifier;
         const displayName = resolveContactName(conv.contact_id, conv.chat_identifier, conv.display_name, contactMap);
 
-        // Determine email address for this contact
-        let email = null;
+        // Get full contact info (all phones and emails)
+        let contactInfo = null;
+        let phones = [];
+        let emails = [];
+
         if (rawContactId && rawContactId.includes('@')) {
-          // contactId is already an email
-          email = rawContactId;
+          // contactId is an email
+          emails = [rawContactId];
         } else if (rawContactId) {
-          // contactId is a phone - look up email from phoneToEmailMap
+          // contactId is a phone - look up full contact info
           const normalized = rawContactId.replace(/\D/g, '');
-          email = phoneToEmailMap[normalized] || phoneToEmailMap[rawContactId] || null;
+          contactInfo = phoneToContactInfo[normalized] || phoneToContactInfo[rawContactId];
+
+          if (contactInfo) {
+            phones = contactInfo.phones || [];
+            emails = contactInfo.emails || [];
+          } else {
+            // No contact info found, just use the raw phone number
+            phones = [rawContactId];
+          }
         }
 
         // Normalize the identifier (phone or email) for deduplication
@@ -560,7 +577,8 @@ ipcMain.handle('get-conversations', async () => {
           id: conv.chat_id,
           name: displayName,
           contactId: rawContactId,
-          email: email, // Add email field
+          phones: phones,
+          emails: emails,
           showBothNameAndNumber: displayName !== rawContactId,
           messageCount: conv.message_count,
           lastMessageDate: conv.last_message_date
@@ -1060,7 +1078,7 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
 
     // Export emails for each contact
     for (const contact of contacts) {
-      if (!contact.email) {
+      if (!contact.emails || contact.emails.length === 0) {
         results.push({
           contactName: contact.name,
           success: false,
@@ -1069,15 +1087,35 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
         continue;
       }
 
-      const result = await outlookService.exportEmailsToAudit(
-        contact.name,
-        contact.email,
-        filePath
-      );
+      // Export emails for ALL email addresses associated with this contact
+      let totalEmails = 0;
+      let anySuccess = false;
+      let errors = [];
+
+      for (const email of contact.emails) {
+        try {
+          const result = await outlookService.exportEmailsToAudit(
+            contact.name,
+            email,
+            filePath
+          );
+
+          if (result.success) {
+            anySuccess = true;
+            totalEmails += result.emailCount || 0;
+          } else if (result.error) {
+            errors.push(result.error);
+          }
+        } catch (err) {
+          errors.push(err.message);
+        }
+      }
 
       results.push({
         contactName: contact.name,
-        ...result
+        success: anySuccess,
+        emailCount: totalEmails,
+        error: errors.length > 0 ? errors.join('; ') : null
       });
     }
 
