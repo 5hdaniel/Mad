@@ -45,7 +45,7 @@ class OutlookService {
       throw new Error('OutlookService not initialized. Call initialize() first.');
     }
 
-    const scopes = ['User.Read', 'Mail.ReadWrite', 'Mail.Send'];
+    const scopes = ['User.Read', 'Mail.Read'];
 
     try {
       // Try to get token silently from cache first

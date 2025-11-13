@@ -44,8 +44,7 @@ The Outlook integration feature:
    - Select "Delegated permissions"
    - Add these permissions:
      - `User.Read` - Read user profile
-     - `Mail.ReadWrite` - Read and write emails
-     - `Mail.Send` - Send emails
+     - `Mail.Read` - Read emails (read-only access)
    - Click "Add permissions"
    - **Optional but recommended**: Click "Grant admin consent" to pre-approve for your organization
 
@@ -161,8 +160,7 @@ Exports are saved to:
 ### Permissions
 The app requests these Microsoft Graph API permissions:
 - `User.Read` - To get the user's email address
-- `Mail.ReadWrite` - To read emails (needed to search for conversations)
-- `Mail.Send` - Required by Microsoft Graph API for email operations (not actually used to send)
+- `Mail.Read` - To read emails (read-only access, cannot modify or delete)
 
 ### Data Handling
 - Emails are only downloaded locally to your computer
