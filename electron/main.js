@@ -1184,9 +1184,12 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
 
               // Handle text content (same logic as export-conversations)
               let text;
-              if (msg.text) {
+
+              // Check if text field has the special marker
+              if (msg.text && msg.text !== '__kIMMessagePartAttributeName') {
                 text = msg.text;
               } else if (msg.attributedBody) {
+                // Text is in attributedBody (either no text field, or it has the marker)
                 try {
                   const bodyBuffer = msg.attributedBody;
                   const bodyText = bodyBuffer.toString('utf8');
@@ -1200,8 +1203,11 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
                     // Find all sequences of readable text
                     const allMatches = afterNSString.match(/[\x20-\x7E\u00A0-\uFFFF]{4,}/g);
                     if (allMatches && allMatches.length > 0) {
+                      // Filter out the marker itself
+                      const filtered = allMatches.filter(m => !m.includes('__kIMMessagePartAttributeName'));
+
                       // Find the best match - prefer longest with good content
-                      for (const match of allMatches.sort((a, b) => b.length - a.length)) {
+                      for (const match of filtered.sort((a, b) => b.length - a.length)) {
                         // Clean up but preserve actual content - only remove control chars and nulls
                         const cleaned = match
                           .replace(/\x00/g, '') // Remove null bytes
@@ -1223,10 +1229,15 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
                       const afterStream = bodyText.substring(streamIndex + 11);
                       const textMatch = afterStream.match(/[\x20-\x7E\u00A0-\uFFFF]{3,}/);
                       if (textMatch) {
-                        extractedText = textMatch[0]
+                        const cleaned = textMatch[0]
                           .replace(/\x00/g, '')
                           .replace(/[\x01-\x08\x0B-\x1F\x7F]/g, '')
                           .trim();
+
+                        // Filter out the marker
+                        if (!cleaned.includes('__kIMMessagePartAttributeName')) {
+                          extractedText = cleaned;
+                        }
                       }
                     }
                   }

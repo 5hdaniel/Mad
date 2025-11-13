@@ -385,10 +385,10 @@ function OutlookExport({ conversations, selectedIds, onComplete, onCancel }) {
           <div className="flex gap-3">
             <button
               onClick={handleExport}
-              disabled={isExporting || contactsWithEmail.length === 0}
+              disabled={isExporting || selectedConversations.length === 0}
               className="flex-1 bg-primary text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isExporting ? 'Exporting...' : `Export ${contactsWithEmail.length} Audit${contactsWithEmail.length !== 1 ? 's' : ''}`}
+              {isExporting ? 'Exporting...' : `Export ${selectedConversations.length} Audit${selectedConversations.length !== 1 ? 's' : ''}`}
             </button>
             <button
               onClick={onCancel}

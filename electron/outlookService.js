@@ -263,18 +263,21 @@ class OutlookService {
         ]);
       };
 
-      // Fetch first page with timeout
-      console.log(`[Email Fetch] Fetching page 1 (top 500)...`);
+      // PHASE 1: Fetch email metadata (without body) to find matching emails
+      // Using smaller page size (50 instead of 500) and excluding body for speed
+      console.log(`[Email Fetch] Phase 1: Fetching metadata (top 50 per page)...`);
       let response = await withTimeout(
         this.graphClient
           .api('/me/messages')
-          .select('subject,from,toRecipients,ccRecipients,receivedDateTime,bodyPreview,body,hasAttachments,importance')
+          .select('id,subject,from,toRecipients,ccRecipients,receivedDateTime,hasAttachments,importance')
           .orderby('receivedDateTime DESC')
-          .top(500)
+          .top(50)
           .get(),
         30000 // 30 second timeout
       );
       console.log(`[Email Fetch] Page 1 fetched: ${response.value?.length || 0} emails`);
+
+      const matchingEmailIds = [];
 
       do {
         const emails = response.value || [];
@@ -291,12 +294,12 @@ class OutlookService {
         });
 
         console.log(`[Email Fetch] Page ${pageCount + 1}: Found ${matching.length} matching emails out of ${emails.length} total`);
-        matchingEmails.push(...matching);
+        matchingEmailIds.push(...matching);
 
         // Stop if we have enough
-        if (matchingEmails.length >= maxResults) {
+        if (matchingEmailIds.length >= maxResults) {
           console.log(`[Email Fetch] Reached maxResults (${maxResults}), stopping`);
-          return matchingEmails.slice(0, maxResults);
+          break;
         }
 
         nextLink = response['@odata.nextLink'];
@@ -318,7 +321,38 @@ class OutlookService {
         }
       } while (nextLink && pageCount < maxPages);
 
-      console.log(`[Email Fetch] Complete: ${matchingEmails.length} matching emails found`);
+      // Trim to maxResults
+      const emailsToFetch = matchingEmailIds.slice(0, maxResults);
+      console.log(`[Email Fetch] Phase 1 complete: Found ${emailsToFetch.length} matching emails`);
+
+      // PHASE 2: Fetch full body content for matching emails only
+      console.log(`[Email Fetch] Phase 2: Fetching body content for ${emailsToFetch.length} emails...`);
+      for (let i = 0; i < emailsToFetch.length; i++) {
+        const email = emailsToFetch[i];
+        try {
+          // Fetch full email details including body
+          const fullEmail = await withTimeout(
+            this.graphClient
+              .api(`/me/messages/${email.id}`)
+              .select('id,subject,from,toRecipients,ccRecipients,receivedDateTime,body,bodyPreview,hasAttachments,importance')
+              .get(),
+            15000 // 15 second timeout per email
+          );
+
+          // Merge the body into the email object
+          matchingEmails.push(fullEmail);
+
+          if ((i + 1) % 10 === 0) {
+            console.log(`[Email Fetch] Fetched ${i + 1}/${emailsToFetch.length} email bodies`);
+          }
+        } catch (error) {
+          console.error(`[Email Fetch] Error fetching body for email ${email.id}:`, error.message);
+          // Still include the email but without body
+          matchingEmails.push(email);
+        }
+      }
+
+      console.log(`[Email Fetch] Phase 2 complete: Fetched ${matchingEmails.length} emails with body content`);
       return matchingEmails;
     } catch (error) {
       console.error('[Email Fetch] Error fetching emails:', error);
