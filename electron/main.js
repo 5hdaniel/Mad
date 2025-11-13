@@ -530,7 +530,9 @@ ipcMain.handle('get-conversations', async () => {
 
       await dbClose();
 
-      // Map conversations and deduplicate by normalized phone number/identifier
+      // Map conversations and deduplicate by contact NAME
+      // This ensures that if a contact has multiple phone numbers or emails,
+      // they appear as ONE contact with all their info
       const conversationMap = new Map();
 
       conversations.forEach(conv => {
@@ -543,8 +545,22 @@ ipcMain.handle('get-conversations', async () => {
         let emails = [];
 
         if (rawContactId && rawContactId.includes('@')) {
-          // contactId is an email
-          emails = [rawContactId];
+          // contactId is an email - look up contact info by email
+          const emailLower = rawContactId.toLowerCase();
+          // Try to find this email in phoneToContactInfo
+          for (const info of Object.values(phoneToContactInfo)) {
+            if (info.emails && info.emails.some(e => e.toLowerCase() === emailLower)) {
+              contactInfo = info;
+              break;
+            }
+          }
+
+          if (contactInfo) {
+            phones = contactInfo.phones || [];
+            emails = contactInfo.emails || [];
+          } else {
+            emails = [rawContactId];
+          }
         } else if (rawContactId) {
           // contactId is a phone - look up full contact info
           const normalized = rawContactId.replace(/\D/g, '');
@@ -559,19 +575,9 @@ ipcMain.handle('get-conversations', async () => {
           }
         }
 
-        // Normalize the identifier (phone or email) for deduplication
-        let normalizedKey;
-        if (rawContactId && rawContactId.includes('@')) {
-          // Email - normalize to lowercase
-          normalizedKey = rawContactId.toLowerCase();
-        } else if (rawContactId) {
-          // Phone - normalize by keeping last 10 digits
-          const digitsOnly = rawContactId.replace(/\D/g, '');
-          normalizedKey = digitsOnly.length > 10 ? digitsOnly.slice(-10) : digitsOnly;
-        } else {
-          // Fallback to chat identifier
-          normalizedKey = conv.chat_identifier || `chat_${conv.chat_id}`;
-        }
+        // Use contact name as the deduplication key
+        // This ensures all chats with the same person are merged
+        const normalizedKey = displayName.toLowerCase().trim();
 
         const conversationData = {
           id: conv.chat_id,
@@ -584,17 +590,25 @@ ipcMain.handle('get-conversations', async () => {
           lastMessageDate: conv.last_message_date
         };
 
-        // If we already have this contact, keep the one with more recent messages
+        // If we already have this contact, merge the data
         if (conversationMap.has(normalizedKey)) {
           const existing = conversationMap.get(normalizedKey);
+
+          // Merge phones (unique)
+          const allPhones = [...new Set([...existing.phones, ...phones])];
+          // Merge emails (unique)
+          const allEmails = [...new Set([...existing.emails, ...emails])];
+
+          // Keep the chat ID with the most recent messages for text export
           if (conv.last_message_date > existing.lastMessageDate) {
-            // This conversation is more recent, replace it
-            conversationData.messageCount = existing.messageCount + conv.message_count;
-            conversationMap.set(normalizedKey, conversationData);
-          } else {
-            // Keep existing, but add message count
-            existing.messageCount += conv.message_count;
+            existing.id = conv.chat_id;
+            existing.lastMessageDate = conv.last_message_date;
           }
+
+          // Add up message counts
+          existing.messageCount += conv.message_count;
+          existing.phones = allPhones;
+          existing.emails = allEmails;
         } else {
           conversationMap.set(normalizedKey, conversationData);
         }

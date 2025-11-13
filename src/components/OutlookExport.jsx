@@ -10,6 +10,7 @@ function OutlookExport({ conversations, selectedIds, onComplete, onCancel }) {
   const [deviceCode, setDeviceCode] = useState(null);
   const [exportResults, setExportResults] = useState(null);
   const [exportProgress, setExportProgress] = useState(null);
+  const [showDetailedResults, setShowDetailedResults] = useState(false);
 
   useEffect(() => {
     initializeOutlook();
@@ -171,6 +172,88 @@ function OutlookExport({ conversations, selectedIds, onComplete, onCancel }) {
     const totalEmails = exportResults.results?.reduce((sum, r) => sum + (r.emailCount || 0), 0) || 0;
     const totalTexts = exportResults.results?.reduce((sum, r) => sum + (r.textMessageCount || 0), 0) || 0;
 
+    // Detailed results view
+    if (showDetailedResults) {
+      return (
+        <div className="flex flex-col min-h-full">
+          <div className="bg-white border-b border-gray-200 p-6">
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">Export Complete!</h1>
+            <p className="text-sm text-gray-600">
+              Detailed export results for {exportResults.results?.length || 0} contact{exportResults.results?.length !== 1 ? 's' : ''}
+            </p>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-6">
+            <div className="max-w-2xl mx-auto space-y-4">
+              {exportResults.results?.map((result, idx) => (
+                <div
+                  key={idx}
+                  className={`p-4 rounded-lg border-2 ${
+                    result.success
+                      ? 'bg-green-50 border-green-200'
+                      : 'bg-red-50 border-red-200'
+                  }`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-gray-900 mb-1">{result.contactName}</h3>
+                      <div className="text-sm text-gray-600 space-y-1">
+                        <p>Text messages: {result.textMessageCount || 0}</p>
+                        <p>Emails: {result.emailCount || 0}</p>
+                      </div>
+                      {result.error && (
+                        <p className="text-sm text-red-600 mt-2">Error: {result.error}</p>
+                      )}
+                    </div>
+                    <div className={`flex-shrink-0 ml-4 ${result.success ? 'text-green-600' : 'text-red-600'}`}>
+                      {result.success ? (
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      ) : (
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-white border-t border-gray-200 p-6">
+            <div className="max-w-2xl mx-auto space-y-3">
+              <button
+                onClick={handleOpenFolder}
+                className="w-full bg-primary text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors"
+              >
+                Open Export Folder
+              </button>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setExportResults(null);
+                    setShowDetailedResults(false);
+                  }}
+                  className="flex-1 bg-gray-200 text-gray-700 py-2 px-6 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
+                >
+                  Export More
+                </button>
+                <button
+                  onClick={handleDone}
+                  className="flex-1 bg-gray-200 text-gray-700 py-2 px-6 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Simple success screen
     return (
       <div className="flex items-center justify-center min-h-full py-8">
         <div className="max-w-md mx-auto p-8 bg-white rounded-lg shadow-lg text-center">
@@ -185,21 +268,6 @@ function OutlookExport({ conversations, selectedIds, onComplete, onCancel }) {
             {failureCount > 0 && ` (${failureCount} failed)`}
           </p>
 
-          {failureCount > 0 && (
-            <div className="mb-6 p-4 bg-yellow-50 rounded-lg text-left">
-              <p className="text-sm font-semibold text-yellow-800 mb-2">Failed exports:</p>
-              <ul className="text-sm text-yellow-700 space-y-1">
-                {exportResults.results
-                  .filter(r => !r.success)
-                  .map((r, idx) => (
-                    <li key={idx}>
-                      {r.contactName}: {r.error}
-                    </li>
-                  ))}
-              </ul>
-            </div>
-          )}
-
           <div className="space-y-3">
             <button
               onClick={handleOpenFolder}
@@ -208,10 +276,19 @@ function OutlookExport({ conversations, selectedIds, onComplete, onCancel }) {
               Open Export Folder
             </button>
             <button
-              onClick={handleDone}
+              onClick={() => {
+                setExportResults(null);
+                setShowDetailedResults(false);
+              }}
+              className="w-full bg-green-600 text-white py-2 px-6 rounded-lg font-semibold hover:bg-green-700 transition-colors"
+            >
+              Export More
+            </button>
+            <button
+              onClick={() => setShowDetailedResults(true)}
               className="w-full bg-gray-200 text-gray-700 py-2 px-6 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
             >
-              Done
+              More Details
             </button>
           </div>
         </div>
