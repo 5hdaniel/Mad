@@ -11,6 +11,7 @@ function ConversationList({ onExportComplete, onOutlookExport, outlookConnected 
   const [loadingEmailCounts, setLoadingEmailCounts] = useState(false);
   const [emailCountProgress, setEmailCountProgress] = useState({ current: 0, total: 0, eta: 0 });
   const [contactInfoModal, setContactInfoModal] = useState(null);
+  const [abortEmailCounting, setAbortEmailCounting] = useState(false);
 
   useEffect(() => {
     loadConversations();
@@ -54,6 +55,7 @@ function ConversationList({ onExportComplete, onOutlookExport, outlookConnected 
     console.log(`Total email addresses to query: ${contactsWithEmail.reduce((sum, c) => sum + (c.emails?.length || 0), 0)}`);
 
     const startTime = Date.now();
+    setAbortEmailCounting(false); // Reset abort flag
     setLoadingEmailCounts(true);
     setEmailCountProgress({ current: 0, total: contactsWithEmail.length });
 
@@ -64,6 +66,12 @@ function ConversationList({ onExportComplete, onOutlookExport, outlookConnected 
 
       // Load email counts for contacts that have email addresses
       for (let i = 0; i < contactsWithEmail.length; i++) {
+        // Check if user clicked skip
+        if (abortEmailCounting) {
+          console.log(`\nEmail counting skipped by user at contact ${i + 1}/${contactsWithEmail.length}`);
+          break;
+        }
+
         const conv = contactsWithEmail[i];
         const contactStartTime = Date.now();
 
@@ -86,6 +94,9 @@ function ConversationList({ onExportComplete, onOutlookExport, outlookConnected 
         // Get count for ALL emails for this contact
         let totalCount = 0;
         for (const email of conv.emails) {
+          // Check abort again for each email query
+          if (abortEmailCounting) break;
+
           totalQueriesMade++;
           try {
             const result = await window.electron.outlookGetEmailCount(email);
@@ -96,6 +107,8 @@ function ConversationList({ onExportComplete, onOutlookExport, outlookConnected 
             console.error(`  Error loading email count for ${email}:`, err.message);
           }
         }
+
+        if (abortEmailCounting) break;
 
         const contactTime = Date.now() - contactStartTime;
         console.log(`  Found ${totalCount} emails (took ${contactTime}ms)`);
@@ -305,9 +318,12 @@ function ConversationList({ onExportComplete, onOutlookExport, outlookConnected 
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-8">
             <div className="text-center">
               <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Loading Email Counts</h3>
-              <p className="text-sm text-gray-600 mb-4">
-                Querying Outlook mailbox for email counts...
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Counting Emails</h3>
+              <p className="text-sm text-gray-600 mb-1">
+                Estimating the number of emails per contact
+              </p>
+              <p className="text-xs text-gray-500 mb-4">
+                (Only checking {emailCountProgress.total} contacts with email addresses)
               </p>
               {emailCountProgress.total > 0 && (
                 <>
@@ -324,12 +340,18 @@ function ConversationList({ onExportComplete, onOutlookExport, outlookConnected 
                     ></div>
                   </div>
                   {emailCountProgress.eta > 0 && (
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-gray-500 mb-4">
                       Estimated time remaining: {emailCountProgress.eta > 60
                         ? `${Math.floor(emailCountProgress.eta / 60)}m ${emailCountProgress.eta % 60}s`
                         : `${emailCountProgress.eta}s`}
                     </p>
                   )}
+                  <button
+                    onClick={() => setAbortEmailCounting(true)}
+                    className="w-full bg-gray-200 text-gray-700 py-2 px-4 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
+                  >
+                    Skip
+                  </button>
                 </>
               )}
             </div>
