@@ -185,17 +185,48 @@ class OutlookService {
     }
 
     try {
-      // Use search instead of filter for more reliable results
-      const searchQuery = `participants:${contactEmail}`;
+      // Fetch messages and filter in memory since Graph API search/filter is problematic
+      const emailLower = contactEmail.toLowerCase();
+      let allEmails = [];
+      let nextLink = null;
+      let pageCount = 0;
+      const maxPages = 20; // Limit to prevent infinite loops
 
-      const result = await this.graphClient
+      // Fetch first page
+      let response = await this.graphClient
         .api('/me/messages')
-        .search(searchQuery)
-        .select('id')
-        .top(999)
+        .select('from,toRecipients,ccRecipients')
+        .top(500)
         .get();
 
-      return result.value?.length || 0;
+      do {
+        const emails = response.value || [];
+
+        // Filter emails that involve this contact
+        const matching = emails.filter(email => {
+          const fromEmail = email.from?.emailAddress?.address?.toLowerCase();
+          const toEmails = (email.toRecipients || []).map(r => r.emailAddress?.address?.toLowerCase());
+          const ccEmails = (email.ccRecipients || []).map(r => r.emailAddress?.address?.toLowerCase());
+
+          return fromEmail === emailLower ||
+                 toEmails.includes(emailLower) ||
+                 ccEmails.includes(emailLower);
+        });
+
+        allEmails.push(...matching);
+
+        nextLink = response['@odata.nextLink'];
+        pageCount++;
+
+        // Fetch next page if exists and under limit
+        if (nextLink && pageCount < maxPages) {
+          response = await this.graphClient.api(nextLink).get();
+        } else {
+          break;
+        }
+      } while (nextLink && pageCount < maxPages);
+
+      return allEmails.length;
     } catch (error) {
       console.error('Error getting email count:', error);
       return 0;
@@ -213,18 +244,54 @@ class OutlookService {
     }
 
     try {
-      // Use search parameter for more reliable results
-      const searchQuery = `participants:${contactEmail}`;
+      // Fetch messages and filter in memory since Graph API search/filter is problematic
+      const emailLower = contactEmail.toLowerCase();
+      let matchingEmails = [];
+      let nextLink = null;
+      let pageCount = 0;
+      const maxPages = 20; // Limit to prevent infinite loops
 
-      const emails = await this.graphClient
+      // Fetch first page
+      let response = await this.graphClient
         .api('/me/messages')
-        .search(searchQuery)
         .select('subject,from,toRecipients,ccRecipients,receivedDateTime,bodyPreview,body,hasAttachments,importance')
         .orderby('receivedDateTime DESC')
-        .top(maxResults)
+        .top(500)
         .get();
 
-      return emails.value || [];
+      do {
+        const emails = response.value || [];
+
+        // Filter emails that involve this contact
+        const matching = emails.filter(email => {
+          const fromEmail = email.from?.emailAddress?.address?.toLowerCase();
+          const toEmails = (email.toRecipients || []).map(r => r.emailAddress?.address?.toLowerCase());
+          const ccEmails = (email.ccRecipients || []).map(r => r.emailAddress?.address?.toLowerCase());
+
+          return fromEmail === emailLower ||
+                 toEmails.includes(emailLower) ||
+                 ccEmails.includes(emailLower);
+        });
+
+        matchingEmails.push(...matching);
+
+        // Stop if we have enough
+        if (matchingEmails.length >= maxResults) {
+          return matchingEmails.slice(0, maxResults);
+        }
+
+        nextLink = response['@odata.nextLink'];
+        pageCount++;
+
+        // Fetch next page if exists and under limit
+        if (nextLink && pageCount < maxPages) {
+          response = await this.graphClient.api(nextLink).get();
+        } else {
+          break;
+        }
+      } while (nextLink && pageCount < maxPages);
+
+      return matchingEmails;
     } catch (error) {
       console.error('Error fetching emails:', error);
       throw error;
