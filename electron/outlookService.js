@@ -59,7 +59,6 @@ class OutlookService {
     };
 
     this.msalInstance = new PublicClientApplication(msalConfig);
-    await this.msalInstance.initialize();
   }
 
   /**
