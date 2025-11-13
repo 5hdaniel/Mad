@@ -71,6 +71,7 @@ class OutlookService {
     }
 
     const scopes = ['User.Read', 'Mail.Read'];
+    const { shell } = require('electron');
 
     try {
       // Try to get token silently from cache first
@@ -100,7 +101,26 @@ class OutlookService {
       const deviceCodeRequest = {
         scopes: scopes,
         deviceCodeCallback: (response) => {
-          // Return the device code info to display to user
+          // Automatically open the browser for the user
+          console.log('\nDevice Code Authentication:');
+          console.log(`Please visit: ${response.verificationUri}`);
+          console.log(`And enter code: ${response.userCode}`);
+          console.log(`Message: ${response.message}\n`);
+
+          // Open browser automatically
+          shell.openExternal(response.verificationUri).catch(err => {
+            console.error('Failed to open browser:', err);
+          });
+
+          // Send to renderer if parentWindow is available
+          if (parentWindow && !parentWindow.isDestroyed()) {
+            parentWindow.webContents.send('device-code-received', {
+              verificationUri: response.verificationUri,
+              userCode: response.userCode,
+              message: response.message
+            });
+          }
+
           return response;
         },
       };

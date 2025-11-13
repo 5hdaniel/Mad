@@ -49,12 +49,23 @@ function MicrosoftLogin({ onLoginComplete, onSkip }) {
     setError(null);
     setDeviceCode(null);
 
+    // Listen for device code from main process
+    const handleDeviceCode = (deviceCodeInfo) => {
+      setDeviceCode(deviceCodeInfo);
+    };
+
+    // Set up listener (will be cleaned up when authentication completes)
+    if (window.electron.onDeviceCode) {
+      window.electron.onDeviceCode(handleDeviceCode);
+    }
+
     try {
       const result = await window.electron.outlookAuthenticate();
 
       if (result.success) {
         setIsAuthenticated(true);
         setUserEmail(result.userInfo?.username);
+        setDeviceCode(null); // Clear device code
 
         // Small delay to show success state
         setTimeout(() => {
@@ -177,20 +188,29 @@ function MicrosoftLogin({ onLoginComplete, onSkip }) {
         </div>
 
         {deviceCode && (
-          <div className="mb-6 p-4 bg-blue-50 rounded-lg">
-            <p className="text-sm text-blue-800 mb-2">
-              Go to{' '}
+          <div className="mb-6 p-6 bg-blue-50 border-2 border-blue-300 rounded-lg">
+            <p className="text-sm text-blue-900 font-semibold mb-3">
+              ✨ Browser opened automatically
+            </p>
+            <p className="text-sm text-blue-800 mb-3">
+              If the browser didn't open, go to:{' '}
               <a
                 href={deviceCode.verificationUri}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="font-bold underline"
+                className="font-bold underline hover:text-blue-600"
               >
                 {deviceCode.verificationUri}
               </a>
             </p>
-            <p className="text-sm text-blue-800">
-              and enter code: <span className="font-mono font-bold text-lg">{deviceCode.userCode}</span>
+            <div className="bg-white p-4 rounded border border-blue-200">
+              <p className="text-xs text-blue-700 mb-1">Enter this code:</p>
+              <p className="font-mono font-bold text-2xl text-blue-900 text-center tracking-wider">
+                {deviceCode.userCode}
+              </p>
+            </div>
+            <p className="text-xs text-blue-600 mt-3 text-center">
+              Waiting for you to complete authentication in the browser...
             </p>
           </div>
         )}
