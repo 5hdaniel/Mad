@@ -1194,14 +1194,21 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
 
                   const nsStringIndex = bodyText.indexOf('NSString');
                   if (nsStringIndex !== -1) {
-                    const afterNSString = bodyText.substring(nsStringIndex + 20);
-                    const allMatches = afterNSString.match(/[\x20-\x7E\u00A0-\uFFFF]{3,}/g);
+                    // Look further into the buffer for the actual message content
+                    const afterNSString = bodyText.substring(nsStringIndex + 8);
+
+                    // Find all sequences of readable text
+                    const allMatches = afterNSString.match(/[\x20-\x7E\u00A0-\uFFFF]{4,}/g);
                     if (allMatches && allMatches.length > 0) {
+                      // Find the best match - prefer longest with good content
                       for (const match of allMatches.sort((a, b) => b.length - a.length)) {
+                        // Clean up but preserve actual content - only remove control chars and nulls
                         const cleaned = match
-                          .replace(/^[^\w\s]+/, '')
-                          .replace(/[^\w\s]+$/, '')
+                          .replace(/\x00/g, '') // Remove null bytes
+                          .replace(/[\x01-\x08\x0B-\x1F\x7F]/g, '') // Remove control chars
                           .trim();
+
+                        // Accept if it has real content (letters or numbers)
                         if (cleaned.length >= 2 && /[a-zA-Z0-9]/.test(cleaned)) {
                           extractedText = cleaned;
                           break;
@@ -1214,18 +1221,17 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
                     const streamIndex = bodyText.indexOf('streamtyped');
                     if (streamIndex !== -1) {
                       const afterStream = bodyText.substring(streamIndex + 11);
-                      const textMatch = afterStream.match(/[\x20-\x7E\u00A0-\uFFFF]{2,}/);
+                      const textMatch = afterStream.match(/[\x20-\x7E\u00A0-\uFFFF]{3,}/);
                       if (textMatch) {
-                        extractedText = textMatch[0].replace(/^[^\w\s]+/, '').trim();
+                        extractedText = textMatch[0]
+                          .replace(/\x00/g, '')
+                          .replace(/[\x01-\x08\x0B-\x1F\x7F]/g, '')
+                          .trim();
                       }
                     }
                   }
 
                   if (extractedText && extractedText.length >= 1 && extractedText.length < 10000) {
-                    extractedText = extractedText
-                      .replace(/\x00/g, '')
-                      .replace(/[\x01-\x08\x0B-\x1F\x7F]/g, '')
-                      .trim();
                     text = extractedText;
                   } else {
                     text = '[Message text - unable to extract from rich format]';

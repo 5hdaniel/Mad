@@ -251,13 +251,30 @@ class OutlookService {
       let pageCount = 0;
       const maxPages = 20; // Limit to prevent infinite loops
 
-      // Fetch first page
-      let response = await this.graphClient
-        .api('/me/messages')
-        .select('subject,from,toRecipients,ccRecipients,receivedDateTime,bodyPreview,body,hasAttachments,importance')
-        .orderby('receivedDateTime DESC')
-        .top(500)
-        .get();
+      console.log(`[Email Fetch] Starting fetch for ${contactEmail}, maxResults: ${maxResults}`);
+
+      // Helper function to add timeout to promises
+      const withTimeout = (promise, timeoutMs = 30000) => {
+        return Promise.race([
+          promise,
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error(`Request timeout after ${timeoutMs}ms`)), timeoutMs)
+          )
+        ]);
+      };
+
+      // Fetch first page with timeout
+      console.log(`[Email Fetch] Fetching page 1 (top 500)...`);
+      let response = await withTimeout(
+        this.graphClient
+          .api('/me/messages')
+          .select('subject,from,toRecipients,ccRecipients,receivedDateTime,bodyPreview,body,hasAttachments,importance')
+          .orderby('receivedDateTime DESC')
+          .top(500)
+          .get(),
+        30000 // 30 second timeout
+      );
+      console.log(`[Email Fetch] Page 1 fetched: ${response.value?.length || 0} emails`);
 
       do {
         const emails = response.value || [];
@@ -273,10 +290,12 @@ class OutlookService {
                  ccEmails.includes(emailLower);
         });
 
+        console.log(`[Email Fetch] Page ${pageCount + 1}: Found ${matching.length} matching emails out of ${emails.length} total`);
         matchingEmails.push(...matching);
 
         // Stop if we have enough
         if (matchingEmails.length >= maxResults) {
+          console.log(`[Email Fetch] Reached maxResults (${maxResults}), stopping`);
           return matchingEmails.slice(0, maxResults);
         }
 
@@ -285,15 +304,30 @@ class OutlookService {
 
         // Fetch next page if exists and under limit
         if (nextLink && pageCount < maxPages) {
-          response = await this.graphClient.api(nextLink).get();
+          console.log(`[Email Fetch] Fetching page ${pageCount + 1}...`);
+          response = await withTimeout(
+            this.graphClient.api(nextLink).get(),
+            30000 // 30 second timeout
+          );
+          console.log(`[Email Fetch] Page ${pageCount + 1} fetched: ${response.value?.length || 0} emails`);
         } else {
+          if (pageCount >= maxPages) {
+            console.log(`[Email Fetch] Reached max pages (${maxPages}), stopping`);
+          }
           break;
         }
       } while (nextLink && pageCount < maxPages);
 
+      console.log(`[Email Fetch] Complete: ${matchingEmails.length} matching emails found`);
       return matchingEmails;
     } catch (error) {
-      console.error('Error fetching emails:', error);
+      console.error('[Email Fetch] Error fetching emails:', error);
+      console.error('[Email Fetch] Error details:', {
+        message: error.message,
+        code: error.code,
+        statusCode: error.statusCode,
+        stack: error.stack
+      });
       throw error;
     }
   }
