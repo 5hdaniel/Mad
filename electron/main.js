@@ -7,12 +7,15 @@ const { exec } = require('child_process');
 const os = require('os');
 const { autoUpdater } = require('electron-updater');
 const log = require('electron-log');
+const OutlookService = require('./outlookService');
+require('dotenv').config({ path: path.join(__dirname, '../.env.local') });
 
 // Configure logging for auto-updater
 log.transports.file.level = 'info';
 autoUpdater.logger = log;
 
 let mainWindow;
+let outlookService = null;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -900,4 +903,169 @@ ipcMain.handle('export-conversations', async (event, conversationIds) => {
 ipcMain.on('install-update', () => {
   log.info('Installing update...');
   autoUpdater.quitAndInstall();
+});
+
+// ===== OUTLOOK INTEGRATION IPC HANDLERS =====
+
+// Initialize Outlook service
+ipcMain.handle('outlook-initialize', async () => {
+  try {
+    const clientId = process.env.MICROSOFT_CLIENT_ID;
+    const tenantId = process.env.MICROSOFT_TENANT_ID || 'common';
+
+    if (!clientId) {
+      return {
+        success: false,
+        error: 'Microsoft Client ID not configured. Please add MICROSOFT_CLIENT_ID to .env.local'
+      };
+    }
+
+    if (!outlookService) {
+      outlookService = new OutlookService();
+    }
+
+    outlookService.initialize(clientId, tenantId);
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error initializing Outlook service:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+});
+
+// Authenticate with Outlook
+ipcMain.handle('outlook-authenticate', async () => {
+  try {
+    if (!outlookService) {
+      return {
+        success: false,
+        error: 'Outlook service not initialized'
+      };
+    }
+
+    const result = await outlookService.authenticate(mainWindow);
+    return result;
+  } catch (error) {
+    console.error('Error authenticating with Outlook:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+});
+
+// Check if authenticated
+ipcMain.handle('outlook-is-authenticated', async () => {
+  return outlookService && outlookService.isAuthenticated();
+});
+
+// Get user email
+ipcMain.handle('outlook-get-user-email', async () => {
+  try {
+    if (!outlookService || !outlookService.isAuthenticated()) {
+      return {
+        success: false,
+        error: 'Not authenticated'
+      };
+    }
+
+    const email = await outlookService.getUserEmail();
+    return {
+      success: true,
+      email: email
+    };
+  } catch (error) {
+    console.error('Error getting user email:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+});
+
+// Export emails for multiple contacts
+ipcMain.handle('outlook-export-emails', async (event, contacts) => {
+  try {
+    if (!outlookService || !outlookService.isAuthenticated()) {
+      return {
+        success: false,
+        error: 'Not authenticated with Outlook'
+      };
+    }
+
+    // Show dialog to select export location
+    const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+      title: 'Select Export Location',
+      defaultPath: path.join(
+        os.homedir(),
+        'Documents',
+        `Email Audit ${new Date().toISOString().split('T')[0]}`
+      ),
+      properties: ['createDirectory']
+    });
+
+    if (canceled || !filePath) {
+      return { success: false, canceled: true };
+    }
+
+    // Create base export directory
+    await fs.mkdir(filePath, { recursive: true });
+
+    const results = [];
+
+    // Export emails for each contact
+    for (const contact of contacts) {
+      if (!contact.email) {
+        results.push({
+          contactName: contact.name,
+          success: false,
+          error: 'No email address found for contact'
+        });
+        continue;
+      }
+
+      const result = await outlookService.exportEmailsToAudit(
+        contact.name,
+        contact.email,
+        filePath
+      );
+
+      results.push({
+        contactName: contact.name,
+        ...result
+      });
+    }
+
+    return {
+      success: true,
+      exportPath: filePath,
+      results: results
+    };
+
+  } catch (error) {
+    console.error('Error exporting emails:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+});
+
+// Sign out from Outlook
+ipcMain.handle('outlook-signout', async () => {
+  try {
+    if (outlookService) {
+      await outlookService.signOut();
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('Error signing out:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
 });

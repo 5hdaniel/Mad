@@ -2,13 +2,16 @@ import React, { useState, useEffect } from 'react';
 import PermissionsScreen from './components/PermissionsScreen';
 import ConversationList from './components/ConversationList';
 import ExportComplete from './components/ExportComplete';
+import OutlookExport from './components/OutlookExport';
 import UpdateNotification from './components/UpdateNotification';
 
 function App() {
-  const [currentStep, setCurrentStep] = useState('permissions'); // permissions, conversations, complete
+  const [currentStep, setCurrentStep] = useState('permissions'); // permissions, conversations, outlook, complete
   const [hasPermissions, setHasPermissions] = useState(false);
   const [exportResult, setExportResult] = useState(null);
   const [showVersion, setShowVersion] = useState(false);
+  const [conversations, setConversations] = useState([]);
+  const [selectedConversationIds, setSelectedConversationIds] = useState(new Set());
 
   useEffect(() => {
     checkPermissions();
@@ -32,6 +35,27 @@ function App() {
     setCurrentStep('complete');
   };
 
+  const handleOutlookExport = async (selectedIds) => {
+    // Load conversations if not already loaded
+    if (conversations.length === 0) {
+      const result = await window.electron.getConversations();
+      if (result.success) {
+        setConversations(result.conversations);
+      }
+    }
+    setSelectedConversationIds(selectedIds);
+    setCurrentStep('outlook');
+  };
+
+  const handleOutlookComplete = (result) => {
+    setExportResult(result);
+    setCurrentStep('complete');
+  };
+
+  const handleOutlookCancel = () => {
+    setCurrentStep('conversations');
+  };
+
   const handleStartOver = () => {
     setExportResult(null);
     setCurrentStep('conversations');
@@ -43,6 +67,8 @@ function App() {
         return 'Setup Permissions';
       case 'conversations':
         return 'Select Conversations';
+      case 'outlook':
+        return 'Export to Outlook';
       case 'complete':
         return 'Export Complete';
       default:
@@ -67,7 +93,19 @@ function App() {
         )}
 
         {currentStep === 'conversations' && (
-          <ConversationList onExportComplete={handleExportComplete} />
+          <ConversationList
+            onExportComplete={handleExportComplete}
+            onOutlookExport={handleOutlookExport}
+          />
+        )}
+
+        {currentStep === 'outlook' && (
+          <OutlookExport
+            conversations={conversations}
+            selectedIds={selectedConversationIds}
+            onComplete={handleOutlookComplete}
+            onCancel={handleOutlookCancel}
+          />
         )}
 
         {currentStep === 'complete' && (
