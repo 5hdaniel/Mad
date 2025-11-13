@@ -83,7 +83,7 @@ function OutlookExport({ conversations, selectedIds, onComplete, onCancel }) {
 
       const contactsToExport = selectedConversations.map(conv => ({
         name: conv.name,
-        email: conv.email || null,
+        emails: conv.emails || [],
       }));
 
       const result = await window.electron.outlookExportEmails(contactsToExport);
@@ -113,8 +113,8 @@ function OutlookExport({ conversations, selectedIds, onComplete, onCancel }) {
   };
 
   const selectedConversations = conversations.filter(c => selectedIds.has(c.id));
-  const contactsWithEmail = selectedConversations.filter(c => c.email);
-  const contactsWithoutEmail = selectedConversations.filter(c => !c.email);
+  const contactsWithEmail = selectedConversations.filter(c => c.emails && c.emails.length > 0);
+  const contactsWithoutEmail = selectedConversations.filter(c => !c.emails || c.emails.length === 0);
 
   // Initialization screen
   if (isInitializing) {
@@ -308,7 +308,13 @@ function OutlookExport({ conversations, selectedIds, onComplete, onCancel }) {
                 {contactsWithEmail.map((conv) => (
                   <div key={conv.id} className="p-3 bg-white border border-gray-200 rounded-lg">
                     <p className="font-semibold text-gray-900">{conv.name}</p>
-                    <p className="text-sm text-gray-600">{conv.email}</p>
+                    {conv.emails && conv.emails.length > 0 && (
+                      <div className="space-y-1 mt-1">
+                        {conv.emails.map((email, index) => (
+                          <p key={index} className="text-sm text-gray-600">{email}</p>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
