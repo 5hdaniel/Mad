@@ -1,6 +1,6 @@
 {
   "name": "real-estate-archive-app",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Real Estate Archive App - Export iMessage conversations",
   "main": "electron/main.js",
   "scripts": {
@@ -9,7 +9,7 @@
     "dev:react": "vite",
     "dev:electron": "wait-on http://localhost:5173 && electron .",
     "build": "vite build",
-    "package": "npm run build && electron-builder"
+    "package": "npm run build && dotenv -e .env.local -- electron-builder"
   },
   "keywords": ["electron", "react", "real-estate", "archive"],
   "author": "",
@@ -18,6 +18,7 @@
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
     "concurrently": "^9.1.0",
+    "dotenv-cli": "^7.4.2",
     "electron": "^33.2.0",
     "electron-builder": "^25.1.8",
     "postcss": "^8.4.49",
@@ -26,6 +27,9 @@
     "wait-on": "^8.0.1"
   },
   "dependencies": {
+    "electron-log": "^5.2.2",
+    "electron-updater": "^6.3.9",
+    "node-machine-id": "^1.1.12",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "sqlite3": "^5.1.7"
@@ -33,12 +37,22 @@
   "build": {
     "appId": "com.realestate.archiveapp",
     "productName": "Real Estate Archive",
+    "publish": {
+      "provider": "github",
+      "owner": "5hdaniel",
+      "repo": "Mad",
+      "private": false
+    },
     "mac": {
       "category": "public.app-category.productivity",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
-      "entitlementsInherit": "build/entitlements.mac.plist"
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "target": [
+        "dmg",
+        "zip"
+      ]
     },
     "files": [
       "dist/**/*",
