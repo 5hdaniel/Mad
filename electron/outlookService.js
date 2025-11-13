@@ -327,19 +327,17 @@ class OutlookService {
         total: emails.length
       });
 
-      // Create audit folder
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-      const sanitizedName = contactName.replace(/[^a-z0-9]/gi, '_');
-      const folderName = `${sanitizedName}_emails_${timestamp}`;
-      const fullPath = path.join(exportPath, folderName);
+      // Create contact folder inside the export path
+      const sanitizedName = contactName.replace(/[^a-z0-9 ]/gi, '_');
+      const contactFolder = path.join(exportPath, sanitizedName);
 
-      if (!fs.existsSync(fullPath)) {
-        fs.mkdirSync(fullPath, { recursive: true });
+      if (!fs.existsSync(contactFolder)) {
+        fs.mkdirSync(contactFolder, { recursive: true });
       }
 
       // Export as text file
-      const fileName = `${sanitizedName}_email_audit.txt`;
-      const filePath = path.join(fullPath, fileName);
+      const fileName = `emails.txt`;
+      const filePath = path.join(contactFolder, fileName);
 
       let content = `EMAIL AUDIT REPORT\n`;
       content += `===================\n\n`;
@@ -356,20 +354,34 @@ class OutlookService {
         content += `EMAIL ${index + 1}\n`;
         content += `${'-'.repeat(80)}\n`;
         content += `Date: ${new Date(email.receivedDateTime).toLocaleString()}\n`;
-        content += `From: ${email.from.emailAddress.name} <${email.from.emailAddress.address}>\n`;
+
+        // Handle from field safely
+        if (email.from && email.from.emailAddress) {
+          const fromName = email.from.emailAddress.name || 'Unknown';
+          const fromAddress = email.from.emailAddress.address || 'unknown@unknown.com';
+          content += `From: ${fromName} <${fromAddress}>\n`;
+        } else {
+          content += `From: Unknown\n`;
+        }
 
         if (email.toRecipients && email.toRecipients.length > 0) {
           const recipients = email.toRecipients
-            .map(r => `${r.emailAddress.name} <${r.emailAddress.address}>`)
+            .filter(r => r.emailAddress)
+            .map(r => `${r.emailAddress.name || 'Unknown'} <${r.emailAddress.address || 'unknown@unknown.com'}>`)
             .join(', ');
-          content += `To: ${recipients}\n`;
+          if (recipients) {
+            content += `To: ${recipients}\n`;
+          }
         }
 
         if (email.ccRecipients && email.ccRecipients.length > 0) {
           const cc = email.ccRecipients
-            .map(r => `${r.emailAddress.name} <${r.emailAddress.address}>`)
+            .filter(r => r.emailAddress)
+            .map(r => `${r.emailAddress.name || 'Unknown'} <${r.emailAddress.address || 'unknown@unknown.com'}>`)
             .join(', ');
-          content += `CC: ${cc}\n`;
+          if (cc) {
+            content += `CC: ${cc}\n`;
+          }
         }
 
         content += `Subject: ${email.subject || '(No Subject)'}\n`;

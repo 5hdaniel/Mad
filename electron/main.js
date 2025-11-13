@@ -1056,23 +1056,34 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
       };
     }
 
-    // Show dialog to select export location
-    const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
-      title: 'Select Export Location',
-      defaultPath: path.join(
-        os.homedir(),
-        'Documents',
-        `Email Audit ${new Date().toISOString().split('T')[0]}`
-      ),
-      properties: ['createDirectory']
+    // Show dialog to select export location (folder picker)
+    const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+      title: 'Select Folder for Audit Export',
+      defaultPath: path.join(os.homedir(), 'Documents'),
+      properties: ['openDirectory', 'createDirectory'],
+      buttonLabel: 'Select Folder'
     });
 
-    if (canceled || !filePath) {
+    if (canceled || !filePaths || filePaths.length === 0) {
       return { success: false, canceled: true };
     }
 
+    // Auto-generate folder name: "Audit Export YYYY-MM-DD HH-MM-SS"
+    const timestamp = new Date().toLocaleString('en-US', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    }).replace(/[/:]/g, '-').replace(/,/g, '');
+
+    const exportFolderName = `Audit Export ${timestamp}`;
+    const exportPath = path.join(filePaths[0], exportFolderName);
+
     // Create base export directory
-    await fs.mkdir(filePath, { recursive: true });
+    await fs.mkdir(exportPath, { recursive: true });
 
     const results = [];
 
@@ -1107,7 +1118,7 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
           const result = await outlookService.exportEmailsToAudit(
             contact.name,
             email,
-            filePath,
+            exportPath,
             (progress) => {
               // Forward progress to renderer
               mainWindow.webContents.send('export-progress', {
@@ -1149,7 +1160,7 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
 
     return {
       success: true,
-      exportPath: filePath,
+      exportPath: exportPath,
       results: results
     };
 
