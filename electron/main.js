@@ -584,7 +584,11 @@ ipcMain.handle('get-conversations', async () => {
 
         if (isGroupChat) {
           // For group chats, we need to attribute the chat to all participants
-          console.log(`Processing group chat: ${displayName} (${conv.chat_identifier}) with ${conv.message_count} messages`);
+          // Reduce logging noise - only log if Carol is involved
+          const isCarolInvolved = displayName.toLowerCase().includes('carol');
+          if (isCarolInvolved) {
+            console.log(`Processing group chat: ${displayName} (${conv.chat_identifier}) with ${conv.message_count} messages`);
+          }
 
           try {
             // Get all participants in this group chat
@@ -595,7 +599,9 @@ ipcMain.handle('get-conversations', async () => {
               WHERE chat_handle_join.chat_id = ?
             `, [conv.chat_id]);
 
-            console.log(`  Found ${participants.length} participants in group chat`);
+            if (isCarolInvolved) {
+              console.log(`  Found ${participants.length} participants in group chat`);
+            }
 
             // Add this group chat to each participant's statistics
             for (const participant of participants) {
@@ -780,6 +786,14 @@ ipcMain.handle('get-conversations', async () => {
       });
 
       console.log(`Filtered to ${recentConversations.length} contacts with messages in last 5 years (removed ${deduplicatedConversations.length - recentConversations.length} old contacts)`);
+
+      // DEBUG: Export Carol's data to a JSON file for inspection
+      const carolDebug = recentConversations.find(c => c.name.toLowerCase().includes('carol'));
+      if (carolDebug) {
+        const debugPath = path.join(process.env.HOME, 'Desktop', 'carol-debug.json');
+        await fs.writeFile(debugPath, JSON.stringify(carolDebug, null, 2), 'utf8');
+        console.log(`\n*** DEBUG: Carol's data exported to ${debugPath} ***\n`);
+      }
 
       return {
         success: true,
