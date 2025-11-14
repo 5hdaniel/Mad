@@ -1579,6 +1579,29 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
                     }
                   }
 
+                  // Final fallback: try to extract ANY readable text from the buffer
+                  if (!extractedText) {
+                    const allReadableText = bodyText.match(/[\x20-\x7E\u00A0-\uFFFF]{2,}/g);
+                    if (allReadableText && allReadableText.length > 0) {
+                      // Filter out technical markers and system strings
+                      const candidates = allReadableText
+                        .filter(t => !t.includes('__kIMMessagePartAttributeName'))
+                        .filter(t => !t.includes('NSString'))
+                        .filter(t => !t.includes('NSObject'))
+                        .filter(t => !t.includes('streamtyped'))
+                        .filter(t => !t.match(/^[\x00-\x1F\x7F]+$/)) // Not all control chars
+                        .filter(t => /[a-zA-Z0-9]/.test(t)); // Has alphanumeric content
+
+                      if (candidates.length > 0) {
+                        // Take the longest candidate as it's most likely the message
+                        extractedText = candidates.sort((a, b) => b.length - a.length)[0]
+                          .replace(/\x00/g, '')
+                          .replace(/[\x01-\x08\x0B-\x1F\x7F]/g, '')
+                          .trim();
+                      }
+                    }
+                  }
+
                   if (extractedText && extractedText.length >= 1 && extractedText.length < 10000) {
                     text = extractedText;
                   } else {
@@ -1647,9 +1670,54 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
                       const afterNSString = bodyText.substring(nsStringIndex + 8);
                       const allMatches = afterNSString.match(/[\x20-\x7E\u00A0-\uFFFF]{4,}/g);
                       if (allMatches && allMatches.length > 0) {
-                        const cleaned = allMatches.join(' ').trim();
-                        if (!cleaned.includes('__kIMMessagePartAttributeName')) {
-                          extractedText = cleaned;
+                        const filtered = allMatches.filter(m => !m.includes('__kIMMessagePartAttributeName'));
+                        for (const match of filtered.sort((a, b) => b.length - a.length)) {
+                          const cleaned = match
+                            .replace(/\x00/g, '')
+                            .replace(/[\x01-\x08\x0B-\x1F\x7F]/g, '')
+                            .trim();
+                          if (cleaned.length >= 2 && /[a-zA-Z0-9]/.test(cleaned)) {
+                            extractedText = cleaned;
+                            break;
+                          }
+                        }
+                      }
+                    }
+
+                    if (!extractedText) {
+                      const streamIndex = bodyText.indexOf('streamtyped');
+                      if (streamIndex !== -1) {
+                        const afterStream = bodyText.substring(streamIndex + 11);
+                        const textMatch = afterStream.match(/[\x20-\x7E\u00A0-\uFFFF]{3,}/);
+                        if (textMatch) {
+                          const cleaned = textMatch[0]
+                            .replace(/\x00/g, '')
+                            .replace(/[\x01-\x08\x0B-\x1F\x7F]/g, '')
+                            .trim();
+                          if (!cleaned.includes('__kIMMessagePartAttributeName')) {
+                            extractedText = cleaned;
+                          }
+                        }
+                      }
+                    }
+
+                    // Final fallback: try to extract ANY readable text from the buffer
+                    if (!extractedText) {
+                      const allReadableText = bodyText.match(/[\x20-\x7E\u00A0-\uFFFF]{2,}/g);
+                      if (allReadableText && allReadableText.length > 0) {
+                        const candidates = allReadableText
+                          .filter(t => !t.includes('__kIMMessagePartAttributeName'))
+                          .filter(t => !t.includes('NSString'))
+                          .filter(t => !t.includes('NSObject'))
+                          .filter(t => !t.includes('streamtyped'))
+                          .filter(t => !t.match(/^[\x00-\x1F\x7F]+$/))
+                          .filter(t => /[a-zA-Z0-9]/.test(t));
+
+                        if (candidates.length > 0) {
+                          extractedText = candidates.sort((a, b) => b.length - a.length)[0]
+                            .replace(/\x00/g, '')
+                            .replace(/[\x01-\x08\x0B-\x1F\x7F]/g, '')
+                            .trim();
                         }
                       }
                     }
