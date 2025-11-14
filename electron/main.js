@@ -601,7 +601,7 @@ ipcMain.handle('get-conversations', async () => {
                 }
 
                 conversationMap.set(normalizedKey, {
-                  id: null, // Will be set when we find their direct chat
+                  id: `group-contact-${normalizedKey}`, // Generate unique ID for group-only contacts
                   name: participantName,
                   contactId: participant.contact_id,
                   phones: phones,

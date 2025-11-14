@@ -406,7 +406,7 @@ function ConversationList({ onExportComplete, onOutlookExport, outlookConnected 
           <div className="grid grid-cols-1 gap-3">
             {filteredConversations.map((conversation) => (
               <div
-                key={conversation.id}
+                key={conversation.id || `contact-${conversation.name}-${conversation.contactId}`}
                 onClick={() => toggleSelection(conversation.id)}
                 className={`p-4 bg-white border-2 rounded-lg cursor-pointer transition-all ${
                   selectedIds.has(conversation.id)
