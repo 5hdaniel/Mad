@@ -727,9 +727,18 @@ ipcMain.handle('get-conversations', async () => {
           // Merge emails (unique)
           const allEmails = [...new Set([...existing.emails, ...emails])];
 
-          // Keep the chat ID with the most recent messages for text export
-          if (conv.last_message_date > existing.lastMessageDate) {
+          // CRITICAL FIX: Always prefer a real chat ID over a generated group-contact-* ID
+          // This ensures we can export 1:1 messages even if group chat is more recent
+          const wasGeneratedId = existing.id && existing.id.startsWith('group-contact-');
+          if (!existing.id || wasGeneratedId) {
+            // Current ID is fake, use the real chat ID from this 1:1 conversation
+            console.log(`  Updating ${displayName}: ${existing.id} -> ${conv.chat_id} (found 1:1 chat)`);
             existing.id = conv.chat_id;
+            existing.chatId = conv.chat_id; // Also set chatId field
+          }
+
+          // Update last message date if this chat is more recent
+          if (conv.last_message_date > existing.lastMessageDate) {
             existing.lastMessageDate = conv.last_message_date;
           }
 
@@ -739,6 +748,8 @@ ipcMain.handle('get-conversations', async () => {
           existing.directMessageCount += conv.message_count;
           existing.phones = allPhones;
           existing.emails = allEmails;
+
+          console.log(`  Merged ${displayName}: ${existing.directChatCount} direct, ${existing.groupChatCount} group, total ${existing.messageCount} messages`);
         } else {
           conversationMap.set(normalizedKey, conversationData);
         }
@@ -1288,7 +1299,11 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
       // 1. Export text messages (if chatId exists or if we have phone/email identifiers)
       if (contact.chatId || contact.phones?.length > 0 || contact.emails?.length > 0) {
         try {
-          console.log(`Exporting text messages for ${contact.name}...`);
+          console.log(`\nExporting text messages for ${contact.name}...`);
+          console.log(`  chatId: ${contact.chatId}`);
+          console.log(`  phones: ${JSON.stringify(contact.phones)}`);
+          console.log(`  emails: ${JSON.stringify(contact.emails)}`);
+
           mainWindow.webContents.send('export-progress', {
             stage: 'text-messages',
             message: `Exporting text messages for ${contact.name}...`,
