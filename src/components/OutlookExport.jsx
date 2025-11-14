@@ -453,18 +453,21 @@ function OutlookExport({ conversations, selectedIds, onComplete, onCancel }) {
           {/* Actions */}
           <div className="flex gap-3">
             <button
+              onClick={onCancel}
+              disabled={isExporting}
+              className="px-6 py-3 border-2 border-gray-300 bg-white rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 flex items-center gap-2 font-semibold text-gray-700"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+              Back
+            </button>
+            <button
               onClick={handleExport}
               disabled={isExporting || selectedConversations.length === 0}
               className="flex-1 bg-primary text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isExporting ? 'Exporting...' : `Export ${selectedConversations.length} Audit${selectedConversations.length !== 1 ? 's' : ''}`}
-            </button>
-            <button
-              onClick={onCancel}
-              disabled={isExporting}
-              className="px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
-            >
-              Cancel
             </button>
           </div>
         </div>
