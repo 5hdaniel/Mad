@@ -383,7 +383,7 @@ class OutlookService {
             .api('/me/messages')
             .search(`"participants:${emailLower}"`)
             .select('id,subject,from,toRecipients,ccRecipients,receivedDateTime,hasAttachments,importance')
-            .orderby('receivedDateTime DESC')
+            // Note: Cannot use .orderby() with $search - results are relevance-ranked
             .top(maxResults)
             .get(),
           60000 // 60 second timeout

@@ -496,6 +496,14 @@ function resolveContactName(contactId, chatIdentifier, displayName, contactMap) 
       return contactMap[normalized];
     }
 
+    // If not found and number has country code 1, try without it
+    if (normalized && normalized.startsWith('1') && normalized.length === 11) {
+      const withoutCountryCode = normalized.substring(1);
+      if (contactMap[withoutCountryCode]) {
+        return contactMap[withoutCountryCode];
+      }
+    }
+
     // Try lowercase email match
     const lowerEmail = contactId.toLowerCase();
     if (contactMap[lowerEmail]) {
@@ -512,6 +520,14 @@ function resolveContactName(contactId, chatIdentifier, displayName, contactMap) 
     const normalized = normalizePhoneNumber(chatIdentifier);
     if (normalized && contactMap[normalized]) {
       return contactMap[normalized];
+    }
+
+    // If not found and number has country code 1, try without it
+    if (normalized && normalized.startsWith('1') && normalized.length === 11) {
+      const withoutCountryCode = normalized.substring(1);
+      if (contactMap[withoutCountryCode]) {
+        return contactMap[withoutCountryCode];
+      }
     }
   }
 
@@ -700,6 +716,12 @@ ipcMain.handle('get-conversations', async () => {
           // contactId is a phone - look up full contact info
           const normalized = rawContactId.replace(/\D/g, '');
           contactInfo = phoneToContactInfo[normalized] || phoneToContactInfo[rawContactId];
+
+          // If not found and number has country code 1 (11 digits starting with 1), try without it
+          if (!contactInfo && normalized.startsWith('1') && normalized.length === 11) {
+            const withoutCountryCode = normalized.substring(1);
+            contactInfo = phoneToContactInfo[withoutCountryCode];
+          }
 
           if (contactInfo) {
             phones = contactInfo.phones || [];
