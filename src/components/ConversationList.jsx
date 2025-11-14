@@ -311,12 +311,8 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
           </button>
         </div>
 
-        {/* Selection Info */}
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-gray-600">
-            {selectedIds.size} of {filteredConversations.length} contacts selected
-          </p>
-
+        {/* Export Buttons */}
+        <div className="flex items-center justify-end gap-3 mb-4">
           <div className="flex gap-3">
             <button
               onClick={handleExport}
@@ -349,6 +345,13 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
             )}
           </div>
         </div>
+      </div>
+
+      {/* Selection Count Bar */}
+      <div className="bg-gray-100 border-b border-gray-200 py-3">
+        <p className="text-sm text-gray-600 text-center font-medium">
+          {selectedIds.size} of {filteredConversations.length} contacts selected
+        </p>
       </div>
 
       {/* Email Count Loading Overlay */}
