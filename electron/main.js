@@ -734,7 +734,7 @@ ipcMain.handle('get-conversations', async () => {
 
           // CRITICAL FIX: Always prefer a real chat ID over a generated group-contact-* ID
           // This ensures we can export 1:1 messages even if group chat is more recent
-          const wasGeneratedId = existing.id && existing.id.startsWith('group-contact-');
+          const wasGeneratedId = typeof existing.id === 'string' && existing.id.startsWith('group-contact-');
           if (!existing.id || wasGeneratedId) {
             // Current ID is fake, use the real chat ID from this 1:1 conversation
             console.log(`  Updating ${displayName}: ${existing.id} -> ${conv.chat_id} (found 1:1 chat)`);
@@ -1327,7 +1327,7 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
           let messages = [];
 
           // Check if this is a generated ID (for group-only contacts)
-          if (contact.chatId && contact.chatId.startsWith('group-contact-')) {
+          if (contact.chatId && typeof contact.chatId === 'string' && contact.chatId.startsWith('group-contact-')) {
             // This contact only appears in group chats, find all chats where they're a participant
             console.log(`  Finding all chats for ${contact.name} using identifiers...`);
 
