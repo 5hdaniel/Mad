@@ -1418,7 +1418,8 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
                 message.is_from_me,
                 handle.id as sender,
                 message.cache_has_attachments,
-                message.attributedBody
+                message.attributedBody,
+                chat_message_join.chat_id
               FROM message
               JOIN chat_message_join ON message.ROWID = chat_message_join.message_id
               LEFT JOIN handle ON message.handle_id = handle.ROWID
@@ -1431,34 +1432,91 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
           textMessageCount = messages.length;
 
           if (messages.length > 0) {
-            // Format messages as text
-            let exportContent = `TEXT MESSAGES WITH: ${contact.name}\n`;
-            exportContent += `Exported: ${new Date().toLocaleString()}\n`;
-            exportContent += `Total Messages: ${messages.length}\n`;
-            exportContent += '='.repeat(80) + '\n\n';
-
+            // Group messages by chat_id
+            const messagesByChatId = {};
             for (const msg of messages) {
-              // Convert Mac timestamp to readable date
-              const macEpoch = new Date('2001-01-01T00:00:00Z').getTime();
-              const messageDate = new Date(macEpoch + (msg.date / 1000000));
-
-              // Resolve sender name
-              let sender;
-              if (msg.is_from_me) {
-                sender = 'Me';
-              } else if (msg.sender) {
-                const resolvedName = resolveContactName(msg.sender, null, null, contactMap);
-                sender = resolvedName !== msg.sender ? resolvedName : msg.sender;
-              } else {
-                sender = 'Unknown';
+              const chatId = msg.chat_id || 'unknown';
+              if (!messagesByChatId[chatId]) {
+                messagesByChatId[chatId] = [];
               }
+              messagesByChatId[chatId].push(msg);
+            }
 
-              // Handle text content (same logic as export-conversations)
-              let text;
+            console.log(`  Messages grouped into ${Object.keys(messagesByChatId).length} separate chats`);
 
-              // Check if text field has the special marker
-              if (msg.text && msg.text !== '__kIMMessagePartAttributeName') {
-                text = msg.text;
+            // Get chat info for each chat_id
+            const chatInfoMap = {};
+            const chatIds = Object.keys(messagesByChatId).filter(id => id !== 'unknown');
+            if (chatIds.length > 0) {
+              const chatInfoQuery = `
+                SELECT
+                  chat.ROWID as chat_id,
+                  chat.chat_identifier,
+                  chat.display_name
+                FROM chat
+                WHERE chat.ROWID IN (${chatIds.map(() => '?').join(',')})
+              `;
+              const chatInfoResults = await dbAll(chatInfoQuery, chatIds);
+              chatInfoResults.forEach(info => {
+                chatInfoMap[info.chat_id] = info;
+              });
+            }
+
+            // Separate group chats from 1:1 chats
+            const groupChats = {};
+            const oneOnOneMessages = [];
+
+            for (const [chatId, chatMessages] of Object.entries(messagesByChatId)) {
+              const chatInfo = chatInfoMap[chatId];
+              const isGroupChat = chatInfo && chatInfo.chat_identifier &&
+                                  chatInfo.chat_identifier.startsWith('chat') &&
+                                  !chatInfo.chat_identifier.includes('@');
+
+              if (isGroupChat) {
+                groupChats[chatId] = {
+                  info: chatInfo,
+                  messages: chatMessages
+                };
+              } else {
+                oneOnOneMessages.push(...chatMessages);
+              }
+            }
+
+            // Sort all 1:1 messages by date
+            oneOnOneMessages.sort((a, b) => a.date - b.date);
+
+            let filesCreated = 0;
+
+            // Export all 1:1 messages to a single file
+            if (oneOnOneMessages.length > 0) {
+              let exportContent = `1-ON-1 MESSAGES\n`;
+              exportContent += `Contact: ${contact.name}\n`;
+              exportContent += `Exported: ${new Date().toLocaleString()}\n`;
+              exportContent += `Total Messages: ${oneOnOneMessages.length}\n`;
+              exportContent += '='.repeat(80) + '\n\n';
+
+              for (const msg of oneOnOneMessages) {
+                // Convert Mac timestamp to readable date
+                const macEpoch = new Date('2001-01-01T00:00:00Z').getTime();
+                const messageDate = new Date(macEpoch + (msg.date / 1000000));
+
+                // Resolve sender name
+                let sender;
+                if (msg.is_from_me) {
+                  sender = 'Me';
+                } else if (msg.sender) {
+                  const resolvedName = resolveContactName(msg.sender, null, null, contactMap);
+                  sender = resolvedName !== msg.sender ? resolvedName : msg.sender;
+                } else {
+                  sender = 'Unknown';
+                }
+
+                // Handle text content (same logic as export-conversations)
+                let text;
+
+                // Check if text field has the special marker
+                if (msg.text && msg.text !== '__kIMMessagePartAttributeName') {
+                  text = msg.text;
               } else if (msg.attributedBody) {
                 // Text is in attributedBody (either no text field, or it has the marker)
                 try {
@@ -1527,14 +1585,93 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
                 text = '[Reaction or system message]';
               }
 
-              exportContent += `[${messageDate.toLocaleString()}] ${sender}:\n${text}\n\n`;
+                exportContent += `[${messageDate.toLocaleString()}] ${sender}:\n${text}\n\n`;
+              }
+
+              // Save 1:1 messages file
+              const oneOnOneFilePath = path.join(contactFolder, '1-on-1_messages.txt');
+              await fs.writeFile(oneOnOneFilePath, exportContent, 'utf8');
+              console.log(`  Saved ${oneOnOneMessages.length} 1:1 messages to: 1-on-1_messages.txt`);
+              filesCreated++;
+              anySuccess = true;
             }
 
-            // Save text messages file
-            const textFilePath = path.join(contactFolder, 'text_messages.txt');
-            await fs.writeFile(textFilePath, exportContent, 'utf8');
-            console.log(`Saved text messages to: ${textFilePath}`);
-            anySuccess = true;
+            // Export each group chat to its own file
+            for (const [chatId, groupChat] of Object.entries(groupChats)) {
+              const chatName = groupChat.info.display_name || `Group Chat ${chatId}`;
+              const sanitized = chatName.replace(/[^a-z0-9]/gi, '_');
+              const fileName = `group_chat_${sanitized}.txt`;
+
+              let exportContent = `GROUP CHAT: ${chatName}\n`;
+              exportContent += `Contact: ${contact.name}\n`;
+              exportContent += `Exported: ${new Date().toLocaleString()}\n`;
+              exportContent += `Messages in this chat: ${groupChat.messages.length}\n`;
+              exportContent += '='.repeat(80) + '\n\n';
+
+              for (const msg of groupChat.messages) {
+                // Convert Mac timestamp to readable date
+                const macEpoch = new Date('2001-01-01T00:00:00Z').getTime();
+                const messageDate = new Date(macEpoch + (msg.date / 1000000));
+
+                // Resolve sender name
+                let sender;
+                if (msg.is_from_me) {
+                  sender = 'Me';
+                } else if (msg.sender) {
+                  const resolvedName = resolveContactName(msg.sender, null, null, contactMap);
+                  sender = resolvedName !== msg.sender ? resolvedName : msg.sender;
+                } else {
+                  sender = 'Unknown';
+                }
+
+                // Handle text content
+                let text;
+                if (msg.text && msg.text !== '__kIMMessagePartAttributeName') {
+                  text = msg.text;
+                } else if (msg.attributedBody) {
+                  try {
+                    const bodyBuffer = msg.attributedBody;
+                    const bodyText = bodyBuffer.toString('utf8');
+                    let extractedText = null;
+
+                    const nsStringIndex = bodyText.indexOf('NSString');
+                    if (nsStringIndex !== -1) {
+                      const afterNSString = bodyText.substring(nsStringIndex + 8);
+                      const allMatches = afterNSString.match(/[\x20-\x7E\u00A0-\uFFFF]{4,}/g);
+                      if (allMatches && allMatches.length > 0) {
+                        const cleaned = allMatches.join(' ').trim();
+                        if (!cleaned.includes('__kIMMessagePartAttributeName')) {
+                          extractedText = cleaned;
+                        }
+                      }
+                    }
+
+                    if (extractedText && extractedText.length >= 1 && extractedText.length < 10000) {
+                      text = extractedText;
+                    } else {
+                      text = '[Message text - unable to extract from rich format]';
+                    }
+                  } catch (e) {
+                    text = '[Message text - parsing error]';
+                  }
+                } else if (msg.cache_has_attachments === 1) {
+                  text = '[Attachment - Photo/Video/File]';
+                } else {
+                  text = '[Reaction or system message]';
+                }
+
+                exportContent += `[${messageDate.toLocaleString()}] ${sender}:\n${text}\n\n`;
+              }
+
+              // Save group chat file
+              const groupFilePath = path.join(contactFolder, fileName);
+              await fs.writeFile(groupFilePath, exportContent, 'utf8');
+              console.log(`  Saved ${groupChat.messages.length} messages to: ${fileName}`);
+              filesCreated++;
+              anySuccess = true;
+            }
+
+            console.log(`Created ${filesCreated} text message file(s) for ${contact.name}`);
           }
         } catch (err) {
           console.error(`Error exporting text messages for ${contact.name}:`, err);
