@@ -1139,15 +1139,10 @@ ipcMain.on('install-update', () => {
 // Initialize Outlook service
 ipcMain.handle('outlook-initialize', async () => {
   try {
-    const clientId = process.env.MICROSOFT_CLIENT_ID;
+    // Production: Use hardcoded Client ID (falls back to .env for development)
+    // This is a public client ID for OAuth, not a secret
+    const clientId = process.env.MICROSOFT_CLIENT_ID || '3a6c341a-17ab-4739-977d-a7d71b27f945';
     const tenantId = process.env.MICROSOFT_TENANT_ID || 'common';
-
-    if (!clientId) {
-      return {
-        success: false,
-        error: 'Microsoft Client ID not configured. Please add MICROSOFT_CLIENT_ID to .env.local'
-      };
-    }
 
     if (!outlookService) {
       outlookService = new OutlookService();
