@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import Joyride, { STATUS } from 'react-joyride';
 
 function ConversationList({ onExportComplete }) {
   const [conversations, setConversations] = useState([]);
@@ -7,10 +8,57 @@ function ConversationList({ onExportComplete }) {
   const [isExporting, setIsExporting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [error, setError] = useState(null);
+  const [runTour, setRunTour] = useState(false);
+
+  const tourSteps = [
+    {
+      target: '.search-input',
+      content: 'Use the search bar to quickly find specific conversations by name or phone number.',
+      disableBeacon: true,
+    },
+    {
+      target: '.select-all-button',
+      content: 'Click here to select or deselect all conversations at once.',
+    },
+    {
+      target: '.conversation-list',
+      content: 'Click on any conversation to select or deselect it. Selected conversations will be highlighted in blue.',
+    },
+    {
+      target: '.selection-counter',
+      content: 'This shows how many conversations you\'ve selected out of the total available.',
+    },
+    {
+      target: '.export-button',
+      content: 'When you\'re ready, click the Export button to save your selected conversations.',
+    },
+  ];
 
   useEffect(() => {
     loadConversations();
   }, []);
+
+  useEffect(() => {
+    // Start tour after conversations are loaded and not empty
+    if (!isLoading && conversations.length > 0 && !error) {
+      // Check if user has seen the tour before
+      const hasSeenTour = localStorage.getItem('hasSeenExportTour');
+      if (!hasSeenTour) {
+        // Delay tour start to ensure DOM is ready
+        setTimeout(() => setRunTour(true), 500);
+      }
+    }
+  }, [isLoading, conversations.length, error]);
+
+  const handleJoyrideCallback = (data) => {
+    const { status } = data;
+    const finishedStatuses = [STATUS.FINISHED, STATUS.SKIPPED];
+
+    if (finishedStatuses.includes(status)) {
+      setRunTour(false);
+      localStorage.setItem('hasSeenExportTour', 'true');
+    }
+  };
 
   const loadConversations = async () => {
     setIsLoading(true);
@@ -134,6 +182,21 @@ function ConversationList({ onExportComplete }) {
 
   return (
     <div className="flex flex-col min-h-full">
+      <Joyride
+        steps={tourSteps}
+        run={runTour}
+        continuous
+        showProgress
+        showSkipButton
+        callback={handleJoyrideCallback}
+        styles={{
+          options: {
+            primaryColor: '#3b82f6',
+            zIndex: 10000,
+          },
+        }}
+      />
+
       {/* Header */}
       <div className="bg-white border-b border-gray-200 p-6">
         <h1 className="text-2xl font-bold text-gray-900 mb-4">Select Conversations to Export</h1>
@@ -146,7 +209,7 @@ function ConversationList({ onExportComplete }) {
               placeholder="Search conversations..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-4 py-2 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+              className="search-input w-full px-4 py-2 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
             />
             <svg className="w-5 h-5 text-gray-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -155,7 +218,7 @@ function ConversationList({ onExportComplete }) {
 
           <button
             onClick={selectAll}
-            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            className="select-all-button px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
           >
             {selectedIds.size === filteredConversations.length ? 'Deselect All' : 'Select All'}
           </button>
@@ -163,14 +226,14 @@ function ConversationList({ onExportComplete }) {
 
         {/* Selection Info */}
         <div className="flex items-center justify-between">
-          <p className="text-sm text-gray-600">
+          <p className="selection-counter text-sm text-gray-600">
             {selectedIds.size} of {filteredConversations.length} conversations selected
           </p>
 
           <button
             onClick={handleExport}
             disabled={selectedIds.size === 0 || isExporting}
-            className="bg-primary text-white py-2 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="export-button bg-primary text-white py-2 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isExporting ? 'Exporting...' : `Export ${selectedIds.size > 0 ? `(${selectedIds.size})` : ''}`}
           </button>
@@ -178,7 +241,7 @@ function ConversationList({ onExportComplete }) {
       </div>
 
       {/* Conversation List */}
-      <div className="flex-1 overflow-y-auto p-6">
+      <div className="conversation-list flex-1 overflow-y-auto p-6">
         {filteredConversations.length === 0 ? (
           <div className="text-center py-12">
             <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
