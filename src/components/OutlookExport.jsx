@@ -364,10 +364,7 @@ function OutlookExport({ conversations, selectedIds, onComplete, onCancel }) {
   return (
     <div className="flex flex-col min-h-full">
       <div className="bg-white border-b border-gray-200 p-6">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Full Audit Export (Messages + Emails)</h1>
-        <p className="text-sm text-gray-600">
-          Signed in as: <span className="font-semibold">{userEmail}</span>
-        </p>
+        <h1 className="text-2xl font-bold text-gray-900">Full Audit Export (Messages + Emails)</h1>
       </div>
 
       <div className="flex-1 overflow-y-auto p-6">

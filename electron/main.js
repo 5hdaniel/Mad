@@ -1540,8 +1540,8 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
                     // Find all sequences of readable text
                     const allMatches = afterNSString.match(/[\x20-\x7E\u00A0-\uFFFF]{4,}/g);
                     if (allMatches && allMatches.length > 0) {
-                      // Filter out the marker itself
-                      const filtered = allMatches.filter(m => !m.includes('__kIMMessagePartAttributeName'));
+                      // Filter out attribute markers
+                      const filtered = allMatches.filter(m => !m.includes('__kIM'));
 
                       // Find the best match - prefer longest with good content
                       for (const match of filtered.sort((a, b) => b.length - a.length)) {
@@ -1549,6 +1549,7 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
                         const cleaned = match
                           .replace(/\x00/g, '') // Remove null bytes
                           .replace(/[\x01-\x08\x0B-\x1F\x7F]/g, '') // Remove control chars
+                          .replace(/[��\uFFFD]/g, '') // Remove replacement characters
                           .trim();
 
                         // Accept if it has real content (letters or numbers)
@@ -1569,10 +1570,11 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
                         const cleaned = textMatch[0]
                           .replace(/\x00/g, '')
                           .replace(/[\x01-\x08\x0B-\x1F\x7F]/g, '')
+                          .replace(/[��\uFFFD]/g, '')
                           .trim();
 
-                        // Filter out the marker
-                        if (!cleaned.includes('__kIMMessagePartAttributeName')) {
+                        // Filter out attribute markers
+                        if (!cleaned.includes('__kIM')) {
                           extractedText = cleaned;
                         }
                       }
@@ -1585,11 +1587,15 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
                     if (allReadableText && allReadableText.length > 0) {
                       // Filter out technical markers and system strings
                       const candidates = allReadableText
-                        .filter(t => !t.includes('__kIMMessagePartAttributeName'))
+                        .filter(t => !t.includes('__kIM')) // Filter all __kIM attribute names
+                        .filter(t => !t.startsWith('NSMutable'))
+                        .filter(t => !t.startsWith('NSAttributed'))
                         .filter(t => !t.includes('NSString'))
                         .filter(t => !t.includes('NSObject'))
+                        .filter(t => !t.includes('NSNumber'))
                         .filter(t => !t.includes('streamtyped'))
                         .filter(t => !t.match(/^[\x00-\x1F\x7F]+$/)) // Not all control chars
+                        .filter(t => !t.match(/^[^\w\s]{3,}$/)) // Not just symbols
                         .filter(t => /[a-zA-Z0-9]/.test(t)); // Has alphanumeric content
 
                       if (candidates.length > 0) {
@@ -1597,6 +1603,7 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
                         extractedText = candidates.sort((a, b) => b.length - a.length)[0]
                           .replace(/\x00/g, '')
                           .replace(/[\x01-\x08\x0B-\x1F\x7F]/g, '')
+                          .replace(/[��\uFFFD]/g, '') // Remove replacement characters
                           .trim();
                       }
                     }
@@ -1670,11 +1677,12 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
                       const afterNSString = bodyText.substring(nsStringIndex + 8);
                       const allMatches = afterNSString.match(/[\x20-\x7E\u00A0-\uFFFF]{4,}/g);
                       if (allMatches && allMatches.length > 0) {
-                        const filtered = allMatches.filter(m => !m.includes('__kIMMessagePartAttributeName'));
+                        const filtered = allMatches.filter(m => !m.includes('__kIM'));
                         for (const match of filtered.sort((a, b) => b.length - a.length)) {
                           const cleaned = match
                             .replace(/\x00/g, '')
                             .replace(/[\x01-\x08\x0B-\x1F\x7F]/g, '')
+                            .replace(/[��\uFFFD]/g, '')
                             .trim();
                           if (cleaned.length >= 2 && /[a-zA-Z0-9]/.test(cleaned)) {
                             extractedText = cleaned;
@@ -1693,8 +1701,9 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
                           const cleaned = textMatch[0]
                             .replace(/\x00/g, '')
                             .replace(/[\x01-\x08\x0B-\x1F\x7F]/g, '')
+                            .replace(/[��\uFFFD]/g, '')
                             .trim();
-                          if (!cleaned.includes('__kIMMessagePartAttributeName')) {
+                          if (!cleaned.includes('__kIM')) {
                             extractedText = cleaned;
                           }
                         }
@@ -1706,17 +1715,22 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
                       const allReadableText = bodyText.match(/[\x20-\x7E\u00A0-\uFFFF]{2,}/g);
                       if (allReadableText && allReadableText.length > 0) {
                         const candidates = allReadableText
-                          .filter(t => !t.includes('__kIMMessagePartAttributeName'))
+                          .filter(t => !t.includes('__kIM')) // Filter all __kIM attribute names
+                          .filter(t => !t.startsWith('NSMutable'))
+                          .filter(t => !t.startsWith('NSAttributed'))
                           .filter(t => !t.includes('NSString'))
                           .filter(t => !t.includes('NSObject'))
+                          .filter(t => !t.includes('NSNumber'))
                           .filter(t => !t.includes('streamtyped'))
                           .filter(t => !t.match(/^[\x00-\x1F\x7F]+$/))
+                          .filter(t => !t.match(/^[^\w\s]{3,}$/)) // Not just symbols
                           .filter(t => /[a-zA-Z0-9]/.test(t));
 
                         if (candidates.length > 0) {
                           extractedText = candidates.sort((a, b) => b.length - a.length)[0]
                             .replace(/\x00/g, '')
                             .replace(/[\x01-\x08\x0B-\x1F\x7F]/g, '')
+                            .replace(/[��\uFFFD]/g, '') // Remove replacement characters
                             .trim();
                         }
                       }
