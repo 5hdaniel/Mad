@@ -1457,8 +1457,10 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
                 WHERE chat.ROWID IN (${chatIds.map(() => '?').join(',')})
               `;
               const chatInfoResults = await dbAll(chatInfoQuery, chatIds);
+              console.log(`  Retrieved chat info for ${chatInfoResults.length} chats`);
               chatInfoResults.forEach(info => {
                 chatInfoMap[info.chat_id] = info;
+                console.log(`    Chat ${info.chat_id}: identifier="${info.chat_identifier}", display_name="${info.display_name}"`);
               });
             }
 
@@ -1468,9 +1470,19 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
 
             for (const [chatId, chatMessages] of Object.entries(messagesByChatId)) {
               const chatInfo = chatInfoMap[chatId];
-              const isGroupChat = chatInfo && chatInfo.chat_identifier &&
+
+              if (!chatInfo) {
+                console.log(`  WARNING: No chat info found for chat_id ${chatId}, treating as 1:1`);
+                oneOnOneMessages.push(...chatMessages);
+                continue;
+              }
+
+              const isGroupChat = chatInfo.chat_identifier &&
+                                  typeof chatInfo.chat_identifier === 'string' &&
                                   chatInfo.chat_identifier.startsWith('chat') &&
                                   !chatInfo.chat_identifier.includes('@');
+
+              console.log(`  Chat ${chatId} (${chatMessages.length} msgs): identifier="${chatInfo.chat_identifier}", isGroupChat=${isGroupChat}`);
 
               if (isGroupChat) {
                 groupChats[chatId] = {
@@ -1481,6 +1493,8 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
                 oneOnOneMessages.push(...chatMessages);
               }
             }
+
+            console.log(`  Identified ${Object.keys(groupChats).length} group chats and ${oneOnOneMessages.length} 1:1 messages`);
 
             // Sort all 1:1 messages by date
             oneOnOneMessages.sort((a, b) => a.date - b.date);
