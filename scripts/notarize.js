@@ -15,23 +15,12 @@ exports.default = async function notarizing(context) {
   const appleIdPassword = process.env.APPLE_APP_SPECIFIC_PASSWORD;
   const teamId = process.env.APPLE_TEAM_ID;
 
-  console.log('\n=== Notarization Configuration ===');
-  console.log(`Apple ID: ${appleId || 'NOT SET'}`);
-  console.log(`Team ID: ${teamId || 'NOT SET'}`);
-  console.log(`App-Specific Password: ${appleIdPassword ? '****' + appleIdPassword.slice(-4) : 'NOT SET'}`);
-  console.log(`App Path: ${appOutDir}/${appName}.app`);
-  console.log('====================================\n');
-
   if (!appleId || !appleIdPassword || !teamId) {
-    console.warn('⚠️  Skipping notarization: Missing credentials');
-    console.warn('   Please check your .env.local file contains:');
-    console.warn('   - APPLE_ID');
-    console.warn('   - APPLE_APP_SPECIFIC_PASSWORD');
-    console.warn('   - APPLE_TEAM_ID');
+    console.warn('Skipping notarization: Missing APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, or APPLE_TEAM_ID environment variables');
     return;
   }
 
-  console.log(`🔐 Notarizing ${appName} with Apple...`);
+  console.log(`Notarizing ${appName}...`);
 
   try {
     await notarize({
