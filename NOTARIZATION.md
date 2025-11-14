@@ -19,10 +19,25 @@ This document explains how to set up code signing and notarization for Audit Mag
 Your Apple Developer account email address.
 
 ### 1.2 Team ID
-Find your Team ID:
+Find your Team ID (10-character code like `ABC123DEFG`):
+
+**Method 1: From Developer Portal**
 1. Go to: https://developer.apple.com/account
-2. Click "Membership" in the sidebar
-3. Your Team ID is listed there (format: `ABC123XYZ`)
+2. Sign in with your Apple ID
+3. Click "Membership" in the left sidebar
+4. Your Team ID is displayed (it's a 10-character alphanumeric code)
+
+**Method 2: Run Helper Script**
+```bash
+chmod +x scripts/find-team-id.sh
+./scripts/find-team-id.sh
+```
+
+**Method 3: From Certificate**
+```bash
+security find-identity -v -p codesigning
+```
+Look for "Developer ID Application" - the Team ID is in the organization unit (OU)
 
 ### 1.3 App-Specific Password
 Generate an app-specific password for notarization:
@@ -119,6 +134,32 @@ The `build/entitlements.mac.plist` file declares required permissions:
 - Keychain access (for storing credentials)
 
 ## Troubleshooting
+
+### "HTTP status code: 403. Invalid or inaccessible developer team ID"
+
+**Cause**: The Team ID in `.env.local` is incorrect or you're using the example placeholder.
+
+**Solution**:
+1. **Find your actual Team ID:**
+   ```bash
+   chmod +x scripts/find-team-id.sh
+   ./scripts/find-team-id.sh
+   ```
+   OR go to https://developer.apple.com/account → Membership
+
+2. **Update `.env.local`** with your real Team ID:
+   ```bash
+   APPLE_TEAM_ID=ABC123DEFG  # Replace with YOUR actual 10-character Team ID
+   ```
+
+3. **Verify your Apple ID** is correct (should match your Apple Developer account)
+
+4. **Rebuild**:
+   ```bash
+   npm run package
+   ```
+
+**Common Mistake**: Using the example Team ID `SDX736QH45` from `.env.local.example` - this won't work!
 
 ### "The app can't be opened because it is from an unidentified developer"
 
