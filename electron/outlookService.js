@@ -365,7 +365,7 @@ class OutlookService {
       console.log(`[Email Fetch] Starting fetch for ${contactEmail}, maxResults: ${maxResults}`);
 
       // Helper function to add timeout to promises
-      const withTimeout = (promise, timeoutMs = 30000) => {
+      const withTimeout = (promise, timeoutMs = 60000) => {
         return Promise.race([
           promise,
           new Promise((_, reject) =>
@@ -384,11 +384,13 @@ class OutlookService {
           .orderby('receivedDateTime DESC')
           .top(50)
           .get(),
-        30000 // 30 second timeout
+        60000 // 60 second timeout
       );
       console.log(`[Email Fetch] Page 1 fetched: ${response.value?.length || 0} emails`);
 
       const matchingEmailIds = [];
+      let consecutivePagesWithNoMatches = 0;
+      const maxConsecutivePagesWithNoMatches = 5; // Stop if 5 pages in a row have 0 matches
 
       do {
         const emails = response.value || [];
@@ -407,6 +409,17 @@ class OutlookService {
         console.log(`[Email Fetch] Page ${pageCount + 1}: Found ${matching.length} matching emails out of ${emails.length} total`);
         matchingEmailIds.push(...matching);
 
+        // Track consecutive pages with no matches
+        if (matching.length === 0) {
+          consecutivePagesWithNoMatches++;
+          if (consecutivePagesWithNoMatches >= maxConsecutivePagesWithNoMatches) {
+            console.log(`[Email Fetch] No matches found in ${maxConsecutivePagesWithNoMatches} consecutive pages, stopping search`);
+            break;
+          }
+        } else {
+          consecutivePagesWithNoMatches = 0; // Reset counter when we find matches
+        }
+
         // Stop if we have enough
         if (matchingEmailIds.length >= maxResults) {
           console.log(`[Email Fetch] Reached maxResults (${maxResults}), stopping`);
@@ -421,7 +434,7 @@ class OutlookService {
           console.log(`[Email Fetch] Fetching page ${pageCount + 1}...`);
           response = await withTimeout(
             this.graphClient.api(nextLink).get(),
-            30000 // 30 second timeout
+            60000 // 60 second timeout
           );
           console.log(`[Email Fetch] Page ${pageCount + 1} fetched: ${response.value?.length || 0} emails`);
         } else {
@@ -447,7 +460,7 @@ class OutlookService {
               .api(`/me/messages/${email.id}`)
               .select('id,subject,from,toRecipients,ccRecipients,receivedDateTime,body,bodyPreview,hasAttachments,importance')
               .get(),
-            15000 // 15 second timeout per email
+            30000 // 30 second timeout per email
           );
 
           // Merge the body into the email object
