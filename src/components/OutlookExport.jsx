@@ -96,6 +96,7 @@ function OutlookExport({ conversations, selectedIds, onComplete, onCancel }) {
         name: conv.name,
         chatId: conv.id, // Include chatId for text message export
         emails: conv.emails || [],
+        phones: conv.phones || [], // Include phones for finding group chats
       }));
 
       const result = await window.electron.outlookExportEmails(contactsToExport);
