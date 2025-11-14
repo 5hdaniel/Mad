@@ -41,8 +41,8 @@
     "sqlite3": "^5.1.7"
   },
   "build": {
-    "appId": "com.auditmagic.app",
-    "productName": "Audit Magic",
+    "appId": "com.realestate.archiveapp",
+    "productName": "Real Estate Archive",
     "publish": {
       "provider": "github",
       "owner": "5hdaniel",
