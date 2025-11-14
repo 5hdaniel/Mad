@@ -710,6 +710,7 @@ ipcMain.handle('get-conversations', async () => {
 
         const conversationData = {
           id: conv.chat_id,
+          chatId: conv.chat_id, // CRITICAL: Set chatId field for exports
           name: displayName,
           contactId: rawContactId,
           phones: phones,

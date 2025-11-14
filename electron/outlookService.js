@@ -355,9 +355,13 @@ class OutlookService {
     }
 
     try {
-      // Use Microsoft Graph API $filter to only fetch relevant emails
+      // Fetch messages and filter in memory
+      // NOTE: Graph API $filter with complex any() expressions doesn't work reliably
       const emailLower = contactEmail.toLowerCase();
       let matchingEmails = [];
+      let nextLink = null;
+      let pageCount = 0;
+      const maxPages = 20; // Limit to prevent infinite loops
 
       console.log(`[Email Fetch] Starting fetch for ${contactEmail}, maxResults: ${maxResults}`);
 
@@ -371,28 +375,79 @@ class OutlookService {
         ]);
       };
 
-      // Build OData filter for emails where contact is sender or recipient
-      // Note: Graph API filter syntax for checking participants:
-      // - from/emailAddress/address eq 'email'
-      // - toRecipients/any(r:r/emailAddress/address eq 'email')
-      // - ccRecipients/any(c:c/emailAddress/address eq 'email')
-      const filter = `from/emailAddress/address eq '${emailLower}' or toRecipients/any(r:r/emailAddress/address eq '${emailLower}') or ccRecipients/any(c:c/emailAddress/address eq '${emailLower}')`;
-
-      console.log(`[Email Fetch] Using API filter to fetch only matching emails`);
-
-      // PHASE 1: Fetch email metadata with server-side filtering
+      // PHASE 1: Fetch email metadata (without body) to find matching emails
+      // Using smaller page size (50 instead of 500) and excluding body for speed
+      console.log(`[Email Fetch] Phase 1: Fetching metadata (top 50 per page)...`);
       let response = await withTimeout(
         this.graphClient
           .api('/me/messages')
-          .filter(filter)
           .select('id,subject,from,toRecipients,ccRecipients,receivedDateTime,hasAttachments,importance')
           .orderby('receivedDateTime DESC')
-          .top(maxResults) // Only fetch what we need
+          .top(50)
           .get(),
         60000 // 60 second timeout
       );
+      console.log(`[Email Fetch] Page 1 fetched: ${response.value?.length || 0} emails`);
 
-      const emailsToFetch = response.value || [];
+      const matchingEmailIds = [];
+      let consecutivePagesWithNoMatches = 0;
+      const maxConsecutivePagesWithNoMatches = 5; // Stop if 5 pages in a row have 0 matches
+
+      do {
+        const emails = response.value || [];
+
+        // Filter emails that involve this contact
+        const matching = emails.filter(email => {
+          const fromEmail = email.from?.emailAddress?.address?.toLowerCase();
+          const toEmails = (email.toRecipients || []).map(r => r.emailAddress?.address?.toLowerCase());
+          const ccEmails = (email.ccRecipients || []).map(r => r.emailAddress?.address?.toLowerCase());
+
+          return fromEmail === emailLower ||
+                 toEmails.includes(emailLower) ||
+                 ccEmails.includes(emailLower);
+        });
+
+        console.log(`[Email Fetch] Page ${pageCount + 1}: Found ${matching.length} matching emails out of ${emails.length} total`);
+        matchingEmailIds.push(...matching);
+
+        // Track consecutive pages with no matches
+        if (matching.length === 0) {
+          consecutivePagesWithNoMatches++;
+          if (consecutivePagesWithNoMatches >= maxConsecutivePagesWithNoMatches) {
+            console.log(`[Email Fetch] No matches found in ${maxConsecutivePagesWithNoMatches} consecutive pages, stopping search`);
+            break;
+          }
+        } else {
+          consecutivePagesWithNoMatches = 0; // Reset counter when we find matches
+        }
+
+        // Stop if we have enough
+        if (matchingEmailIds.length >= maxResults) {
+          console.log(`[Email Fetch] Reached maxResults (${maxResults}), stopping`);
+          break;
+        }
+
+        nextLink = response['@odata.nextLink'];
+        pageCount++;
+
+        // Fetch next page if exists and under limit
+        if (nextLink && pageCount < maxPages) {
+          console.log(`[Email Fetch] Fetching page ${pageCount + 1}...`);
+          response = await withTimeout(
+            this.graphClient.api(nextLink).get(),
+            60000 // 60 second timeout
+          );
+          console.log(`[Email Fetch] Page ${pageCount + 1} fetched: ${response.value?.length || 0} emails`);
+        } else {
+          if (pageCount >= maxPages) {
+            console.log(`[Email Fetch] Reached max pages (${maxPages}), stopping`);
+          }
+          break;
+        }
+      } while (nextLink && pageCount < maxPages);
+
+      // Trim to maxResults
+      const emailsToFetch = matchingEmailIds.slice(0, maxResults);
       console.log(`[Email Fetch] Phase 1 complete: Found ${emailsToFetch.length} matching emails`);
 
       // PHASE 2: Fetch full body content for matching emails only
