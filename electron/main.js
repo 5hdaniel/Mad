@@ -298,7 +298,7 @@ async function getContactNames() {
 
           // If this database has more records, use it
           if (recordCount[0].count > 10) {
-            console.log(`Found Contacts database with ${recordCount[0].count} contacts`);
+            // Found Contacts database
             return await loadContactsFromDatabase(dbPath);
           }
         } catch (err) {
