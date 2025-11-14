@@ -46,6 +46,11 @@ function App() {
     }
   };
 
+  const handleConnectOutlook = () => {
+    // Navigate back to Microsoft login screen
+    setCurrentStep('microsoft-login');
+  };
+
   const handlePermissionsGranted = () => {
     setHasPermissions(true);
     setCurrentStep('contacts');
@@ -126,6 +131,7 @@ function App() {
           <ConversationList
             onExportComplete={handleExportComplete}
             onOutlookExport={handleOutlookExport}
+            onConnectOutlook={handleConnectOutlook}
             outlookConnected={outlookConnected}
           />
         )}
