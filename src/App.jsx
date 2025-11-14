@@ -91,7 +91,7 @@ function App() {
   const getPageTitle = () => {
     switch (currentStep) {
       case 'microsoft-login':
-        return 'Connect to Microsoft';
+        return 'Login';
       case 'permissions':
         return 'Setup Permissions';
       case 'contacts':
