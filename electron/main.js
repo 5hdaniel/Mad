@@ -532,6 +532,9 @@ ipcMain.handle('get-conversations', async () => {
     const dbAll = promisify(db.all.bind(db));
     const dbClose = promisify(db.close.bind(db));
 
+    let db2 = null;
+    let dbClose2 = null;
+
     try {
       // Get contact names from Contacts database
       console.log('Loading contact names...');
@@ -557,11 +560,13 @@ ipcMain.handle('get-conversations', async () => {
         ORDER BY last_message_date DESC
       `);
 
-      // Re-open database to query group chat participants
-      const db2 = new sqlite3.Database(messagesDbPath, sqlite3.OPEN_READONLY);
-      const dbAll2 = promisify(db2.all.bind(db2));
-
+      // Close first database connection - we're done with it
       await dbClose();
+
+      // Re-open database to query group chat participants
+      db2 = new sqlite3.Database(messagesDbPath, sqlite3.OPEN_READONLY);
+      const dbAll2 = promisify(db2.all.bind(db2));
+      dbClose2 = promisify(db2.close.bind(db2));
 
       // Map conversations and deduplicate by contact NAME
       // This ensures that if a contact has multiple phone numbers or emails,
@@ -756,7 +761,7 @@ ipcMain.handle('get-conversations', async () => {
       }
 
       // Close the second database connection
-      await promisify(db2.close.bind(db2))();
+      await dbClose2();
 
       // Convert map back to array
       const deduplicatedConversations = Array.from(conversationMap.values())
@@ -780,7 +785,14 @@ ipcMain.handle('get-conversations', async () => {
         conversations: recentConversations
       };
     } catch (error) {
-      await dbClose();
+      // Clean up db2 if it was opened
+      if (dbClose2) {
+        try {
+          await dbClose2();
+        } catch (closeError) {
+          console.error('Error closing db2:', closeError);
+        }
+      }
       throw error;
     }
   } catch (error) {
