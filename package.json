@@ -1,7 +1,7 @@
 {
-  "name": "real-estate-archive-app",
+  "name": "audit-magic",
   "version": "1.0.3",
-  "description": "Real Estate Archive App - Export iMessage conversations",
+  "description": "Audit Magic - Export and archive iMessage conversations and emails",
   "main": "electron/main.js",
   "scripts": {
     "start": "concurrently \"npm run dev:react\" \"npm run dev:electron\"",
@@ -11,10 +11,11 @@
     "build": "vite build",
     "package": "npm run build && dotenv -e .env.local -- electron-builder"
   },
-  "keywords": ["electron", "react", "real-estate", "archive"],
+  "keywords": ["electron", "react", "audit", "archive", "imessage", "outlook"],
   "author": "",
   "license": "MIT",
   "devDependencies": {
+    "@electron/notarize": "^2.4.1",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
     "concurrently": "^9.1.0",
@@ -40,8 +41,8 @@
     "sqlite3": "^5.1.7"
   },
   "build": {
-    "appId": "com.realestate.archiveapp",
-    "productName": "Real Estate Archive",
+    "appId": "com.auditmagic.app",
+    "productName": "Audit Magic",
     "publish": {
       "provider": "github",
       "owner": "5hdaniel",
@@ -54,11 +55,15 @@
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
+      "notarize": {
+        "teamId": "${APPLE_TEAM_ID}"
+      },
       "target": [
         "dmg",
         "zip"
       ]
     },
+    "afterSign": "scripts/notarize.js",
     "files": [
       "dist/**/*",
       "electron/**/*"

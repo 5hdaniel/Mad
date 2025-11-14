@@ -170,11 +170,11 @@ function ConversationList({ onExportComplete, onOutlookExport, outlookConnected 
   };
 
   const selectAll = () => {
-    if (selectedIds.size === filteredConversations.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(filteredConversations.map(c => c.id)));
-    }
+    setSelectedIds(new Set(filteredConversations.map(c => c.id)));
+  };
+
+  const deselectAll = () => {
+    setSelectedIds(new Set());
   };
 
   const handleExport = async () => {
@@ -296,7 +296,14 @@ function ConversationList({ onExportComplete, onOutlookExport, outlookConnected 
             onClick={selectAll}
             className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
           >
-            {selectedIds.size === filteredConversations.length ? 'Deselect All' : 'Select All'}
+            Select All
+          </button>
+
+          <button
+            onClick={deselectAll}
+            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            Deselect All
           </button>
         </div>
 
