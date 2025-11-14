@@ -1362,54 +1362,48 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
           });
 
           let messages = [];
+          const allChatIds = new Set();
 
-          // Check if this is a generated ID (for group-only contacts)
-          if (contact.chatId && typeof contact.chatId === 'string' && contact.chatId.startsWith('group-contact-')) {
-            // This contact only appears in group chats, find all chats where they're a participant
-            console.log(`  Finding all chats for ${contact.name} using identifiers...`);
+          // Strategy: Fetch messages from ALL chats involving this contact
+          // This includes both their primary 1:1 chat AND any group chats they're in
 
-            // Build list of all identifiers (phones and emails)
-            const identifiers = [
-              ...(contact.phones || []),
-              ...(contact.emails || [])
-            ];
+          // Step 1: If they have a primary chatId, add it
+          if (contact.chatId && !(typeof contact.chatId === 'string' && contact.chatId.startsWith('group-contact-'))) {
+            allChatIds.add(contact.chatId);
+            console.log(`  Primary chat ID: ${contact.chatId}`);
+          }
 
-            if (identifiers.length > 0) {
-              // Find all chat IDs where any of these identifiers appear
-              const placeholders = identifiers.map(() => '?').join(',');
-              const chatIds = await dbAll(`
-                SELECT DISTINCT chat.ROWID as chat_id, chat.display_name
-                FROM chat
-                JOIN chat_handle_join ON chat.ROWID = chat_handle_join.chat_id
-                JOIN handle ON chat_handle_join.handle_id = handle.ROWID
-                WHERE handle.id IN (${placeholders})
-              `, identifiers);
+          // Step 2: Find ALL chats where their phone numbers or emails appear
+          // This will find group chats they're in
+          const identifiers = [
+            ...(contact.phones || []),
+            ...(contact.emails || [])
+          ];
 
-              console.log(`  Found ${chatIds.length} chats involving ${contact.name}`);
+          if (identifiers.length > 0) {
+            console.log(`  Finding all chats for ${contact.name} using ${identifiers.length} identifiers...`);
+            const placeholders = identifiers.map(() => '?').join(',');
+            const chatIds = await dbAll(`
+              SELECT DISTINCT chat.ROWID as chat_id, chat.display_name, chat.chat_identifier
+              FROM chat
+              JOIN chat_handle_join ON chat.ROWID = chat_handle_join.chat_id
+              JOIN handle ON chat_handle_join.handle_id = handle.ROWID
+              WHERE handle.id IN (${placeholders})
+            `, identifiers);
 
-              // Get messages from all these chats
-              if (chatIds.length > 0) {
-                const chatIdPlaceholders = chatIds.map(() => '?').join(',');
-                messages = await dbAll(`
-                  SELECT
-                    message.ROWID as id,
-                    message.text,
-                    message.date,
-                    message.is_from_me,
-                    handle.id as sender,
-                    message.cache_has_attachments,
-                    message.attributedBody,
-                    chat_message_join.chat_id
-                  FROM message
-                  JOIN chat_message_join ON message.ROWID = chat_message_join.message_id
-                  LEFT JOIN handle ON message.handle_id = handle.ROWID
-                  WHERE chat_message_join.chat_id IN (${chatIdPlaceholders})
-                  ORDER BY message.date ASC
-                `, chatIds.map(c => c.chat_id));
-              }
-            }
-          } else if (contact.chatId) {
-            // Regular single chat
+            console.log(`  Found ${chatIds.length} additional chats involving ${contact.name}`);
+            chatIds.forEach(c => {
+              allChatIds.add(c.chat_id);
+              console.log(`    - Chat ${c.chat_id}: ${c.chat_identifier} (${c.display_name || 'no name'})`);
+            });
+          }
+
+          // Step 3: Fetch messages from ALL identified chats
+          if (allChatIds.size > 0) {
+            const chatIdArray = Array.from(allChatIds);
+            const chatIdPlaceholders = chatIdArray.map(() => '?').join(',');
+            console.log(`  Fetching messages from ${chatIdArray.length} total chats...`);
+
             messages = await dbAll(`
               SELECT
                 message.ROWID as id,
@@ -1423,9 +1417,9 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
               FROM message
               JOIN chat_message_join ON message.ROWID = chat_message_join.message_id
               LEFT JOIN handle ON message.handle_id = handle.ROWID
-              WHERE chat_message_join.chat_id = ?
+              WHERE chat_message_join.chat_id IN (${chatIdPlaceholders})
               ORDER BY message.date ASC
-            `, [contact.chatId]);
+            `, chatIdArray);
           }
 
           console.log(`Found ${messages.length} text messages for ${contact.name}`);
