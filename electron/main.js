@@ -450,6 +450,34 @@ function normalizePhoneNumber(phone) {
   return phone.replace(/\D/g, '');
 }
 
+// Helper function to format phone numbers for display
+function formatPhoneNumber(phone) {
+  if (!phone) return '';
+
+  // Check if it's an email
+  if (phone.includes('@')) {
+    return phone;
+  }
+
+  // Extract just the digits
+  const digits = phone.replace(/\D/g, '');
+
+  // Format based on length
+  if (digits.length === 10) {
+    // US/Canada format: (XXX) XXX-XXXX
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+  } else if (digits.length === 11 && digits[0] === '1') {
+    // US/Canada with country code: +1 (XXX) XXX-XXXX
+    return `+1 (${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7)}`;
+  } else if (digits.length > 10) {
+    // International: +XX XXX XXX XXXX
+    return `+${digits}`;
+  } else {
+    // Short number or unknown format - just show as-is
+    return phone;
+  }
+}
+
 // Helper function to resolve contact name
 function resolveContactName(contactId, chatIdentifier, displayName, contactMap) {
   // If we have a display_name from Messages, use it
@@ -487,8 +515,9 @@ function resolveContactName(contactId, chatIdentifier, displayName, contactMap) 
     }
   }
 
-  // Final fallback: show the phone/email
-  return contactId || chatIdentifier || 'Unknown';
+  // Final fallback: format and show the phone/email nicely
+  const fallbackValue = contactId || chatIdentifier || 'Unknown';
+  return formatPhoneNumber(fallbackValue);
 }
 
 // Get conversations from Messages database
