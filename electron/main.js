@@ -1285,10 +1285,10 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
       let anySuccess = false;
       let errors = [];
 
-      // 1. Export text messages (if chatId exists)
-      if (contact.chatId) {
+      // 1. Export text messages (if chatId exists or if we have phone/email identifiers)
+      if (contact.chatId || contact.phones?.length > 0 || contact.emails?.length > 0) {
         try {
-          console.log(`Exporting text messages for ${contact.name} (chatId: ${contact.chatId})...`);
+          console.log(`Exporting text messages for ${contact.name}...`);
           mainWindow.webContents.send('export-progress', {
             stage: 'text-messages',
             message: `Exporting text messages for ${contact.name}...`,
@@ -1297,22 +1297,71 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
             contactName: contact.name
           });
 
-          // Get messages for this chat
-          const messages = await dbAll(`
-            SELECT
-              message.ROWID as id,
-              message.text,
-              message.date,
-              message.is_from_me,
-              handle.id as sender,
-              message.cache_has_attachments,
-              message.attributedBody
-            FROM message
-            JOIN chat_message_join ON message.ROWID = chat_message_join.message_id
-            LEFT JOIN handle ON message.handle_id = handle.ROWID
-            WHERE chat_message_join.chat_id = ?
-            ORDER BY message.date ASC
-          `, [contact.chatId]);
+          let messages = [];
+
+          // Check if this is a generated ID (for group-only contacts)
+          if (contact.chatId && contact.chatId.startsWith('group-contact-')) {
+            // This contact only appears in group chats, find all chats where they're a participant
+            console.log(`  Finding all chats for ${contact.name} using identifiers...`);
+
+            // Build list of all identifiers (phones and emails)
+            const identifiers = [
+              ...(contact.phones || []),
+              ...(contact.emails || [])
+            ];
+
+            if (identifiers.length > 0) {
+              // Find all chat IDs where any of these identifiers appear
+              const placeholders = identifiers.map(() => '?').join(',');
+              const chatIds = await dbAll(`
+                SELECT DISTINCT chat.ROWID as chat_id, chat.display_name
+                FROM chat
+                JOIN chat_handle_join ON chat.ROWID = chat_handle_join.chat_id
+                JOIN handle ON chat_handle_join.handle_id = handle.ROWID
+                WHERE handle.id IN (${placeholders})
+              `, identifiers);
+
+              console.log(`  Found ${chatIds.length} chats involving ${contact.name}`);
+
+              // Get messages from all these chats
+              if (chatIds.length > 0) {
+                const chatIdPlaceholders = chatIds.map(() => '?').join(',');
+                messages = await dbAll(`
+                  SELECT
+                    message.ROWID as id,
+                    message.text,
+                    message.date,
+                    message.is_from_me,
+                    handle.id as sender,
+                    message.cache_has_attachments,
+                    message.attributedBody,
+                    chat_message_join.chat_id
+                  FROM message
+                  JOIN chat_message_join ON message.ROWID = chat_message_join.message_id
+                  LEFT JOIN handle ON message.handle_id = handle.ROWID
+                  WHERE chat_message_join.chat_id IN (${chatIdPlaceholders})
+                  ORDER BY message.date ASC
+                `, chatIds.map(c => c.chat_id));
+              }
+            }
+          } else if (contact.chatId) {
+            // Regular single chat
+            messages = await dbAll(`
+              SELECT
+                message.ROWID as id,
+                message.text,
+                message.date,
+                message.is_from_me,
+                handle.id as sender,
+                message.cache_has_attachments,
+                message.attributedBody
+              FROM message
+              JOIN chat_message_join ON message.ROWID = chat_message_join.message_id
+              LEFT JOIN handle ON message.handle_id = handle.ROWID
+              WHERE chat_message_join.chat_id = ?
+              ORDER BY message.date ASC
+            `, [contact.chatId]);
+          }
 
           console.log(`Found ${messages.length} text messages for ${contact.name}`);
           textMessageCount = messages.length;
