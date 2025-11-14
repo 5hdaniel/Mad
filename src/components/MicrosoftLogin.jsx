@@ -12,6 +12,17 @@ function MicrosoftLogin({ onLoginComplete, onSkip }) {
     checkAuthentication();
   }, []);
 
+  // Auto-continue when authenticated
+  useEffect(() => {
+    if (isAuthenticated && userEmail) {
+      // Small delay to show the success state before continuing
+      const timer = setTimeout(() => {
+        onLoginComplete({ username: userEmail });
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [isAuthenticated, userEmail, onLoginComplete]);
+
   const checkAuthentication = async () => {
     setIsInitializing(true);
     setError(null);
@@ -145,17 +156,6 @@ function MicrosoftLogin({ onLoginComplete, onSkip }) {
       </div>
     );
   }
-
-  // Already authenticated - auto-continue
-  useEffect(() => {
-    if (isAuthenticated && userEmail) {
-      // Small delay to show the success state before continuing
-      const timer = setTimeout(() => {
-        onLoginComplete({ username: userEmail });
-      }, 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [isAuthenticated, userEmail, onLoginComplete]);
 
   // Already authenticated - show success briefly
   if (isAuthenticated) {
