@@ -84,6 +84,7 @@ function App() {
 
   const handleStartOver = () => {
     setExportResult(null);
+    setSelectedConversationIds(new Set()); // Clear selected conversations
     setCurrentStep('contacts');
   };
 

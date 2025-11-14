@@ -233,10 +233,7 @@ function OutlookExport({ conversations, selectedIds, onComplete, onCancel }) {
               </button>
               <div className="flex gap-3">
                 <button
-                  onClick={() => {
-                    setExportResults(null);
-                    setShowDetailedResults(false);
-                  }}
+                  onClick={onCancel}
                   className="flex-1 bg-gray-200 text-gray-700 py-2 px-6 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
                 >
                   Export More
@@ -277,10 +274,7 @@ function OutlookExport({ conversations, selectedIds, onComplete, onCancel }) {
               Open Export Folder
             </button>
             <button
-              onClick={() => {
-                setExportResults(null);
-                setShowDetailedResults(false);
-              }}
+              onClick={onCancel}
               className="w-full bg-green-600 text-white py-2 px-6 rounded-lg font-semibold hover:bg-green-700 transition-colors"
             >
               Export More
