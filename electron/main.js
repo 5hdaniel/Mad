@@ -310,7 +310,6 @@ async function getContactNames() {
     }
 
     // Fallback to old method
-    console.log('Could not find main contacts database, trying default location...');
     const defaultPath = path.join(process.env.HOME, 'Library/Application Support/AddressBook/AddressBook-v22.abcddb');
     return await loadContactsFromDatabase(defaultPath);
 
@@ -328,7 +327,6 @@ async function loadContactsFromDatabase(contactsDbPath) {
   try {
     await fs.access(contactsDbPath);
   } catch {
-    console.log('Database not accessible:', contactsDbPath);
     return { contactMap, phoneToContactInfo };
   }
 
@@ -407,8 +405,6 @@ async function loadContactsFromDatabase(contactsDbPath) {
         personMap[email.person_id].emails.push(email.email);
       }
     });
-
-    console.log(`Loaded ${Object.keys(personMap).length} contact entries from Contacts database`);
 
     // Build maps
     Object.values(personMap).forEach(person => {
@@ -553,7 +549,6 @@ ipcMain.handle('get-conversations', async () => {
 
     try {
       // Get contact names from Contacts database
-      console.log('Loading contact names...');
       const { contactMap, phoneToContactInfo } = await getContactNames();
 
       // Get all chats with their latest message
@@ -600,11 +595,6 @@ ipcMain.handle('get-conversations', async () => {
 
         if (isGroupChat) {
           // For group chats, we need to attribute the chat to all participants
-          // Reduce logging noise - only log if Carol is involved
-          const isCarolInvolved = displayName.toLowerCase().includes('carol');
-          if (isCarolInvolved) {
-            console.log(`Processing group chat: ${displayName} (${conv.chat_identifier}) with ${conv.message_count} messages`);
-          }
 
           try {
             // Get all participants in this group chat
@@ -614,10 +604,6 @@ ipcMain.handle('get-conversations', async () => {
               JOIN handle ON chat_handle_join.handle_id = handle.ROWID
               WHERE chat_handle_join.chat_id = ?
             `, [conv.chat_id]);
-
-            if (isCarolInvolved) {
-              console.log(`  Found ${participants.length} participants in group chat`);
-            }
 
             // Add this group chat to each participant's statistics
             for (const participant of participants) {
@@ -766,7 +752,6 @@ ipcMain.handle('get-conversations', async () => {
           const wasGeneratedId = typeof existing.id === 'string' && existing.id.startsWith('group-contact-');
           if (!existing.id || wasGeneratedId) {
             // Current ID is fake, use the real chat ID from this 1:1 conversation
-            console.log(`  Updating ${displayName}: ${existing.id} -> ${conv.chat_id} (found 1:1 chat)`);
             existing.id = conv.chat_id;
             existing.chatId = conv.chat_id; // Also set chatId field
           }
@@ -782,8 +767,6 @@ ipcMain.handle('get-conversations', async () => {
           existing.directMessageCount += conv.message_count;
           existing.phones = allPhones;
           existing.emails = allEmails;
-
-          console.log(`  Merged ${displayName}: ${existing.directChatCount} direct, ${existing.groupChatCount} group, total ${existing.messageCount} messages`);
         } else {
           conversationMap.set(normalizedKey, conversationData);
         }
@@ -796,8 +779,6 @@ ipcMain.handle('get-conversations', async () => {
       const deduplicatedConversations = Array.from(conversationMap.values())
         .sort((a, b) => b.lastMessageDate - a.lastMessageDate);
 
-      console.log(`Deduplicated ${conversations.length} conversations to ${deduplicatedConversations.length}`);
-
       // Filter out contacts with no messages in the last 5 years
       const fiveYearsAgo = Date.now() - (5 * 365 * 24 * 60 * 60 * 1000); // 5 years in milliseconds
       const macEpoch = new Date('2001-01-01T00:00:00Z').getTime();
@@ -806,16 +787,6 @@ ipcMain.handle('get-conversations', async () => {
       const recentConversations = deduplicatedConversations.filter(conv => {
         return conv.lastMessageDate > fiveYearsAgoMacTime;
       });
-
-      console.log(`Filtered to ${recentConversations.length} contacts with messages in last 5 years (removed ${deduplicatedConversations.length - recentConversations.length} old contacts)`);
-
-      // DEBUG: Export Carol's data to a JSON file for inspection
-      const carolDebug = recentConversations.find(c => c.name.toLowerCase().includes('carol'));
-      if (carolDebug) {
-        const debugPath = path.join(process.env.HOME, 'Desktop', 'carol-debug.json');
-        await fs.writeFile(debugPath, JSON.stringify(carolDebug, null, 2), 'utf8');
-        console.log(`\n*** DEBUG: Carol's data exported to ${debugPath} ***\n`);
-      }
 
       return {
         success: true,
@@ -945,7 +916,6 @@ ipcMain.handle('export-conversations', async (event, conversationIds) => {
     const dbClose = promisify(db.close.bind(db));
 
     // Load contact names for resolving names in export
-    console.log('Loading contacts for export...');
     const contactMap = await getContactNames();
 
     const exportedFiles = [];
@@ -996,24 +966,6 @@ ipcMain.handle('export-conversations', async (event, conversationIds) => {
           WHERE chat_message_join.chat_id = ?
           ORDER BY message.date ASC
         `, [chatId]);
-
-        // DEBUG: Log first message to see what data we have
-        if (messages.length > 0) {
-          const firstMsg = messages[0];
-          console.log('\n=== Sample Message Debug ===');
-          console.log('Text field:', firstMsg.text);
-          console.log('Has attachments:', firstMsg.cache_has_attachments);
-          console.log('AttributedBody length:', firstMsg.attributedBody ? firstMsg.attributedBody.length : 0);
-
-          if (firstMsg.attributedBody) {
-            // Show first 200 characters of the blob in hex and text
-            const sample = firstMsg.attributedBody.slice(0, 200);
-            console.log('AttributedBody hex sample:', sample.toString('hex').substring(0, 100));
-            console.log('AttributedBody text sample:', sample.toString('utf8').replace(/[\x00-\x1F\x7F-\x9F]/g, '·').substring(0, 100));
-          }
-          console.log('Date:', firstMsg.date);
-          console.log('============================\n');
-        }
 
         // Format messages as text
         let exportContent = `Conversation with: ${chatName}\n`;
@@ -1152,7 +1104,6 @@ ipcMain.handle('export-conversations', async (event, conversationIds) => {
         try {
           await fs.rename(filePath, newPath);
           finalPath = newPath;
-          console.log(`Renamed export folder to: ${newFolderName}`);
         } catch (renameError) {
           console.error('Error renaming folder:', renameError);
           // Keep original path if rename fails
@@ -1267,8 +1218,6 @@ ipcMain.handle('outlook-get-user-email', async () => {
 // Export emails for multiple contacts
 ipcMain.handle('outlook-export-emails', async (event, contacts) => {
   try {
-    console.log(`Starting full audit export for ${contacts.length} contacts`);
-
     if (!outlookService || !outlookService.isAuthenticated()) {
       return {
         success: false,
@@ -1304,7 +1253,6 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
 
     // Create base export directory
     await fs.mkdir(exportPath, { recursive: true });
-    console.log(`Created export folder: ${exportPath}`);
 
     // Open Messages database for text message export
     const messagesDbPath = path.join(
@@ -1316,7 +1264,6 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
     const dbClose = promisify(db.close.bind(db));
 
     // Load contact names for resolving names in export
-    console.log('Loading contacts for export...');
     const { contactMap } = await getContactNames();
 
     const results = [];
@@ -1324,7 +1271,6 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
     // Export BOTH text messages AND emails for each contact
     for (let i = 0; i < contacts.length; i++) {
       const contact = contacts[i];
-      console.log(`\n=== Processing contact ${i + 1}/${contacts.length}: ${contact.name} ===`);
 
       // Send progress update
       mainWindow.webContents.send('export-progress', {
@@ -1338,7 +1284,6 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
       const sanitizedName = contact.name.replace(/[^a-z0-9 ]/gi, '_');
       const contactFolder = path.join(exportPath, sanitizedName);
       await fs.mkdir(contactFolder, { recursive: true });
-      console.log(`Created contact folder: ${contactFolder}`);
 
       let textMessageCount = 0;
       let totalEmails = 0;
@@ -1348,11 +1293,6 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
       // 1. Export text messages (if chatId exists or if we have phone/email identifiers)
       if (contact.chatId || contact.phones?.length > 0 || contact.emails?.length > 0) {
         try {
-          console.log(`\nExporting text messages for ${contact.name}...`);
-          console.log(`  chatId: ${contact.chatId}`);
-          console.log(`  phones: ${JSON.stringify(contact.phones)}`);
-          console.log(`  emails: ${JSON.stringify(contact.emails)}`);
-
           mainWindow.webContents.send('export-progress', {
             stage: 'text-messages',
             message: `Exporting text messages for ${contact.name}...`,
@@ -1370,7 +1310,6 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
           // Step 1: If they have a primary chatId, add it
           if (contact.chatId && !(typeof contact.chatId === 'string' && contact.chatId.startsWith('group-contact-'))) {
             allChatIds.add(contact.chatId);
-            console.log(`  Primary chat ID: ${contact.chatId}`);
           }
 
           // Step 2: Find ALL chats where their phone numbers or emails appear
@@ -1381,7 +1320,6 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
           ];
 
           if (identifiers.length > 0) {
-            console.log(`  Finding all chats for ${contact.name} using ${identifiers.length} identifiers...`);
             const placeholders = identifiers.map(() => '?').join(',');
             const chatIds = await dbAll(`
               SELECT DISTINCT chat.ROWID as chat_id, chat.display_name, chat.chat_identifier
@@ -1391,10 +1329,8 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
               WHERE handle.id IN (${placeholders})
             `, identifiers);
 
-            console.log(`  Found ${chatIds.length} additional chats involving ${contact.name}`);
             chatIds.forEach(c => {
               allChatIds.add(c.chat_id);
-              console.log(`    - Chat ${c.chat_id}: ${c.chat_identifier} (${c.display_name || 'no name'})`);
             });
           }
 
@@ -1402,7 +1338,6 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
           if (allChatIds.size > 0) {
             const chatIdArray = Array.from(allChatIds);
             const chatIdPlaceholders = chatIdArray.map(() => '?').join(',');
-            console.log(`  Fetching messages from ${chatIdArray.length} total chats...`);
 
             messages = await dbAll(`
               SELECT
@@ -1422,7 +1357,6 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
             `, chatIdArray);
           }
 
-          console.log(`Found ${messages.length} text messages for ${contact.name}`);
           textMessageCount = messages.length;
 
           if (messages.length > 0) {
@@ -1435,8 +1369,6 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
               }
               messagesByChatId[chatId].push(msg);
             }
-
-            console.log(`  Messages grouped into ${Object.keys(messagesByChatId).length} separate chats`);
 
             // Get chat info for each chat_id
             const chatInfoMap = {};
@@ -1451,10 +1383,8 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
                 WHERE chat.ROWID IN (${chatIds.map(() => '?').join(',')})
               `;
               const chatInfoResults = await dbAll(chatInfoQuery, chatIds);
-              console.log(`  Retrieved chat info for ${chatInfoResults.length} chats`);
               chatInfoResults.forEach(info => {
                 chatInfoMap[info.chat_id] = info;
-                console.log(`    Chat ${info.chat_id}: identifier="${info.chat_identifier}", display_name="${info.display_name}"`);
               });
             }
 
@@ -1466,7 +1396,6 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
               const chatInfo = chatInfoMap[chatId];
 
               if (!chatInfo) {
-                console.log(`  WARNING: No chat info found for chat_id ${chatId}, treating as 1:1`);
                 oneOnOneMessages.push(...chatMessages);
                 continue;
               }
@@ -1475,8 +1404,6 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
                                   typeof chatInfo.chat_identifier === 'string' &&
                                   chatInfo.chat_identifier.startsWith('chat') &&
                                   !chatInfo.chat_identifier.includes('@');
-
-              console.log(`  Chat ${chatId} (${chatMessages.length} msgs): identifier="${chatInfo.chat_identifier}", isGroupChat=${isGroupChat}`);
 
               if (isGroupChat) {
                 groupChats[chatId] = {
@@ -1487,8 +1414,6 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
                 oneOnOneMessages.push(...chatMessages);
               }
             }
-
-            console.log(`  Identified ${Object.keys(groupChats).length} group chats and ${oneOnOneMessages.length} 1:1 messages`);
 
             // Sort all 1:1 messages by date
             oneOnOneMessages.sort((a, b) => a.date - b.date);
@@ -1636,7 +1561,6 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
               // Save 1:1 messages file
               const oneOnOneFilePath = path.join(contactFolder, '1-on-1_messages.txt');
               await fs.writeFile(oneOnOneFilePath, exportContent, 'utf8');
-              console.log(`  Saved ${oneOnOneMessages.length} 1:1 messages to: 1-on-1_messages.txt`);
               filesCreated++;
               anySuccess = true;
             }
@@ -1770,34 +1694,25 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
               // Save group chat file
               const groupFilePath = path.join(contactFolder, fileName);
               await fs.writeFile(groupFilePath, exportContent, 'utf8');
-              console.log(`  Saved ${groupChat.messages.length} messages to: ${fileName}`);
               filesCreated++;
               anySuccess = true;
             }
-
-            console.log(`Created ${filesCreated} text message file(s) for ${contact.name}`);
           }
         } catch (err) {
           console.error(`Error exporting text messages for ${contact.name}:`, err);
           errors.push(`Text messages: ${err.message}`);
         }
-      } else {
-        console.log(`No chatId for ${contact.name}, skipping text messages`);
       }
 
       // 2. Export emails (if email addresses exist)
       if (contact.emails && contact.emails.length > 0) {
-        console.log(`Exporting emails for ${contact.name} (${contact.emails.length} email addresses)...`);
-
         for (const email of contact.emails) {
           try {
-            console.log(`  - Fetching emails from: ${email}`);
             const result = await outlookService.exportEmailsToAudit(
               contact.name,
               email,
               exportPath,
               (progress) => {
-                console.log(`    Progress: ${progress.stage} - ${progress.message || ''}`);
                 // Forward progress to renderer
                 mainWindow.webContents.send('export-progress', {
                   ...progress,
@@ -1807,8 +1722,6 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
                 });
               }
             );
-
-            console.log(`  - Result for ${email}:`, { success: result.success, emailCount: result.emailCount, error: result.error });
 
             if (result.success) {
               anySuccess = true;
@@ -1821,8 +1734,6 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
             errors.push(`${email}: ${err.message}`);
           }
         }
-      } else {
-        console.log(`No email addresses for ${contact.name}, skipping emails`);
       }
 
       results.push({
@@ -1832,8 +1743,6 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
         emailCount: totalEmails,
         error: errors.length > 0 ? errors.join('; ') : null
       });
-
-      console.log(`=== Completed ${contact.name}: ${textMessageCount} texts, ${totalEmails} emails ===\n`);
     }
 
     // Close database
@@ -1847,9 +1756,6 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
       title: 'Full Audit Export Complete',
       body: `Exported ${successCount} contact${successCount !== 1 ? 's' : ''}${failCount > 0 ? `. ${failCount} failed.` : ''}`,
     }).show();
-
-    console.log('Export complete!');
-    console.log('Results:', JSON.stringify(results, null, 2));
 
     return {
       success: true,

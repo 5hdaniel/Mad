@@ -46,12 +46,8 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
     const contactsWithEmail = conversations.filter(c => c.emails && c.emails.length > 0);
 
     if (contactsWithEmail.length === 0) {
-      console.log('No contacts with email addresses found');
       return;
     }
-
-    console.log(`\n=== Starting Email Count Load (Optimized Bulk Fetch) ===`);
-    console.log(`Contacts with emails: ${contactsWithEmail.length}`);
 
     // Collect all unique email addresses
     const allEmailAddresses = new Set();
@@ -59,10 +55,6 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
       c.emails.forEach(email => allEmailAddresses.add(email.toLowerCase()));
     });
     const uniqueEmails = Array.from(allEmailAddresses);
-
-    console.log(`Total unique email addresses: ${uniqueEmails.length}`);
-    console.log(`\nOLD ARCHITECTURE: Would make ${uniqueEmails.length} sequential API calls (60+ minutes)`);
-    console.log(`NEW ARCHITECTURE: Making 1 bulk API call to fetch and index all emails (10-30 seconds)`);
 
     const startTime = Date.now();
 
@@ -98,7 +90,6 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
 
       // Check the ref variable set by skip button
       if (abortEmailCountingRef.current) {
-        console.log('\nEmail counting skipped by user - discarding results');
         return;
       }
 
@@ -142,16 +133,6 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
           });
         }
       });
-
-      const totalTime = Date.now() - startTime;
-
-      console.log(`\n=== Bulk Email Count Complete ===`);
-      console.log(`Total time: ${(totalTime / 1000).toFixed(1)}s`);
-      console.log(`Contacts processed: ${contactsWithEmail.length}`);
-      console.log(`Unique email addresses: ${uniqueEmails.length}`);
-      console.log(`Total emails found: ${totalEmailsFound}`);
-      console.log(`Contacts with emails: ${Object.values(counts).filter(c => c > 0).length}`);
-      console.log(`\nPerformance Improvement: ~${Math.round(60 / (totalTime / 1000))}x faster than old sequential approach!`);
 
       // Set all counts at once
       setEmailCounts(counts);
@@ -440,7 +421,6 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
                     onClick={() => {
                       abortEmailCountingRef.current = true;
                       setLoadingEmailCounts(false);
-                      console.log('\nEmail counting aborted by user');
                     }}
                     className="w-full bg-gray-200 text-gray-700 py-2 px-4 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
                   >

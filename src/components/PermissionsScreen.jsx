@@ -23,12 +23,6 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain }) {
     try {
       const info = await window.electron.getAppInfo();
       setAppInfo(info);
-      console.log('==================================================');
-      console.log('🔍 App Information:');
-      console.log('  App Name:', info.name);
-      console.log('  App Path:', info.path);
-      console.log('  Process ID:', info.pid);
-      console.log('==================================================');
     } catch (error) {
       console.error('Error detecting app info:', error);
     }
@@ -38,14 +32,6 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain }) {
     try {
       const versionInfo = await window.electron.getMacOSVersion();
       setMacOSInfo(versionInfo);
-      console.log('==================================================');
-      console.log('🔍 macOS Version Detection:');
-      console.log('  macOS Version:', versionInfo.version, `(${versionInfo.name})`);
-      console.log('  Darwin Version:', versionInfo.darwinVersion);
-      console.log('  Full Release:', versionInfo.fullRelease);
-      console.log('  UI Style:', versionInfo.uiStyle);
-      console.log('  App Name:', versionInfo.appName);
-      console.log('==================================================');
     } catch (error) {
       console.error('Error detecting macOS version:', error);
       // Default to modern style if detection fails
@@ -139,7 +125,6 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain }) {
           <button
             onClick={async () => {
               // Trigger Full Disk Access attempt - this makes the app appear in System Settings
-              console.log('Triggering Full Disk Access attempt...');
               await window.electron.triggerFullDiskAccess();
               setCurrentStep(2);
             }}

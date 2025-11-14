@@ -50,7 +50,7 @@ class OutlookService {
       system: {
         loggerOptions: {
           loggerCallback(loglevel, message) {
-            console.log(message);
+            // Logging disabled for production
           },
           piiLoggingEnabled: false,
           logLevel: 3,
@@ -102,10 +102,6 @@ class OutlookService {
         scopes: scopes,
         deviceCodeCallback: (response) => {
           // Automatically open the browser for the user
-          console.log('\nDevice Code Authentication:');
-          console.log(`Please visit: ${response.verificationUri}`);
-          console.log(`And enter code: ${response.userCode}`);
-          console.log(`Message: ${response.message}\n`);
 
           // Open browser automatically
           shell.openExternal(response.verificationUri).catch(err => {
@@ -245,9 +241,6 @@ class OutlookService {
     }
 
     try {
-      console.log('\n=== Bulk Email Count (Optimized Architecture) ===');
-      console.log(`Fetching ALL emails once and building index for ${contactEmails.length} contacts...`);
-
       const startTime = Date.now();
       const counts = {};
 
@@ -320,22 +313,9 @@ class OutlookService {
         if (nextLink && pageCount < maxPages) {
           response = await this.graphClient.api(nextLink).get();
         } else {
-          if (nextLink) {
-            console.log(`Reached page limit (${maxPages} pages = ${totalEmailsFetched} emails)`);
-          }
           break;
         }
       } while (nextLink && pageCount < maxPages);
-
-      const totalTime = Date.now() - startTime;
-      const timePerEmail = totalEmailsFetched > 0 ? (totalTime / totalEmailsFetched).toFixed(2) : 0;
-
-      console.log('\n=== Bulk Fetch Complete ===');
-      console.log(`Total emails fetched: ${totalEmailsFetched}`);
-      console.log(`Total pages: ${pageCount}`);
-      console.log(`Total time: ${(totalTime / 1000).toFixed(1)}s`);
-      console.log(`Avg time per email: ${timePerEmail}ms`);
-      console.log(`Contacts with emails: ${Object.values(counts).filter(c => c > 0).length}`);
 
       return counts;
     } catch (error) {
@@ -360,8 +340,6 @@ class OutlookService {
       const emailLower = contactEmail.toLowerCase();
       let matchingEmails = [];
 
-      console.log(`[Email Fetch] Starting fetch for ${contactEmail}, maxResults: ${maxResults}`);
-
       // Helper function to add timeout to promises
       const withTimeout = (promise, timeoutMs = 60000) => {
         return Promise.race([
@@ -374,7 +352,6 @@ class OutlookService {
 
       // Try $search first (server-side filtering)
       // $search requires the query to be quoted and uses KQL syntax
-      console.log(`[Email Fetch] Attempting $search with participants:${emailLower}`);
 
       let emailsToFetch = [];
       try {
@@ -390,10 +367,7 @@ class OutlookService {
         );
 
         emailsToFetch = response.value || [];
-        console.log(`[Email Fetch] $search found ${emailsToFetch.length} matching emails`);
       } catch (searchError) {
-        console.log(`[Email Fetch] $search failed (${searchError.message}), falling back to fetch-and-filter`);
-
         // Fallback: Fetch and filter in memory with early stopping
         let nextLink = null;
         let pageCount = 0;
@@ -426,13 +400,11 @@ class OutlookService {
                    ccEmails.includes(emailLower);
           });
 
-          console.log(`[Email Fetch] Page ${pageCount + 1}: Found ${matching.length} matching emails out of ${emails.length} total`);
           matchingEmailIds.push(...matching);
 
           if (matching.length === 0) {
             consecutivePagesWithNoMatches++;
             if (consecutivePagesWithNoMatches >= maxConsecutivePagesWithNoMatches) {
-              console.log(`[Email Fetch] No matches in ${maxConsecutivePagesWithNoMatches} pages, stopping`);
               break;
             }
           } else {
@@ -440,7 +412,6 @@ class OutlookService {
           }
 
           if (matchingEmailIds.length >= maxResults) {
-            console.log(`[Email Fetch] Reached maxResults (${maxResults}), stopping`);
             break;
           }
 
@@ -448,20 +419,16 @@ class OutlookService {
           pageCount++;
 
           if (nextLink && pageCount < maxPages) {
-            console.log(`[Email Fetch] Fetching page ${pageCount + 1}...`);
             response = await withTimeout(this.graphClient.api(nextLink).get(), 60000);
           } else {
-            if (pageCount >= maxPages) console.log(`[Email Fetch] Reached max pages (${maxPages})`);
             break;
           }
         } while (nextLink && pageCount < maxPages);
 
         emailsToFetch = matchingEmailIds.slice(0, maxResults);
-        console.log(`[Email Fetch] Fallback complete: Found ${emailsToFetch.length} matching emails`);
       }
 
       // PHASE 2: Fetch full body content for matching emails only
-      console.log(`[Email Fetch] Phase 2: Fetching body content for ${emailsToFetch.length} emails...`);
       for (let i = 0; i < emailsToFetch.length; i++) {
         const email = emailsToFetch[i];
         try {
@@ -476,10 +443,6 @@ class OutlookService {
 
           // Merge the body into the email object
           matchingEmails.push(fullEmail);
-
-          if ((i + 1) % 10 === 0) {
-            console.log(`[Email Fetch] Fetched ${i + 1}/${emailsToFetch.length} email bodies`);
-          }
         } catch (error) {
           console.error(`[Email Fetch] Error fetching body for email ${email.id}:`, error.message);
           // Still include the email but without body
@@ -487,7 +450,6 @@ class OutlookService {
         }
       }
 
-      console.log(`[Email Fetch] Phase 2 complete: Fetched ${matchingEmails.length} emails with body content`);
       return matchingEmails;
     } catch (error) {
       console.error('[Email Fetch] Error fetching emails:', error);

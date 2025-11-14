@@ -10,7 +10,6 @@ export default function UpdateNotification() {
     // Listen for update events
     if (window.electron?.onUpdateAvailable) {
       window.electron.onUpdateAvailable((info) => {
-        console.log('Update available:', info);
         setUpdateAvailable(true);
         setUpdateInfo(info);
       });
@@ -18,14 +17,12 @@ export default function UpdateNotification() {
 
     if (window.electron?.onUpdateProgress) {
       window.electron.onUpdateProgress((progress) => {
-        console.log('Update progress:', progress.percent);
         setDownloadProgress(Math.round(progress.percent));
       });
     }
 
     if (window.electron?.onUpdateDownloaded) {
       window.electron.onUpdateDownloaded((info) => {
-        console.log('Update downloaded:', info);
         setUpdateDownloaded(true);
       });
     }
