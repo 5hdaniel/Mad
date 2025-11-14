@@ -137,29 +137,54 @@ The `build/entitlements.mac.plist` file declares required permissions:
 
 ### "HTTP status code: 403. Invalid or inaccessible developer team ID"
 
-**Cause**: The Team ID in `.env.local` is incorrect or you're using the example placeholder.
+**Cause**: Apple cannot verify the Team ID with your Apple ID. This usually means:
+- The Apple ID doesn't belong to that team
+- You don't have the right permissions in that team
+- The credentials don't match the signing certificate
 
 **Solution**:
-1. **Find your actual Team ID:**
-   ```bash
-   chmod +x scripts/find-team-id.sh
-   ./scripts/find-team-id.sh
-   ```
-   OR go to https://developer.apple.com/account → Membership
 
-2. **Update `.env.local`** with your real Team ID:
+1. **Verify your credentials match:**
    ```bash
-   APPLE_TEAM_ID=ABC123DEFG  # Replace with YOUR actual 10-character Team ID
+   chmod +x scripts/verify-credentials.sh
+   ./scripts/verify-credentials.sh
    ```
 
-3. **Verify your Apple ID** is correct (should match your Apple Developer account)
+2. **Check Apple ID & Team ID association:**
+   - Go to: https://developer.apple.com/account
+   - Sign in with the Apple ID from `.env.local`
+   - Click "Membership" → verify the Team ID matches
+   - If different, update `.env.local` with the correct Team ID
 
-4. **Rebuild**:
+3. **Common causes of this error:**
+
+   **A. You belong to multiple Apple Developer teams**
+   - Your certificate belongs to Team A, but you're using Team B's ID
+   - Run: `security find-identity -v -p codesigning`
+   - Look for the Team ID in the certificate name (OU field)
+   - Use that Team ID in `.env.local`
+
+   **B. Wrong Apple ID**
+   - The certificate was created under a different Apple ID
+   - Use the Apple ID that matches the certificate's team
+
+   **C. Insufficient permissions**
+   - Your role must be "Admin" or "Account Holder"
+   - Check at: https://developer.apple.com/account/#!/membership/
+   - If you're just a "Member", ask the Account Holder to upgrade your role
+
+   **D. App-specific password issues**
+   - Password expired or incorrect
+   - Generate new one at: https://appleid.apple.com
+   - Update `APPLE_APP_SPECIFIC_PASSWORD` in `.env.local`
+   - Format must be: `xxxx-xxxx-xxxx-xxxx` (with dashes)
+
+4. **Rebuild after fixing**:
    ```bash
    npm run package
    ```
 
-**Common Mistake**: Using the example Team ID `SDX736QH45` from `.env.local.example` - this won't work!
+**Important**: The Team ID must match the team that owns your Developer ID certificate. The error "403 Invalid team ID" means Apple can't find that Team ID associated with your Apple ID, or you don't have permission to use it for notarization.
 
 ### "The app can't be opened because it is from an unidentified developer"
 
