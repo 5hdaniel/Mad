@@ -156,9 +156,7 @@ function MicrosoftLogin({ onLoginComplete, onSkip }) {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">Connected to Outlook</h2>
-          <p className="text-gray-600 mb-2">Signed in as:</p>
-          <p className="text-sm font-semibold text-primary mb-6">{userEmail}</p>
+          <h2 className="text-xl font-bold text-gray-900 mb-6">Connected to Outlook</h2>
 
           <button
             onClick={handleContinue}

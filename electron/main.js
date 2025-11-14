@@ -1588,15 +1588,22 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
                       // Filter out technical markers and system strings
                       const candidates = allReadableText
                         .filter(t => !t.includes('__kIM')) // Filter all __kIM attribute names
+                        .filter(t => !t.includes('$classname')) // NSKeyedArchiver markers
+                        .filter(t => !t.includes('$classes'))
+                        .filter(t => !t.includes('XNSObject'))
+                        .filter(t => !t.includes('WNSValue'))
+                        .filter(t => !t.includes('YNSString'))
                         .filter(t => !t.startsWith('NSMutable'))
                         .filter(t => !t.startsWith('NSAttributed'))
                         .filter(t => !t.includes('NSString'))
                         .filter(t => !t.includes('NSObject'))
                         .filter(t => !t.includes('NSNumber'))
                         .filter(t => !t.includes('streamtyped'))
+                        .filter(t => !t.match(/^['"\(\)\*\+\-Z]{3,}/)) // Not bplist markers like '()*Z
                         .filter(t => !t.match(/^[\x00-\x1F\x7F]+$/)) // Not all control chars
                         .filter(t => !t.match(/^[^\w\s]{3,}$/)) // Not just symbols
-                        .filter(t => /[a-zA-Z0-9]/.test(t)); // Has alphanumeric content
+                        .filter(t => /[a-zA-Z0-9]/.test(t)) // Has alphanumeric content
+                        .filter(t => t.length > 3); // Minimum length to avoid random chars
 
                       if (candidates.length > 0) {
                         // Take the longest candidate as it's most likely the message
@@ -1716,15 +1723,22 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
                       if (allReadableText && allReadableText.length > 0) {
                         const candidates = allReadableText
                           .filter(t => !t.includes('__kIM')) // Filter all __kIM attribute names
+                          .filter(t => !t.includes('$classname')) // NSKeyedArchiver markers
+                          .filter(t => !t.includes('$classes'))
+                          .filter(t => !t.includes('XNSObject'))
+                          .filter(t => !t.includes('WNSValue'))
+                          .filter(t => !t.includes('YNSString'))
                           .filter(t => !t.startsWith('NSMutable'))
                           .filter(t => !t.startsWith('NSAttributed'))
                           .filter(t => !t.includes('NSString'))
                           .filter(t => !t.includes('NSObject'))
                           .filter(t => !t.includes('NSNumber'))
                           .filter(t => !t.includes('streamtyped'))
+                          .filter(t => !t.match(/^['"\(\)\*\+\-Z]{3,}/)) // Not bplist markers like '()*Z
                           .filter(t => !t.match(/^[\x00-\x1F\x7F]+$/))
                           .filter(t => !t.match(/^[^\w\s]{3,}$/)) // Not just symbols
-                          .filter(t => /[a-zA-Z0-9]/.test(t));
+                          .filter(t => /[a-zA-Z0-9]/.test(t))
+                          .filter(t => t.length > 3); // Minimum length to avoid random chars
 
                         if (candidates.length > 0) {
                           extractedText = candidates.sort((a, b) => b.length - a.length)[0]
