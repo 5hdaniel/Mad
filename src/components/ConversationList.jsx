@@ -11,7 +11,7 @@ function ConversationList({ onExportComplete, onOutlookExport, outlookConnected 
   const [loadingEmailCounts, setLoadingEmailCounts] = useState(false);
   const [emailCountProgress, setEmailCountProgress] = useState({ current: 0, total: 0, eta: 0 });
   const [contactInfoModal, setContactInfoModal] = useState(null);
-  const [abortEmailCounting, setAbortEmailCounting] = useState(false);
+  const [abortEmailCounting, setAbortEmailCounting] = useState(null); // Now stores the abort function
 
   useEffect(() => {
     loadConversations();
@@ -19,7 +19,11 @@ function ConversationList({ onExportComplete, onOutlookExport, outlookConnected 
 
   useEffect(() => {
     if (outlookConnected && conversations.length > 0) {
-      loadEmailCounts();
+      const abortFn = loadEmailCounts();
+      // Store the abort function so the skip button can call it
+      if (abortFn) {
+        setAbortEmailCounting(() => abortFn);
+      }
     }
   }, [outlookConnected, conversations]);
 
@@ -65,7 +69,11 @@ function ConversationList({ onExportComplete, onOutlookExport, outlookConnected 
     console.log(`NEW ARCHITECTURE: Making 1 bulk API call to fetch and index all emails (10-30 seconds)`);
 
     const startTime = Date.now();
-    setAbortEmailCounting(false); // Reset abort flag
+
+    // Use a ref to track abort state that can be checked synchronously
+    let aborted = false;
+
+    setAbortEmailCounting(null); // Reset abort function
     setLoadingEmailCounts(true);
     setEmailCountProgress({
       current: 0,
@@ -77,7 +85,7 @@ function ConversationList({ onExportComplete, onOutlookExport, outlookConnected 
     try {
       // Setup progress listener for bulk fetch
       const progressHandler = (progress) => {
-        if (abortEmailCounting) return;
+        if (aborted) return;
 
         setEmailCountProgress({
           current: progress.pagesLoaded || 0,
@@ -91,10 +99,12 @@ function ConversationList({ onExportComplete, onOutlookExport, outlookConnected 
       window.electron.onBulkEmailProgress(progressHandler);
 
       // Make the bulk API call - this fetches ALL emails once and indexes them
+      // Note: This will continue in background even if user skips, but we won't apply results
       const result = await window.electron.outlookBulkGetEmailCounts(uniqueEmails, true);
 
-      if (abortEmailCounting) {
-        console.log('\nEmail counting skipped by user during bulk fetch');
+      // Check the ref variable set by skip button
+      if (aborted) {
+        console.log('\nEmail counting skipped by user - discarding results');
         return;
       }
 
@@ -157,6 +167,13 @@ function ConversationList({ onExportComplete, onOutlookExport, outlookConnected 
     } finally {
       setLoadingEmailCounts(false);
     }
+
+    // Return a function that can abort this operation
+    return () => {
+      aborted = true;
+      setLoadingEmailCounts(false);
+      console.log('\nEmail counting aborted by user');
+    };
   };
 
   const toggleSelection = (id) => {
@@ -388,7 +405,11 @@ function ConversationList({ onExportComplete, onOutlookExport, outlookConnected 
                     </p>
                   )}
                   <button
-                    onClick={() => setAbortEmailCounting(true)}
+                    onClick={() => {
+                      if (abortEmailCounting) {
+                        abortEmailCounting();
+                      }
+                    }}
                     className="w-full bg-gray-200 text-gray-700 py-2 px-4 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
                   >
                     Skip
