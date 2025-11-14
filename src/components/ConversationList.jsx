@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 function ConversationList({ onExportComplete, onOutlookExport, outlookConnected }) {
   const [conversations, setConversations] = useState([]);
@@ -11,7 +11,7 @@ function ConversationList({ onExportComplete, onOutlookExport, outlookConnected 
   const [loadingEmailCounts, setLoadingEmailCounts] = useState(false);
   const [emailCountProgress, setEmailCountProgress] = useState({ current: 0, total: 0, eta: 0 });
   const [contactInfoModal, setContactInfoModal] = useState(null);
-  const [abortEmailCounting, setAbortEmailCounting] = useState(null); // Now stores the abort function
+  const abortEmailCountingRef = useRef(false); // Ref to track abort state
 
   useEffect(() => {
     loadConversations();
@@ -19,11 +19,7 @@ function ConversationList({ onExportComplete, onOutlookExport, outlookConnected 
 
   useEffect(() => {
     if (outlookConnected && conversations.length > 0) {
-      const abortFn = loadEmailCounts();
-      // Store the abort function so the skip button can call it
-      if (abortFn) {
-        setAbortEmailCounting(() => abortFn);
-      }
+      loadEmailCounts();
     }
   }, [outlookConnected, conversations]);
 
@@ -70,10 +66,8 @@ function ConversationList({ onExportComplete, onOutlookExport, outlookConnected 
 
     const startTime = Date.now();
 
-    // Use a ref to track abort state that can be checked synchronously
-    let aborted = false;
-
-    setAbortEmailCounting(null); // Reset abort function
+    // Reset abort flag
+    abortEmailCountingRef.current = false;
     setLoadingEmailCounts(true);
     setEmailCountProgress({
       current: 0,
@@ -85,7 +79,7 @@ function ConversationList({ onExportComplete, onOutlookExport, outlookConnected 
     try {
       // Setup progress listener for bulk fetch
       const progressHandler = (progress) => {
-        if (aborted) return;
+        if (abortEmailCountingRef.current) return;
 
         setEmailCountProgress({
           current: progress.pagesLoaded || 0,
@@ -103,7 +97,7 @@ function ConversationList({ onExportComplete, onOutlookExport, outlookConnected 
       const result = await window.electron.outlookBulkGetEmailCounts(uniqueEmails, true);
 
       // Check the ref variable set by skip button
-      if (aborted) {
+      if (abortEmailCountingRef.current) {
         console.log('\nEmail counting skipped by user - discarding results');
         return;
       }
@@ -167,13 +161,6 @@ function ConversationList({ onExportComplete, onOutlookExport, outlookConnected 
     } finally {
       setLoadingEmailCounts(false);
     }
-
-    // Return a function that can abort this operation
-    return () => {
-      aborted = true;
-      setLoadingEmailCounts(false);
-      console.log('\nEmail counting aborted by user');
-    };
   };
 
   const toggleSelection = (id) => {
@@ -406,9 +393,9 @@ function ConversationList({ onExportComplete, onOutlookExport, outlookConnected 
                   )}
                   <button
                     onClick={() => {
-                      if (abortEmailCounting) {
-                        abortEmailCounting();
-                      }
+                      abortEmailCountingRef.current = true;
+                      setLoadingEmailCounts(false);
+                      console.log('\nEmail counting aborted by user');
                     }}
                     className="w-full bg-gray-200 text-gray-700 py-2 px-4 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
                   >
