@@ -63,7 +63,7 @@ function ExportComplete({ result, onStartOver }) {
                     <div key={index} className={`flex items-center justify-between bg-white px-3 py-2 rounded border ${res.success ? 'border-green-200' : 'border-red-200'}`}>
                       <span className="text-sm text-gray-700">{res.contactName}</span>
                       {res.success ? (
-                        <span className="text-xs text-green-600">{res.emailCount || 0} emails</span>
+                        <span className="text-xs text-green-600">Success</span>
                       ) : (
                         <span className="text-xs text-red-600">Failed</span>
                       )}

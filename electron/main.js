@@ -1768,61 +1768,6 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
   }
 });
 
-// Get email count for a contact
-ipcMain.handle('outlook-get-email-count', async (event, contactEmail) => {
-  try {
-    if (!outlookService || !outlookService.isAuthenticated()) {
-      return {
-        success: true,
-        count: 0
-      };
-    }
-
-    const count = await outlookService.getEmailCount(contactEmail);
-    return {
-      success: true,
-      count: count
-    };
-  } catch (error) {
-    console.error('Error getting email count:', error);
-    return {
-      success: false,
-      count: 0,
-      error: error.message
-    };
-  }
-});
-
-// Bulk get email counts (optimized - fetches all emails once)
-ipcMain.handle('outlook-bulk-get-email-counts', async (event, contactEmails, onProgress) => {
-  try {
-    if (!outlookService || !outlookService.isAuthenticated()) {
-      return {
-        success: true,
-        counts: {}
-      };
-    }
-
-    // Create progress callback that sends updates to renderer
-    const progressCallback = onProgress ? (progress) => {
-      event.sender.send('outlook-bulk-progress', progress);
-    } : null;
-
-    const counts = await outlookService.bulkGetEmailCounts(contactEmails, progressCallback);
-    return {
-      success: true,
-      counts: counts
-    };
-  } catch (error) {
-    console.error('Error getting bulk email counts:', error);
-    return {
-      success: false,
-      counts: {},
-      error: error.message
-    };
-  }
-});
-
 // Sign out from Outlook
 ipcMain.handle('outlook-signout', async () => {
   try {
