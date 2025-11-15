@@ -76,7 +76,7 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
     {
       target: '[data-tour="contact-list"]',
       content: 'Here you can see all your contacts. Click on a contact to select or deselect them for export.',
-      placement: 'center',
+      placement: 'top',
     },
     {
       target: 'body',
@@ -245,8 +245,8 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
         showProgress
         showSkipButton
         hideCloseButton
+        scrollToSteps={false}
         disableScrolling={true}
-        scrollToFirstStep={false}
         callback={handleJoyrideCallback}
         locale={{
           last: 'Done',
@@ -376,7 +376,7 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
       </div>
 
       {/* Conversation List */}
-      <div className="flex-1 overflow-y-auto p-6" data-tour="contact-list">
+      <div className="flex-1 overflow-y-auto p-6">
         {filteredConversations.length === 0 ? (
           <div className="text-center py-12">
             <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -385,7 +385,7 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
             <p className="text-gray-500">No contacts found</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-3">
+          <div className="grid grid-cols-1 gap-3" data-tour="contact-list">
             {filteredConversations.map((conversation) => (
               <div
                 key={conversation.id || `contact-${conversation.name}-${conversation.contactId}`}
