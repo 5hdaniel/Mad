@@ -10,6 +10,26 @@ const log = require('electron-log');
 const OutlookService = require('./outlookService');
 require('dotenv').config({ path: path.join(__dirname, '../.env.local') });
 
+// Import services and utilities
+const { getContactNames, resolveContactName } = require('./services/contactsService');
+const {
+  getAllConversations,
+  getGroupChatParticipants,
+  isGroupChat,
+  getMessagesForContact,
+  openMessagesDatabase
+} = require('./services/messagesService');
+const { macTimestampToDate, getYearsAgoTimestamp } = require('./utils/dateUtils');
+const { normalizePhoneNumber, formatPhoneNumber } = require('./utils/phoneUtils');
+const { sanitizeFilename, createTimestampedFilename } = require('./utils/fileUtils');
+const { getMessageText } = require('./utils/messageParser');
+const {
+  WINDOW_CONFIG,
+  DEV_SERVER_URL,
+  UPDATE_CHECK_DELAY,
+  FIVE_YEARS_IN_MS
+} = require('./constants');
+
 // Configure logging for auto-updater
 log.transports.file.level = 'info';
 autoUpdater.logger = log;
@@ -19,28 +39,28 @@ let outlookService = null;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
+    width: WINDOW_CONFIG.DEFAULT_WIDTH,
+    height: WINDOW_CONFIG.DEFAULT_HEIGHT,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js')
     },
-    titleBarStyle: 'hiddenInset',
-    backgroundColor: '#ffffff'
+    titleBarStyle: WINDOW_CONFIG.TITLE_BAR_STYLE,
+    backgroundColor: WINDOW_CONFIG.BACKGROUND_COLOR
   });
 
   // Load the app
   if (process.env.NODE_ENV === 'development' || !app.isPackaged) {
-    mainWindow.loadURL('http://localhost:5173');
+    mainWindow.loadURL(DEV_SERVER_URL);
     mainWindow.webContents.openDevTools();
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
 
-    // Check for updates 5 seconds after window loads (only in production)
+    // Check for updates after window loads (only in production)
     setTimeout(() => {
       autoUpdater.checkForUpdatesAndNotify();
-    }, 5000);
+    }, UPDATE_CHECK_DELAY);
   }
 }
 
@@ -311,268 +331,7 @@ ipcMain.handle('request-permissions', async () => {
   };
 });
 
-// Helper function to get contact names from macOS Contacts database
-async function getContactNames() {
-  const contactMap = {};
-  const phoneToContactInfo = {};
-
-  try {
-    // Search for ALL possible Contacts database files
-    const baseDir = path.join(process.env.HOME, 'Library/Application Support/AddressBook');
-
-    // Use exec to find all .abcddb files
-    const { exec: execCallback } = require('child_process');
-    const execPromise = promisify(execCallback);
-
-    try {
-      const { stdout } = await execPromise(`find "${baseDir}" -name "*.abcddb" 2>/dev/null`);
-      const dbFiles = stdout.trim().split('\n').filter(f => f);
-
-      // Try each database and count records
-      for (const dbPath of dbFiles) {
-        try {
-          const db = new sqlite3.Database(dbPath, sqlite3.OPEN_READONLY);
-          const dbAll = promisify(db.all.bind(db));
-          const dbClose = promisify(db.close.bind(db));
-
-          const recordCount = await dbAll(`SELECT COUNT(*) as count FROM ZABCDRECORD WHERE Z_ENT IS NOT NULL;`);
-          await dbClose();
-
-          // If this database has more records, use it
-          if (recordCount[0].count > 10) {
-            // Found Contacts database
-            return await loadContactsFromDatabase(dbPath);
-          }
-        } catch (err) {
-          // Silently skip unreadable databases
-        }
-      }
-    } catch (err) {
-      console.error('Error finding database files:', err.message);
-    }
-
-    // Fallback to old method
-    const defaultPath = path.join(process.env.HOME, 'Library/Application Support/AddressBook/AddressBook-v22.abcddb');
-    return await loadContactsFromDatabase(defaultPath);
-
-  } catch (error) {
-    console.error('Error accessing contacts database:', error);
-    return { contactMap, phoneToContactInfo };
-  }
-}
-
-// Helper function to load contacts from a specific database
-async function loadContactsFromDatabase(contactsDbPath) {
-  const contactMap = {};
-  const phoneToContactInfo = {}; // Map phone numbers to full contact info (all phones & emails)
-
-  try {
-    await fs.access(contactsDbPath);
-  } catch {
-    return { contactMap, phoneToContactInfo };
-  }
-
-  try {
-    const db = new sqlite3.Database(contactsDbPath, sqlite3.OPEN_READONLY);
-    const dbAll = promisify(db.all.bind(db));
-    const dbClose = promisify(db.close.bind(db));
-
-    // Query to get contacts with both phone numbers and emails
-    // Group by person to associate phones with emails
-    const contactsResult = await dbAll(`
-      SELECT
-        ZABCDRECORD.Z_PK as person_id,
-        ZABCDRECORD.ZFIRSTNAME as first_name,
-        ZABCDRECORD.ZLASTNAME as last_name,
-        ZABCDRECORD.ZORGANIZATION as organization
-      FROM ZABCDRECORD
-      WHERE ZABCDRECORD.Z_PK IS NOT NULL
-    `);
-
-    const phonesResult = await dbAll(`
-      SELECT
-        ZABCDPHONENUMBER.ZOWNER as person_id,
-        ZABCDPHONENUMBER.ZFULLNUMBER as phone
-      FROM ZABCDPHONENUMBER
-      WHERE ZABCDPHONENUMBER.ZFULLNUMBER IS NOT NULL
-    `);
-
-    const emailsResult = await dbAll(`
-      SELECT
-        ZABCDEMAILADDRESS.ZOWNER as person_id,
-        ZABCDEMAILADDRESS.ZADDRESS as email
-      FROM ZABCDEMAILADDRESS
-      WHERE ZABCDEMAILADDRESS.ZADDRESS IS NOT NULL
-    `);
-
-    await dbClose();
-
-    // Build person map
-    const personMap = {};
-    contactsResult.forEach(person => {
-      const firstName = person.first_name || '';
-      const lastName = person.last_name || '';
-      const organization = person.organization || '';
-
-      let displayName = '';
-      if (firstName && lastName) {
-        displayName = `${firstName} ${lastName}`;
-      } else if (organization) {
-        displayName = organization;
-      } else if (firstName) {
-        displayName = firstName;
-      } else if (lastName) {
-        displayName = lastName;
-      }
-
-      if (displayName) {
-        personMap[person.person_id] = {
-          name: displayName,
-          phones: [],
-          emails: []
-        };
-      }
-    });
-
-    // Add phones to persons
-    phonesResult.forEach(phone => {
-      if (personMap[phone.person_id]) {
-        personMap[phone.person_id].phones.push(phone.phone);
-      }
-    });
-
-    // Add emails to persons
-    emailsResult.forEach(email => {
-      if (personMap[email.person_id]) {
-        personMap[email.person_id].emails.push(email.email);
-      }
-    });
-
-    // Build maps
-    Object.values(personMap).forEach(person => {
-      // Map phone numbers to name
-      person.phones.forEach(phone => {
-        const normalized = phone.replace(/\D/g, '');
-        contactMap[normalized] = person.name;
-        contactMap[phone] = person.name;
-
-        // Map phone to full contact info (ALL phones and emails)
-        phoneToContactInfo[normalized] = {
-          name: person.name,
-          phones: person.phones,
-          emails: person.emails
-        };
-        phoneToContactInfo[phone] = {
-          name: person.name,
-          phones: person.phones,
-          emails: person.emails
-        };
-      });
-
-      // Map emails to name
-      person.emails.forEach(email => {
-        const emailLower = email.toLowerCase();
-        contactMap[emailLower] = person.name;
-      });
-    });
-  } catch (error) {
-    console.error('Error accessing contacts database:', error);
-  }
-
-  return { contactMap, phoneToContactInfo };
-}
-
-// Helper function to normalize phone numbers for matching
-function normalizePhoneNumber(phone) {
-  if (!phone) return '';
-  return phone.replace(/\D/g, '');
-}
-
-// Helper function to format phone numbers for display
-function formatPhoneNumber(phone) {
-  if (!phone) return '';
-
-  // Check if it's an email
-  if (phone.includes('@')) {
-    return phone;
-  }
-
-  // Extract just the digits
-  const digits = phone.replace(/\D/g, '');
-
-  // Format based on length
-  if (digits.length === 10) {
-    // US/Canada format: (XXX) XXX-XXXX
-    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
-  } else if (digits.length === 11 && digits[0] === '1') {
-    // US/Canada with country code: +1 (XXX) XXX-XXXX
-    return `+1 (${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7)}`;
-  } else if (digits.length > 10) {
-    // International: +XX XXX XXX XXXX
-    return `+${digits}`;
-  } else {
-    // Short number or unknown format - just show as-is
-    return phone;
-  }
-}
-
-// Helper function to resolve contact name
-function resolveContactName(contactId, chatIdentifier, displayName, contactMap) {
-  // If we have a display_name from Messages, use it
-  if (displayName) return displayName;
-
-  // Try to find contact name by contactId (phone or email)
-  if (contactId) {
-    // Try direct match
-    if (contactMap[contactId]) {
-      return contactMap[contactId];
-    }
-
-    // Try normalized phone number match
-    const normalized = normalizePhoneNumber(contactId);
-    if (normalized && contactMap[normalized]) {
-      return contactMap[normalized];
-    }
-
-    // If not found and number has country code 1, try without it
-    if (normalized && normalized.startsWith('1') && normalized.length === 11) {
-      const withoutCountryCode = normalized.substring(1);
-      if (contactMap[withoutCountryCode]) {
-        return contactMap[withoutCountryCode];
-      }
-    }
-
-    // Try lowercase email match
-    const lowerEmail = contactId.toLowerCase();
-    if (contactMap[lowerEmail]) {
-      return contactMap[lowerEmail];
-    }
-  }
-
-  // Try chat_identifier as fallback
-  if (chatIdentifier) {
-    if (contactMap[chatIdentifier]) {
-      return contactMap[chatIdentifier];
-    }
-
-    const normalized = normalizePhoneNumber(chatIdentifier);
-    if (normalized && contactMap[normalized]) {
-      return contactMap[normalized];
-    }
-
-    // If not found and number has country code 1, try without it
-    if (normalized && normalized.startsWith('1') && normalized.length === 11) {
-      const withoutCountryCode = normalized.substring(1);
-      if (contactMap[withoutCountryCode]) {
-        return contactMap[withoutCountryCode];
-      }
-    }
-  }
-
-  // Final fallback: format and show the phone/email nicely
-  const fallbackValue = contactId || chatIdentifier || 'Unknown';
-  return formatPhoneNumber(fallbackValue);
-}
+// Note: Helper functions moved to services/contactsService.js and utils/
 
 // Get conversations from Messages database
 ipcMain.handle('get-conversations', async () => {
@@ -822,8 +581,8 @@ ipcMain.handle('get-conversations', async () => {
         .sort((a, b) => b.lastMessageDate - a.lastMessageDate);
 
       // Filter out contacts with no messages in the last 5 years
-      const fiveYearsAgo = Date.now() - (5 * 365 * 24 * 60 * 60 * 1000); // 5 years in milliseconds
-      const macEpoch = new Date('2001-01-01T00:00:00Z').getTime();
+      const fiveYearsAgo = getYearsAgoTimestamp(5);
+      const macEpoch = require('./constants').MAC_EPOCH;
       const fiveYearsAgoMacTime = (fiveYearsAgo - macEpoch) * 1000000; // Convert to Mac timestamp (nanoseconds)
 
       const recentConversations = deduplicatedConversations.filter(conv => {
@@ -1017,9 +776,7 @@ ipcMain.handle('export-conversations', async (event, conversationIds) => {
 
         for (const msg of messages) {
           // Convert Mac timestamp to readable date
-          // Mac timestamps are nanoseconds since 2001-01-01
-          const macEpoch = new Date('2001-01-01T00:00:00Z').getTime();
-          const messageDate = new Date(macEpoch + (msg.date / 1000000));
+          const messageDate = macTimestampToDate(msg.date);
 
           // Resolve sender name
           let sender;
@@ -1033,89 +790,14 @@ ipcMain.handle('export-conversations', async (event, conversationIds) => {
             sender = 'Unknown';
           }
 
-          // Handle text content
-          let text;
-          if (msg.text) {
-            text = msg.text;
-          } else if (msg.attributedBody) {
-            // Extract text from attributedBody blob (NSKeyedArchiver format)
-            // This contains NSAttributedString with the actual message text
-            try {
-              const bodyBuffer = msg.attributedBody;
-              const bodyText = bodyBuffer.toString('utf8');
-
-              // Extract readable text after NSString marker
-              // Pattern: NSString is followed by some length bytes, then the actual text
-              let extractedText = null;
-
-              // Method 1: Look for text after NSString marker
-              // The format is: ...NSString[binary][length markers]ACTUAL_TEXT
-              const nsStringIndex = bodyText.indexOf('NSString');
-              if (nsStringIndex !== -1) {
-                // Skip NSString and more metadata bytes to get closer to actual text
-                const afterNSString = bodyText.substring(nsStringIndex + 20);
-
-                // Find ALL sequences of printable text
-                const allMatches = afterNSString.match(/[\x20-\x7E\u00A0-\uFFFF]{3,}/g);
-                if (allMatches && allMatches.length > 0) {
-                  // Find the longest match that contains alphanumeric characters
-                  for (const match of allMatches.sort((a, b) => b.length - a.length)) {
-                    const cleaned = match
-                      .replace(/^[^\w\s]+/, '') // Remove leading symbols
-                      .replace(/[^\w\s]+$/, '') // Remove trailing symbols
-                      .trim();
-
-                    // Accept if it has alphanumeric content and is reasonable length
-                    if (cleaned.length >= 2 && /[a-zA-Z0-9]/.test(cleaned)) {
-                      extractedText = cleaned;
-                      break;
-                    }
-                  }
-                }
-              }
-
-              // Method 2: If method 1 failed, look for text after 'streamtyped'
-              if (!extractedText) {
-                const streamIndex = bodyText.indexOf('streamtyped');
-                if (streamIndex !== -1) {
-                  const afterStream = bodyText.substring(streamIndex + 11);
-                  const textMatch = afterStream.match(/[\x20-\x7E\u00A0-\uFFFF]{2,}/);
-                  if (textMatch) {
-                    extractedText = textMatch[0]
-                      .replace(/^[^\w\s]+/, '')
-                      .trim();
-                  }
-                }
-              }
-
-              // Validate and clean extracted text
-              if (extractedText && extractedText.length >= 1 && extractedText.length < 10000) {
-                // Additional cleaning
-                extractedText = extractedText
-                  .replace(/\x00/g, '') // Remove null bytes
-                  .replace(/[\x01-\x08\x0B-\x1F\x7F]/g, '') // Remove control chars
-                  .trim();
-
-                text = extractedText;
-              } else {
-                text = '[Message text - unable to extract from rich format]';
-              }
-            } catch (e) {
-              console.error('Error parsing attributedBody:', e.message);
-              text = '[Message text - parsing error]';
-            }
-          } else if (msg.cache_has_attachments === 1) {
-            text = '[Attachment - Photo/Video/File]';
-          } else {
-            text = '[Reaction or system message]';
-          }
+          // Handle text content (using centralized message parser)
+          const text = getMessageText(msg);
 
           exportContent += `[${messageDate.toLocaleString()}] ${sender}:\n${text}\n\n`;
         }
 
         // Save file
-        const safeFileName = chatName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-        const fileName = `${safeFileName}_${Date.now()}.txt`;
+        const fileName = createTimestampedFilename(chatName, 'txt');
         const exportFilePath = path.join(filePath, fileName);
 
         await fs.writeFile(exportFilePath, exportContent, 'utf8');
@@ -1320,7 +1002,7 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
       });
 
       // Create contact folder
-      const sanitizedName = contact.name.replace(/[^a-z0-9 ]/gi, '_');
+      const sanitizedName = sanitizeFilename(contact.name, true);
       const contactFolder = path.join(exportPath, sanitizedName);
       await fs.mkdir(contactFolder, { recursive: true });
 
@@ -1469,8 +1151,7 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
 
               for (const msg of oneOnOneMessages) {
                 // Convert Mac timestamp to readable date
-                const macEpoch = new Date('2001-01-01T00:00:00Z').getTime();
-                const messageDate = new Date(macEpoch + (msg.date / 1000000));
+                const messageDate = macTimestampToDate(msg.date);
 
                 // Resolve sender name
                 let sender;
@@ -1483,116 +1164,8 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
                   sender = 'Unknown';
                 }
 
-                // Handle text content (same logic as export-conversations)
-                let text;
-
-                // Check if text field has the special marker
-                if (msg.text && msg.text !== '__kIMMessagePartAttributeName') {
-                  text = msg.text;
-              } else if (msg.attributedBody) {
-                // Text is in attributedBody (either no text field, or it has the marker)
-                try {
-                  const bodyBuffer = msg.attributedBody;
-                  const bodyText = bodyBuffer.toString('utf8');
-                  let extractedText = null;
-
-                  const nsStringIndex = bodyText.indexOf('NSString');
-                  if (nsStringIndex !== -1) {
-                    // Look further into the buffer for the actual message content
-                    const afterNSString = bodyText.substring(nsStringIndex + 8);
-
-                    // Find all sequences of readable text
-                    const allMatches = afterNSString.match(/[\x20-\x7E\u00A0-\uFFFF]{4,}/g);
-                    if (allMatches && allMatches.length > 0) {
-                      // Filter out attribute markers
-                      const filtered = allMatches.filter(m => !m.includes('__kIM'));
-
-                      // Find the best match - prefer longest with good content
-                      for (const match of filtered.sort((a, b) => b.length - a.length)) {
-                        // Clean up but preserve actual content - only remove control chars and nulls
-                        const cleaned = match
-                          .replace(/\x00/g, '') // Remove null bytes
-                          .replace(/[\x01-\x08\x0B-\x1F\x7F]/g, '') // Remove control chars
-                          .replace(/[��\uFFFD]/g, '') // Remove replacement characters
-                          .trim();
-
-                        // Accept if it has real content (letters or numbers)
-                        if (cleaned.length >= 2 && /[a-zA-Z0-9]/.test(cleaned)) {
-                          extractedText = cleaned;
-                          break;
-                        }
-                      }
-                    }
-                  }
-
-                  if (!extractedText) {
-                    const streamIndex = bodyText.indexOf('streamtyped');
-                    if (streamIndex !== -1) {
-                      const afterStream = bodyText.substring(streamIndex + 11);
-                      const textMatch = afterStream.match(/[\x20-\x7E\u00A0-\uFFFF]{3,}/);
-                      if (textMatch) {
-                        const cleaned = textMatch[0]
-                          .replace(/\x00/g, '')
-                          .replace(/[\x01-\x08\x0B-\x1F\x7F]/g, '')
-                          .replace(/[��\uFFFD]/g, '')
-                          .trim();
-
-                        // Filter out attribute markers
-                        if (!cleaned.includes('__kIM')) {
-                          extractedText = cleaned;
-                        }
-                      }
-                    }
-                  }
-
-                  // Final fallback: try to extract ANY readable text from the buffer
-                  if (!extractedText) {
-                    const allReadableText = bodyText.match(/[\x20-\x7E\u00A0-\uFFFF]{2,}/g);
-                    if (allReadableText && allReadableText.length > 0) {
-                      // Filter out technical markers and system strings
-                      const candidates = allReadableText
-                        .filter(t => !t.includes('__kIM')) // Filter all __kIM attribute names
-                        .filter(t => !t.includes('$classname')) // NSKeyedArchiver markers
-                        .filter(t => !t.includes('$classes'))
-                        .filter(t => !t.includes('XNSObject'))
-                        .filter(t => !t.includes('WNSValue'))
-                        .filter(t => !t.includes('YNSString'))
-                        .filter(t => !t.startsWith('NSMutable'))
-                        .filter(t => !t.startsWith('NSAttributed'))
-                        .filter(t => !t.includes('NSString'))
-                        .filter(t => !t.includes('NSObject'))
-                        .filter(t => !t.includes('NSNumber'))
-                        .filter(t => !t.includes('streamtyped'))
-                        .filter(t => !t.match(/^['"\(\)\*\+\-Z]{3,}/)) // Not bplist markers like '()*Z
-                        .filter(t => !t.match(/^[\x00-\x1F\x7F]+$/)) // Not all control chars
-                        .filter(t => !t.match(/^[^\w\s]{3,}$/)) // Not just symbols
-                        .filter(t => /[a-zA-Z0-9]/.test(t)) // Has alphanumeric content
-                        .filter(t => t.length > 3); // Minimum length to avoid random chars
-
-                      if (candidates.length > 0) {
-                        // Take the longest candidate as it's most likely the message
-                        extractedText = candidates.sort((a, b) => b.length - a.length)[0]
-                          .replace(/\x00/g, '')
-                          .replace(/[\x01-\x08\x0B-\x1F\x7F]/g, '')
-                          .replace(/[��\uFFFD]/g, '') // Remove replacement characters
-                          .trim();
-                      }
-                    }
-                  }
-
-                  if (extractedText && extractedText.length >= 1 && extractedText.length < 10000) {
-                    text = extractedText;
-                  } else {
-                    text = '[Message text - unable to extract from rich format]';
-                  }
-                } catch (e) {
-                  text = '[Message text - parsing error]';
-                }
-              } else if (msg.cache_has_attachments === 1) {
-                text = '[Attachment - Photo/Video/File]';
-              } else {
-                text = '[Reaction or system message]';
-              }
+                // Handle text content (using centralized message parser)
+                const text = getMessageText(msg);
 
                 exportContent += `[${messageDate.toLocaleString()}] ${sender}:\n${text}\n\n`;
               }
@@ -1607,7 +1180,7 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
             // Export each group chat to its own file
             for (const [chatId, groupChat] of Object.entries(groupChats)) {
               const chatName = groupChat.info.display_name || `Group Chat ${chatId}`;
-              const sanitized = chatName.replace(/[^a-z0-9]/gi, '_');
+              const sanitized = sanitizeFilename(chatName);
               const fileName = `group_chat_${sanitized}.txt`;
 
               let exportContent = `GROUP CHAT: ${chatName}\n`;
@@ -1618,8 +1191,7 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
 
               for (const msg of groupChat.messages) {
                 // Convert Mac timestamp to readable date
-                const macEpoch = new Date('2001-01-01T00:00:00Z').getTime();
-                const messageDate = new Date(macEpoch + (msg.date / 1000000));
+                const messageDate = macTimestampToDate(msg.date);
 
                 // Resolve sender name
                 let sender;
@@ -1632,100 +1204,8 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
                   sender = 'Unknown';
                 }
 
-                // Handle text content
-                let text;
-                if (msg.text && msg.text !== '__kIMMessagePartAttributeName') {
-                  text = msg.text;
-                } else if (msg.attributedBody) {
-                  try {
-                    const bodyBuffer = msg.attributedBody;
-                    const bodyText = bodyBuffer.toString('utf8');
-                    let extractedText = null;
-
-                    const nsStringIndex = bodyText.indexOf('NSString');
-                    if (nsStringIndex !== -1) {
-                      const afterNSString = bodyText.substring(nsStringIndex + 8);
-                      const allMatches = afterNSString.match(/[\x20-\x7E\u00A0-\uFFFF]{4,}/g);
-                      if (allMatches && allMatches.length > 0) {
-                        const filtered = allMatches.filter(m => !m.includes('__kIM'));
-                        for (const match of filtered.sort((a, b) => b.length - a.length)) {
-                          const cleaned = match
-                            .replace(/\x00/g, '')
-                            .replace(/[\x01-\x08\x0B-\x1F\x7F]/g, '')
-                            .replace(/[��\uFFFD]/g, '')
-                            .trim();
-                          if (cleaned.length >= 2 && /[a-zA-Z0-9]/.test(cleaned)) {
-                            extractedText = cleaned;
-                            break;
-                          }
-                        }
-                      }
-                    }
-
-                    if (!extractedText) {
-                      const streamIndex = bodyText.indexOf('streamtyped');
-                      if (streamIndex !== -1) {
-                        const afterStream = bodyText.substring(streamIndex + 11);
-                        const textMatch = afterStream.match(/[\x20-\x7E\u00A0-\uFFFF]{3,}/);
-                        if (textMatch) {
-                          const cleaned = textMatch[0]
-                            .replace(/\x00/g, '')
-                            .replace(/[\x01-\x08\x0B-\x1F\x7F]/g, '')
-                            .replace(/[��\uFFFD]/g, '')
-                            .trim();
-                          if (!cleaned.includes('__kIM')) {
-                            extractedText = cleaned;
-                          }
-                        }
-                      }
-                    }
-
-                    // Final fallback: try to extract ANY readable text from the buffer
-                    if (!extractedText) {
-                      const allReadableText = bodyText.match(/[\x20-\x7E\u00A0-\uFFFF]{2,}/g);
-                      if (allReadableText && allReadableText.length > 0) {
-                        const candidates = allReadableText
-                          .filter(t => !t.includes('__kIM')) // Filter all __kIM attribute names
-                          .filter(t => !t.includes('$classname')) // NSKeyedArchiver markers
-                          .filter(t => !t.includes('$classes'))
-                          .filter(t => !t.includes('XNSObject'))
-                          .filter(t => !t.includes('WNSValue'))
-                          .filter(t => !t.includes('YNSString'))
-                          .filter(t => !t.startsWith('NSMutable'))
-                          .filter(t => !t.startsWith('NSAttributed'))
-                          .filter(t => !t.includes('NSString'))
-                          .filter(t => !t.includes('NSObject'))
-                          .filter(t => !t.includes('NSNumber'))
-                          .filter(t => !t.includes('streamtyped'))
-                          .filter(t => !t.match(/^['"\(\)\*\+\-Z]{3,}/)) // Not bplist markers like '()*Z
-                          .filter(t => !t.match(/^[\x00-\x1F\x7F]+$/))
-                          .filter(t => !t.match(/^[^\w\s]{3,}$/)) // Not just symbols
-                          .filter(t => /[a-zA-Z0-9]/.test(t))
-                          .filter(t => t.length > 3); // Minimum length to avoid random chars
-
-                        if (candidates.length > 0) {
-                          extractedText = candidates.sort((a, b) => b.length - a.length)[0]
-                            .replace(/\x00/g, '')
-                            .replace(/[\x01-\x08\x0B-\x1F\x7F]/g, '')
-                            .replace(/[��\uFFFD]/g, '') // Remove replacement characters
-                            .trim();
-                        }
-                      }
-                    }
-
-                    if (extractedText && extractedText.length >= 1 && extractedText.length < 10000) {
-                      text = extractedText;
-                    } else {
-                      text = '[Message text - unable to extract from rich format]';
-                    }
-                  } catch (e) {
-                    text = '[Message text - parsing error]';
-                  }
-                } else if (msg.cache_has_attachments === 1) {
-                  text = '[Attachment - Photo/Video/File]';
-                } else {
-                  text = '[Reaction or system message]';
-                }
+                // Handle text content (using centralized message parser)
+                const text = getMessageText(msg);
 
                 exportContent += `[${messageDate.toLocaleString()}] ${sender}:\n${text}\n\n`;
               }
