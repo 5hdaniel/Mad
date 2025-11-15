@@ -1173,7 +1173,9 @@ ipcMain.handle('export-conversations', async (event, conversationIds) => {
 // Install update and restart
 ipcMain.on('install-update', () => {
   log.info('Installing update...');
-  autoUpdater.quitAndInstall();
+  // Parameters: isSilent, isForceRunAfter
+  // false = show, true = run after install
+  autoUpdater.quitAndInstall(false, true);
 });
 
 // ===== OUTLOOK INTEGRATION IPC HANDLERS =====
