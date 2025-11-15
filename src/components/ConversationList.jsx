@@ -76,7 +76,7 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
     {
       target: '[data-tour="contact-list"]',
       content: 'Here you can see all your contacts. Click on a contact to select or deselect them for export.',
-      placement: 'center',
+      placement: 'top',
     },
     {
       target: 'body',
@@ -245,8 +245,8 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
         showProgress
         showSkipButton
         hideCloseButton
-        scrollOffset={100}
-        disableScrollParentFix={true}
+        disableScrolling={true}
+        scrollToFirstStep={false}
         callback={handleJoyrideCallback}
         locale={{
           last: 'Done',
