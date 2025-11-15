@@ -51,7 +51,7 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
     },
     {
       target: '[data-tour="select-last-export"]',
-      content: 'Quickly re-select the same contacts you exported last time with this button.',
+      content: 'Quickly re-export the same contacts you exported last time with this button. It remembers both the contacts and the export type (texts only, emails only, or all).',
       placement: 'bottom',
     },
     {
@@ -147,14 +147,28 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
     setSelectedIds(new Set());
   };
 
-  const selectLastExport = () => {
-    const lastExportedIds = localStorage.getItem('lastExportedContacts');
-    if (lastExportedIds) {
+  const handleLastExport = () => {
+    const lastExportData = localStorage.getItem('lastExportedContacts');
+    if (lastExportData) {
       try {
-        const ids = JSON.parse(lastExportedIds);
+        const data = JSON.parse(lastExportData);
+        const contactIds = data.contactIds || data; // Support old format (just array) or new format (object)
+        const exportType = data.exportType || 'texts'; // Default to texts if not specified
+
         // Only select IDs that still exist in current conversations
-        const validIds = ids.filter(id => conversations.some(c => c.id === id));
+        const validIds = contactIds.filter(id => conversations.some(c => c.id === id));
         setSelectedIds(new Set(validIds));
+
+        // Trigger the same export type
+        setTimeout(() => {
+          if (exportType === 'texts') {
+            handleExport();
+          } else if (exportType === 'all') {
+            handleOutlookExport();
+          } else if (exportType === 'emails') {
+            alert('Email-only export coming soon!');
+          }
+        }, 100); // Small delay to ensure selection is updated
       } catch (err) {
         console.error('Failed to load last exported contacts:', err);
       }
@@ -162,8 +176,16 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
   };
 
   const hasLastExport = () => {
-    const lastExportedIds = localStorage.getItem('lastExportedContacts');
-    return lastExportedIds && lastExportedIds.length > 2; // More than just "[]"
+    const lastExportData = localStorage.getItem('lastExportedContacts');
+    if (!lastExportData || lastExportData.length <= 2) return false;
+
+    try {
+      const data = JSON.parse(lastExportData);
+      const contactIds = data.contactIds || data;
+      return contactIds && contactIds.length > 0;
+    } catch {
+      return false;
+    }
   };
 
   const handleExport = async () => {
@@ -178,8 +200,11 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
       const result = await window.electron.exportConversations(Array.from(selectedIds));
 
       if (result.success) {
-        // Save exported contact IDs to localStorage for easy re-export
-        localStorage.setItem('lastExportedContacts', JSON.stringify(Array.from(selectedIds)));
+        // Save exported contact IDs and export type to localStorage for easy re-export
+        localStorage.setItem('lastExportedContacts', JSON.stringify({
+          contactIds: Array.from(selectedIds),
+          exportType: 'texts'
+        }));
         onExportComplete(result);
       } else if (!result.canceled) {
         setError(result.error || 'Export failed');
@@ -197,8 +222,11 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
       return;
     }
 
-    // Save exported contact IDs to localStorage for easy re-export
-    localStorage.setItem('lastExportedContacts', JSON.stringify(Array.from(selectedIds)));
+    // Save exported contact IDs and export type to localStorage for easy re-export
+    localStorage.setItem('lastExportedContacts', JSON.stringify({
+      contactIds: Array.from(selectedIds),
+      exportType: 'all'
+    }));
 
     if (onOutlookExport) {
       onOutlookExport(selectedIds);
@@ -326,14 +354,11 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
 
           <button
             data-tour="select-last-export"
-            onClick={selectLastExport}
+            onClick={handleLastExport}
             disabled={!hasLastExport()}
-            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            title="Re-select contacts from last export"
+            className="px-4 py-2 border-2 border-blue-500 text-blue-600 rounded-lg hover:bg-blue-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:border-gray-300 disabled:text-gray-400"
+            title="Re-export contacts from last export"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
             Last Export
           </button>
         </div>
