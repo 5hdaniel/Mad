@@ -4,11 +4,12 @@ import SystemSettingsMockup from './SystemSettingsMockup';
 function PermissionsScreen({ onPermissionsGranted, onCheckAgain }) {
   const [isChecking, setIsChecking] = useState(false);
   const [currentStep, setCurrentStep] = useState(1); // 1: welcome, 2: full disk access
-  const [appleScriptStepComplete, setAppleScriptStepComplete] = useState(false);
   const [openSettingsComplete, setOpenSettingsComplete] = useState(false);
-  const [unlockSettingsComplete, setUnlockSettingsComplete] = useState(false);
-  const [findAppComplete, setFindAppComplete] = useState(false);
-  const [toggleSwitchComplete, setToggleSwitchComplete] = useState(false);
+  const [findPrivacySecurityComplete, setFindPrivacySecurityComplete] = useState(false);
+  const [findFullDiskAccessComplete, setFindFullDiskAccessComplete] = useState(false);
+  const [clickPlusComplete, setClickPlusComplete] = useState(false);
+  const [selectAppComplete, setSelectAppComplete] = useState(false);
+  const [quitReopenComplete, setQuitReopenComplete] = useState(false);
   const [macOSInfo, setMacOSInfo] = useState(null);
   const [appInfo, setAppInfo] = useState(null);
 
@@ -97,7 +98,7 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain }) {
             </div>
             <h1 className="text-4xl font-bold text-gray-900 mb-4">Welcome to Real Estate Archive</h1>
             <p className="text-lg text-gray-600 mb-6">
-              Export your iMessage conversations with just a few clicks
+              Export your client conversations with just a few clicks
             </p>
           </div>
 
@@ -155,15 +156,15 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain }) {
           </p>
         </div>
 
-        {/* Step 1: AppleScript Permission */}
+        {/* Step 1: Open System Settings */}
         <div className={`border-2 rounded-lg p-6 mb-6 transition-all ${
-          appleScriptStepComplete
+          openSettingsComplete
             ? 'bg-green-50 border-green-300'
             : 'bg-yellow-50 border-yellow-300'
         }`}>
           <div className="flex items-start justify-between mb-4">
             <div className="flex items-start flex-1">
-              {appleScriptStepComplete ? (
+              {openSettingsComplete ? (
                 <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center mr-3 flex-shrink-0">
                   <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
@@ -176,95 +177,48 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain }) {
               )}
               <div className="flex-1">
                 <h3 className="font-semibold text-gray-900 mb-1">
-                  {appleScriptStepComplete ? 'AppleScript Permission Granted' : 'Allow AppleScript Access'}
+                  {openSettingsComplete ? 'System Settings Opened' : 'Open System Settings'}
                 </h3>
-                {!appleScriptStepComplete && (
-                  <p className="text-sm text-gray-700">
-                    When you click "Open System Settings" below, you'll see this permission dialog
+                {!openSettingsComplete && (
+                  <p className="text-sm text-gray-700 mb-4">
+                    Click the button below to open System Settings
                   </p>
                 )}
               </div>
             </div>
           </div>
 
-          {!appleScriptStepComplete && (
+          {!openSettingsComplete && (
             <>
-              {/* macOS-style Dialog */}
-              <div className="mx-auto max-w-md mb-4">
-                <div className="bg-gradient-to-b from-gray-50 to-gray-100 rounded-xl shadow-2xl border border-gray-300 overflow-hidden">
-                  {/* Title Bar */}
-                  <div className="bg-gradient-to-b from-gray-200 to-gray-300 px-4 py-2 flex items-center border-b border-gray-400">
-                    <div className="flex gap-2">
-                      <div className="w-3 h-3 rounded-full bg-red-500"></div>
-                      <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-                      <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                    </div>
-                  </div>
-
-                  {/* Dialog Content */}
-                  <div className="p-6">
-                    <div className="flex items-start gap-4 mb-6">
-                      <div className="flex-shrink-0">
-                        <svg className="w-16 h-16 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                      </div>
-                      <div className="flex-1 pt-1">
-                        <p className="text-sm text-gray-900 mb-2 leading-relaxed">
-                          <strong>"Visual Studio Code"</strong> (or <strong>"Electron"</strong>) wants access to control <strong>"System Events"</strong>.
-                        </p>
-                        <p className="text-xs text-gray-600 mb-3 leading-relaxed">
-                          Allowing control will provide access to documents and data in "System Events", and to perform actions within that app.
-                        </p>
-                        <p className="text-xs text-gray-500 italic">
-                          An application wants to use AppleScript.
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Buttons */}
-                    <div className="flex justify-end gap-3">
-                      <button className="px-5 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm font-medium shadow-sm hover:bg-gray-50 transition-colors">
-                        Don't Allow
-                      </button>
-                      <button
-                        onClick={handleAppleScriptAllow}
-                        className="px-5 py-2 bg-blue-500 text-white rounded-lg text-sm font-semibold shadow-md hover:bg-blue-600 transition-colors relative ring-2 ring-green-400 ring-offset-2"
-                      >
-                        Allow
-                        <div className="absolute -top-3 -right-3 animate-bounce">
-                          <svg className="w-7 h-7 text-green-500 drop-shadow-lg" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                          </svg>
-                        </div>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-green-50 border border-green-200 rounded-lg p-3 mt-4">
-                <p className="text-sm text-green-800 font-semibold flex items-center">
-                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  Click "Allow" above to mark this step as complete
-                </p>
-              </div>
+              <button
+                onClick={async () => {
+                  await window.electron.openSystemSettings();
+                  setOpenSettingsComplete(true);
+                }}
+                className="w-full bg-primary text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors mb-3"
+              >
+                🔓 Open System Settings
+              </button>
+              <button
+                onClick={() => setOpenSettingsComplete(true)}
+                className="w-full bg-gray-100 text-gray-700 py-2 px-4 rounded-lg text-sm hover:bg-gray-200 transition-colors"
+              >
+                I've Opened Settings Manually
+              </button>
             </>
           )}
         </div>
 
-        {/* Step 2: Open System Settings */}
-        {appleScriptStepComplete && (
+        {/* Step 2: Find Privacy & Security in Sidebar */}
+        {openSettingsComplete && (
           <div className={`border-2 rounded-lg p-6 mb-6 transition-all ${
-            openSettingsComplete
+            findPrivacySecurityComplete
               ? 'bg-green-50 border-green-300'
               : 'bg-yellow-50 border-yellow-300'
           }`}>
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-start flex-1">
-                {openSettingsComplete ? (
+                {findPrivacySecurityComplete ? (
                   <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center mr-3 flex-shrink-0">
                     <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
@@ -277,60 +231,49 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain }) {
                 )}
                 <div className="flex-1">
                   <h3 className="font-semibold text-gray-900 mb-1">
-                    {openSettingsComplete ? 'System Settings Opened' : 'Open System Settings'}
+                    {findPrivacySecurityComplete ? 'Privacy & Security Found' : 'Find Privacy & Security in Sidebar'}
                   </h3>
-                  {!openSettingsComplete && (
-                    <p className="text-sm text-gray-700 mb-4">
-                      Click the button below to open the Privacy & Security settings
+                  {!findPrivacySecurityComplete && (
+                    <p className="text-sm text-gray-700">
+                      In the System Settings window, look in the <strong>left sidebar</strong> for <strong>"Privacy & Security"</strong> and click on it
                     </p>
                   )}
                 </div>
               </div>
             </div>
 
-            {!openSettingsComplete && (
-              <>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setAppleScriptStepComplete(false)}
-                    className="px-4 py-3 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-colors flex items-center gap-2"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
-                    Back
-                  </button>
-                  <button
-                    onClick={async () => {
-                      await window.electron.openSystemSettings();
-                      setOpenSettingsComplete(true);
-                    }}
-                    className="flex-1 bg-primary text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors"
-                  >
-                    🔓 Open System Settings
-                  </button>
-                </div>
+            {!findPrivacySecurityComplete && (
+              <div className="flex gap-3">
                 <button
-                  onClick={() => setOpenSettingsComplete(true)}
-                  className="w-full mt-3 bg-gray-100 text-gray-700 py-2 px-4 rounded-lg text-sm hover:bg-gray-200 transition-colors"
+                  onClick={() => setOpenSettingsComplete(false)}
+                  className="px-4 py-3 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-colors flex items-center gap-2"
                 >
-                  I've Opened Settings Manually
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                  Back
                 </button>
-              </>
+                <button
+                  onClick={() => setFindPrivacySecurityComplete(true)}
+                  className="flex-1 bg-blue-500 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors"
+                >
+                  ✅ Done - Found Privacy & Security
+                </button>
+              </div>
             )}
           </div>
         )}
 
-        {/* Step 3: Unlock Settings (only for macOS < 15) */}
-        {openSettingsComplete && macOSInfo && macOSInfo.version < 15 && (
+        {/* Step 3: Find Full Disk Access */}
+        {findPrivacySecurityComplete && (
           <div className={`border-2 rounded-lg p-6 mb-6 transition-all ${
-            unlockSettingsComplete
+            findFullDiskAccessComplete
               ? 'bg-green-50 border-green-300'
               : 'bg-yellow-50 border-yellow-300'
           }`}>
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-start flex-1">
-                {unlockSettingsComplete ? (
+                {findFullDiskAccessComplete ? (
                   <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center mr-3 flex-shrink-0">
                     <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
@@ -343,56 +286,49 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain }) {
                 )}
                 <div className="flex-1">
                   <h3 className="font-semibold text-gray-900 mb-1">
-                    {unlockSettingsComplete ? 'Settings Unlocked' : 'Click the Lock Icon'}
+                    {findFullDiskAccessComplete ? 'Full Disk Access Found' : 'Find Full Disk Access'}
                   </h3>
-                  {!unlockSettingsComplete && (
+                  {!findFullDiskAccessComplete && (
                     <p className="text-sm text-gray-700">
-                      Click the 🔒 lock icon in the bottom-left corner and authenticate
+                      In the Privacy & Security section, scroll down and click on <strong>"Full Disk Access"</strong>
                     </p>
                   )}
                 </div>
               </div>
             </div>
 
-            {!unlockSettingsComplete && macOSInfo && (
-              <>
-                <SystemSettingsMockup
-                  macOSVersion={macOSInfo.version}
-                  step="unlock"
-                />
-
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setOpenSettingsComplete(false)}
-                    className="px-4 py-3 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-colors flex items-center gap-2"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
-                    Back
-                  </button>
-                  <button
-                    onClick={() => setUnlockSettingsComplete(true)}
-                    className="flex-1 bg-blue-500 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors"
-                  >
-                    ✅ Done - I Clicked the Lock
-                  </button>
-                </div>
-              </>
+            {!findFullDiskAccessComplete && (
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setFindPrivacySecurityComplete(false)}
+                  className="px-4 py-3 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-colors flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                  Back
+                </button>
+                <button
+                  onClick={() => setFindFullDiskAccessComplete(true)}
+                  className="flex-1 bg-blue-500 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors"
+                >
+                  ✅ Done - Found Full Disk Access
+                </button>
+              </div>
             )}
           </div>
         )}
 
-        {/* Step 4: Find App in List - Shows after unlock for macOS < 15, or after open settings for macOS 15+ */}
-        {((macOSInfo && macOSInfo.version >= 15 && openSettingsComplete) || unlockSettingsComplete) && (
+        {/* Step 4: Click Plus Button */}
+        {findFullDiskAccessComplete && (
           <div className={`border-2 rounded-lg p-6 mb-6 transition-all ${
-            findAppComplete
+            clickPlusComplete
               ? 'bg-green-50 border-green-300'
               : 'bg-yellow-50 border-yellow-300'
           }`}>
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-start flex-1">
-                {findAppComplete ? (
+                {clickPlusComplete ? (
                   <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center mr-3 flex-shrink-0">
                     <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
@@ -400,81 +336,116 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain }) {
                   </div>
                 ) : (
                   <div className="w-6 h-6 bg-yellow-500 rounded-full flex items-center justify-center mr-3 flex-shrink-0 text-white font-bold text-sm">
-                    {macOSInfo && macOSInfo.version >= 15 ? '3' : '4'}
+                    4
                   </div>
                 )}
                 <div className="flex-1">
                   <h3 className="font-semibold text-gray-900 mb-1">
-                    {findAppComplete ? 'App Located' : 'Find the App'}
+                    {clickPlusComplete ? 'Plus Button Clicked' : 'Click the Plus (+) Button'}
                   </h3>
-                  {!findAppComplete && (
+                  {!clickPlusComplete && (
+                    <p className="text-sm text-gray-700">
+                      Click the <strong>+ (plus)</strong> button to add a new application to the Full Disk Access list
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {!clickPlusComplete && (
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setFindFullDiskAccessComplete(false)}
+                  className="px-4 py-3 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-colors flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                  Back
+                </button>
+                <button
+                  onClick={() => setClickPlusComplete(true)}
+                  className="flex-1 bg-blue-500 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors"
+                >
+                  ✅ Done - Clicked Plus Button
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Step 5: Select Real Estate Archive App */}
+        {clickPlusComplete && (
+          <div className={`border-2 rounded-lg p-6 mb-6 transition-all ${
+            selectAppComplete
+              ? 'bg-green-50 border-green-300'
+              : 'bg-yellow-50 border-yellow-300'
+          }`}>
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex items-start flex-1">
+                {selectAppComplete ? (
+                  <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center mr-3 flex-shrink-0">
+                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                ) : (
+                  <div className="w-6 h-6 bg-yellow-500 rounded-full flex items-center justify-center mr-3 flex-shrink-0 text-white font-bold text-sm">
+                    5
+                  </div>
+                )}
+                <div className="flex-1">
+                  <h3 className="font-semibold text-gray-900 mb-1">
+                    {selectAppComplete ? 'App Selected' : 'Select Real Estate Archive'}
+                  </h3>
+                  {!selectAppComplete && (
                     <>
                       <p className="text-sm text-gray-700 mb-2">
-                        Look for <strong>"Electron"</strong>, <strong>"Code"</strong>, <strong>"iTerm"</strong>, or <strong>"Terminal"</strong> in the Full Disk Access list
+                        In the file selector that opens, navigate to <strong>Applications</strong> and select <strong>Real Estate Archive.app</strong>
                       </p>
-                      {appInfo && (
-                        <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                          <p className="text-xs font-semibold text-blue-900 mb-1">💡 Detected App:</p>
-                          <p className="text-xs text-blue-800"><strong>{appInfo.name}</strong></p>
-                          <p className="text-xs text-blue-700 mt-1 break-all">{appInfo.path}</p>
-                          <div className="mt-2 pt-2 border-t border-blue-300">
-                            <p className="text-xs text-blue-700">
-                              <strong>Note:</strong> If running from VS Code, you may need to grant Full Disk Access to <strong>"Code"</strong>, <strong>"Code Helper"</strong>, or <strong>"Visual Studio Code"</strong> instead.
-                            </p>
-                          </div>
-                        </div>
-                      )}
+                      <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <p className="text-xs text-blue-800">
+                          <strong>💡 Tip:</strong> If you can't find Real Estate Archive in the Applications folder, you may not have copied it from the DMG file. Drag the app from the DMG to your Applications folder first.
+                        </p>
+                      </div>
                     </>
                   )}
                 </div>
               </div>
             </div>
 
-            {!findAppComplete && macOSInfo && (
-              <>
-                <SystemSettingsMockup
-                  macOSVersion={macOSInfo.version}
-                  step="find-app"
-                />
-
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => {
-                      if (macOSInfo && macOSInfo.version >= 15) {
-                        setOpenSettingsComplete(false);
-                      } else {
-                        setUnlockSettingsComplete(false);
-                      }
-                    }}
-                    className="px-4 py-3 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-colors flex items-center gap-2"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
-                    Back
-                  </button>
-                  <button
-                    onClick={() => setFindAppComplete(true)}
-                    className="flex-1 bg-blue-500 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors"
-                  >
-                    ✅ Done - I Found the App
-                  </button>
-                </div>
-              </>
+            {!selectAppComplete && (
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setClickPlusComplete(false)}
+                  className="px-4 py-3 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-colors flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                  Back
+                </button>
+                <button
+                  onClick={() => setSelectAppComplete(true)}
+                  className="flex-1 bg-blue-500 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors"
+                >
+                  ✅ Done - Selected the App
+                </button>
+              </div>
             )}
           </div>
         )}
 
-        {/* Step 5: Toggle Switch ON */}
-        {findAppComplete && (
+        {/* Step 6: Handle Quit & Reopen Prompt */}
+        {selectAppComplete && (
           <div className={`border-2 rounded-lg p-6 mb-6 transition-all ${
-            toggleSwitchComplete
+            quitReopenComplete
               ? 'bg-green-50 border-green-300'
               : 'bg-yellow-50 border-yellow-300'
           }`}>
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-start flex-1">
-                {toggleSwitchComplete ? (
+                {quitReopenComplete ? (
                   <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center mr-3 flex-shrink-0">
                     <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
@@ -482,64 +453,67 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain }) {
                   </div>
                 ) : (
                   <div className="w-6 h-6 bg-yellow-500 rounded-full flex items-center justify-center mr-3 flex-shrink-0 text-white font-bold text-sm">
-                    {macOSInfo && macOSInfo.version >= 15 ? '4' : '5'}
+                    6
                   </div>
                 )}
                 <div className="flex-1">
                   <h3 className="font-semibold text-gray-900 mb-1">
-                    {toggleSwitchComplete ? 'Permission Granted!' : 'Toggle the Switch ON'}
+                    {quitReopenComplete ? 'App Restarted' : 'Quit & Reopen the App'}
                   </h3>
-                  {!toggleSwitchComplete && (
-                    <p className="text-sm text-gray-700">
-                      Click the toggle switch next to the app name to turn it <strong className="text-green-600">ON</strong>
-                    </p>
+                  {!quitReopenComplete && (
+                    <>
+                      <p className="text-sm text-gray-700 mb-3">
+                        You'll see a prompt that says <strong>"Real Estate Archive" will not have full disk access until it is quit.</strong>
+                      </p>
+                      <p className="text-sm text-gray-700 mb-2">
+                        Click <strong>"Quit & Reopen"</strong> to restart the app with full disk access enabled
+                      </p>
+                      <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                        <p className="text-xs text-yellow-800">
+                          <strong>Note:</strong> If you click "Later", you'll need to manually restart the app for the permissions to take effect
+                        </p>
+                      </div>
+                    </>
                   )}
                 </div>
               </div>
             </div>
 
-            {!toggleSwitchComplete && macOSInfo && (
-              <>
-                <SystemSettingsMockup
-                  macOSVersion={macOSInfo.version}
-                  step="toggle"
-                />
-
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setFindAppComplete(false)}
-                    className="px-4 py-3 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-colors flex items-center gap-2"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
-                    Back
-                  </button>
-                  <button
-                    onClick={() => {
-                      setToggleSwitchComplete(true);
-                      // Start auto-checking for permissions
-                      const interval = setInterval(async () => {
-                        const result = await window.electron.checkPermissions();
-                        if (result.hasPermission) {
-                          clearInterval(interval);
-                          onPermissionsGranted();
-                        }
-                      }, 2000);
-                      setTimeout(() => clearInterval(interval), 60000);
-                    }}
-                    className="flex-1 bg-blue-500 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors"
-                  >
-                    ✅ Done - I Toggled the Switch
-                  </button>
-                </div>
-              </>
+            {!quitReopenComplete && (
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setSelectAppComplete(false)}
+                  className="px-4 py-3 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-colors flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                  Back
+                </button>
+                <button
+                  onClick={() => {
+                    setQuitReopenComplete(true);
+                    // Start auto-checking for permissions
+                    const interval = setInterval(async () => {
+                      const result = await window.electron.checkPermissions();
+                      if (result.hasPermission) {
+                        clearInterval(interval);
+                        onPermissionsGranted();
+                      }
+                    }, 2000);
+                    setTimeout(() => clearInterval(interval), 60000);
+                  }}
+                  className="flex-1 bg-blue-500 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors"
+                >
+                  ✅ Done - App Restarted
+                </button>
+              </div>
             )}
           </div>
         )}
 
         {/* Final message after all steps */}
-        {toggleSwitchComplete && (
+        {quitReopenComplete && (
           <div className="bg-green-50 border-2 border-green-300 rounded-lg p-6 mb-6 text-center">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-green-500 rounded-full mb-4">
               <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -547,8 +521,11 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain }) {
               </svg>
             </div>
             <h3 className="text-xl font-bold text-gray-900 mb-2">All Steps Complete!</h3>
-            <p className="text-gray-700 mb-4">
-              We're checking for permissions... You should be redirected automatically.
+            <p className="text-gray-700 mb-2">
+              The app has been restarted with full disk access.
+            </p>
+            <p className="text-sm text-gray-600 mb-4">
+              If you don't see the app, you can open it manually from your Applications folder. We're checking for permissions and you should be redirected automatically.
             </p>
             <button
               onClick={handleCheckPermissions}
@@ -557,14 +534,6 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain }) {
             >
               {isChecking ? 'Checking...' : 'Check Again'}
             </button>
-          </div>
-        )}
-
-        {!appleScriptStepComplete && (
-          <div className="bg-gray-100 border border-gray-300 rounded-lg p-4 text-center">
-            <p className="text-sm text-gray-600">
-              Click "Allow" in the dialog above to continue
-            </p>
           </div>
         )}
 

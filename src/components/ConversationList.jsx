@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import Joyride from 'react-joyride';
 
 function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook, outlookConnected }) {
   const [conversations, setConversations] = useState([]);
@@ -12,6 +13,7 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
   const [emailCountProgress, setEmailCountProgress] = useState({ current: 0, total: 0, eta: 0 });
   const [contactInfoModal, setContactInfoModal] = useState(null);
   const abortEmailCountingRef = useRef(false); // Ref to track abort state
+  const [runTour, setRunTour] = useState(false);
 
   useEffect(() => {
     loadConversations();
@@ -22,6 +24,85 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
       loadEmailCounts();
     }
   }, [outlookConnected, conversations]);
+
+  // Start tour when conversations are loaded
+  useEffect(() => {
+    if (conversations.length > 0 && !isLoading) {
+      const hasSeenTour = localStorage.getItem('hasSeenExportTour');
+      if (!hasSeenTour) {
+        setTimeout(() => setRunTour(true), 500);
+      }
+    }
+  }, [conversations, isLoading]);
+
+  // Tour steps for export screen features
+  const tourSteps = [
+    {
+      target: 'body',
+      content: 'Welcome to the Export screen! Let me show you around and explain the different features available.',
+      placement: 'center',
+      disableBeacon: true,
+    },
+    {
+      target: '[data-tour="search"]',
+      content: 'Use this search bar to quickly find contacts by name or phone number.',
+      placement: 'bottom',
+    },
+    {
+      target: '[data-tour="select-all"]',
+      content: 'Quickly select all contacts at once with this button.',
+      placement: 'bottom',
+    },
+    {
+      target: '[data-tour="deselect-all"]',
+      content: 'Or deselect all contacts with this button.',
+      placement: 'bottom',
+    },
+    {
+      target: '[data-tour="export-section"]',
+      content: 'This is where you choose how to export your conversations. You have multiple options:',
+      placement: 'bottom',
+    },
+    {
+      target: '[data-tour="export-all"]',
+      content: outlookConnected
+        ? 'Export both messages and emails for your selected contacts.'
+        : 'Connect to Outlook to export both messages and emails together.',
+      placement: 'bottom',
+    },
+    {
+      target: '[data-tour="export-emails"]',
+      content: outlookConnected
+        ? 'Export only emails (no text messages) for your selected contacts.'
+        : 'This option will be available once you connect to Outlook.',
+      placement: 'bottom',
+    },
+    {
+      target: '[data-tour="export-texts"]',
+      content: 'Export only text messages (no emails) for your selected contacts.',
+      placement: 'bottom',
+    },
+    {
+      target: '[data-tour="contact-list"]',
+      content: 'Here you can see all your contacts. Click on a contact to select or deselect them for export.',
+      placement: 'top',
+    },
+    {
+      target: 'body',
+      content: 'That\'s it! You\'re all set to start exporting your client conversations. Happy archiving!',
+      placement: 'center',
+    },
+  ];
+
+  const handleJoyrideCallback = (data) => {
+    const { status } = data;
+    const finishedStatuses = ['finished', 'skipped'];
+
+    if (finishedStatuses.includes(status)) {
+      setRunTour(false);
+      localStorage.setItem('hasSeenExportTour', 'true');
+    }
+  };
 
   const loadConversations = async () => {
     setIsLoading(true);
@@ -258,13 +339,29 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
 
   return (
     <div className="flex flex-col min-h-full">
+      {/* Joyride Tour */}
+      <Joyride
+        steps={tourSteps}
+        run={runTour}
+        continuous
+        showProgress
+        showSkipButton
+        callback={handleJoyrideCallback}
+        styles={{
+          options: {
+            primaryColor: '#3b82f6',
+            zIndex: 10000,
+          },
+        }}
+      />
+
       {/* Header */}
       <div className="bg-white border-b border-gray-200 p-6">
         <h1 className="text-2xl font-bold text-gray-900 mb-4">Select Contacts for Export</h1>
 
         {/* Search and Select All */}
         <div className="flex gap-4 mb-4">
-          <div className="flex-1 relative">
+          <div className="flex-1 relative" data-tour="search">
             <input
               type="text"
               placeholder="Search contacts..."
@@ -278,6 +375,7 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
           </div>
 
           <button
+            data-tour="select-all"
             onClick={selectAll}
             className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
           >
@@ -285,6 +383,7 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
           </button>
 
           <button
+            data-tour="deselect-all"
             onClick={deselectAll}
             className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
           >
@@ -293,12 +392,13 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
         </div>
 
         {/* Export Section */}
-        <div className="border border-gray-300 rounded-lg p-4 bg-gray-50">
+        <div className="border border-gray-300 rounded-lg p-4 bg-gray-50" data-tour="export-section">
           <h3 className="text-sm font-semibold text-gray-700 mb-3">Export</h3>
           <div className="flex gap-3">
             {/* All (Messages + Emails) */}
             {outlookConnected ? (
               <button
+                data-tour="export-all"
                 onClick={handleOutlookExport}
                 disabled={selectedIds.size === 0 || isExporting}
                 className="flex-1 bg-primary text-white py-2.5 px-4 rounded-lg font-semibold hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
@@ -310,6 +410,7 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
               </button>
             ) : (
               <button
+                data-tour="export-all"
                 onClick={onConnectOutlook}
                 className="flex-1 bg-blue-50 border-2 border-blue-300 text-blue-700 py-2.5 px-4 rounded-lg font-semibold hover:bg-blue-100 transition-colors flex items-center justify-center gap-2"
               >
@@ -323,6 +424,7 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
             {/* Only Emails */}
             {outlookConnected ? (
               <button
+                data-tour="export-emails"
                 onClick={() => alert('Email-only export coming soon!')}
                 disabled={selectedIds.size === 0 || isExporting}
                 className="flex-1 bg-white border-2 border-gray-300 text-gray-700 py-2.5 px-4 rounded-lg font-semibold hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
@@ -334,6 +436,7 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
               </button>
             ) : (
               <button
+                data-tour="export-emails"
                 onClick={onConnectOutlook}
                 className="flex-1 bg-gray-200 border-2 border-gray-300 text-gray-500 py-2.5 px-4 rounded-lg font-semibold cursor-not-allowed flex items-center justify-center gap-2"
                 disabled
@@ -347,6 +450,7 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
 
             {/* Only Texts */}
             <button
+              data-tour="export-texts"
               onClick={handleExport}
               disabled={selectedIds.size === 0 || isExporting}
               className="flex-1 bg-white border-2 border-gray-300 text-gray-700 py-2.5 px-4 rounded-lg font-semibold hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
@@ -434,7 +538,7 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
       )}
 
       {/* Conversation List */}
-      <div className="flex-1 overflow-y-auto p-6">
+      <div className="flex-1 overflow-y-auto p-6" data-tour="contact-list">
         {filteredConversations.length === 0 ? (
           <div className="text-center py-12">
             <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
