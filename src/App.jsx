@@ -5,6 +5,7 @@ import ConversationList from './components/ConversationList';
 import ExportComplete from './components/ExportComplete';
 import OutlookExport from './components/OutlookExport';
 import UpdateNotification from './components/UpdateNotification';
+import MoveAppPrompt from './components/MoveAppPrompt';
 
 function App() {
   const [currentStep, setCurrentStep] = useState('microsoft-login'); // microsoft-login, permissions, contacts, outlook, complete
@@ -14,9 +15,12 @@ function App() {
   const [showVersion, setShowVersion] = useState(false);
   const [conversations, setConversations] = useState([]);
   const [selectedConversationIds, setSelectedConversationIds] = useState(new Set());
+  const [showMoveAppPrompt, setShowMoveAppPrompt] = useState(false);
+  const [appPath, setAppPath] = useState('');
 
   useEffect(() => {
     checkPermissions();
+    checkAppLocation();
   }, []);
 
   const checkPermissions = async () => {
@@ -24,6 +28,32 @@ function App() {
     if (result.hasPermission) {
       setHasPermissions(true);
     }
+  };
+
+  const checkAppLocation = async () => {
+    try {
+      const result = await window.electron.checkAppLocation();
+      setAppPath(result.appPath || '');
+
+      // Check if we should show the prompt
+      // Only show if:
+      // 1. shouldPrompt is true (not in Applications and in temp location)
+      // 2. User hasn't dismissed it permanently
+      const hasIgnored = localStorage.getItem('ignoreMoveAppPrompt');
+      if (result.shouldPrompt && !hasIgnored) {
+        setShowMoveAppPrompt(true);
+      }
+    } catch (error) {
+      console.error('Error checking app location:', error);
+    }
+  };
+
+  const handleDismissMovePrompt = () => {
+    setShowMoveAppPrompt(false);
+  };
+
+  const handleNotNowMovePrompt = () => {
+    setShowMoveAppPrompt(false);
   };
 
   const handleMicrosoftLogin = (userInfo) => {
@@ -181,11 +211,11 @@ function App() {
             <div className="space-y-2 text-xs">
               <div className="flex justify-between">
                 <span className="text-gray-600">Version:</span>
-                <span className="font-mono font-semibold text-gray-900">1.0.3</span>
+                <span className="font-mono font-semibold text-gray-900">1.0.5</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">Last Update:</span>
-                <span className="font-mono text-gray-700 bg-green-100 px-1 rounded">✨ Auto-Update Test</span>
+                <span className="font-mono text-gray-700 bg-green-100 px-1 rounded">📁 Apps Folder Prompt</span>
               </div>
               <div className="pt-2 border-t border-gray-200">
                 <p className="text-gray-500 text-xs">
@@ -199,6 +229,15 @@ function App() {
 
       {/* Update Notification */}
       <UpdateNotification />
+
+      {/* Move App Prompt */}
+      {showMoveAppPrompt && (
+        <MoveAppPrompt
+          appPath={appPath}
+          onDismiss={handleDismissMovePrompt}
+          onNotNow={handleNotNowMovePrompt}
+        />
+      )}
     </div>
   );
 }
