@@ -42,7 +42,7 @@
   },
   "build": {
     "appId": "com.realestate.archiveapp",
-    "productName": "Magic Audit",
+    "productName": "MagicAudit",
     "publish": {
       "provider": "github",
       "owner": "5hdaniel",

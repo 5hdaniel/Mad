@@ -219,7 +219,7 @@ function App() {
               </div>
               <div className="pt-2 border-t border-gray-200">
                 <p className="text-gray-500 text-xs">
-                  Magic Audit
+                  MagicAudit
                 </p>
               </div>
             </div>
