@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Joyride from 'react-joyride';
+import confetti from 'canvas-confetti';
 
 function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook, outlookConnected }) {
   const [conversations, setConversations] = useState([]);
@@ -91,6 +92,15 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
     if (finishedStatuses.includes(status)) {
       setRunTour(false);
       localStorage.setItem('hasSeenExportTour', 'true');
+
+      // Trigger confetti when tour is completed (not skipped)
+      if (status === 'finished') {
+        confetti({
+          particleCount: 100,
+          spread: 70,
+          origin: { y: 0.6 }
+        });
+      }
     }
   };
 
@@ -234,7 +244,11 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
         continuous
         showProgress
         showSkipButton
+        hideCloseButton
         callback={handleJoyrideCallback}
+        locale={{
+          last: 'Done',
+        }}
         styles={{
           options: {
             primaryColor: '#3b82f6',
