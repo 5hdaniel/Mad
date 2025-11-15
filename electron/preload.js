@@ -19,5 +19,18 @@ contextBridge.exposeInMainWorld('electron', {
   onUpdateAvailable: (callback) => ipcRenderer.on('update-available', (_, info) => callback(info)),
   onUpdateProgress: (callback) => ipcRenderer.on('update-progress', (_, progress) => callback(progress)),
   onUpdateDownloaded: (callback) => ipcRenderer.on('update-downloaded', (_, info) => callback(info)),
-  installUpdate: () => ipcRenderer.send('install-update')
+  installUpdate: () => ipcRenderer.send('install-update'),
+
+  // Outlook integration methods
+  outlookInitialize: () => ipcRenderer.invoke('outlook-initialize'),
+  outlookAuthenticate: () => ipcRenderer.invoke('outlook-authenticate'),
+  outlookIsAuthenticated: () => ipcRenderer.invoke('outlook-is-authenticated'),
+  outlookGetUserEmail: () => ipcRenderer.invoke('outlook-get-user-email'),
+  outlookGetEmailCount: (contactEmail) => ipcRenderer.invoke('outlook-get-email-count', contactEmail),
+  outlookBulkGetEmailCounts: (contactEmails, enableProgress) => ipcRenderer.invoke('outlook-bulk-get-email-counts', contactEmails, enableProgress),
+  onBulkEmailProgress: (callback) => ipcRenderer.on('outlook-bulk-progress', (_, progress) => callback(progress)),
+  outlookExportEmails: (contacts) => ipcRenderer.invoke('outlook-export-emails', contacts),
+  outlookSignout: () => ipcRenderer.invoke('outlook-signout'),
+  onDeviceCode: (callback) => ipcRenderer.on('device-code-received', (_, info) => callback(info)),
+  onExportProgress: (callback) => ipcRenderer.on('export-progress', (_, progress) => callback(progress))
 });

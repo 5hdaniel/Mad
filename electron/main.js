@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, systemPreferences } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, systemPreferences, Notification } = require('electron');
 const path = require('path');
 const fs = require('fs').promises;
 const sqlite3 = require('sqlite3');
@@ -7,12 +7,15 @@ const { exec } = require('child_process');
 const os = require('os');
 const { autoUpdater } = require('electron-updater');
 const log = require('electron-log');
+const OutlookService = require('./outlookService');
+require('dotenv').config({ path: path.join(__dirname, '../.env.local') });
 
 // Configure logging for auto-updater
 log.transports.file.level = 'info';
 autoUpdater.logger = log;
 
 let mainWindow;
+let outlookService = null;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -269,6 +272,7 @@ ipcMain.handle('request-permissions', async () => {
 // Helper function to get contact names from macOS Contacts database
 async function getContactNames() {
   const contactMap = {};
+  const phoneToContactInfo = {};
 
   try {
     // Search for ALL possible Contacts database files
@@ -294,7 +298,7 @@ async function getContactNames() {
 
           // If this database has more records, use it
           if (recordCount[0].count > 10) {
-            console.log(`Found Contacts database with ${recordCount[0].count} contacts`);
+            // Found Contacts database
             return await loadContactsFromDatabase(dbPath);
           }
         } catch (err) {
@@ -306,25 +310,24 @@ async function getContactNames() {
     }
 
     // Fallback to old method
-    console.log('Could not find main contacts database, trying default location...');
     const defaultPath = path.join(process.env.HOME, 'Library/Application Support/AddressBook/AddressBook-v22.abcddb');
     return await loadContactsFromDatabase(defaultPath);
 
   } catch (error) {
     console.error('Error accessing contacts database:', error);
-    return contactMap;
+    return { contactMap, phoneToContactInfo };
   }
 }
 
 // Helper function to load contacts from a specific database
 async function loadContactsFromDatabase(contactsDbPath) {
   const contactMap = {};
+  const phoneToContactInfo = {}; // Map phone numbers to full contact info (all phones & emails)
 
   try {
     await fs.access(contactsDbPath);
   } catch {
-    console.log('Database not accessible:', contactsDbPath);
-    return contactMap;
+    return { contactMap, phoneToContactInfo };
   }
 
   try {
@@ -332,43 +335,43 @@ async function loadContactsFromDatabase(contactsDbPath) {
     const dbAll = promisify(db.all.bind(db));
     const dbClose = promisify(db.close.bind(db));
 
-    // Query phone numbers and emails SEPARATELY to avoid Cartesian product
-    // Use ZOWNER instead of Z22_OWNER - Z22_OWNER is for unified/linked contacts
+    // Query to get contacts with both phone numbers and emails
+    // Group by person to associate phones with emails
+    const contactsResult = await dbAll(`
+      SELECT
+        ZABCDRECORD.Z_PK as person_id,
+        ZABCDRECORD.ZFIRSTNAME as first_name,
+        ZABCDRECORD.ZLASTNAME as last_name,
+        ZABCDRECORD.ZORGANIZATION as organization
+      FROM ZABCDRECORD
+      WHERE ZABCDRECORD.Z_PK IS NOT NULL
+    `);
+
     const phonesResult = await dbAll(`
       SELECT
-        ZABCDRECORD.ZFIRSTNAME as first_name,
-        ZABCDRECORD.ZLASTNAME as last_name,
-        ZABCDRECORD.ZORGANIZATION as organization,
+        ZABCDPHONENUMBER.ZOWNER as person_id,
         ZABCDPHONENUMBER.ZFULLNUMBER as phone
-      FROM ZABCDRECORD
-      INNER JOIN ZABCDPHONENUMBER ON ZABCDRECORD.Z_PK = ZABCDPHONENUMBER.ZOWNER
+      FROM ZABCDPHONENUMBER
       WHERE ZABCDPHONENUMBER.ZFULLNUMBER IS NOT NULL
     `);
+
     const emailsResult = await dbAll(`
       SELECT
-        ZABCDRECORD.ZFIRSTNAME as first_name,
-        ZABCDRECORD.ZLASTNAME as last_name,
-        ZABCDRECORD.ZORGANIZATION as organization,
+        ZABCDEMAILADDRESS.ZOWNER as person_id,
         ZABCDEMAILADDRESS.ZADDRESS as email
-      FROM ZABCDRECORD
-      INNER JOIN ZABCDEMAILADDRESS ON ZABCDRECORD.Z_PK = ZABCDEMAILADDRESS.ZOWNER
+      FROM ZABCDEMAILADDRESS
       WHERE ZABCDEMAILADDRESS.ZADDRESS IS NOT NULL
     `);
 
-    // Combine results - each row is now either a phone OR an email, not both
-    const contacts = [
-      ...phonesResult.map(r => ({ ...r, email: null })),
-      ...emailsResult.map(r => ({ ...r, phone: null }))
-    ];
+    await dbClose();
 
-    // Build a map of phone numbers and emails to contact names
+    // Build person map
+    const personMap = {};
+    contactsResult.forEach(person => {
+      const firstName = person.first_name || '';
+      const lastName = person.last_name || '';
+      const organization = person.organization || '';
 
-    contacts.forEach((contact, index) => {
-      const firstName = contact.first_name || '';
-      const lastName = contact.last_name || '';
-      const organization = contact.organization || '';
-
-      // Prefer "First Last", fallback to organization, then "First" or "Last"
       let displayName = '';
       if (firstName && lastName) {
         displayName = `${firstName} ${lastName}`;
@@ -381,34 +384,94 @@ async function loadContactsFromDatabase(contactsDbPath) {
       }
 
       if (displayName) {
-        // Map phone numbers (normalize by removing non-digits)
-        if (contact.phone) {
-          const normalized = contact.phone.replace(/\D/g, '');
-          contactMap[normalized] = displayName;
-          contactMap[contact.phone] = displayName;
-        }
-
-        // Map emails (lowercase)
-        if (contact.email) {
-          const emailLower = contact.email.toLowerCase();
-          contactMap[emailLower] = displayName;
-        }
+        personMap[person.person_id] = {
+          name: displayName,
+          phones: [],
+          emails: []
+        };
       }
     });
 
-    console.log(`Loaded ${Object.keys(contactMap).length} contact entries from Contacts database`);
-    await dbClose();
+    // Add phones to persons
+    phonesResult.forEach(phone => {
+      if (personMap[phone.person_id]) {
+        personMap[phone.person_id].phones.push(phone.phone);
+      }
+    });
+
+    // Add emails to persons
+    emailsResult.forEach(email => {
+      if (personMap[email.person_id]) {
+        personMap[email.person_id].emails.push(email.email);
+      }
+    });
+
+    // Build maps
+    Object.values(personMap).forEach(person => {
+      // Map phone numbers to name
+      person.phones.forEach(phone => {
+        const normalized = phone.replace(/\D/g, '');
+        contactMap[normalized] = person.name;
+        contactMap[phone] = person.name;
+
+        // Map phone to full contact info (ALL phones and emails)
+        phoneToContactInfo[normalized] = {
+          name: person.name,
+          phones: person.phones,
+          emails: person.emails
+        };
+        phoneToContactInfo[phone] = {
+          name: person.name,
+          phones: person.phones,
+          emails: person.emails
+        };
+      });
+
+      // Map emails to name
+      person.emails.forEach(email => {
+        const emailLower = email.toLowerCase();
+        contactMap[emailLower] = person.name;
+      });
+    });
   } catch (error) {
     console.error('Error accessing contacts database:', error);
   }
 
-  return contactMap;
+  return { contactMap, phoneToContactInfo };
 }
 
 // Helper function to normalize phone numbers for matching
 function normalizePhoneNumber(phone) {
   if (!phone) return '';
   return phone.replace(/\D/g, '');
+}
+
+// Helper function to format phone numbers for display
+function formatPhoneNumber(phone) {
+  if (!phone) return '';
+
+  // Check if it's an email
+  if (phone.includes('@')) {
+    return phone;
+  }
+
+  // Extract just the digits
+  const digits = phone.replace(/\D/g, '');
+
+  // Format based on length
+  if (digits.length === 10) {
+    // US/Canada format: (XXX) XXX-XXXX
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+  } else if (digits.length === 11 && digits[0] === '1') {
+    // US/Canada with country code: +1 (XXX) XXX-XXXX
+    return `+1 (${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7)}`;
+  } else if (digits.length > 10) {
+    // International: +XX XXX XXX XXXX
+    return `+${digits}`;
+  } else {
+    // Short number or unknown format - just show as-is
+    return phone;
+  }
 }
 
 // Helper function to resolve contact name
@@ -429,6 +492,14 @@ function resolveContactName(contactId, chatIdentifier, displayName, contactMap) 
       return contactMap[normalized];
     }
 
+    // If not found and number has country code 1, try without it
+    if (normalized && normalized.startsWith('1') && normalized.length === 11) {
+      const withoutCountryCode = normalized.substring(1);
+      if (contactMap[withoutCountryCode]) {
+        return contactMap[withoutCountryCode];
+      }
+    }
+
     // Try lowercase email match
     const lowerEmail = contactId.toLowerCase();
     if (contactMap[lowerEmail]) {
@@ -446,10 +517,19 @@ function resolveContactName(contactId, chatIdentifier, displayName, contactMap) 
     if (normalized && contactMap[normalized]) {
       return contactMap[normalized];
     }
+
+    // If not found and number has country code 1, try without it
+    if (normalized && normalized.startsWith('1') && normalized.length === 11) {
+      const withoutCountryCode = normalized.substring(1);
+      if (contactMap[withoutCountryCode]) {
+        return contactMap[withoutCountryCode];
+      }
+    }
   }
 
-  // Final fallback: show the phone/email
-  return contactId || chatIdentifier || 'Unknown';
+  // Final fallback: format and show the phone/email nicely
+  const fallbackValue = contactId || chatIdentifier || 'Unknown';
+  return formatPhoneNumber(fallbackValue);
 }
 
 // Get conversations from Messages database
@@ -464,10 +544,12 @@ ipcMain.handle('get-conversations', async () => {
     const dbAll = promisify(db.all.bind(db));
     const dbClose = promisify(db.close.bind(db));
 
+    let db2 = null;
+    let dbClose2 = null;
+
     try {
       // Get contact names from Contacts database
-      console.log('Loading contact names...');
-      const contactMap = await getContactNames();
+      const { contactMap, phoneToContactInfo } = await getContactNames();
 
       // Get all chats with their latest message
       // Filter to only show chats with at least 1 message
@@ -489,66 +571,236 @@ ipcMain.handle('get-conversations', async () => {
         ORDER BY last_message_date DESC
       `);
 
+      // Close first database connection - we're done with it
       await dbClose();
 
-      // Map conversations and deduplicate by normalized phone number/identifier
+      // Re-open database to query group chat participants
+      db2 = new sqlite3.Database(messagesDbPath, sqlite3.OPEN_READONLY);
+      const dbAll2 = promisify(db2.all.bind(db2));
+      dbClose2 = promisify(db2.close.bind(db2));
+
+      // Map conversations and deduplicate by contact NAME
+      // This ensures that if a contact has multiple phone numbers or emails,
+      // they appear as ONE contact with all their info
       const conversationMap = new Map();
 
-      conversations.forEach(conv => {
+      // Process conversations - track direct chats and group chats separately
+      for (const conv of conversations) {
         const rawContactId = conv.contact_id || conv.chat_identifier;
         const displayName = resolveContactName(conv.contact_id, conv.chat_identifier, conv.display_name, contactMap);
 
-        // Normalize the identifier (phone or email) for deduplication
-        let normalizedKey;
-        if (rawContactId && rawContactId.includes('@')) {
-          // Email - normalize to lowercase
-          normalizedKey = rawContactId.toLowerCase();
-        } else if (rawContactId) {
-          // Phone - normalize by keeping last 10 digits
-          const digitsOnly = rawContactId.replace(/\D/g, '');
-          normalizedKey = digitsOnly.length > 10 ? digitsOnly.slice(-10) : digitsOnly;
-        } else {
-          // Fallback to chat identifier
-          normalizedKey = conv.chat_identifier || `chat_${conv.chat_id}`;
+        // Detect group chats - they have chat_identifier like "chat123456789"
+        // Individual chats have phone numbers or emails as identifiers
+        const isGroupChat = conv.chat_identifier && conv.chat_identifier.startsWith('chat') && !conv.chat_identifier.includes('@');
+
+        if (isGroupChat) {
+          // For group chats, we need to attribute the chat to all participants
+
+          try {
+            // Get all participants in this group chat
+            const participants = await dbAll2(`
+              SELECT DISTINCT handle.id as contact_id
+              FROM chat_handle_join
+              JOIN handle ON chat_handle_join.handle_id = handle.ROWID
+              WHERE chat_handle_join.chat_id = ?
+            `, [conv.chat_id]);
+
+            // Add this group chat to each participant's statistics
+            for (const participant of participants) {
+              const participantName = resolveContactName(participant.contact_id, participant.contact_id, null, contactMap);
+              const normalizedKey = participantName.toLowerCase().trim();
+
+              // Get or create contact entry
+              if (!conversationMap.has(normalizedKey)) {
+                // Create new contact entry for this participant
+                let contactInfo = null;
+                let phones = [];
+                let emails = [];
+
+                if (participant.contact_id && participant.contact_id.includes('@')) {
+                  const emailLower = participant.contact_id.toLowerCase();
+                  for (const info of Object.values(phoneToContactInfo)) {
+                    if (info.emails && info.emails.some(e => e.toLowerCase() === emailLower)) {
+                      contactInfo = info;
+                      break;
+                    }
+                  }
+                  if (contactInfo) {
+                    phones = contactInfo.phones || [];
+                    emails = contactInfo.emails || [];
+                  } else {
+                    emails = [participant.contact_id];
+                  }
+                } else if (participant.contact_id) {
+                  const normalized = participant.contact_id.replace(/\D/g, '');
+                  contactInfo = phoneToContactInfo[normalized] || phoneToContactInfo[participant.contact_id];
+                  if (contactInfo) {
+                    phones = contactInfo.phones || [];
+                    emails = contactInfo.emails || [];
+                  } else {
+                    phones = [participant.contact_id];
+                  }
+                }
+
+                conversationMap.set(normalizedKey, {
+                  id: `group-contact-${normalizedKey}`, // Generate unique ID for group-only contacts
+                  name: participantName,
+                  contactId: participant.contact_id,
+                  phones: phones,
+                  emails: emails,
+                  showBothNameAndNumber: participantName !== participant.contact_id,
+                  messageCount: 0,
+                  lastMessageDate: 0,
+                  directChatCount: 0,
+                  directMessageCount: 0,
+                  groupChatCount: 0,
+                  groupMessageCount: 0
+                });
+              }
+
+              // Add group chat stats to this participant
+              const existing = conversationMap.get(normalizedKey);
+              existing.groupChatCount += 1;
+              existing.groupMessageCount += conv.message_count;
+              existing.messageCount += conv.message_count;
+
+              // Update last message date if this group chat is more recent
+              if (conv.last_message_date > existing.lastMessageDate) {
+                existing.lastMessageDate = conv.last_message_date;
+              }
+            }
+          } catch (err) {
+            console.error(`Error processing group chat ${conv.chat_identifier}:`, err);
+          }
+
+          continue; // Skip to next conversation (don't add group chat as its own contact)
         }
+
+        // Get full contact info (all phones and emails)
+        let contactInfo = null;
+        let phones = [];
+        let emails = [];
+
+        if (rawContactId && rawContactId.includes('@')) {
+          // contactId is an email - look up contact info by email
+          const emailLower = rawContactId.toLowerCase();
+          // Try to find this email in phoneToContactInfo
+          for (const info of Object.values(phoneToContactInfo)) {
+            if (info.emails && info.emails.some(e => e.toLowerCase() === emailLower)) {
+              contactInfo = info;
+              break;
+            }
+          }
+
+          if (contactInfo) {
+            phones = contactInfo.phones || [];
+            emails = contactInfo.emails || [];
+          } else {
+            emails = [rawContactId];
+          }
+        } else if (rawContactId) {
+          // contactId is a phone - look up full contact info
+          const normalized = rawContactId.replace(/\D/g, '');
+          contactInfo = phoneToContactInfo[normalized] || phoneToContactInfo[rawContactId];
+
+          // If not found and number has country code 1 (11 digits starting with 1), try without it
+          if (!contactInfo && normalized.startsWith('1') && normalized.length === 11) {
+            const withoutCountryCode = normalized.substring(1);
+            contactInfo = phoneToContactInfo[withoutCountryCode];
+          }
+
+          if (contactInfo) {
+            phones = contactInfo.phones || [];
+            emails = contactInfo.emails || [];
+          } else {
+            // No contact info found, just use the raw phone number
+            phones = [rawContactId];
+          }
+        }
+
+        // Use contact name as the deduplication key
+        // This ensures all chats with the same person are merged
+        const normalizedKey = displayName.toLowerCase().trim();
 
         const conversationData = {
           id: conv.chat_id,
+          chatId: conv.chat_id, // CRITICAL: Set chatId field for exports
           name: displayName,
           contactId: rawContactId,
+          phones: phones,
+          emails: emails,
           showBothNameAndNumber: displayName !== rawContactId,
           messageCount: conv.message_count,
-          lastMessageDate: conv.last_message_date
+          lastMessageDate: conv.last_message_date,
+          directChatCount: 1, // This is a direct chat
+          directMessageCount: conv.message_count,
+          groupChatCount: 0,
+          groupMessageCount: 0
         };
 
-        // If we already have this contact, keep the one with more recent messages
+        // If we already have this contact, merge the data
         if (conversationMap.has(normalizedKey)) {
           const existing = conversationMap.get(normalizedKey);
-          if (conv.last_message_date > existing.lastMessageDate) {
-            // This conversation is more recent, replace it
-            conversationData.messageCount = existing.messageCount + conv.message_count;
-            conversationMap.set(normalizedKey, conversationData);
-          } else {
-            // Keep existing, but add message count
-            existing.messageCount += conv.message_count;
+
+          // Merge phones (unique)
+          const allPhones = [...new Set([...existing.phones, ...phones])];
+          // Merge emails (unique)
+          const allEmails = [...new Set([...existing.emails, ...emails])];
+
+          // CRITICAL FIX: Always prefer a real chat ID over a generated group-contact-* ID
+          // This ensures we can export 1:1 messages even if group chat is more recent
+          const wasGeneratedId = typeof existing.id === 'string' && existing.id.startsWith('group-contact-');
+          if (!existing.id || wasGeneratedId) {
+            // Current ID is fake, use the real chat ID from this 1:1 conversation
+            existing.id = conv.chat_id;
+            existing.chatId = conv.chat_id; // Also set chatId field
           }
+
+          // Update last message date if this chat is more recent
+          if (conv.last_message_date > existing.lastMessageDate) {
+            existing.lastMessageDate = conv.last_message_date;
+          }
+
+          // Add up message counts and direct chat counts
+          existing.messageCount += conv.message_count;
+          existing.directChatCount += 1;
+          existing.directMessageCount += conv.message_count;
+          existing.phones = allPhones;
+          existing.emails = allEmails;
         } else {
           conversationMap.set(normalizedKey, conversationData);
         }
-      });
+      }
+
+      // Close the second database connection
+      await dbClose2();
 
       // Convert map back to array
       const deduplicatedConversations = Array.from(conversationMap.values())
         .sort((a, b) => b.lastMessageDate - a.lastMessageDate);
 
-      console.log(`Deduplicated ${conversations.length} conversations to ${deduplicatedConversations.length}`);
+      // Filter out contacts with no messages in the last 5 years
+      const fiveYearsAgo = Date.now() - (5 * 365 * 24 * 60 * 60 * 1000); // 5 years in milliseconds
+      const macEpoch = new Date('2001-01-01T00:00:00Z').getTime();
+      const fiveYearsAgoMacTime = (fiveYearsAgo - macEpoch) * 1000000; // Convert to Mac timestamp (nanoseconds)
+
+      const recentConversations = deduplicatedConversations.filter(conv => {
+        return conv.lastMessageDate > fiveYearsAgoMacTime;
+      });
 
       return {
         success: true,
-        conversations: deduplicatedConversations
+        conversations: recentConversations
       };
     } catch (error) {
-      await dbClose();
+      // Clean up db2 if it was opened
+      if (dbClose2) {
+        try {
+          await dbClose2();
+        } catch (closeError) {
+          console.error('Error closing db2:', closeError);
+        }
+      }
       throw error;
     }
   } catch (error) {
@@ -664,7 +916,6 @@ ipcMain.handle('export-conversations', async (event, conversationIds) => {
     const dbClose = promisify(db.close.bind(db));
 
     // Load contact names for resolving names in export
-    console.log('Loading contacts for export...');
     const contactMap = await getContactNames();
 
     const exportedFiles = [];
@@ -715,24 +966,6 @@ ipcMain.handle('export-conversations', async (event, conversationIds) => {
           WHERE chat_message_join.chat_id = ?
           ORDER BY message.date ASC
         `, [chatId]);
-
-        // DEBUG: Log first message to see what data we have
-        if (messages.length > 0) {
-          const firstMsg = messages[0];
-          console.log('\n=== Sample Message Debug ===');
-          console.log('Text field:', firstMsg.text);
-          console.log('Has attachments:', firstMsg.cache_has_attachments);
-          console.log('AttributedBody length:', firstMsg.attributedBody ? firstMsg.attributedBody.length : 0);
-
-          if (firstMsg.attributedBody) {
-            // Show first 200 characters of the blob in hex and text
-            const sample = firstMsg.attributedBody.slice(0, 200);
-            console.log('AttributedBody hex sample:', sample.toString('hex').substring(0, 100));
-            console.log('AttributedBody text sample:', sample.toString('utf8').replace(/[\x00-\x1F\x7F-\x9F]/g, '·').substring(0, 100));
-          }
-          console.log('Date:', firstMsg.date);
-          console.log('============================\n');
-        }
 
         // Format messages as text
         let exportContent = `Conversation with: ${chatName}\n`;
@@ -871,7 +1104,6 @@ ipcMain.handle('export-conversations', async (event, conversationIds) => {
         try {
           await fs.rename(filePath, newPath);
           finalPath = newPath;
-          console.log(`Renamed export folder to: ${newFolderName}`);
         } catch (renameError) {
           console.error('Error renaming folder:', renameError);
           // Keep original path if rename fails
@@ -900,4 +1132,709 @@ ipcMain.handle('export-conversations', async (event, conversationIds) => {
 ipcMain.on('install-update', () => {
   log.info('Installing update...');
   autoUpdater.quitAndInstall();
+});
+
+// ===== OUTLOOK INTEGRATION IPC HANDLERS =====
+
+// Initialize Outlook service
+ipcMain.handle('outlook-initialize', async () => {
+  try {
+    // Production: Use hardcoded Client ID (falls back to .env for development)
+    // This is a public client ID for OAuth, not a secret
+    const clientId = process.env.MICROSOFT_CLIENT_ID || '3a6c341a-17ab-4739-977d-a7d71b27f945';
+    const tenantId = process.env.MICROSOFT_TENANT_ID || 'common';
+
+    if (!outlookService) {
+      outlookService = new OutlookService();
+    }
+
+    await outlookService.initialize(clientId, tenantId);
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error initializing Outlook service:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+});
+
+// Authenticate with Outlook
+ipcMain.handle('outlook-authenticate', async () => {
+  try {
+    if (!outlookService) {
+      return {
+        success: false,
+        error: 'Outlook service not initialized'
+      };
+    }
+
+    const result = await outlookService.authenticate(mainWindow);
+    return result;
+  } catch (error) {
+    console.error('Error authenticating with Outlook:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+});
+
+// Check if authenticated
+ipcMain.handle('outlook-is-authenticated', async () => {
+  return outlookService && outlookService.isAuthenticated();
+});
+
+// Get user email
+ipcMain.handle('outlook-get-user-email', async () => {
+  try {
+    if (!outlookService || !outlookService.isAuthenticated()) {
+      return {
+        success: false,
+        error: 'Not authenticated'
+      };
+    }
+
+    const email = await outlookService.getUserEmail();
+    return {
+      success: true,
+      email: email
+    };
+  } catch (error) {
+    console.error('Error getting user email:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+});
+
+// Export emails for multiple contacts
+ipcMain.handle('outlook-export-emails', async (event, contacts) => {
+  try {
+    if (!outlookService || !outlookService.isAuthenticated()) {
+      return {
+        success: false,
+        error: 'Not authenticated with Outlook'
+      };
+    }
+
+    // Show dialog to select export location (folder picker)
+    const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+      title: 'Select Folder for Audit Export',
+      defaultPath: path.join(os.homedir(), 'Documents'),
+      properties: ['openDirectory', 'createDirectory'],
+      buttonLabel: 'Select Folder'
+    });
+
+    if (canceled || !filePaths || filePaths.length === 0) {
+      return { success: false, canceled: true };
+    }
+
+    // Auto-generate folder name: "Audit Export YYYY-MM-DD HH-MM-SS"
+    const timestamp = new Date().toLocaleString('en-US', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    }).replace(/[/:]/g, '-').replace(/,/g, '');
+
+    const exportFolderName = `Audit Export ${timestamp}`;
+    const exportPath = path.join(filePaths[0], exportFolderName);
+
+    // Create base export directory
+    await fs.mkdir(exportPath, { recursive: true });
+
+    // Open Messages database for text message export
+    const messagesDbPath = path.join(
+      process.env.HOME,
+      'Library/Messages/chat.db'
+    );
+    const db = new sqlite3.Database(messagesDbPath, sqlite3.OPEN_READONLY);
+    const dbAll = promisify(db.all.bind(db));
+    const dbClose = promisify(db.close.bind(db));
+
+    // Load contact names for resolving names in export
+    const { contactMap } = await getContactNames();
+
+    const results = [];
+
+    // Export BOTH text messages AND emails for each contact
+    for (let i = 0; i < contacts.length; i++) {
+      const contact = contacts[i];
+
+      // Send progress update
+      mainWindow.webContents.send('export-progress', {
+        stage: 'contact',
+        current: i + 1,
+        total: contacts.length,
+        contactName: contact.name
+      });
+
+      // Create contact folder
+      const sanitizedName = contact.name.replace(/[^a-z0-9 ]/gi, '_');
+      const contactFolder = path.join(exportPath, sanitizedName);
+      await fs.mkdir(contactFolder, { recursive: true });
+
+      let textMessageCount = 0;
+      let totalEmails = 0;
+      let anySuccess = false;
+      let errors = [];
+
+      // 1. Export text messages (if chatId exists or if we have phone/email identifiers)
+      if (contact.chatId || contact.phones?.length > 0 || contact.emails?.length > 0) {
+        try {
+          mainWindow.webContents.send('export-progress', {
+            stage: 'text-messages',
+            message: `Exporting text messages for ${contact.name}...`,
+            current: i + 1,
+            total: contacts.length,
+            contactName: contact.name
+          });
+
+          let messages = [];
+          const allChatIds = new Set();
+
+          // Strategy: Fetch messages from ALL chats involving this contact
+          // This includes both their primary 1:1 chat AND any group chats they're in
+
+          // Step 1: If they have a primary chatId, add it
+          if (contact.chatId && !(typeof contact.chatId === 'string' && contact.chatId.startsWith('group-contact-'))) {
+            allChatIds.add(contact.chatId);
+          }
+
+          // Step 2: Find ALL chats where their phone numbers or emails appear
+          // This will find group chats they're in
+          const identifiers = [
+            ...(contact.phones || []),
+            ...(contact.emails || [])
+          ];
+
+          if (identifiers.length > 0) {
+            const placeholders = identifiers.map(() => '?').join(',');
+            const chatIds = await dbAll(`
+              SELECT DISTINCT chat.ROWID as chat_id, chat.display_name, chat.chat_identifier
+              FROM chat
+              JOIN chat_handle_join ON chat.ROWID = chat_handle_join.chat_id
+              JOIN handle ON chat_handle_join.handle_id = handle.ROWID
+              WHERE handle.id IN (${placeholders})
+            `, identifiers);
+
+            chatIds.forEach(c => {
+              allChatIds.add(c.chat_id);
+            });
+          }
+
+          // Step 3: Fetch messages from ALL identified chats
+          if (allChatIds.size > 0) {
+            const chatIdArray = Array.from(allChatIds);
+            const chatIdPlaceholders = chatIdArray.map(() => '?').join(',');
+
+            messages = await dbAll(`
+              SELECT
+                message.ROWID as id,
+                message.text,
+                message.date,
+                message.is_from_me,
+                handle.id as sender,
+                message.cache_has_attachments,
+                message.attributedBody,
+                chat_message_join.chat_id
+              FROM message
+              JOIN chat_message_join ON message.ROWID = chat_message_join.message_id
+              LEFT JOIN handle ON message.handle_id = handle.ROWID
+              WHERE chat_message_join.chat_id IN (${chatIdPlaceholders})
+              ORDER BY message.date ASC
+            `, chatIdArray);
+          }
+
+          textMessageCount = messages.length;
+
+          if (messages.length > 0) {
+            // Group messages by chat_id
+            const messagesByChatId = {};
+            for (const msg of messages) {
+              const chatId = msg.chat_id || 'unknown';
+              if (!messagesByChatId[chatId]) {
+                messagesByChatId[chatId] = [];
+              }
+              messagesByChatId[chatId].push(msg);
+            }
+
+            // Get chat info for each chat_id
+            const chatInfoMap = {};
+            const chatIds = Object.keys(messagesByChatId).filter(id => id !== 'unknown');
+            if (chatIds.length > 0) {
+              const chatInfoQuery = `
+                SELECT
+                  chat.ROWID as chat_id,
+                  chat.chat_identifier,
+                  chat.display_name
+                FROM chat
+                WHERE chat.ROWID IN (${chatIds.map(() => '?').join(',')})
+              `;
+              const chatInfoResults = await dbAll(chatInfoQuery, chatIds);
+              chatInfoResults.forEach(info => {
+                chatInfoMap[info.chat_id] = info;
+              });
+            }
+
+            // Separate group chats from 1:1 chats
+            const groupChats = {};
+            const oneOnOneMessages = [];
+
+            for (const [chatId, chatMessages] of Object.entries(messagesByChatId)) {
+              const chatInfo = chatInfoMap[chatId];
+
+              if (!chatInfo) {
+                oneOnOneMessages.push(...chatMessages);
+                continue;
+              }
+
+              const isGroupChat = chatInfo.chat_identifier &&
+                                  typeof chatInfo.chat_identifier === 'string' &&
+                                  chatInfo.chat_identifier.startsWith('chat') &&
+                                  !chatInfo.chat_identifier.includes('@');
+
+              if (isGroupChat) {
+                groupChats[chatId] = {
+                  info: chatInfo,
+                  messages: chatMessages
+                };
+              } else {
+                oneOnOneMessages.push(...chatMessages);
+              }
+            }
+
+            // Sort all 1:1 messages by date
+            oneOnOneMessages.sort((a, b) => a.date - b.date);
+
+            let filesCreated = 0;
+
+            // Export all 1:1 messages to a single file
+            if (oneOnOneMessages.length > 0) {
+              let exportContent = `1-ON-1 MESSAGES\n`;
+              exportContent += `Contact: ${contact.name}\n`;
+              exportContent += `Exported: ${new Date().toLocaleString()}\n`;
+              exportContent += `Total Messages: ${oneOnOneMessages.length}\n`;
+              exportContent += '='.repeat(80) + '\n\n';
+
+              for (const msg of oneOnOneMessages) {
+                // Convert Mac timestamp to readable date
+                const macEpoch = new Date('2001-01-01T00:00:00Z').getTime();
+                const messageDate = new Date(macEpoch + (msg.date / 1000000));
+
+                // Resolve sender name
+                let sender;
+                if (msg.is_from_me) {
+                  sender = 'Me';
+                } else if (msg.sender) {
+                  const resolvedName = resolveContactName(msg.sender, null, null, contactMap);
+                  sender = resolvedName !== msg.sender ? resolvedName : msg.sender;
+                } else {
+                  sender = 'Unknown';
+                }
+
+                // Handle text content (same logic as export-conversations)
+                let text;
+
+                // Check if text field has the special marker
+                if (msg.text && msg.text !== '__kIMMessagePartAttributeName') {
+                  text = msg.text;
+              } else if (msg.attributedBody) {
+                // Text is in attributedBody (either no text field, or it has the marker)
+                try {
+                  const bodyBuffer = msg.attributedBody;
+                  const bodyText = bodyBuffer.toString('utf8');
+                  let extractedText = null;
+
+                  const nsStringIndex = bodyText.indexOf('NSString');
+                  if (nsStringIndex !== -1) {
+                    // Look further into the buffer for the actual message content
+                    const afterNSString = bodyText.substring(nsStringIndex + 8);
+
+                    // Find all sequences of readable text
+                    const allMatches = afterNSString.match(/[\x20-\x7E\u00A0-\uFFFF]{4,}/g);
+                    if (allMatches && allMatches.length > 0) {
+                      // Filter out attribute markers
+                      const filtered = allMatches.filter(m => !m.includes('__kIM'));
+
+                      // Find the best match - prefer longest with good content
+                      for (const match of filtered.sort((a, b) => b.length - a.length)) {
+                        // Clean up but preserve actual content - only remove control chars and nulls
+                        const cleaned = match
+                          .replace(/\x00/g, '') // Remove null bytes
+                          .replace(/[\x01-\x08\x0B-\x1F\x7F]/g, '') // Remove control chars
+                          .replace(/[��\uFFFD]/g, '') // Remove replacement characters
+                          .trim();
+
+                        // Accept if it has real content (letters or numbers)
+                        if (cleaned.length >= 2 && /[a-zA-Z0-9]/.test(cleaned)) {
+                          extractedText = cleaned;
+                          break;
+                        }
+                      }
+                    }
+                  }
+
+                  if (!extractedText) {
+                    const streamIndex = bodyText.indexOf('streamtyped');
+                    if (streamIndex !== -1) {
+                      const afterStream = bodyText.substring(streamIndex + 11);
+                      const textMatch = afterStream.match(/[\x20-\x7E\u00A0-\uFFFF]{3,}/);
+                      if (textMatch) {
+                        const cleaned = textMatch[0]
+                          .replace(/\x00/g, '')
+                          .replace(/[\x01-\x08\x0B-\x1F\x7F]/g, '')
+                          .replace(/[��\uFFFD]/g, '')
+                          .trim();
+
+                        // Filter out attribute markers
+                        if (!cleaned.includes('__kIM')) {
+                          extractedText = cleaned;
+                        }
+                      }
+                    }
+                  }
+
+                  // Final fallback: try to extract ANY readable text from the buffer
+                  if (!extractedText) {
+                    const allReadableText = bodyText.match(/[\x20-\x7E\u00A0-\uFFFF]{2,}/g);
+                    if (allReadableText && allReadableText.length > 0) {
+                      // Filter out technical markers and system strings
+                      const candidates = allReadableText
+                        .filter(t => !t.includes('__kIM')) // Filter all __kIM attribute names
+                        .filter(t => !t.includes('$classname')) // NSKeyedArchiver markers
+                        .filter(t => !t.includes('$classes'))
+                        .filter(t => !t.includes('XNSObject'))
+                        .filter(t => !t.includes('WNSValue'))
+                        .filter(t => !t.includes('YNSString'))
+                        .filter(t => !t.startsWith('NSMutable'))
+                        .filter(t => !t.startsWith('NSAttributed'))
+                        .filter(t => !t.includes('NSString'))
+                        .filter(t => !t.includes('NSObject'))
+                        .filter(t => !t.includes('NSNumber'))
+                        .filter(t => !t.includes('streamtyped'))
+                        .filter(t => !t.match(/^['"\(\)\*\+\-Z]{3,}/)) // Not bplist markers like '()*Z
+                        .filter(t => !t.match(/^[\x00-\x1F\x7F]+$/)) // Not all control chars
+                        .filter(t => !t.match(/^[^\w\s]{3,}$/)) // Not just symbols
+                        .filter(t => /[a-zA-Z0-9]/.test(t)) // Has alphanumeric content
+                        .filter(t => t.length > 3); // Minimum length to avoid random chars
+
+                      if (candidates.length > 0) {
+                        // Take the longest candidate as it's most likely the message
+                        extractedText = candidates.sort((a, b) => b.length - a.length)[0]
+                          .replace(/\x00/g, '')
+                          .replace(/[\x01-\x08\x0B-\x1F\x7F]/g, '')
+                          .replace(/[��\uFFFD]/g, '') // Remove replacement characters
+                          .trim();
+                      }
+                    }
+                  }
+
+                  if (extractedText && extractedText.length >= 1 && extractedText.length < 10000) {
+                    text = extractedText;
+                  } else {
+                    text = '[Message text - unable to extract from rich format]';
+                  }
+                } catch (e) {
+                  text = '[Message text - parsing error]';
+                }
+              } else if (msg.cache_has_attachments === 1) {
+                text = '[Attachment - Photo/Video/File]';
+              } else {
+                text = '[Reaction or system message]';
+              }
+
+                exportContent += `[${messageDate.toLocaleString()}] ${sender}:\n${text}\n\n`;
+              }
+
+              // Save 1:1 messages file
+              const oneOnOneFilePath = path.join(contactFolder, '1-on-1_messages.txt');
+              await fs.writeFile(oneOnOneFilePath, exportContent, 'utf8');
+              filesCreated++;
+              anySuccess = true;
+            }
+
+            // Export each group chat to its own file
+            for (const [chatId, groupChat] of Object.entries(groupChats)) {
+              const chatName = groupChat.info.display_name || `Group Chat ${chatId}`;
+              const sanitized = chatName.replace(/[^a-z0-9]/gi, '_');
+              const fileName = `group_chat_${sanitized}.txt`;
+
+              let exportContent = `GROUP CHAT: ${chatName}\n`;
+              exportContent += `Contact: ${contact.name}\n`;
+              exportContent += `Exported: ${new Date().toLocaleString()}\n`;
+              exportContent += `Messages in this chat: ${groupChat.messages.length}\n`;
+              exportContent += '='.repeat(80) + '\n\n';
+
+              for (const msg of groupChat.messages) {
+                // Convert Mac timestamp to readable date
+                const macEpoch = new Date('2001-01-01T00:00:00Z').getTime();
+                const messageDate = new Date(macEpoch + (msg.date / 1000000));
+
+                // Resolve sender name
+                let sender;
+                if (msg.is_from_me) {
+                  sender = 'Me';
+                } else if (msg.sender) {
+                  const resolvedName = resolveContactName(msg.sender, null, null, contactMap);
+                  sender = resolvedName !== msg.sender ? resolvedName : msg.sender;
+                } else {
+                  sender = 'Unknown';
+                }
+
+                // Handle text content
+                let text;
+                if (msg.text && msg.text !== '__kIMMessagePartAttributeName') {
+                  text = msg.text;
+                } else if (msg.attributedBody) {
+                  try {
+                    const bodyBuffer = msg.attributedBody;
+                    const bodyText = bodyBuffer.toString('utf8');
+                    let extractedText = null;
+
+                    const nsStringIndex = bodyText.indexOf('NSString');
+                    if (nsStringIndex !== -1) {
+                      const afterNSString = bodyText.substring(nsStringIndex + 8);
+                      const allMatches = afterNSString.match(/[\x20-\x7E\u00A0-\uFFFF]{4,}/g);
+                      if (allMatches && allMatches.length > 0) {
+                        const filtered = allMatches.filter(m => !m.includes('__kIM'));
+                        for (const match of filtered.sort((a, b) => b.length - a.length)) {
+                          const cleaned = match
+                            .replace(/\x00/g, '')
+                            .replace(/[\x01-\x08\x0B-\x1F\x7F]/g, '')
+                            .replace(/[��\uFFFD]/g, '')
+                            .trim();
+                          if (cleaned.length >= 2 && /[a-zA-Z0-9]/.test(cleaned)) {
+                            extractedText = cleaned;
+                            break;
+                          }
+                        }
+                      }
+                    }
+
+                    if (!extractedText) {
+                      const streamIndex = bodyText.indexOf('streamtyped');
+                      if (streamIndex !== -1) {
+                        const afterStream = bodyText.substring(streamIndex + 11);
+                        const textMatch = afterStream.match(/[\x20-\x7E\u00A0-\uFFFF]{3,}/);
+                        if (textMatch) {
+                          const cleaned = textMatch[0]
+                            .replace(/\x00/g, '')
+                            .replace(/[\x01-\x08\x0B-\x1F\x7F]/g, '')
+                            .replace(/[��\uFFFD]/g, '')
+                            .trim();
+                          if (!cleaned.includes('__kIM')) {
+                            extractedText = cleaned;
+                          }
+                        }
+                      }
+                    }
+
+                    // Final fallback: try to extract ANY readable text from the buffer
+                    if (!extractedText) {
+                      const allReadableText = bodyText.match(/[\x20-\x7E\u00A0-\uFFFF]{2,}/g);
+                      if (allReadableText && allReadableText.length > 0) {
+                        const candidates = allReadableText
+                          .filter(t => !t.includes('__kIM')) // Filter all __kIM attribute names
+                          .filter(t => !t.includes('$classname')) // NSKeyedArchiver markers
+                          .filter(t => !t.includes('$classes'))
+                          .filter(t => !t.includes('XNSObject'))
+                          .filter(t => !t.includes('WNSValue'))
+                          .filter(t => !t.includes('YNSString'))
+                          .filter(t => !t.startsWith('NSMutable'))
+                          .filter(t => !t.startsWith('NSAttributed'))
+                          .filter(t => !t.includes('NSString'))
+                          .filter(t => !t.includes('NSObject'))
+                          .filter(t => !t.includes('NSNumber'))
+                          .filter(t => !t.includes('streamtyped'))
+                          .filter(t => !t.match(/^['"\(\)\*\+\-Z]{3,}/)) // Not bplist markers like '()*Z
+                          .filter(t => !t.match(/^[\x00-\x1F\x7F]+$/))
+                          .filter(t => !t.match(/^[^\w\s]{3,}$/)) // Not just symbols
+                          .filter(t => /[a-zA-Z0-9]/.test(t))
+                          .filter(t => t.length > 3); // Minimum length to avoid random chars
+
+                        if (candidates.length > 0) {
+                          extractedText = candidates.sort((a, b) => b.length - a.length)[0]
+                            .replace(/\x00/g, '')
+                            .replace(/[\x01-\x08\x0B-\x1F\x7F]/g, '')
+                            .replace(/[��\uFFFD]/g, '') // Remove replacement characters
+                            .trim();
+                        }
+                      }
+                    }
+
+                    if (extractedText && extractedText.length >= 1 && extractedText.length < 10000) {
+                      text = extractedText;
+                    } else {
+                      text = '[Message text - unable to extract from rich format]';
+                    }
+                  } catch (e) {
+                    text = '[Message text - parsing error]';
+                  }
+                } else if (msg.cache_has_attachments === 1) {
+                  text = '[Attachment - Photo/Video/File]';
+                } else {
+                  text = '[Reaction or system message]';
+                }
+
+                exportContent += `[${messageDate.toLocaleString()}] ${sender}:\n${text}\n\n`;
+              }
+
+              // Save group chat file
+              const groupFilePath = path.join(contactFolder, fileName);
+              await fs.writeFile(groupFilePath, exportContent, 'utf8');
+              filesCreated++;
+              anySuccess = true;
+            }
+          }
+        } catch (err) {
+          console.error(`Error exporting text messages for ${contact.name}:`, err);
+          errors.push(`Text messages: ${err.message}`);
+        }
+      }
+
+      // 2. Export emails (if email addresses exist)
+      if (contact.emails && contact.emails.length > 0) {
+        for (const email of contact.emails) {
+          try {
+            const result = await outlookService.exportEmailsToAudit(
+              contact.name,
+              email,
+              exportPath,
+              (progress) => {
+                // Forward progress to renderer
+                mainWindow.webContents.send('export-progress', {
+                  ...progress,
+                  contactName: contact.name,
+                  current: i + 1,
+                  total: contacts.length
+                });
+              }
+            );
+
+            if (result.success) {
+              anySuccess = true;
+              totalEmails += result.emailCount || 0;
+            } else if (result.error) {
+              errors.push(`${email}: ${result.error}`);
+            }
+          } catch (err) {
+            console.error(`  - Error exporting emails from ${email}:`, err);
+            errors.push(`${email}: ${err.message}`);
+          }
+        }
+      }
+
+      results.push({
+        contactName: contact.name,
+        success: anySuccess,
+        textMessageCount: textMessageCount,
+        emailCount: totalEmails,
+        error: errors.length > 0 ? errors.join('; ') : null
+      });
+    }
+
+    // Close database
+    await dbClose();
+
+    // Show OS notification when complete
+    const successCount = results.filter(r => r.success).length;
+    const failCount = results.filter(r => !r.success).length;
+
+    new Notification({
+      title: 'Full Audit Export Complete',
+      body: `Exported ${successCount} contact${successCount !== 1 ? 's' : ''}${failCount > 0 ? `. ${failCount} failed.` : ''}`,
+    }).show();
+
+    return {
+      success: true,
+      exportPath: exportPath,
+      results: results
+    };
+
+  } catch (error) {
+    console.error('Error exporting full audit:', error);
+    console.error('Stack trace:', error.stack);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+});
+
+// Get email count for a contact
+ipcMain.handle('outlook-get-email-count', async (event, contactEmail) => {
+  try {
+    if (!outlookService || !outlookService.isAuthenticated()) {
+      return {
+        success: true,
+        count: 0
+      };
+    }
+
+    const count = await outlookService.getEmailCount(contactEmail);
+    return {
+      success: true,
+      count: count
+    };
+  } catch (error) {
+    console.error('Error getting email count:', error);
+    return {
+      success: false,
+      count: 0,
+      error: error.message
+    };
+  }
+});
+
+// Bulk get email counts (optimized - fetches all emails once)
+ipcMain.handle('outlook-bulk-get-email-counts', async (event, contactEmails, onProgress) => {
+  try {
+    if (!outlookService || !outlookService.isAuthenticated()) {
+      return {
+        success: true,
+        counts: {}
+      };
+    }
+
+    // Create progress callback that sends updates to renderer
+    const progressCallback = onProgress ? (progress) => {
+      event.sender.send('outlook-bulk-progress', progress);
+    } : null;
+
+    const counts = await outlookService.bulkGetEmailCounts(contactEmails, progressCallback);
+    return {
+      success: true,
+      counts: counts
+    };
+  } catch (error) {
+    console.error('Error getting bulk email counts:', error);
+    return {
+      success: false,
+      counts: {},
+      error: error.message
+    };
+  }
+});
+
+// Sign out from Outlook
+ipcMain.handle('outlook-signout', async () => {
+  try {
+    if (outlookService) {
+      await outlookService.signOut();
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('Error signing out:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
 });

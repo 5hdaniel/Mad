@@ -1,16 +1,27 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
-function ConversationList({ onExportComplete }) {
+function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook, outlookConnected }) {
   const [conversations, setConversations] = useState([]);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [error, setError] = useState(null);
+  const [emailCounts, setEmailCounts] = useState({});
+  const [loadingEmailCounts, setLoadingEmailCounts] = useState(false);
+  const [emailCountProgress, setEmailCountProgress] = useState({ current: 0, total: 0, eta: 0 });
+  const [contactInfoModal, setContactInfoModal] = useState(null);
+  const abortEmailCountingRef = useRef(false); // Ref to track abort state
 
   useEffect(() => {
     loadConversations();
   }, []);
+
+  useEffect(() => {
+    if (outlookConnected && conversations.length > 0) {
+      loadEmailCounts();
+    }
+  }, [outlookConnected, conversations]);
 
   const loadConversations = async () => {
     setIsLoading(true);
@@ -22,12 +33,114 @@ function ConversationList({ onExportComplete }) {
       if (result.success) {
         setConversations(result.conversations);
       } else {
-        setError(result.error || 'Failed to load conversations');
+        setError(result.error || 'Failed to load contacts');
       }
     } catch (err) {
       setError(err.message);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadEmailCounts = async () => {
+    const contactsWithEmail = conversations.filter(c => c.emails && c.emails.length > 0);
+
+    if (contactsWithEmail.length === 0) {
+      return;
+    }
+
+    // Collect all unique email addresses
+    const allEmailAddresses = new Set();
+    contactsWithEmail.forEach(c => {
+      c.emails.forEach(email => allEmailAddresses.add(email.toLowerCase()));
+    });
+    const uniqueEmails = Array.from(allEmailAddresses);
+
+    const startTime = Date.now();
+
+    // Reset abort flag
+    abortEmailCountingRef.current = false;
+    setLoadingEmailCounts(true);
+    setEmailCountProgress({
+      current: 0,
+      total: 1, // Just one bulk operation
+      eta: 0,
+      phase: 'fetching'
+    });
+
+    try {
+      // Setup progress listener for bulk fetch
+      const progressHandler = (progress) => {
+        if (abortEmailCountingRef.current) return;
+
+        setEmailCountProgress({
+          current: progress.pagesLoaded || 0,
+          total: Math.max(progress.pagesLoaded * 2, 100), // Rough estimate
+          eta: progress.eta || 0,
+          emailsFetched: progress.emailsFetched,
+          phase: 'fetching'
+        });
+      };
+
+      window.electron.onBulkEmailProgress(progressHandler);
+
+      // Make the bulk API call - this fetches ALL emails once and indexes them
+      // Note: This will continue in background even if user skips, but we won't apply results
+      const result = await window.electron.outlookBulkGetEmailCounts(uniqueEmails, true);
+
+      // Check the ref variable set by skip button
+      if (abortEmailCountingRef.current) {
+        return;
+      }
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to fetch email counts');
+      }
+
+      const emailCountsByAddress = result.counts; // Map of email -> count
+
+      // Now map the counts back to contacts
+      setEmailCountProgress({
+        current: 0,
+        total: contactsWithEmail.length,
+        eta: 0,
+        phase: 'mapping'
+      });
+
+      const counts = {};
+      let totalEmailsFound = 0;
+
+      contactsWithEmail.forEach((conv, idx) => {
+        // Sum up counts for all email addresses for this contact
+        let totalCount = 0;
+        conv.emails.forEach(email => {
+          const emailLower = email.toLowerCase();
+          if (emailCountsByAddress[emailLower]) {
+            totalCount += emailCountsByAddress[emailLower];
+          }
+        });
+
+        counts[conv.id] = totalCount;
+        totalEmailsFound += totalCount;
+
+        // Update progress
+        if (idx % 10 === 0 || idx === contactsWithEmail.length - 1) {
+          setEmailCountProgress({
+            current: idx + 1,
+            total: contactsWithEmail.length,
+            eta: 0,
+            phase: 'mapping'
+          });
+        }
+      });
+
+      // Set all counts at once
+      setEmailCounts(counts);
+    } catch (err) {
+      console.error('Error loading email counts:', err);
+      setError('Failed to load email counts. Please try again.');
+    } finally {
+      setLoadingEmailCounts(false);
     }
   };
 
@@ -42,16 +155,16 @@ function ConversationList({ onExportComplete }) {
   };
 
   const selectAll = () => {
-    if (selectedIds.size === filteredConversations.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(filteredConversations.map(c => c.id)));
-    }
+    setSelectedIds(new Set(filteredConversations.map(c => c.id)));
+  };
+
+  const deselectAll = () => {
+    setSelectedIds(new Set());
   };
 
   const handleExport = async () => {
     if (selectedIds.size === 0) {
-      alert('Please select at least one conversation to export');
+      alert('Please select at least one contact to export');
       return;
     }
 
@@ -69,6 +182,17 @@ function ConversationList({ onExportComplete }) {
       setError(err.message);
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  const handleOutlookExport = () => {
+    if (selectedIds.size === 0) {
+      alert('Please select at least one contact to export');
+      return;
+    }
+
+    if (onOutlookExport) {
+      onOutlookExport(selectedIds);
     }
   };
 
@@ -104,7 +228,7 @@ function ConversationList({ onExportComplete }) {
       <div className="flex items-center justify-center min-h-full py-8">
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
-          <p className="text-gray-600">Loading conversations...</p>
+          <p className="text-gray-600">Loading contacts...</p>
         </div>
       </div>
     );
@@ -119,7 +243,7 @@ function ConversationList({ onExportComplete }) {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </div>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">Error Loading Conversations</h2>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Error Loading Contacts</h2>
           <p className="text-gray-600 mb-6">{error}</p>
           <button
             onClick={loadConversations}
@@ -136,14 +260,14 @@ function ConversationList({ onExportComplete }) {
     <div className="flex flex-col min-h-full">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 p-6">
-        <h1 className="text-2xl font-bold text-gray-900 mb-4">Select Conversations to Export</h1>
+        <h1 className="text-2xl font-bold text-gray-900 mb-4">Select Contacts for Export</h1>
 
         {/* Search and Select All */}
         <div className="flex gap-4 mb-4">
           <div className="flex-1 relative">
             <input
               type="text"
-              placeholder="Search conversations..."
+              placeholder="Search contacts..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full px-4 py-2 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
@@ -157,25 +281,157 @@ function ConversationList({ onExportComplete }) {
             onClick={selectAll}
             className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
           >
-            {selectedIds.size === filteredConversations.length ? 'Deselect All' : 'Select All'}
+            Select All
           </button>
-        </div>
-
-        {/* Selection Info */}
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-gray-600">
-            {selectedIds.size} of {filteredConversations.length} conversations selected
-          </p>
 
           <button
-            onClick={handleExport}
-            disabled={selectedIds.size === 0 || isExporting}
-            className="bg-primary text-white py-2 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={deselectAll}
+            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
           >
-            {isExporting ? 'Exporting...' : `Export ${selectedIds.size > 0 ? `(${selectedIds.size})` : ''}`}
+            Deselect All
           </button>
         </div>
+
+        {/* Export Section */}
+        <div className="border border-gray-300 rounded-lg p-4 bg-gray-50">
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">Export</h3>
+          <div className="flex gap-3">
+            {/* All (Messages + Emails) */}
+            {outlookConnected ? (
+              <button
+                onClick={handleOutlookExport}
+                disabled={selectedIds.size === 0 || isExporting}
+                className="flex-1 bg-primary text-white py-2.5 px-4 rounded-lg font-semibold hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                All
+              </button>
+            ) : (
+              <button
+                onClick={onConnectOutlook}
+                className="flex-1 bg-blue-50 border-2 border-blue-300 text-blue-700 py-2.5 px-4 rounded-lg font-semibold hover:bg-blue-100 transition-colors flex items-center justify-center gap-2"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+                All
+              </button>
+            )}
+
+            {/* Only Emails */}
+            {outlookConnected ? (
+              <button
+                onClick={() => alert('Email-only export coming soon!')}
+                disabled={selectedIds.size === 0 || isExporting}
+                className="flex-1 bg-white border-2 border-gray-300 text-gray-700 py-2.5 px-4 rounded-lg font-semibold hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                Only Emails
+              </button>
+            ) : (
+              <button
+                onClick={onConnectOutlook}
+                className="flex-1 bg-gray-200 border-2 border-gray-300 text-gray-500 py-2.5 px-4 rounded-lg font-semibold cursor-not-allowed flex items-center justify-center gap-2"
+                disabled
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+                Only Emails
+              </button>
+            )}
+
+            {/* Only Texts */}
+            <button
+              onClick={handleExport}
+              disabled={selectedIds.size === 0 || isExporting}
+              className="flex-1 bg-white border-2 border-gray-300 text-gray-700 py-2.5 px-4 rounded-lg font-semibold hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+              Only Texts
+            </button>
+          </div>
+        </div>
       </div>
+
+      {/* Selection Count Bar */}
+      <div className="bg-gray-100 border-b border-gray-200 py-3">
+        <p className="text-sm text-gray-600 text-center font-medium">
+          {selectedIds.size} of {filteredConversations.length} contacts selected
+        </p>
+      </div>
+
+      {/* Email Count Loading Overlay */}
+      {loadingEmailCounts && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-8">
+            <div className="text-center">
+              <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Counting Emails</h3>
+              <p className="text-sm text-gray-600 mb-1">
+                {emailCountProgress.phase === 'fetching' ? (
+                  'Fetching and indexing all emails from Outlook...'
+                ) : emailCountProgress.phase === 'mapping' ? (
+                  'Mapping email counts to contacts...'
+                ) : (
+                  'Estimating the number of emails per contact'
+                )}
+              </p>
+              {emailCountProgress.emailsFetched > 0 && (
+                <p className="text-xs text-gray-500 mb-2">
+                  {emailCountProgress.emailsFetched.toLocaleString()} emails processed
+                </p>
+              )}
+              {emailCountProgress.total > 0 && (
+                <>
+                  <div className="flex items-center justify-between text-sm text-gray-700 mb-2">
+                    <span>
+                      {emailCountProgress.phase === 'fetching' ? (
+                        `Page ${emailCountProgress.current} of ~${emailCountProgress.total}`
+                      ) : emailCountProgress.phase === 'mapping' ? (
+                        `Contact ${emailCountProgress.current} of ${emailCountProgress.total}`
+                      ) : (
+                        `${emailCountProgress.current} of ${emailCountProgress.total}`
+                      )}
+                    </span>
+                    <span className="font-semibold">
+                      {Math.round((emailCountProgress.current / emailCountProgress.total) * 100)}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2.5 mb-3">
+                    <div
+                      className="bg-primary h-2.5 rounded-full transition-all duration-300"
+                      style={{ width: `${(emailCountProgress.current / emailCountProgress.total) * 100}%` }}
+                    ></div>
+                  </div>
+                  {emailCountProgress.eta > 0 && (
+                    <p className="text-xs text-gray-500 mb-4">
+                      Estimated time remaining: {emailCountProgress.eta > 60
+                        ? `${Math.floor(emailCountProgress.eta / 60)}m ${emailCountProgress.eta % 60}s`
+                        : `${emailCountProgress.eta}s`}
+                    </p>
+                  )}
+                  <button
+                    onClick={() => {
+                      abortEmailCountingRef.current = true;
+                      setLoadingEmailCounts(false);
+                    }}
+                    className="w-full bg-gray-200 text-gray-700 py-2 px-4 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
+                  >
+                    Skip
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Conversation List */}
       <div className="flex-1 overflow-y-auto p-6">
@@ -184,13 +440,13 @@ function ConversationList({ onExportComplete }) {
             <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
             </svg>
-            <p className="text-gray-500">No conversations found</p>
+            <p className="text-gray-500">No contacts found</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-3">
             {filteredConversations.map((conversation) => (
               <div
-                key={conversation.id}
+                key={conversation.id || `contact-${conversation.name}-${conversation.contactId}`}
                 onClick={() => toggleSelection(conversation.id)}
                 className={`p-4 bg-white border-2 rounded-lg cursor-pointer transition-all ${
                   selectedIds.has(conversation.id)
@@ -214,16 +470,72 @@ function ConversationList({ onExportComplete }) {
 
                     <div className="flex-1 min-w-0">
                       <h3 className="font-semibold text-gray-900 truncate">{conversation.name}</h3>
-                      {conversation.showBothNameAndNumber && conversation.contactId && (
-                        <p className="text-xs text-gray-400 truncate">{conversation.contactId}</p>
+
+                      {/* Contact info summary */}
+                      {(conversation.phones?.length > 0 || conversation.emails?.length > 0) && (
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {conversation.phones?.length > 0 && (
+                            <span>{conversation.phones.length} Phone{conversation.phones.length > 1 ? 's' : ''}</span>
+                          )}
+                          {conversation.phones?.length > 0 && conversation.emails?.length > 0 && ' · '}
+                          {conversation.emails?.length > 0 && (
+                            <span>{conversation.emails.length} Email{conversation.emails.length > 1 ? 's' : ''}</span>
+                          )}
+                        </p>
                       )}
-                      <p className="text-sm text-gray-500">
-                        {conversation.messageCount || 0} messages · {formatDate(conversation.lastMessageDate)}
+
+                      <p className="text-sm text-gray-500 mt-1">
+                        {/* Show chat statistics breakdown */}
+                        {conversation.directChatCount > 0 && conversation.groupChatCount > 0 ? (
+                          // Has both direct and group chats
+                          <>
+                            {conversation.directChatCount} direct message thread{conversation.directChatCount > 1 ? 's' : ''} ({conversation.directMessageCount} message{conversation.directMessageCount !== 1 ? 's' : ''})
+                            {' and '}
+                            {conversation.groupChatCount} group chat thread{conversation.groupChatCount > 1 ? 's' : ''} ({conversation.groupMessageCount} message{conversation.groupMessageCount !== 1 ? 's' : ''})
+                          </>
+                        ) : conversation.directChatCount > 0 ? (
+                          // Only direct chats
+                          <>
+                            {conversation.directChatCount} direct message thread{conversation.directChatCount > 1 ? 's' : ''} ({conversation.directMessageCount} message{conversation.directMessageCount !== 1 ? 's' : ''})
+                          </>
+                        ) : conversation.groupChatCount > 0 ? (
+                          // Only group chats
+                          <>
+                            {conversation.groupChatCount} group chat thread{conversation.groupChatCount > 1 ? 's' : ''} ({conversation.groupMessageCount} message{conversation.groupMessageCount !== 1 ? 's' : ''})
+                          </>
+                        ) : (
+                          // Fallback to old format
+                          <>{conversation.messageCount || 0} messages</>
+                        )}
+                        {outlookConnected && conversation.emails?.length > 0 && (
+                          loadingEmailCounts ? (
+                            <> · loading emails...</>
+                          ) : emailCounts[conversation.id] !== undefined ? (
+                            <> · {emailCounts[conversation.id]} emails</>
+                          ) : null
+                        )}
+                        {' · '}
+                        {formatDate(conversation.lastMessageDate)}
                       </p>
                     </div>
                   </div>
 
-                  <div className="ml-4 flex-shrink-0">
+                  <div className="ml-4 flex gap-2 items-center">
+                    {/* Contact Info Button */}
+                    {(conversation.phones?.length > 0 || conversation.emails?.length > 0) && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setContactInfoModal(conversation);
+                        }}
+                        className="p-2 text-gray-400 hover:text-primary hover:bg-blue-50 rounded transition-colors"
+                        title="View contact info"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </button>
+                    )}
                     <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
@@ -234,6 +546,89 @@ function ConversationList({ onExportComplete }) {
           </div>
         )}
       </div>
+
+      {/* Contact Info Modal */}
+      {contactInfoModal && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          onClick={() => setContactInfoModal(null)}
+        >
+          <div
+            className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-gray-900">{contactInfoModal.name}</h2>
+              <button
+                onClick={() => setContactInfoModal(null)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Phone Numbers */}
+              {contactInfoModal.phones?.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-700 mb-2">
+                    Phone Numbers ({contactInfoModal.phones.length})
+                  </h3>
+                  <div className="space-y-2">
+                    {contactInfoModal.phones.map((phone, index) => (
+                      <div key={index} className="flex items-center bg-gray-50 px-3 py-2 rounded">
+                        <svg className="w-4 h-4 text-gray-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                        </svg>
+                        <span className="text-sm text-gray-900">{phone}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Email Addresses */}
+              {contactInfoModal.emails?.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-700 mb-2">
+                    Email Addresses ({contactInfoModal.emails.length})
+                  </h3>
+                  <div className="space-y-2">
+                    {contactInfoModal.emails.map((email, index) => (
+                      <div key={index} className="flex items-center bg-gray-50 px-3 py-2 rounded">
+                        <svg className="w-4 h-4 text-gray-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                        <span className="text-sm text-gray-900 break-all">{email}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Email count if connected to Outlook */}
+              {outlookConnected && emailCounts[contactInfoModal.id] !== undefined && (
+                <div className="pt-3 border-t border-gray-200">
+                  <p className="text-sm text-gray-600">
+                    <span className="font-semibold">{emailCounts[contactInfoModal.id]}</span> emails found in mailbox
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-6">
+              <button
+                onClick={() => setContactInfoModal(null)}
+                className="w-full bg-primary text-white py-2 px-4 rounded-lg font-semibold hover:bg-blue-600 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
