@@ -149,41 +149,85 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
 
   const handleLastExport = () => {
     const lastExportData = localStorage.getItem('lastExportedContacts');
-    if (lastExportData) {
-      try {
-        const data = JSON.parse(lastExportData);
-        const contactIds = data.contactIds || data; // Support old format (just array) or new format (object)
-        const exportType = data.exportType || 'texts'; // Default to texts if not specified
+    if (!lastExportData) {
+      console.warn('No last export data found');
+      return;
+    }
 
-        // Only select IDs that still exist in current conversations
-        const validIds = contactIds.filter(id => conversations.some(c => c.id === id));
-        setSelectedIds(new Set(validIds));
+    try {
+      const data = JSON.parse(lastExportData);
+      const contactIds = data.contactIds || data; // Support old format (just array) or new format (object)
+      const exportType = data.exportType || 'texts'; // Default to texts if not specified
 
-        // Trigger the same export type
-        setTimeout(() => {
-          if (exportType === 'texts') {
-            handleExport();
-          } else if (exportType === 'all') {
-            handleOutlookExport();
-          } else if (exportType === 'emails') {
-            alert('Email-only export coming soon!');
-          }
-        }, 100); // Small delay to ensure selection is updated
-      } catch (err) {
-        console.error('Failed to load last exported contacts:', err);
+      // Validate that contactIds is an array
+      if (!Array.isArray(contactIds) || contactIds.length === 0) {
+        console.warn('Invalid or empty contact IDs in last export:', contactIds);
+        return;
       }
+
+      console.log('Loading last export:', { contactIds, exportType, totalContacts: contactIds.length });
+
+      // Only select IDs that still exist in current conversations
+      const validIds = contactIds.filter(id => conversations.some(c => c.id === id));
+
+      // Get the names of contacts for easier debugging
+      const selectedContacts = validIds.map(id => {
+        const contact = conversations.find(c => c.id === id);
+        return contact ? { id, name: contact.name, contactId: contact.contactId } : { id, name: 'Unknown' };
+      });
+
+      console.log('Valid contacts found:', {
+        requested: contactIds.length,
+        valid: validIds.length,
+        validIds,
+        selectedContacts
+      });
+
+      if (validIds.length === 0) {
+        console.warn('No valid contacts found from last export');
+        alert('None of the previously exported contacts are available anymore.');
+        return;
+      }
+
+      setSelectedIds(new Set(validIds));
+
+      // Trigger the same export type
+      setTimeout(() => {
+        if (exportType === 'texts') {
+          handleExport();
+        } else if (exportType === 'all') {
+          handleOutlookExport();
+        } else if (exportType === 'emails') {
+          alert('Email-only export coming soon!');
+        }
+      }, 100); // Small delay to ensure selection is updated
+    } catch (err) {
+      console.error('Failed to load last exported contacts:', err);
+      alert('Failed to load last export data. Please try selecting contacts manually.');
     }
   };
 
   const hasLastExport = () => {
     const lastExportData = localStorage.getItem('lastExportedContacts');
-    if (!lastExportData || lastExportData.length <= 2) return false;
+
+    // No data stored
+    if (!lastExportData || lastExportData.trim().length === 0) {
+      return false;
+    }
 
     try {
       const data = JSON.parse(lastExportData);
       const contactIds = data.contactIds || data;
-      return contactIds && contactIds.length > 0;
-    } catch {
+
+      // Explicitly check if it's an array with items
+      if (!Array.isArray(contactIds)) {
+        console.warn('Last export data is not an array:', contactIds);
+        return false;
+      }
+
+      return contactIds.length > 0;
+    } catch (err) {
+      console.error('Error parsing last export data:', err);
       return false;
     }
   };
@@ -200,11 +244,26 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
       const result = await window.electron.exportConversations(Array.from(selectedIds));
 
       if (result.success) {
-        // Save exported contact IDs and export type to localStorage for easy re-export
-        localStorage.setItem('lastExportedContacts', JSON.stringify({
+        const exportData = {
           contactIds: Array.from(selectedIds),
           exportType: 'texts'
-        }));
+        };
+
+        // Log what we're saving for debugging
+        const selectedContactNames = exportData.contactIds.map(id => {
+          const contact = conversations.find(c => c.id === id);
+          return contact ? contact.name : 'Unknown';
+        });
+
+        console.log('Saving text export:', {
+          count: exportData.contactIds.length,
+          contactIds: exportData.contactIds,
+          contactNames: selectedContactNames,
+          exportType: exportData.exportType
+        });
+
+        // Save exported contact IDs and export type to localStorage for easy re-export
+        localStorage.setItem('lastExportedContacts', JSON.stringify(exportData));
         onExportComplete(result);
       } else if (!result.canceled) {
         setError(result.error || 'Export failed');
@@ -222,11 +281,26 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
       return;
     }
 
-    // Save exported contact IDs and export type to localStorage for easy re-export
-    localStorage.setItem('lastExportedContacts', JSON.stringify({
+    const exportData = {
       contactIds: Array.from(selectedIds),
       exportType: 'all'
-    }));
+    };
+
+    // Log what we're saving for debugging
+    const selectedContactNames = exportData.contactIds.map(id => {
+      const contact = conversations.find(c => c.id === id);
+      return contact ? contact.name : 'Unknown';
+    });
+
+    console.log('Saving Outlook export:', {
+      count: exportData.contactIds.length,
+      contactIds: exportData.contactIds,
+      contactNames: selectedContactNames,
+      exportType: exportData.exportType
+    });
+
+    // Save exported contact IDs and export type to localStorage for easy re-export
+    localStorage.setItem('lastExportedContacts', JSON.stringify(exportData));
 
     if (onOutlookExport) {
       onOutlookExport(selectedIds);
