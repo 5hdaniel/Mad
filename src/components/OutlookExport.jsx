@@ -170,7 +170,6 @@ function OutlookExport({ conversations, selectedIds, onComplete, onCancel }) {
   if (exportResults) {
     const successCount = exportResults.results?.filter(r => r.success).length || 0;
     const failureCount = exportResults.results?.filter(r => !r.success).length || 0;
-    const totalEmails = exportResults.results?.reduce((sum, r) => sum + (r.emailCount || 0), 0) || 0;
     const totalTexts = exportResults.results?.reduce((sum, r) => sum + (r.textMessageCount || 0), 0) || 0;
 
     // Detailed results view
@@ -200,7 +199,6 @@ function OutlookExport({ conversations, selectedIds, onComplete, onCancel }) {
                       <h3 className="font-semibold text-gray-900 mb-1">{result.contactName}</h3>
                       <div className="text-sm text-gray-600 space-y-1">
                         <p>Text messages: {result.textMessageCount || 0}</p>
-                        <p>Emails: {result.emailCount || 0}</p>
                       </div>
                       {result.error && (
                         <p className="text-sm text-red-600 mt-2">Error: {result.error}</p>
@@ -262,7 +260,7 @@ function OutlookExport({ conversations, selectedIds, onComplete, onCancel }) {
           </div>
           <h2 className="text-xl font-bold text-gray-900 mb-2">Full Audit Export Complete</h2>
           <p className="text-gray-600 mb-6">
-            Successfully exported {totalTexts} text messages and {totalEmails} emails from {successCount} contact{successCount !== 1 ? 's' : ''}
+            Successfully exported {totalTexts} text messages from {successCount} contact{successCount !== 1 ? 's' : ''}
             {failureCount > 0 && ` (${failureCount} failed)`}
           </p>
 

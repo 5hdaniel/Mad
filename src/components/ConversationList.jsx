@@ -8,22 +8,12 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
   const [isExporting, setIsExporting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [error, setError] = useState(null);
-  const [emailCounts, setEmailCounts] = useState({});
-  const [loadingEmailCounts, setLoadingEmailCounts] = useState(false);
-  const [emailCountProgress, setEmailCountProgress] = useState({ current: 0, total: 0, eta: 0 });
   const [contactInfoModal, setContactInfoModal] = useState(null);
-  const abortEmailCountingRef = useRef(false); // Ref to track abort state
   const [runTour, setRunTour] = useState(false);
 
   useEffect(() => {
     loadConversations();
   }, []);
-
-  useEffect(() => {
-    if (outlookConnected && conversations.length > 0) {
-      loadEmailCounts();
-    }
-  }, [outlookConnected, conversations]);
 
   // Start tour when conversations are loaded
   useEffect(() => {
@@ -120,108 +110,6 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
       setError(err.message);
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const loadEmailCounts = async () => {
-    const contactsWithEmail = conversations.filter(c => c.emails && c.emails.length > 0);
-
-    if (contactsWithEmail.length === 0) {
-      return;
-    }
-
-    // Collect all unique email addresses
-    const allEmailAddresses = new Set();
-    contactsWithEmail.forEach(c => {
-      c.emails.forEach(email => allEmailAddresses.add(email.toLowerCase()));
-    });
-    const uniqueEmails = Array.from(allEmailAddresses);
-
-    const startTime = Date.now();
-
-    // Reset abort flag
-    abortEmailCountingRef.current = false;
-    setLoadingEmailCounts(true);
-    setEmailCountProgress({
-      current: 0,
-      total: 1, // Just one bulk operation
-      eta: 0,
-      phase: 'fetching'
-    });
-
-    try {
-      // Setup progress listener for bulk fetch
-      const progressHandler = (progress) => {
-        if (abortEmailCountingRef.current) return;
-
-        setEmailCountProgress({
-          current: progress.pagesLoaded || 0,
-          total: Math.max(progress.pagesLoaded * 2, 100), // Rough estimate
-          eta: progress.eta || 0,
-          emailsFetched: progress.emailsFetched,
-          phase: 'fetching'
-        });
-      };
-
-      window.electron.onBulkEmailProgress(progressHandler);
-
-      // Make the bulk API call - this fetches ALL emails once and indexes them
-      // Note: This will continue in background even if user skips, but we won't apply results
-      const result = await window.electron.outlookBulkGetEmailCounts(uniqueEmails, true);
-
-      // Check the ref variable set by skip button
-      if (abortEmailCountingRef.current) {
-        return;
-      }
-
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to fetch email counts');
-      }
-
-      const emailCountsByAddress = result.counts; // Map of email -> count
-
-      // Now map the counts back to contacts
-      setEmailCountProgress({
-        current: 0,
-        total: contactsWithEmail.length,
-        eta: 0,
-        phase: 'mapping'
-      });
-
-      const counts = {};
-      let totalEmailsFound = 0;
-
-      contactsWithEmail.forEach((conv, idx) => {
-        // Sum up counts for all email addresses for this contact
-        let totalCount = 0;
-        conv.emails.forEach(email => {
-          const emailLower = email.toLowerCase();
-          if (emailCountsByAddress[emailLower]) {
-            totalCount += emailCountsByAddress[emailLower];
-          }
-        });
-
-        counts[conv.id] = totalCount;
-        totalEmailsFound += totalCount;
-
-        // Update progress
-        if (idx % 10 === 0 || idx === contactsWithEmail.length - 1) {
-          setEmailCountProgress({
-            current: idx + 1,
-            total: contactsWithEmail.length,
-            eta: 0,
-            phase: 'mapping'
-          });
-        }
-      });
-
-      // Set all counts at once
-      setEmailCounts(counts);
-    } catch (err) {
-      console.error('Error loading email counts:', err);
-      setError('Failed to load email counts. Please try again.');
-    } finally {
-      setLoadingEmailCounts(false);
     }
   };
 
@@ -471,72 +359,6 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
         </p>
       </div>
 
-      {/* Email Count Loading Overlay */}
-      {loadingEmailCounts && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-8">
-            <div className="text-center">
-              <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Counting Emails</h3>
-              <p className="text-sm text-gray-600 mb-1">
-                {emailCountProgress.phase === 'fetching' ? (
-                  'Fetching and indexing all emails from Outlook...'
-                ) : emailCountProgress.phase === 'mapping' ? (
-                  'Mapping email counts to contacts...'
-                ) : (
-                  'Estimating the number of emails per contact'
-                )}
-              </p>
-              {emailCountProgress.emailsFetched > 0 && (
-                <p className="text-xs text-gray-500 mb-2">
-                  {emailCountProgress.emailsFetched.toLocaleString()} emails processed
-                </p>
-              )}
-              {emailCountProgress.total > 0 && (
-                <>
-                  <div className="flex items-center justify-between text-sm text-gray-700 mb-2">
-                    <span>
-                      {emailCountProgress.phase === 'fetching' ? (
-                        `Page ${emailCountProgress.current} of ~${emailCountProgress.total}`
-                      ) : emailCountProgress.phase === 'mapping' ? (
-                        `Contact ${emailCountProgress.current} of ${emailCountProgress.total}`
-                      ) : (
-                        `${emailCountProgress.current} of ${emailCountProgress.total}`
-                      )}
-                    </span>
-                    <span className="font-semibold">
-                      {Math.round((emailCountProgress.current / emailCountProgress.total) * 100)}%
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2.5 mb-3">
-                    <div
-                      className="bg-primary h-2.5 rounded-full transition-all duration-300"
-                      style={{ width: `${(emailCountProgress.current / emailCountProgress.total) * 100}%` }}
-                    ></div>
-                  </div>
-                  {emailCountProgress.eta > 0 && (
-                    <p className="text-xs text-gray-500 mb-4">
-                      Estimated time remaining: {emailCountProgress.eta > 60
-                        ? `${Math.floor(emailCountProgress.eta / 60)}m ${emailCountProgress.eta % 60}s`
-                        : `${emailCountProgress.eta}s`}
-                    </p>
-                  )}
-                  <button
-                    onClick={() => {
-                      abortEmailCountingRef.current = true;
-                      setLoadingEmailCounts(false);
-                    }}
-                    className="w-full bg-gray-200 text-gray-700 py-2 px-4 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
-                  >
-                    Skip
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Conversation List */}
       <div className="flex-1 overflow-y-auto p-6" data-tour="contact-list">
         {filteredConversations.length === 0 ? (
@@ -610,13 +432,6 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
                         ) : (
                           // Fallback to old format
                           <>{conversation.messageCount || 0} messages</>
-                        )}
-                        {outlookConnected && conversation.emails?.length > 0 && (
-                          loadingEmailCounts ? (
-                            <> · loading emails...</>
-                          ) : emailCounts[conversation.id] !== undefined ? (
-                            <> · {emailCounts[conversation.id]} emails</>
-                          ) : null
                         )}
                         {' · '}
                         {formatDate(conversation.lastMessageDate)}
@@ -709,15 +524,6 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
                       </div>
                     ))}
                   </div>
-                </div>
-              )}
-
-              {/* Email count if connected to Outlook */}
-              {outlookConnected && emailCounts[contactInfoModal.id] !== undefined && (
-                <div className="pt-3 border-t border-gray-200">
-                  <p className="text-sm text-gray-600">
-                    <span className="font-semibold">{emailCounts[contactInfoModal.id]}</span> emails found in mailbox
-                  </p>
                 </div>
               )}
             </div>
