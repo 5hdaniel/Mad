@@ -76,7 +76,7 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
     {
       target: '[data-tour="contact-list"]',
       content: 'Here you can see all your contacts. Click on a contact to select or deselect them for export.',
-      placement: 'top',
+      placement: 'center',
     },
     {
       target: 'body',
