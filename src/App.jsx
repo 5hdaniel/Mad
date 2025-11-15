@@ -104,6 +104,22 @@ function App() {
   };
 
   const handleOutlookComplete = (result) => {
+    // Only save to localStorage if export was successful
+    if (result && result.exportPath) {
+      const exportData = {
+        contactIds: Array.from(selectedConversationIds),
+        exportType: 'all'
+      };
+
+      console.log('Outlook export completed successfully, saving:', {
+        count: exportData.contactIds.length,
+        contactIds: exportData.contactIds,
+        exportType: exportData.exportType
+      });
+
+      localStorage.setItem('lastExportedContacts', JSON.stringify(exportData));
+    }
+
     setExportResult(result);
     setCurrentStep('complete');
   };

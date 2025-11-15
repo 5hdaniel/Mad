@@ -281,27 +281,8 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
       return;
     }
 
-    const exportData = {
-      contactIds: Array.from(selectedIds),
-      exportType: 'all'
-    };
-
-    // Log what we're saving for debugging
-    const selectedContactNames = exportData.contactIds.map(id => {
-      const contact = conversations.find(c => c.id === id);
-      return contact ? contact.name : 'Unknown';
-    });
-
-    console.log('Saving Outlook export:', {
-      count: exportData.contactIds.length,
-      contactIds: exportData.contactIds,
-      contactNames: selectedContactNames,
-      exportType: exportData.exportType
-    });
-
-    // Save exported contact IDs and export type to localStorage for easy re-export
-    localStorage.setItem('lastExportedContacts', JSON.stringify(exportData));
-
+    // Don't save to localStorage yet - wait for export to complete successfully
+    // The parent component (App.jsx) will save it when the export finishes
     if (onOutlookExport) {
       onOutlookExport(selectedIds);
     }
