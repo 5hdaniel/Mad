@@ -1,7 +1,7 @@
 {
-  "name": "audit-magic",
+  "name": "magic-audit",
   "version": "1.0.6",
-  "description": "Audit Magic - Export and archive iMessage conversations and emails",
+  "description": "Magic Audit - Export and archive iMessage conversations and emails",
   "main": "electron/main.js",
   "scripts": {
     "start": "concurrently \"npm run dev:react\" \"npm run dev:electron\"",
@@ -42,7 +42,7 @@
   },
   "build": {
     "appId": "com.realestate.archiveapp",
-    "productName": "Real Estate Archive",
+    "productName": "Magic Audit",
     "publish": {
       "provider": "github",
       "owner": "5hdaniel",
