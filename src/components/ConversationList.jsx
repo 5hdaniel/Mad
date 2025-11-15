@@ -76,7 +76,8 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
     {
       target: '[data-tour="contact-list"]',
       content: 'Here you can see all your contacts. Click on a contact to select or deselect them for export.',
-      placement: 'top',
+      placement: 'right',
+      spotlightClicks: true,
     },
     {
       target: 'body',
@@ -385,11 +386,12 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
             <p className="text-gray-500">No contacts found</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-3" data-tour="contact-list">
-            {filteredConversations.map((conversation) => (
+          <div className="grid grid-cols-1 gap-3">
+            {filteredConversations.map((conversation, index) => (
               <div
                 key={conversation.id || `contact-${conversation.name}-${conversation.contactId}`}
                 onClick={() => toggleSelection(conversation.id)}
+                data-tour={index === 0 ? "contact-list" : undefined}
                 className={`p-4 bg-white border-2 rounded-lg cursor-pointer transition-all ${
                   selectedIds.has(conversation.id)
                     ? 'border-primary bg-blue-50'
