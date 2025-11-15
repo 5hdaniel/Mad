@@ -177,6 +177,48 @@ ipcMain.handle('get-macos-version', () => {
   }
 });
 
+// Check if app is running from /Applications folder
+ipcMain.handle('check-app-location', async () => {
+  try {
+    // Only check on macOS
+    if (process.platform !== 'darwin') {
+      return {
+        isInApplications: true, // Not applicable on other platforms
+        shouldPrompt: false,
+        appPath: app.getPath('exe')
+      };
+    }
+
+    // Get the app executable path
+    const appPath = app.getPath('exe');
+
+    // Check if running from /Applications
+    const isInApplications = appPath.includes('/Applications/');
+
+    // Check if running from common temporary/download locations
+    const isDmgOrDownloads = appPath.includes('/Volumes/') ||
+                             appPath.includes('/Downloads') ||
+                             appPath.includes('/Desktop') ||
+                             appPath.includes('/private/var');
+
+    // Should prompt if not in Applications AND is in a temporary location
+    const shouldPrompt = !isInApplications && isDmgOrDownloads;
+
+    return {
+      isInApplications,
+      shouldPrompt,
+      appPath
+    };
+  } catch (error) {
+    console.error('Error checking app location:', error);
+    return {
+      isInApplications: false,
+      shouldPrompt: false,
+      appPath: 'unknown'
+    };
+  }
+});
+
 // Trigger Full Disk Access request by attempting to read Messages database
 // This will cause the app to appear in System Settings > Privacy & Security > Full Disk Access
 ipcMain.handle('trigger-full-disk-access', async () => {

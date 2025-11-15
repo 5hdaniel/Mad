@@ -5,6 +5,7 @@ import ConversationList from './components/ConversationList';
 import ExportComplete from './components/ExportComplete';
 import OutlookExport from './components/OutlookExport';
 import UpdateNotification from './components/UpdateNotification';
+import MoveAppPrompt from './components/MoveAppPrompt';
 
 function App() {
   const [currentStep, setCurrentStep] = useState('microsoft-login'); // microsoft-login, permissions, contacts, outlook, complete
@@ -14,9 +15,12 @@ function App() {
   const [showVersion, setShowVersion] = useState(false);
   const [conversations, setConversations] = useState([]);
   const [selectedConversationIds, setSelectedConversationIds] = useState(new Set());
+  const [showMoveAppPrompt, setShowMoveAppPrompt] = useState(false);
+  const [appPath, setAppPath] = useState('');
 
   useEffect(() => {
     checkPermissions();
+    checkAppLocation();
   }, []);
 
   const checkPermissions = async () => {
@@ -24,6 +28,32 @@ function App() {
     if (result.hasPermission) {
       setHasPermissions(true);
     }
+  };
+
+  const checkAppLocation = async () => {
+    try {
+      const result = await window.electron.checkAppLocation();
+      setAppPath(result.appPath || '');
+
+      // Check if we should show the prompt
+      // Only show if:
+      // 1. shouldPrompt is true (not in Applications and in temp location)
+      // 2. User hasn't dismissed it permanently
+      const hasIgnored = localStorage.getItem('ignoreMoveAppPrompt');
+      if (result.shouldPrompt && !hasIgnored) {
+        setShowMoveAppPrompt(true);
+      }
+    } catch (error) {
+      console.error('Error checking app location:', error);
+    }
+  };
+
+  const handleDismissMovePrompt = () => {
+    setShowMoveAppPrompt(false);
+  };
+
+  const handleNotNowMovePrompt = () => {
+    setShowMoveAppPrompt(false);
   };
 
   const handleMicrosoftLogin = (userInfo) => {
@@ -199,6 +229,15 @@ function App() {
 
       {/* Update Notification */}
       <UpdateNotification />
+
+      {/* Move App Prompt */}
+      {showMoveAppPrompt && (
+        <MoveAppPrompt
+          appPath={appPath}
+          onDismiss={handleDismissMovePrompt}
+          onNotNow={handleNotNowMovePrompt}
+        />
+      )}
     </div>
   );
 }
