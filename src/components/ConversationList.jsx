@@ -11,6 +11,7 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
   const [error, setError] = useState(null);
   const [contactInfoModal, setContactInfoModal] = useState(null);
   const [runTour, setRunTour] = useState(false);
+  const [showOnlySelected, setShowOnlySelected] = useState(false);
 
   useEffect(() => {
     loadConversations();
@@ -198,10 +199,16 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
     return date.toLocaleDateString();
   };
 
-  const filteredConversations = conversations.filter(conv =>
-    conv.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    conv.contactId?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredConversations = conversations.filter(conv => {
+    // Filter by search term
+    const matchesSearch = conv.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      conv.contactId?.toLowerCase().includes(searchTerm.toLowerCase());
+
+    // Filter by selection if showOnlySelected is true
+    const matchesSelection = !showOnlySelected || selectedIds.has(conv.id);
+
+    return matchesSearch && matchesSelection;
+  });
 
   if (isLoading) {
     return (
@@ -293,6 +300,18 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
             className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
           >
             Deselect All
+          </button>
+
+          <button
+            onClick={() => setShowOnlySelected(!showOnlySelected)}
+            disabled={selectedIds.size === 0}
+            className={`px-4 py-2 border rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+              showOnlySelected
+                ? 'bg-primary text-white border-primary hover:bg-blue-600'
+                : 'border-gray-300 hover:bg-gray-50'
+            }`}
+          >
+            {showOnlySelected ? 'Show All' : 'Show Selected'}
           </button>
         </div>
 
