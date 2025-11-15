@@ -211,11 +211,11 @@ function App() {
             <div className="space-y-2 text-xs">
               <div className="flex justify-between">
                 <span className="text-gray-600">Version:</span>
-                <span className="font-mono font-semibold text-gray-900">1.0.5</span>
+                <span className="font-mono font-semibold text-gray-900">1.0.6</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">Last Update:</span>
-                <span className="font-mono text-gray-700 bg-green-100 px-1 rounded">📁 Apps Folder Prompt</span>
+                <span className="font-mono text-gray-700 bg-green-100 px-1 rounded">🔧 Auto-Update Fix</span>
               </div>
               <div className="pt-2 border-t border-gray-200">
                 <p className="text-gray-500 text-xs">
