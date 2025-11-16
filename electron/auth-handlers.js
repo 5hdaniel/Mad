@@ -7,8 +7,11 @@ const { ipcMain, app, shell } = require('electron');
 const os = require('os');
 const crypto = require('crypto');
 
-// NOTE: These handlers should be added to main.js
-// Services are already imported in main.js
+// Import services
+const databaseService = require('./services/databaseService');
+const googleAuthService = require('./services/googleAuthService');
+const supabaseService = require('./services/supabaseService');
+const tokenEncryptionService = require('./services/tokenEncryptionService');
 
 // Initialize database when app is ready
 const initializeDatabase = async () => {
