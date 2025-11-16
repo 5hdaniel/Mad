@@ -73,7 +73,7 @@ class GoogleAuthService {
       const deviceCodeResponse = await this.oauth2Client.generateAuthUrl({
         access_type: 'offline',
         scope: scopes,
-        prompt: 'consent', // Force consent to get refresh token
+        prompt: 'select_account', // Show account picker, only consent if needed
       });
 
       // For device code flow, we need to use a different approach
@@ -83,7 +83,7 @@ class GoogleAuthService {
       const authUrl = this.oauth2Client.generateAuthUrl({
         access_type: 'offline',
         scope: scopes,
-        prompt: 'consent',
+        prompt: 'select_account', // Show account picker, only consent if needed
       });
 
       // Return auth URL for user to open in browser
@@ -159,7 +159,7 @@ class GoogleAuthService {
       const authUrl = this.oauth2Client.generateAuthUrl({
         access_type: 'offline',
         scope: scopes,
-        prompt: 'consent',
+        prompt: 'select_account', // Show account picker, only consent if needed
       });
 
       if (onDeviceCode) {

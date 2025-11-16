@@ -151,7 +151,7 @@ class MicrosoftAuthService {
       redirect_uri: this.redirectUri,
       scope: scopes.join(' '),
       response_mode: 'query',
-      prompt: 'consent',
+      prompt: 'select_account', // Show account picker, only consent if needed
       code_challenge: codeChallenge,
       code_challenge_method: 'S256'
     });
@@ -195,7 +195,7 @@ class MicrosoftAuthService {
       redirect_uri: this.redirectUri,
       scope: scopes.join(' '),
       response_mode: 'query',
-      prompt: 'consent',
+      prompt: 'select_account', // Show account picker, only consent if needed
       code_challenge: codeChallenge,
       code_challenge_method: 'S256'
     });
