@@ -51,6 +51,13 @@ contextBridge.exposeInMainWorld('api', {
     validate: (address) => ipcRenderer.invoke('address:validate', address),
   },
 
+  // User feedback methods (for extraction corrections)
+  feedback: {
+    submit: (userId, feedbackData) => ipcRenderer.invoke('feedback:submit', userId, feedbackData),
+    getForTransaction: (transactionId) => ipcRenderer.invoke('feedback:get-for-transaction', transactionId),
+    getMetrics: (userId, fieldName) => ipcRenderer.invoke('feedback:get-metrics', userId, fieldName),
+  },
+
   // IPC event listeners
   onMicrosoftLoginComplete: (callback) => ipcRenderer.on('microsoft:login-complete', (_, result) => callback(result)),
   onTransactionScanProgress: (callback) => ipcRenderer.on('transactions:scan-progress', (_, progress) => callback(progress)),

@@ -173,6 +173,72 @@ class DatabaseService {
         END;
       `);
 
+      // Migration 4: User feedback and extraction metrics
+      const feedbackTableExists = await this._get(`SELECT name FROM sqlite_master WHERE type='table' AND name='user_feedback'`);
+      if (!feedbackTableExists) {
+        console.log('[DatabaseService] Creating user feedback tables');
+
+        // User feedback table
+        await this._run(`
+          CREATE TABLE user_feedback (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            transaction_id TEXT NOT NULL,
+            field_name TEXT NOT NULL,
+            original_value TEXT,
+            corrected_value TEXT,
+            original_confidence INTEGER,
+            feedback_type TEXT CHECK (feedback_type IN ('correction', 'confirmation', 'rejection')),
+            source_communication_id TEXT,
+            user_notes TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE,
+            FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE CASCADE,
+            FOREIGN KEY (source_communication_id) REFERENCES communications(id) ON DELETE SET NULL
+          )
+        `);
+
+        // Extraction metrics table
+        await this._run(`
+          CREATE TABLE extraction_metrics (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            field_name TEXT NOT NULL,
+            total_extractions INTEGER DEFAULT 0,
+            confirmed_correct INTEGER DEFAULT 0,
+            user_corrected INTEGER DEFAULT 0,
+            completely_wrong INTEGER DEFAULT 0,
+            avg_confidence INTEGER,
+            high_confidence_count INTEGER DEFAULT 0,
+            medium_confidence_count INTEGER DEFAULT 0,
+            low_confidence_count INTEGER DEFAULT 0,
+            period_start DATETIME,
+            period_end DATETIME,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE,
+            UNIQUE(user_id, field_name, period_start)
+          )
+        `);
+
+        // Indexes
+        await this._run(`CREATE INDEX idx_user_feedback_user_id ON user_feedback(user_id)`);
+        await this._run(`CREATE INDEX idx_user_feedback_transaction_id ON user_feedback(transaction_id)`);
+        await this._run(`CREATE INDEX idx_user_feedback_field_name ON user_feedback(field_name)`);
+        await this._run(`CREATE INDEX idx_user_feedback_type ON user_feedback(feedback_type)`);
+        await this._run(`CREATE INDEX idx_extraction_metrics_user_id ON extraction_metrics(user_id)`);
+        await this._run(`CREATE INDEX idx_extraction_metrics_field ON extraction_metrics(field_name)`);
+
+        // Trigger
+        await this._run(`
+          CREATE TRIGGER update_extraction_metrics_timestamp
+          AFTER UPDATE ON extraction_metrics
+          BEGIN
+            UPDATE extraction_metrics SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+          END;
+        `);
+      }
+
     } catch (error) {
       // Log but don't fail on migration errors
       console.log('[DatabaseService] Migration check:', error.message);
@@ -1038,6 +1104,193 @@ class DatabaseService {
     `;
 
     return await this._all(sql, [contactId]);
+  }
+
+  // ============================================
+  // USER FEEDBACK OPERATIONS
+  // ============================================
+
+  /**
+   * Submit user feedback on extracted data
+   */
+  async submitFeedback(userId, feedbackData) {
+    const id = crypto.randomUUID();
+
+    const sql = `
+      INSERT INTO user_feedback (
+        id, user_id, transaction_id, field_name, original_value,
+        corrected_value, original_confidence, feedback_type,
+        source_communication_id, user_notes
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+
+    const params = [
+      id,
+      userId,
+      feedbackData.transaction_id,
+      feedbackData.field_name,
+      feedbackData.original_value || null,
+      feedbackData.corrected_value || null,
+      feedbackData.original_confidence || null,
+      feedbackData.feedback_type, // 'correction', 'confirmation', or 'rejection'
+      feedbackData.source_communication_id || null,
+      feedbackData.user_notes || null,
+    ];
+
+    await this._run(sql, params);
+
+    // Update extraction metrics
+    await this._updateExtractionMetrics(userId, feedbackData);
+
+    return id;
+  }
+
+  /**
+   * Get all feedback for a transaction
+   */
+  async getFeedbackForTransaction(transactionId) {
+    const sql = `
+      SELECT * FROM user_feedback
+      WHERE transaction_id = ?
+      ORDER BY created_at DESC
+    `;
+
+    return await this._all(sql, [transactionId]);
+  }
+
+  /**
+   * Get feedback by field name
+   */
+  async getFeedbackByField(userId, fieldName, limit = 100) {
+    const sql = `
+      SELECT * FROM user_feedback
+      WHERE user_id = ? AND field_name = ?
+      ORDER BY created_at DESC
+      LIMIT ?
+    `;
+
+    return await this._all(sql, [userId, fieldName, limit]);
+  }
+
+  /**
+   * Get extraction accuracy metrics
+   */
+  async getExtractionMetrics(userId, fieldName = null) {
+    let sql = `
+      SELECT * FROM extraction_metrics
+      WHERE user_id = ?
+    `;
+
+    const params = [userId];
+
+    if (fieldName) {
+      sql += ` AND field_name = ?`;
+      params.push(fieldName);
+    }
+
+    sql += ` ORDER BY period_start DESC`;
+
+    return await this._all(sql, params);
+  }
+
+  /**
+   * Update extraction metrics based on feedback
+   * @private
+   */
+  async _updateExtractionMetrics(userId, feedbackData) {
+    // Get current period (monthly)
+    const now = new Date();
+    const periodStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString();
+
+    // Check if metrics exist for this period
+    const existing = await this._get(
+      `SELECT * FROM extraction_metrics WHERE user_id = ? AND field_name = ? AND period_start = ?`,
+      [userId, feedbackData.field_name, periodStart]
+    );
+
+    if (existing) {
+      // Update existing metrics
+      const updates = {
+        total_extractions: existing.total_extractions + 1,
+      };
+
+      if (feedbackData.feedback_type === 'confirmation') {
+        updates.confirmed_correct = existing.confirmed_correct + 1;
+      } else if (feedbackData.feedback_type === 'correction') {
+        updates.user_corrected = existing.user_corrected + 1;
+      } else if (feedbackData.feedback_type === 'rejection') {
+        updates.completely_wrong = existing.completely_wrong + 1;
+      }
+
+      // Update confidence distribution
+      const confidence = feedbackData.original_confidence || 0;
+      if (confidence >= 80) {
+        updates.high_confidence_count = existing.high_confidence_count + 1;
+      } else if (confidence >= 50) {
+        updates.medium_confidence_count = existing.medium_confidence_count + 1;
+      } else {
+        updates.low_confidence_count = existing.low_confidence_count + 1;
+      }
+
+      // Calculate new average confidence
+      const totalConf = (existing.avg_confidence || 0) * existing.total_extractions;
+      updates.avg_confidence = Math.round((totalConf + confidence) / updates.total_extractions);
+
+      const sql = `
+        UPDATE extraction_metrics
+        SET total_extractions = ?,
+            confirmed_correct = ?,
+            user_corrected = ?,
+            completely_wrong = ?,
+            avg_confidence = ?,
+            high_confidence_count = ?,
+            medium_confidence_count = ?,
+            low_confidence_count = ?
+        WHERE id = ?
+      `;
+
+      await this._run(sql, [
+        updates.total_extractions,
+        updates.confirmed_correct || existing.confirmed_correct,
+        updates.user_corrected || existing.user_corrected,
+        updates.completely_wrong || existing.completely_wrong,
+        updates.avg_confidence,
+        updates.high_confidence_count || existing.high_confidence_count,
+        updates.medium_confidence_count || existing.medium_confidence_count,
+        updates.low_confidence_count || existing.low_confidence_count,
+        existing.id,
+      ]);
+    } else {
+      // Create new metrics entry
+      const id = crypto.randomUUID();
+      const confidence = feedbackData.original_confidence || 0;
+
+      const sql = `
+        INSERT INTO extraction_metrics (
+          id, user_id, field_name, total_extractions,
+          confirmed_correct, user_corrected, completely_wrong,
+          avg_confidence, high_confidence_count, medium_confidence_count,
+          low_confidence_count, period_start, period_end
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `;
+
+      await this._run(sql, [
+        id,
+        userId,
+        feedbackData.field_name,
+        1, // total_extractions
+        feedbackData.feedback_type === 'confirmation' ? 1 : 0,
+        feedbackData.feedback_type === 'correction' ? 1 : 0,
+        feedbackData.feedback_type === 'rejection' ? 1 : 0,
+        confidence,
+        confidence >= 80 ? 1 : 0,
+        confidence >= 50 && confidence < 80 ? 1 : 0,
+        confidence < 50 ? 1 : 0,
+        periodStart,
+        periodEnd,
+      ]);
+    }
   }
 
   /**

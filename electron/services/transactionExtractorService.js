@@ -129,31 +129,182 @@ class TransactionExtractorService {
   }
 
   /**
-   * Calculate confidence score (0-100)
+   * Calculate confidence score (0-100) - Enhanced Algorithm
    * @private
    */
   _calculateConfidence(text) {
     let score = 0;
+    let bonusMultiplier = 1.0;
 
-    // Keywords present
+    // 1. Keywords present (max 40 points)
     const keywordMatches = this.keywords.transaction.filter(keyword =>
       text.includes(keyword.toLowerCase())
     ).length;
-    score += Math.min(keywordMatches * 5, 40); // Max 40 points from keywords
+    const keywordScore = Math.min(keywordMatches * 5, 40);
+    score += keywordScore;
 
-    // Has address
-    if (this.patterns.address.test(text)) score += 20;
+    // Bonus: Many keywords = higher multiplier
+    if (keywordMatches >= 5) bonusMultiplier += 0.1;
+    if (keywordMatches >= 8) bonusMultiplier += 0.1;
 
-    // Has money amounts
-    if (this.patterns.largeAmount.test(text)) score += 15;
+    // 2. Has valid address (20 points)
+    const hasAddress = this.patterns.address.test(text);
+    if (hasAddress) {
+      score += 20;
+      // Bonus: If address appears multiple times (thread discussion)
+      const addressMatches = (text.match(this.patterns.address) || []).length;
+      if (addressMatches > 2) score += 5;
+    }
 
-    // Has dates
-    if (this.patterns.date.test(text) || this.patterns.dateNumeric.test(text)) score += 10;
+    // 3. Has money amounts (up to 20 points)
+    const moneyMatches = (text.match(this.patterns.largeAmount) || []).length;
+    if (moneyMatches > 0) {
+      // More amounts = more likely real transaction
+      score += Math.min(10 + (moneyMatches * 3), 20);
+    }
 
-    // Has MLS number
-    if (this.patterns.mls.test(text)) score += 15;
+    // 4. Has dates (up to 15 points)
+    const dateMatches = [
+      ...(text.match(this.patterns.date) || []),
+      ...(text.match(this.patterns.dateNumeric) || [])
+    ];
+    if (dateMatches.length > 0) {
+      // Multiple dates = timeline discussion
+      score += Math.min(10 + (dateMatches.length * 2), 15);
+    }
 
-    return Math.min(score, 100);
+    // 5. Has MLS number (15 points - strong indicator)
+    if (this.patterns.mls.test(text)) {
+      score += 15;
+      bonusMultiplier += 0.1; // MLS = professional listing
+    }
+
+    // 6. Context analysis bonuses
+    // Check for common real estate phrases
+    const contextPhrases = [
+      'mutual acceptance', 'purchase agreement', 'closing disclosure',
+      'earnest money', 'inspection contingency', 'title report',
+      'escrow instructions', 'final walkthrough', 'loan approval'
+    ];
+    const contextMatches = contextPhrases.filter(phrase =>
+      text.includes(phrase.toLowerCase())
+    ).length;
+    if (contextMatches > 0) {
+      score += Math.min(contextMatches * 3, 10);
+    }
+
+    // 7. Email pattern analysis
+    // If subject contains key transaction terms = higher confidence
+    const subjectBonus = this._analyzeSubjectLine(text);
+    score += subjectBonus;
+
+    // Apply multiplier and cap at 100
+    const finalScore = Math.min(Math.round(score * bonusMultiplier), 100);
+
+    return finalScore;
+  }
+
+  /**
+   * Analyze email subject line for transaction indicators
+   * @private
+   */
+  _analyzeSubjectLine(text) {
+    // Extract likely subject (first line or text before body)
+    const firstLine = text.split('\n')[0].toLowerCase();
+
+    let bonus = 0;
+
+    // Subject contains address
+    if (this.patterns.address.test(firstLine)) bonus += 5;
+
+    // Subject contains transaction keywords
+    const subjectKeywords = ['closing', 'offer', 'accepted', 'pending', 'sold', 'contract'];
+    const subjectMatches = subjectKeywords.filter(kw => firstLine.includes(kw)).length;
+    bonus += subjectMatches * 2;
+
+    return Math.min(bonus, 10);
+  }
+
+  /**
+   * Calculate field-specific confidence
+   * Used for individual field extractions (closing_date, sale_price, etc.)
+   */
+  calculateFieldConfidence(fieldName, extractedValue, text, allMatches = []) {
+    let confidence = 0;
+
+    switch (fieldName) {
+      case 'closing_date':
+        // Higher confidence if:
+        // - Appears near "closing" keyword
+        // - Format is consistent (MM/DD/YYYY)
+        // - Date is in reasonable range (not too far in past/future)
+        if (text.includes('closing') && text.indexOf(extractedValue) - text.indexOf('closing') < 100) {
+          confidence += 30;
+        }
+        if (allMatches.length === 1) confidence += 20; // Only one date = likely correct
+        if (allMatches.length <= 3) confidence += 10;
+        if (this._isReasonableClosingDate(extractedValue)) confidence += 40;
+        break;
+
+      case 'sale_price':
+        // Higher confidence if:
+        // - Amount is in reasonable range ($50k - $50M)
+        // - Appears near "price" or "sale" keywords
+        // - Is the largest amount mentioned
+        const price = parseFloat(extractedValue.replace(/[^0-9.]/g, ''));
+        if (price >= 50000 && price <= 50000000) confidence += 40;
+        if (allMatches.length > 0 && Math.max(...allMatches) === price) confidence += 20;
+        if (text.includes('sale price') || text.includes('purchase price')) confidence += 30;
+        if (text.indexOf(extractedValue) - text.lastIndexOf('price') < 50) confidence += 10;
+        break;
+
+      case 'transaction_type':
+        // Higher confidence if:
+        // - Clear buyer/seller language
+        // - Listing agreement vs purchase agreement mentioned
+        const purchaseKeywords = ['buying', 'buyer', 'purchase agreement'];
+        const saleKeywords = ['selling', 'seller', 'listing agreement'];
+        const pCount = purchaseKeywords.filter(kw => text.includes(kw)).length;
+        const sCount = saleKeywords.filter(kw => text.includes(kw)).length;
+        const diff = Math.abs(pCount - sCount);
+        confidence += Math.min(diff * 20, 80);
+        if (text.includes('representing buyer') || text.includes('representing seller')) confidence += 20;
+        break;
+
+      case 'property_address':
+        // Higher confidence if:
+        // - Well-formatted US address
+        // - Appears multiple times
+        // - Has zip code
+        if (this.patterns.address.test(extractedValue)) confidence += 50;
+        if (extractedValue.match(/\d{5}(-\d{4})?/)) confidence += 20; // Has zip
+        const occurrences = (text.match(new RegExp(extractedValue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')) || []).length;
+        confidence += Math.min(occurrences * 5, 30);
+        break;
+
+      default:
+        confidence = 50; // Default medium confidence
+    }
+
+    return Math.min(confidence, 100);
+  }
+
+  /**
+   * Check if date is reasonable for a closing date
+   * @private
+   */
+  _isReasonableClosingDate(dateStr) {
+    try {
+      const date = new Date(dateStr);
+      const now = new Date();
+      const twoYearsAgo = new Date(now.getFullYear() - 2, now.getMonth(), now.getDate());
+      const oneYearAhead = new Date(now.getFullYear() + 1, now.getMonth(), now.getDate());
+
+      // Reasonable if within 2 years past to 1 year future
+      return date >= twoYearsAgo && date <= oneYearAhead;
+    } catch (e) {
+      return false;
+    }
   }
 
   /**
