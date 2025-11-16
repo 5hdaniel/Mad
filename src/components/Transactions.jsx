@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import ManualTransactionModal from './ManualTransactionModal';
+import ExportModal from './ExportModal';
 
 /**
  * Transactions Component
@@ -363,7 +365,24 @@ function Transactions({ userId, provider, onClose }) {
 
       {/* Transaction Details Modal */}
       {selectedTransaction && (
-        <TransactionDetails transaction={selectedTransaction} onClose={() => setSelectedTransaction(null)} />
+        <TransactionDetails
+          transaction={selectedTransaction}
+          onClose={() => setSelectedTransaction(null)}
+          onTransactionUpdated={loadTransactions}
+        />
+      )}
+
+      {/* Manual Transaction Creation Modal */}
+      {showManualCreate && (
+        <ManualTransactionModal
+          userId={userId}
+          provider={provider}
+          onClose={() => setShowManualCreate(false)}
+          onSuccess={(newTransaction) => {
+            setShowManualCreate(false);
+            loadTransactions();
+          }}
+        />
       )}
     </div>
   );
@@ -373,11 +392,12 @@ function Transactions({ userId, provider, onClose }) {
  * Transaction Details Modal
  * Shows full details of a single transaction
  */
-function TransactionDetails({ transaction, onClose }) {
+function TransactionDetails({ transaction, onClose, onTransactionUpdated }) {
   const [communications, setCommunications] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [exporting, setExporting] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
   const [exportSuccess, setExportSuccess] = useState(null);
+  const [showArchivePrompt, setShowArchivePrompt] = useState(false);
 
   useEffect(() => {
     loadDetails();
@@ -398,24 +418,27 @@ function TransactionDetails({ transaction, onClose }) {
     }
   };
 
-  const handleExportPDF = async () => {
+  const handleExportComplete = (result) => {
+    setShowExportModal(false);
+    setExportSuccess(result.path || 'Export completed successfully!');
+    // Auto-hide success message after 5 seconds
+    setTimeout(() => setExportSuccess(null), 5000);
+
+    // Show archive prompt if transaction is still active
+    if (transaction.status === 'active') {
+      setShowArchivePrompt(true);
+    }
+  };
+
+  const handleArchive = async () => {
     try {
-      setExporting(true);
-      setExportSuccess(null);
-
-      const result = await window.api.transactions.exportPDF(transaction.id);
-
-      if (result.success) {
-        setExportSuccess(result.path);
-        // Auto-hide success message after 5 seconds
-        setTimeout(() => setExportSuccess(null), 5000);
-      } else {
-        alert(`Failed to export PDF: ${result.error}`);
+      await window.api.transactions.update(transaction.id, { status: 'closed' });
+      setShowArchivePrompt(false);
+      if (onTransactionUpdated) {
+        onTransactionUpdated();
       }
     } catch (err) {
-      alert(`Failed to export PDF: ${err.message}`);
-    } finally {
-      setExporting(false);
+      console.error('Failed to archive transaction:', err);
     }
   };
 
@@ -429,34 +452,20 @@ function TransactionDetails({ transaction, onClose }) {
             <p className="text-green-100 text-sm">{transaction.property_address}</p>
           </div>
           <div className="flex items-center gap-2">
-            {/* Export PDF Button */}
+            {/* Export Button */}
             <button
-              onClick={handleExportPDF}
-              disabled={exporting}
-              className={`px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 ${
-                exporting
-                  ? 'bg-white bg-opacity-40 text-white cursor-not-allowed'
-                  : 'bg-white text-green-600 hover:bg-opacity-90 shadow-md hover:shadow-lg'
-              }`}
+              onClick={() => setShowExportModal(true)}
+              className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-white text-green-600 hover:bg-opacity-90 shadow-md hover:shadow-lg"
             >
-              {exporting ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-green-600 border-t-transparent rounded-full animate-spin"></div>
-                  Exporting...
-                </>
-              ) : (
-                <>
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                    />
-                  </svg>
-                  Export PDF
-                </>
-              )}
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                />
+              </svg>
+              Export
             </button>
             {/* Close Button */}
             <button
@@ -537,6 +546,41 @@ function TransactionDetails({ transaction, onClose }) {
           </div>
         </div>
       </div>
+
+      {/* Export Modal */}
+      {showExportModal && (
+        <ExportModal
+          transaction={transaction}
+          onClose={() => setShowExportModal(false)}
+          onExportComplete={handleExportComplete}
+        />
+      )}
+
+      {/* Archive Prompt */}
+      {showArchivePrompt && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[70] p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+            <h3 className="text-lg font-bold text-gray-900 mb-3">Archive Transaction?</h3>
+            <p className="text-sm text-gray-600 mb-6">
+              Export completed! Would you like to mark this transaction as closed?
+            </p>
+            <div className="flex items-center gap-3 justify-end">
+              <button
+                onClick={() => setShowArchivePrompt(false)}
+                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg font-medium transition-all"
+              >
+                Keep Active
+              </button>
+              <button
+                onClick={handleArchive}
+                className="px-4 py-2 bg-gray-600 text-white hover:bg-gray-700 rounded-lg font-semibold transition-all"
+              >
+                Mark as Closed
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

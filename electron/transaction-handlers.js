@@ -6,6 +6,7 @@
 const { ipcMain } = require('electron');
 const transactionService = require('./services/transactionService');
 const pdfExportService = require('./services/pdfExportService');
+const enhancedExportService = require('./services/enhancedExportService');
 
 /**
  * Register all transaction-related IPC handlers
@@ -53,6 +54,24 @@ const registerTransactionHandlers = (mainWindow) => {
       };
     } catch (error) {
       console.error('[Main] Get transactions failed:', error);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  });
+
+  // Create manual transaction
+  ipcMain.handle('transactions:create', async (event, userId, transactionData) => {
+    try {
+      const transaction = await transactionService.createManualTransaction(userId, transactionData);
+
+      return {
+        success: true,
+        transaction,
+      };
+    } catch (error) {
+      console.error('[Main] Create transaction failed:', error);
       return {
         success: false,
         error: error.message,
@@ -171,6 +190,43 @@ const registerTransactionHandlers = (mainWindow) => {
       };
     } catch (error) {
       console.error('[Main] PDF export failed:', error);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  });
+
+  // Enhanced export with options
+  ipcMain.handle('transactions:export-enhanced', async (event, transactionId, options) => {
+    try {
+      console.log('[Main] Enhanced export for transaction:', transactionId, options);
+
+      // Get transaction details with communications
+      const details = await transactionService.getTransactionDetails(transactionId);
+
+      if (!details) {
+        return {
+          success: false,
+          error: 'Transaction not found',
+        };
+      }
+
+      // Export with options
+      const exportPath = await enhancedExportService.exportTransaction(
+        details,
+        details.communications || [],
+        options
+      );
+
+      console.log('[Main] Enhanced export successful:', exportPath);
+
+      return {
+        success: true,
+        path: exportPath,
+      };
+    } catch (error) {
+      console.error('[Main] Enhanced export failed:', error);
       return {
         success: false,
         error: error.message,

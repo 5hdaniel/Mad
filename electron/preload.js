@@ -19,12 +19,14 @@ contextBridge.exposeInMainWorld('api', {
   transactions: {
     scan: (userId, options) => ipcRenderer.invoke('transactions:scan', userId, options),
     getAll: (userId) => ipcRenderer.invoke('transactions:get-all', userId),
+    create: (userId, transactionData) => ipcRenderer.invoke('transactions:create', userId, transactionData),
     getDetails: (transactionId) => ipcRenderer.invoke('transactions:get-details', transactionId),
     update: (transactionId, updates) => ipcRenderer.invoke('transactions:update', transactionId, updates),
     delete: (transactionId) => ipcRenderer.invoke('transactions:delete', transactionId),
     reanalyze: (userId, provider, propertyAddress, dateRange) =>
       ipcRenderer.invoke('transactions:reanalyze', userId, provider, propertyAddress, dateRange),
     exportPDF: (transactionId, outputPath) => ipcRenderer.invoke('transactions:export-pdf', transactionId, outputPath),
+    exportEnhanced: (transactionId, options) => ipcRenderer.invoke('transactions:export-enhanced', transactionId, options),
   },
 
   // IPC event listeners

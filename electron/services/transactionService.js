@@ -222,6 +222,24 @@ class TransactionService {
   }
 
   /**
+   * Create manual transaction (user-entered)
+   */
+  async createManualTransaction(userId, transactionData) {
+    const transactionId = await databaseService.createTransaction(userId, {
+      property_address: transactionData.property_address,
+      transaction_type: transactionData.transaction_type || null,
+      status: transactionData.status || 'active',
+      representation_start_date: transactionData.representation_start_date || null,
+      closing_date: transactionData.closing_date || null,
+      closing_date_verified: 0,
+      representation_start_confidence: null,
+      closing_date_confidence: null,
+    });
+
+    return await databaseService.getTransactionById(transactionId);
+  }
+
+  /**
    * Update transaction
    */
   async updateTransaction(transactionId, updates) {
