@@ -101,17 +101,36 @@ class DatabaseService {
    */
   async _runAdditionalMigrations() {
     try {
-      // Migration: Add terms_accepted_at column if it doesn't exist
-      const columnCheck = await this._get(`PRAGMA table_info(users_local)`);
-      const columns = await this._all(`PRAGMA table_info(users_local)`);
-      const hasTermsColumn = columns.some(col => col.name === 'terms_accepted_at');
-
-      if (!hasTermsColumn) {
+      // Migration 1: Add terms_accepted_at column to users_local
+      const userColumns = await this._all(`PRAGMA table_info(users_local)`);
+      if (!userColumns.some(col => col.name === 'terms_accepted_at')) {
         console.log('[DatabaseService] Adding terms_accepted_at column to users_local');
         await this._run(`ALTER TABLE users_local ADD COLUMN terms_accepted_at DATETIME`);
       }
+
+      // Migration 2: Add new transaction columns
+      const transactionColumns = await this._all(`PRAGMA table_info(transactions)`);
+      const transactionMigrations = [
+        { name: 'status', sql: `ALTER TABLE transactions ADD COLUMN status TEXT DEFAULT 'active'` },
+        { name: 'representation_start_date', sql: `ALTER TABLE transactions ADD COLUMN representation_start_date DATE` },
+        { name: 'closing_date_verified', sql: `ALTER TABLE transactions ADD COLUMN closing_date_verified INTEGER DEFAULT 0` },
+        { name: 'representation_start_confidence', sql: `ALTER TABLE transactions ADD COLUMN representation_start_confidence INTEGER` },
+        { name: 'closing_date_confidence', sql: `ALTER TABLE transactions ADD COLUMN closing_date_confidence INTEGER` },
+        { name: 'buyer_agent_id', sql: `ALTER TABLE transactions ADD COLUMN buyer_agent_id TEXT` },
+        { name: 'seller_agent_id', sql: `ALTER TABLE transactions ADD COLUMN seller_agent_id TEXT` },
+        { name: 'escrow_officer_id', sql: `ALTER TABLE transactions ADD COLUMN escrow_officer_id TEXT` },
+        { name: 'inspector_id', sql: `ALTER TABLE transactions ADD COLUMN inspector_id TEXT` },
+        { name: 'other_contacts', sql: `ALTER TABLE transactions ADD COLUMN other_contacts TEXT` },
+      ];
+
+      for (const migration of transactionMigrations) {
+        if (!transactionColumns.some(col => col.name === migration.name)) {
+          console.log(`[DatabaseService] Adding ${migration.name} column to transactions`);
+          await this._run(migration.sql);
+        }
+      }
     } catch (error) {
-      // Ignore errors if column already exists
+      // Log but don't fail on migration errors
       console.log('[DatabaseService] Migration check:', error.message);
     }
   }
@@ -372,6 +391,121 @@ class DatabaseService {
   }
 
   // ============================================
+  // CONTACT OPERATIONS
+  // ============================================
+
+  /**
+   * Create a new contact
+   */
+  async createContact(userId, contactData) {
+    const id = crypto.randomUUID();
+    const sql = `
+      INSERT INTO contacts (
+        id, user_id, name, email, phone, company, title, source
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+
+    const params = [
+      id,
+      userId,
+      contactData.name,
+      contactData.email || null,
+      contactData.phone || null,
+      contactData.company || null,
+      contactData.title || null,
+      contactData.source || 'manual',
+    ];
+
+    await this._run(sql, params);
+    return await this.getContactById(id);
+  }
+
+  /**
+   * Get contact by ID
+   */
+  async getContactById(contactId) {
+    const sql = 'SELECT * FROM contacts WHERE id = ?';
+    return await this._get(sql, [contactId]);
+  }
+
+  /**
+   * Get all contacts for a user
+   */
+  async getContactsByUserId(userId) {
+    const sql = 'SELECT * FROM contacts WHERE user_id = ? ORDER BY name ASC';
+    return await this._all(sql, [userId]);
+  }
+
+  /**
+   * Search contacts by name or email
+   */
+  async searchContacts(userId, query) {
+    const sql = `
+      SELECT * FROM contacts
+      WHERE user_id = ? AND (name LIKE ? OR email LIKE ?)
+      ORDER BY name ASC
+    `;
+    const searchPattern = `%${query}%`;
+    return await this._all(sql, [userId, searchPattern, searchPattern]);
+  }
+
+  /**
+   * Update contact information
+   */
+  async updateContact(contactId, updates) {
+    const allowedFields = ['name', 'email', 'phone', 'company', 'title'];
+    const fields = [];
+    const values = [];
+
+    Object.keys(updates).forEach((key) => {
+      if (allowedFields.includes(key)) {
+        fields.push(`${key} = ?`);
+        values.push(updates[key]);
+      }
+    });
+
+    if (fields.length === 0) {
+      throw new Error('No valid fields to update');
+    }
+
+    values.push(contactId);
+    const sql = `UPDATE contacts SET ${fields.join(', ')} WHERE id = ?`;
+    await this._run(sql, values);
+
+    return await this.getContactById(contactId);
+  }
+
+  /**
+   * Delete a contact
+   */
+  async deleteContact(contactId) {
+    const sql = 'DELETE FROM contacts WHERE id = ?';
+    await this._run(sql, [contactId]);
+  }
+
+  /**
+   * Get or create contact from email address
+   */
+  async getOrCreateContactFromEmail(userId, email, name = null) {
+    // Try to find existing contact
+    let contact = await this._get(
+      'SELECT * FROM contacts WHERE user_id = ? AND email = ?',
+      [userId, email]
+    );
+
+    if (!contact) {
+      // Create new contact
+      contact = await this.createContact(userId, {
+        name: name || email.split('@')[0],
+        email: email,
+        source: 'email',
+      });
+    }
+
+    return contact;
+  }
+
+  // ============================================
   // OAUTH TOKEN OPERATIONS
   // ============================================
 
@@ -555,7 +689,17 @@ class DatabaseService {
       'property_coordinates',
       'transaction_type',
       'transaction_status',
+      'status',
       'closing_date',
+      'representation_start_date',
+      'closing_date_verified',
+      'representation_start_confidence',
+      'closing_date_confidence',
+      'buyer_agent_id',
+      'seller_agent_id',
+      'escrow_officer_id',
+      'inspector_id',
+      'other_contacts',
       'export_generated_at',
       'communications_scanned',
       'extraction_confidence',
@@ -579,7 +723,7 @@ class DatabaseService {
     Object.keys(updates).forEach((key) => {
       if (allowedFields.includes(key)) {
         let value = updates[key];
-        if (['property_coordinates', 'other_parties', 'key_dates'].includes(key) && typeof value === 'object') {
+        if (['property_coordinates', 'other_parties', 'key_dates', 'other_contacts'].includes(key) && typeof value === 'object') {
           value = JSON.stringify(value);
         }
         fields.push(`${key} = ?`);

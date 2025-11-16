@@ -96,6 +96,31 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 
 -- ============================================
+-- CONTACTS TABLE (Local)
+-- ============================================
+CREATE TABLE IF NOT EXISTS contacts (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+
+  -- Contact Information
+  name TEXT NOT NULL,
+  email TEXT,
+  phone TEXT,
+  company TEXT,
+  title TEXT,
+
+  -- Source
+  source TEXT DEFAULT 'manual' CHECK (source IN ('manual', 'email', 'contacts_app')),
+
+  -- Metadata
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  last_interaction_at DATETIME,
+
+  FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE
+);
+
+-- ============================================
 -- TRANSACTIONS TABLE (Local)
 -- ============================================
 CREATE TABLE IF NOT EXISTS transactions (
@@ -110,10 +135,22 @@ CREATE TABLE IF NOT EXISTS transactions (
   property_zip TEXT,
   property_coordinates TEXT,
 
-  -- Transaction Details (AUTO-DETECTED)
+  -- Transaction Details (AUTO-DETECTED + USER INPUT)
   transaction_type TEXT CHECK (transaction_type IN ('purchase', 'sale')),
   transaction_status TEXT DEFAULT 'completed' CHECK (transaction_status IN ('completed', 'pending')),
+  status TEXT DEFAULT 'active' CHECK (status IN ('active', 'closed')),
   closing_date DATE,
+  representation_start_date DATE,
+  closing_date_verified INTEGER DEFAULT 0,
+  representation_start_confidence INTEGER,
+  closing_date_confidence INTEGER,
+
+  -- Contact Associations
+  buyer_agent_id TEXT,
+  seller_agent_id TEXT,
+  escrow_officer_id TEXT,
+  inspector_id TEXT,
+  other_contacts TEXT, -- JSON array of contact IDs
 
   -- Metadata
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -138,7 +175,11 @@ CREATE TABLE IF NOT EXISTS transactions (
   failed_offers_count INTEGER DEFAULT 0,
   key_dates TEXT,
 
-  FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE
+  FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE,
+  FOREIGN KEY (buyer_agent_id) REFERENCES contacts(id) ON DELETE SET NULL,
+  FOREIGN KEY (seller_agent_id) REFERENCES contacts(id) ON DELETE SET NULL,
+  FOREIGN KEY (escrow_officer_id) REFERENCES contacts(id) ON DELETE SET NULL,
+  FOREIGN KEY (inspector_id) REFERENCES contacts(id) ON DELETE SET NULL
 );
 
 -- ============================================
@@ -238,8 +279,11 @@ CREATE INDEX IF NOT EXISTS idx_users_local_email ON users_local(email);
 CREATE INDEX IF NOT EXISTS idx_oauth_tokens_user_provider ON oauth_tokens(user_id, provider, purpose);
 CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(session_token);
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_contacts_user_id ON contacts(user_id);
+CREATE INDEX IF NOT EXISTS idx_contacts_email ON contacts(email);
 CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_property ON transactions(property_address);
+CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions(status);
 CREATE INDEX IF NOT EXISTS idx_transaction_contacts_transaction_id ON transaction_contacts(transaction_id);
 CREATE INDEX IF NOT EXISTS idx_communications_user_id ON communications(user_id);
 CREATE INDEX IF NOT EXISTS idx_communications_transaction_id ON communications(transaction_id);
@@ -259,6 +303,12 @@ CREATE TRIGGER IF NOT EXISTS update_oauth_tokens_timestamp
 AFTER UPDATE ON oauth_tokens
 BEGIN
   UPDATE oauth_tokens SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS update_contacts_timestamp
+AFTER UPDATE ON contacts
+BEGIN
+  UPDATE contacts SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
 END;
 
 CREATE TRIGGER IF NOT EXISTS update_transactions_timestamp
