@@ -143,13 +143,13 @@ const handleGoogleCompleteLogin = async (event, authCode) => {
     console.log('[Main] Google login completed successfully');
 
     // Save session for persistence (30 days expiration)
-    const expiresAt = Date.now() + (30 * 24 * 60 * 60 * 1000);
+    const sessionExpiresAt = Date.now() + (30 * 24 * 60 * 60 * 1000);
     await sessionService.saveSession({
       user: localUser,
       sessionToken,
       provider: 'google',
       subscription,
-      expiresAt,
+      expiresAt: sessionExpiresAt,
     });
 
     return {
@@ -274,13 +274,13 @@ const handleMicrosoftLogin = async (mainWindow) => {
         console.log('[Main] Microsoft login completed successfully');
 
         // Save session for persistence (30 days expiration)
-        const expiresAt = Date.now() + (30 * 24 * 60 * 60 * 1000);
+        const sessionExpiresAt = Date.now() + (30 * 24 * 60 * 60 * 1000);
         await sessionService.saveSession({
           user: localUser,
           sessionToken,
           provider: 'microsoft',
           subscription,
-          expiresAt,
+          expiresAt: sessionExpiresAt,
         });
 
         // Notify renderer of successful login
