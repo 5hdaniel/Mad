@@ -11,9 +11,10 @@ import Profile from './components/Profile';
 import Settings from './components/Settings';
 import Transactions from './components/Transactions';
 import WelcomeTerms from './components/WelcomeTerms';
+import Dashboard from './components/Dashboard';
 
 function App() {
-  const [currentStep, setCurrentStep] = useState('login'); // login, microsoft-login, permissions, contacts, outlook, complete
+  const [currentStep, setCurrentStep] = useState('login'); // login, microsoft-login, permissions, dashboard, outlook, complete
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [sessionToken, setSessionToken] = useState(null);
@@ -53,9 +54,9 @@ function App() {
           // Also store in localStorage for backward compatibility
           localStorage.setItem('sessionToken', result.sessionToken);
 
-          // Skip to permissions or contacts based on permission status
+          // Skip to permissions or dashboard based on permission status
           if (hasPermissions) {
-            setCurrentStep('contacts');
+            setCurrentStep('dashboard');
           } else {
             setCurrentStep('permissions');
           }
@@ -85,7 +86,7 @@ function App() {
     } else {
       // Proceed to permissions check for existing users
       if (hasPermissions) {
-        setCurrentStep('contacts');
+        setCurrentStep('dashboard');
       } else {
         setCurrentStep('permissions');
       }
@@ -100,7 +101,7 @@ function App() {
 
         // Proceed to app after accepting terms
         if (hasPermissions) {
-          setCurrentStep('contacts');
+          setCurrentStep('dashboard');
         } else {
           setCurrentStep('permissions');
         }
@@ -173,7 +174,7 @@ function App() {
     setOutlookConnected(true);
     // Check if we already have permissions
     if (hasPermissions) {
-      setCurrentStep('contacts');
+      setCurrentStep('dashboard');
     } else {
       setCurrentStep('permissions');
     }
@@ -183,7 +184,7 @@ function App() {
     setOutlookConnected(false);
     // Check if we already have permissions
     if (hasPermissions) {
-      setCurrentStep('contacts');
+      setCurrentStep('dashboard');
     } else {
       setCurrentStep('permissions');
     }
@@ -196,7 +197,7 @@ function App() {
 
   const handlePermissionsGranted = () => {
     setHasPermissions(true);
-    setCurrentStep('contacts');
+    setCurrentStep('dashboard');
   };
 
   const handleExportComplete = (result) => {
@@ -222,13 +223,13 @@ function App() {
   };
 
   const handleOutlookCancel = () => {
-    setCurrentStep('contacts');
+    setCurrentStep('dashboard');
   };
 
   const handleStartOver = () => {
     setExportResult(null);
     setSelectedConversationIds(new Set()); // Clear selected conversations
-    setCurrentStep('contacts');
+    setCurrentStep('dashboard');
   };
 
   const getPageTitle = () => {
@@ -239,6 +240,8 @@ function App() {
         return 'Login';
       case 'permissions':
         return 'Setup Permissions';
+      case 'dashboard':
+        return 'Dashboard';
       case 'contacts':
         return 'Select Contacts for Export';
       case 'outlook':
@@ -246,7 +249,7 @@ function App() {
       case 'complete':
         return 'Export Complete';
       default:
-        return 'Real Estate Archive';
+        return 'Magic Audit';
     }
   };
 
@@ -291,6 +294,13 @@ function App() {
           <PermissionsScreen
             onPermissionsGranted={handlePermissionsGranted}
             onCheckAgain={checkPermissions}
+          />
+        )}
+
+        {currentStep === 'dashboard' && (
+          <Dashboard
+            onAuditNew={() => setShowTransactions(true)}
+            onViewTransactions={() => setShowTransactions(true)}
           />
         )}
 
