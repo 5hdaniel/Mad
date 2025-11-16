@@ -24,7 +24,7 @@ const initializeDatabase = async () => {
 };
 
 // Google Auth: Start login flow
-const handleGoogleLogin = async () => {
+const handleGoogleLogin = async (mainWindow) => {
   try {
     console.log('[Main] Starting Google login flow');
 
@@ -156,8 +156,8 @@ const handleGoogleCompleteLogin = async (event, authCode) => {
 };
 
 // Register all handlers (to be called in main.js)
-const registerAuthHandlers = () => {
-  ipcMain.handle('auth:google:login', handleGoogleLogin);
+const registerAuthHandlers = (mainWindow) => {
+  ipcMain.handle('auth:google:login', () => handleGoogleLogin(mainWindow));
   ipcMain.handle('auth:google:complete-login', handleGoogleCompleteLogin);
 
   // Microsoft Auth (placeholders for Phase 4)

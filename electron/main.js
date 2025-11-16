@@ -108,8 +108,8 @@ autoUpdater.on('update-downloaded', (info) => {
 
 app.whenReady().then(async () => {
   await initializeDatabase();
-  registerAuthHandlers();
   createWindow();
+  registerAuthHandlers(mainWindow);
 });
 
 app.on('window-all-closed', () => {
