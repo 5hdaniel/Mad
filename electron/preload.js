@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('api', {
     logout: (sessionToken) => ipcRenderer.invoke('auth:logout', sessionToken),
     validateSession: (sessionToken) => ipcRenderer.invoke('auth:validate-session', sessionToken),
     getCurrentUser: () => ipcRenderer.invoke('auth:get-current-user'),
+    acceptTerms: (userId) => ipcRenderer.invoke('auth:accept-terms', userId),
   },
 
   // Transaction methods

@@ -10,6 +10,7 @@ import MoveAppPrompt from './components/MoveAppPrompt';
 import Profile from './components/Profile';
 import Settings from './components/Settings';
 import Transactions from './components/Transactions';
+import WelcomeTerms from './components/WelcomeTerms';
 
 function App() {
   const [currentStep, setCurrentStep] = useState('login'); // login, microsoft-login, permissions, contacts, outlook, complete
@@ -27,6 +28,7 @@ function App() {
   const [showProfile, setShowProfile] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showTransactions, setShowTransactions] = useState(false);
+  const [showWelcomeTerms, setShowWelcomeTerms] = useState(false);
   const [authProvider, setAuthProvider] = useState(null);
   const [subscription, setSubscription] = useState(null);
 
@@ -69,7 +71,7 @@ function App() {
     }
   };
 
-  const handleLoginSuccess = (user, token, provider, subscription) => {
+  const handleLoginSuccess = (user, token, provider, subscription, isNewUser) => {
     setIsAuthenticated(true);
     setCurrentUser(user);
     setSessionToken(token);
@@ -77,12 +79,40 @@ function App() {
     setSubscription(subscription);
     localStorage.setItem('sessionToken', token);
 
-    // Proceed to permissions check
-    if (hasPermissions) {
-      setCurrentStep('contacts');
+    // Show welcome modal for new users
+    if (isNewUser) {
+      setShowWelcomeTerms(true);
     } else {
-      setCurrentStep('permissions');
+      // Proceed to permissions check for existing users
+      if (hasPermissions) {
+        setCurrentStep('contacts');
+      } else {
+        setCurrentStep('permissions');
+      }
     }
+  };
+
+  const handleAcceptTerms = async () => {
+    try {
+      if (currentUser && window.api?.auth?.acceptTerms) {
+        await window.api.auth.acceptTerms(currentUser.id);
+        setShowWelcomeTerms(false);
+
+        // Proceed to app after accepting terms
+        if (hasPermissions) {
+          setCurrentStep('contacts');
+        } else {
+          setCurrentStep('permissions');
+        }
+      }
+    } catch (error) {
+      console.error('Failed to accept terms:', error);
+    }
+  };
+
+  const handleDeclineTerms = async () => {
+    // User declined terms, log them out
+    await handleLogout();
   };
 
   const handleLogout = async () => {
@@ -101,6 +131,7 @@ function App() {
     setAuthProvider(null);
     setSubscription(null);
     setShowProfile(false);
+    setShowWelcomeTerms(false);
     localStorage.removeItem('sessionToken');
     setCurrentStep('login');
   };
@@ -369,6 +400,15 @@ function App() {
           userId={currentUser.id}
           provider={authProvider}
           onClose={() => setShowTransactions(false)}
+        />
+      )}
+
+      {/* Welcome Terms Modal (New Users Only) */}
+      {showWelcomeTerms && currentUser && (
+        <WelcomeTerms
+          user={currentUser}
+          onAccept={handleAcceptTerms}
+          onDecline={handleDeclineTerms}
         />
       )}
     </div>

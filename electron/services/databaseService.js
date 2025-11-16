@@ -79,14 +79,41 @@ class DatabaseService {
     const schemaSql = fs.readFileSync(schemaPath, 'utf8');
 
     return new Promise((resolve, reject) => {
-      this.db.exec(schemaSql, (err) => {
+      this.db.exec(schemaSql, async (err) => {
         if (err) {
           reject(err);
         } else {
-          resolve();
+          // Run additional migrations for existing databases
+          try {
+            await this._runAdditionalMigrations();
+            resolve();
+          } catch (migrationErr) {
+            reject(migrationErr);
+          }
         }
       });
     });
+  }
+
+  /**
+   * Run additional migrations for schema changes
+   * @private
+   */
+  async _runAdditionalMigrations() {
+    try {
+      // Migration: Add terms_accepted_at column if it doesn't exist
+      const columnCheck = await this._get(`PRAGMA table_info(users_local)`);
+      const columns = await this._all(`PRAGMA table_info(users_local)`);
+      const hasTermsColumn = columns.some(col => col.name === 'terms_accepted_at');
+
+      if (!hasTermsColumn) {
+        console.log('[DatabaseService] Adding terms_accepted_at column to users_local');
+        await this._run(`ALTER TABLE users_local ADD COLUMN terms_accepted_at DATETIME`);
+      }
+    } catch (error) {
+      // Ignore errors if column already exists
+      console.log('[DatabaseService] Migration check:', error.message);
+    }
   }
 
   /**
@@ -219,6 +246,7 @@ class DatabaseService {
       'company',
       'job_title',
       'last_cloud_sync_at',
+      'terms_accepted_at',
     ];
 
     const fields = [];
@@ -253,6 +281,19 @@ class DatabaseService {
       WHERE id = ?
     `;
     await this._run(sql, [userId]);
+  }
+
+  /**
+   * Accept terms and conditions for a user
+   */
+  async acceptTerms(userId) {
+    const sql = `
+      UPDATE users_local
+      SET terms_accepted_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `;
+    await this._run(sql, [userId]);
+    return await this.getUserById(userId);
   }
 
   // ============================================

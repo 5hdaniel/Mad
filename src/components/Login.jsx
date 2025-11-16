@@ -12,18 +12,11 @@ const Login = ({ onLoginSuccess }) => {
   const [authCode, setAuthCode] = useState('');
   const [provider, setProvider] = useState(null);
   const [error, setError] = useState(null);
-  const [termsAccepted, setTermsAccepted] = useState(false);
-  const [privacyAccepted, setPrivacyAccepted] = useState(false);
 
   /**
    * Handle Google Sign In
    */
   const handleGoogleLogin = async () => {
-    if (!termsAccepted || !privacyAccepted) {
-      setError('Please accept the Terms of Service and Privacy Policy');
-      return;
-    }
-
     setLoading(true);
     setError(null);
     setProvider('google');
@@ -54,11 +47,6 @@ const Login = ({ onLoginSuccess }) => {
    * Browser opens, user logs in, redirects to local server, app handles automatically
    */
   const handleMicrosoftLogin = async () => {
-    if (!termsAccepted || !privacyAccepted) {
-      setError('Please accept the Terms of Service and Privacy Policy');
-      return;
-    }
-
     setLoading(true);
     setError(null);
     setProvider('microsoft');
@@ -69,7 +57,7 @@ const Login = ({ onLoginSuccess }) => {
         console.log('Microsoft login complete:', result);
 
         if (result.success && onLoginSuccess) {
-          onLoginSuccess(result.user, result.sessionToken, 'microsoft', result.subscription);
+          onLoginSuccess(result.user, result.sessionToken, 'microsoft', result.subscription, result.isNewUser);
         } else {
           setError(result.error || 'Failed to complete Microsoft login');
           setLoading(false);
@@ -122,8 +110,8 @@ const Login = ({ onLoginSuccess }) => {
       }
 
       if (result && result.success && onLoginSuccess) {
-        // Call parent callback with user, session token, provider, and subscription
-        onLoginSuccess(result.user, result.sessionToken, provider, result.subscription);
+        // Call parent callback with user, session token, provider, subscription, and isNewUser flag
+        onLoginSuccess(result.user, result.sessionToken, provider, result.subscription, result.isNewUser);
       } else if (result && !result.success) {
         setError(result.error || 'Login failed');
         setLoading(false);
@@ -151,7 +139,7 @@ const Login = ({ onLoginSuccess }) => {
       <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-8">
         {/* Logo/Title */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Mad</h1>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Magic Audit</h1>
           <p className="text-gray-600">
             Real Estate Compliance Made Simple
           </p>
@@ -242,42 +230,10 @@ const Login = ({ onLoginSuccess }) => {
         {/* Initial Login Buttons */}
         {!authUrl && !(provider === 'microsoft' && loading) && (
           <div>
-            {/* Terms & Privacy */}
-            <div className="mb-6 space-y-2">
-              <label className="flex items-start">
-                <input
-                  type="checkbox"
-                  checked={termsAccepted}
-                  onChange={(e) => setTermsAccepted(e.target.checked)}
-                  className="mt-1 mr-2"
-                />
-                <span className="text-xs text-gray-600">
-                  I accept the{' '}
-                  <a href="#" className="text-blue-600 hover:underline">
-                    Terms of Service
-                  </a>
-                </span>
-              </label>
-              <label className="flex items-start">
-                <input
-                  type="checkbox"
-                  checked={privacyAccepted}
-                  onChange={(e) => setPrivacyAccepted(e.target.checked)}
-                  className="mt-1 mr-2"
-                />
-                <span className="text-xs text-gray-600">
-                  I accept the{' '}
-                  <a href="#" className="text-blue-600 hover:underline">
-                    Privacy Policy
-                  </a>
-                </span>
-              </label>
-            </div>
-
             {/* Google Sign In */}
             <button
               onClick={handleGoogleLogin}
-              disabled={loading || !termsAccepted || !privacyAccepted}
+              disabled={loading}
               className="w-full mb-3 flex items-center justify-center gap-3 bg-white border-2 border-gray-300 text-gray-700 py-3 px-4 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:bg-gray-100 disabled:cursor-not-allowed transition-colors"
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -304,7 +260,7 @@ const Login = ({ onLoginSuccess }) => {
             {/* Microsoft Sign In */}
             <button
               onClick={handleMicrosoftLogin}
-              disabled={loading || !termsAccepted || !privacyAccepted}
+              disabled={loading}
               className="w-full flex items-center justify-center gap-3 bg-white border-2 border-gray-300 text-gray-700 py-3 px-4 rounded-lg hover:bg-gray-50 hover:border-gray-400 disabled:bg-gray-100 disabled:cursor-not-allowed transition-colors"
             >
               <svg className="w-5 h-5" viewBox="0 0 23 23">

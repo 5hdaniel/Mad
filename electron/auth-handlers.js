@@ -142,6 +142,9 @@ const handleGoogleCompleteLogin = async (event, authCode) => {
 
     console.log('[Main] Google login completed successfully');
 
+    // Check if user is new (hasn't accepted terms yet)
+    const isNewUser = !localUser.terms_accepted_at;
+
     // Save session for persistence (30 days expiration)
     const sessionExpiresAt = Date.now() + (30 * 24 * 60 * 60 * 1000);
     await sessionService.saveSession({
@@ -157,6 +160,7 @@ const handleGoogleCompleteLogin = async (event, authCode) => {
       user: localUser,
       sessionToken,
       subscription,
+      isNewUser,
     };
   } catch (error) {
     console.error('[Main] Google login completion failed:', error);
@@ -273,6 +277,9 @@ const handleMicrosoftLogin = async (mainWindow) => {
 
         console.log('[Main] Microsoft login completed successfully');
 
+        // Check if user is new (hasn't accepted terms yet)
+        const isNewUser = !localUser.terms_accepted_at;
+
         // Save session for persistence (30 days expiration)
         const sessionExpiresAt = Date.now() + (30 * 24 * 60 * 60 * 1000);
         await sessionService.saveSession({
@@ -290,6 +297,7 @@ const handleMicrosoftLogin = async (mainWindow) => {
             user: localUser,
             sessionToken,
             subscription,
+            isNewUser,
           });
         }
       } catch (error) {
@@ -335,6 +343,17 @@ const registerAuthHandlers = (mainWindow) => {
       return { success: true };
     } catch (error) {
       console.error('[Main] Logout failed:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Accept terms
+  ipcMain.handle('auth:accept-terms', async (event, userId) => {
+    try {
+      const updatedUser = await databaseService.acceptTerms(userId);
+      return { success: true, user: updatedUser };
+    } catch (error) {
+      console.error('[Main] Accept terms failed:', error);
       return { success: false, error: error.message };
     }
   });
