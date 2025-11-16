@@ -69,7 +69,7 @@ const Login = ({ onLoginSuccess }) => {
         console.log('Microsoft login complete:', result);
 
         if (result.success && onLoginSuccess) {
-          onLoginSuccess(result.user, result.sessionToken);
+          onLoginSuccess(result.user, result.sessionToken, 'microsoft', result.subscription);
         } else {
           setError(result.error || 'Failed to complete Microsoft login');
           setLoading(false);
@@ -122,8 +122,8 @@ const Login = ({ onLoginSuccess }) => {
       }
 
       if (result && result.success && onLoginSuccess) {
-        // Call parent callback with user and session token
-        onLoginSuccess(result.user, result.sessionToken);
+        // Call parent callback with user, session token, provider, and subscription
+        onLoginSuccess(result.user, result.sessionToken, provider, result.subscription);
       } else if (result && !result.success) {
         setError(result.error || 'Login failed');
         setLoading(false);

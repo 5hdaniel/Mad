@@ -69,10 +69,12 @@ function App() {
     }
   };
 
-  const handleLoginSuccess = (user, token) => {
+  const handleLoginSuccess = (user, token, provider, subscription) => {
     setIsAuthenticated(true);
     setCurrentUser(user);
     setSessionToken(token);
+    setAuthProvider(provider);
+    setSubscription(subscription);
     localStorage.setItem('sessionToken', token);
 
     // Proceed to permissions check
