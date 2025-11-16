@@ -9,6 +9,7 @@ import UpdateNotification from './components/UpdateNotification';
 import MoveAppPrompt from './components/MoveAppPrompt';
 import Profile from './components/Profile';
 import Settings from './components/Settings';
+import Transactions from './components/Transactions';
 
 function App() {
   const [currentStep, setCurrentStep] = useState('login'); // login, microsoft-login, permissions, contacts, outlook, complete
@@ -25,6 +26,7 @@ function App() {
   const [appPath, setAppPath] = useState('');
   const [showProfile, setShowProfile] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showTransactions, setShowTransactions] = useState(false);
   const [authProvider, setAuthProvider] = useState(null);
   const [subscription, setSubscription] = useState(null);
 
@@ -348,6 +350,7 @@ function App() {
           subscription={subscription}
           onLogout={handleLogout}
           onClose={() => setShowProfile(false)}
+          onViewTransactions={() => setShowTransactions(true)}
         />
       )}
 
@@ -355,6 +358,15 @@ function App() {
       {showSettings && (
         <Settings
           onClose={() => setShowSettings(false)}
+        />
+      )}
+
+      {/* Transactions Modal */}
+      {showTransactions && currentUser && (
+        <Transactions
+          userId={currentUser.id}
+          provider={authProvider}
+          onClose={() => setShowTransactions(false)}
         />
       )}
     </div>
