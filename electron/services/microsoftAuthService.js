@@ -16,8 +16,9 @@ class MicrosoftAuthService {
     this.tokenUrl = `https://login.microsoftonline.com/${this.tenantId}/oauth2/v2.0/token`;
     this.deviceCodeUrl = `https://login.microsoftonline.com/${this.tenantId}/oauth2/v2.0/devicecode`;
 
-    // Redirect URI for desktop app
-    this.redirectUri = 'http://localhost:3000/auth/callback';
+    // Redirect URI for native/desktop applications
+    // This is the standard Microsoft redirect URI for native apps
+    this.redirectUri = 'https://login.microsoftonline.com/common/oauth2/nativeclient';
   }
 
   /**
