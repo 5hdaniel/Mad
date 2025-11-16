@@ -7,6 +7,8 @@ import ExportComplete from './components/ExportComplete';
 import OutlookExport from './components/OutlookExport';
 import UpdateNotification from './components/UpdateNotification';
 import MoveAppPrompt from './components/MoveAppPrompt';
+import Profile from './components/Profile';
+import Settings from './components/Settings';
 
 function App() {
   const [currentStep, setCurrentStep] = useState('login'); // login, microsoft-login, permissions, contacts, outlook, complete
@@ -21,6 +23,10 @@ function App() {
   const [selectedConversationIds, setSelectedConversationIds] = useState(new Set());
   const [showMoveAppPrompt, setShowMoveAppPrompt] = useState(false);
   const [appPath, setAppPath] = useState('');
+  const [showProfile, setShowProfile] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [authProvider, setAuthProvider] = useState(null);
+  const [subscription, setSubscription] = useState(null);
 
   useEffect(() => {
     checkSession();
@@ -38,6 +44,8 @@ function App() {
           setIsAuthenticated(true);
           setCurrentUser(result.user);
           setSessionToken(result.sessionToken);
+          setAuthProvider(result.provider);
+          setSubscription(result.subscription);
           // Also store in localStorage for backward compatibility
           localStorage.setItem('sessionToken', result.sessionToken);
 
@@ -82,9 +90,13 @@ function App() {
       }
     }
 
+    // Clear all state
     setIsAuthenticated(false);
     setCurrentUser(null);
     setSessionToken(null);
+    setAuthProvider(null);
+    setSubscription(null);
+    setShowProfile(false);
     localStorage.removeItem('sessionToken');
     setCurrentStep('login');
   };
@@ -207,8 +219,23 @@ function App() {
     <div className="h-screen flex flex-col bg-gray-50 overflow-hidden">
       {/* Title Bar - Hide on login screen */}
       {currentStep !== 'login' && (
-        <div className="flex-shrink-0 bg-gradient-to-b from-gray-100 to-gray-50 border-b border-gray-200 px-4 py-3 flex items-center justify-center select-none">
+        <div className="flex-shrink-0 bg-gradient-to-b from-gray-100 to-gray-50 border-b border-gray-200 px-4 py-3 flex items-center justify-between select-none">
+          <div className="w-8" /> {/* Spacer for centering */}
           <h1 className="text-sm font-semibold text-gray-700">{getPageTitle()}</h1>
+          {/* User Menu Button */}
+          {isAuthenticated && currentUser && (
+            <button
+              onClick={() => setShowProfile(true)}
+              className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 hover:from-blue-500 hover:to-purple-600 flex items-center justify-center text-white text-sm font-bold shadow-md transition-all hover:shadow-lg"
+              title={`${currentUser.display_name || currentUser.email} - Click for account settings`}
+            >
+              {currentUser.avatar_url ? (
+                <img src={currentUser.avatar_url} alt="Profile" className="w-8 h-8 rounded-full" />
+              ) : (
+                currentUser.display_name?.[0]?.toUpperCase() || currentUser.email?.[0]?.toUpperCase() || '?'
+              )}
+            </button>
+          )}
         </div>
       )}
 
@@ -310,6 +337,24 @@ function App() {
           appPath={appPath}
           onDismiss={handleDismissMovePrompt}
           onNotNow={handleNotNowMovePrompt}
+        />
+      )}
+
+      {/* Profile Modal */}
+      {showProfile && currentUser && (
+        <Profile
+          user={currentUser}
+          provider={authProvider}
+          subscription={subscription}
+          onLogout={handleLogout}
+          onClose={() => setShowProfile(false)}
+        />
+      )}
+
+      {/* Settings Modal */}
+      {showSettings && (
+        <Settings
+          onClose={() => setShowSettings(false)}
         />
       )}
     </div>
