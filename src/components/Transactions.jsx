@@ -251,7 +251,6 @@ function Transactions({ userId, provider, onClose }) {
               <p className="text-sm text-red-800">{error}</p>
             </div>
           )}
-        </div>
       </div>
 
       {/* Transactions List */}
