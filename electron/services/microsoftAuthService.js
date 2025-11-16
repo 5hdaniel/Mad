@@ -11,7 +11,8 @@ const crypto = require('crypto');
 class MicrosoftAuthService {
   constructor() {
     this.clientId = process.env.MICROSOFT_CLIENT_ID;
-    this.clientSecret = process.env.MICROSOFT_CLIENT_SECRET;
+    // Note: client_secret not needed for public clients (desktop apps)
+    // We use PKCE (Proof Key for Code Exchange) for security instead
     this.tenantId = process.env.MICROSOFT_TENANT_ID || 'common';
     this.redirectUri = 'http://localhost:3000/callback';
 
@@ -201,7 +202,6 @@ class MicrosoftAuthService {
     try {
       const params = new URLSearchParams({
         client_id: this.clientId,
-        client_secret: this.clientSecret,
         code: code,
         redirect_uri: this.redirectUri,
         grant_type: 'authorization_code',
@@ -258,7 +258,6 @@ class MicrosoftAuthService {
     try {
       const params = new URLSearchParams({
         client_id: this.clientId,
-        client_secret: this.clientSecret,
         refresh_token: refreshToken,
         grant_type: 'refresh_token'
       });
