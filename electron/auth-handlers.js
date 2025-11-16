@@ -13,6 +13,7 @@ const googleAuthService = require('./services/googleAuthService');
 const microsoftAuthService = require('./services/microsoftAuthService');
 const supabaseService = require('./services/supabaseService');
 const tokenEncryptionService = require('./services/tokenEncryptionService');
+const sessionService = require('./services/sessionService');
 
 // Initialize database when app is ready
 const initializeDatabase = async () => {
@@ -141,6 +142,16 @@ const handleGoogleCompleteLogin = async (event, authCode) => {
 
     console.log('[Main] Google login completed successfully');
 
+    // Save session for persistence (30 days expiration)
+    const expiresAt = Date.now() + (30 * 24 * 60 * 60 * 1000);
+    await sessionService.saveSession({
+      user: localUser,
+      sessionToken,
+      provider: 'google',
+      subscription,
+      expiresAt,
+    });
+
     return {
       success: true,
       user: localUser,
@@ -262,6 +273,16 @@ const handleMicrosoftLogin = async (mainWindow) => {
 
         console.log('[Main] Microsoft login completed successfully');
 
+        // Save session for persistence (30 days expiration)
+        const expiresAt = Date.now() + (30 * 24 * 60 * 60 * 1000);
+        await sessionService.saveSession({
+          user: localUser,
+          sessionToken,
+          provider: 'microsoft',
+          subscription,
+          expiresAt,
+        });
+
         // Notify renderer of successful login
         if (mainWindow) {
           mainWindow.webContents.send('microsoft:login-complete', {
@@ -310,6 +331,7 @@ const registerAuthHandlers = (mainWindow) => {
   ipcMain.handle('auth:logout', async (event, sessionToken) => {
     try {
       await databaseService.deleteSession(sessionToken);
+      await sessionService.clearSession();
       return { success: true };
     } catch (error) {
       console.error('[Main] Logout failed:', error);
@@ -333,9 +355,35 @@ const registerAuthHandlers = (mainWindow) => {
     }
   });
 
-  // Get current user
+  // Get current user (load from saved session)
   ipcMain.handle('auth:get-current-user', async () => {
-    return { success: false, error: 'Session management not yet implemented' };
+    try {
+      const session = await sessionService.loadSession();
+
+      if (!session) {
+        return { success: false, error: 'No active session' };
+      }
+
+      // Validate session token in database
+      const dbSession = await databaseService.validateSession(session.sessionToken);
+
+      if (!dbSession) {
+        // Session invalid, clear it
+        await sessionService.clearSession();
+        return { success: false, error: 'Session expired or invalid' };
+      }
+
+      return {
+        success: true,
+        user: session.user,
+        sessionToken: session.sessionToken,
+        subscription: session.subscription,
+        provider: session.provider,
+      };
+    } catch (error) {
+      console.error('[Main] Get current user failed:', error);
+      return { success: false, error: error.message };
+    }
   });
 
   // Shell: Open external URL

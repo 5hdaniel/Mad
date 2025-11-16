@@ -29,24 +29,31 @@ function App() {
   }, []);
 
   const checkSession = async () => {
-    // Check if user has an existing session
-    const storedToken = localStorage.getItem('sessionToken');
-    if (storedToken && window.api?.auth?.validateSession) {
+    // Check if user has an existing session (now using persistent session service)
+    if (window.api?.auth?.getCurrentUser) {
       try {
-        const result = await window.api.auth.validateSession(storedToken);
-        if (result.success && result.valid) {
+        const result = await window.api.auth.getCurrentUser();
+        if (result.success) {
+          console.log('Auto-login: Session found, logging in user');
           setIsAuthenticated(true);
           setCurrentUser(result.user);
-          setSessionToken(storedToken);
+          setSessionToken(result.sessionToken);
+          // Also store in localStorage for backward compatibility
+          localStorage.setItem('sessionToken', result.sessionToken);
+
           // Skip to permissions or contacts based on permission status
           if (hasPermissions) {
             setCurrentStep('contacts');
           } else {
             setCurrentStep('permissions');
           }
+        } else {
+          console.log('Auto-login: No active session found');
+          // Clear any stale localStorage data
+          localStorage.removeItem('sessionToken');
         }
       } catch (error) {
-        console.error('Session validation failed:', error);
+        console.error('Session check failed:', error);
         localStorage.removeItem('sessionToken');
       }
     }
