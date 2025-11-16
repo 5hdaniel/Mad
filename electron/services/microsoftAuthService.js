@@ -1,54 +1,81 @@
+const { PublicClientApplication } = require('@azure/msal-node');
 const axios = require('axios');
 
 /**
- * Microsoft OAuth Service
- * Handles Microsoft authentication with device code flow
- * Two-step process: Login authentication vs Mailbox access
+ * Microsoft OAuth Service using MSAL Device Code Flow
+ * Consistent with existing OutlookService implementation
+ * No redirect URI configuration needed
  */
 class MicrosoftAuthService {
   constructor() {
     this.clientId = process.env.MICROSOFT_CLIENT_ID;
-    this.clientSecret = process.env.MICROSOFT_CLIENT_SECRET;
     this.tenantId = process.env.MICROSOFT_TENANT_ID || 'common';
+    this.msalInstance = null;
+  }
 
-    // Microsoft OAuth2 endpoints
-    this.authorizeUrl = `https://login.microsoftonline.com/${this.tenantId}/oauth2/v2.0/authorize`;
-    this.tokenUrl = `https://login.microsoftonline.com/${this.tenantId}/oauth2/v2.0/token`;
-    this.deviceCodeUrl = `https://login.microsoftonline.com/${this.tenantId}/oauth2/v2.0/devicecode`;
+  /**
+   * Initialize MSAL instance
+   */
+  initialize() {
+    if (!this.msalInstance) {
+      const msalConfig = {
+        auth: {
+          clientId: this.clientId,
+          authority: `https://login.microsoftonline.com/${this.tenantId}`,
+        },
+        system: {
+          loggerOptions: {
+            loggerCallback(loglevel, message) {
+              // Logging disabled for production
+            },
+            piiLoggingEnabled: false,
+            logLevel: 3,
+          },
+        },
+      };
 
-    // Redirect URI for desktop applications
-    // Using the standard Azure native client redirect URI
-    this.redirectUri = 'urn:ietf:wg:oauth:2.0:oob';
+      this.msalInstance = new PublicClientApplication(msalConfig);
+    }
   }
 
   /**
    * Step 1: Authenticate for Login (minimal scopes)
-   * Only requests basic profile information
+   * Uses device code flow - no redirect URI needed
+   * @param {Function} onDeviceCode - Callback to send device code info to renderer
    * @returns {Promise<{authUrl: string, scopes: string[]}>}
    */
   async authenticateForLogin(onDeviceCode) {
+    this.initialize();
+
     const scopes = [
       'openid',
       'profile',
       'email',
-      'User.Read', // Basic Microsoft Graph profile access
-      'offline_access' // For refresh tokens
+      'User.Read',
+      'offline_access'
     ];
 
-    // Build authorization URL
-    const params = new URLSearchParams({
-      client_id: this.clientId,
-      response_type: 'code',
-      redirect_uri: this.redirectUri,
-      scope: scopes.join(' '),
-      response_mode: 'query',
-      prompt: 'consent' // Force consent to get refresh token
-    });
+    // Device code flow - returns URL and user code for manual entry
+    const deviceCodeRequest = {
+      scopes: scopes,
+      deviceCodeCallback: (response) => {
+        // Send device code info to renderer
+        if (onDeviceCode) {
+          onDeviceCode({
+            verificationUri: response.verificationUri,
+            userCode: response.userCode,
+            message: response.message,
+            expiresIn: response.expiresIn
+          });
+        }
+      },
+    };
 
-    const authUrl = `${this.authorizeUrl}?${params.toString()}`;
+    // This will wait for user to complete authentication in browser
+    const authResponse = await this.msalInstance.acquireTokenByDeviceCode(deviceCodeRequest);
 
     return {
-      authUrl,
+      authResponse,
       scopes
     };
   }
@@ -56,10 +83,13 @@ class MicrosoftAuthService {
   /**
    * Step 2: Authenticate for Mailbox Access
    * Requests full mailbox permissions
-   * @param {string} userId - User ID to associate mailbox with
-   * @returns {Promise<{authUrl: string, scopes: string[]}>}
+   * @param {string} loginHint - User email to pre-fill
+   * @param {Function} onDeviceCode - Callback to send device code info to renderer
+   * @returns {Promise<{authResponse: object, scopes: string[]}>}
    */
-  async authenticateForMailbox(userId) {
+  async authenticateForMailbox(loginHint, onDeviceCode) {
+    this.initialize();
+
     const scopes = [
       'openid',
       'profile',
@@ -70,50 +100,30 @@ class MicrosoftAuthService {
       'offline_access'
     ];
 
-    const params = new URLSearchParams({
-      client_id: this.clientId,
-      response_type: 'code',
-      redirect_uri: this.redirectUri,
-      scope: scopes.join(' '),
-      response_mode: 'query',
-      prompt: 'consent',
-      login_hint: userId // Pre-fill the email
-    });
+    const deviceCodeRequest = {
+      scopes: scopes,
+      deviceCodeCallback: (response) => {
+        if (onDeviceCode) {
+          onDeviceCode({
+            verificationUri: response.verificationUri,
+            userCode: response.userCode,
+            message: response.message,
+            expiresIn: response.expiresIn
+          });
+        }
+      },
+    };
 
-    const authUrl = `${this.authorizeUrl}?${params.toString()}`;
+    if (loginHint) {
+      deviceCodeRequest.loginHint = loginHint;
+    }
+
+    const authResponse = await this.msalInstance.acquireTokenByDeviceCode(deviceCodeRequest);
 
     return {
-      authUrl,
+      authResponse,
       scopes
     };
-  }
-
-  /**
-   * Exchange authorization code for tokens
-   * @param {string} code - Authorization code from OAuth flow
-   * @returns {Promise<{access_token: string, refresh_token: string, expires_in: number, scope: string}>}
-   */
-  async exchangeCodeForTokens(code) {
-    try {
-      const params = new URLSearchParams({
-        client_id: this.clientId,
-        client_secret: this.clientSecret,
-        code: code,
-        redirect_uri: this.redirectUri,
-        grant_type: 'authorization_code'
-      });
-
-      const response = await axios.post(this.tokenUrl, params.toString(), {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded'
-        }
-      });
-
-      return response.data;
-    } catch (error) {
-      console.error('Error exchanging code for tokens:', error.response?.data || error.message);
-      throw new Error(error.response?.data?.error_description || 'Failed to exchange authorization code');
-    }
   }
 
   /**
@@ -150,44 +160,51 @@ class MicrosoftAuthService {
    * @returns {Promise<{access_token: string, refresh_token: string, expires_in: number}>}
    */
   async refreshToken(refreshToken) {
-    try {
-      const params = new URLSearchParams({
-        client_id: this.clientId,
-        client_secret: this.clientSecret,
-        refresh_token: refreshToken,
-        grant_type: 'refresh_token'
-      });
+    this.initialize();
 
-      const response = await axios.post(this.tokenUrl, params.toString(), {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded'
-        }
-      });
+    // MSAL handles refresh tokens internally
+    // Get account from cache and use silent token acquisition
+    const accounts = await this.msalInstance.getTokenCache().getAllAccounts();
 
-      return response.data;
-    } catch (error) {
-      console.error('Error refreshing token:', error.response?.data || error.message);
-      throw new Error('Failed to refresh access token');
+    if (accounts.length === 0) {
+      throw new Error('No accounts found in cache');
     }
+
+    const silentRequest = {
+      account: accounts[0],
+      scopes: ['User.Read', 'openid', 'profile', 'email', 'offline_access'],
+      forceRefresh: true
+    };
+
+    const response = await this.msalInstance.acquireTokenSilent(silentRequest);
+
+    return {
+      access_token: response.accessToken,
+      refresh_token: response.refreshToken || refreshToken,
+      expires_in: response.expiresOn ? Math.floor((response.expiresOn.getTime() - Date.now()) / 1000) : 3600
+    };
   }
 
   /**
    * Revoke access token (logout)
-   * Note: Microsoft doesn't have a token revocation endpoint
-   * Tokens will expire naturally or can be invalidated by changing password
    * @param {string} accessToken - Access token to revoke
    */
   async revokeToken(accessToken) {
-    // Microsoft OAuth2 doesn't provide a revocation endpoint
-    // For proper logout, direct user to: https://login.microsoftonline.com/common/oauth2/v2.0/logout
-    console.log('Microsoft tokens cannot be revoked programmatically. User should sign out from Microsoft account.');
-    return { success: true, message: 'Token will expire naturally' };
+    this.initialize();
+
+    // Remove all accounts from cache
+    const accounts = await this.msalInstance.getTokenCache().getAllAccounts();
+    for (const account of accounts) {
+      await this.msalInstance.getTokenCache().removeAccount(account);
+    }
+
+    return { success: true, message: 'Token revoked and cache cleared' };
   }
 
   /**
    * Get mailbox metadata (for testing connection)
    * @param {string} accessToken - Access token with Mail.Read scope
-   * @returns {Promise<{emailAddress: string, displayName: string}>}
+   * @returns {Promise<{displayName: string, totalItemCount: number, unreadItemCount: number}>}
    */
   async getMailboxInfo(accessToken) {
     try {

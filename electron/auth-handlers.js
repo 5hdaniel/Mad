@@ -156,47 +156,31 @@ const handleGoogleCompleteLogin = async (event, authCode) => {
   }
 };
 
-// Microsoft Auth: Start login flow
+// Microsoft Auth: Start login flow with MSAL Device Code
 const handleMicrosoftLogin = async (mainWindow) => {
   try {
-    console.log('[Main] Starting Microsoft login flow');
+    console.log('[Main] Starting Microsoft login flow with MSAL');
 
+    // Device code flow - this will wait for user to complete auth
     const result = await microsoftAuthService.authenticateForLogin((deviceCodeInfo) => {
-      // Device code callback - send to renderer
+      // Send device code to renderer for display
       if (mainWindow) {
-        mainWindow.webContents.send('auth:device-code', deviceCodeInfo);
+        mainWindow.webContents.send('microsoft:device-code', {
+          userCode: deviceCodeInfo.userCode,
+          verificationUri: deviceCodeInfo.verificationUri,
+          message: deviceCodeInfo.message
+        });
       }
     });
 
-    return {
-      success: true,
-      authUrl: result.authUrl,
-      scopes: result.scopes,
-    };
-  } catch (error) {
-    console.error('[Main] Microsoft login failed:', error);
-    return {
-      success: false,
-      error: error.message,
-    };
-  }
-};
-
-// Microsoft Auth: Complete login with authorization code
-const handleMicrosoftCompleteLogin = async (event, authCode) => {
-  try {
-    console.log('[Main] Completing Microsoft login');
-
-    // Exchange code for tokens
-    const tokens = await microsoftAuthService.exchangeCodeForTokens(authCode);
-
-    // Get user info
-    const userInfo = await microsoftAuthService.getUserInfo(tokens.access_token);
+    // Authentication complete - get user info
+    const accessToken = result.authResponse.accessToken;
+    const userInfo = await microsoftAuthService.getUserInfo(accessToken);
 
     // Encrypt tokens
-    const encryptedAccessToken = tokenEncryptionService.encrypt(tokens.access_token);
-    const encryptedRefreshToken = tokens.refresh_token
-      ? tokenEncryptionService.encrypt(tokens.refresh_token)
+    const encryptedAccessToken = tokenEncryptionService.encrypt(accessToken);
+    const encryptedRefreshToken = result.authResponse.refreshToken
+      ? tokenEncryptionService.encrypt(result.authResponse.refreshToken)
       : null;
 
     // Sync user to Supabase
@@ -205,7 +189,7 @@ const handleMicrosoftCompleteLogin = async (event, authCode) => {
       first_name: userInfo.given_name,
       last_name: userInfo.family_name,
       display_name: userInfo.name,
-      avatar_url: null, // Microsoft Graph doesn't return avatar URL in basic profile
+      avatar_url: null,
       oauth_provider: 'microsoft',
       oauth_id: userInfo.id,
     });
@@ -242,11 +226,15 @@ const handleMicrosoftCompleteLogin = async (event, authCode) => {
     await databaseService.updateLastLogin(localUser.id);
 
     // Save auth token
+    const expiresAt = result.authResponse.expiresOn
+      ? result.authResponse.expiresOn.toISOString()
+      : new Date(Date.now() + 3600 * 1000).toISOString();
+
     await databaseService.saveOAuthToken(localUser.id, 'microsoft', 'authentication', {
       access_token: encryptedAccessToken,
       refresh_token: encryptedRefreshToken,
-      token_expires_at: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
-      scopes_granted: tokens.scope,
+      token_expires_at: expiresAt,
+      scopes_granted: result.scopes.join(' '),
     });
 
     // Create session
@@ -282,7 +270,7 @@ const handleMicrosoftCompleteLogin = async (event, authCode) => {
       subscription,
     };
   } catch (error) {
-    console.error('[Main] Microsoft login completion failed:', error);
+    console.error('[Main] Microsoft login failed:', error);
     return {
       success: false,
       error: error.message,
@@ -290,14 +278,14 @@ const handleMicrosoftCompleteLogin = async (event, authCode) => {
   }
 };
 
+
 // Register all handlers (to be called in main.js)
 const registerAuthHandlers = (mainWindow) => {
   ipcMain.handle('auth:google:login', () => handleGoogleLogin(mainWindow));
   ipcMain.handle('auth:google:complete-login', handleGoogleCompleteLogin);
 
-  // Microsoft Auth
+  // Microsoft Auth (MSAL Device Code Flow - single step, no completion handler needed)
   ipcMain.handle('auth:microsoft:login', () => handleMicrosoftLogin(mainWindow));
-  ipcMain.handle('auth:microsoft:complete-login', handleMicrosoftCompleteLogin);
 
   // Logout
   ipcMain.handle('auth:logout', async (event, sessionToken) => {

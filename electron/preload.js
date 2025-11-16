@@ -14,6 +14,9 @@ contextBridge.exposeInMainWorld('api', {
     getCurrentUser: () => ipcRenderer.invoke('auth:get-current-user'),
   },
 
+  // IPC event listeners
+  onMicrosoftDeviceCode: (callback) => ipcRenderer.on('microsoft:device-code', (_, info) => callback(info)),
+
   // Shell methods (opens URLs in external browser)
   shell: {
     openExternal: (url) => ipcRenderer.invoke('shell:open-external', url),
