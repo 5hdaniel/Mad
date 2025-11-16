@@ -39,6 +39,7 @@ class EnhancedExportService {
         format: exportFormat,
         contentType,
         transactionId: transaction.id,
+        propertyAddress: transaction.property_address,
       });
 
       // Filter communications by date range
@@ -48,6 +49,13 @@ class EnhancedExportService {
         closingDate
       );
 
+      // IMPORTANT: Verify address relevance to prevent cross-transaction contamination
+      // This ensures that contacts working on multiple transactions don't get mixed emails
+      filteredComms = this._filterByAddressRelevance(
+        filteredComms,
+        transaction.property_address
+      );
+
       // Filter by content type
       filteredComms = this._filterByContentType(filteredComms, contentType);
 
@@ -55,7 +63,7 @@ class EnhancedExportService {
       filteredComms.sort((a, b) => new Date(b.sent_at) - new Date(a.sent_at));
 
       console.log(
-        `[Enhanced Export] Filtered to ${filteredComms.length} communications`
+        `[Enhanced Export] Filtered to ${filteredComms.length} communications (verified address relevance)`
       );
 
       // Export based on format
@@ -124,6 +132,103 @@ class EnhancedExportService {
     }
 
     return communications;
+  }
+
+  /**
+   * Filter communications by address relevance
+   * CRITICAL: Prevents cross-transaction contamination when contacts work on multiple properties
+   * Example: Inspector working on 4 different transactions should only show emails for THIS property
+   * @private
+   */
+  _filterByAddressRelevance(communications, propertyAddress) {
+    if (!propertyAddress) {
+      console.warn('[Enhanced Export] No property address provided, skipping address verification');
+      return communications;
+    }
+
+    // Normalize the property address for matching
+    const normalizedAddress = this._normalizeAddress(propertyAddress);
+    const addressParts = this._extractAddressParts(normalizedAddress);
+
+    return communications.filter((comm) => {
+      // Check subject and body for address references
+      const subject = (comm.subject || '').toLowerCase();
+      const body = (comm.body_plain || comm.body || '').toLowerCase();
+      const combinedContent = `${subject} ${body}`;
+
+      // Check if ANY part of the address is mentioned in the communication
+      const hasAddressReference = addressParts.some((part) => {
+        if (part.length < 3) return false; // Skip very short parts
+        return combinedContent.includes(part);
+      });
+
+      if (hasAddressReference) {
+        return true;
+      }
+
+      // If no direct match, check if it's in the parties_involved or keywords_detected
+      // (These might have been extracted during email scanning)
+      if (comm.parties_involved) {
+        const parties = comm.parties_involved.toLowerCase();
+        if (addressParts.some((part) => part.length >= 3 && parties.includes(part))) {
+          return true;
+        }
+      }
+
+      if (comm.keywords_detected) {
+        const keywords = Array.isArray(comm.keywords_detected)
+          ? comm.keywords_detected.join(' ').toLowerCase()
+          : comm.keywords_detected.toLowerCase();
+        if (addressParts.some((part) => part.length >= 3 && keywords.includes(part))) {
+          return true;
+        }
+      }
+
+      // Log filtered out emails for debugging
+      console.log(
+        `[Enhanced Export] Filtered out email (no address match): "${comm.subject}" from ${comm.sender}`
+      );
+      return false;
+    });
+  }
+
+  /**
+   * Normalize address for comparison (lowercase, remove extra spaces)
+   * @private
+   */
+  _normalizeAddress(address) {
+    return address.toLowerCase().replace(/\s+/g, ' ').trim();
+  }
+
+  /**
+   * Extract searchable parts from an address
+   * Examples:
+   *   "123 Main St, Anytown, CA 12345" → ["123", "main", "st", "anytown", "ca", "12345", "123 main", "main st"]
+   * @private
+   */
+  _extractAddressParts(normalizedAddress) {
+    const parts = [];
+
+    // Remove common separators and split
+    const words = normalizedAddress
+      .replace(/[,\.]/g, ' ')
+      .split(/\s+/)
+      .filter((w) => w.length > 0);
+
+    // Add individual words
+    parts.push(...words);
+
+    // Add 2-word combinations (street number + street name, etc)
+    for (let i = 0; i < words.length - 1; i++) {
+      parts.push(`${words[i]} ${words[i + 1]}`);
+    }
+
+    // Add 3-word combinations for better matching
+    for (let i = 0; i < words.length - 2; i++) {
+      parts.push(`${words[i]} ${words[i + 1]} ${words[i + 2]}`);
+    }
+
+    return parts;
   }
 
   /**
