@@ -566,6 +566,116 @@ class DatabaseService {
     await this._run(sql, [transactionId]);
   }
 
+  // ============================================
+  // COMMUNICATION OPERATIONS
+  // ============================================
+
+  /**
+   * Save communication (email) to database
+   */
+  async saveCommunication(userId, communicationData) {
+    const id = crypto.randomUUID();
+
+    const sql = `
+      INSERT INTO communications (
+        id, user_id, transaction_id, communication_type, source,
+        email_thread_id, sender, recipients, cc, bcc,
+        subject, body, body_plain, sent_at, received_at,
+        has_attachments, attachment_count, attachment_metadata,
+        keywords_detected, parties_involved, communication_category,
+        relevance_score, is_compliance_related
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+
+    const params = [
+      id,
+      userId,
+      communicationData.transaction_id || null,
+      communicationData.communication_type || 'email',
+      communicationData.source || null,
+      communicationData.email_thread_id || null,
+      communicationData.sender || null,
+      communicationData.recipients || null,
+      communicationData.cc || null,
+      communicationData.bcc || null,
+      communicationData.subject || null,
+      communicationData.body || null,
+      communicationData.body_plain || null,
+      communicationData.sent_at || null,
+      communicationData.received_at || null,
+      communicationData.has_attachments ? 1 : 0,
+      communicationData.attachment_count || 0,
+      communicationData.attachment_metadata ? JSON.stringify(communicationData.attachment_metadata) : null,
+      communicationData.keywords_detected ? JSON.stringify(communicationData.keywords_detected) : null,
+      communicationData.parties_involved ? JSON.stringify(communicationData.parties_involved) : null,
+      communicationData.communication_category || null,
+      communicationData.relevance_score || null,
+      communicationData.is_compliance_related ? 1 : 0,
+    ];
+
+    await this._run(sql, params);
+    return id;
+  }
+
+  /**
+   * Get communications for a transaction
+   */
+  async getCommunicationsByTransactionId(transactionId) {
+    const sql = `
+      SELECT * FROM communications
+      WHERE transaction_id = ?
+      ORDER BY sent_at DESC
+    `;
+    return await this._all(sql, [transactionId]);
+  }
+
+  /**
+   * Get communications for a user
+   */
+  async getCommunicationsByUserId(userId, limit = 100) {
+    const sql = `
+      SELECT * FROM communications
+      WHERE user_id = ?
+      ORDER BY sent_at DESC
+      LIMIT ?
+    `;
+    return await this._all(sql, [userId, limit]);
+  }
+
+  /**
+   * Link communication to transaction
+   */
+  async linkCommunicationToTransaction(communicationId, transactionId) {
+    const sql = 'UPDATE communications SET transaction_id = ? WHERE id = ?';
+    await this._run(sql, [transactionId, communicationId]);
+  }
+
+  /**
+   * Save extracted transaction data (audit trail)
+   */
+  async saveExtractedData(transactionId, fieldName, fieldValue, sourceCommId, confidence) {
+    const id = crypto.randomUUID();
+
+    const sql = `
+      INSERT INTO extracted_transaction_data (
+        id, transaction_id, field_name, field_value,
+        source_communication_id, extraction_method, confidence_score
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    `;
+
+    await this._run(sql, [
+      id,
+      transactionId,
+      fieldName,
+      fieldValue,
+      sourceCommId || null,
+      'pattern_matching',
+      confidence || null,
+    ]);
+
+    return id;
+  }
+
   /**
    * Close database connection
    */

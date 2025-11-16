@@ -36,6 +36,7 @@ const googleAuthService = require('./services/googleAuthService');
 const supabaseService = require('./services/supabaseService');
 const tokenEncryptionService = require('./services/tokenEncryptionService');
 const { initializeDatabase, registerAuthHandlers } = require('./auth-handlers');
+const { registerTransactionHandlers } = require('./transaction-handlers');
 
 // Configure logging for auto-updater
 log.transports.file.level = 'info';
@@ -110,6 +111,7 @@ app.whenReady().then(async () => {
   await initializeDatabase();
   createWindow();
   registerAuthHandlers(mainWindow);
+  registerTransactionHandlers(mainWindow);
 });
 
 app.on('window-all-closed', () => {

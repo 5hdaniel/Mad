@@ -14,8 +14,20 @@ contextBridge.exposeInMainWorld('api', {
     getCurrentUser: () => ipcRenderer.invoke('auth:get-current-user'),
   },
 
+  // Transaction methods
+  transactions: {
+    scan: (userId, options) => ipcRenderer.invoke('transactions:scan', userId, options),
+    getAll: (userId) => ipcRenderer.invoke('transactions:get-all', userId),
+    getDetails: (transactionId) => ipcRenderer.invoke('transactions:get-details', transactionId),
+    update: (transactionId, updates) => ipcRenderer.invoke('transactions:update', transactionId, updates),
+    delete: (transactionId) => ipcRenderer.invoke('transactions:delete', transactionId),
+    reanalyze: (userId, provider, propertyAddress, dateRange) =>
+      ipcRenderer.invoke('transactions:reanalyze', userId, provider, propertyAddress, dateRange),
+  },
+
   // IPC event listeners
   onMicrosoftLoginComplete: (callback) => ipcRenderer.on('microsoft:login-complete', (_, result) => callback(result)),
+  onTransactionScanProgress: (callback) => ipcRenderer.on('transactions:scan-progress', (_, progress) => callback(progress)),
 
   // Shell methods (opens URLs in external browser)
   shell: {
