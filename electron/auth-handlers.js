@@ -156,118 +156,137 @@ const handleGoogleCompleteLogin = async (event, authCode) => {
   }
 };
 
-// Microsoft Auth: Start login flow with MSAL Device Code
+// Microsoft Auth: Start login flow with local server redirect
 const handleMicrosoftLogin = async (mainWindow) => {
   try {
-    console.log('[Main] Starting Microsoft login flow with MSAL');
+    console.log('[Main] Starting Microsoft login flow with redirect');
 
-    // Device code flow - this will wait for user to complete auth
-    const result = await microsoftAuthService.authenticateForLogin((deviceCodeInfo) => {
-      // Send device code to renderer for display
-      if (mainWindow) {
-        mainWindow.webContents.send('microsoft:device-code', {
-          userCode: deviceCodeInfo.userCode,
-          verificationUri: deviceCodeInfo.verificationUri,
-          message: deviceCodeInfo.message
+    // Start auth flow - returns authUrl and a promise for the code
+    const { authUrl, codePromise, codeVerifier, scopes } = await microsoftAuthService.authenticateForLogin();
+
+    // Return authUrl immediately so browser can open
+    // Don't wait for user - return early
+    setTimeout(async () => {
+      try {
+        // Wait for code from local server (in background)
+        const code = await codePromise;
+        console.log('[Main] Received authorization code from redirect');
+
+        // Exchange code for tokens
+        const tokens = await microsoftAuthService.exchangeCodeForTokens(code, codeVerifier);
+
+        // Get user info
+        const userInfo = await microsoftAuthService.getUserInfo(tokens.access_token);
+
+        // Encrypt tokens
+        const encryptedAccessToken = tokenEncryptionService.encrypt(tokens.access_token);
+        const encryptedRefreshToken = tokens.refresh_token
+          ? tokenEncryptionService.encrypt(tokens.refresh_token)
+          : null;
+
+        // Sync user to Supabase
+        const cloudUser = await supabaseService.syncUser({
+          email: userInfo.email,
+          first_name: userInfo.given_name,
+          last_name: userInfo.family_name,
+          display_name: userInfo.name,
+          avatar_url: null,
+          oauth_provider: 'microsoft',
+          oauth_id: userInfo.id,
         });
+
+        // Create user in local database
+        let localUser = await databaseService.getUserByOAuthId('microsoft', userInfo.id);
+
+        if (!localUser) {
+          const userId = await databaseService.createUser({
+            email: userInfo.email,
+            first_name: userInfo.given_name,
+            last_name: userInfo.family_name,
+            display_name: userInfo.name,
+            avatar_url: null,
+            oauth_provider: 'microsoft',
+            oauth_id: userInfo.id,
+            subscription_tier: cloudUser.subscription_tier,
+            subscription_status: cloudUser.subscription_status,
+            trial_ends_at: cloudUser.trial_ends_at,
+          });
+
+          localUser = await databaseService.getUserById(userId);
+        } else {
+          // Update existing user
+          localUser = await databaseService.updateUser(localUser.id, {
+            email: userInfo.email,
+            first_name: userInfo.given_name,
+            last_name: userInfo.family_name,
+            display_name: userInfo.name,
+          });
+        }
+
+        // Update last login
+        await databaseService.updateLastLogin(localUser.id);
+
+        // Save auth token
+        const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
+
+        await databaseService.saveOAuthToken(localUser.id, 'microsoft', 'authentication', {
+          access_token: encryptedAccessToken,
+          refresh_token: encryptedRefreshToken,
+          token_expires_at: expiresAt,
+          scopes_granted: tokens.scope,
+        });
+
+        // Create session
+        const sessionToken = await databaseService.createSession(localUser.id);
+
+        // Validate subscription
+        const subscription = await supabaseService.validateSubscription(cloudUser.id);
+
+        // Register device
+        const deviceInfo = {
+          device_id: crypto.randomUUID(),
+          device_name: os.hostname(),
+          os: os.platform() + ' ' + os.release(),
+          app_version: app.getVersion(),
+        };
+        await supabaseService.registerDevice(cloudUser.id, deviceInfo);
+
+        // Track login event
+        await supabaseService.trackEvent(
+          cloudUser.id,
+          'user_login',
+          { provider: 'microsoft' },
+          deviceInfo.device_id,
+          app.getVersion()
+        );
+
+        console.log('[Main] Microsoft login completed successfully');
+
+        // Notify renderer of successful login
+        if (mainWindow) {
+          mainWindow.webContents.send('microsoft:login-complete', {
+            success: true,
+            user: localUser,
+            sessionToken,
+            subscription,
+          });
+        }
+      } catch (error) {
+        console.error('[Main] Microsoft login background processing failed:', error);
+        if (mainWindow) {
+          mainWindow.webContents.send('microsoft:login-complete', {
+            success: false,
+            error: error.message,
+          });
+        }
       }
-    });
+    }, 0);
 
-    // Authentication complete - get user info
-    const accessToken = result.authResponse.accessToken;
-    const userInfo = await microsoftAuthService.getUserInfo(accessToken);
-
-    // Encrypt tokens
-    const encryptedAccessToken = tokenEncryptionService.encrypt(accessToken);
-    const encryptedRefreshToken = result.authResponse.refreshToken
-      ? tokenEncryptionService.encrypt(result.authResponse.refreshToken)
-      : null;
-
-    // Sync user to Supabase
-    const cloudUser = await supabaseService.syncUser({
-      email: userInfo.email,
-      first_name: userInfo.given_name,
-      last_name: userInfo.family_name,
-      display_name: userInfo.name,
-      avatar_url: null,
-      oauth_provider: 'microsoft',
-      oauth_id: userInfo.id,
-    });
-
-    // Create user in local database
-    let localUser = await databaseService.getUserByOAuthId('microsoft', userInfo.id);
-
-    if (!localUser) {
-      const userId = await databaseService.createUser({
-        email: userInfo.email,
-        first_name: userInfo.given_name,
-        last_name: userInfo.family_name,
-        display_name: userInfo.name,
-        avatar_url: null,
-        oauth_provider: 'microsoft',
-        oauth_id: userInfo.id,
-        subscription_tier: cloudUser.subscription_tier,
-        subscription_status: cloudUser.subscription_status,
-        trial_ends_at: cloudUser.trial_ends_at,
-      });
-
-      localUser = await databaseService.getUserById(userId);
-    } else {
-      // Update existing user
-      localUser = await databaseService.updateUser(localUser.id, {
-        email: userInfo.email,
-        first_name: userInfo.given_name,
-        last_name: userInfo.family_name,
-        display_name: userInfo.name,
-      });
-    }
-
-    // Update last login
-    await databaseService.updateLastLogin(localUser.id);
-
-    // Save auth token
-    const expiresAt = result.authResponse.expiresOn
-      ? result.authResponse.expiresOn.toISOString()
-      : new Date(Date.now() + 3600 * 1000).toISOString();
-
-    await databaseService.saveOAuthToken(localUser.id, 'microsoft', 'authentication', {
-      access_token: encryptedAccessToken,
-      refresh_token: encryptedRefreshToken,
-      token_expires_at: expiresAt,
-      scopes_granted: result.scopes.join(' '),
-    });
-
-    // Create session
-    const sessionToken = await databaseService.createSession(localUser.id);
-
-    // Validate subscription
-    const subscription = await supabaseService.validateSubscription(cloudUser.id);
-
-    // Register device
-    const deviceInfo = {
-      device_id: crypto.randomUUID(),
-      device_name: os.hostname(),
-      os: os.platform() + ' ' + os.release(),
-      app_version: app.getVersion(),
-    };
-    await supabaseService.registerDevice(cloudUser.id, deviceInfo);
-
-    // Track login event
-    await supabaseService.trackEvent(
-      cloudUser.id,
-      'user_login',
-      { provider: 'microsoft' },
-      deviceInfo.device_id,
-      app.getVersion()
-    );
-
-    console.log('[Main] Microsoft login completed successfully');
-
+    // Return immediately with authUrl
     return {
       success: true,
-      user: localUser,
-      sessionToken,
-      subscription,
+      authUrl,
+      scopes,
     };
   } catch (error) {
     console.error('[Main] Microsoft login failed:', error);

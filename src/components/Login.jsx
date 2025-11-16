@@ -14,7 +14,6 @@ const Login = ({ onLoginSuccess }) => {
   const [error, setError] = useState(null);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
-  const [deviceCode, setDeviceCode] = useState(null); // For Microsoft device code flow
 
   /**
    * Handle Google Sign In
@@ -51,8 +50,8 @@ const Login = ({ onLoginSuccess }) => {
   };
 
   /**
-   * Handle Microsoft Sign In (Device Code Flow)
-   * MSAL Device Code Flow: User enters code on Microsoft's website, app waits for completion
+   * Handle Microsoft Sign In (Redirect Flow)
+   * Browser opens, user logs in, redirects to local server, app handles automatically
    */
   const handleMicrosoftLogin = async () => {
     if (!termsAccepted || !privacyAccepted) {
@@ -63,39 +62,40 @@ const Login = ({ onLoginSuccess }) => {
     setLoading(true);
     setError(null);
     setProvider('microsoft');
-    setDeviceCode(null);
 
-    // Listen for device code from main process
-    const deviceCodeHandler = (data) => {
-      console.log('Received device code:', data);
-      setDeviceCode(data);
-      // Open browser to verification URI
-      window.api.shell.openExternal(data.verificationUri);
-    };
+    // Listen for login completion from main process
+    if (window.api.onMicrosoftLoginComplete) {
+      window.api.onMicrosoftLoginComplete((result) => {
+        console.log('Microsoft login complete:', result);
 
-    // Set up listener (assuming ipcRenderer is exposed via preload)
-    if (window.api.onMicrosoftDeviceCode) {
-      window.api.onMicrosoftDeviceCode(deviceCodeHandler);
+        if (result.success && onLoginSuccess) {
+          onLoginSuccess(result.user, result.sessionToken);
+        } else {
+          setError(result.error || 'Failed to complete Microsoft login');
+          setLoading(false);
+          setProvider(null);
+        }
+      });
     }
 
     try {
-      // This will wait for the user to complete authentication
+      // Start login - returns authUrl immediately
       const result = await window.api.auth.microsoftLogin();
 
-      if (result.success && onLoginSuccess) {
-        onLoginSuccess(result.user, result.sessionToken);
+      if (result.success && result.authUrl) {
+        // Open browser - redirect will be handled automatically
+        window.api.shell.openExternal(result.authUrl);
+        // Keep loading=true while waiting for redirect
       } else {
-        setError(result.error || 'Failed to complete Microsoft login');
+        setError(result.error || 'Failed to start Microsoft login');
         setLoading(false);
         setProvider(null);
-        setDeviceCode(null);
       }
     } catch (err) {
       console.error('Microsoft login error:', err);
       setError(err.message || 'Failed to start Microsoft login');
       setLoading(false);
       setProvider(null);
-      setDeviceCode(null);
     }
   };
 
@@ -144,7 +144,6 @@ const Login = ({ onLoginSuccess }) => {
     setAuthCode('');
     setProvider(null);
     setError(null);
-    setDeviceCode(null);
   };
 
   return (
@@ -165,33 +164,19 @@ const Login = ({ onLoginSuccess }) => {
           </div>
         )}
 
-        {/* Microsoft Device Code Display */}
-        {deviceCode && provider === 'microsoft' && loading && (
+        {/* Microsoft Authentication in Progress */}
+        {provider === 'microsoft' && loading && (
           <div className="mb-6">
             <div className="p-6 bg-gradient-to-br from-purple-50 to-indigo-50 border-2 border-purple-200 rounded-lg text-center">
-              <p className="text-sm text-purple-900 mb-4 font-semibold">
-                Microsoft Authentication in Progress...
-              </p>
-              <p className="text-xs text-purple-700 mb-4">
-                A browser window has been opened. Enter this code on the Microsoft sign-in page:
-              </p>
-              <div className="bg-white px-6 py-4 rounded-lg border-2 border-purple-300 inline-block mb-4">
-                <p className="text-3xl font-bold text-purple-900 tracking-widest font-mono">
-                  {deviceCode.userCode}
+              <div className="flex flex-col items-center">
+                <div className="w-12 h-12 border-4 border-purple-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+                <p className="text-sm text-purple-900 font-semibold mb-2">
+                  Authenticating with Microsoft...
+                </p>
+                <p className="text-xs text-purple-700">
+                  A browser window has been opened. Complete sign-in there and you'll be automatically logged in.
                 </p>
               </div>
-              <p className="text-xs text-purple-600 mb-4">
-                Verification URL: {deviceCode.verificationUri}
-              </p>
-              <button
-                onClick={() => window.api.shell.openExternal(deviceCode.verificationUri)}
-                className="text-xs text-purple-600 hover:text-purple-800 underline font-medium"
-              >
-                Click here if the browser didn't open
-              </button>
-              <p className="text-xs text-purple-500 mt-4">
-                Waiting for you to complete authentication...
-              </p>
             </div>
           </div>
         )}
@@ -255,7 +240,7 @@ const Login = ({ onLoginSuccess }) => {
         )}
 
         {/* Initial Login Buttons */}
-        {!authUrl && !deviceCode && (
+        {!authUrl && !(provider === 'microsoft' && loading) && (
           <div>
             {/* Terms & Privacy */}
             <div className="mb-6 space-y-2">

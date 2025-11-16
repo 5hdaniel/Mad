@@ -15,7 +15,7 @@ contextBridge.exposeInMainWorld('api', {
   },
 
   // IPC event listeners
-  onMicrosoftDeviceCode: (callback) => ipcRenderer.on('microsoft:device-code', (_, info) => callback(info)),
+  onMicrosoftLoginComplete: (callback) => ipcRenderer.on('microsoft:login-complete', (_, result) => callback(result)),
 
   // Shell methods (opens URLs in external browser)
   shell: {
