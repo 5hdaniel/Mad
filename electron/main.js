@@ -30,6 +30,13 @@ const {
   FIVE_YEARS_IN_MS
 } = require('./constants');
 
+// Import new authentication services
+const databaseService = require('./services/databaseService');
+const googleAuthService = require('./services/googleAuthService');
+const supabaseService = require('./services/supabaseService');
+const tokenEncryptionService = require('./services/tokenEncryptionService');
+const { initializeDatabase, registerAuthHandlers } = require('./auth-handlers');
+
 // Configure logging for auto-updater
 log.transports.file.level = 'info';
 autoUpdater.logger = log;
@@ -99,7 +106,11 @@ autoUpdater.on('update-downloaded', (info) => {
   }
 });
 
-app.whenReady().then(createWindow);
+app.whenReady().then(async () => {
+  await initializeDatabase();
+  registerAuthHandlers();
+  createWindow();
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {

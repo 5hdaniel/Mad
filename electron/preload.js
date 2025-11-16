@@ -2,6 +2,25 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 // Expose protected methods that allow the renderer process to use
 // ipcRenderer without exposing the entire object
+contextBridge.exposeInMainWorld('api', {
+  // Authentication methods
+  auth: {
+    googleLogin: () => ipcRenderer.invoke('auth:google:login'),
+    googleCompleteLogin: (code) => ipcRenderer.invoke('auth:google:complete-login', code),
+    microsoftLogin: () => ipcRenderer.invoke('auth:microsoft:login'),
+    microsoftCompleteLogin: (code) => ipcRenderer.invoke('auth:microsoft:complete-login', code),
+    logout: (sessionToken) => ipcRenderer.invoke('auth:logout', sessionToken),
+    validateSession: (sessionToken) => ipcRenderer.invoke('auth:validate-session', sessionToken),
+    getCurrentUser: () => ipcRenderer.invoke('auth:get-current-user'),
+  },
+
+  // Shell methods (opens URLs in external browser)
+  shell: {
+    openExternal: (url) => ipcRenderer.invoke('shell:open-external', url),
+  },
+});
+
+// Legacy electron namespace for backward compatibility
 contextBridge.exposeInMainWorld('electron', {
   getAppInfo: () => ipcRenderer.invoke('get-app-info'),
   getMacOSVersion: () => ipcRenderer.invoke('get-macos-version'),
