@@ -6,7 +6,7 @@
 
 import React, { useState } from 'react';
 
-const Login = () => {
+const Login = ({ onLoginSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [authUrl, setAuthUrl] = useState(null);
   const [authCode, setAuthCode] = useState('');
@@ -88,13 +88,20 @@ const Login = () => {
     setError(null);
 
     try {
+      let result;
       if (provider === 'google') {
-        await window.api.auth.googleCompleteLogin(authCode.trim());
+        result = await window.api.auth.googleCompleteLogin(authCode.trim());
       } else if (provider === 'microsoft') {
-        await window.api.auth.microsoftCompleteLogin(authCode.trim());
+        result = await window.api.auth.microsoftCompleteLogin(authCode.trim());
       }
 
-      // Success - the main app will handle the redirect
+      if (result && result.success && onLoginSuccess) {
+        // Call parent callback with user and session token
+        onLoginSuccess(result.user, result.sessionToken);
+      } else if (result && !result.success) {
+        setError(result.error || 'Login failed');
+        setLoading(false);
+      }
     } catch (err) {
       console.error('Code exchange error:', err);
       setError(err.message || 'Failed to complete login');

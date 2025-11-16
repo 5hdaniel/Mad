@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import Login from './components/Login';
 import MicrosoftLogin from './components/MicrosoftLogin';
 import PermissionsScreen from './components/PermissionsScreen';
 import ConversationList from './components/ConversationList';
@@ -8,7 +9,10 @@ import UpdateNotification from './components/UpdateNotification';
 import MoveAppPrompt from './components/MoveAppPrompt';
 
 function App() {
-  const [currentStep, setCurrentStep] = useState('microsoft-login'); // microsoft-login, permissions, contacts, outlook, complete
+  const [currentStep, setCurrentStep] = useState('login'); // login, microsoft-login, permissions, contacts, outlook, complete
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [sessionToken, setSessionToken] = useState(null);
   const [hasPermissions, setHasPermissions] = useState(false);
   const [outlookConnected, setOutlookConnected] = useState(false);
   const [exportResult, setExportResult] = useState(null);
@@ -19,9 +23,64 @@ function App() {
   const [appPath, setAppPath] = useState('');
 
   useEffect(() => {
+    checkSession();
     checkPermissions();
     checkAppLocation();
   }, []);
+
+  const checkSession = async () => {
+    // Check if user has an existing session
+    const storedToken = localStorage.getItem('sessionToken');
+    if (storedToken && window.api?.auth?.validateSession) {
+      try {
+        const result = await window.api.auth.validateSession(storedToken);
+        if (result.success && result.valid) {
+          setIsAuthenticated(true);
+          setCurrentUser(result.user);
+          setSessionToken(storedToken);
+          // Skip to permissions or contacts based on permission status
+          if (hasPermissions) {
+            setCurrentStep('contacts');
+          } else {
+            setCurrentStep('permissions');
+          }
+        }
+      } catch (error) {
+        console.error('Session validation failed:', error);
+        localStorage.removeItem('sessionToken');
+      }
+    }
+  };
+
+  const handleLoginSuccess = (user, token) => {
+    setIsAuthenticated(true);
+    setCurrentUser(user);
+    setSessionToken(token);
+    localStorage.setItem('sessionToken', token);
+
+    // Proceed to permissions check
+    if (hasPermissions) {
+      setCurrentStep('contacts');
+    } else {
+      setCurrentStep('permissions');
+    }
+  };
+
+  const handleLogout = async () => {
+    if (sessionToken && window.api?.auth?.logout) {
+      try {
+        await window.api.auth.logout(sessionToken);
+      } catch (error) {
+        console.error('Logout failed:', error);
+      }
+    }
+
+    setIsAuthenticated(false);
+    setCurrentUser(null);
+    setSessionToken(null);
+    localStorage.removeItem('sessionToken');
+    setCurrentStep('login');
+  };
 
   const checkPermissions = async () => {
     const result = await window.electron.checkPermissions();
@@ -120,6 +179,8 @@ function App() {
 
   const getPageTitle = () => {
     switch (currentStep) {
+      case 'login':
+        return 'Welcome';
       case 'microsoft-login':
         return 'Login';
       case 'permissions':
@@ -137,13 +198,19 @@ function App() {
 
   return (
     <div className="h-screen flex flex-col bg-gray-50 overflow-hidden">
-      {/* Title Bar */}
-      <div className="flex-shrink-0 bg-gradient-to-b from-gray-100 to-gray-50 border-b border-gray-200 px-4 py-3 flex items-center justify-center select-none">
-        <h1 className="text-sm font-semibold text-gray-700">{getPageTitle()}</h1>
-      </div>
+      {/* Title Bar - Hide on login screen */}
+      {currentStep !== 'login' && (
+        <div className="flex-shrink-0 bg-gradient-to-b from-gray-100 to-gray-50 border-b border-gray-200 px-4 py-3 flex items-center justify-center select-none">
+          <h1 className="text-sm font-semibold text-gray-700">{getPageTitle()}</h1>
+        </div>
+      )}
 
       {/* Scrollable Content Area */}
       <div className="flex-1 overflow-y-auto relative">
+        {currentStep === 'login' && (
+          <Login onLoginSuccess={handleLoginSuccess} />
+        )}
+
         {currentStep === 'microsoft-login' && (
           <MicrosoftLogin
             onLoginComplete={handleMicrosoftLogin}
