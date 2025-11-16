@@ -31,10 +31,15 @@ const Login = ({ onLoginSuccess }) => {
     try {
       const result = await window.api.auth.googleLogin();
 
-      if (result.authUrl) {
+      if (result.success && result.authUrl) {
         setAuthUrl(result.authUrl);
         // Open browser
         window.api.shell.openExternal(result.authUrl);
+        setLoading(false); // Reset loading so code input field appears
+      } else {
+        setError(result.error || 'Failed to start Google login');
+        setLoading(false);
+        setProvider(null);
       }
     } catch (err) {
       console.error('Google login error:', err);
@@ -60,10 +65,15 @@ const Login = ({ onLoginSuccess }) => {
     try {
       const result = await window.api.auth.microsoftLogin();
 
-      if (result.authUrl) {
+      if (result.success && result.authUrl) {
         setAuthUrl(result.authUrl);
         // Open browser
         window.api.shell.openExternal(result.authUrl);
+        setLoading(false); // Reset loading so code input field appears
+      } else {
+        setError(result.error || 'Failed to start Microsoft login');
+        setLoading(false);
+        setProvider(null);
       }
     } catch (err) {
       console.error('Microsoft login error:', err);
