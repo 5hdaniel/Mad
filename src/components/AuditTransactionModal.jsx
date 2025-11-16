@@ -27,6 +27,25 @@ function AuditTransactionModal({ userId, provider, onClose, onSuccess }) {
 
   const [showAddressAutocomplete, setShowAddressAutocomplete] = useState(false);
   const [addressSuggestions, setAddressSuggestions] = useState([]);
+  const [sessionToken] = React.useState(() => `session_${Date.now()}_${Math.random()}`);
+
+  /**
+   * Initialize Google Places API (if available)
+   */
+  React.useEffect(() => {
+    const initializeAPI = async () => {
+      if (window.api?.address?.initialize) {
+        // Try to initialize with API key from environment
+        // If no API key, address verification will gracefully degrade
+        try {
+          await window.api.address.initialize();
+        } catch (error) {
+          console.warn('[AuditTransaction] Address verification not available:', error);
+        }
+      }
+    };
+    initializeAPI();
+  }, []);
 
   /**
    * Handle address input change with autocomplete
@@ -34,10 +53,20 @@ function AuditTransactionModal({ userId, provider, onClose, onSuccess }) {
   const handleAddressChange = async (value) => {
     setAddressData({ ...addressData, property_address: value });
 
-    if (value.length > 3) {
-      setShowAddressAutocomplete(true);
-      // TODO: Fetch address suggestions from Google Places API
-      // For now, just hide autocomplete if empty
+    if (value.length > 3 && window.api?.address?.getSuggestions) {
+      try {
+        const result = await window.api.address.getSuggestions(value, sessionToken);
+        if (result.success && result.suggestions.length > 0) {
+          setAddressSuggestions(result.suggestions);
+          setShowAddressAutocomplete(true);
+        } else {
+          setAddressSuggestions([]);
+          setShowAddressAutocomplete(false);
+        }
+      } catch (error) {
+        console.error('[AuditTransaction] Failed to fetch address suggestions:', error);
+        setShowAddressAutocomplete(false);
+      }
     } else {
       setShowAddressAutocomplete(false);
       setAddressSuggestions([]);
@@ -48,16 +77,44 @@ function AuditTransactionModal({ userId, provider, onClose, onSuccess }) {
    * Select address from autocomplete
    */
   const selectAddress = async (suggestion) => {
-    // TODO: Use Google Places API to get full address details
-    setAddressData({
-      ...addressData,
-      property_address: suggestion.formatted_address,
-      property_street: suggestion.street,
-      property_city: suggestion.city,
-      property_state: suggestion.state,
-      property_zip: suggestion.zip,
-      property_coordinates: suggestion.coordinates,
-    });
+    if (!window.api?.address?.getDetails) {
+      // Fallback if API not available
+      setAddressData({
+        ...addressData,
+        property_address: suggestion.formatted_address,
+      });
+      setShowAddressAutocomplete(false);
+      return;
+    }
+
+    try {
+      const result = await window.api.address.getDetails(suggestion.place_id);
+      if (result.success && result.address) {
+        const addr = result.address;
+        setAddressData({
+          ...addressData,
+          property_address: addr.formatted_address,
+          property_street: addr.street,
+          property_city: addr.city,
+          property_state: addr.state_short || addr.state,
+          property_zip: addr.zip,
+          property_coordinates: addr.coordinates,
+        });
+      } else {
+        // Fallback
+        setAddressData({
+          ...addressData,
+          property_address: suggestion.formatted_address,
+        });
+      }
+    } catch (error) {
+      console.error('[AuditTransaction] Failed to get address details:', error);
+      // Fallback
+      setAddressData({
+        ...addressData,
+        property_address: suggestion.formatted_address,
+      });
+    }
     setShowAddressAutocomplete(false);
   };
 
@@ -329,12 +386,12 @@ function AddressVerificationStep({
             <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
               {suggestions.map((suggestion, index) => (
                 <button
-                  key={index}
+                  key={suggestion.place_id || index}
                   onClick={() => onSelectSuggestion(suggestion)}
-                  className="w-full text-left px-4 py-2 hover:bg-indigo-50 transition-colors"
+                  className="w-full text-left px-4 py-2 hover:bg-indigo-50 transition-colors border-b border-gray-100 last:border-b-0"
                 >
-                  <p className="font-medium text-gray-900">{suggestion.formatted_address}</p>
-                  <p className="text-xs text-gray-500">{suggestion.city}, {suggestion.state}</p>
+                  <p className="font-medium text-gray-900">{suggestion.main_text}</p>
+                  <p className="text-xs text-gray-500">{suggestion.secondary_text}</p>
                 </button>
               ))}
             </div>

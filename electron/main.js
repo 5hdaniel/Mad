@@ -38,6 +38,7 @@ const tokenEncryptionService = require('./services/tokenEncryptionService');
 const { initializeDatabase, registerAuthHandlers } = require('./auth-handlers');
 const { registerTransactionHandlers } = require('./transaction-handlers');
 const { registerContactHandlers } = require('./contact-handlers');
+const { registerAddressHandlers } = require('./address-handlers');
 
 // Configure logging for auto-updater
 log.transports.file.level = 'info';
@@ -114,6 +115,7 @@ app.whenReady().then(async () => {
   registerAuthHandlers(mainWindow);
   registerTransactionHandlers(mainWindow);
   registerContactHandlers();
+  registerAddressHandlers();
 });
 
 app.on('window-all-closed', () => {

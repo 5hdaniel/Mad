@@ -42,6 +42,15 @@ contextBridge.exposeInMainWorld('api', {
     delete: (contactId) => ipcRenderer.invoke('contacts:delete', contactId),
   },
 
+  // Address verification methods (Google Places API)
+  address: {
+    initialize: (apiKey) => ipcRenderer.invoke('address:initialize', apiKey),
+    getSuggestions: (input, sessionToken) => ipcRenderer.invoke('address:get-suggestions', input, sessionToken),
+    getDetails: (placeId) => ipcRenderer.invoke('address:get-details', placeId),
+    geocode: (address) => ipcRenderer.invoke('address:geocode', address),
+    validate: (address) => ipcRenderer.invoke('address:validate', address),
+  },
+
   // IPC event listeners
   onMicrosoftLoginComplete: (callback) => ipcRenderer.on('microsoft:login-complete', (_, result) => callback(result)),
   onTransactionScanProgress: (callback) => ipcRenderer.on('transactions:scan-progress', (_, progress) => callback(progress)),
