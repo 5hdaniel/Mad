@@ -17,8 +17,8 @@ class MicrosoftAuthService {
     this.deviceCodeUrl = `https://login.microsoftonline.com/${this.tenantId}/oauth2/v2.0/devicecode`;
 
     // Redirect URI for desktop applications
-    // Using http://localhost which is commonly pre-configured for mobile/desktop apps
-    this.redirectUri = 'http://localhost';
+    // Using the standard Azure native client redirect URI
+    this.redirectUri = 'urn:ietf:wg:oauth:2.0:oob';
   }
 
   /**
