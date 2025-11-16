@@ -39,12 +39,23 @@ class MicrosoftAuthService {
           if (error) {
             res.writeHead(200, { 'Content-Type': 'text/html' });
             res.end(`
+              <!DOCTYPE html>
               <html>
-                <body style="font-family: system-ui; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #fee;">
-                  <div style="text-align: center;">
-                    <h1 style="color: #c33;">❌ Authentication Failed</h1>
-                    <p style="color: #666;">${parsedUrl.query.error_description || error}</p>
-                    <p style="color: #999; font-size: 14px;">You can close this window.</p>
+                <head>
+                  <meta charset="UTF-8">
+                  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                  <title>Authentication Failed</title>
+                </head>
+                <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                  <div style="text-align: center; background: white; padding: 3rem 4rem; border-radius: 1rem; box-shadow: 0 20px 60px rgba(0,0,0,0.3); max-width: 500px;">
+                    <div style="width: 80px; height: 80px; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem;">
+                      <svg style="width: 48px; height: 48px; color: white;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path>
+                      </svg>
+                    </div>
+                    <h1 style="color: #1a202c; font-size: 1.875rem; font-weight: 700; margin: 0 0 1rem 0;">Authentication Failed</h1>
+                    <p style="color: #4a5568; font-size: 1rem; margin: 0 0 1.5rem 0; line-height: 1.5;">${parsedUrl.query.error_description || error}</p>
+                    <p style="color: #718096; font-size: 0.875rem; margin: 0;">You can close this window and try again.</p>
                   </div>
                 </body>
               </html>
@@ -54,13 +65,25 @@ class MicrosoftAuthService {
           } else if (code) {
             res.writeHead(200, { 'Content-Type': 'text/html' });
             res.end(`
+              <!DOCTYPE html>
               <html>
-                <body style="font-family: system-ui; display: flex; align-items: center; justify-center; height: 100vh; margin: 0; background: #efe;">
-                  <div style="text-align: center;">
-                    <h1 style="color: #383;">✓ Authentication Successful</h1>
-                    <p style="color: #666;">You can close this window and return to the app.</p>
+                <head>
+                  <meta charset="UTF-8">
+                  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                  <title>Authentication Successful</title>
+                </head>
+                <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                  <div style="text-align: center; background: white; padding: 3rem 4rem; border-radius: 1rem; box-shadow: 0 20px 60px rgba(0,0,0,0.3); max-width: 500px;">
+                    <div style="width: 80px; height: 80px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem;">
+                      <svg style="width: 48px; height: 48px; color: white;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path>
+                      </svg>
+                    </div>
+                    <h1 style="color: #1a202c; font-size: 1.875rem; font-weight: 700; margin: 0 0 1rem 0;">Authentication Successful!</h1>
+                    <p style="color: #4a5568; font-size: 1rem; margin: 0 0 1.5rem 0; line-height: 1.5;">You've been successfully authenticated with Microsoft.</p>
+                    <p style="color: #718096; font-size: 0.875rem; margin: 0;">This window will close automatically, or you can close it now.</p>
                   </div>
-                  <script>setTimeout(() => window.close(), 2000);</script>
+                  <script>setTimeout(() => window.close(), 2500);</script>
                 </body>
               </html>
             `);
