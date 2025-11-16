@@ -56,6 +56,9 @@ contextBridge.exposeInMainWorld('api', {
     submit: (userId, feedbackData) => ipcRenderer.invoke('feedback:submit', userId, feedbackData),
     getForTransaction: (transactionId) => ipcRenderer.invoke('feedback:get-for-transaction', transactionId),
     getMetrics: (userId, fieldName) => ipcRenderer.invoke('feedback:get-metrics', userId, fieldName),
+    getSuggestion: (userId, fieldName, extractedValue, confidence) =>
+      ipcRenderer.invoke('feedback:get-suggestion', userId, fieldName, extractedValue, confidence),
+    getLearningStats: (userId, fieldName) => ipcRenderer.invoke('feedback:get-learning-stats', userId, fieldName),
   },
 
   // IPC event listeners

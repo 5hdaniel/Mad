@@ -5,6 +5,7 @@
 
 const { ipcMain } = require('electron');
 const databaseService = require('./services/databaseService');
+const feedbackLearningService = require('./services/feedbackLearningService');
 
 /**
  * Register all feedback-related IPC handlers
@@ -14,6 +15,9 @@ const registerFeedbackHandlers = () => {
   ipcMain.handle('feedback:submit', async (event, userId, feedbackData) => {
     try {
       const feedbackId = await databaseService.submitFeedback(userId, feedbackData);
+
+      // Clear pattern cache for this field so new patterns are detected
+      feedbackLearningService.clearCache(userId, feedbackData.field_name);
 
       return {
         success: true,
@@ -62,6 +66,49 @@ const registerFeedbackHandlers = () => {
         success: false,
         error: error.message,
         metrics: [],
+      };
+    }
+  });
+
+  // Get smart suggestion based on past patterns
+  ipcMain.handle('feedback:get-suggestion', async (event, userId, fieldName, extractedValue, confidence) => {
+    try {
+      const suggestion = await feedbackLearningService.generateSuggestion(
+        userId,
+        fieldName,
+        extractedValue,
+        confidence
+      );
+
+      return {
+        success: true,
+        suggestion,
+      };
+    } catch (error) {
+      console.error('[Main] Get suggestion failed:', error);
+      return {
+        success: false,
+        error: error.message,
+        suggestion: null,
+      };
+    }
+  });
+
+  // Get learning statistics for a field
+  ipcMain.handle('feedback:get-learning-stats', async (event, userId, fieldName) => {
+    try {
+      const stats = await feedbackLearningService.getLearningStats(userId, fieldName);
+
+      return {
+        success: true,
+        stats,
+      };
+    } catch (error) {
+      console.error('[Main] Get learning stats failed:', error);
+      return {
+        success: false,
+        error: error.message,
+        stats: null,
       };
     }
   });
