@@ -3,9 +3,9 @@ import React from 'react';
 /**
  * Dashboard Component
  * Main landing screen after login
- * Provides two primary actions: Audit New Transaction or View Existing Transactions
+ * Provides three primary actions: Audit Current Transaction, View Transactions, and Manage Contacts
  */
-function Dashboard({ onAuditNew, onViewTransactions }) {
+function Dashboard({ onAuditNew, onViewTransactions, onManageContacts }) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-8">
       <div className="max-w-5xl w-full">
@@ -21,7 +21,7 @@ function Dashboard({ onAuditNew, onViewTransactions }) {
 
         {/* Action Cards */}
         <div className="grid md:grid-cols-2 gap-8">
-          {/* Audit New Transaction Card */}
+          {/* Audit Current Transaction Card */}
           <button
             onClick={onAuditNew}
             className="group relative bg-white rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 p-8 text-left border-2 border-transparent hover:border-blue-500 transform hover:scale-105"
@@ -29,17 +29,17 @@ function Dashboard({ onAuditNew, onViewTransactions }) {
             <div className="absolute top-6 right-6">
               <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all">
                 <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
             </div>
 
             <div className="pr-24">
               <h2 className="text-2xl font-bold text-gray-900 mb-3">
-                Audit New Transaction
+                Audit Current Transaction
               </h2>
               <p className="text-gray-600 mb-6">
-                Create a new transaction audit by manually entering details or scanning your emails for transaction data.
+                Start auditing a transaction by manually entering details or scanning your emails for transaction data.
               </p>
 
               <div className="space-y-2 text-sm text-gray-500">
@@ -65,7 +65,7 @@ function Dashboard({ onAuditNew, onViewTransactions }) {
             </div>
 
             <div className="mt-6 flex items-center gap-2 text-blue-600 font-semibold group-hover:gap-4 transition-all">
-              <span>Get Started</span>
+              <span>Start Audit</span>
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
@@ -118,6 +118,31 @@ function Dashboard({ onAuditNew, onViewTransactions }) {
             <div className="mt-6 flex items-center gap-2 text-green-600 font-semibold group-hover:gap-4 transition-all">
               <span>View All</span>
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+          </button>
+        </div>
+
+        {/* Manage Contacts Card */}
+        <div className="mt-8">
+          <button
+            onClick={onManageContacts}
+            className="group w-full relative bg-white bg-opacity-70 backdrop-blur rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 p-6 text-left border-2 border-transparent hover:border-purple-400 transform hover:scale-[1.02]"
+          >
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl flex items-center justify-center shadow-lg">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-bold text-gray-900 mb-1">Manage Contacts</h3>
+                <p className="text-sm text-gray-600">
+                  View and manage your contact database, assign roles to transactions
+                </p>
+              </div>
+              <svg className="w-5 h-5 text-purple-600 group-hover:translate-x-2 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </div>

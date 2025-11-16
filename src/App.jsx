@@ -10,6 +10,7 @@ import MoveAppPrompt from './components/MoveAppPrompt';
 import Profile from './components/Profile';
 import Settings from './components/Settings';
 import Transactions from './components/Transactions';
+import Contacts from './components/Contacts';
 import WelcomeTerms from './components/WelcomeTerms';
 import Dashboard from './components/Dashboard';
 
@@ -29,6 +30,7 @@ function App() {
   const [showProfile, setShowProfile] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showTransactions, setShowTransactions] = useState(false);
+  const [showContacts, setShowContacts] = useState(false);
   const [showWelcomeTerms, setShowWelcomeTerms] = useState(false);
   const [authProvider, setAuthProvider] = useState(null);
   const [subscription, setSubscription] = useState(null);
@@ -301,6 +303,7 @@ function App() {
           <Dashboard
             onAuditNew={() => setShowTransactions(true)}
             onViewTransactions={() => setShowTransactions(true)}
+            onManageContacts={() => setShowContacts(true)}
           />
         )}
 
@@ -404,12 +407,20 @@ function App() {
         />
       )}
 
-      {/* Transactions Modal */}
+      {/* Transactions View */}
       {showTransactions && currentUser && (
         <Transactions
           userId={currentUser.id}
           provider={authProvider}
           onClose={() => setShowTransactions(false)}
+        />
+      )}
+
+      {/* Contacts View */}
+      {showContacts && currentUser && (
+        <Contacts
+          userId={currentUser.id}
+          onClose={() => setShowContacts(false)}
         />
       )}
 

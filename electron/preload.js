@@ -29,6 +29,14 @@ contextBridge.exposeInMainWorld('api', {
     exportEnhanced: (transactionId, options) => ipcRenderer.invoke('transactions:export-enhanced', transactionId, options),
   },
 
+  // Contact methods
+  contacts: {
+    getAll: (userId) => ipcRenderer.invoke('contacts:get-all', userId),
+    create: (userId, contactData) => ipcRenderer.invoke('contacts:create', userId, contactData),
+    update: (contactId, updates) => ipcRenderer.invoke('contacts:update', contactId, updates),
+    delete: (contactId) => ipcRenderer.invoke('contacts:delete', contactId),
+  },
+
   // IPC event listeners
   onMicrosoftLoginComplete: (callback) => ipcRenderer.on('microsoft:login-complete', (_, result) => callback(result)),
   onTransactionScanProgress: (callback) => ipcRenderer.on('transactions:scan-progress', (_, progress) => callback(progress)),

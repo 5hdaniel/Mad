@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 /**
  * ManualTransactionModal Component
@@ -11,7 +11,31 @@ function ManualTransactionModal({ userId, provider, onClose, onSuccess }) {
   const [transactionType, setTransactionType] = useState('purchase');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
-  const [step, setStep] = useState(1); // 1: Address, 2: Dates
+  const [step, setStep] = useState(1); // 1: Address, 2: Dates, 3: Contacts
+  const [contacts, setContacts] = useState([]);
+  const [loadingContacts, setLoadingContacts] = useState(false);
+  const [buyerAgentId, setBuyerAgentId] = useState('');
+  const [sellerAgentId, setSellerAgentId] = useState('');
+  const [escrowOfficerId, setEscrowOfficerId] = useState('');
+  const [inspectorId, setInspectorId] = useState('');
+
+  useEffect(() => {
+    loadContacts();
+  }, []);
+
+  const loadContacts = async () => {
+    try {
+      setLoadingContacts(true);
+      const result = await window.api.contacts.getAll(userId);
+      if (result.success) {
+        setContacts(result.contacts || []);
+      }
+    } catch (err) {
+      console.error('Failed to load contacts:', err);
+    } finally {
+      setLoadingContacts(false);
+    }
+  };
 
   const handleSave = async () => {
     if (!propertyAddress.trim()) {
@@ -29,6 +53,10 @@ function ManualTransactionModal({ userId, provider, onClose, onSuccess }) {
         transaction_type: transactionType,
         representation_start_date: representationStartDate || null,
         closing_date: closingDate || null,
+        buyer_agent_id: buyerAgentId || null,
+        seller_agent_id: sellerAgentId || null,
+        escrow_officer_id: escrowOfficerId || null,
+        inspector_id: inspectorId || null,
         status: 'active',
       });
 
@@ -52,7 +80,7 @@ function ManualTransactionModal({ userId, provider, onClose, onSuccess }) {
         <div className="bg-gradient-to-r from-green-500 to-teal-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
           <div>
             <h3 className="text-xl font-bold text-white">Create New Transaction</h3>
-            <p className="text-green-100 text-sm">Step {step} of 2</p>
+            <p className="text-green-100 text-sm">Step {step} of 3</p>
           </div>
           <button
             onClick={onClose}
@@ -182,12 +210,123 @@ function ManualTransactionModal({ userId, provider, onClose, onSuccess }) {
               </div>
             </div>
           )}
+
+          {step === 3 && (
+            <div className="space-y-4">
+              <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-4">
+                <div className="flex items-start gap-2">
+                  <svg className="w-5 h-5 text-purple-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-purple-900">Assign contacts to this transaction</p>
+                    <p className="text-xs text-purple-700 mt-1">
+                      All contacts are optional. You can always add or update them later.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {loadingContacts ? (
+                <div className="text-center py-8">
+                  <div className="w-8 h-8 border-4 border-green-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                  <p className="text-sm text-gray-600">Loading contacts...</p>
+                </div>
+              ) : contacts.length === 0 ? (
+                <div className="text-center py-8">
+                  <svg className="w-12 h-12 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                  <p className="text-sm text-gray-600 mb-2">No contacts available</p>
+                  <p className="text-xs text-gray-500">You can create contacts from the Dashboard later</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Buyer Agent */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Buyer Agent
+                    </label>
+                    <select
+                      value={buyerAgentId}
+                      onChange={(e) => setBuyerAgentId(e.target.value)}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    >
+                      <option value="">-- None --</option>
+                      {contacts.map((contact) => (
+                        <option key={contact.id} value={contact.id}>
+                          {contact.name} {contact.company ? `(${contact.company})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Seller Agent */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Seller Agent
+                    </label>
+                    <select
+                      value={sellerAgentId}
+                      onChange={(e) => setSellerAgentId(e.target.value)}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    >
+                      <option value="">-- None --</option>
+                      {contacts.map((contact) => (
+                        <option key={contact.id} value={contact.id}>
+                          {contact.name} {contact.company ? `(${contact.company})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Escrow Officer */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Escrow Officer
+                    </label>
+                    <select
+                      value={escrowOfficerId}
+                      onChange={(e) => setEscrowOfficerId(e.target.value)}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    >
+                      <option value="">-- None --</option>
+                      {contacts.map((contact) => (
+                        <option key={contact.id} value={contact.id}>
+                          {contact.name} {contact.company ? `(${contact.company})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Inspector */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Inspector
+                    </label>
+                    <select
+                      value={inspectorId}
+                      onChange={(e) => setInspectorId(e.target.value)}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    >
+                      <option value="">-- None --</option>
+                      {contacts.map((contact) => (
+                        <option key={contact.id} value={contact.id}>
+                          {contact.name} {contact.company ? `(${contact.company})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Footer */}
         <div className="px-6 py-4 bg-gray-50 rounded-b-xl flex items-center justify-between">
           <button
-            onClick={step === 1 ? onClose : () => setStep(1)}
+            onClick={step === 1 ? onClose : () => setStep(step - 1)}
             disabled={saving}
             className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg font-medium transition-all disabled:opacity-50"
           >
@@ -195,7 +334,7 @@ function ManualTransactionModal({ userId, provider, onClose, onSuccess }) {
           </button>
 
           <button
-            onClick={step === 1 ? () => setStep(2) : handleSave}
+            onClick={step < 3 ? () => setStep(step + 1) : handleSave}
             disabled={saving || !propertyAddress.trim()}
             className={`px-6 py-2 rounded-lg font-semibold transition-all ${
               saving || !propertyAddress.trim()
@@ -208,7 +347,7 @@ function ManualTransactionModal({ userId, provider, onClose, onSuccess }) {
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                 Creating...
               </span>
-            ) : step === 1 ? (
+            ) : step < 3 ? (
               'Next'
             ) : (
               'Create Transaction'

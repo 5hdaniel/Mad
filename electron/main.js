@@ -37,6 +37,7 @@ const supabaseService = require('./services/supabaseService');
 const tokenEncryptionService = require('./services/tokenEncryptionService');
 const { initializeDatabase, registerAuthHandlers } = require('./auth-handlers');
 const { registerTransactionHandlers } = require('./transaction-handlers');
+const { registerContactHandlers } = require('./contact-handlers');
 
 // Configure logging for auto-updater
 log.transports.file.level = 'info';
@@ -112,6 +113,7 @@ app.whenReady().then(async () => {
   createWindow();
   registerAuthHandlers(mainWindow);
   registerTransactionHandlers(mainWindow);
+  registerContactHandlers();
 });
 
 app.on('window-all-closed', () => {

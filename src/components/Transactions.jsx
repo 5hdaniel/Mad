@@ -107,26 +107,26 @@ function Transactions({ userId, provider, onClose }) {
   });
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl h-[85vh] flex flex-col">
-        {/* Header */}
-        <div className="flex-shrink-0 bg-gradient-to-r from-blue-500 to-purple-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
-          <div>
-            <h2 className="text-xl font-bold text-white">Transactions</h2>
-            <p className="text-blue-100 text-sm">{transactions.length} properties found</p>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-all"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex flex-col">
+      {/* Header */}
+      <div className="flex-shrink-0 bg-gradient-to-r from-blue-500 to-purple-600 px-6 py-6 flex items-center justify-between shadow-lg">
+        <div>
+          <h2 className="text-2xl font-bold text-white">Transactions</h2>
+          <p className="text-blue-100 text-sm">{transactions.length} properties found</p>
         </div>
+        <button
+          onClick={onClose}
+          className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg px-4 py-2 transition-all flex items-center gap-2 font-medium"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
+          Back to Dashboard
+        </button>
+      </div>
 
-        {/* Toolbar */}
-        <div className="flex-shrink-0 p-4 border-b border-gray-200 bg-gray-50">
+      {/* Toolbar */}
+      <div className="flex-shrink-0 p-6 bg-white shadow-md">
           {/* Status Filter Tabs */}
           <div className="flex items-center gap-2 mb-3">
             <button
@@ -252,9 +252,10 @@ function Transactions({ userId, provider, onClose }) {
             </div>
           )}
         </div>
+      </div>
 
-        {/* Transactions List */}
-        <div className="flex-1 overflow-y-auto p-4">
+      {/* Transactions List */}
+      <div className="flex-1 overflow-y-auto p-6 max-w-7xl mx-auto w-full">
           {loading ? (
             <div className="flex items-center justify-center h-full">
               <div className="text-center">
@@ -289,11 +290,11 @@ function Transactions({ userId, provider, onClose }) {
               </div>
             </div>
           ) : (
-            <div className="grid gap-4">
+            <div className="grid gap-6">
               {filteredTransactions.map((transaction) => (
                 <div
                   key={transaction.id}
-                  className="bg-white border border-gray-200 rounded-lg p-4 hover:border-blue-300 hover:shadow-md transition-all cursor-pointer"
+                  className="bg-white border-2 border-gray-200 rounded-xl p-6 hover:border-blue-400 hover:shadow-xl transition-all cursor-pointer transform hover:scale-[1.01]"
                   onClick={() => setSelectedTransaction(transaction)}
                 >
                   <div className="flex items-start justify-between">
@@ -360,7 +361,6 @@ function Transactions({ userId, provider, onClose }) {
               ))}
             </div>
           )}
-        </div>
       </div>
 
       {/* Transaction Details Modal */}
@@ -398,6 +398,7 @@ function TransactionDetails({ transaction, onClose, onTransactionUpdated }) {
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportSuccess, setExportSuccess] = useState(null);
   const [showArchivePrompt, setShowArchivePrompt] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
 
   useEffect(() => {
     loadDetails();
@@ -452,6 +453,16 @@ function TransactionDetails({ transaction, onClose, onTransactionUpdated }) {
             <p className="text-green-100 text-sm">{transaction.property_address}</p>
           </div>
           <div className="flex items-center gap-2">
+            {/* Edit Button */}
+            <button
+              onClick={() => setShowEditModal(true)}
+              className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-white text-blue-600 hover:bg-opacity-90 shadow-md hover:shadow-lg"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+              Edit
+            </button>
             {/* Export Button */}
             <button
               onClick={() => setShowExportModal(true)}
@@ -556,6 +567,20 @@ function TransactionDetails({ transaction, onClose, onTransactionUpdated }) {
         />
       )}
 
+      {/* Edit Modal */}
+      {showEditModal && (
+        <EditTransactionModal
+          transaction={transaction}
+          onClose={() => setShowEditModal(false)}
+          onSuccess={() => {
+            setShowEditModal(false);
+            if (onTransactionUpdated) {
+              onTransactionUpdated();
+            }
+          }}
+        />
+      )}
+
       {/* Archive Prompt */}
       {showArchivePrompt && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[70] p-4">
@@ -581,6 +606,205 @@ function TransactionDetails({ transaction, onClose, onTransactionUpdated }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Edit Transaction Modal
+ * Allows editing transaction details
+ */
+function EditTransactionModal({ transaction, onClose, onSuccess }) {
+  const [formData, setFormData] = useState({
+    property_address: transaction.property_address || '',
+    transaction_type: transaction.transaction_type || 'purchase',
+    representation_start_date: transaction.representation_start_date || '',
+    closing_date: transaction.closing_date || '',
+    sale_price: transaction.sale_price || '',
+    listing_price: transaction.listing_price || '',
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+
+  const handleChange = (field, value) => {
+    setFormData({ ...formData, [field]: value });
+  };
+
+  const handleSave = async () => {
+    if (!formData.property_address.trim()) {
+      setError('Property address is required');
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+
+    try {
+      const updates = {
+        property_address: formData.property_address.trim(),
+        transaction_type: formData.transaction_type,
+        representation_start_date: formData.representation_start_date || null,
+        closing_date: formData.closing_date || null,
+        sale_price: formData.sale_price ? parseFloat(formData.sale_price) : null,
+        listing_price: formData.listing_price ? parseFloat(formData.listing_price) : null,
+      };
+
+      const result = await window.api.transactions.update(transaction.id, updates);
+
+      if (result.success) {
+        onSuccess();
+      } else {
+        setError(result.error || 'Failed to update transaction');
+      }
+    } catch (err) {
+      setError(err.message || 'Failed to update transaction');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[70] p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <div className="bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-4 flex items-center justify-between rounded-t-xl sticky top-0 z-10">
+          <h3 className="text-xl font-bold text-white">Edit Transaction</h3>
+          <button
+            onClick={onClose}
+            className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-all"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Form */}
+        <div className="p-6 space-y-4">
+          {error && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-sm text-red-800">{error}</p>
+            </div>
+          )}
+
+          {/* Property Address */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Property Address *
+            </label>
+            <input
+              type="text"
+              value={formData.property_address}
+              onChange={(e) => handleChange('property_address', e.target.value)}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+
+          {/* Transaction Type */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Transaction Type
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => handleChange('transaction_type', 'purchase')}
+                className={`px-4 py-3 rounded-lg font-medium transition-all ${
+                  formData.transaction_type === 'purchase'
+                    ? 'bg-blue-500 text-white shadow-md'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Purchase
+              </button>
+              <button
+                onClick={() => handleChange('transaction_type', 'sale')}
+                className={`px-4 py-3 rounded-lg font-medium transition-all ${
+                  formData.transaction_type === 'sale'
+                    ? 'bg-blue-500 text-white shadow-md'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Sale
+              </button>
+            </div>
+          </div>
+
+          {/* Dates */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Representation Start Date
+              </label>
+              <input
+                type="date"
+                value={formData.representation_start_date}
+                onChange={(e) => handleChange('representation_start_date', e.target.value)}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Closing Date
+              </label>
+              <input
+                type="date"
+                value={formData.closing_date}
+                onChange={(e) => handleChange('closing_date', e.target.value)}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+          </div>
+
+          {/* Prices */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Sale Price
+              </label>
+              <input
+                type="number"
+                value={formData.sale_price}
+                onChange={(e) => handleChange('sale_price', e.target.value)}
+                placeholder="0"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Listing Price
+              </label>
+              <input
+                type="number"
+                value={formData.listing_price}
+                onChange={(e) => handleChange('listing_price', e.target.value)}
+                placeholder="0"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 bg-gray-50 rounded-b-xl flex items-center gap-3 justify-end sticky bottom-0">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg font-medium transition-all"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className={`px-6 py-2 rounded-lg font-semibold transition-all ${
+              saving
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white hover:from-blue-600 hover:to-indigo-700 shadow-md hover:shadow-lg'
+            }`}
+          >
+            {saving ? 'Saving...' : 'Save Changes'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
