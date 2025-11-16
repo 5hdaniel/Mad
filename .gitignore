@@ -26,6 +26,8 @@ Thumbs.db
 # Environment
 .env
 .env.local
+.env.development
+.env.production
 
 # Project management (using Linear)
 linear-import.csv
