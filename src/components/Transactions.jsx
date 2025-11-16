@@ -13,6 +13,8 @@ function Transactions({ userId, provider, onClose }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTransaction, setSelectedTransaction] = useState(null);
   const [error, setError] = useState(null);
+  const [statusFilter, setStatusFilter] = useState('active'); // active, closed, all
+  const [showManualCreate, setShowManualCreate] = useState(false);
 
   useEffect(() => {
     loadTransactions();
@@ -93,9 +95,14 @@ function Transactions({ userId, provider, onClose }) {
     });
   };
 
-  const filteredTransactions = transactions.filter((t) =>
-    t.property_address?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredTransactions = transactions.filter((t) => {
+    const matchesSearch = t.property_address?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesStatus =
+      statusFilter === 'all' ||
+      (statusFilter === 'active' && t.status === 'active') ||
+      (statusFilter === 'closed' && t.status === 'closed');
+    return matchesSearch && matchesStatus;
+  });
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -118,6 +125,40 @@ function Transactions({ userId, provider, onClose }) {
 
         {/* Toolbar */}
         <div className="flex-shrink-0 p-4 border-b border-gray-200 bg-gray-50">
+          {/* Status Filter Tabs */}
+          <div className="flex items-center gap-2 mb-3">
+            <button
+              onClick={() => setStatusFilter('active')}
+              className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                statusFilter === 'active'
+                  ? 'bg-blue-500 text-white shadow-md'
+                  : 'bg-white text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              Active ({transactions.filter((t) => t.status === 'active').length})
+            </button>
+            <button
+              onClick={() => setStatusFilter('closed')}
+              className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                statusFilter === 'closed'
+                  ? 'bg-gray-600 text-white shadow-md'
+                  : 'bg-white text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              Closed ({transactions.filter((t) => t.status === 'closed').length})
+            </button>
+            <button
+              onClick={() => setStatusFilter('all')}
+              className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                statusFilter === 'all'
+                  ? 'bg-purple-500 text-white shadow-md'
+                  : 'bg-white text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              All ({transactions.length})
+            </button>
+          </div>
+
           <div className="flex items-center gap-3">
             {/* Search */}
             <div className="flex-1 relative">
@@ -142,6 +183,17 @@ function Transactions({ userId, provider, onClose }) {
                 />
               </svg>
             </div>
+
+            {/* New Transaction Button */}
+            <button
+              onClick={() => setShowManualCreate(true)}
+              className="px-4 py-2 rounded-lg font-semibold transition-all bg-green-500 text-white hover:bg-green-600 shadow-md hover:shadow-lg flex items-center gap-2"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+              New Transaction
+            </button>
 
             {/* Scan Button */}
             <button
