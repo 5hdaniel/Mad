@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld('api', {
     delete: (transactionId) => ipcRenderer.invoke('transactions:delete', transactionId),
     reanalyze: (userId, provider, propertyAddress, dateRange) =>
       ipcRenderer.invoke('transactions:reanalyze', userId, provider, propertyAddress, dateRange),
+    exportPDF: (transactionId, outputPath) => ipcRenderer.invoke('transactions:export-pdf', transactionId, outputPath),
   },
 
   // IPC event listeners

@@ -5,6 +5,7 @@
 
 const { ipcMain } = require('electron');
 const transactionService = require('./services/transactionService');
+const pdfExportService = require('./services/pdfExportService');
 
 /**
  * Register all transaction-related IPC handlers
@@ -130,6 +131,46 @@ const registerTransactionHandlers = (mainWindow) => {
       };
     } catch (error) {
       console.error('[Main] Reanalyze property failed:', error);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  });
+
+  // Export transaction to PDF
+  ipcMain.handle('transactions:export-pdf', async (event, transactionId, outputPath) => {
+    try {
+      console.log('[Main] Exporting transaction to PDF:', transactionId);
+
+      // Get transaction details with communications
+      const details = await transactionService.getTransactionDetails(transactionId);
+
+      if (!details) {
+        return {
+          success: false,
+          error: 'Transaction not found',
+        };
+      }
+
+      // Use provided output path or generate default one
+      const pdfPath = outputPath || pdfExportService.getDefaultExportPath(details);
+
+      // Generate PDF
+      const generatedPath = await pdfExportService.generateTransactionPDF(
+        details,
+        details.communications || [],
+        pdfPath
+      );
+
+      console.log('[Main] PDF exported successfully:', generatedPath);
+
+      return {
+        success: true,
+        path: generatedPath,
+      };
+    } catch (error) {
+      console.error('[Main] PDF export failed:', error);
       return {
         success: false,
         error: error.message,

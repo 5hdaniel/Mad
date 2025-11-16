@@ -324,6 +324,8 @@ function Transactions({ userId, provider, onClose }) {
 function TransactionDetails({ transaction, onClose }) {
   const [communications, setCommunications] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
+  const [exportSuccess, setExportSuccess] = useState(null);
 
   useEffect(() => {
     loadDetails();
@@ -344,6 +346,27 @@ function TransactionDetails({ transaction, onClose }) {
     }
   };
 
+  const handleExportPDF = async () => {
+    try {
+      setExporting(true);
+      setExportSuccess(null);
+
+      const result = await window.api.transactions.exportPDF(transaction.id);
+
+      if (result.success) {
+        setExportSuccess(result.path);
+        // Auto-hide success message after 5 seconds
+        setTimeout(() => setExportSuccess(null), 5000);
+      } else {
+        alert(`Failed to export PDF: ${result.error}`);
+      }
+    } catch (err) {
+      alert(`Failed to export PDF: ${err.message}`);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[60] p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
@@ -353,15 +376,62 @@ function TransactionDetails({ transaction, onClose }) {
             <h3 className="text-xl font-bold text-white">Transaction Details</h3>
             <p className="text-green-100 text-sm">{transaction.property_address}</p>
           </div>
-          <button
-            onClick={onClose}
-            className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-all"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Export PDF Button */}
+            <button
+              onClick={handleExportPDF}
+              disabled={exporting}
+              className={`px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 ${
+                exporting
+                  ? 'bg-white bg-opacity-40 text-white cursor-not-allowed'
+                  : 'bg-white text-green-600 hover:bg-opacity-90 shadow-md hover:shadow-lg'
+              }`}
+            >
+              {exporting ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-green-600 border-t-transparent rounded-full animate-spin"></div>
+                  Exporting...
+                </>
+              ) : (
+                <>
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                    />
+                  </svg>
+                  Export PDF
+                </>
+              )}
+            </button>
+            {/* Close Button */}
+            <button
+              onClick={onClose}
+              className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-all"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
         </div>
+
+        {/* Success Message */}
+        {exportSuccess && (
+          <div className="flex-shrink-0 mx-6 mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+            <div className="flex items-start gap-2">
+              <svg className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-green-900">PDF exported successfully!</p>
+                <p className="text-xs text-green-700 mt-1 break-all">{exportSuccess}</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
