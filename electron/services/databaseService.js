@@ -129,6 +129,50 @@ class DatabaseService {
           await this._run(migration.sql);
         }
       }
+
+      // Migration 3: Enhanced contact roles for transaction_contacts
+      const tcColumns = await this._all(`PRAGMA table_info(transaction_contacts)`);
+      const tcMigrations = [
+        {
+          name: 'role_category',
+          sql: `ALTER TABLE transaction_contacts ADD COLUMN role_category TEXT CHECK (role_category IN (
+            'client', 'agent', 'lending', 'inspection', 'title_escrow', 'legal', 'support', 'property_management', 'insurance'
+          ))`
+        },
+        {
+          name: 'specific_role',
+          sql: `ALTER TABLE transaction_contacts ADD COLUMN specific_role TEXT CHECK (specific_role IN (
+            'client', 'buyer_agent', 'seller_agent', 'listing_agent', 'appraiser', 'inspector',
+            'title_company', 'escrow_officer', 'mortgage_broker', 'lender', 'real_estate_attorney',
+            'transaction_coordinator', 'insurance_agent', 'surveyor', 'hoa_management', 'condo_management', 'other'
+          ))`
+        },
+        { name: 'is_primary', sql: `ALTER TABLE transaction_contacts ADD COLUMN is_primary INTEGER DEFAULT 0` },
+        { name: 'notes', sql: `ALTER TABLE transaction_contacts ADD COLUMN notes TEXT` },
+        { name: 'updated_at', sql: `ALTER TABLE transaction_contacts ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP` }
+      ];
+
+      for (const migration of tcMigrations) {
+        if (!tcColumns.some(col => col.name === migration.name)) {
+          console.log(`[DatabaseService] Adding ${migration.name} column to transaction_contacts`);
+          await this._run(migration.sql);
+        }
+      }
+
+      // Create index for better performance
+      await this._run(`CREATE INDEX IF NOT EXISTS idx_transaction_contacts_specific_role ON transaction_contacts(specific_role)`);
+      await this._run(`CREATE INDEX IF NOT EXISTS idx_transaction_contacts_category ON transaction_contacts(role_category)`);
+      await this._run(`CREATE INDEX IF NOT EXISTS idx_transaction_contacts_primary ON transaction_contacts(is_primary)`);
+
+      // Create trigger for transaction_contacts timestamp updates
+      await this._run(`
+        CREATE TRIGGER IF NOT EXISTS update_transaction_contacts_timestamp
+        AFTER UPDATE ON transaction_contacts
+        BEGIN
+          UPDATE transaction_contacts SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+        END;
+      `);
+
     } catch (error) {
       // Log but don't fail on migration errors
       console.log('[DatabaseService] Migration check:', error.message);
@@ -859,6 +903,141 @@ class DatabaseService {
     ]);
 
     return id;
+  }
+
+  // ============================================
+  // TRANSACTION CONTACT OPERATIONS
+  // ============================================
+
+  /**
+   * Assign contact to transaction with role
+   */
+  async assignContactToTransaction(transactionId, data) {
+    const id = crypto.randomUUID();
+
+    const sql = `
+      INSERT INTO transaction_contacts (
+        id, transaction_id, contact_id, role, role_category, specific_role, is_primary, notes
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+
+    const params = [
+      id,
+      transactionId,
+      data.contact_id,
+      data.role || null,
+      data.role_category || null,
+      data.specific_role || null,
+      data.is_primary || 0,
+      data.notes || null,
+    ];
+
+    await this._run(sql, params);
+    return id;
+  }
+
+  /**
+   * Get all contacts assigned to a transaction
+   */
+  async getTransactionContacts(transactionId) {
+    const sql = `
+      SELECT
+        tc.*,
+        c.name as contact_name,
+        c.email as contact_email,
+        c.phone as contact_phone,
+        c.company as contact_company,
+        c.title as contact_title
+      FROM transaction_contacts tc
+      LEFT JOIN contacts c ON tc.contact_id = c.id
+      WHERE tc.transaction_id = ?
+      ORDER BY tc.is_primary DESC, tc.created_at ASC
+    `;
+
+    return await this._all(sql, [transactionId]);
+  }
+
+  /**
+   * Get all contacts for a specific role in a transaction
+   */
+  async getTransactionContactsByRole(transactionId, role) {
+    const sql = `
+      SELECT
+        tc.*,
+        c.name as contact_name,
+        c.email as contact_email,
+        c.phone as contact_phone,
+        c.company as contact_company,
+        c.title as contact_title
+      FROM transaction_contacts tc
+      LEFT JOIN contacts c ON tc.contact_id = c.id
+      WHERE tc.transaction_id = ? AND tc.specific_role = ?
+      ORDER BY tc.is_primary DESC
+    `;
+
+    return await this._all(sql, [transactionId, role]);
+  }
+
+  /**
+   * Update contact role information
+   */
+  async updateContactRole(transactionId, contactId, updates) {
+    const allowedFields = ['role', 'role_category', 'specific_role', 'is_primary', 'notes'];
+    const fields = [];
+    const values = [];
+
+    Object.keys(updates).forEach((key) => {
+      if (allowedFields.includes(key)) {
+        fields.push(`${key} = ?`);
+        values.push(updates[key]);
+      }
+    });
+
+    if (fields.length === 0) {
+      throw new Error('No valid fields to update');
+    }
+
+    values.push(transactionId, contactId);
+
+    const sql = `
+      UPDATE transaction_contacts
+      SET ${fields.join(', ')}
+      WHERE transaction_id = ? AND contact_id = ?
+    `;
+
+    await this._run(sql, values);
+  }
+
+  /**
+   * Remove contact from transaction
+   */
+  async removeContactFromTransaction(transactionId, contactId) {
+    const sql = 'DELETE FROM transaction_contacts WHERE transaction_id = ? AND contact_id = ?';
+    await this._run(sql, [transactionId, contactId]);
+  }
+
+  /**
+   * Check if contact is assigned to transaction
+   */
+  async isContactAssignedToTransaction(transactionId, contactId) {
+    const sql = 'SELECT id FROM transaction_contacts WHERE transaction_id = ? AND contact_id = ? LIMIT 1';
+    const result = await this._get(sql, [transactionId, contactId]);
+    return !!result;
+  }
+
+  /**
+   * Get all transactions for a specific contact
+   */
+  async getTransactionsByContact(contactId) {
+    const sql = `
+      SELECT t.*, tc.specific_role, tc.is_primary
+      FROM transactions t
+      INNER JOIN transaction_contacts tc ON t.id = tc.transaction_id
+      WHERE tc.contact_id = ?
+      ORDER BY t.created_at DESC
+    `;
+
+    return await this._all(sql, [contactId]);
   }
 
   /**

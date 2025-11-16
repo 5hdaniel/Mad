@@ -240,6 +240,105 @@ class TransactionService {
   }
 
   /**
+   * Create audited transaction with contact assignments
+   * Used for the "Audit New Transaction" feature
+   */
+  async createAuditedTransaction(userId, data) {
+    try {
+      const {
+        property_address,
+        property_street,
+        property_city,
+        property_state,
+        property_zip,
+        property_coordinates,
+        transaction_type,
+        contact_assignments,
+      } = data;
+
+      // Create the transaction
+      const transactionId = await databaseService.createTransaction(userId, {
+        property_address,
+        property_street,
+        property_city,
+        property_state,
+        property_zip,
+        property_coordinates,
+        transaction_type,
+        status: 'active',
+        closing_date_verified: property_coordinates ? 1 : 0, // Mark as verified if coordinates exist
+      });
+
+      // Assign all contacts
+      if (contact_assignments && contact_assignments.length > 0) {
+        for (const assignment of contact_assignments) {
+          await databaseService.assignContactToTransaction(transactionId, {
+            contact_id: assignment.contact_id,
+            role: assignment.role,
+            role_category: assignment.role_category,
+            specific_role: assignment.role,
+            is_primary: assignment.is_primary,
+            notes: assignment.notes,
+          });
+        }
+      }
+
+      // Fetch the complete transaction with contacts
+      return await this.getTransactionWithContacts(transactionId);
+    } catch (error) {
+      console.error('[TransactionService] Failed to create audited transaction:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get transaction with all assigned contacts
+   */
+  async getTransactionWithContacts(transactionId) {
+    const transaction = await databaseService.getTransactionById(transactionId);
+
+    if (!transaction) {
+      return null;
+    }
+
+    // Get all contact assignments
+    const contactAssignments = await databaseService.getTransactionContacts(transactionId);
+
+    return {
+      ...transaction,
+      contact_assignments: contactAssignments,
+    };
+  }
+
+  /**
+   * Assign contact to transaction role
+   */
+  async assignContactToTransaction(transactionId, contactId, role, roleCategory, isPrimary = false, notes = null) {
+    return await databaseService.assignContactToTransaction(transactionId, {
+      contact_id: contactId,
+      role: role,
+      role_category: roleCategory,
+      specific_role: role,
+      is_primary: isPrimary ? 1 : 0,
+      notes,
+    });
+  }
+
+  /**
+   * Remove contact from transaction
+   */
+  async removeContactFromTransaction(transactionId, contactId) {
+    return await databaseService.removeContactFromTransaction(transactionId, contactId);
+  }
+
+  /**
+   * Update contact role in transaction
+   */
+  async updateContactRole(transactionId, contactId, updates) {
+    return await databaseService.updateContactRole(transactionId, contactId, updates);
+  }
+
+  /**
    * Update transaction
    */
   async updateTransaction(transactionId, updates) {

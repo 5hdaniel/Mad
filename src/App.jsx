@@ -13,6 +13,7 @@ import Transactions from './components/Transactions';
 import Contacts from './components/Contacts';
 import WelcomeTerms from './components/WelcomeTerms';
 import Dashboard from './components/Dashboard';
+import AuditTransactionModal from './components/AuditTransactionModal';
 
 function App() {
   const [currentStep, setCurrentStep] = useState('login'); // login, microsoft-login, permissions, dashboard, outlook, complete
@@ -32,6 +33,7 @@ function App() {
   const [showTransactions, setShowTransactions] = useState(false);
   const [showContacts, setShowContacts] = useState(false);
   const [showWelcomeTerms, setShowWelcomeTerms] = useState(false);
+  const [showAuditTransaction, setShowAuditTransaction] = useState(false);
   const [authProvider, setAuthProvider] = useState(null);
   const [subscription, setSubscription] = useState(null);
 
@@ -301,7 +303,7 @@ function App() {
 
         {currentStep === 'dashboard' && (
           <Dashboard
-            onAuditNew={() => setShowTransactions(true)}
+            onAuditNew={() => setShowAuditTransaction(true)}
             onViewTransactions={() => setShowTransactions(true)}
             onManageContacts={() => setShowContacts(true)}
           />
@@ -430,6 +432,20 @@ function App() {
           user={currentUser}
           onAccept={handleAcceptTerms}
           onDecline={handleDeclineTerms}
+        />
+      )}
+
+      {/* Audit Transaction Modal */}
+      {showAuditTransaction && currentUser && (
+        <AuditTransactionModal
+          userId={currentUser.id}
+          provider={authProvider}
+          onClose={() => setShowAuditTransaction(false)}
+          onSuccess={(newTransaction) => {
+            setShowAuditTransaction(false);
+            // Optionally show the transactions view after successful creation
+            setShowTransactions(true);
+          }}
         />
       )}
     </div>

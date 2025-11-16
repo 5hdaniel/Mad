@@ -20,9 +20,14 @@ contextBridge.exposeInMainWorld('api', {
     scan: (userId, options) => ipcRenderer.invoke('transactions:scan', userId, options),
     getAll: (userId) => ipcRenderer.invoke('transactions:get-all', userId),
     create: (userId, transactionData) => ipcRenderer.invoke('transactions:create', userId, transactionData),
+    createAudited: (userId, transactionData) => ipcRenderer.invoke('transactions:create-audited', userId, transactionData),
     getDetails: (transactionId) => ipcRenderer.invoke('transactions:get-details', transactionId),
+    getWithContacts: (transactionId) => ipcRenderer.invoke('transactions:get-with-contacts', transactionId),
     update: (transactionId, updates) => ipcRenderer.invoke('transactions:update', transactionId, updates),
     delete: (transactionId) => ipcRenderer.invoke('transactions:delete', transactionId),
+    assignContact: (transactionId, contactId, role, roleCategory, isPrimary, notes) =>
+      ipcRenderer.invoke('transactions:assign-contact', transactionId, contactId, role, roleCategory, isPrimary, notes),
+    removeContact: (transactionId, contactId) => ipcRenderer.invoke('transactions:remove-contact', transactionId, contactId),
     reanalyze: (userId, provider, propertyAddress, dateRange) =>
       ipcRenderer.invoke('transactions:reanalyze', userId, provider, propertyAddress, dateRange),
     exportPDF: (transactionId, outputPath) => ipcRenderer.invoke('transactions:export-pdf', transactionId, outputPath),

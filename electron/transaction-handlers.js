@@ -139,6 +139,84 @@ const registerTransactionHandlers = (mainWindow) => {
     }
   });
 
+  // Create audited transaction with contact assignments
+  ipcMain.handle('transactions:create-audited', async (event, userId, transactionData) => {
+    try {
+      console.log('[Main] Creating audited transaction for user:', userId);
+      const transaction = await transactionService.createAuditedTransaction(userId, transactionData);
+
+      return {
+        success: true,
+        transaction,
+      };
+    } catch (error) {
+      console.error('[Main] Create audited transaction failed:', error);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  });
+
+  // Get transaction with contacts
+  ipcMain.handle('transactions:get-with-contacts', async (event, transactionId) => {
+    try {
+      const transaction = await transactionService.getTransactionWithContacts(transactionId);
+
+      if (!transaction) {
+        return {
+          success: false,
+          error: 'Transaction not found',
+        };
+      }
+
+      return {
+        success: true,
+        transaction,
+      };
+    } catch (error) {
+      console.error('[Main] Get transaction with contacts failed:', error);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  });
+
+  // Assign contact to transaction
+  ipcMain.handle('transactions:assign-contact', async (event, transactionId, contactId, role, roleCategory, isPrimary, notes) => {
+    try {
+      await transactionService.assignContactToTransaction(transactionId, contactId, role, roleCategory, isPrimary, notes);
+
+      return {
+        success: true,
+      };
+    } catch (error) {
+      console.error('[Main] Assign contact to transaction failed:', error);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  });
+
+  // Remove contact from transaction
+  ipcMain.handle('transactions:remove-contact', async (event, transactionId, contactId) => {
+    try {
+      await transactionService.removeContactFromTransaction(transactionId, contactId);
+
+      return {
+        success: true,
+      };
+    } catch (error) {
+      console.error('[Main] Remove contact from transaction failed:', error);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  });
+
   // Re-analyze property (rescan emails for specific address)
   ipcMain.handle('transactions:reanalyze', async (event, userId, provider, propertyAddress, dateRange) => {
     try {
