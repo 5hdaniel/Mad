@@ -261,26 +261,18 @@ function Contacts({ userId, onClose }) {
 
                 {/* Actions */}
                 <div className="flex items-center gap-2 pt-4 border-t border-gray-200">
-                  {contact.source === 'contacts_app' ? (
-                    <div className="flex-1 text-center py-2 text-xs text-gray-500 italic">
-                      Read-only from Contacts app
-                    </div>
-                  ) : (
-                    <>
-                      <button
-                        onClick={() => handleEditContact(contact)}
-                        className="flex-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium text-sm transition-all"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDeleteContact(contact.id)}
-                        className="flex-1 px-3 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg font-medium text-sm transition-all"
-                      >
-                        Delete
-                      </button>
-                    </>
-                  )}
+                  <button
+                    onClick={() => handleEditContact(contact)}
+                    className="flex-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium text-sm transition-all"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => handleDeleteContact(contact.id)}
+                    className="flex-1 px-3 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg font-medium text-sm transition-all"
+                  >
+                    Delete
+                  </button>
                 </div>
               </div>
             ))}
