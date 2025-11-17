@@ -80,10 +80,38 @@ class MicrosoftAuthService {
                       </svg>
                     </div>
                     <h1 style="color: #1a202c; font-size: 1.875rem; font-weight: 700; margin: 0 0 1rem 0;">Authentication Successful!</h1>
-                    <p style="color: #4a5568; font-size: 1rem; margin: 0 0 1.5rem 0; line-height: 1.5;">You've been successfully authenticated with Microsoft.</p>
-                    <p style="color: #718096; font-size: 0.875rem; margin: 0;">This window will close automatically, or you can close it now.</p>
+                    <p id="status-message" style="color: #4a5568; font-size: 1rem; margin: 0 0 1.5rem 0; line-height: 1.5;">You've been successfully authenticated with Microsoft.</p>
+                    <p id="close-message" style="color: #718096; font-size: 0.875rem; margin: 0 0 1rem 0;">Attempting to close this window...</p>
+                    <button id="return-button" style="display: none; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 0.75rem 2rem; border-radius: 0.5rem; font-size: 1rem; font-weight: 600; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">Return to Application</button>
                   </div>
-                  <script>setTimeout(() => window.close(), 2500);</script>
+                  <script>
+                    // Try to close the window
+                    setTimeout(() => {
+                      window.close();
+
+                      // If window didn't close (we're still here after 500ms), show fallback
+                      setTimeout(() => {
+                        const closeMsg = document.getElementById('close-message');
+                        const returnBtn = document.getElementById('return-button');
+
+                        closeMsg.innerHTML = 'Please return to the application to continue.';
+                        closeMsg.style.color = '#4a5568';
+                        closeMsg.style.fontSize = '1rem';
+                        closeMsg.style.marginBottom = '1.5rem';
+                        returnBtn.style.display = 'inline-block';
+
+                        // Try to focus the app if possible (won't work in all browsers)
+                        returnBtn.onclick = () => {
+                          // Attempt to close again
+                          window.close();
+                          // If still here, user needs to manually return
+                          if (!window.closed) {
+                            closeMsg.innerHTML = 'You can close this tab and return to the Mad Accountant application.';
+                          }
+                        };
+                      }, 500);
+                    }, 2000);
+                  </script>
                 </body>
               </html>
             `);
