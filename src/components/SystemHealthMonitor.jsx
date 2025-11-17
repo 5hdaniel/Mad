@@ -45,20 +45,6 @@ function SystemHealthMonitor({ userId, provider }) {
     return () => clearInterval(interval);
   }, [checkSystemHealth]);
 
-  // Listen for Microsoft login completion events
-  useEffect(() => {
-    if (window.api?.onMicrosoftLoginComplete) {
-      const handleLoginComplete = (result) => {
-        console.log('[SystemHealthMonitor] Microsoft login complete:', result);
-        if (result.success) {
-          // Re-check health after successful authentication
-          checkSystemHealth();
-        }
-      };
-
-      window.api.onMicrosoftLoginComplete(handleLoginComplete);
-    }
-  }, [checkSystemHealth]);
 
   const handleDismiss = (issueIndex) => {
     setDismissed((prev) => new Set([...prev, issueIndex]));
@@ -89,21 +75,26 @@ function SystemHealthMonitor({ userId, provider }) {
 
       case 'connect-microsoft':
       case 'reconnect-microsoft':
-        // Trigger Microsoft OAuth re-authentication
+        // Trigger Outlook OAuth authentication for mailbox access
         try {
-          const result = await window.api.auth.microsoftLogin();
-          if (result.success && result.authUrl) {
-            // Open auth URL in browser
-            if (window.api?.shell?.openExternal) {
-              await window.api.shell.openExternal(result.authUrl);
+          // Initialize Outlook service first
+          if (window.electron?.outlookInitialize) {
+            await window.electron.outlookInitialize();
+          }
+
+          // Authenticate with Outlook for email access
+          if (window.electron?.outlookAuthenticate) {
+            const result = await window.electron.outlookAuthenticate();
+            if (result.success) {
+              // Re-check health after successful auth
+              await checkSystemHealth();
+              handleDismiss(issueIndex);
+            } else {
+              console.error('Outlook authentication failed:', result.error);
             }
-            // Don't dismiss immediately - wait for login-complete event
-            // The event listener will re-check health when authentication completes
-          } else {
-            console.error('Microsoft login failed:', result.error);
           }
         } catch (error) {
-          console.error('Microsoft re-authentication failed:', error);
+          console.error('Outlook authentication failed:', error);
         }
         break;
 
