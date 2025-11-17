@@ -173,6 +173,23 @@ app.whenReady().then(async () => {
   registerAddressHandlers();
   registerFeedbackHandlers();
   registerSystemHandlers();
+
+  // Initialize OutlookService on startup so existing tokens are detected
+  try {
+    const clientId = process.env.MICROSOFT_CLIENT_ID || '3a6c341a-17ab-4739-977d-a7d71b27f945';
+    const tenantId = process.env.MICROSOFT_TENANT_ID || 'common';
+
+    if (!outlookService) {
+      outlookService = new OutlookService();
+    }
+
+    await outlookService.initialize(clientId, tenantId);
+    connectionStatusService.setOutlookService(outlookService);
+
+    console.log('[Main] OutlookService initialized on startup');
+  } catch (error) {
+    console.error('[Main] Failed to initialize OutlookService on startup:', error);
+  }
 });
 
 app.on('window-all-closed', () => {
