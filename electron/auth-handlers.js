@@ -23,20 +23,41 @@ const { CURRENT_TERMS_VERSION, CURRENT_PRIVACY_POLICY_VERSION } = require('./con
  * Returns true if user hasn't accepted OR if the accepted versions are outdated
  */
 function needsToAcceptTerms(user) {
-  // User hasn't accepted terms at all
-  if (!user.terms_accepted_at || !user.privacy_policy_accepted_at) {
+  console.log('[Auth] Checking if user needs to accept terms:', {
+    terms_accepted_at: user.terms_accepted_at,
+    terms_version_accepted: user.terms_version_accepted,
+    privacy_policy_accepted_at: user.privacy_policy_accepted_at,
+    privacy_policy_version_accepted: user.privacy_policy_version_accepted,
+    current_terms_version: CURRENT_TERMS_VERSION,
+    current_privacy_version: CURRENT_PRIVACY_POLICY_VERSION,
+  });
+
+  // User hasn't accepted terms at all (truly new user)
+  if (!user.terms_accepted_at) {
+    console.log('[Auth] User needs to accept: No terms_accepted_at');
     return true;
+  }
+
+  // Backward compatibility: If user accepted before we added version tracking,
+  // don't force them to re-accept (version fields will be null/undefined)
+  if (!user.terms_version_accepted && !user.privacy_policy_version_accepted) {
+    // User accepted in old system, consider them accepted
+    console.log('[Auth] User accepted in old system (no version tracking), allowing login');
+    return false;
   }
 
   // Check if versions have been updated since user last accepted
-  if (user.terms_version_accepted !== CURRENT_TERMS_VERSION) {
+  if (user.terms_version_accepted && user.terms_version_accepted !== CURRENT_TERMS_VERSION) {
+    console.log('[Auth] User needs to accept: Terms version outdated');
     return true;
   }
 
-  if (user.privacy_policy_version_accepted !== CURRENT_PRIVACY_POLICY_VERSION) {
+  if (user.privacy_policy_version_accepted && user.privacy_policy_version_accepted !== CURRENT_PRIVACY_POLICY_VERSION) {
+    console.log('[Auth] User needs to accept: Privacy Policy version outdated');
     return true;
   }
 
+  console.log('[Auth] User does NOT need to accept terms');
   return false;
 }
 
@@ -531,11 +552,24 @@ const registerAuthHandlers = (mainWindow) => {
   // Accept terms
   ipcMain.handle('auth:accept-terms', async (event, userId) => {
     try {
+      console.log('[Auth] Accepting terms for user:', userId, {
+        terms_version: CURRENT_TERMS_VERSION,
+        privacy_version: CURRENT_PRIVACY_POLICY_VERSION,
+      });
+
       const updatedUser = await databaseService.acceptTerms(
         userId,
         CURRENT_TERMS_VERSION,
         CURRENT_PRIVACY_POLICY_VERSION
       );
+
+      console.log('[Auth] Terms accepted successfully. Updated user:', {
+        terms_accepted_at: updatedUser.terms_accepted_at,
+        terms_version_accepted: updatedUser.terms_version_accepted,
+        privacy_policy_accepted_at: updatedUser.privacy_policy_accepted_at,
+        privacy_policy_version_accepted: updatedUser.privacy_policy_version_accepted,
+      });
+
       return { success: true, user: updatedUser };
     } catch (error) {
       console.error('[Main] Accept terms failed:', error);
