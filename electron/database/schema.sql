@@ -155,7 +155,13 @@ CREATE TABLE IF NOT EXISTS transactions (
   -- Metadata
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  export_generated_at DATETIME,
+
+  -- Export Tracking
+  export_status TEXT DEFAULT 'not_exported' CHECK (export_status IN ('not_exported', 'exported', 're_export_needed')),
+  export_format TEXT CHECK (export_format IN ('pdf', 'csv', 'json', 'txt_eml', 'excel')),
+  export_count INTEGER DEFAULT 0,
+  last_exported_on DATETIME,
+  export_generated_at DATETIME, -- Deprecated: Use last_exported_on instead
 
   -- Extraction Stats
   communications_scanned INTEGER DEFAULT 0,
