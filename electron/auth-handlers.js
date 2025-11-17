@@ -248,23 +248,42 @@ const handleMicrosoftLogin = async (mainWindow) => {
     // Start auth flow - returns authUrl and a promise for the code
     const { authUrl, codePromise, codeVerifier, scopes } = await microsoftAuthService.authenticateForLogin();
 
+    console.log('[Main] Auth URL:', authUrl);
+
     // Create a popup window for auth
     const authWindow = new BrowserWindow({
       width: 600,
       height: 800,
       webPreferences: {
         nodeIntegration: false,
-        contextIsolation: true
+        contextIsolation: true,
+        webSecurity: true
       },
       autoHideMenuBar: true,
       title: 'Sign in with Microsoft'
     });
 
+    // Debug: Log navigation events
+    authWindow.webContents.on('did-start-loading', () => {
+      console.log('[Main] Auth window started loading');
+    });
+
+    authWindow.webContents.on('did-finish-load', () => {
+      console.log('[Main] Auth window finished loading');
+    });
+
+    authWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+      console.error('[Main] Auth window failed to load:', errorCode, errorDescription, validatedURL);
+    });
+
     // Load the auth URL
-    authWindow.loadURL(authUrl);
+    authWindow.loadURL(authUrl).catch(err => {
+      console.error('[Main] Failed to load auth URL:', err);
+    });
 
     // Close the window when redirected to callback
     authWindow.webContents.on('will-redirect', (event, url) => {
+      console.log('[Main] Auth window redirecting to:', url);
       if (url.startsWith('http://localhost:3000/callback')) {
         // Let the redirect complete so the success page shows briefly
         setTimeout(() => {
@@ -438,23 +457,42 @@ const handleMicrosoftConnectMailbox = async (mainWindow, userId) => {
     // Start auth flow - returns authUrl and a promise for the code
     const { authUrl, codePromise, codeVerifier, scopes } = await microsoftAuthService.authenticateForMailbox(loginHint);
 
+    console.log('[Main] Mailbox Auth URL:', authUrl);
+
     // Create a popup window for auth
     const authWindow = new BrowserWindow({
       width: 600,
       height: 800,
       webPreferences: {
         nodeIntegration: false,
-        contextIsolation: true
+        contextIsolation: true,
+        webSecurity: true
       },
       autoHideMenuBar: true,
       title: 'Connect Microsoft Mailbox'
     });
 
+    // Debug: Log navigation events
+    authWindow.webContents.on('did-start-loading', () => {
+      console.log('[Main] Mailbox auth window started loading');
+    });
+
+    authWindow.webContents.on('did-finish-load', () => {
+      console.log('[Main] Mailbox auth window finished loading');
+    });
+
+    authWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+      console.error('[Main] Mailbox auth window failed to load:', errorCode, errorDescription, validatedURL);
+    });
+
     // Load the auth URL
-    authWindow.loadURL(authUrl);
+    authWindow.loadURL(authUrl).catch(err => {
+      console.error('[Main] Failed to load mailbox auth URL:', err);
+    });
 
     // Close the window when redirected to callback
     authWindow.webContents.on('will-redirect', (event, url) => {
+      console.log('[Main] Mailbox auth window redirecting to:', url);
       if (url.startsWith('http://localhost:3000/callback')) {
         // Let the redirect complete so the success page shows briefly
         setTimeout(() => {
