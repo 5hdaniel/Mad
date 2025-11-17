@@ -59,11 +59,16 @@ function App() {
           // Also store in localStorage for backward compatibility
           localStorage.setItem('sessionToken', result.sessionToken);
 
-          // Skip to permissions or dashboard based on permission status
-          if (hasPermissions) {
-            setCurrentStep('dashboard');
+          // Check if user needs to accept terms (for new users or version updates)
+          if (result.isNewUser) {
+            setShowWelcomeTerms(true);
           } else {
-            setCurrentStep('permissions');
+            // Skip to permissions or dashboard based on permission status
+            if (hasPermissions) {
+              setCurrentStep('dashboard');
+            } else {
+              setCurrentStep('permissions');
+            }
           }
         } else {
           console.log('Auto-login: No active session found');

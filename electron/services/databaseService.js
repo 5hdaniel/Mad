@@ -101,11 +101,23 @@ class DatabaseService {
    */
   async _runAdditionalMigrations() {
     try {
-      // Migration 1: Add terms_accepted_at column to users_local
+      // Migration 1: Add legal compliance columns to users_local
       const userColumns = await this._all(`PRAGMA table_info(users_local)`);
       if (!userColumns.some(col => col.name === 'terms_accepted_at')) {
         console.log('[DatabaseService] Adding terms_accepted_at column to users_local');
         await this._run(`ALTER TABLE users_local ADD COLUMN terms_accepted_at DATETIME`);
+      }
+      if (!userColumns.some(col => col.name === 'terms_version_accepted')) {
+        console.log('[DatabaseService] Adding terms_version_accepted column to users_local');
+        await this._run(`ALTER TABLE users_local ADD COLUMN terms_version_accepted TEXT`);
+      }
+      if (!userColumns.some(col => col.name === 'privacy_policy_accepted_at')) {
+        console.log('[DatabaseService] Adding privacy_policy_accepted_at column to users_local');
+        await this._run(`ALTER TABLE users_local ADD COLUMN privacy_policy_accepted_at DATETIME`);
+      }
+      if (!userColumns.some(col => col.name === 'privacy_policy_version_accepted')) {
+        console.log('[DatabaseService] Adding privacy_policy_version_accepted column to users_local');
+        await this._run(`ALTER TABLE users_local ADD COLUMN privacy_policy_version_accepted TEXT`);
       }
 
       // Migration 2: Add new transaction columns
@@ -414,14 +426,20 @@ class DatabaseService {
 
   /**
    * Accept terms and conditions for a user
+   * @param {string} userId - User ID
+   * @param {string} termsVersion - Version of Terms of Service being accepted
+   * @param {string} privacyVersion - Version of Privacy Policy being accepted
    */
-  async acceptTerms(userId) {
+  async acceptTerms(userId, termsVersion, privacyVersion) {
     const sql = `
       UPDATE users_local
-      SET terms_accepted_at = CURRENT_TIMESTAMP
+      SET terms_accepted_at = CURRENT_TIMESTAMP,
+          terms_version_accepted = ?,
+          privacy_policy_accepted_at = CURRENT_TIMESTAMP,
+          privacy_policy_version_accepted = ?
       WHERE id = ?
     `;
-    await this._run(sql, [userId]);
+    await this._run(sql, [termsVersion, privacyVersion, userId]);
     return await this.getUserById(userId);
   }
 
