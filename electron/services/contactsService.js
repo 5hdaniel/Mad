@@ -16,13 +16,16 @@ const { MIN_CONTACT_RECORD_COUNT, CONTACTS_BASE_DIR, DEFAULT_CONTACTS_DB } = req
  * Get contact names from macOS Contacts database
  * Searches for all .abcddb files and uses the one with most records
  *
- * @returns {Promise<{contactMap: Object, phoneToContactInfo: Object}>}
+ * @returns {Promise<{contactMap: Object, phoneToContactInfo: Object, status: Object}>}
  * contactMap: Maps phone/email to contact name
  * phoneToContactInfo: Maps phone to full contact info (all phones & emails)
+ * status: Loading status with success flag, error info, and contact count
  */
 async function getContactNames() {
   const contactMap = {};
   const phoneToContactInfo = {};
+  let lastError = null;
+  let attemptedPaths = [];
 
   try {
     const baseDir = path.join(process.env.HOME, CONTACTS_BASE_DIR);
@@ -34,8 +37,14 @@ async function getContactNames() {
       const { stdout } = await execPromise(`find "${baseDir}" -name "*.abcddb" 2>/dev/null`);
       const dbFiles = stdout.trim().split('\n').filter(f => f);
 
+      if (dbFiles.length === 0) {
+        console.warn('[ContactsService] No .abcddb files found in', baseDir);
+        lastError = new Error('No contacts database files found');
+      }
+
       // Try each database and count records
       for (const dbPath of dbFiles) {
+        attemptedPaths.push(dbPath);
         try {
           const db = new sqlite3.Database(dbPath, sqlite3.OPEN_READONLY);
           const dbAll = promisify(db.all.bind(db));
@@ -48,23 +57,66 @@ async function getContactNames() {
 
           // If this database has sufficient records, use it
           if (recordCount[0].count > MIN_CONTACT_RECORD_COUNT) {
-            return await loadContactsFromDatabase(dbPath);
+            console.log(`[ContactsService] Successfully loaded contacts from ${dbPath}`);
+            const result = await loadContactsFromDatabase(dbPath);
+            const contactCount = Object.keys(result.contactMap).length;
+            return {
+              ...result,
+              status: {
+                success: true,
+                contactCount,
+                source: dbPath
+              }
+            };
+          } else {
+            console.warn(`[ContactsService] Database ${dbPath} has insufficient records (${recordCount[0].count})`);
           }
         } catch (err) {
-          // Silently skip unreadable databases
+          console.error(`[ContactsService] Failed to read database ${dbPath}:`, err.message);
+          lastError = err;
         }
       }
     } catch (err) {
-      console.error('Error finding database files:', err.message);
+      console.error('[ContactsService] Error finding database files:', err.message);
+      lastError = err;
     }
 
     // Fallback to default path
     const defaultPath = path.join(process.env.HOME, DEFAULT_CONTACTS_DB);
-    return await loadContactsFromDatabase(defaultPath);
+    attemptedPaths.push(defaultPath);
+    console.log('[ContactsService] Attempting fallback to default path:', defaultPath);
+    const result = await loadContactsFromDatabase(defaultPath);
+    const contactCount = Object.keys(result.contactMap).length;
+
+    if (contactCount > 0) {
+      console.log(`[ContactsService] Successfully loaded ${contactCount} contacts from fallback path`);
+      return {
+        ...result,
+        status: {
+          success: true,
+          contactCount,
+          source: defaultPath
+        }
+      };
+    } else {
+      throw new Error('No contacts could be loaded from any database');
+    }
 
   } catch (error) {
-    console.error('Error accessing contacts database:', error);
-    return { contactMap, phoneToContactInfo };
+    console.error('[ContactsService] Error accessing contacts database:', error);
+    return {
+      contactMap,
+      phoneToContactInfo,
+      status: {
+        success: false,
+        contactCount: 0,
+        error: error.message,
+        lastError: lastError?.message,
+        attemptedPaths,
+        userMessage: 'Could not load contacts from Contacts app',
+        action: 'Grant Full Disk Access in System Settings > Privacy & Security > Full Disk Access'
+      }
+    };
   }
 }
 
@@ -80,7 +132,8 @@ async function loadContactsFromDatabase(contactsDbPath) {
 
   try {
     await fs.access(contactsDbPath);
-  } catch {
+  } catch (error) {
+    console.error(`[ContactsService] Cannot access database at ${contactsDbPath}:`, error.message);
     return { contactMap, phoneToContactInfo };
   }
 
@@ -118,6 +171,8 @@ async function loadContactsFromDatabase(contactsDbPath) {
 
     await dbClose();
 
+    console.log(`[ContactsService] Loaded ${contactsResult.length} contact records, ${phonesResult.length} phones, ${emailsResult.length} emails`);
+
     // Build person map
     const personMap = buildPersonMap(contactsResult, phonesResult, emailsResult);
 
@@ -125,7 +180,8 @@ async function loadContactsFromDatabase(contactsDbPath) {
     buildContactMaps(personMap, contactMap, phoneToContactInfo);
 
   } catch (error) {
-    console.error('Error accessing contacts database:', error);
+    console.error('[ContactsService] Error accessing contacts database:', error);
+    throw error;
   }
 
   return { contactMap, phoneToContactInfo };

@@ -80,6 +80,74 @@ class PermissionService {
   }
 
   /**
+   * Check if contacts are actually loading from the Contacts app
+   * This is a more thorough check than just checking directory access
+   * @returns {Promise<{canLoadContacts: boolean, contactCount?: number, error?: Object}>}
+   */
+  async checkContactsLoading() {
+    try {
+      // Import contactsService here to avoid circular dependencies
+      const { getContactNames } = require('./contactsService');
+
+      const result = await getContactNames();
+
+      if (result.status && !result.status.success) {
+        return {
+          canLoadContacts: false,
+          contactCount: 0,
+          error: {
+            type: 'CONTACTS_LOADING_FAILED',
+            title: 'Cannot Load Contacts',
+            message: result.status.userMessage || 'Could not load contacts from Contacts app',
+            details: result.status.error || result.status.lastError,
+            action: result.status.action || 'Grant Full Disk Access',
+            actionHandler: 'open-system-settings',
+            severity: 'error',
+          },
+        };
+      }
+
+      const contactCount = result.status?.contactCount || Object.keys(result.contactMap).length;
+
+      if (contactCount === 0) {
+        return {
+          canLoadContacts: false,
+          contactCount: 0,
+          error: {
+            type: 'NO_CONTACTS_FOUND',
+            title: 'No Contacts Found',
+            message: 'No contacts were found in your Contacts app. You may need to grant Full Disk Access.',
+            details: 'Contact database exists but contains no contacts',
+            action: 'Open System Settings',
+            actionHandler: 'open-system-settings',
+            severity: 'warning',
+          },
+        };
+      }
+
+      return {
+        canLoadContacts: true,
+        contactCount,
+      };
+    } catch (error) {
+      console.error('[PermissionService] Contacts loading check failed:', error);
+      return {
+        canLoadContacts: false,
+        contactCount: 0,
+        error: {
+          type: 'CONTACTS_CHECK_FAILED',
+          title: 'Contacts Check Failed',
+          message: 'Could not verify contacts access',
+          details: error.message,
+          action: 'Grant Full Disk Access',
+          actionHandler: 'open-system-settings',
+          severity: 'error',
+        },
+      };
+    }
+  }
+
+  /**
    * Check all required permissions
    * @returns {Promise<{allGranted: boolean, permissions: Object, errors: Array}>}
    */
