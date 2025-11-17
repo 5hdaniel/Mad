@@ -64,12 +64,24 @@ contextBridge.exposeInMainWorld('api', {
 
   // System health and permission checks
   system: {
+    // Permission setup (onboarding)
+    runPermissionSetup: () => ipcRenderer.invoke('system:run-permission-setup'),
+    requestContactsPermission: () => ipcRenderer.invoke('system:request-contacts-permission'),
+    setupFullDiskAccess: () => ipcRenderer.invoke('system:setup-full-disk-access'),
+    openPrivacyPane: (pane) => ipcRenderer.invoke('system:open-privacy-pane', pane),
+    checkFullDiskAccessStatus: () => ipcRenderer.invoke('system:check-full-disk-access-status'),
+
+    // Permission checks
     checkFullDiskAccess: () => ipcRenderer.invoke('system:check-full-disk-access'),
     checkContactsPermission: () => ipcRenderer.invoke('system:check-contacts-permission'),
     checkAllPermissions: () => ipcRenderer.invoke('system:check-all-permissions'),
+
+    // Connection checks
     checkGoogleConnection: (userId) => ipcRenderer.invoke('system:check-google-connection', userId),
     checkMicrosoftConnection: (userId) => ipcRenderer.invoke('system:check-microsoft-connection', userId),
     checkAllConnections: (userId) => ipcRenderer.invoke('system:check-all-connections', userId),
+
+    // Health check
     healthCheck: (userId) => ipcRenderer.invoke('system:health-check', userId),
   },
 

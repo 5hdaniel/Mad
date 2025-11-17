@@ -3,14 +3,104 @@
 // Permission checks, connection status, system health
 // ============================================
 
-const { ipcMain } = require('electron');
+const { ipcMain, shell } = require('electron');
 const permissionService = require('./services/permissionService');
 const connectionStatusService = require('./services/connectionStatusService');
+const macOSPermissionHelper = require('./services/macOSPermissionHelper');
 
 /**
  * Register all system and permission-related IPC handlers
  */
 function registerSystemHandlers() {
+  // ===== PERMISSION SETUP (ONBOARDING) =====
+
+  /**
+   * Run permission setup flow (contacts + full disk access)
+   */
+  ipcMain.handle('system:run-permission-setup', async () => {
+    try {
+      const result = await macOSPermissionHelper.runPermissionSetupFlow();
+      return {
+        success: result.overallSuccess,
+        ...result,
+      };
+    } catch (error) {
+      console.error('[Main] Permission setup failed:', error);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  });
+
+  /**
+   * Request Contacts permission
+   */
+  ipcMain.handle('system:request-contacts-permission', async () => {
+    try {
+      const result = await macOSPermissionHelper.requestContactsPermission();
+      return result;
+    } catch (error) {
+      console.error('[Main] Contacts permission request failed:', error);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  });
+
+  /**
+   * Setup Full Disk Access (opens System Preferences)
+   */
+  ipcMain.handle('system:setup-full-disk-access', async () => {
+    try {
+      const result = await macOSPermissionHelper.setupFullDiskAccess();
+      return result;
+    } catch (error) {
+      console.error('[Main] Full Disk Access setup failed:', error);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  });
+
+  /**
+   * Open specific privacy pane in System Preferences
+   */
+  ipcMain.handle('system:open-privacy-pane', async (event, pane) => {
+    try {
+      const result = await macOSPermissionHelper.openPrivacyPane(pane);
+      return result;
+    } catch (error) {
+      console.error('[Main] Failed to open privacy pane:', error);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  });
+
+  /**
+   * Check Full Disk Access status
+   */
+  ipcMain.handle('system:check-full-disk-access-status', async () => {
+    try {
+      const result = await macOSPermissionHelper.checkFullDiskAccessStatus();
+      return {
+        success: true,
+        ...result,
+      };
+    } catch (error) {
+      console.error('[Main] Full Disk Access status check failed:', error);
+      return {
+        success: false,
+        granted: false,
+        error: error.message,
+      };
+    }
+  });
+
   // ===== PERMISSION CHECKS =====
 
   /**
