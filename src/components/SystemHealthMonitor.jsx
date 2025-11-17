@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 
 /**
  * System Health Monitor
@@ -14,7 +14,28 @@ import React, { useState, useEffect } from 'react';
 function SystemHealthMonitor({ userId, provider }) {
   const [issues, setIssues] = useState([]);
   const [dismissed, setDismissed] = useState(new Set());
-  const [checking, setChecking] = useState(false);
+  const checkingRef = useRef(false);
+
+  const checkSystemHealth = useCallback(async () => {
+    if (checkingRef.current) return;
+
+    checkingRef.current = true;
+
+    try {
+      // Pass provider so we only check the relevant OAuth connection
+      console.log('[SystemHealthMonitor] Checking health with provider:', provider);
+      const result = await window.api.system.healthCheck(userId, provider);
+
+      console.log('[SystemHealthMonitor] Health check result:', result);
+      if (result.success && result.issues) {
+        setIssues(result.issues);
+      }
+    } catch (error) {
+      console.error('System health check failed:', error);
+    } finally {
+      checkingRef.current = false;
+    }
+  }, [userId, provider]);
 
   useEffect(() => {
     checkSystemHealth();
@@ -22,7 +43,7 @@ function SystemHealthMonitor({ userId, provider }) {
     // Check every 2 minutes
     const interval = setInterval(checkSystemHealth, 2 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [userId, provider]);
+  }, [checkSystemHealth]);
 
   // Listen for Microsoft login completion events
   useEffect(() => {
@@ -38,26 +59,6 @@ function SystemHealthMonitor({ userId, provider }) {
       window.api.onMicrosoftLoginComplete(handleLoginComplete);
     }
   }, [checkSystemHealth]);
-
-  const checkSystemHealth = async () => {
-    if (checking) return;
-
-    setChecking(true);
-    try {
-      // Pass provider so we only check the relevant OAuth connection
-      console.log('[SystemHealthMonitor] Checking health with provider:', provider);
-      const result = await window.api.system.healthCheck(userId, provider);
-
-      console.log('[SystemHealthMonitor] Health check result:', result);
-      if (result.success && result.issues) {
-        setIssues(result.issues);
-      }
-    } catch (error) {
-      console.error('System health check failed:', error);
-    } finally {
-      setChecking(false);
-    }
-  };
 
   const handleDismiss = (issueIndex) => {
     setDismissed((prev) => new Set([...prev, issueIndex]));
