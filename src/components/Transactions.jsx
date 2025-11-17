@@ -281,11 +281,9 @@ function Transactions({ userId, provider, onClose }) {
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">
                   {searchQuery ? 'No matching transactions' : 'No transactions yet'}
                 </h3>
-                <p className="text-gray-600 mb-4">
-                  {searchQuery
-                    ? 'Try adjusting your search'
-                    : 'Click "Scan Emails" to extract real estate transactions from your emails, or audit a new transaction manually.'}
-                </p>
+                {searchQuery && (
+                  <p className="text-gray-600 mb-4">Try adjusting your search</p>
+                )}
                 {!searchQuery && (
                   <button
                     onClick={() => setShowAuditCreate(true)}
@@ -294,7 +292,7 @@ function Transactions({ userId, provider, onClose }) {
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
                     </svg>
-                    Audit New Transaction
+                    Audit new transaction
                   </button>
                 )}
               </div>
