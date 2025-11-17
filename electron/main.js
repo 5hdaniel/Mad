@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, systemPreferences, Notification } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, systemPreferences, Notification, session } = require('electron');
 const path = require('path');
 const fs = require('fs').promises;
 const sqlite3 = require('sqlite3');
@@ -48,6 +48,55 @@ autoUpdater.logger = log;
 
 let mainWindow;
 let outlookService = null;
+
+/**
+ * Configure Content Security Policy for the application
+ * This prevents the "unsafe-eval" security warning
+ */
+function setupContentSecurityPolicy() {
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    const isDevelopment = process.env.NODE_ENV === 'development' || !app.isPackaged;
+
+    // Configure CSP based on environment
+    // Development: Allow localhost dev server and inline styles for HMR
+    // Production: Strict CSP without unsafe-eval
+    const cspDirectives = isDevelopment
+      ? [
+          "default-src 'self'",
+          "script-src 'self' 'unsafe-inline'",
+          "style-src 'self' 'unsafe-inline'",
+          "img-src 'self' data: https:",
+          "font-src 'self' data:",
+          "connect-src 'self' http://localhost:* ws://localhost:* https:",
+          "media-src 'self'",
+          "object-src 'none'",
+          "base-uri 'self'",
+          "form-action 'self'",
+          "frame-ancestors 'none'",
+          "upgrade-insecure-requests"
+        ]
+      : [
+          "default-src 'self'",
+          "script-src 'self'",
+          "style-src 'self' 'unsafe-inline'",
+          "img-src 'self' data: https:",
+          "font-src 'self' data:",
+          "connect-src 'self' https:",
+          "media-src 'self'",
+          "object-src 'none'",
+          "base-uri 'self'",
+          "form-action 'self'",
+          "frame-ancestors 'none'"
+        ];
+
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [cspDirectives.join('; ')]
+      }
+    });
+  });
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -112,6 +161,9 @@ autoUpdater.on('update-downloaded', (info) => {
 });
 
 app.whenReady().then(async () => {
+  // Set up Content Security Policy
+  setupContentSecurityPolicy();
+
   await initializeDatabase();
   createWindow();
   registerAuthHandlers(mainWindow);
