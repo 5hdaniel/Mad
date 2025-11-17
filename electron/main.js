@@ -30,6 +30,18 @@ const {
   FIVE_YEARS_IN_MS
 } = require('./constants');
 
+// Import new authentication services
+const databaseService = require('./services/databaseService');
+const googleAuthService = require('./services/googleAuthService');
+const supabaseService = require('./services/supabaseService');
+const tokenEncryptionService = require('./services/tokenEncryptionService');
+const { initializeDatabase, registerAuthHandlers } = require('./auth-handlers');
+const { registerTransactionHandlers } = require('./transaction-handlers');
+const { registerContactHandlers } = require('./contact-handlers');
+const { registerAddressHandlers } = require('./address-handlers');
+const { registerFeedbackHandlers } = require('./feedback-handlers');
+const { registerSystemHandlers } = require('./system-handlers');
+
 // Configure logging for auto-updater
 log.transports.file.level = 'info';
 autoUpdater.logger = log;
@@ -99,7 +111,16 @@ autoUpdater.on('update-downloaded', (info) => {
   }
 });
 
-app.whenReady().then(createWindow);
+app.whenReady().then(async () => {
+  await initializeDatabase();
+  createWindow();
+  registerAuthHandlers(mainWindow);
+  registerTransactionHandlers(mainWindow);
+  registerContactHandlers();
+  registerAddressHandlers();
+  registerFeedbackHandlers();
+  registerSystemHandlers();
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
@@ -855,9 +876,18 @@ ipcMain.handle('export-conversations', async (event, conversationIds) => {
 // Install update and restart
 ipcMain.on('install-update', () => {
   log.info('Installing update...');
+
+  // Ensure app relaunches after update
   // Parameters: isSilent, isForceRunAfter
-  // false = show, true = run after install
-  autoUpdater.quitAndInstall(false, true);
+  // false = show installer, true = force run after install
+  setImmediate(() => {
+    app.removeAllListeners('window-all-closed');
+    if (mainWindow) {
+      mainWindow.removeAllListeners('close');
+      mainWindow.close();
+    }
+    autoUpdater.quitAndInstall(false, true);
+  });
 });
 
 // ===== OUTLOOK INTEGRATION IPC HANDLERS =====

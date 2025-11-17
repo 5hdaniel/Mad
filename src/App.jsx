@@ -1,14 +1,26 @@
 import React, { useState, useEffect } from 'react';
+import Login from './components/Login';
 import MicrosoftLogin from './components/MicrosoftLogin';
 import PermissionsScreen from './components/PermissionsScreen';
 import ConversationList from './components/ConversationList';
 import ExportComplete from './components/ExportComplete';
 import OutlookExport from './components/OutlookExport';
 import UpdateNotification from './components/UpdateNotification';
+import SystemHealthMonitor from './components/SystemHealthMonitor';
 import MoveAppPrompt from './components/MoveAppPrompt';
+import Profile from './components/Profile';
+import Settings from './components/Settings';
+import Transactions from './components/Transactions';
+import Contacts from './components/Contacts';
+import WelcomeTerms from './components/WelcomeTerms';
+import Dashboard from './components/Dashboard';
+import AuditTransactionModal from './components/AuditTransactionModal';
 
 function App() {
-  const [currentStep, setCurrentStep] = useState('microsoft-login'); // microsoft-login, permissions, contacts, outlook, complete
+  const [currentStep, setCurrentStep] = useState('login'); // login, microsoft-login, permissions, dashboard, outlook, complete
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [sessionToken, setSessionToken] = useState(null);
   const [hasPermissions, setHasPermissions] = useState(false);
   const [outlookConnected, setOutlookConnected] = useState(false);
   const [exportResult, setExportResult] = useState(null);
@@ -17,11 +29,118 @@ function App() {
   const [selectedConversationIds, setSelectedConversationIds] = useState(new Set());
   const [showMoveAppPrompt, setShowMoveAppPrompt] = useState(false);
   const [appPath, setAppPath] = useState('');
+  const [showProfile, setShowProfile] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [showTransactions, setShowTransactions] = useState(false);
+  const [showContacts, setShowContacts] = useState(false);
+  const [showWelcomeTerms, setShowWelcomeTerms] = useState(false);
+  const [showAuditTransaction, setShowAuditTransaction] = useState(false);
+  const [authProvider, setAuthProvider] = useState(null);
+  const [subscription, setSubscription] = useState(null);
 
   useEffect(() => {
+    checkSession();
     checkPermissions();
     checkAppLocation();
   }, []);
+
+  const checkSession = async () => {
+    // Check if user has an existing session (now using persistent session service)
+    if (window.api?.auth?.getCurrentUser) {
+      try {
+        const result = await window.api.auth.getCurrentUser();
+        if (result.success) {
+          console.log('Auto-login: Session found, logging in user');
+          setIsAuthenticated(true);
+          setCurrentUser(result.user);
+          setSessionToken(result.sessionToken);
+          setAuthProvider(result.provider);
+          setSubscription(result.subscription);
+          // Also store in localStorage for backward compatibility
+          localStorage.setItem('sessionToken', result.sessionToken);
+
+          // Skip to permissions or dashboard based on permission status
+          if (hasPermissions) {
+            setCurrentStep('dashboard');
+          } else {
+            setCurrentStep('permissions');
+          }
+        } else {
+          console.log('Auto-login: No active session found');
+          // Clear any stale localStorage data
+          localStorage.removeItem('sessionToken');
+        }
+      } catch (error) {
+        console.error('Session check failed:', error);
+        localStorage.removeItem('sessionToken');
+      }
+    }
+  };
+
+  const handleLoginSuccess = (user, token, provider, subscription, isNewUser) => {
+    setIsAuthenticated(true);
+    setCurrentUser(user);
+    setSessionToken(token);
+    setAuthProvider(provider);
+    setSubscription(subscription);
+    localStorage.setItem('sessionToken', token);
+
+    // Show welcome modal for new users
+    if (isNewUser) {
+      setShowWelcomeTerms(true);
+    } else {
+      // Proceed to permissions check for existing users
+      if (hasPermissions) {
+        setCurrentStep('dashboard');
+      } else {
+        setCurrentStep('permissions');
+      }
+    }
+  };
+
+  const handleAcceptTerms = async () => {
+    try {
+      if (currentUser && window.api?.auth?.acceptTerms) {
+        await window.api.auth.acceptTerms(currentUser.id);
+        setShowWelcomeTerms(false);
+
+        // Proceed to app after accepting terms
+        if (hasPermissions) {
+          setCurrentStep('dashboard');
+        } else {
+          setCurrentStep('permissions');
+        }
+      }
+    } catch (error) {
+      console.error('Failed to accept terms:', error);
+    }
+  };
+
+  const handleDeclineTerms = async () => {
+    // User declined terms, log them out
+    await handleLogout();
+  };
+
+  const handleLogout = async () => {
+    if (sessionToken && window.api?.auth?.logout) {
+      try {
+        await window.api.auth.logout(sessionToken);
+      } catch (error) {
+        console.error('Logout failed:', error);
+      }
+    }
+
+    // Clear all state
+    setIsAuthenticated(false);
+    setCurrentUser(null);
+    setSessionToken(null);
+    setAuthProvider(null);
+    setSubscription(null);
+    setShowProfile(false);
+    setShowWelcomeTerms(false);
+    localStorage.removeItem('sessionToken');
+    setCurrentStep('login');
+  };
 
   const checkPermissions = async () => {
     const result = await window.electron.checkPermissions();
@@ -60,7 +179,7 @@ function App() {
     setOutlookConnected(true);
     // Check if we already have permissions
     if (hasPermissions) {
-      setCurrentStep('contacts');
+      setCurrentStep('dashboard');
     } else {
       setCurrentStep('permissions');
     }
@@ -70,7 +189,7 @@ function App() {
     setOutlookConnected(false);
     // Check if we already have permissions
     if (hasPermissions) {
-      setCurrentStep('contacts');
+      setCurrentStep('dashboard');
     } else {
       setCurrentStep('permissions');
     }
@@ -83,7 +202,7 @@ function App() {
 
   const handlePermissionsGranted = () => {
     setHasPermissions(true);
-    setCurrentStep('contacts');
+    setCurrentStep('dashboard');
   };
 
   const handleExportComplete = (result) => {
@@ -109,21 +228,25 @@ function App() {
   };
 
   const handleOutlookCancel = () => {
-    setCurrentStep('contacts');
+    setCurrentStep('dashboard');
   };
 
   const handleStartOver = () => {
     setExportResult(null);
     setSelectedConversationIds(new Set()); // Clear selected conversations
-    setCurrentStep('contacts');
+    setCurrentStep('dashboard');
   };
 
   const getPageTitle = () => {
     switch (currentStep) {
+      case 'login':
+        return 'Welcome';
       case 'microsoft-login':
         return 'Login';
       case 'permissions':
         return 'Setup Permissions';
+      case 'dashboard':
+        return 'Dashboard';
       case 'contacts':
         return 'Select Contacts for Export';
       case 'outlook':
@@ -131,19 +254,40 @@ function App() {
       case 'complete':
         return 'Export Complete';
       default:
-        return 'Real Estate Archive';
+        return 'Magic Audit';
     }
   };
 
   return (
     <div className="h-screen flex flex-col bg-gray-50 overflow-hidden">
-      {/* Title Bar */}
-      <div className="flex-shrink-0 bg-gradient-to-b from-gray-100 to-gray-50 border-b border-gray-200 px-4 py-3 flex items-center justify-center select-none">
-        <h1 className="text-sm font-semibold text-gray-700">{getPageTitle()}</h1>
-      </div>
+      {/* Title Bar - Hide on login screen */}
+      {currentStep !== 'login' && (
+        <div className="flex-shrink-0 bg-gradient-to-b from-gray-100 to-gray-50 border-b border-gray-200 px-4 py-3 flex items-center justify-between select-none">
+          <div className="w-8" /> {/* Spacer for centering */}
+          <h1 className="text-sm font-semibold text-gray-700">{getPageTitle()}</h1>
+          {/* User Menu Button */}
+          {isAuthenticated && currentUser && (
+            <button
+              onClick={() => setShowProfile(true)}
+              className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 hover:from-blue-500 hover:to-purple-600 flex items-center justify-center text-white text-sm font-bold shadow-md transition-all hover:shadow-lg"
+              title={`${currentUser.display_name || currentUser.email} - Click for account settings`}
+            >
+              {currentUser.avatar_url ? (
+                <img src={currentUser.avatar_url} alt="Profile" className="w-8 h-8 rounded-full" />
+              ) : (
+                currentUser.display_name?.[0]?.toUpperCase() || currentUser.email?.[0]?.toUpperCase() || '?'
+              )}
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Scrollable Content Area */}
       <div className="flex-1 overflow-y-auto relative">
+        {currentStep === 'login' && (
+          <Login onLoginSuccess={handleLoginSuccess} />
+        )}
+
         {currentStep === 'microsoft-login' && (
           <MicrosoftLogin
             onLoginComplete={handleMicrosoftLogin}
@@ -155,6 +299,14 @@ function App() {
           <PermissionsScreen
             onPermissionsGranted={handlePermissionsGranted}
             onCheckAgain={checkPermissions}
+          />
+        )}
+
+        {currentStep === 'dashboard' && (
+          <Dashboard
+            onAuditNew={() => setShowAuditTransaction(true)}
+            onViewTransactions={() => setShowTransactions(true)}
+            onManageContacts={() => setShowContacts(true)}
           />
         )}
 
@@ -230,12 +382,76 @@ function App() {
       {/* Update Notification */}
       <UpdateNotification />
 
+      {/* System Health Monitor - Show permission/connection errors */}
+      {isAuthenticated && currentUser && (
+        <SystemHealthMonitor userId={currentUser.id} provider={authProvider} />
+      )}
+
       {/* Move App Prompt */}
       {showMoveAppPrompt && (
         <MoveAppPrompt
           appPath={appPath}
           onDismiss={handleDismissMovePrompt}
           onNotNow={handleNotNowMovePrompt}
+        />
+      )}
+
+      {/* Profile Modal */}
+      {showProfile && currentUser && (
+        <Profile
+          user={currentUser}
+          provider={authProvider}
+          subscription={subscription}
+          onLogout={handleLogout}
+          onClose={() => setShowProfile(false)}
+          onViewTransactions={() => setShowTransactions(true)}
+        />
+      )}
+
+      {/* Settings Modal */}
+      {showSettings && (
+        <Settings
+          onClose={() => setShowSettings(false)}
+        />
+      )}
+
+      {/* Transactions View */}
+      {showTransactions && currentUser && (
+        <Transactions
+          userId={currentUser.id}
+          provider={authProvider}
+          onClose={() => setShowTransactions(false)}
+        />
+      )}
+
+      {/* Contacts View */}
+      {showContacts && currentUser && (
+        <Contacts
+          userId={currentUser.id}
+          onClose={() => setShowContacts(false)}
+        />
+      )}
+
+      {/* Welcome Terms Modal (New Users Only) */}
+      {showWelcomeTerms && currentUser && (
+        <WelcomeTerms
+          user={currentUser}
+          onAccept={handleAcceptTerms}
+          onDecline={handleDeclineTerms}
+        />
+      )}
+
+      {/* Audit Transaction Modal */}
+      {showAuditTransaction && currentUser && (
+        <AuditTransactionModal
+          userId={currentUser.id}
+          provider={authProvider}
+          onClose={() => setShowAuditTransaction(false)}
+          onSuccess={(newTransaction) => {
+            setShowAuditTransaction(false);
+            // Optionally show the transactions view after successful creation
+            setShowTransactions(true);
+          }}
         />
       )}
     </div>

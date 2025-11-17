@@ -1,0 +1,364 @@
+/**
+ * Feedback Learning Service
+ * Analyzes user corrections to detect patterns and generate smart suggestions
+ */
+
+const databaseService = require('./databaseService');
+
+class FeedbackLearningService {
+  constructor() {
+    this.patternCache = new Map(); // Cache detected patterns
+  }
+
+  /**
+   * Analyze past feedback to detect correction patterns
+   * @param {string} userId - User ID
+   * @param {string} fieldName - Field to analyze
+   * @returns {Promise<Array>} Detected patterns
+   */
+  async detectPatterns(userId, fieldName) {
+    // Check cache first
+    const cacheKey = `${userId}_${fieldName}`;
+    if (this.patternCache.has(cacheKey)) {
+      return this.patternCache.get(cacheKey);
+    }
+
+    try {
+      // Get recent feedback for this field
+      const feedback = await databaseService.getFeedbackByField(userId, fieldName, 50);
+
+      if (feedback.length < 3) {
+        return []; // Need at least 3 corrections to detect patterns
+      }
+
+      const patterns = [];
+
+      // Pattern 1: Consistent date adjustment
+      if (fieldName === 'closing_date') {
+        const datePattern = this._detectDateAdjustmentPattern(feedback);
+        if (datePattern) patterns.push(datePattern);
+      }
+
+      // Pattern 2: Consistent value substitution
+      const substitutionPattern = this._detectSubstitutionPattern(feedback);
+      if (substitutionPattern) patterns.push(substitutionPattern);
+
+      // Pattern 3: Consistent rejection of certain values
+      const rejectionPattern = this._detectRejectionPattern(feedback);
+      if (rejectionPattern) patterns.push(rejectionPattern);
+
+      // Pattern 4: Number adjustment (for prices, amounts)
+      if (fieldName === 'sale_price' || fieldName.includes('price') || fieldName.includes('amount')) {
+        const numberPattern = this._detectNumberAdjustmentPattern(feedback);
+        if (numberPattern) patterns.push(numberPattern);
+      }
+
+      // Cache patterns
+      this.patternCache.set(cacheKey, patterns);
+
+      return patterns;
+    } catch (error) {
+      console.error('[FeedbackLearning] Pattern detection failed:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Generate suggestion for a field based on patterns
+   * @param {string} userId - User ID
+   * @param {string} fieldName - Field name
+   * @param {any} extractedValue - Value extracted by system
+   * @param {number} confidence - Extraction confidence
+   * @returns {Promise<Object|null>} Suggestion object or null
+   */
+  async generateSuggestion(userId, fieldName, extractedValue, confidence) {
+    // Only suggest for medium/low confidence extractions
+    if (confidence && confidence > 85) {
+      return null;
+    }
+
+    const patterns = await this.detectPatterns(userId, fieldName);
+
+    if (patterns.length === 0) {
+      return null;
+    }
+
+    // Find applicable pattern
+    for (const pattern of patterns) {
+      const suggestion = this._applyPattern(pattern, extractedValue, fieldName);
+      if (suggestion) {
+        return suggestion;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Detect date adjustment pattern (e.g., user always adds 30 days)
+   * @private
+   */
+  _detectDateAdjustmentPattern(feedback) {
+    const corrections = feedback.filter(f => f.feedback_type === 'correction');
+
+    if (corrections.length < 3) return null;
+
+    const adjustments = [];
+
+    for (const correction of corrections) {
+      try {
+        const original = new Date(correction.original_value);
+        const corrected = new Date(correction.corrected_value);
+
+        if (isNaN(original) || isNaN(corrected)) continue;
+
+        const diffDays = Math.round((corrected - original) / (1000 * 60 * 60 * 24));
+        adjustments.push(diffDays);
+      } catch (e) {
+        continue;
+      }
+    }
+
+    if (adjustments.length < 3) return null;
+
+    // Check if adjustments are consistent
+    const avg = adjustments.reduce((sum, val) => sum + val, 0) / adjustments.length;
+    const variance = adjustments.reduce((sum, val) => sum + Math.pow(val - avg, 2), 0) / adjustments.length;
+    const stdDev = Math.sqrt(variance);
+
+    // If standard deviation is low, we have a pattern
+    if (stdDev < 5 && Math.abs(avg) > 1) {
+      return {
+        type: 'date_adjustment',
+        adjustment_days: Math.round(avg),
+        confidence: Math.max(0, 100 - stdDev * 10),
+        sample_size: adjustments.length,
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * Detect substitution pattern (e.g., user always changes "purchase" to "sale")
+   * @private
+   */
+  _detectSubstitutionPattern(feedback) {
+    const corrections = feedback.filter(f => f.feedback_type === 'correction');
+
+    if (corrections.length < 3) return null;
+
+    // Count frequency of specific substitutions
+    const substitutions = {};
+
+    for (const correction of corrections) {
+      const key = `${correction.original_value} -> ${correction.corrected_value}`;
+      substitutions[key] = (substitutions[key] || 0) + 1;
+    }
+
+    // Find most common substitution
+    let maxCount = 0;
+    let mostCommon = null;
+
+    Object.entries(substitutions).forEach(([sub, count]) => {
+      if (count > maxCount) {
+        maxCount = count;
+        mostCommon = sub;
+      }
+    });
+
+    // If substitution appears in >50% of corrections, it's a pattern
+    if (mostCommon && maxCount / corrections.length > 0.5) {
+      const [original, corrected] = mostCommon.split(' -> ');
+      return {
+        type: 'substitution',
+        from_value: original,
+        to_value: corrected,
+        frequency: maxCount / corrections.length,
+        sample_size: corrections.length,
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * Detect rejection pattern (e.g., user always rejects certain values)
+   * @private
+   */
+  _detectRejectionPattern(feedback) {
+    const rejections = feedback.filter(f => f.feedback_type === 'rejection');
+
+    if (rejections.length < 2) return null;
+
+    // Find common values that get rejected
+    const rejectedValues = {};
+
+    for (const rejection of rejections) {
+      rejectedValues[rejection.original_value] = (rejectedValues[rejection.original_value] || 0) + 1;
+    }
+
+    const frequentlyRejected = Object.entries(rejectedValues)
+      .filter(([_, count]) => count >= 2)
+      .map(([value]) => value);
+
+    if (frequentlyRejected.length > 0) {
+      return {
+        type: 'rejection',
+        rejected_values: frequentlyRejected,
+        sample_size: rejections.length,
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * Detect number adjustment pattern (e.g., user always subtracts earnest money)
+   * @private
+   */
+  _detectNumberAdjustmentPattern(feedback) {
+    const corrections = feedback.filter(f => f.feedback_type === 'correction');
+
+    if (corrections.length < 3) return null;
+
+    const adjustments = [];
+
+    for (const correction of corrections) {
+      try {
+        const original = parseFloat(correction.original_value.replace(/[^0-9.-]/g, ''));
+        const corrected = parseFloat(correction.corrected_value.replace(/[^0-9.-]/g, ''));
+
+        if (isNaN(original) || isNaN(corrected)) continue;
+
+        const diff = corrected - original;
+        const percentDiff = (diff / original) * 100;
+
+        adjustments.push({ absolute: diff, percent: percentDiff });
+      } catch (e) {
+        continue;
+      }
+    }
+
+    if (adjustments.length < 3) return null;
+
+    // Check for consistent percentage adjustment
+    const avgPercent = adjustments.reduce((sum, val) => sum + val.percent, 0) / adjustments.length;
+    const variance = adjustments.reduce((sum, val) => sum + Math.pow(val.percent - avgPercent, 2), 0) / adjustments.length;
+    const stdDev = Math.sqrt(variance);
+
+    if (stdDev < 10 && Math.abs(avgPercent) > 1) {
+      return {
+        type: 'number_adjustment',
+        percent_adjustment: avgPercent,
+        confidence: Math.max(0, 100 - stdDev * 5),
+        sample_size: adjustments.length,
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * Apply pattern to generate suggestion
+   * @private
+   */
+  _applyPattern(pattern, extractedValue, fieldName) {
+    try {
+      switch (pattern.type) {
+        case 'date_adjustment': {
+          const date = new Date(extractedValue);
+          if (isNaN(date)) return null;
+
+          const adjusted = new Date(date);
+          adjusted.setDate(adjusted.getDate() + pattern.adjustment_days);
+
+          return {
+            value: adjusted.toISOString().split('T')[0], // YYYY-MM-DD format
+            reason: `Based on ${pattern.sample_size} past corrections, you typically adjust dates by ${pattern.adjustment_days > 0 ? '+' : ''}${pattern.adjustment_days} days`,
+            confidence: pattern.confidence,
+          };
+        }
+
+        case 'substitution': {
+          if (extractedValue === pattern.from_value) {
+            return {
+              value: pattern.to_value,
+              reason: `You've changed "${pattern.from_value}" to "${pattern.to_value}" in ${Math.round(pattern.frequency * 100)}% of past cases`,
+              confidence: pattern.frequency * 100,
+            };
+          }
+          return null;
+        }
+
+        case 'rejection': {
+          if (pattern.rejected_values.includes(extractedValue)) {
+            return {
+              value: null,
+              reason: `You've rejected this value in past transactions`,
+              confidence: 70,
+              isWarning: true,
+            };
+          }
+          return null;
+        }
+
+        case 'number_adjustment': {
+          const num = parseFloat(extractedValue.replace(/[^0-9.-]/g, ''));
+          if (isNaN(num)) return null;
+
+          const adjusted = num * (1 + pattern.percent_adjustment / 100);
+
+          return {
+            value: `$${adjusted.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+            reason: `Based on ${pattern.sample_size} past corrections, you typically adjust by ${pattern.percent_adjustment > 0 ? '+' : ''}${pattern.percent_adjustment.toFixed(1)}%`,
+            confidence: pattern.confidence,
+          };
+        }
+
+        default:
+          return null;
+      }
+    } catch (error) {
+      console.error('[FeedbackLearning] Pattern application failed:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Clear pattern cache (call after new feedback is submitted)
+   */
+  clearCache(userId, fieldName = null) {
+    if (fieldName) {
+      this.patternCache.delete(`${userId}_${fieldName}`);
+    } else {
+      // Clear all patterns for user
+      for (const key of this.patternCache.keys()) {
+        if (key.startsWith(`${userId}_`)) {
+          this.patternCache.delete(key);
+        }
+      }
+    }
+  }
+
+  /**
+   * Get learning statistics for a field
+   */
+  async getLearningStats(userId, fieldName) {
+    const feedback = await databaseService.getFeedbackByField(userId, fieldName, 100);
+    const patterns = await this.detectPatterns(userId, fieldName);
+
+    const stats = {
+      total_feedback: feedback.length,
+      confirmations: feedback.filter(f => f.feedback_type === 'confirmation').length,
+      corrections: feedback.filter(f => f.feedback_type === 'correction').length,
+      rejections: feedback.filter(f => f.feedback_type === 'rejection').length,
+      patterns_detected: patterns.length,
+      patterns: patterns,
+    };
+
+    return stats;
+  }
+}
+
+module.exports = new FeedbackLearningService();

@@ -1,0 +1,181 @@
+import React, { useState } from 'react';
+
+/**
+ * Profile Component
+ * Displays user information, session details, and account actions
+ */
+function Profile({ user, provider, subscription, onLogout, onClose, onViewTransactions }) {
+  const [showConfirmLogout, setShowConfirmLogout] = useState(false);
+
+  const handleLogoutClick = () => {
+    setShowConfirmLogout(true);
+  };
+
+  const handleConfirmLogout = () => {
+    setShowConfirmLogout(false);
+    onLogout();
+  };
+
+  const handleCancelLogout = () => {
+    setShowConfirmLogout(false);
+  };
+
+  const getProviderDisplay = () => {
+    if (provider === 'google') {
+      return {
+        name: 'Google',
+        color: 'text-blue-600',
+        bgColor: 'bg-blue-50',
+        borderColor: 'border-blue-200',
+      };
+    } else if (provider === 'microsoft') {
+      return {
+        name: 'Microsoft',
+        color: 'text-purple-600',
+        bgColor: 'bg-purple-50',
+        borderColor: 'border-purple-200',
+      };
+    }
+    return {
+      name: provider,
+      color: 'text-gray-600',
+      bgColor: 'bg-gray-50',
+      borderColor: 'border-gray-200',
+    };
+  };
+
+  const providerInfo = getProviderDisplay();
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-purple-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
+          <h2 className="text-xl font-bold text-white">Account</h2>
+          <button
+            onClick={onClose}
+            className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-all"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* User Info */}
+        <div className="p-6">
+          {/* Avatar and Name */}
+          <div className="flex items-center mb-6">
+            {user.avatar_url ? (
+              <img
+                src={user.avatar_url}
+                alt={user.display_name}
+                className="w-16 h-16 rounded-full border-2 border-gray-200"
+              />
+            ) : (
+              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white text-2xl font-bold">
+                {user.display_name?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || '?'}
+              </div>
+            )}
+            <div className="ml-4 flex-1">
+              <h3 className="text-lg font-semibold text-gray-900">{user.display_name || 'User'}</h3>
+              <p className="text-sm text-gray-600">{user.email}</p>
+            </div>
+          </div>
+
+          {/* Provider Badge */}
+          <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full ${providerInfo.bgColor} ${providerInfo.borderColor} border mb-6`}>
+            <svg className={`w-4 h-4 ${providerInfo.color}`} fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
+            </svg>
+            <span className={`text-sm font-medium ${providerInfo.color}`}>
+              Signed in with {providerInfo.name}
+            </span>
+          </div>
+
+          {/* Subscription Info */}
+          {subscription && (
+            <div className="bg-gray-50 rounded-lg p-4 mb-6 border border-gray-200">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-gray-700">Subscription</span>
+                <span className={`text-xs px-2 py-1 rounded-full ${
+                  subscription.subscription_status === 'active'
+                    ? 'bg-green-100 text-green-700'
+                    : subscription.subscription_status === 'trial'
+                    ? 'bg-blue-100 text-blue-700'
+                    : 'bg-gray-100 text-gray-700'
+                }`}>
+                  {subscription.subscription_status || 'Unknown'}
+                </span>
+              </div>
+              <p className="text-sm text-gray-600 capitalize">
+                {subscription.subscription_tier || 'Free'} Plan
+              </p>
+              {subscription.trial_ends_at && (
+                <p className="text-xs text-gray-500 mt-1">
+                  Trial ends: {new Date(subscription.trial_ends_at).toLocaleDateString()}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Account Details */}
+          <div className="space-y-3 mb-6">
+            <div className="flex justify-between items-center py-2 border-b border-gray-100">
+              <span className="text-sm text-gray-600">User ID</span>
+              <span className="text-sm font-mono text-gray-900">{user.id}</span>
+            </div>
+            {user.last_login_at && (
+              <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                <span className="text-sm text-gray-600">Last Login</span>
+                <span className="text-sm text-gray-900">
+                  {new Date(user.last_login_at).toLocaleDateString()}
+                </span>
+              </div>
+            )}
+            {user.created_at && (
+              <div className="flex justify-between items-center py-2">
+                <span className="text-sm text-gray-600">Member Since</span>
+                <span className="text-sm text-gray-900">
+                  {new Date(user.created_at).toLocaleDateString()}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Logout Button */}
+          {!showConfirmLogout ? (
+            <button
+              onClick={handleLogoutClick}
+              className="w-full bg-red-500 hover:bg-red-600 text-white font-semibold py-3 px-4 rounded-lg transition-all shadow-md hover:shadow-lg"
+            >
+              Sign Out
+            </button>
+          ) : (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <p className="text-sm text-red-800 mb-3 text-center font-medium">
+                Are you sure you want to sign out?
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleCancelLogout}
+                  className="flex-1 bg-white hover:bg-gray-50 text-gray-700 font-medium py-2 px-4 rounded-lg border border-gray-300 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmLogout}
+                  className="flex-1 bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-lg transition-all"
+                >
+                  Sign Out
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default Profile;
