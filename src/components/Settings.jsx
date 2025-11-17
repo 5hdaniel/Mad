@@ -76,9 +76,8 @@ function Settings({ onClose, userId }) {
     setConnectingProvider('microsoft');
     try {
       const result = await window.api.auth.microsoftConnectMailbox(userId);
-      if (result.success && result.authUrl) {
-        await window.api.shell.openExternal(result.authUrl);
-
+      if (result.success) {
+        // Auth popup window opens automatically and will close when done
         // Listen for connection completion
         window.api.onMicrosoftMailboxConnected(async (connectionResult) => {
           if (connectionResult.success) {
