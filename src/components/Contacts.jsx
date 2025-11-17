@@ -10,6 +10,7 @@ import React, { useState, useEffect } from 'react';
 function Contacts({ userId, onClose }) {
   const [contacts, setContacts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddEdit, setShowAddEdit] = useState(false);
   const [selectedContact, setSelectedContact] = useState(null);
@@ -19,21 +20,39 @@ function Contacts({ userId, onClose }) {
     loadContacts();
   }, []);
 
-  const loadContacts = async () => {
+  const loadContacts = async (isSync = false) => {
     try {
-      setLoading(true);
+      if (isSync) {
+        setSyncing(true);
+      } else {
+        setLoading(true);
+      }
       const result = await window.api.contacts.getAll(userId);
 
       if (result.success) {
-        setContacts(result.contacts || []);
+        // Sort contacts by created_at in reverse order (newest first)
+        const sortedContacts = (result.contacts || []).sort((a, b) => {
+          const dateA = a.created_at ? new Date(a.created_at) : new Date(0);
+          const dateB = b.created_at ? new Date(b.created_at) : new Date(0);
+          return dateB - dateA; // Reverse order
+        });
+        setContacts(sortedContacts);
       } else {
         setError(result.error || 'Failed to load contacts');
       }
     } catch (err) {
       setError(err.message);
     } finally {
-      setLoading(false);
+      if (isSync) {
+        setSyncing(false);
+      } else {
+        setLoading(false);
+      }
     }
+  };
+
+  const handleSync = () => {
+    loadContacts(true);
   };
 
   const handleAddContact = () => {
@@ -124,6 +143,22 @@ function Contacts({ userId, onClose }) {
             </svg>
           </div>
 
+          {/* Sync Button */}
+          <button
+            onClick={handleSync}
+            disabled={syncing}
+            className={`px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 ${
+              syncing
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-white text-purple-600 border-2 border-purple-500 hover:bg-purple-50 shadow-md hover:shadow-lg'
+            }`}
+          >
+            <svg className={`w-5 h-5 ${syncing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            {syncing ? 'Syncing...' : 'Sync'}
+          </button>
+
           {/* Add Contact Button */}
           <button
             onClick={handleAddContact}
@@ -145,7 +180,7 @@ function Contacts({ userId, onClose }) {
       </div>
 
       {/* Contacts List */}
-      <div className="flex-1 overflow-y-auto p-6 max-w-7xl mx-auto w-full">
+      <div className="flex-1 overflow-y-auto p-6 pb-12 max-w-7xl mx-auto w-full">
         {loading ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
