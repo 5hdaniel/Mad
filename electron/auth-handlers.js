@@ -243,8 +243,37 @@ const handleMicrosoftLogin = async (mainWindow) => {
   try {
     console.log('[Main] Starting Microsoft login flow with redirect');
 
+    const { BrowserWindow } = require('electron');
+
     // Start auth flow - returns authUrl and a promise for the code
     const { authUrl, codePromise, codeVerifier, scopes } = await microsoftAuthService.authenticateForLogin();
+
+    // Create a popup window for auth
+    const authWindow = new BrowserWindow({
+      width: 600,
+      height: 800,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true
+      },
+      autoHideMenuBar: true,
+      title: 'Sign in with Microsoft'
+    });
+
+    // Load the auth URL
+    authWindow.loadURL(authUrl);
+
+    // Close the window when redirected to callback
+    authWindow.webContents.on('will-redirect', (event, url) => {
+      if (url.startsWith('http://localhost:3000/callback')) {
+        // Let the redirect complete so the success page shows briefly
+        setTimeout(() => {
+          if (authWindow && !authWindow.isDestroyed()) {
+            authWindow.close();
+          }
+        }, 2000);
+      }
+    });
 
     // Return authUrl immediately so browser can open
     // Don't wait for user - return early
@@ -400,12 +429,41 @@ const handleMicrosoftConnectMailbox = async (mainWindow, userId) => {
   try {
     console.log('[Main] Starting Microsoft mailbox connection with redirect');
 
+    const { BrowserWindow } = require('electron');
+
     // Get user info to use as login hint
     const user = await databaseService.getUserById(userId);
     const loginHint = user?.email;
 
     // Start auth flow - returns authUrl and a promise for the code
     const { authUrl, codePromise, codeVerifier, scopes } = await microsoftAuthService.authenticateForMailbox(loginHint);
+
+    // Create a popup window for auth
+    const authWindow = new BrowserWindow({
+      width: 600,
+      height: 800,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true
+      },
+      autoHideMenuBar: true,
+      title: 'Connect Microsoft Mailbox'
+    });
+
+    // Load the auth URL
+    authWindow.loadURL(authUrl);
+
+    // Close the window when redirected to callback
+    authWindow.webContents.on('will-redirect', (event, url) => {
+      if (url.startsWith('http://localhost:3000/callback')) {
+        // Let the redirect complete so the success page shows briefly
+        setTimeout(() => {
+          if (authWindow && !authWindow.isDestroyed()) {
+            authWindow.close();
+          }
+        }, 2000);
+      }
+    });
 
     // Return authUrl immediately so browser can open
     // Don't wait for user - return early

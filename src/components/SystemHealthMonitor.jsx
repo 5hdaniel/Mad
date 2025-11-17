@@ -90,10 +90,8 @@ function SystemHealthMonitor({ userId, provider }) {
         // Trigger Microsoft mailbox connection
         try {
           const result = await window.api.auth.microsoftConnectMailbox(userId);
-          if (result.success && result.authUrl) {
-            // Open auth URL in browser
-            await window.api.shell.openExternal(result.authUrl);
-
+          if (result.success) {
+            // Auth popup window opens automatically and will close when done
             // Listen for connection completion
             const cleanup = window.api.onMicrosoftMailboxConnected((connectionResult) => {
               if (connectionResult.success) {

@@ -67,13 +67,12 @@ const Login = ({ onLoginSuccess }) => {
     }
 
     try {
-      // Start login - returns authUrl immediately
+      // Start login - auth popup window will open automatically
       const result = await window.api.auth.microsoftLogin();
 
-      if (result.success && result.authUrl) {
-        // Open browser - redirect will be handled automatically
-        window.api.shell.openExternal(result.authUrl);
-        // Keep loading=true while waiting for redirect
+      if (result.success) {
+        // Auth popup is already open - keep loading=true while waiting for redirect
+        // The popup will close automatically after successful authentication
       } else {
         setError(result.error || 'Failed to start Microsoft login');
         setLoading(false);
@@ -162,7 +161,7 @@ const Login = ({ onLoginSuccess }) => {
                   Authenticating with Microsoft...
                 </p>
                 <p className="text-xs text-purple-700">
-                  A browser window has been opened. Complete sign-in there and you'll be automatically logged in.
+                  A popup window has been opened. Complete sign-in there and the window will close automatically.
                 </p>
               </div>
             </div>
