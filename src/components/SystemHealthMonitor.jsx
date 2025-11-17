@@ -24,6 +24,21 @@ function SystemHealthMonitor({ userId, provider }) {
     return () => clearInterval(interval);
   }, [userId, provider]);
 
+  // Listen for Microsoft login completion events
+  useEffect(() => {
+    if (window.api?.onMicrosoftLoginComplete) {
+      const handleLoginComplete = (result) => {
+        console.log('[SystemHealthMonitor] Microsoft login complete:', result);
+        if (result.success) {
+          // Re-check health after successful authentication
+          checkSystemHealth();
+        }
+      };
+
+      window.api.onMicrosoftLoginComplete(handleLoginComplete);
+    }
+  }, [checkSystemHealth]);
+
   const checkSystemHealth = async () => {
     if (checking) return;
 
@@ -76,10 +91,15 @@ function SystemHealthMonitor({ userId, provider }) {
         // Trigger Microsoft OAuth re-authentication
         try {
           const result = await window.api.auth.microsoftLogin();
-          if (result.success) {
-            // Re-check health after successful auth
-            await checkSystemHealth();
-            handleDismiss(issueIndex);
+          if (result.success && result.authUrl) {
+            // Open auth URL in browser
+            if (window.api?.shell?.openExternal) {
+              await window.api.shell.openExternal(result.authUrl);
+            }
+            // Don't dismiss immediately - wait for login-complete event
+            // The event listener will re-check health when authentication completes
+          } else {
+            console.error('Microsoft login failed:', result.error);
           }
         } catch (error) {
           console.error('Microsoft re-authentication failed:', error);
