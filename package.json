@@ -10,6 +10,8 @@
     "dev:electron": "wait-on http://localhost:5173 && electron .",
     "build": "vite build",
     "package": "npm run build && dotenv -e .env.local -- electron-builder",
+    "package:dev": "npm run build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --dir",
+    "package:unsigned": "npm run build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",

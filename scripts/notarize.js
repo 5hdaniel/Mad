@@ -8,6 +8,12 @@ exports.default = async function notarizing(context) {
     return;
   }
 
+  // Skip notarization if CSC_IDENTITY_AUTO_DISCOVERY is false (unsigned builds)
+  if (process.env.CSC_IDENTITY_AUTO_DISCOVERY === 'false') {
+    console.log('Skipping notarization: Building unsigned version (CSC_IDENTITY_AUTO_DISCOVERY=false)');
+    return;
+  }
+
   const appName = context.packager.appInfo.productFilename;
 
   // Check for required environment variables
