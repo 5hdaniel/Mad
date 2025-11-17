@@ -260,20 +260,22 @@ function Contacts({ userId, onClose }) {
                 </div>
 
                 {/* Actions */}
-                <div className="flex items-center gap-2 pt-4 border-t border-gray-200">
-                  <button
-                    onClick={() => handleEditContact(contact)}
-                    className="flex-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium text-sm transition-all"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => handleDeleteContact(contact.id)}
-                    className="flex-1 px-3 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg font-medium text-sm transition-all"
-                  >
-                    Delete
-                  </button>
-                </div>
+                {contact.source !== 'contacts_app' && (
+                  <div className="flex items-center gap-2 pt-4 border-t border-gray-200">
+                    <button
+                      onClick={() => handleEditContact(contact)}
+                      className="flex-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium text-sm transition-all"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDeleteContact(contact.id)}
+                      className="flex-1 px-3 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg font-medium text-sm transition-all"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
