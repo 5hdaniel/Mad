@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import ManualTransactionModal from './ManualTransactionModal';
+import AuditTransactionModal from './AuditTransactionModal';
 import ExportModal from './ExportModal';
 
 /**
@@ -16,7 +16,7 @@ function Transactions({ userId, provider, onClose }) {
   const [selectedTransaction, setSelectedTransaction] = useState(null);
   const [error, setError] = useState(null);
   const [statusFilter, setStatusFilter] = useState('active'); // active, closed, all
-  const [showManualCreate, setShowManualCreate] = useState(false);
+  const [showAuditCreate, setShowAuditCreate] = useState(false);
 
   useEffect(() => {
     loadTransactions();
@@ -127,34 +127,34 @@ function Transactions({ userId, provider, onClose }) {
 
       {/* Toolbar */}
       <div className="flex-shrink-0 p-6 bg-white shadow-md">
-          {/* Status Filter Tabs */}
-          <div className="flex items-center gap-2 mb-3">
+          {/* Status Filter Toggle */}
+          <div className="inline-flex items-center bg-gray-200 rounded-lg p-1 mb-3">
             <button
               onClick={() => setStatusFilter('active')}
-              className={`px-4 py-2 rounded-lg font-medium transition-all ${
+              className={`px-4 py-2 rounded-md font-medium transition-all ${
                 statusFilter === 'active'
-                  ? 'bg-blue-500 text-white shadow-md'
-                  : 'bg-white text-gray-600 hover:bg-gray-100'
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
               }`}
             >
               Active ({transactions.filter((t) => t.status === 'active').length})
             </button>
             <button
               onClick={() => setStatusFilter('closed')}
-              className={`px-4 py-2 rounded-lg font-medium transition-all ${
+              className={`px-4 py-2 rounded-md font-medium transition-all ${
                 statusFilter === 'closed'
-                  ? 'bg-gray-600 text-white shadow-md'
-                  : 'bg-white text-gray-600 hover:bg-gray-100'
+                  ? 'bg-white text-gray-800 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
               }`}
             >
               Closed ({transactions.filter((t) => t.status === 'closed').length})
             </button>
             <button
               onClick={() => setStatusFilter('all')}
-              className={`px-4 py-2 rounded-lg font-medium transition-all ${
+              className={`px-4 py-2 rounded-md font-medium transition-all ${
                 statusFilter === 'all'
-                  ? 'bg-purple-500 text-white shadow-md'
-                  : 'bg-white text-gray-600 hover:bg-gray-100'
+                  ? 'bg-white text-purple-600 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
               }`}
             >
               All ({transactions.length})
@@ -186,9 +186,9 @@ function Transactions({ userId, provider, onClose }) {
               </svg>
             </div>
 
-            {/* New Transaction Button */}
+            {/* Audit New Transaction Button */}
             <button
-              onClick={() => setShowManualCreate(true)}
+              onClick={() => setShowAuditCreate(true)}
               className="px-4 py-2 rounded-lg font-semibold transition-all bg-green-500 text-white hover:bg-green-600 shadow-md hover:shadow-lg flex items-center gap-2"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -371,14 +371,14 @@ function Transactions({ userId, provider, onClose }) {
         />
       )}
 
-      {/* Manual Transaction Creation Modal */}
-      {showManualCreate && (
-        <ManualTransactionModal
+      {/* Audit Transaction Creation Modal */}
+      {showAuditCreate && (
+        <AuditTransactionModal
           userId={userId}
           provider={provider}
-          onClose={() => setShowManualCreate(false)}
+          onClose={() => setShowAuditCreate(false)}
           onSuccess={(newTransaction) => {
-            setShowManualCreate(false);
+            setShowAuditCreate(false);
             loadTransactions();
           }}
         />

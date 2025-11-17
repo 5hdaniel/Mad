@@ -37,6 +37,7 @@ contextBridge.exposeInMainWorld('api', {
   // Contact methods
   contacts: {
     getAll: (userId) => ipcRenderer.invoke('contacts:get-all', userId),
+    getSortedByActivity: (userId, propertyAddress) => ipcRenderer.invoke('contacts:get-sorted-by-activity', userId, propertyAddress),
     create: (userId, contactData) => ipcRenderer.invoke('contacts:create', userId, contactData),
     update: (contactId, updates) => ipcRenderer.invoke('contacts:update', contactId, updates),
     delete: (contactId) => ipcRenderer.invoke('contacts:delete', contactId),

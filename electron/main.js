@@ -874,9 +874,18 @@ ipcMain.handle('export-conversations', async (event, conversationIds) => {
 // Install update and restart
 ipcMain.on('install-update', () => {
   log.info('Installing update...');
+
+  // Ensure app relaunches after update
   // Parameters: isSilent, isForceRunAfter
-  // false = show, true = run after install
-  autoUpdater.quitAndInstall(false, true);
+  // false = show installer, true = force run after install
+  setImmediate(() => {
+    app.removeAllListeners('window-all-closed');
+    if (mainWindow) {
+      mainWindow.removeAllListeners('close');
+      mainWindow.close();
+    }
+    autoUpdater.quitAndInstall(false, true);
+  });
 });
 
 // ===== OUTLOOK INTEGRATION IPC HANDLERS =====

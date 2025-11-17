@@ -30,6 +30,26 @@ function registerContactHandlers() {
     }
   });
 
+  // Get contacts sorted by recent activity and address relevance
+  ipcMain.handle('contacts:get-sorted-by-activity', async (event, userId, propertyAddress = null) => {
+    try {
+      console.log('[Main] Getting contacts sorted by activity for user:', userId, 'address:', propertyAddress);
+
+      const contacts = await databaseService.getContactsSortedByActivity(userId, propertyAddress);
+
+      return {
+        success: true,
+        contacts,
+      };
+    } catch (error) {
+      console.error('[Main] Get sorted contacts failed:', error);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  });
+
   // Create new contact
   ipcMain.handle('contacts:create', async (event, userId, contactData) => {
     try {

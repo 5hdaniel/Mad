@@ -547,6 +547,44 @@ class DatabaseService {
   }
 
   /**
+   * Get contacts sorted by recent communication and optionally by property address relevance
+   * @param {string} userId - User ID
+   * @param {string} propertyAddress - Optional property address to rank contacts who communicated about it
+   * @returns {Promise<Array>} Contacts with metadata about recent communication and address relevance
+   */
+  async getContactsSortedByActivity(userId, propertyAddress = null) {
+    let sql = `
+      SELECT
+        c.*,
+        MAX(comm.sent_at) as last_communication_at,
+        COUNT(comm.id) as communication_count,
+        ${propertyAddress ? `
+          SUM(CASE
+            WHEN comm.subject LIKE ? OR comm.body_plain LIKE ? OR comm.body LIKE ?
+            THEN 1 ELSE 0
+          END) as address_mention_count
+        ` : '0 as address_mention_count'}
+      FROM contacts c
+      LEFT JOIN communications comm ON (
+        (comm.sender = c.email OR comm.recipients LIKE '%' || c.email || '%')
+        AND comm.user_id = c.user_id
+      )
+      WHERE c.user_id = ?
+      GROUP BY c.id
+      ORDER BY
+        ${propertyAddress ? 'address_mention_count DESC,' : ''}
+        last_communication_at DESC NULLS LAST,
+        c.name ASC
+    `;
+
+    const params = propertyAddress
+      ? [`%${propertyAddress}%`, `%${propertyAddress}%`, `%${propertyAddress}%`, userId]
+      : [userId];
+
+    return await this._all(sql, params);
+  }
+
+  /**
    * Search contacts by name or email
    */
   async searchContacts(userId, query) {
