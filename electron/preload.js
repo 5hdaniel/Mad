@@ -62,6 +62,17 @@ contextBridge.exposeInMainWorld('api', {
     getLearningStats: (userId, fieldName) => ipcRenderer.invoke('feedback:get-learning-stats', userId, fieldName),
   },
 
+  // System health and permission checks
+  system: {
+    checkFullDiskAccess: () => ipcRenderer.invoke('system:check-full-disk-access'),
+    checkContactsPermission: () => ipcRenderer.invoke('system:check-contacts-permission'),
+    checkAllPermissions: () => ipcRenderer.invoke('system:check-all-permissions'),
+    checkGoogleConnection: (userId) => ipcRenderer.invoke('system:check-google-connection', userId),
+    checkMicrosoftConnection: (userId) => ipcRenderer.invoke('system:check-microsoft-connection', userId),
+    checkAllConnections: (userId) => ipcRenderer.invoke('system:check-all-connections', userId),
+    healthCheck: (userId) => ipcRenderer.invoke('system:health-check', userId),
+  },
+
   // IPC event listeners
   onMicrosoftLoginComplete: (callback) => ipcRenderer.on('microsoft:login-complete', (_, result) => callback(result)),
   onTransactionScanProgress: (callback) => ipcRenderer.on('transactions:scan-progress', (_, progress) => callback(progress)),

@@ -40,6 +40,7 @@ const { registerTransactionHandlers } = require('./transaction-handlers');
 const { registerContactHandlers } = require('./contact-handlers');
 const { registerAddressHandlers } = require('./address-handlers');
 const { registerFeedbackHandlers } = require('./feedback-handlers');
+const { registerSystemHandlers } = require('./system-handlers');
 
 // Configure logging for auto-updater
 log.transports.file.level = 'info';
@@ -118,6 +119,7 @@ app.whenReady().then(async () => {
   registerContactHandlers();
   registerAddressHandlers();
   registerFeedbackHandlers();
+  registerSystemHandlers();
 });
 
 app.on('window-all-closed', () => {

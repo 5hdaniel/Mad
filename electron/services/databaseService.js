@@ -566,14 +566,16 @@ class DatabaseService {
         ` : '0 as address_mention_count'}
       FROM contacts c
       LEFT JOIN communications comm ON (
-        (comm.sender = c.email OR comm.recipients LIKE '%' || c.email || '%')
+        c.email IS NOT NULL
+        AND (comm.sender = c.email OR comm.recipients LIKE '%' || c.email || '%')
         AND comm.user_id = c.user_id
       )
       WHERE c.user_id = ?
       GROUP BY c.id
       ORDER BY
         ${propertyAddress ? 'address_mention_count DESC,' : ''}
-        last_communication_at DESC NULLS LAST,
+        CASE WHEN last_communication_at IS NULL THEN 1 ELSE 0 END,
+        last_communication_at DESC,
         c.name ASC
     `;
 
@@ -581,7 +583,14 @@ class DatabaseService {
       ? [`%${propertyAddress}%`, `%${propertyAddress}%`, `%${propertyAddress}%`, userId]
       : [userId];
 
-    return await this._all(sql, params);
+    try {
+      return await this._all(sql, params);
+    } catch (error) {
+      console.error('[DatabaseService] Error getting sorted contacts:', error);
+      console.error('[DatabaseService] SQL:', sql);
+      console.error('[DatabaseService] Params:', params);
+      throw error;
+    }
   }
 
   /**
