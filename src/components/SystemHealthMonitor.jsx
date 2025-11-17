@@ -83,7 +83,7 @@ function SystemHealthMonitor({ userId, provider }) {
 
       case 'connect-microsoft':
       case 'reconnect-microsoft':
-        // Trigger Outlook OAuth authentication for mailbox access
+        // Trigger Outlook OAuth authentication for mailbox access (redirect-based, no code copying!)
         try {
           // Initialize Outlook service first
           if (window.electron?.outlookInitialize) {
@@ -92,7 +92,7 @@ function SystemHealthMonitor({ userId, provider }) {
 
           // Authenticate with Outlook for email access
           if (window.electron?.outlookAuthenticate) {
-            const result = await window.electron.outlookAuthenticate();
+            const result = await window.electron.outlookAuthenticate(userId);
             if (result.success) {
               // Re-check health after successful auth
               await checkSystemHealth();
