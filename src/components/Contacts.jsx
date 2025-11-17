@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import ImportContactsModal from './ImportContactsModal';
 
 /**
  * Contacts Component
@@ -10,9 +11,8 @@ import React, { useState, useEffect } from 'react';
 function Contacts({ userId, onClose }) {
   const [contacts, setContacts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [showAddEdit, setShowAddEdit] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [selectedContact, setSelectedContact] = useState(null);
   const [error, setError] = useState(null);
 
@@ -20,18 +20,17 @@ function Contacts({ userId, onClose }) {
     loadContacts();
   }, []);
 
-  const loadContacts = async (isSync = false) => {
+  const loadContacts = async () => {
     try {
-      if (isSync) {
-        setSyncing(true);
-      } else {
-        setLoading(true);
-      }
+      setLoading(true);
       const result = await window.api.contacts.getAll(userId);
 
       if (result.success) {
+        // Filter to only show imported/saved contacts (not external contacts_app)
+        const importedContacts = (result.contacts || []).filter(c => c.source !== 'contacts_app');
+
         // Sort contacts by created_at in reverse order (newest first)
-        const sortedContacts = (result.contacts || []).sort((a, b) => {
+        const sortedContacts = importedContacts.sort((a, b) => {
           const dateA = a.created_at ? new Date(a.created_at) : new Date(0);
           const dateB = b.created_at ? new Date(b.created_at) : new Date(0);
           return dateB - dateA; // Reverse order
@@ -43,26 +42,22 @@ function Contacts({ userId, onClose }) {
     } catch (err) {
       setError(err.message);
     } finally {
-      if (isSync) {
-        setSyncing(false);
-      } else {
-        setLoading(false);
-      }
+      setLoading(false);
     }
   };
 
-  const handleSync = () => {
-    loadContacts(true);
+  const handleImportContacts = () => {
+    setShowImport(true);
   };
 
-  const handleAddContact = () => {
-    setSelectedContact(null);
-    setShowAddEdit(true);
+  const handleImportComplete = (importedContacts) => {
+    setShowImport(false);
+    loadContacts(); // Reload the contacts list
   };
 
   const handleEditContact = (contact) => {
     setSelectedContact(contact);
-    setShowAddEdit(true);
+    setShowImport(true);
   };
 
   const handleDeleteContact = async (contactId) => {
@@ -143,25 +138,9 @@ function Contacts({ userId, onClose }) {
             </svg>
           </div>
 
-          {/* Sync Button */}
-          <button
-            onClick={handleSync}
-            disabled={syncing}
-            className={`px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 ${
-              syncing
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                : 'bg-white text-purple-600 border-2 border-purple-500 hover:bg-purple-50 shadow-md hover:shadow-lg'
-            }`}
-          >
-            <svg className={`w-5 h-5 ${syncing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            {syncing ? 'Syncing...' : 'Sync'}
-          </button>
-
           {/* Add Contact Button */}
           <button
-            onClick={handleAddContact}
+            onClick={handleImportContacts}
             className="px-4 py-2 rounded-lg font-semibold transition-all bg-gradient-to-r from-purple-500 to-pink-600 text-white hover:from-purple-600 hover:to-pink-700 shadow-md hover:shadow-lg flex items-center gap-2"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -295,209 +274,28 @@ function Contacts({ userId, onClose }) {
                 </div>
 
                 {/* Actions */}
-                {contact.source !== 'contacts_app' && (
-                  <div className="flex items-center gap-2 pt-4 border-t border-gray-200">
-                    <button
-                      onClick={() => handleEditContact(contact)}
-                      className="flex-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium text-sm transition-all"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDeleteContact(contact.id)}
-                      className="flex-1 px-3 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg font-medium text-sm transition-all"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                )}
+                <div className="flex items-center gap-2 pt-4 border-t border-gray-200">
+                  <button
+                    onClick={() => handleDeleteContact(contact.id)}
+                    className="flex-1 px-3 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg font-medium text-sm transition-all"
+                  >
+                    Delete
+                  </button>
+                </div>
               </div>
             ))}
           </div>
         )}
       </div>
 
-      {/* Add/Edit Contact Modal */}
-      {showAddEdit && (
-        <ContactModal
+      {/* Import Contacts Modal */}
+      {showImport && (
+        <ImportContactsModal
           userId={userId}
-          contact={selectedContact}
-          onClose={() => {
-            setShowAddEdit(false);
-            setSelectedContact(null);
-          }}
-          onSuccess={() => {
-            setShowAddEdit(false);
-            setSelectedContact(null);
-            loadContacts();
-          }}
+          onClose={() => setShowImport(false)}
+          onImportComplete={handleImportComplete}
         />
       )}
-    </div>
-  );
-}
-
-/**
- * Contact Modal
- * Add or edit a contact
- */
-function ContactModal({ userId, contact, onClose, onSuccess }) {
-  const [formData, setFormData] = useState({
-    name: contact?.name || '',
-    email: contact?.email || '',
-    phone: contact?.phone || '',
-    company: contact?.company || '',
-    title: contact?.title || '',
-  });
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
-
-  const handleChange = (field, value) => {
-    setFormData({ ...formData, [field]: value });
-  };
-
-  const handleSave = async () => {
-    if (!formData.name.trim()) {
-      setError('Name is required');
-      return;
-    }
-
-    setSaving(true);
-    setError(null);
-
-    try {
-      let result;
-      if (contact) {
-        // Update existing contact
-        result = await window.api.contacts.update(contact.id, formData);
-      } else {
-        // Create new contact
-        result = await window.api.contacts.create(userId, formData);
-      }
-
-      if (result.success) {
-        onSuccess();
-      } else {
-        setError(result.error || 'Failed to save contact');
-      }
-    } catch (err) {
-      setError(err.message || 'Failed to save contact');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[60] p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-purple-500 to-pink-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
-          <h3 className="text-lg font-bold text-white">
-            {contact ? 'Edit Contact' : 'Add New Contact'}
-          </h3>
-          <button
-            onClick={onClose}
-            className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-all"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        {/* Form */}
-        <div className="p-6 space-y-4">
-          {/* Name */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Name <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={formData.name}
-              onChange={(e) => handleChange('name', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-              placeholder="John Doe"
-            />
-          </div>
-
-          {/* Email */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-            <input
-              type="email"
-              value={formData.email}
-              onChange={(e) => handleChange('email', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-              placeholder="john@example.com"
-            />
-          </div>
-
-          {/* Phone */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-            <input
-              type="tel"
-              value={formData.phone}
-              onChange={(e) => handleChange('phone', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-              placeholder="(555) 123-4567"
-            />
-          </div>
-
-          {/* Company */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Company</label>
-            <input
-              type="text"
-              value={formData.company}
-              onChange={(e) => handleChange('company', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-              placeholder="ABC Real Estate"
-            />
-          </div>
-
-          {/* Title */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
-            <input
-              type="text"
-              value={formData.title}
-              onChange={(e) => handleChange('title', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-              placeholder="Real Estate Agent"
-            />
-          </div>
-
-          {/* Error */}
-          {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-sm text-red-800">{error}</p>
-            </div>
-          )}
-        </div>
-
-        {/* Actions */}
-        <div className="px-6 py-4 bg-gray-50 rounded-b-xl flex items-center gap-3 justify-end">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg font-medium transition-all"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className={`px-4 py-2 rounded-lg font-semibold transition-all ${
-              saving
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                : 'bg-gradient-to-r from-purple-500 to-pink-600 text-white hover:from-purple-600 hover:to-pink-700'
-            }`}
-          >
-            {saving ? 'Saving...' : contact ? 'Update Contact' : 'Add Contact'}
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

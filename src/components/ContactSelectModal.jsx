@@ -1,4 +1,5 @@
 import React from 'react';
+import ImportContactsModal from './ImportContactsModal';
 
 /**
  * Contact Select Modal
@@ -17,10 +18,13 @@ import React from 'react';
  * @param {Function} onSelect - Callback when contacts are selected
  * @param {Function} onClose - Callback to close modal
  * @param {string} propertyAddress - Optional address to show relevance
+ * @param {string} userId - User ID for importing new contacts
+ * @param {Function} onContactsUpdated - Callback to refresh contacts after import
  */
-function ContactSelectModal({ contacts, excludeIds = [], multiple = false, onSelect, onClose, propertyAddress }) {
+function ContactSelectModal({ contacts, excludeIds = [], multiple = false, onSelect, onClose, propertyAddress, userId, onContactsUpdated }) {
   const [searchQuery, setSearchQuery] = React.useState('');
   const [selectedIds, setSelectedIds] = React.useState([]);
+  const [showImport, setShowImport] = React.useState(false);
 
   const availableContacts = contacts.filter((c) => !excludeIds.includes(c.id));
 
@@ -43,6 +47,25 @@ function ContactSelectModal({ contacts, excludeIds = [], multiple = false, onSel
   const handleConfirm = () => {
     const selectedContacts = contacts.filter((c) => selectedIds.includes(c.id));
     onSelect(selectedContacts);
+  };
+
+  const handleImportComplete = (importedContacts) => {
+    setShowImport(false);
+
+    // Refresh the contacts list if callback provided
+    if (onContactsUpdated) {
+      onContactsUpdated();
+    }
+
+    // Auto-select the newly imported contacts
+    if (importedContacts && importedContacts.length > 0) {
+      const newIds = importedContacts.map(c => c.id);
+      if (multiple) {
+        setSelectedIds(prev => [...prev, ...newIds]);
+      } else {
+        setSelectedIds([newIds[0]]);
+      }
+    }
   };
 
   return (
@@ -72,28 +95,41 @@ function ContactSelectModal({ contacts, excludeIds = [], multiple = false, onSel
 
         {/* Search Bar */}
         <div className="flex-shrink-0 p-4 border-b border-gray-200">
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="Search contacts by name, email, or company..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-              autoFocus
-            />
-            <svg
-              className="w-5 h-5 text-gray-400 absolute left-3 top-2.5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+          <div className="flex gap-3 mb-3">
+            <div className="flex-1 relative">
+              <input
+                type="text"
+                placeholder="Search contacts by name, email, or company..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                autoFocus
               />
-            </svg>
+              <svg
+                className="w-5 h-5 text-gray-400 absolute left-3 top-2.5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                />
+              </svg>
+            </div>
+            {userId && (
+              <button
+                onClick={() => setShowImport(true)}
+                className="px-4 py-2 bg-white text-purple-600 border-2 border-purple-500 rounded-lg font-semibold hover:bg-purple-50 transition-all flex items-center gap-2 whitespace-nowrap"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+                Import New
+              </button>
+            )}
           </div>
         </div>
 
@@ -205,6 +241,15 @@ function ContactSelectModal({ contacts, excludeIds = [], multiple = false, onSel
           </button>
         </div>
       </div>
+
+      {/* Import Contacts Modal */}
+      {showImport && userId && (
+        <ImportContactsModal
+          userId={userId}
+          onClose={() => setShowImport(false)}
+          onImportComplete={handleImportComplete}
+        />
+      )}
     </div>
   );
 }

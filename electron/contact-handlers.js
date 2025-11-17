@@ -182,6 +182,95 @@ function registerContactHandlers() {
       };
     }
   });
+
+  // Search external contacts (without saving to database)
+  ipcMain.handle('contacts:search-external', async (event, searchQuery = '') => {
+    try {
+      console.log('[Main] Searching external contacts:', searchQuery);
+
+      // Get contacts from macOS Contacts app
+      const { phoneToContactInfo, status } = await getContactNames();
+
+      // Convert Contacts app data to contact objects
+      const externalContacts = [];
+      const seenContacts = new Set();
+
+      if (phoneToContactInfo && Object.keys(phoneToContactInfo).length > 0) {
+        for (const [phone, contactInfo] of Object.entries(phoneToContactInfo)) {
+          if (!seenContacts.has(contactInfo.name)) {
+            seenContacts.add(contactInfo.name);
+
+            // Filter by search query if provided
+            const matchesSearch = !searchQuery ||
+              contactInfo.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+              contactInfo.emails?.some(email => email.toLowerCase().includes(searchQuery.toLowerCase())) ||
+              contactInfo.phones?.some(phone => phone.includes(searchQuery));
+
+            if (matchesSearch) {
+              externalContacts.push({
+                id: `external-${contactInfo.name}-${Date.now()}`, // Temporary ID
+                name: contactInfo.name,
+                phone: contactInfo.phones?.[0] || null,
+                email: contactInfo.emails?.[0] || null,
+                source: 'contacts_app',
+                allPhones: contactInfo.phones || [],
+                allEmails: contactInfo.emails || [],
+              });
+            }
+          }
+        }
+      }
+
+      console.log(`[Main] Found ${externalContacts.length} external contacts`);
+
+      return {
+        success: true,
+        contacts: externalContacts,
+        status,
+      };
+    } catch (error) {
+      console.error('[Main] Search external contacts failed:', error);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  });
+
+  // Import multiple contacts
+  ipcMain.handle('contacts:import-multiple', async (event, userId, contactsToImport) => {
+    try {
+      console.log('[Main] Importing multiple contacts:', contactsToImport.length);
+
+      const importedContacts = [];
+
+      for (const contactData of contactsToImport) {
+        const contact = await databaseService.createContact(userId, {
+          name: contactData.name,
+          email: contactData.email || null,
+          phone: contactData.phone || null,
+          company: contactData.company || null,
+          title: contactData.title || null,
+          source: contactData.source || 'manual',
+        });
+
+        importedContacts.push(contact);
+      }
+
+      console.log(`[Main] Successfully imported ${importedContacts.length} contacts`);
+
+      return {
+        success: true,
+        contacts: importedContacts,
+      };
+    } catch (error) {
+      console.error('[Main] Import multiple contacts failed:', error);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  });
 }
 
 module.exports = {
