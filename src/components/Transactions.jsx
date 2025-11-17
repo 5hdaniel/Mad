@@ -284,17 +284,17 @@ function Transactions({ userId, provider, onClose }) {
                 <p className="text-gray-600 mb-4">
                   {searchQuery
                     ? 'Try adjusting your search'
-                    : 'Click "Scan Emails" to extract real estate transactions from your emails, or create a transaction manually.'}
+                    : 'Click "Scan Emails" to extract real estate transactions from your emails, or audit a new transaction manually.'}
                 </p>
                 {!searchQuery && (
                   <button
                     onClick={() => setShowAuditCreate(true)}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                    className="inline-flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all font-semibold shadow-md hover:shadow-lg"
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
                     </svg>
-                    Create Transaction Manually
+                    Audit New Transaction
                   </button>
                 )}
               </div>
