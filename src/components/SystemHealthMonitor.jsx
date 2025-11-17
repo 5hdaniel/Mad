@@ -38,11 +38,19 @@ function SystemHealthMonitor({ userId, provider }) {
   }, [userId, provider]);
 
   useEffect(() => {
-    checkSystemHealth();
+    // Delay initial check by 3 seconds to allow OutlookService to initialize
+    // This prevents the "not connected" warning from flashing on startup
+    const initialTimeout = setTimeout(() => {
+      checkSystemHealth();
+    }, 3000);
 
-    // Check every 2 minutes
+    // Check every 2 minutes after the initial check
     const interval = setInterval(checkSystemHealth, 2 * 60 * 1000);
-    return () => clearInterval(interval);
+
+    return () => {
+      clearTimeout(initialTimeout);
+      clearInterval(interval);
+    };
   }, [checkSystemHealth]);
 
 
