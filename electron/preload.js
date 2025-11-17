@@ -82,7 +82,7 @@ contextBridge.exposeInMainWorld('api', {
     checkAllConnections: (userId) => ipcRenderer.invoke('system:check-all-connections', userId),
 
     // Health check
-    healthCheck: (userId) => ipcRenderer.invoke('system:health-check', userId),
+    healthCheck: (userId, provider) => ipcRenderer.invoke('system:health-check', userId, provider),
   },
 
   // IPC event listeners

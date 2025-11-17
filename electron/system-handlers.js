@@ -238,11 +238,15 @@ function registerSystemHandlers() {
   /**
    * Get system health status (all checks combined)
    */
-  ipcMain.handle('system:health-check', async (event, userId) => {
+  ipcMain.handle('system:health-check', async (event, userId, provider = null) => {
     try {
-      const [permissions, connections] = await Promise.all([
+      const [permissions, connection] = await Promise.all([
         permissionService.checkAllPermissions(),
-        userId ? connectionStatusService.checkAllConnections(userId) : null,
+        userId && provider ? (
+          provider === 'google'
+            ? connectionStatusService.checkGoogleConnection(userId)
+            : connectionStatusService.checkMicrosoftConnection(userId)
+        ) : null,
       ]);
 
       const issues = [];
@@ -252,29 +256,20 @@ function registerSystemHandlers() {
         issues.push(...permissions.errors);
       }
 
-      // Add connection issues
-      if (connections) {
-        if (connections.google.error) {
-          issues.push({
-            type: 'OAUTH_CONNECTION',
-            provider: 'google',
-            ...connections.google.error,
-          });
-        }
-        if (connections.microsoft.error) {
-          issues.push({
-            type: 'OAUTH_CONNECTION',
-            provider: 'microsoft',
-            ...connections.microsoft.error,
-          });
-        }
+      // Add connection issue (only for the provider the user logged in with)
+      if (connection && connection.error) {
+        issues.push({
+          type: 'OAUTH_CONNECTION',
+          provider: provider,
+          ...connection.error,
+        });
       }
 
       return {
         success: true,
         healthy: issues.length === 0,
         permissions,
-        connections,
+        connection,
         issues,
         summary: {
           totalIssues: issues.length,

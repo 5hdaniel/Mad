@@ -22,14 +22,15 @@ function SystemHealthMonitor({ userId, provider }) {
     // Check every 2 minutes
     const interval = setInterval(checkSystemHealth, 2 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [userId]);
+  }, [userId, provider]);
 
   const checkSystemHealth = async () => {
     if (checking) return;
 
     setChecking(true);
     try {
-      const result = await window.api.system.healthCheck(userId);
+      // Pass provider so we only check the relevant OAuth connection
+      const result = await window.api.system.healthCheck(userId, provider);
 
       if (result.success && result.issues) {
         setIssues(result.issues);
@@ -48,27 +49,39 @@ function SystemHealthMonitor({ userId, provider }) {
   const handleAction = async (issue, issueIndex) => {
     switch (issue.actionHandler) {
       case 'open-system-settings':
-        await window.electron.openSystemSettings();
+        if (window.api?.system?.openPrivacyPane) {
+          await window.api.system.openPrivacyPane('fullDiskAccess');
+        }
         break;
 
       case 'connect-google':
-        // Trigger Google authentication
-        window.location.href = '/settings?connect=google';
-        break;
-
       case 'reconnect-google':
-        // Trigger Google re-authentication
-        window.location.href = '/settings?reconnect=google';
+        // Trigger Google OAuth re-authentication
+        try {
+          const result = await window.api.auth.googleLogin();
+          if (result.success) {
+            // Re-check health after successful auth
+            await checkSystemHealth();
+            handleDismiss(issueIndex);
+          }
+        } catch (error) {
+          console.error('Google re-authentication failed:', error);
+        }
         break;
 
       case 'connect-microsoft':
-        // Trigger Microsoft authentication
-        window.location.href = '/settings?connect=microsoft';
-        break;
-
       case 'reconnect-microsoft':
-        // Trigger Microsoft re-authentication
-        window.location.href = '/settings?reconnect=microsoft';
+        // Trigger Microsoft OAuth re-authentication
+        try {
+          const result = await window.api.auth.microsoftLogin();
+          if (result.success) {
+            // Re-check health after successful auth
+            await checkSystemHealth();
+            handleDismiss(issueIndex);
+          }
+        } catch (error) {
+          console.error('Microsoft re-authentication failed:', error);
+        }
         break;
 
       case 'retry':
