@@ -299,6 +299,15 @@ const registerTransactionHandlers = (mainWindow) => {
 
       console.log('[Main] Enhanced export successful:', exportPath);
 
+      // Update export tracking in database
+      const db = require('./services/databaseService');
+      await db.updateTransaction(transactionId, {
+        export_status: 'exported',
+        export_format: options.exportFormat || 'pdf',
+        last_exported_on: new Date().toISOString(),
+        export_count: (details.export_count || 0) + 1,
+      });
+
       return {
         success: true,
         path: exportPath,
