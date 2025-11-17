@@ -240,6 +240,8 @@ function registerSystemHandlers() {
    */
   ipcMain.handle('system:health-check', async (event, userId, provider = null) => {
     try {
+      console.log('[Main] Health check called with userId:', userId, 'provider:', provider);
+
       const [permissions, connection] = await Promise.all([
         permissionService.checkAllPermissions(),
         userId && provider ? (
@@ -248,6 +250,8 @@ function registerSystemHandlers() {
             : connectionStatusService.checkMicrosoftConnection(userId)
         ) : null,
       ]);
+
+      console.log('[Main] Connection check result:', connection);
 
       const issues = [];
 
@@ -258,6 +262,7 @@ function registerSystemHandlers() {
 
       // Add connection issue (only for the provider the user logged in with)
       if (connection && connection.error) {
+        console.log('[Main] Adding connection issue for provider:', provider);
         issues.push({
           type: 'OAUTH_CONNECTION',
           provider: provider,
