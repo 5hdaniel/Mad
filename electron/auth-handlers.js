@@ -263,6 +263,12 @@ const handleMicrosoftLogin = async (mainWindow) => {
       title: 'Sign in with Microsoft'
     });
 
+    // Open DevTools for debugging (temporary)
+    authWindow.webContents.openDevTools();
+
+    // Set user agent to appear as a normal browser
+    authWindow.webContents.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+
     // Debug: Log navigation events
     authWindow.webContents.on('did-start-loading', () => {
       console.log('[Main] Auth window started loading');
@@ -270,6 +276,13 @@ const handleMicrosoftLogin = async (mainWindow) => {
 
     authWindow.webContents.on('did-finish-load', () => {
       console.log('[Main] Auth window finished loading');
+      // Check what actually loaded
+      authWindow.webContents.executeJavaScript('document.documentElement.innerHTML').then(html => {
+        console.log('[Main] Page HTML length:', html.length);
+        console.log('[Main] Page title:', authWindow.webContents.getTitle());
+      }).catch(err => {
+        console.error('[Main] Failed to get page content:', err);
+      });
     });
 
     authWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
@@ -472,6 +485,9 @@ const handleMicrosoftConnectMailbox = async (mainWindow, userId) => {
       title: 'Connect Microsoft Mailbox'
     });
 
+    // Set user agent to appear as a normal browser
+    authWindow.webContents.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+
     // Debug: Log navigation events
     authWindow.webContents.on('did-start-loading', () => {
       console.log('[Main] Mailbox auth window started loading');
@@ -479,6 +495,13 @@ const handleMicrosoftConnectMailbox = async (mainWindow, userId) => {
 
     authWindow.webContents.on('did-finish-load', () => {
       console.log('[Main] Mailbox auth window finished loading');
+      // Check what actually loaded
+      authWindow.webContents.executeJavaScript('document.documentElement.innerHTML').then(html => {
+        console.log('[Main] Mailbox page HTML length:', html.length);
+        console.log('[Main] Mailbox page title:', authWindow.webContents.getTitle());
+      }).catch(err => {
+        console.error('[Main] Failed to get mailbox page content:', err);
+      });
     });
 
     authWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
