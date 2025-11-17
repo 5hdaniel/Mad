@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 
 /**
  * System Health Monitor
@@ -14,20 +14,13 @@ import React, { useState, useEffect } from 'react';
 function SystemHealthMonitor({ userId, provider }) {
   const [issues, setIssues] = useState([]);
   const [dismissed, setDismissed] = useState(new Set());
-  const [checking, setChecking] = useState(false);
+  const checkingRef = useRef(false);
 
-  useEffect(() => {
-    checkSystemHealth();
+  const checkSystemHealth = useCallback(async () => {
+    if (checkingRef.current) return;
 
-    // Check every 2 minutes
-    const interval = setInterval(checkSystemHealth, 2 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, [userId, provider]);
+    checkingRef.current = true;
 
-  const checkSystemHealth = async () => {
-    if (checking) return;
-
-    setChecking(true);
     try {
       // Pass provider so we only check the relevant OAuth connection
       console.log('[SystemHealthMonitor] Checking health with provider:', provider);
@@ -40,9 +33,26 @@ function SystemHealthMonitor({ userId, provider }) {
     } catch (error) {
       console.error('System health check failed:', error);
     } finally {
-      setChecking(false);
+      checkingRef.current = false;
     }
-  };
+  }, [userId, provider]);
+
+  useEffect(() => {
+    // Delay initial check by 3 seconds to allow OutlookService to initialize
+    // This prevents the "not connected" warning from flashing on startup
+    const initialTimeout = setTimeout(() => {
+      checkSystemHealth();
+    }, 3000);
+
+    // Check every 2 minutes after the initial check
+    const interval = setInterval(checkSystemHealth, 2 * 60 * 1000);
+
+    return () => {
+      clearTimeout(initialTimeout);
+      clearInterval(interval);
+    };
+  }, [checkSystemHealth]);
+
 
   const handleDismiss = (issueIndex) => {
     setDismissed((prev) => new Set([...prev, issueIndex]));
@@ -58,31 +68,43 @@ function SystemHealthMonitor({ userId, provider }) {
 
       case 'connect-google':
       case 'reconnect-google':
-        // Trigger Google OAuth re-authentication
+        // Trigger Google mailbox connection
         try {
-          const result = await window.api.auth.googleLogin();
-          if (result.success) {
-            // Re-check health after successful auth
-            await checkSystemHealth();
-            handleDismiss(issueIndex);
+          const result = await window.api.auth.googleConnectMailbox(userId);
+          if (result.success && result.authUrl) {
+            // Open auth URL in browser
+            await window.api.shell.openExternal(result.authUrl);
+            // Note: User will need to complete the flow in browser
+            // We'll re-check health after a delay
+            setTimeout(async () => {
+              await checkSystemHealth();
+            }, 5000);
           }
         } catch (error) {
-          console.error('Google re-authentication failed:', error);
+          console.error('Google mailbox connection failed:', error);
         }
         break;
 
       case 'connect-microsoft':
       case 'reconnect-microsoft':
-        // Trigger Microsoft OAuth re-authentication
+        // Trigger Microsoft mailbox connection
         try {
-          const result = await window.api.auth.microsoftLogin();
-          if (result.success) {
-            // Re-check health after successful auth
-            await checkSystemHealth();
-            handleDismiss(issueIndex);
+          const result = await window.api.auth.microsoftConnectMailbox(userId);
+          if (result.success && result.authUrl) {
+            // Open auth URL in browser
+            await window.api.shell.openExternal(result.authUrl);
+
+            // Listen for connection completion
+            const cleanup = window.api.onMicrosoftMailboxConnected((connectionResult) => {
+              if (connectionResult.success) {
+                checkSystemHealth();
+                handleDismiss(issueIndex);
+              }
+              cleanup(); // Remove listener
+            });
           }
         } catch (error) {
-          console.error('Microsoft re-authentication failed:', error);
+          console.error('Microsoft mailbox connection failed:', error);
         }
         break;
 

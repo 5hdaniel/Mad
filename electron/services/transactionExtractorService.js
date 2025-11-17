@@ -14,10 +14,15 @@ class TransactionExtractorService {
         'mutual acceptance', 'purchase agreement', 'sale agreement',
         'mls', 'listing', 'buyer', 'seller', 'real estate',
         'property', 'contract', 'addendum', 'inspection',
+        'house', 'home', 'condo', 'townhouse', 'apartment',
+        'viewing', 'showing', 'tour', 'open house',
+        'representation agreement', 'buyer representation', 'listing agreement',
+        'commission', 'appraisal', 'title', 'deed',
+        'mortgage', 'loan', 'financing', 'pre-approval',
       ],
       purchase: [
         'buying', 'buyer', 'purchase', 'offer to purchase', 'buying agent',
-        'purchase price', 'down payment',
+        'purchase price', 'down payment', 'buyer representation',
       ],
       sale: [
         'selling', 'seller', 'listing', 'list price', 'selling agent',

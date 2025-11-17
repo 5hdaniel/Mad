@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, systemPreferences, Notification } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, systemPreferences, Notification, session } = require('electron');
 const path = require('path');
 const fs = require('fs').promises;
 const sqlite3 = require('sqlite3');
@@ -7,7 +7,6 @@ const { exec } = require('child_process');
 const os = require('os');
 const { autoUpdater } = require('electron-updater');
 const log = require('electron-log');
-const OutlookService = require('./outlookService');
 require('dotenv').config({ path: path.join(__dirname, '../.env.local') });
 
 // Import services and utilities
@@ -33,8 +32,10 @@ const {
 // Import new authentication services
 const databaseService = require('./services/databaseService');
 const googleAuthService = require('./services/googleAuthService');
+const microsoftAuthService = require('./services/microsoftAuthService');
 const supabaseService = require('./services/supabaseService');
 const tokenEncryptionService = require('./services/tokenEncryptionService');
+const connectionStatusService = require('./services/connectionStatusService');
 const { initializeDatabase, registerAuthHandlers } = require('./auth-handlers');
 const { registerTransactionHandlers } = require('./transaction-handlers');
 const { registerContactHandlers } = require('./contact-handlers');
@@ -47,7 +48,55 @@ log.transports.file.level = 'info';
 autoUpdater.logger = log;
 
 let mainWindow;
-let outlookService = null;
+
+/**
+ * Configure Content Security Policy for the application
+ * This prevents the "unsafe-eval" security warning
+ */
+function setupContentSecurityPolicy() {
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    const isDevelopment = process.env.NODE_ENV === 'development' || !app.isPackaged;
+
+    // Configure CSP based on environment
+    // Development: Allow localhost dev server and inline styles for HMR
+    // Production: Strict CSP without unsafe-eval
+    const cspDirectives = isDevelopment
+      ? [
+          "default-src 'self'",
+          "script-src 'self' 'unsafe-inline'",
+          "style-src 'self' 'unsafe-inline'",
+          "img-src 'self' data: https:",
+          "font-src 'self' data:",
+          "connect-src 'self' http://localhost:* ws://localhost:* https:",
+          "media-src 'self'",
+          "object-src 'none'",
+          "base-uri 'self'",
+          "form-action 'self'",
+          "frame-ancestors 'none'",
+          "upgrade-insecure-requests"
+        ]
+      : [
+          "default-src 'self'",
+          "script-src 'self'",
+          "style-src 'self' 'unsafe-inline'",
+          "img-src 'self' data: https:",
+          "font-src 'self' data:",
+          "connect-src 'self' https:",
+          "media-src 'self'",
+          "object-src 'none'",
+          "base-uri 'self'",
+          "form-action 'self'",
+          "frame-ancestors 'none'"
+        ];
+
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [cspDirectives.join('; ')]
+      }
+    });
+  });
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -112,6 +161,9 @@ autoUpdater.on('update-downloaded', (info) => {
 });
 
 app.whenReady().then(async () => {
+  // Set up Content Security Policy
+  setupContentSecurityPolicy();
+
   await initializeDatabase();
   createWindow();
   registerAuthHandlers(mainWindow);
@@ -891,45 +943,71 @@ ipcMain.on('install-update', () => {
 });
 
 // ===== OUTLOOK INTEGRATION IPC HANDLERS =====
+// Now using redirect-based OAuth (no device code required!)
 
-// Initialize Outlook service
+// Initialize Outlook service (no-op now, kept for compatibility)
 ipcMain.handle('outlook-initialize', async () => {
-  try {
-    // Production: Use hardcoded Client ID (falls back to .env for development)
-    // This is a public client ID for OAuth, not a secret
-    const clientId = process.env.MICROSOFT_CLIENT_ID || '3a6c341a-17ab-4739-977d-a7d71b27f945';
-    const tenantId = process.env.MICROSOFT_TENANT_ID || 'common';
-
-    if (!outlookService) {
-      outlookService = new OutlookService();
-    }
-
-    await outlookService.initialize(clientId, tenantId);
-
-    return { success: true };
-  } catch (error) {
-    console.error('Error initializing Outlook service:', error);
-    return {
-      success: false,
-      error: error.message
-    };
-  }
+  return { success: true };
 });
 
-// Authenticate with Outlook
-ipcMain.handle('outlook-authenticate', async () => {
+// Authenticate with Outlook using redirect-based OAuth
+ipcMain.handle('outlook-authenticate', async (event, userId) => {
   try {
-    if (!outlookService) {
-      return {
-        success: false,
-        error: 'Outlook service not initialized'
-      };
+    console.log('[Main] Starting Outlook authentication with redirect flow');
+
+    // Get user info to use as login hint
+    let loginHint = null;
+    if (userId) {
+      const user = await databaseService.getUserById(userId);
+      if (user) {
+        loginHint = user.email;
+      }
     }
 
-    const result = await outlookService.authenticate(mainWindow);
-    return result;
+    // Start auth flow - returns authUrl and a promise for the code
+    const { authUrl, codePromise, codeVerifier, scopes } = await microsoftAuthService.authenticateForMailbox(loginHint);
+
+    // Open browser with auth URL
+    await shell.openExternal(authUrl);
+
+    // Wait for user to complete auth in browser (local server will catch redirect)
+    const code = await codePromise;
+    console.log('[Main] Received authorization code from redirect');
+
+    // Exchange code for tokens
+    const tokens = await microsoftAuthService.exchangeCodeForTokens(code, codeVerifier);
+
+    // Get user info
+    const userInfo = await microsoftAuthService.getUserInfo(tokens.access_token);
+
+    // Encrypt tokens before saving
+    const encryptedAccessToken = tokenEncryptionService.encrypt(tokens.access_token);
+    const encryptedRefreshToken = tokens.refresh_token
+      ? tokenEncryptionService.encrypt(tokens.refresh_token)
+      : null;
+
+    // Save mailbox token to database
+    const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
+
+    await databaseService.saveOAuthToken(userId, 'microsoft', 'mailbox', {
+      access_token: encryptedAccessToken,
+      refresh_token: encryptedRefreshToken,
+      token_expires_at: expiresAt,
+      scopes_granted: tokens.scope,
+      connected_email_address: userInfo.email
+    });
+
+    console.log('[Main] Outlook authentication completed successfully');
+
+    return {
+      success: true,
+      userInfo: {
+        username: userInfo.email,
+        name: userInfo.name,
+      }
+    };
   } catch (error) {
-    console.error('Error authenticating with Outlook:', error);
+    console.error('[Main] Outlook authentication failed:', error);
     return {
       success: false,
       error: error.message
@@ -938,24 +1016,45 @@ ipcMain.handle('outlook-authenticate', async () => {
 });
 
 // Check if authenticated
-ipcMain.handle('outlook-is-authenticated', async () => {
-  return outlookService && outlookService.isAuthenticated();
+ipcMain.handle('outlook-is-authenticated', async (event, userId) => {
+  try {
+    if (!userId) return false;
+
+    const token = await databaseService.getOAuthToken(userId, 'microsoft', 'mailbox');
+    if (!token || !token.access_token) return false;
+
+    // Check if token is expired
+    const tokenExpiry = new Date(token.token_expires_at);
+    const now = new Date();
+
+    return tokenExpiry > now;
+  } catch (error) {
+    console.error('Error checking Outlook authentication:', error);
+    return false;
+  }
 });
 
 // Get user email
-ipcMain.handle('outlook-get-user-email', async () => {
+ipcMain.handle('outlook-get-user-email', async (event, userId) => {
   try {
-    if (!outlookService || !outlookService.isAuthenticated()) {
+    if (!userId) {
+      return {
+        success: false,
+        error: 'User ID required'
+      };
+    }
+
+    const token = await databaseService.getOAuthToken(userId, 'microsoft', 'mailbox');
+    if (!token || !token.connected_email_address) {
       return {
         success: false,
         error: 'Not authenticated'
       };
     }
 
-    const email = await outlookService.getUserEmail();
     return {
       success: true,
-      email: email
+      email: token.connected_email_address
     };
   } catch (error) {
     console.error('Error getting user email:', error);
