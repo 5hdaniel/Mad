@@ -68,41 +68,43 @@ function SystemHealthMonitor({ userId, provider }) {
 
       case 'connect-google':
       case 'reconnect-google':
-        // Trigger Google OAuth re-authentication
+        // Trigger Google mailbox connection
         try {
-          const result = await window.api.auth.googleLogin();
-          if (result.success) {
-            // Re-check health after successful auth
-            await checkSystemHealth();
-            handleDismiss(issueIndex);
+          const result = await window.api.auth.googleConnectMailbox(userId);
+          if (result.success && result.authUrl) {
+            // Open auth URL in browser
+            await window.api.shell.openExternal(result.authUrl);
+            // Note: User will need to complete the flow in browser
+            // We'll re-check health after a delay
+            setTimeout(async () => {
+              await checkSystemHealth();
+            }, 5000);
           }
         } catch (error) {
-          console.error('Google re-authentication failed:', error);
+          console.error('Google mailbox connection failed:', error);
         }
         break;
 
       case 'connect-microsoft':
       case 'reconnect-microsoft':
-        // Trigger Outlook OAuth authentication for mailbox access (redirect-based, no code copying!)
+        // Trigger Microsoft mailbox connection
         try {
-          // Initialize Outlook service first
-          if (window.electron?.outlookInitialize) {
-            await window.electron.outlookInitialize();
-          }
+          const result = await window.api.auth.microsoftConnectMailbox(userId);
+          if (result.success && result.authUrl) {
+            // Open auth URL in browser
+            await window.api.shell.openExternal(result.authUrl);
 
-          // Authenticate with Outlook for email access
-          if (window.electron?.outlookAuthenticate) {
-            const result = await window.electron.outlookAuthenticate(userId);
-            if (result.success) {
-              // Re-check health after successful auth
-              await checkSystemHealth();
-              handleDismiss(issueIndex);
-            } else {
-              console.error('Outlook authentication failed:', result.error);
-            }
+            // Listen for connection completion
+            const cleanup = window.api.onMicrosoftMailboxConnected((connectionResult) => {
+              if (connectionResult.success) {
+                checkSystemHealth();
+                handleDismiss(issueIndex);
+              }
+              cleanup(); // Remove listener
+            });
           }
         } catch (error) {
-          console.error('Outlook authentication failed:', error);
+          console.error('Microsoft mailbox connection failed:', error);
         }
         break;
 

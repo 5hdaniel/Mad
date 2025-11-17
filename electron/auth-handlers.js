@@ -107,6 +107,8 @@ const handleGoogleCompleteLogin = async (event, authCode) => {
 
     // Update last login
     await databaseService.updateLastLogin(localUser.id);
+    // Re-fetch user to get updated last_login_at timestamp
+    localUser = await databaseService.getUserById(localUser.id);
 
     // Save auth token
     await databaseService.saveOAuthToken(localUser.id, 'google', 'authentication', {
@@ -164,6 +166,71 @@ const handleGoogleCompleteLogin = async (event, authCode) => {
     };
   } catch (error) {
     console.error('[Main] Google login completion failed:', error);
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+};
+
+// Google Auth: Connect mailbox (Gmail access)
+const handleGoogleConnectMailbox = async (event, userId) => {
+  try {
+    console.log('[Main] Starting Google mailbox connection');
+
+    const result = await googleAuthService.authenticateForMailbox((deviceCodeInfo) => {
+      // This won't be called in browser-based flow, but keeping for consistency
+    });
+
+    return {
+      success: true,
+      authUrl: result.authUrl,
+      scopes: result.scopes,
+    };
+  } catch (error) {
+    console.error('[Main] Google mailbox connection failed:', error);
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+};
+
+// Google Auth: Complete mailbox connection
+const handleGoogleCompleteMailboxConnection = async (event, authCode, userId) => {
+  try {
+    console.log('[Main] Completing Google mailbox connection');
+
+    // Exchange code for tokens
+    const { tokens } = await googleAuthService.exchangeCodeForTokens(authCode);
+
+    // Encrypt tokens
+    const encryptedAccessToken = tokenEncryptionService.encrypt(tokens.access_token);
+    const encryptedRefreshToken = tokens.refresh_token
+      ? tokenEncryptionService.encrypt(tokens.refresh_token)
+      : null;
+
+    // Get user's email for the connected_email_address field
+    const userInfo = await googleAuthService.getUserInfo(tokens.access_token);
+
+    // Save mailbox token
+    await databaseService.saveOAuthToken(userId, 'google', 'mailbox', {
+      access_token: encryptedAccessToken,
+      refresh_token: encryptedRefreshToken,
+      token_expires_at: tokens.expires_at,
+      scopes_granted: tokens.scopes,
+      connected_email_address: userInfo.email,
+      mailbox_connected: true,
+    });
+
+    console.log('[Main] Google mailbox connection completed successfully');
+
+    return {
+      success: true,
+      email: userInfo.email,
+    };
+  } catch (error) {
+    console.error('[Main] Google mailbox connection completion failed:', error);
     return {
       success: false,
       error: error.message,
@@ -240,6 +307,8 @@ const handleMicrosoftLogin = async (mainWindow) => {
 
         // Update last login
         await databaseService.updateLastLogin(localUser.id);
+        // Re-fetch user to get updated last_login_at timestamp
+        localUser = await databaseService.getUserById(localUser.id);
 
         // Save auth token
         const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
@@ -326,14 +395,101 @@ const handleMicrosoftLogin = async (mainWindow) => {
   }
 };
 
+// Microsoft Auth: Connect mailbox (Outlook/Mail access)
+const handleMicrosoftConnectMailbox = async (mainWindow, userId) => {
+  try {
+    console.log('[Main] Starting Microsoft mailbox connection with redirect');
+
+    // Get user info to use as login hint
+    const user = await databaseService.getUserById(userId);
+    const loginHint = user?.email;
+
+    // Start auth flow - returns authUrl and a promise for the code
+    const { authUrl, codePromise, codeVerifier, scopes } = await microsoftAuthService.authenticateForMailbox(loginHint);
+
+    // Return authUrl immediately so browser can open
+    // Don't wait for user - return early
+    setTimeout(async () => {
+      try {
+        // Wait for code from local server (in background)
+        const code = await codePromise;
+        console.log('[Main] Received mailbox authorization code from redirect');
+
+        // Exchange code for tokens
+        const tokens = await microsoftAuthService.exchangeCodeForTokens(code, codeVerifier);
+
+        // Get user info
+        const userInfo = await microsoftAuthService.getUserInfo(tokens.access_token);
+
+        // Encrypt tokens
+        const encryptedAccessToken = tokenEncryptionService.encrypt(tokens.access_token);
+        const encryptedRefreshToken = tokens.refresh_token
+          ? tokenEncryptionService.encrypt(tokens.refresh_token)
+          : null;
+
+        // Save mailbox token
+        const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
+
+        await databaseService.saveOAuthToken(userId, 'microsoft', 'mailbox', {
+          access_token: encryptedAccessToken,
+          refresh_token: encryptedRefreshToken,
+          token_expires_at: expiresAt,
+          scopes_granted: tokens.scope,
+          connected_email_address: userInfo.email,
+          mailbox_connected: true,
+        });
+
+        console.log('[Main] Microsoft mailbox connection completed successfully');
+
+        // Notify renderer of successful connection
+        if (mainWindow) {
+          mainWindow.webContents.send('microsoft:mailbox-connected', {
+            success: true,
+            email: userInfo.email,
+          });
+        }
+      } catch (error) {
+        console.error('[Main] Microsoft mailbox connection background processing failed:', error);
+        if (mainWindow) {
+          mainWindow.webContents.send('microsoft:mailbox-connected', {
+            success: false,
+            error: error.message,
+          });
+        }
+      }
+    }, 0);
+
+    // Return immediately with authUrl
+    return {
+      success: true,
+      authUrl,
+      scopes,
+    };
+  } catch (error) {
+    console.error('[Main] Microsoft mailbox connection failed:', error);
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+};
+
 
 // Register all handlers (to be called in main.js)
 const registerAuthHandlers = (mainWindow) => {
+  // Google Auth - Login
   ipcMain.handle('auth:google:login', () => handleGoogleLogin(mainWindow));
   ipcMain.handle('auth:google:complete-login', handleGoogleCompleteLogin);
 
-  // Microsoft Auth (MSAL Device Code Flow - single step, no completion handler needed)
+  // Google Auth - Mailbox Connection
+  ipcMain.handle('auth:google:connect-mailbox', handleGoogleConnectMailbox);
+  ipcMain.handle('auth:google:complete-mailbox-connection', handleGoogleCompleteMailboxConnection);
+
+  // Microsoft Auth - Login
   ipcMain.handle('auth:microsoft:login', () => handleMicrosoftLogin(mainWindow));
+
+  // Microsoft Auth - Mailbox Connection
+  ipcMain.handle('auth:microsoft:connect-mailbox', (event, userId) => handleMicrosoftConnectMailbox(mainWindow, userId));
 
   // Logout
   ipcMain.handle('auth:logout', async (event, sessionToken) => {
