@@ -246,11 +246,36 @@ const handleMicrosoftLogin = async (mainWindow) => {
     // Start auth flow - returns authUrl and a promise for the code
     const { authUrl, codePromise, codeVerifier, scopes } = await microsoftAuthService.authenticateForLogin();
 
-    console.log('[Main] Opening auth URL in external browser');
+    console.log('[Main] Opening auth URL in popup window');
 
-    // Open in external browser (more reliable than BrowserWindow for OAuth)
-    const { shell } = require('electron');
-    await shell.openExternal(authUrl);
+    // Create a popup window for auth with webSecurity disabled to allow Microsoft's scripts
+    const { BrowserWindow } = require('electron');
+    const authWindow = new BrowserWindow({
+      width: 500,
+      height: 700,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        webSecurity: false // Disable to allow Microsoft's CDN scripts to load
+      },
+      autoHideMenuBar: true,
+      title: 'Sign in with Microsoft'
+    });
+
+    // Load the auth URL
+    authWindow.loadURL(authUrl);
+
+    // Close the window when redirected to callback
+    authWindow.webContents.on('will-redirect', (event, url) => {
+      if (url.startsWith('http://localhost:3000/callback')) {
+        // Let the success page load, then close after 3 seconds
+        setTimeout(() => {
+          if (authWindow && !authWindow.isDestroyed()) {
+            authWindow.close();
+          }
+        }, 3000);
+      }
+    });
 
     // Return authUrl immediately so browser can open
     // Don't wait for user - return early
@@ -413,11 +438,36 @@ const handleMicrosoftConnectMailbox = async (mainWindow, userId) => {
     // Start auth flow - returns authUrl and a promise for the code
     const { authUrl, codePromise, codeVerifier, scopes} = await microsoftAuthService.authenticateForMailbox(loginHint);
 
-    console.log('[Main] Opening mailbox auth URL in external browser');
+    console.log('[Main] Opening mailbox auth URL in popup window');
 
-    // Open in external browser (more reliable than BrowserWindow for OAuth)
-    const { shell } = require('electron');
-    await shell.openExternal(authUrl);
+    // Create a popup window for auth with webSecurity disabled to allow Microsoft's scripts
+    const { BrowserWindow } = require('electron');
+    const authWindow = new BrowserWindow({
+      width: 500,
+      height: 700,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        webSecurity: false // Disable to allow Microsoft's CDN scripts to load
+      },
+      autoHideMenuBar: true,
+      title: 'Connect Microsoft Mailbox'
+    });
+
+    // Load the auth URL
+    authWindow.loadURL(authUrl);
+
+    // Close the window when redirected to callback
+    authWindow.webContents.on('will-redirect', (event, url) => {
+      if (url.startsWith('http://localhost:3000/callback')) {
+        // Let the success page load, then close after 3 seconds
+        setTimeout(() => {
+          if (authWindow && !authWindow.isDestroyed()) {
+            authWindow.close();
+          }
+        }, 3000);
+      }
+    });
 
     // Return authUrl immediately so browser can open
     // Don't wait for user - return early
