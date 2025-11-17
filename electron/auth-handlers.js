@@ -107,6 +107,8 @@ const handleGoogleCompleteLogin = async (event, authCode) => {
 
     // Update last login
     await databaseService.updateLastLogin(localUser.id);
+    // Re-fetch user to get updated last_login_at timestamp
+    localUser = await databaseService.getUserById(localUser.id);
 
     // Save auth token
     await databaseService.saveOAuthToken(localUser.id, 'google', 'authentication', {
@@ -240,6 +242,8 @@ const handleMicrosoftLogin = async (mainWindow) => {
 
         // Update last login
         await databaseService.updateLastLogin(localUser.id);
+        // Re-fetch user to get updated last_login_at timestamp
+        localUser = await databaseService.getUserById(localUser.id);
 
         // Save auth token
         const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
