@@ -35,6 +35,7 @@ const databaseService = require('./services/databaseService');
 const googleAuthService = require('./services/googleAuthService');
 const supabaseService = require('./services/supabaseService');
 const tokenEncryptionService = require('./services/tokenEncryptionService');
+const connectionStatusService = require('./services/connectionStatusService');
 const { initializeDatabase, registerAuthHandlers } = require('./auth-handlers');
 const { registerTransactionHandlers } = require('./transaction-handlers');
 const { registerContactHandlers } = require('./contact-handlers');
@@ -957,6 +958,9 @@ ipcMain.handle('outlook-initialize', async () => {
     }
 
     await outlookService.initialize(clientId, tenantId);
+
+    // Set OutlookService instance in connectionStatusService so health checks work
+    connectionStatusService.setOutlookService(outlookService);
 
     return { success: true };
   } catch (error) {

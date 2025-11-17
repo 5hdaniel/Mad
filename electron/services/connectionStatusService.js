@@ -6,12 +6,23 @@
 const databaseService = require('./databaseService');
 const googleAuthService = require('./googleAuthService');
 
+// OutlookService is a singleton, will be set by main.js
+let outlookServiceInstance = null;
+
 class ConnectionStatusService {
   constructor() {
     this.connectionStatus = {
       google: { connected: false, lastCheck: null, error: null },
       microsoft: { connected: false, lastCheck: null, error: null },
     };
+  }
+
+  /**
+   * Set the OutlookService instance for checking Microsoft connection
+   * @param {OutlookService} outlookService
+   */
+  setOutlookService(outlookService) {
+    outlookServiceInstance = outlookService;
   }
 
   /**
@@ -104,10 +115,8 @@ class ConnectionStatusService {
    */
   async checkMicrosoftConnection(userId) {
     try {
-      // Get Microsoft auth token from database
-      const token = await databaseService.getOAuthToken(userId, 'microsoft', 'mailbox');
-
-      if (!token || !token.access_token) {
+      // Check if OutlookService is initialized and authenticated
+      if (!outlookServiceInstance) {
         this.connectionStatus.microsoft = {
           connected: false,
           lastCheck: Date.now(),
@@ -121,11 +130,28 @@ class ConnectionStatusService {
         return this.connectionStatus.microsoft;
       }
 
-      // Check if token is expired
-      const tokenExpiry = new Date(token.token_expires_at);
-      const now = new Date();
+      const isAuthenticated = outlookServiceInstance.isAuthenticated();
 
-      if (tokenExpiry < now) {
+      if (!isAuthenticated) {
+        this.connectionStatus.microsoft = {
+          connected: false,
+          lastCheck: Date.now(),
+          error: {
+            type: 'NOT_CONNECTED',
+            userMessage: 'Outlook is not connected',
+            action: 'Connect your Outlook account to access emails',
+            actionHandler: 'connect-microsoft',
+          },
+        };
+        return this.connectionStatus.microsoft;
+      }
+
+      // Get user email to verify connection is still valid
+      let email = null;
+      try {
+        email = await outlookServiceInstance.getUserEmail();
+      } catch (emailError) {
+        // Token might be expired or invalid
         this.connectionStatus.microsoft = {
           connected: false,
           lastCheck: Date.now(),
@@ -134,17 +160,17 @@ class ConnectionStatusService {
             userMessage: 'Outlook connection expired',
             action: 'Reconnect your Outlook account',
             actionHandler: 'reconnect-microsoft',
-            details: 'Authentication token has expired',
+            details: emailError.message,
           },
         };
         return this.connectionStatus.microsoft;
       }
 
-      // Token is valid
+      // Connection is valid
       this.connectionStatus.microsoft = {
         connected: true,
         lastCheck: Date.now(),
-        email: token.connected_email_address,
+        email: email,
         error: null,
       };
       return this.connectionStatus.microsoft;
