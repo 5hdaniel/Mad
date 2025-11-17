@@ -161,7 +161,7 @@ const Login = ({ onLoginSuccess }) => {
                   Authenticating with Microsoft...
                 </p>
                 <p className="text-xs text-purple-700">
-                  A popup window has been opened. Complete sign-in there and the window will close automatically.
+                  A browser tab has been opened. Complete sign-in there.
                 </p>
               </div>
             </div>

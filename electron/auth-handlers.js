@@ -243,69 +243,14 @@ const handleMicrosoftLogin = async (mainWindow) => {
   try {
     console.log('[Main] Starting Microsoft login flow with redirect');
 
-    const { BrowserWindow } = require('electron');
-
     // Start auth flow - returns authUrl and a promise for the code
     const { authUrl, codePromise, codeVerifier, scopes } = await microsoftAuthService.authenticateForLogin();
 
-    console.log('[Main] Auth URL:', authUrl);
+    console.log('[Main] Opening auth URL in external browser');
 
-    // Create a popup window for auth
-    const authWindow = new BrowserWindow({
-      width: 600,
-      height: 800,
-      webPreferences: {
-        nodeIntegration: false,
-        contextIsolation: true,
-        webSecurity: true
-      },
-      autoHideMenuBar: true,
-      title: 'Sign in with Microsoft'
-    });
-
-    // Open DevTools for debugging (temporary)
-    authWindow.webContents.openDevTools();
-
-    // Set user agent to appear as a normal browser
-    authWindow.webContents.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
-
-    // Debug: Log navigation events
-    authWindow.webContents.on('did-start-loading', () => {
-      console.log('[Main] Auth window started loading');
-    });
-
-    authWindow.webContents.on('did-finish-load', () => {
-      console.log('[Main] Auth window finished loading');
-      // Check what actually loaded
-      authWindow.webContents.executeJavaScript('document.documentElement.innerHTML').then(html => {
-        console.log('[Main] Page HTML length:', html.length);
-        console.log('[Main] Page title:', authWindow.webContents.getTitle());
-      }).catch(err => {
-        console.error('[Main] Failed to get page content:', err);
-      });
-    });
-
-    authWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
-      console.error('[Main] Auth window failed to load:', errorCode, errorDescription, validatedURL);
-    });
-
-    // Load the auth URL
-    authWindow.loadURL(authUrl).catch(err => {
-      console.error('[Main] Failed to load auth URL:', err);
-    });
-
-    // Close the window when redirected to callback
-    authWindow.webContents.on('will-redirect', (event, url) => {
-      console.log('[Main] Auth window redirecting to:', url);
-      if (url.startsWith('http://localhost:3000/callback')) {
-        // Let the redirect complete so the success page shows briefly
-        setTimeout(() => {
-          if (authWindow && !authWindow.isDestroyed()) {
-            authWindow.close();
-          }
-        }, 2000);
-      }
-    });
+    // Open in external browser (more reliable than BrowserWindow for OAuth)
+    const { shell } = require('electron');
+    await shell.openExternal(authUrl);
 
     // Return authUrl immediately so browser can open
     // Don't wait for user - return early
@@ -461,70 +406,18 @@ const handleMicrosoftConnectMailbox = async (mainWindow, userId) => {
   try {
     console.log('[Main] Starting Microsoft mailbox connection with redirect');
 
-    const { BrowserWindow } = require('electron');
-
     // Get user info to use as login hint
     const user = await databaseService.getUserById(userId);
     const loginHint = user?.email;
 
     // Start auth flow - returns authUrl and a promise for the code
-    const { authUrl, codePromise, codeVerifier, scopes } = await microsoftAuthService.authenticateForMailbox(loginHint);
+    const { authUrl, codePromise, codeVerifier, scopes} = await microsoftAuthService.authenticateForMailbox(loginHint);
 
-    console.log('[Main] Mailbox Auth URL:', authUrl);
+    console.log('[Main] Opening mailbox auth URL in external browser');
 
-    // Create a popup window for auth
-    const authWindow = new BrowserWindow({
-      width: 600,
-      height: 800,
-      webPreferences: {
-        nodeIntegration: false,
-        contextIsolation: true,
-        webSecurity: true
-      },
-      autoHideMenuBar: true,
-      title: 'Connect Microsoft Mailbox'
-    });
-
-    // Set user agent to appear as a normal browser
-    authWindow.webContents.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
-
-    // Debug: Log navigation events
-    authWindow.webContents.on('did-start-loading', () => {
-      console.log('[Main] Mailbox auth window started loading');
-    });
-
-    authWindow.webContents.on('did-finish-load', () => {
-      console.log('[Main] Mailbox auth window finished loading');
-      // Check what actually loaded
-      authWindow.webContents.executeJavaScript('document.documentElement.innerHTML').then(html => {
-        console.log('[Main] Mailbox page HTML length:', html.length);
-        console.log('[Main] Mailbox page title:', authWindow.webContents.getTitle());
-      }).catch(err => {
-        console.error('[Main] Failed to get mailbox page content:', err);
-      });
-    });
-
-    authWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
-      console.error('[Main] Mailbox auth window failed to load:', errorCode, errorDescription, validatedURL);
-    });
-
-    // Load the auth URL
-    authWindow.loadURL(authUrl).catch(err => {
-      console.error('[Main] Failed to load mailbox auth URL:', err);
-    });
-
-    // Close the window when redirected to callback
-    authWindow.webContents.on('will-redirect', (event, url) => {
-      console.log('[Main] Mailbox auth window redirecting to:', url);
-      if (url.startsWith('http://localhost:3000/callback')) {
-        // Let the redirect complete so the success page shows briefly
-        setTimeout(() => {
-          if (authWindow && !authWindow.isDestroyed()) {
-            authWindow.close();
-          }
-        }, 2000);
-      }
-    });
+    // Open in external browser (more reliable than BrowserWindow for OAuth)
+    const { shell } = require('electron');
+    await shell.openExternal(authUrl);
 
     // Return authUrl immediately so browser can open
     // Don't wait for user - return early
