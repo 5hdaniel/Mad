@@ -242,22 +242,30 @@ function registerSystemHandlers() {
     try {
       console.log('[Main] Health check called with userId:', userId, 'provider:', provider);
 
-      const [permissions, connection] = await Promise.all([
+      const [permissions, connection, contactsLoading] = await Promise.all([
         permissionService.checkAllPermissions(),
         userId && provider ? (
           provider === 'google'
             ? connectionStatusService.checkGoogleConnection(userId)
             : connectionStatusService.checkMicrosoftConnection(userId)
         ) : null,
+        permissionService.checkContactsLoading(),
       ]);
 
       console.log('[Main] Connection check result:', connection);
+      console.log('[Main] Contacts loading check result:', contactsLoading);
 
       const issues = [];
 
       // Add permission issues
       if (!permissions.allGranted) {
         issues.push(...permissions.errors);
+      }
+
+      // Add contacts loading issue
+      if (!contactsLoading.canLoadContacts && contactsLoading.error) {
+        console.log('[Main] Adding contacts loading issue');
+        issues.push(contactsLoading.error);
       }
 
       // Add connection issue (only for the provider the user logged in with)
@@ -275,6 +283,7 @@ function registerSystemHandlers() {
         healthy: issues.length === 0,
         permissions,
         connection,
+        contactsLoading,
         issues,
         summary: {
           totalIssues: issues.length,

@@ -5,6 +5,7 @@
 
 const { ipcMain } = require('electron');
 const databaseService = require('./services/databaseService');
+const { getContactNames } = require('./services/contactsService');
 
 /**
  * Register all contact-related IPC handlers
@@ -15,11 +16,45 @@ function registerContactHandlers() {
     try {
       console.log('[Main] Getting all contacts for user:', userId);
 
-      const contacts = await databaseService.getContactsByUserId(userId);
+      // Get manual contacts from database
+      const manualContacts = await databaseService.getContactsByUserId(userId);
+
+      // Get contacts from macOS Contacts app
+      const { phoneToContactInfo, status } = await getContactNames();
+
+      // Convert Contacts app data to contact objects
+      const contactsAppContacts = [];
+      const seenContacts = new Set();
+
+      if (phoneToContactInfo && Object.keys(phoneToContactInfo).length > 0) {
+        for (const [phone, contactInfo] of Object.entries(phoneToContactInfo)) {
+          // Use the contact name as unique key to avoid duplicates
+          // (same contact may have multiple phone numbers)
+          if (!seenContacts.has(contactInfo.name)) {
+            seenContacts.add(contactInfo.name);
+
+            contactsAppContacts.push({
+              id: `contacts-app-${contactInfo.name}`, // Temporary ID for UI
+              name: contactInfo.name,
+              phone: contactInfo.phones?.[0] || null, // Primary phone
+              email: contactInfo.emails?.[0] || null, // Primary email
+              source: 'contacts_app',
+              allPhones: contactInfo.phones || [],
+              allEmails: contactInfo.emails || [],
+            });
+          }
+        }
+      }
+
+      console.log(`[Main] Found ${manualContacts.length} manual contacts and ${contactsAppContacts.length} Contacts app contacts`);
+
+      // Merge manual contacts and Contacts app contacts
+      const allContacts = [...manualContacts, ...contactsAppContacts];
 
       return {
         success: true,
-        contacts,
+        contacts: allContacts,
+        contactsStatus: status, // Include loading status
       };
     } catch (error) {
       console.error('[Main] Get contacts failed:', error);
@@ -35,11 +70,43 @@ function registerContactHandlers() {
     try {
       console.log('[Main] Getting contacts sorted by activity for user:', userId, 'address:', propertyAddress);
 
-      const contacts = await databaseService.getContactsSortedByActivity(userId, propertyAddress);
+      // Get manual contacts sorted by activity
+      const manualContacts = await databaseService.getContactsSortedByActivity(userId, propertyAddress);
+
+      // Get contacts from macOS Contacts app
+      const { phoneToContactInfo } = await getContactNames();
+
+      // Convert Contacts app data to contact objects
+      const contactsAppContacts = [];
+      const seenContacts = new Set();
+
+      if (phoneToContactInfo && Object.keys(phoneToContactInfo).length > 0) {
+        for (const [phone, contactInfo] of Object.entries(phoneToContactInfo)) {
+          if (!seenContacts.has(contactInfo.name)) {
+            seenContacts.add(contactInfo.name);
+
+            contactsAppContacts.push({
+              id: `contacts-app-${contactInfo.name}`,
+              name: contactInfo.name,
+              phone: contactInfo.phones?.[0] || null,
+              email: contactInfo.emails?.[0] || null,
+              source: 'contacts_app',
+              allPhones: contactInfo.phones || [],
+              allEmails: contactInfo.emails || [],
+              activityScore: 0, // Contacts app contacts have no activity score
+            });
+          }
+        }
+      }
+
+      // Manual contacts come first (already sorted by activity), then Contacts app contacts
+      const allContacts = [...manualContacts, ...contactsAppContacts];
+
+      console.log(`[Main] Returning ${allContacts.length} total contacts (${manualContacts.length} with activity, ${contactsAppContacts.length} from Contacts app)`);
 
       return {
         success: true,
-        contacts,
+        contacts: allContacts,
       };
     } catch (error) {
       console.error('[Main] Get sorted contacts failed:', error);
