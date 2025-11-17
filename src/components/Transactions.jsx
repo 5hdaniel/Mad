@@ -110,10 +110,6 @@ function Transactions({ userId, provider, onClose }) {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex flex-col">
       {/* Header */}
       <div className="flex-shrink-0 bg-gradient-to-r from-blue-500 to-purple-600 px-6 py-6 flex items-center justify-between shadow-lg">
-        <div>
-          <h2 className="text-2xl font-bold text-white">Transactions</h2>
-          <p className="text-blue-100 text-sm">{transactions.length} properties found</p>
-        </div>
         <button
           onClick={onClose}
           className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg px-4 py-2 transition-all flex items-center gap-2 font-medium"
@@ -123,6 +119,10 @@ function Transactions({ userId, provider, onClose }) {
           </svg>
           Back to Dashboard
         </button>
+        <div className="text-right">
+          <h2 className="text-2xl font-bold text-white">Transactions</h2>
+          <p className="text-blue-100 text-sm">{transactions.length} properties found</p>
+        </div>
       </div>
 
       {/* Toolbar */}
