@@ -249,17 +249,29 @@ const handleMicrosoftLogin = async (mainWindow) => {
     console.log('[Main] Opening auth URL in popup window');
 
     // Create a popup window for auth with webSecurity disabled to allow Microsoft's scripts
-    const { BrowserWindow } = require('electron');
+    const { BrowserWindow, session } = require('electron');
+
     const authWindow = new BrowserWindow({
       width: 500,
       height: 700,
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
-        webSecurity: false // Disable to allow Microsoft's CDN scripts to load
+        webSecurity: false, // Disable to allow Microsoft's CDN scripts to load
+        allowRunningInsecureContent: true
       },
       autoHideMenuBar: true,
       title: 'Sign in with Microsoft'
+    });
+
+    // Strip CSP headers to allow Microsoft's scripts to load
+    const filter = { urls: ['*://*.microsoftonline.com/*', '*://*.msauth.net/*', '*://*.msftauth.net/*'] };
+    authWindow.webContents.session.webRequest.onHeadersReceived(filter, (details, callback) => {
+      const responseHeaders = details.responseHeaders || {};
+      delete responseHeaders['content-security-policy'];
+      delete responseHeaders['content-security-policy-report-only'];
+      delete responseHeaders['x-content-security-policy'];
+      callback({ responseHeaders });
     });
 
     // Load the auth URL
@@ -441,17 +453,29 @@ const handleMicrosoftConnectMailbox = async (mainWindow, userId) => {
     console.log('[Main] Opening mailbox auth URL in popup window');
 
     // Create a popup window for auth with webSecurity disabled to allow Microsoft's scripts
-    const { BrowserWindow } = require('electron');
+    const { BrowserWindow, session } = require('electron');
+
     const authWindow = new BrowserWindow({
       width: 500,
       height: 700,
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
-        webSecurity: false // Disable to allow Microsoft's CDN scripts to load
+        webSecurity: false, // Disable to allow Microsoft's CDN scripts to load
+        allowRunningInsecureContent: true
       },
       autoHideMenuBar: true,
       title: 'Connect Microsoft Mailbox'
+    });
+
+    // Strip CSP headers to allow Microsoft's scripts to load
+    const filter = { urls: ['*://*.microsoftonline.com/*', '*://*.msauth.net/*', '*://*.msftauth.net/*'] };
+    authWindow.webContents.session.webRequest.onHeadersReceived(filter, (details, callback) => {
+      const responseHeaders = details.responseHeaders || {};
+      delete responseHeaders['content-security-policy'];
+      delete responseHeaders['content-security-policy-report-only'];
+      delete responseHeaders['x-content-security-policy'];
+      callback({ responseHeaders });
     });
 
     // Load the auth URL
