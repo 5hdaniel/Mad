@@ -500,6 +500,7 @@ function ContactAssignmentStep({ stepConfig, contactAssignments, onAssignContact
 function RoleAssignment({ role, required, multiple, assignments, onAssign, onRemove, userId, propertyAddress }) {
   const [contacts, setContacts] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState(null);
   const [showContactSelect, setShowContactSelect] = React.useState(false);
 
   React.useEffect(() => {
@@ -507,6 +508,9 @@ function RoleAssignment({ role, required, multiple, assignments, onAssign, onRem
   }, [propertyAddress]);
 
   const loadContacts = async () => {
+    setLoading(true);
+    setError(null);
+
     try {
       // Use sorted API when property address is available, otherwise use regular API
       const result = propertyAddress
@@ -515,9 +519,30 @@ function RoleAssignment({ role, required, multiple, assignments, onAssign, onRem
 
       if (result.success) {
         setContacts(result.contacts || []);
+
+        // If no contacts returned, check if it's a permission issue
+        if (!result.contacts || result.contacts.length === 0) {
+          setError({
+            type: 'no_contacts',
+            message: 'No contacts found. Make sure you have Full Disk Access enabled and have imported your emails.',
+            action: 'Check permissions in System Settings > Privacy & Security > Full Disk Access',
+          });
+        }
+      } else {
+        // API returned error
+        setError({
+          type: 'api_error',
+          message: result.error || 'Failed to load contacts. This may be due to missing permissions.',
+          action: 'Please check Full Disk Access permission in System Settings',
+        });
       }
     } catch (err) {
       console.error('Failed to load contacts:', err);
+      setError({
+        type: 'exception',
+        message: 'Unable to load contacts. Please check your permissions.',
+        action: 'Open System Settings and enable Full Disk Access for this app',
+      });
     } finally {
       setLoading(false);
     }
@@ -542,6 +567,39 @@ function RoleAssignment({ role, required, multiple, assignments, onAssign, onRem
           {multiple && <span className="text-xs text-gray-500">(can assign multiple)</span>}
         </div>
       </div>
+
+      {/* Error Message */}
+      {error && (
+        <div className="mb-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+          <div className="flex items-start gap-2">
+            <svg className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <div className="flex-1">
+              <p className="text-sm font-medium text-yellow-900">{error.message}</p>
+              <p className="text-xs text-yellow-700 mt-1">{error.action}</p>
+              <button
+                onClick={async () => {
+                  if (window.api?.system?.openPrivacyPane) {
+                    await window.api.system.openPrivacyPane('fullDiskAccess');
+                  }
+                }}
+                className="mt-2 text-xs font-medium text-yellow-800 hover:text-yellow-900 underline"
+              >
+                Open System Settings →
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Loading State */}
+      {loading && !error && (
+        <div className="mb-3 p-4 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-center gap-2">
+          <div className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+          <span className="text-sm text-gray-600">Loading contacts...</span>
+        </div>
+      )}
 
       {/* Assigned Contacts */}
       {assignments.length > 0 && (
@@ -575,10 +633,15 @@ function RoleAssignment({ role, required, multiple, assignments, onAssign, onRem
       )}
 
       {/* Add Contact Button (if multiple allowed or no contact assigned) */}
-      {(multiple || assignments.length === 0) && (
+      {!loading && (multiple || assignments.length === 0) && (
         <button
           onClick={() => setShowContactSelect(true)}
-          className="w-full px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 text-sm font-medium transition-all flex items-center justify-center gap-2"
+          disabled={error && error.type !== 'no_contacts'}
+          className={`w-full px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+            error && error.type !== 'no_contacts'
+              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              : 'bg-indigo-500 text-white hover:bg-indigo-600'
+          }`}
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />

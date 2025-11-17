@@ -6,6 +6,7 @@ import ConversationList from './components/ConversationList';
 import ExportComplete from './components/ExportComplete';
 import OutlookExport from './components/OutlookExport';
 import UpdateNotification from './components/UpdateNotification';
+import SystemHealthMonitor from './components/SystemHealthMonitor';
 import MoveAppPrompt from './components/MoveAppPrompt';
 import Profile from './components/Profile';
 import Settings from './components/Settings';
@@ -380,6 +381,11 @@ function App() {
 
       {/* Update Notification */}
       <UpdateNotification />
+
+      {/* System Health Monitor - Show permission/connection errors */}
+      {isAuthenticated && currentUser && (
+        <SystemHealthMonitor userId={currentUser.id} provider={authProvider} />
+      )}
 
       {/* Move App Prompt */}
       {showMoveAppPrompt && (
