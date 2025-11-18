@@ -6,14 +6,18 @@
 // Create a mock database before requiring the service
 const mockDatabase = {
   all: jest.fn((sql, params, callback) => {
-    // Default implementation - will be overridden in tests
-    callback(null, []);
+    // Handle optional params parameter (params might be a callback)
+    const cb = typeof params === 'function' ? params : callback;
+    if (cb) cb(null, []);
   }),
   get: jest.fn((sql, params, callback) => {
-    callback(null, null);
+    const cb = typeof params === 'function' ? params : callback;
+    if (cb) cb(null, null);
   }),
   run: jest.fn((sql, params, callback) => {
-    callback && callback(null);
+    // Handle optional params parameter (params might be a callback)
+    const cb = typeof params === 'function' ? params : callback;
+    if (cb) cb(null);
   }),
 };
 
@@ -35,6 +39,8 @@ const databaseService = require('../databaseService');
 describe('DatabaseService - Contact Deletion Prevention', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // Set the db directly since initialize() is async and we don't need full initialization for these tests
+    databaseService.db = mockDatabase;
   });
 
   describe('getTransactionsByContact', () => {
