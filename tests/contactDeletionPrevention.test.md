@@ -131,12 +131,25 @@ All required dependencies are already in `package.json`:
 
 ## Key Testing Patterns Used
 
-### 1. Mocking Database Calls
+### 1. Mocking Database Calls (SQLite Callbacks)
 ```javascript
-mockDb.all
-  .mockResolvedValueOnce([directTxn])  // First call
-  .mockResolvedValueOnce([junctionTxn]) // Second call
-  .mockResolvedValueOnce([jsonTxn]);    // Third call
+// Create mock database before requiring service
+const mockDatabase = {
+  all: jest.fn((sql, params, callback) => callback(null, []))
+};
+
+// Mock sqlite3 to return our mock
+jest.mock('sqlite3', () => ({
+  verbose: () => ({
+    Database: jest.fn().mockImplementation(() => mockDatabase)
+  })
+}));
+
+// In tests: mock callback responses
+mockDatabase.all
+  .mockImplementationOnce((sql, params, callback) => callback(null, [directTxn]))
+  .mockImplementationOnce((sql, params, callback) => callback(null, [junctionTxn]))
+  .mockImplementationOnce((sql, params, callback) => callback(null, [jsonTxn]));
 ```
 
 ### 2. Testing Async User Interactions
