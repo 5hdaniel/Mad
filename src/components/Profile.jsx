@@ -126,41 +126,37 @@ function Profile({ user, provider, subscription, onLogout, onClose, onViewTransa
             </span>
           </div>
 
-          {/* Email Connection Status */}
-          <div className="space-y-2 mb-6">
+          {/* Email Connection Status - Only show if connected */}
+          <div className="flex flex-wrap gap-2 mb-6">
             {/* Gmail Connection Status */}
-            <div className="flex items-center gap-2">
-              <div className={`w-2 h-2 rounded-full ${emailConnections.google.connected ? 'bg-green-500' : 'bg-gray-300'}`} />
-              <span className="text-xs text-gray-600">
-                {emailConnections.google.connected ? (
-                  <>
-                    <span className="font-medium text-green-700">Connected to Gmail</span>
-                    {emailConnections.google.email && (
-                      <span className="text-gray-500"> ({emailConnections.google.email})</span>
-                    )}
-                  </>
-                ) : (
-                  <span className="text-gray-500">Gmail not connected</span>
-                )}
-              </span>
-            </div>
+            {emailConnections.google.connected && (
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-50 border-green-200 border">
+                <svg className="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z" />
+                </svg>
+                <span className="text-sm font-medium text-green-700">
+                  Gmail
+                  {emailConnections.google.email && (
+                    <span className="text-green-600 font-normal"> ({emailConnections.google.email})</span>
+                  )}
+                </span>
+              </div>
+            )}
 
             {/* Outlook Connection Status */}
-            <div className="flex items-center gap-2">
-              <div className={`w-2 h-2 rounded-full ${emailConnections.microsoft.connected ? 'bg-green-500' : 'bg-gray-300'}`} />
-              <span className="text-xs text-gray-600">
-                {emailConnections.microsoft.connected ? (
-                  <>
-                    <span className="font-medium text-green-700">Connected to Outlook</span>
-                    {emailConnections.microsoft.email && (
-                      <span className="text-gray-500"> ({emailConnections.microsoft.email})</span>
-                    )}
-                  </>
-                ) : (
-                  <span className="text-gray-500">Outlook not connected</span>
-                )}
-              </span>
-            </div>
+            {emailConnections.microsoft.connected && (
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-50 border-blue-200 border">
+                <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z" />
+                </svg>
+                <span className="text-sm font-medium text-blue-700">
+                  Outlook
+                  {emailConnections.microsoft.email && (
+                    <span className="text-blue-600 font-normal"> ({emailConnections.microsoft.email})</span>
+                  )}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Subscription Info */}
