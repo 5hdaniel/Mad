@@ -218,6 +218,25 @@ function registerContactHandlers() {
       };
     }
   });
+
+  // Remove contact from local database (un-import)
+  ipcMain.handle('contacts:remove', async (event, contactId) => {
+    try {
+      console.log('[Main] Removing contact from local database:', contactId);
+
+      await databaseService.removeContact(contactId);
+
+      return {
+        success: true,
+      };
+    } catch (error) {
+      console.error('[Main] Remove contact failed:', error);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  });
 }
 
 module.exports = {

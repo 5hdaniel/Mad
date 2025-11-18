@@ -70,6 +70,23 @@ function Contacts({ userId, onClose }) {
     }
   };
 
+  const handleRemoveContact = async (contactId) => {
+    if (!confirm('Remove this contact from your local database? You can re-import it later if needed.')) {
+      return;
+    }
+
+    try {
+      const result = await window.api.contacts.remove(contactId);
+      if (result.success) {
+        loadContacts();
+      } else {
+        alert(`Failed to remove contact: ${result.error}`);
+      }
+    } catch (err) {
+      alert(`Failed to remove contact: ${err.message}`);
+    }
+  };
+
   const filteredContacts = contacts.filter((c) =>
     c.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     c.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -269,9 +286,12 @@ function Contacts({ userId, onClose }) {
                 {/* Actions */}
                 <div className="flex items-center gap-2 pt-4 border-t border-gray-200">
                   {contact.source === 'contacts_app' ? (
-                    <div className="flex-1 text-center py-2 text-xs text-gray-500 italic">
-                      Read-only from Contacts app
-                    </div>
+                    <button
+                      onClick={() => handleRemoveContact(contact.id)}
+                      className="flex-1 px-3 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg font-medium text-sm transition-all"
+                    >
+                      Remove
+                    </button>
                   ) : (
                     <>
                       <button
@@ -281,10 +301,10 @@ function Contacts({ userId, onClose }) {
                         Edit
                       </button>
                       <button
-                        onClick={() => handleDeleteContact(contact.id)}
+                        onClick={() => handleRemoveContact(contact.id)}
                         className="flex-1 px-3 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg font-medium text-sm transition-all"
                       >
-                        Delete
+                        Remove
                       </button>
                     </>
                   )}

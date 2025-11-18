@@ -688,6 +688,15 @@ class DatabaseService {
   }
 
   /**
+   * Remove a contact from local database (un-import)
+   * Sets is_imported = 0 so it disappears from the list but can be re-imported
+   */
+  async removeContact(contactId) {
+    const sql = 'UPDATE contacts SET is_imported = 0 WHERE id = ?';
+    await this._run(sql, [contactId]);
+  }
+
+  /**
    * Get or create contact from email address
    */
   async getOrCreateContactFromEmail(userId, email, name = null) {
