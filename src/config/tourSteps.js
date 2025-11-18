@@ -1,8 +1,52 @@
 /**
  * Tour Steps Configuration
- * Defines the steps for the Joyride tour on the export screen
+ * Defines the steps for Joyride tours throughout the app
  */
 
+// Main Dashboard Tour - shown to first-time users
+export const getDashboardTourSteps = () => [
+  {
+    target: 'body',
+    content: '👋 Welcome to Magic Audit! Let me give you a quick tour of the main features.',
+    placement: 'center',
+    disableBeacon: true,
+  },
+  {
+    target: '[data-tour="dashboard-header"]',
+    content: 'This is your main dashboard. From here, you can access all the key features of Magic Audit.',
+    placement: 'bottom',
+  },
+  {
+    target: '[data-tour="new-audit-card"]',
+    content: 'Start a new transaction audit to track client communications and ensure compliance.',
+    placement: 'bottom',
+    spotlightClicks: true,
+  },
+  {
+    target: '[data-tour="transactions-card"]',
+    content: 'Browse and review all your past transaction audits in one place.',
+    placement: 'bottom',
+    spotlightClicks: true,
+  },
+  {
+    target: '[data-tour="contacts-card"]',
+    content: 'Manage your real estate contacts database here. Add, edit, or organize your client contacts.',
+    placement: 'top',
+    spotlightClicks: true,
+  },
+  {
+    target: '[data-tour="profile-button"]',
+    content: 'Access your account settings, subscription status, and email connections from your profile.',
+    placement: 'left',
+  },
+  {
+    target: 'body',
+    content: '🎉 That\'s it! You\'re all set to start using Magic Audit. Let\'s get started!',
+    placement: 'center',
+  },
+];
+
+// Export Screen Tour - shown when user first visits export screen
 export const getExportTourSteps = (outlookConnected) => [
   {
     target: 'body',

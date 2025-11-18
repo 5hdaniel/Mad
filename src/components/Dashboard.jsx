@@ -1,4 +1,7 @@
 import React from 'react';
+import Joyride from 'react-joyride';
+import { useTour } from '../hooks/useTour';
+import { getDashboardTourSteps, JOYRIDE_STYLES, JOYRIDE_LOCALE } from '../config/tourSteps';
 
 /**
  * Dashboard Component
@@ -6,11 +9,25 @@ import React from 'react';
  * Provides three primary actions: Start New Audit, Browse Transactions, and Manage Contacts
  */
 function Dashboard({ onAuditNew, onViewTransactions, onManageContacts }) {
+  // Initialize the onboarding tour for first-time users
+  const { runTour, handleJoyrideCallback } = useTour(true, 'hasSeenDashboardTour');
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-8">
+      {/* Onboarding Tour */}
+      <Joyride
+        steps={getDashboardTourSteps()}
+        run={runTour}
+        continuous
+        showProgress
+        showSkipButton
+        callback={handleJoyrideCallback}
+        styles={JOYRIDE_STYLES}
+        locale={JOYRIDE_LOCALE}
+      />
       <div className="max-w-5xl w-full">
         {/* Header */}
-        <div className="text-center mb-12">
+        <div className="text-center mb-12" data-tour="dashboard-header">
           <h1 className="text-4xl font-bold text-gray-900 mb-3">
             Welcome to Magic Audit
           </h1>
@@ -25,6 +42,7 @@ function Dashboard({ onAuditNew, onViewTransactions, onManageContacts }) {
           <button
             onClick={onAuditNew}
             className="group relative bg-white rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 p-8 text-left border-2 border-transparent hover:border-blue-500 transform hover:scale-105"
+            data-tour="new-audit-card"
           >
             <div className="absolute top-6 right-6">
               <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all">
@@ -52,6 +70,7 @@ function Dashboard({ onAuditNew, onViewTransactions, onManageContacts }) {
           <button
             onClick={onViewTransactions}
             className="group relative bg-white rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 p-8 text-left border-2 border-transparent hover:border-green-500 transform hover:scale-105"
+            data-tour="transactions-card"
           >
             <div className="absolute top-6 right-6">
               <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-teal-600 rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all">
@@ -81,6 +100,7 @@ function Dashboard({ onAuditNew, onViewTransactions, onManageContacts }) {
           <button
             onClick={onManageContacts}
             className="group w-full relative bg-white bg-opacity-70 backdrop-blur rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 p-6 text-left border-2 border-transparent hover:border-purple-400 transform hover:scale-[1.02]"
+            data-tour="contacts-card"
           >
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl flex items-center justify-center shadow-lg">
