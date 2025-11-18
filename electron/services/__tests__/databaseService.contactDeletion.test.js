@@ -19,8 +19,12 @@ jest.mock('sqlite3', () => {
 const databaseService = require('../databaseService');
 
 describe('DatabaseService - Contact Deletion Prevention', () => {
+  let _allSpy;
+
   beforeEach(() => {
     jest.clearAllMocks();
+    // Create spy that we'll configure in each test
+    _allSpy = jest.spyOn(databaseService, '_all');
   });
 
   afterEach(() => {
@@ -31,8 +35,8 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
     const contactId = 'contact-123';
 
     it('should return empty array when contact has no associated transactions', async () => {
-      // Spy on _all method
-      const _allSpy = jest.spyOn(databaseService, '_all')
+      // Mock all three queries to return empty results
+      _allSpy
         .mockResolvedValueOnce([]) // Direct FK query
         .mockResolvedValueOnce([]) // Junction table query
         .mockResolvedValueOnce([]); // JSON array query
@@ -53,7 +57,7 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
         role: 'Buyer Agent',
       };
 
-      jest.spyOn(databaseService, '_all')
+      _allSpy
         .mockResolvedValueOnce([mockTransaction]) // Direct FK query
         .mockResolvedValueOnce([]) // Junction table query
         .mockResolvedValueOnce([]); // JSON array query
@@ -79,7 +83,7 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
         role_category: 'inspection',
       };
 
-      jest.spyOn(databaseService, '_all')
+      _allSpy
         .mockResolvedValueOnce([]) // Direct FK query
         .mockResolvedValueOnce([mockTransaction]) // Junction table query
         .mockResolvedValueOnce([]); // JSON array query
@@ -103,7 +107,7 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
         status: 'closed',
       };
 
-      jest.spyOn(databaseService, '_all')
+      _allSpy
         .mockResolvedValueOnce([]) // Direct FK query
         .mockResolvedValueOnce([]) // Junction table query
         .mockResolvedValueOnce([mockTransaction]); // JSON array query
@@ -138,7 +142,7 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
         role_category: 'title_escrow',
       };
 
-      jest.spyOn(databaseService, '_all')
+      _allSpy
         .mockResolvedValueOnce([directTxn]) // Direct FK query
         .mockResolvedValueOnce([junctionTxn]) // Junction table query
         .mockResolvedValueOnce([]); // JSON array query
@@ -171,7 +175,7 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
         role: 'Seller Agent',
       };
 
-      jest.spyOn(databaseService, '_all')
+      _allSpy
         .mockResolvedValueOnce([directTxn1, directTxn2]) // Direct FK query returns both
         .mockResolvedValueOnce([]) // Junction table query
         .mockResolvedValueOnce([]); // JSON array query
@@ -209,7 +213,7 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
         status: 'closed',
       };
 
-      jest.spyOn(databaseService, '_all')
+      _allSpy
         .mockResolvedValueOnce([directTxn])
         .mockResolvedValueOnce([junctionTxn])
         .mockResolvedValueOnce([jsonTxn]);
@@ -230,7 +234,7 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
         other_contacts: `["contact-123", "contact-456"]`,
       };
 
-      const _allSpy = jest.spyOn(databaseService, '_all')
+      _allSpy
         .mockResolvedValueOnce([]) // Direct FK query
         .mockResolvedValueOnce([]) // Junction table query
         .mockRejectedValueOnce(new Error('json_each not supported')) // JSON array query fails
@@ -253,7 +257,7 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
         other_contacts: 'invalid-json',
       };
 
-      jest.spyOn(databaseService, '_all')
+      _allSpy
         .mockResolvedValueOnce([])
         .mockResolvedValueOnce([])
         .mockRejectedValueOnce(new Error('json_each not supported'))
@@ -266,7 +270,7 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
     });
 
     it('should pass correct SQL parameters for all queries', async () => {
-      const _allSpy = jest.spyOn(databaseService, '_all')
+      _allSpy
         .mockResolvedValueOnce([])
         .mockResolvedValueOnce([])
         .mockResolvedValueOnce([]);
@@ -303,7 +307,7 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
         role_category: 'inspection',
       };
 
-      jest.spyOn(databaseService, '_all')
+      _allSpy
         .mockResolvedValueOnce([])
         .mockResolvedValueOnce([mockTransaction])
         .mockResolvedValueOnce([]);
@@ -324,7 +328,7 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
         role_category: null,
       };
 
-      jest.spyOn(databaseService, '_all')
+      _allSpy
         .mockResolvedValueOnce([])
         .mockResolvedValueOnce([mockTransaction])
         .mockResolvedValueOnce([]);
@@ -353,7 +357,7 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
         role: 'Seller Agent',
       };
 
-      jest.spyOn(databaseService, '_all')
+      _allSpy
         .mockResolvedValueOnce([purchaseTxn, saleTxn])
         .mockResolvedValueOnce([])
         .mockResolvedValueOnce([]);
