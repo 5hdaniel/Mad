@@ -18,15 +18,6 @@ const sessionService = require('./services/sessionService');
 // Import constants
 const { CURRENT_TERMS_VERSION, CURRENT_PRIVACY_POLICY_VERSION } = require('./constants/legalVersions');
 
-// Import validation utilities
-const {
-  ValidationError,
-  validateUserId,
-  validateAuthCode,
-  validateSessionToken,
-  validateUrl,
-} = require('./utils/validation');
-
 /**
  * Check if user needs to accept or re-accept terms
  * Returns true if user hasn't accepted OR if the accepted versions are outdated
@@ -68,27 +59,7 @@ const initializeDatabase = async () => {
   }
 };
 
-/**
- * Google Auth: Start login flow
- *
- * COMPLEX IPC OPERATION - OAuth Flow
- * This handler initiates the Google OAuth2 authentication flow for user login.
- *
- * FLOW:
- * 1. Calls googleAuthService.authenticateForLogin() to generate auth URL
- * 2. Opens auth URL in popup window (handled by renderer)
- * 3. User authenticates and grants permissions
- * 4. Google redirects to localhost:3001/callback with auth code
- * 5. Code is exchanged for tokens in handleGoogleCompleteLogin
- *
- * SECURITY NOTES:
- * - Uses PKCE (Proof Key for Code Exchange) for enhanced security
- * - Tokens are encrypted using OS-level keychain before storage
- * - Auth window has webSecurity disabled to allow Google's CDN scripts
- *
- * @param {BrowserWindow} mainWindow - Main application window for sending events
- * @returns {Promise<{success: boolean, authUrl?: string, scopes?: string[], error?: string}>}
- */
+// Google Auth: Start login flow
 const handleGoogleLogin = async (mainWindow) => {
   try {
     console.log('[Main] Starting Google login flow');
@@ -114,44 +85,13 @@ const handleGoogleLogin = async (mainWindow) => {
   }
 };
 
-/**
- * Google Auth: Complete login with authorization code
- *
- * COMPLEX IPC OPERATION - OAuth Token Exchange & User Creation
- * This handler completes the Google OAuth2 flow by exchanging the auth code for tokens
- * and creating/updating the user in both local and cloud databases.
- *
- * FLOW:
- * 1. Exchange authorization code for access/refresh tokens
- * 2. Encrypt tokens using OS-level keychain (safeStorage API)
- * 3. Get user info from Google API
- * 4. Sync user to Supabase (cloud backup)
- * 5. Create/update user in local SQLite database
- * 6. Save encrypted OAuth tokens to database
- * 7. Create session with 30-day expiration
- * 8. Validate subscription status
- * 9. Register device for tracking
- * 10. Save session to persistent storage
- *
- * SECURITY CONSIDERATIONS:
- * - All tokens are encrypted before storage using Electron safeStorage
- * - Session tokens are cryptographically random UUIDs
- * - Subscription validation prevents unauthorized access
- *
- * @param {Event} event - IPC event object
- * @param {string} authCode - Authorization code from OAuth redirect
- * @returns {Promise<{success: boolean, user?: Object, sessionToken?: string, subscription?: Object, isNewUser?: boolean, error?: string}>}
- * @throws Will return error object if token exchange, user creation, or sync fails
- */
+// Google Auth: Complete login with authorization code
 const handleGoogleCompleteLogin = async (event, authCode) => {
   try {
     console.log('[Main] Completing Google login');
 
-    // INPUT VALIDATION
-    const validatedAuthCode = validateAuthCode(authCode);
-
     // Exchange code for tokens
-    const { tokens, userInfo } = await googleAuthService.exchangeCodeForTokens(validatedAuthCode);
+    const { tokens, userInfo } = await googleAuthService.exchangeCodeForTokens(authCode);
 
     // Encrypt tokens
     const encryptedAccessToken = tokenEncryptionService.encrypt(tokens.access_token);
@@ -267,48 +207,13 @@ const handleGoogleCompleteLogin = async (event, authCode) => {
   }
 };
 
-/**
- * Google Auth: Connect mailbox (Gmail access)
- *
- * COMPLEX IPC OPERATION - Asynchronous OAuth with Popup Window
- * This handler initiates Gmail API access for email scanning functionality.
- * Uses a non-blocking pattern: returns immediately while processing continues in background.
- *
- * FLOW:
- * 1. Get user's email for login hint
- * 2. Generate Gmail-specific OAuth URL with mailbox scopes
- * 3. Create popup BrowserWindow with CSP headers stripped (allows Google scripts)
- * 4. Return authUrl immediately (non-blocking)
- * 5. BACKGROUND: Wait for OAuth redirect to localhost:3001/callback
- * 6. BACKGROUND: Exchange code for tokens
- * 7. BACKGROUND: Encrypt and save mailbox tokens
- * 8. BACKGROUND: Notify renderer via 'google:mailbox-connected' event
- *
- * SECURITY CONSIDERATIONS:
- * - webSecurity disabled ONLY for Google domains to allow CDN scripts
- * - CSP headers stripped to prevent Google's own CSP from blocking functionality
- * - Tokens encrypted with OS keychain before database storage
- * - Scopes limited to read-only Gmail access
- *
- * WHY ASYNC PATTERN:
- * - Prevents IPC timeout during long user authentication
- * - Allows UI to show "waiting for authorization" state
- * - User can take unlimited time to complete OAuth flow
- *
- * @param {BrowserWindow} mainWindow - Main window for sending completion events
- * @param {number} userId - User ID for token association
- * @returns {Promise<{success: boolean, authUrl?: string, scopes?: string[], error?: string}>}
- * @emits google:mailbox-connected - Sent to renderer when connection completes or fails
- */
+// Google Auth: Connect mailbox (Gmail access)
 const handleGoogleConnectMailbox = async (mainWindow, userId) => {
   try {
     console.log('[Main] Starting Google mailbox connection with redirect');
 
-    // INPUT VALIDATION
-    const validatedUserId = validateUserId(userId);
-
     // Get user info to use as login hint
-    const user = await databaseService.getUserById(validatedUserId);
+    const user = await databaseService.getUserById(userId);
     const loginHint = user?.email;
 
     // Start auth flow - returns authUrl and a promise for the code
@@ -763,17 +668,11 @@ const registerAuthHandlers = (mainWindow) => {
   // Logout
   ipcMain.handle('auth:logout', async (event, sessionToken) => {
     try {
-      // INPUT VALIDATION
-      const validatedToken = validateSessionToken(sessionToken);
-
-      await databaseService.deleteSession(validatedToken);
+      await databaseService.deleteSession(sessionToken);
       await sessionService.clearSession();
       return { success: true };
     } catch (error) {
       console.error('[Main] Logout failed:', error);
-      if (error instanceof ValidationError) {
-        return { success: false, error: error.message, validationError: true };
-      }
       return { success: false, error: error.message };
     }
   });
@@ -781,12 +680,9 @@ const registerAuthHandlers = (mainWindow) => {
   // Accept terms
   ipcMain.handle('auth:accept-terms', async (event, userId) => {
     try {
-      // INPUT VALIDATION
-      const validatedUserId = validateUserId(userId);
-
       // Save to local database
       const updatedUser = await databaseService.acceptTerms(
-        validatedUserId,
+        userId,
         CURRENT_TERMS_VERSION,
         CURRENT_PRIVACY_POLICY_VERSION
       );
@@ -815,10 +711,7 @@ const registerAuthHandlers = (mainWindow) => {
   // Validate session
   ipcMain.handle('auth:validate-session', async (event, sessionToken) => {
     try {
-      // INPUT VALIDATION
-      const validatedToken = validateSessionToken(sessionToken);
-
-      const session = await databaseService.validateSession(validatedToken);
+      const session = await databaseService.validateSession(sessionToken);
 
       if (!session) {
         return { success: false, valid: false };
@@ -870,16 +763,10 @@ const registerAuthHandlers = (mainWindow) => {
   // Shell: Open external URL
   ipcMain.handle('shell:open-external', async (event, url) => {
     try {
-      // INPUT VALIDATION - Prevent XSS and malicious URLs
-      const validatedUrl = validateUrl(url);
-
-      await shell.openExternal(validatedUrl);
+      await shell.openExternal(url);
       return { success: true };
     } catch (error) {
       console.error('[Main] Failed to open external URL:', error);
-      if (error instanceof ValidationError) {
-        return { success: false, error: error.message, validationError: true };
-      }
       return { success: false, error: error.message };
     }
   });

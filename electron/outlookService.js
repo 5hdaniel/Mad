@@ -1,4 +1,5 @@
 const { PublicClientApplication, InteractionRequiredAuthError } = require('@azure/msal-node');
+const { FilePersistence } = require('@azure/msal-node-extensions');
 const { Client } = require('@microsoft/microsoft-graph-client');
 require('isomorphic-fetch');
 const fs = require('fs');
@@ -184,7 +185,7 @@ class OutlookService {
       // Use Microsoft Graph API $search to filter on server-side
       // $search uses KQL (Keyword Query Language) and searches across from/to/cc/bcc
       const emailLower = contactEmail.toLowerCase();
-      const matchingEmails = [];
+      let matchingEmails = [];
 
       // Helper function to add timeout to promises
       const withTimeout = (promise, timeoutMs = 60000) => {
@@ -201,7 +202,7 @@ class OutlookService {
 
       let emailsToFetch = [];
       try {
-        const response = await withTimeout(
+        let response = await withTimeout(
           this.graphClient
             .api('/me/messages')
             .search(`"participants:${emailLower}"`)
