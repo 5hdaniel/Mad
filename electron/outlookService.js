@@ -1,5 +1,4 @@
 const { PublicClientApplication, InteractionRequiredAuthError } = require('@azure/msal-node');
-const { FilePersistence } = require('@azure/msal-node-extensions');
 const { Client } = require('@microsoft/microsoft-graph-client');
 require('isomorphic-fetch');
 const fs = require('fs');
