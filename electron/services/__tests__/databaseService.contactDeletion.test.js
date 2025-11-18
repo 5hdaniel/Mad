@@ -3,52 +3,44 @@
  * Tests the getTransactionsByContact method in databaseService
  */
 
-const DatabaseService = require('../databaseService');
-
-// Mock sqlite3
+// Mock sqlite3 before requiring databaseService
 jest.mock('sqlite3', () => {
   return {
     verbose: () => ({
-      Database: jest.fn(),
+      Database: jest.fn().mockImplementation(() => ({
+        all: jest.fn(),
+        get: jest.fn(),
+        run: jest.fn(),
+      })),
     }),
   };
 });
 
+const databaseService = require('../databaseService');
+
 describe('DatabaseService - Contact Deletion Prevention', () => {
-  let dbService;
-  let mockDb;
-
   beforeEach(() => {
-    // Create mock database
-    mockDb = {
-      all: jest.fn(),
-      get: jest.fn(),
-      run: jest.fn(),
-    };
-
-    // Create database service instance
-    dbService = new DatabaseService();
-    dbService.db = mockDb;
+    jest.clearAllMocks();
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    jest.restoreAllMocks();
   });
 
   describe('getTransactionsByContact', () => {
     const contactId = 'contact-123';
 
     it('should return empty array when contact has no associated transactions', async () => {
-      // Mock all queries to return empty results
-      mockDb.all
+      // Spy on _all method
+      const _allSpy = jest.spyOn(databaseService, '_all')
         .mockResolvedValueOnce([]) // Direct FK query
         .mockResolvedValueOnce([]) // Junction table query
         .mockResolvedValueOnce([]); // JSON array query
 
-      const result = await dbService.getTransactionsByContact(contactId);
+      const result = await databaseService.getTransactionsByContact(contactId);
 
       expect(result).toEqual([]);
-      expect(mockDb.all).toHaveBeenCalledTimes(3);
+      expect(_allSpy).toHaveBeenCalledTimes(3);
     });
 
     it('should find transactions via direct FK references (buyer_agent_id)', async () => {
@@ -61,13 +53,12 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
         role: 'Buyer Agent',
       };
 
-      // Mock direct FK query to return result
-      mockDb.all
+      jest.spyOn(databaseService, '_all')
         .mockResolvedValueOnce([mockTransaction]) // Direct FK query
         .mockResolvedValueOnce([]) // Junction table query
         .mockResolvedValueOnce([]); // JSON array query
 
-      const result = await dbService.getTransactionsByContact(contactId);
+      const result = await databaseService.getTransactionsByContact(contactId);
 
       expect(result).toHaveLength(1);
       expect(result[0]).toMatchObject({
@@ -88,12 +79,12 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
         role_category: 'inspection',
       };
 
-      mockDb.all
+      jest.spyOn(databaseService, '_all')
         .mockResolvedValueOnce([]) // Direct FK query
         .mockResolvedValueOnce([mockTransaction]) // Junction table query
         .mockResolvedValueOnce([]); // JSON array query
 
-      const result = await dbService.getTransactionsByContact(contactId);
+      const result = await databaseService.getTransactionsByContact(contactId);
 
       expect(result).toHaveLength(1);
       expect(result[0]).toMatchObject({
@@ -112,12 +103,12 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
         status: 'closed',
       };
 
-      mockDb.all
+      jest.spyOn(databaseService, '_all')
         .mockResolvedValueOnce([]) // Direct FK query
         .mockResolvedValueOnce([]) // Junction table query
         .mockResolvedValueOnce([mockTransaction]); // JSON array query
 
-      const result = await dbService.getTransactionsByContact(contactId);
+      const result = await databaseService.getTransactionsByContact(contactId);
 
       expect(result).toHaveLength(1);
       expect(result[0]).toMatchObject({
@@ -147,12 +138,12 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
         role_category: 'title_escrow',
       };
 
-      mockDb.all
+      jest.spyOn(databaseService, '_all')
         .mockResolvedValueOnce([directTxn]) // Direct FK query
         .mockResolvedValueOnce([junctionTxn]) // Junction table query
         .mockResolvedValueOnce([]); // JSON array query
 
-      const result = await dbService.getTransactionsByContact(contactId);
+      const result = await databaseService.getTransactionsByContact(contactId);
 
       // Should only have one transaction, but with combined roles
       expect(result).toHaveLength(1);
@@ -180,12 +171,12 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
         role: 'Seller Agent',
       };
 
-      mockDb.all
+      jest.spyOn(databaseService, '_all')
         .mockResolvedValueOnce([directTxn1, directTxn2]) // Direct FK query returns both
         .mockResolvedValueOnce([]) // Junction table query
         .mockResolvedValueOnce([]); // JSON array query
 
-      const result = await dbService.getTransactionsByContact(contactId);
+      const result = await databaseService.getTransactionsByContact(contactId);
 
       expect(result).toHaveLength(1);
       expect(result[0].roles).toBe('Buyer Agent, Seller Agent');
@@ -218,12 +209,12 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
         status: 'closed',
       };
 
-      mockDb.all
+      jest.spyOn(databaseService, '_all')
         .mockResolvedValueOnce([directTxn])
         .mockResolvedValueOnce([junctionTxn])
         .mockResolvedValueOnce([jsonTxn]);
 
-      const result = await dbService.getTransactionsByContact(contactId);
+      const result = await databaseService.getTransactionsByContact(contactId);
 
       expect(result).toHaveLength(3);
       expect(result.map((t) => t.id)).toEqual(['txn-1', 'txn-2', 'txn-3']);
@@ -239,17 +230,17 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
         other_contacts: `["contact-123", "contact-456"]`,
       };
 
-      mockDb.all
+      const _allSpy = jest.spyOn(databaseService, '_all')
         .mockResolvedValueOnce([]) // Direct FK query
         .mockResolvedValueOnce([]) // Junction table query
         .mockRejectedValueOnce(new Error('json_each not supported')) // JSON array query fails
         .mockResolvedValueOnce([fallbackTxn]); // Fallback LIKE query
 
-      const result = await dbService.getTransactionsByContact(contactId);
+      const result = await databaseService.getTransactionsByContact(contactId);
 
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('txn-1');
-      expect(mockDb.all).toHaveBeenCalledTimes(4); // 3 original + 1 fallback
+      expect(_allSpy).toHaveBeenCalledTimes(4); // 3 original + 1 fallback
     });
 
     it('should handle fallback query with invalid JSON gracefully', async () => {
@@ -262,28 +253,28 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
         other_contacts: 'invalid-json',
       };
 
-      mockDb.all
+      jest.spyOn(databaseService, '_all')
         .mockResolvedValueOnce([])
         .mockResolvedValueOnce([])
         .mockRejectedValueOnce(new Error('json_each not supported'))
         .mockResolvedValueOnce([invalidJsonTxn]);
 
-      const result = await dbService.getTransactionsByContact(contactId);
+      const result = await databaseService.getTransactionsByContact(contactId);
 
       // Should handle JSON parse error gracefully
       expect(result).toHaveLength(0);
     });
 
     it('should pass correct SQL parameters for all queries', async () => {
-      mockDb.all
+      const _allSpy = jest.spyOn(databaseService, '_all')
         .mockResolvedValueOnce([])
         .mockResolvedValueOnce([])
         .mockResolvedValueOnce([]);
 
-      await dbService.getTransactionsByContact(contactId);
+      await databaseService.getTransactionsByContact(contactId);
 
       // Check direct FK query parameters (8 times - 4 for CASE, 4 for WHERE)
-      expect(mockDb.all.mock.calls[0][1]).toEqual([
+      expect(_allSpy.mock.calls[0][1]).toEqual([
         contactId,
         contactId,
         contactId,
@@ -295,10 +286,10 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
       ]);
 
       // Check junction table query parameters
-      expect(mockDb.all.mock.calls[1][1]).toEqual([contactId]);
+      expect(_allSpy.mock.calls[1][1]).toEqual([contactId]);
 
       // Check JSON array query parameters
-      expect(mockDb.all.mock.calls[2][1]).toEqual([contactId]);
+      expect(_allSpy.mock.calls[2][1]).toEqual([contactId]);
     });
 
     it('should use role_category when specific_role is not available', async () => {
@@ -312,12 +303,12 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
         role_category: 'inspection',
       };
 
-      mockDb.all
+      jest.spyOn(databaseService, '_all')
         .mockResolvedValueOnce([])
         .mockResolvedValueOnce([mockTransaction])
         .mockResolvedValueOnce([]);
 
-      const result = await dbService.getTransactionsByContact(contactId);
+      const result = await databaseService.getTransactionsByContact(contactId);
 
       expect(result[0].roles).toBe('inspection');
     });
@@ -333,12 +324,12 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
         role_category: null,
       };
 
-      mockDb.all
+      jest.spyOn(databaseService, '_all')
         .mockResolvedValueOnce([])
         .mockResolvedValueOnce([mockTransaction])
         .mockResolvedValueOnce([]);
 
-      const result = await dbService.getTransactionsByContact(contactId);
+      const result = await databaseService.getTransactionsByContact(contactId);
 
       expect(result[0].roles).toBe('Associated Contact');
     });
@@ -362,12 +353,12 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
         role: 'Seller Agent',
       };
 
-      mockDb.all
+      jest.spyOn(databaseService, '_all')
         .mockResolvedValueOnce([purchaseTxn, saleTxn])
         .mockResolvedValueOnce([])
         .mockResolvedValueOnce([]);
 
-      const result = await dbService.getTransactionsByContact(contactId);
+      const result = await databaseService.getTransactionsByContact(contactId);
 
       expect(result).toHaveLength(2);
       expect(result[0].transaction_type).toBe('purchase');
