@@ -21,7 +21,9 @@ global.window.api = {
     getSortedByActivity: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
+    checkCanDelete: jest.fn(),
     delete: jest.fn(),
+    remove: jest.fn(),
   },
   system: {
     checkFullDiskAccess: jest.fn(),

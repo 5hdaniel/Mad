@@ -44,9 +44,9 @@ module.exports = {
 
   // Test match patterns
   testMatch: [
-    '**/__tests__/**/*.(test|spec).js',
-    '**/tests/**/*.(test|spec).js',
-    '**/?(*.)+(spec|test).js',
+    '**/__tests__/**/*.(test|spec).{js,jsx}',
+    '**/tests/**/*.(test|spec).{js,jsx}',
+    '**/?(*.)+(spec|test).{js,jsx}',
   ],
 
   // Ignore patterns
