@@ -128,10 +128,6 @@
       "buildResources": "build"
     }
   },
-  "directories": {
-    "doc": "docs",
-    "test": "tests"
-  },
   "repository": {
     "type": "git",
     "url": "http://local_proxy@127.0.0.1:29995/git/5hdaniel/Mad"
