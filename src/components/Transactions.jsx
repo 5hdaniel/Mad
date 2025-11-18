@@ -700,7 +700,7 @@ function TransactionDetails({ transaction, onClose, onTransactionUpdated }) {
       {showExportModal && (
         <ExportModal
           transaction={transaction}
-          userId={userId}
+          userId={transaction.user_id}
           onClose={() => setShowExportModal(false)}
           onExportComplete={handleExportComplete}
         />
@@ -1131,10 +1131,6 @@ function EditTransactionModal({ transaction, onClose, onSuccess }) {
  * Reusable component for editing contact assignments
  */
 function EditContactAssignments({ transactionType, contactAssignments, onAssignContact, onRemoveContact, userId, propertyAddress }) {
-  // Get all roles from the workflow
-  const allRoles = AUDIT_WORKFLOW_STEPS.flatMap(step => step.roles);
-  const filteredRoles = filterRolesByTransactionType(allRoles, transactionType);
-
   return (
     <div className="space-y-6">
       {AUDIT_WORKFLOW_STEPS.map((step, idx) => {
@@ -1173,8 +1169,8 @@ function EditContactAssignments({ transactionType, contactAssignments, onAssignC
  */
 function EditRoleAssignment({ role, required, multiple, assignments, onAssign, onRemove, userId, propertyAddress, transactionType }) {
   const [contacts, setContacts] = React.useState([]);
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState(null);
+  const [_loading, setLoading] = React.useState(true);
+  const [_error, setError] = React.useState(null);
   const [showContactSelect, setShowContactSelect] = React.useState(false);
 
   React.useEffect(() => {
