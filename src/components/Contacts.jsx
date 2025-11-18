@@ -129,7 +129,7 @@ function Contacts({ userId, onClose }) {
       </div>
 
       {/* Toolbar */}
-      <div className="flex-shrink-0 p-6 bg-white shadow-md">
+      <div className="flex-shrink-0 p-6 bg-white shadow-md relative">
         <div className="flex items-center gap-3">
           {/* Search */}
           <div className="flex-1 relative">
@@ -171,6 +171,16 @@ function Contacts({ userId, onClose }) {
         {error && (
           <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
             <p className="text-sm text-red-800">{error}</p>
+          </div>
+        )}
+
+        {/* Arrow pointing to Add Contact button - only show when no contacts */}
+        {!loading && contacts.length === 0 && !searchQuery && (
+          <div className="absolute right-6 top-full mt-2 flex flex-col items-center gap-1 text-purple-600 animate-bounce">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+            </svg>
+            <p className="text-xs font-medium whitespace-nowrap">Click here to get started</p>
           </div>
         )}
       </div>
