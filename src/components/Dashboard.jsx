@@ -27,7 +27,7 @@ function Dashboard({ onAuditNew, onViewTransactions, onManageContacts }) {
       />
       <div className="max-w-5xl w-full">
         {/* Header */}
-        <div className="text-center mb-12" data-tour="dashboard-header">
+        <div className="text-center mb-12">
           <h1 className="text-4xl font-bold text-gray-900 mb-3">
             Welcome to Magic Audit
           </h1>

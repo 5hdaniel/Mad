@@ -12,11 +12,6 @@ export const getDashboardTourSteps = () => [
     disableBeacon: true,
   },
   {
-    target: '[data-tour="dashboard-header"]',
-    content: 'This is your main dashboard. From here, you can access all the key features of Magic Audit.',
-    placement: 'bottom',
-  },
-  {
     target: '[data-tour="new-audit-card"]',
     content: 'Start a new transaction audit to track client communications and ensure compliance.',
     placement: 'bottom',
@@ -37,7 +32,7 @@ export const getDashboardTourSteps = () => [
   {
     target: '[data-tour="profile-button"]',
     content: 'Access your account settings, subscription status, and email connections from your profile.',
-    placement: 'left',
+    placement: 'bottom-end',
   },
   {
     target: 'body',
