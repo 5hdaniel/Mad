@@ -4,9 +4,10 @@
  */
 
 // Create a mock database before requiring the service
+// Important: Provide default implementations that always call the callback
+// This ensures that Promises created by _all() always resolve
 const mockDatabase = {
   all: jest.fn((sql, params, callback) => {
-    // Handle optional params parameter (params might be a callback)
     const cb = typeof params === 'function' ? params : callback;
     if (cb) cb(null, []);
   }),
@@ -15,11 +16,17 @@ const mockDatabase = {
     if (cb) cb(null, null);
   }),
   run: jest.fn((sql, params, callback) => {
-    // Handle optional params parameter (params might be a callback)
     const cb = typeof params === 'function' ? params : callback;
     if (cb) cb(null);
   }),
 };
+
+// Mock electron before requiring databaseService
+jest.mock('electron', () => ({
+  app: {
+    getPath: jest.fn(() => '/mock/app/path'),
+  },
+}));
 
 // Mock sqlite3 before requiring databaseService
 jest.mock('sqlite3', () => {
@@ -38,7 +45,11 @@ const databaseService = require('../databaseService');
 
 describe('DatabaseService - Contact Deletion Prevention', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    // Clear only call history, not implementations
+    mockDatabase.all.mockClear();
+    mockDatabase.get.mockClear();
+    mockDatabase.run.mockClear();
+
     // Set the db directly since initialize() is async and we don't need full initialization for these tests
     databaseService.db = mockDatabase;
   });

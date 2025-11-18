@@ -1365,21 +1365,6 @@ class DatabaseService {
     return !!result;
   }
 
-  /**
-   * Get all transactions for a specific contact
-   */
-  async getTransactionsByContact(contactId) {
-    const sql = `
-      SELECT t.*, tc.specific_role, tc.is_primary
-      FROM transactions t
-      INNER JOIN transaction_contacts tc ON t.id = tc.transaction_id
-      WHERE tc.contact_id = ?
-      ORDER BY t.created_at DESC
-    `;
-
-    return await this._all(sql, [contactId]);
-  }
-
   // ============================================
   // USER FEEDBACK OPERATIONS
   // ============================================
