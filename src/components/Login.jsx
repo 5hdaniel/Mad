@@ -8,27 +8,40 @@ import React, { useState } from 'react';
 
 const Login = ({ onLoginSuccess }) => {
   const [loading, setLoading] = useState(false);
-  const [authUrl, setAuthUrl] = useState(null);
-  const [authCode, setAuthCode] = useState('');
   const [provider, setProvider] = useState(null);
   const [error, setError] = useState(null);
 
   /**
-   * Handle Google Sign In
+   * Handle Google Sign In (Redirect Flow)
+   * Browser opens, user logs in, redirects to local server, app handles automatically
    */
   const handleGoogleLogin = async () => {
     setLoading(true);
     setError(null);
     setProvider('google');
 
+    // Listen for login completion from main process
+    if (window.api.onGoogleLoginComplete) {
+      window.api.onGoogleLoginComplete((result) => {
+        console.log('Google login complete:', result);
+
+        if (result.success && onLoginSuccess) {
+          onLoginSuccess(result.user, result.sessionToken, 'google', result.subscription, result.isNewUser);
+        } else {
+          setError(result.error || 'Failed to complete Google login');
+          setLoading(false);
+          setProvider(null);
+        }
+      });
+    }
+
     try {
+      // Start login - auth popup window will open automatically
       const result = await window.api.auth.googleLogin();
 
-      if (result.success && result.authUrl) {
-        setAuthUrl(result.authUrl);
-        // Open browser
-        window.api.shell.openExternal(result.authUrl);
-        setLoading(false); // Reset loading so code input field appears
+      if (result.success) {
+        // Auth popup is already open - keep loading=true while waiting for redirect
+        // The popup will close automatically after successful authentication
       } else {
         setError(result.error || 'Failed to start Google login');
         setLoading(false);
@@ -87,48 +100,10 @@ const Login = ({ onLoginSuccess }) => {
   };
 
   /**
-   * Handle authorization code submission
-   */
-  const handleCodeSubmit = async (e) => {
-    e.preventDefault();
-
-    if (!authCode.trim()) {
-      setError('Please enter the authorization code');
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      let result;
-      if (provider === 'google') {
-        result = await window.api.auth.googleCompleteLogin(authCode.trim());
-      } else if (provider === 'microsoft') {
-        result = await window.api.auth.microsoftCompleteLogin(authCode.trim());
-      }
-
-      if (result && result.success && onLoginSuccess) {
-        // Call parent callback with user, session token, provider, subscription, and isNewUser flag
-        onLoginSuccess(result.user, result.sessionToken, provider, result.subscription, result.isNewUser);
-      } else if (result && !result.success) {
-        setError(result.error || 'Login failed');
-        setLoading(false);
-      }
-    } catch (err) {
-      console.error('Code exchange error:', err);
-      setError(err.message || 'Failed to complete login');
-      setLoading(false);
-    }
-  };
-
-  /**
    * Cancel login flow
    */
   const handleCancel = () => {
     setLoading(false);
-    setAuthUrl(null);
-    setAuthCode('');
     setProvider(null);
     setError(null);
   };
@@ -151,14 +126,14 @@ const Login = ({ onLoginSuccess }) => {
           </div>
         )}
 
-        {/* Microsoft Authentication in Progress */}
-        {provider === 'microsoft' && loading && (
+        {/* Authentication in Progress */}
+        {loading && provider && (
           <div className="mb-6">
             <div className="p-6 bg-gradient-to-br from-purple-50 to-indigo-50 border-2 border-purple-200 rounded-lg text-center">
               <div className="flex flex-col items-center">
                 <div className="w-12 h-12 border-4 border-purple-600 border-t-transparent rounded-full animate-spin mb-4"></div>
                 <p className="text-sm text-purple-900 font-semibold mb-2">
-                  Authenticating with Microsoft...
+                  Authenticating with {provider === 'google' ? 'Google' : 'Microsoft'}...
                 </p>
                 <p className="text-xs text-purple-700">
                   A popup window will open. Complete sign-in there and it will close automatically.
@@ -168,66 +143,8 @@ const Login = ({ onLoginSuccess }) => {
           </div>
         )}
 
-        {/* Auth URL Display (after clicking sign in) - Google only */}
-        {authUrl && !loading && provider === 'google' && (
-          <div className="mb-6">
-            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg mb-4">
-              <p className="text-sm text-blue-900 mb-2 font-semibold">
-                Step 1: Sign in with {provider === 'google' ? 'Google' : 'Microsoft'}
-              </p>
-              <p className="text-xs text-blue-700 mb-3">
-                A browser window has been opened. After signing in, copy the authorization code and paste it below.
-              </p>
-              <button
-                onClick={() => window.api.shell.openExternal(authUrl)}
-                className="text-xs text-blue-600 hover:text-blue-800 underline"
-              >
-                Click here if the browser didn't open
-              </button>
-            </div>
-
-            <form onSubmit={handleCodeSubmit}>
-              <div className="mb-4">
-                <label
-                  htmlFor="authCode"
-                  className="block text-sm font-medium text-gray-700 mb-2"
-                >
-                  Authorization Code
-                </label>
-                <input
-                  type="text"
-                  id="authCode"
-                  value={authCode}
-                  onChange={(e) => setAuthCode(e.target.value)}
-                  placeholder="Paste code here"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  disabled={loading}
-                />
-              </div>
-
-              <div className="flex gap-3">
-                <button
-                  type="submit"
-                  disabled={loading || !authCode.trim()}
-                  className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-                >
-                  {loading ? 'Completing...' : 'Complete Sign In'}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleCancel}
-                  disabled={loading}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
-        )}
-
         {/* Initial Login Buttons */}
-        {!authUrl && !(provider === 'microsoft' && loading) && (
+        {!loading && (
           <div>
             {/* Google Sign In */}
             <button

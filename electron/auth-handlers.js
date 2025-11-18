@@ -59,22 +59,180 @@ const initializeDatabase = async () => {
   }
 };
 
-// Google Auth: Start login flow
+// Google Auth: Start login flow with local server redirect
 const handleGoogleLogin = async (mainWindow) => {
   try {
-    console.log('[Main] Starting Google login flow');
+    console.log('[Main] Starting Google login flow with redirect');
 
-    const result = await googleAuthService.authenticateForLogin((deviceCodeInfo) => {
-      // Device code callback - send to renderer
-      if (mainWindow) {
-        mainWindow.webContents.send('auth:device-code', deviceCodeInfo);
+    // Start auth flow - returns authUrl and a promise for the code
+    const { authUrl, codePromise, scopes } = await googleAuthService.authenticateForLogin();
+
+    console.log('[Main] Opening Google auth URL in popup window');
+
+    // Create a popup window for auth
+    const { BrowserWindow } = require('electron');
+
+    const authWindow = new BrowserWindow({
+      width: 500,
+      height: 700,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+      },
+      autoHideMenuBar: true,
+      title: 'Sign in with Google'
+    });
+
+    // Load the auth URL
+    authWindow.loadURL(authUrl);
+
+    // Close the window when redirected to callback
+    authWindow.webContents.on('will-redirect', (event, url) => {
+      if (url.startsWith('http://localhost:3001/callback')) {
+        // Let the success page load, then close after 3 seconds
+        setTimeout(() => {
+          if (authWindow && !authWindow.isDestroyed()) {
+            authWindow.close();
+          }
+        }, 3000);
       }
     });
 
+    // Return authUrl immediately so browser can open
+    // Don't wait for user - return early
+    setTimeout(async () => {
+      try {
+        // Wait for code from local server (in background)
+        const code = await codePromise;
+        console.log('[Main] Received authorization code from redirect');
+
+        // Exchange code for tokens
+        const { tokens, userInfo } = await googleAuthService.exchangeCodeForTokens(code);
+
+        // Encrypt tokens
+        const encryptedAccessToken = tokenEncryptionService.encrypt(tokens.access_token);
+        const encryptedRefreshToken = tokens.refresh_token
+          ? tokenEncryptionService.encrypt(tokens.refresh_token)
+          : null;
+
+        // Sync user to Supabase
+        const cloudUser = await supabaseService.syncUser({
+          email: userInfo.email,
+          first_name: userInfo.given_name,
+          last_name: userInfo.family_name,
+          display_name: userInfo.name,
+          avatar_url: userInfo.picture,
+          oauth_provider: 'google',
+          oauth_id: userInfo.id,
+        });
+
+        // Create user in local database
+        let localUser = await databaseService.getUserByOAuthId('google', userInfo.id);
+
+        if (!localUser) {
+          const userId = await databaseService.createUser({
+            email: userInfo.email,
+            first_name: userInfo.given_name,
+            last_name: userInfo.family_name,
+            display_name: userInfo.name,
+            avatar_url: userInfo.picture,
+            oauth_provider: 'google',
+            oauth_id: userInfo.id,
+            subscription_tier: cloudUser.subscription_tier,
+            subscription_status: cloudUser.subscription_status,
+            trial_ends_at: cloudUser.trial_ends_at,
+          });
+
+          localUser = await databaseService.getUserById(userId);
+        } else {
+          // Update existing user
+          localUser = await databaseService.updateUser(localUser.id, {
+            email: userInfo.email,
+            first_name: userInfo.given_name,
+            last_name: userInfo.family_name,
+            display_name: userInfo.name,
+            avatar_url: userInfo.picture,
+          });
+        }
+
+        // Update last login
+        await databaseService.updateLastLogin(localUser.id);
+        // Re-fetch user to get updated last_login_at timestamp
+        localUser = await databaseService.getUserById(localUser.id);
+
+        // Save auth token
+        await databaseService.saveOAuthToken(localUser.id, 'google', 'authentication', {
+          access_token: encryptedAccessToken,
+          refresh_token: encryptedRefreshToken,
+          token_expires_at: tokens.expires_at,
+          scopes_granted: tokens.scopes,
+        });
+
+        // Create session
+        const sessionToken = await databaseService.createSession(localUser.id);
+
+        // Validate subscription
+        const subscription = await supabaseService.validateSubscription(cloudUser.id);
+
+        // Register device
+        const deviceInfo = {
+          device_id: crypto.randomUUID(),
+          device_name: os.hostname(),
+          os: os.platform() + ' ' + os.release(),
+          app_version: app.getVersion(),
+        };
+        await supabaseService.registerDevice(cloudUser.id, deviceInfo);
+
+        // Track login event
+        await supabaseService.trackEvent(
+          cloudUser.id,
+          'user_login',
+          { provider: 'google' },
+          deviceInfo.device_id,
+          app.getVersion()
+        );
+
+        console.log('[Main] Google login completed successfully');
+
+        // Check if user needs to accept terms (new user or outdated versions)
+        const isNewUser = needsToAcceptTerms(localUser);
+
+        // Save session for persistence (30 days expiration)
+        const sessionExpiresAt = Date.now() + (30 * 24 * 60 * 60 * 1000);
+        await sessionService.saveSession({
+          user: localUser,
+          sessionToken,
+          provider: 'google',
+          subscription,
+          expiresAt: sessionExpiresAt,
+        });
+
+        // Notify renderer of successful login
+        if (mainWindow) {
+          mainWindow.webContents.send('google:login-complete', {
+            success: true,
+            user: localUser,
+            sessionToken,
+            subscription,
+            isNewUser,
+          });
+        }
+      } catch (error) {
+        console.error('[Main] Google login background processing failed:', error);
+        if (mainWindow) {
+          mainWindow.webContents.send('google:login-complete', {
+            success: false,
+            error: error.message,
+          });
+        }
+      }
+    }, 0);
+
+    // Return immediately with authUrl
     return {
       success: true,
-      authUrl: result.authUrl,
-      scopes: result.scopes,
+      authUrl,
+      scopes,
     };
   } catch (error) {
     console.error('[Main] Google login failed:', error);
@@ -85,186 +243,107 @@ const handleGoogleLogin = async (mainWindow) => {
   }
 };
 
-// Google Auth: Complete login with authorization code
-const handleGoogleCompleteLogin = async (event, authCode) => {
-  try {
-    console.log('[Main] Completing Google login');
-
-    // Exchange code for tokens
-    const { tokens, userInfo } = await googleAuthService.exchangeCodeForTokens(authCode);
-
-    // Encrypt tokens
-    const encryptedAccessToken = tokenEncryptionService.encrypt(tokens.access_token);
-    const encryptedRefreshToken = tokens.refresh_token
-      ? tokenEncryptionService.encrypt(tokens.refresh_token)
-      : null;
-
-    // Sync user to Supabase
-    const cloudUser = await supabaseService.syncUser({
-      email: userInfo.email,
-      first_name: userInfo.given_name,
-      last_name: userInfo.family_name,
-      display_name: userInfo.name,
-      avatar_url: userInfo.picture,
-      oauth_provider: 'google',
-      oauth_id: userInfo.id,
-    });
-
-    // Create user in local database
-    let localUser = await databaseService.getUserByOAuthId('google', userInfo.id);
-
-    if (!localUser) {
-      const userId = await databaseService.createUser({
-        email: userInfo.email,
-        first_name: userInfo.given_name,
-        last_name: userInfo.family_name,
-        display_name: userInfo.name,
-        avatar_url: userInfo.picture,
-        oauth_provider: 'google',
-        oauth_id: userInfo.id,
-        subscription_tier: cloudUser.subscription_tier,
-        subscription_status: cloudUser.subscription_status,
-        trial_ends_at: cloudUser.trial_ends_at,
-      });
-
-      localUser = await databaseService.getUserById(userId);
-    } else {
-      // Update existing user
-      localUser = await databaseService.updateUser(localUser.id, {
-        email: userInfo.email,
-        first_name: userInfo.given_name,
-        last_name: userInfo.family_name,
-        display_name: userInfo.name,
-        avatar_url: userInfo.picture,
-      });
-    }
-
-    // Update last login
-    await databaseService.updateLastLogin(localUser.id);
-    // Re-fetch user to get updated last_login_at timestamp
-    localUser = await databaseService.getUserById(localUser.id);
-
-    // Save auth token
-    await databaseService.saveOAuthToken(localUser.id, 'google', 'authentication', {
-      access_token: encryptedAccessToken,
-      refresh_token: encryptedRefreshToken,
-      token_expires_at: tokens.expires_at,
-      scopes_granted: tokens.scopes,
-    });
-
-    // Create session
-    const sessionToken = await databaseService.createSession(localUser.id);
-
-    // Validate subscription
-    const subscription = await supabaseService.validateSubscription(cloudUser.id);
-
-    // Register device
-    const deviceInfo = {
-      device_id: crypto.randomUUID(),
-      device_name: os.hostname(),
-      os: os.platform() + ' ' + os.release(),
-      app_version: app.getVersion(),
-    };
-    await supabaseService.registerDevice(cloudUser.id, deviceInfo);
-
-    // Track login event
-    await supabaseService.trackEvent(
-      cloudUser.id,
-      'user_login',
-      { provider: 'google' },
-      deviceInfo.device_id,
-      app.getVersion()
-    );
-
-    console.log('[Main] Google login completed successfully');
-
-    // Check if user needs to accept terms (new user or outdated versions)
-    const isNewUser = needsToAcceptTerms(localUser);
-
-    // Save session for persistence (30 days expiration)
-    const sessionExpiresAt = Date.now() + (30 * 24 * 60 * 60 * 1000);
-    await sessionService.saveSession({
-      user: localUser,
-      sessionToken,
-      provider: 'google',
-      subscription,
-      expiresAt: sessionExpiresAt,
-    });
-
-    return {
-      success: true,
-      user: localUser,
-      sessionToken,
-      subscription,
-      isNewUser,
-    };
-  } catch (error) {
-    console.error('[Main] Google login completion failed:', error);
-    return {
-      success: false,
-      error: error.message,
-    };
-  }
-};
-
 // Google Auth: Connect mailbox (Gmail access)
-const handleGoogleConnectMailbox = async (event, userId) => {
+const handleGoogleConnectMailbox = async (mainWindow, userId) => {
   try {
-    console.log('[Main] Starting Google mailbox connection');
+    console.log('[Main] Starting Google mailbox connection with redirect');
 
-    const result = await googleAuthService.authenticateForMailbox((deviceCodeInfo) => {
-      // This won't be called in browser-based flow, but keeping for consistency
+    // Get user info to use as login hint
+    const user = await databaseService.getUserById(userId);
+    const loginHint = user?.email;
+
+    // Start auth flow - returns authUrl and a promise for the code
+    const { authUrl, codePromise, scopes } = await googleAuthService.authenticateForMailbox(loginHint);
+
+    console.log('[Main] Opening Google mailbox auth URL in popup window');
+
+    // Create a popup window for auth
+    const { BrowserWindow } = require('electron');
+
+    const authWindow = new BrowserWindow({
+      width: 500,
+      height: 700,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+      },
+      autoHideMenuBar: true,
+      title: 'Connect to Gmail'
     });
 
+    // Load the auth URL
+    authWindow.loadURL(authUrl);
+
+    // Close the window when redirected to callback
+    authWindow.webContents.on('will-redirect', (event, url) => {
+      if (url.startsWith('http://localhost:3001/callback')) {
+        // Let the success page load, then close after 3 seconds
+        setTimeout(() => {
+          if (authWindow && !authWindow.isDestroyed()) {
+            authWindow.close();
+          }
+        }, 3000);
+      }
+    });
+
+    // Return authUrl immediately so browser can open
+    // Don't wait for user - return early
+    setTimeout(async () => {
+      try {
+        // Wait for code from local server (in background)
+        const code = await codePromise;
+        console.log('[Main] Received Gmail authorization code from redirect');
+
+        // Exchange code for tokens
+        const { tokens } = await googleAuthService.exchangeCodeForTokens(code);
+
+        // Encrypt tokens
+        const encryptedAccessToken = tokenEncryptionService.encrypt(tokens.access_token);
+        const encryptedRefreshToken = tokens.refresh_token
+          ? tokenEncryptionService.encrypt(tokens.refresh_token)
+          : null;
+
+        // Get user's email for the connected_email_address field
+        const userInfo = await googleAuthService.getUserInfo(tokens.access_token);
+
+        // Save mailbox token
+        await databaseService.saveOAuthToken(userId, 'google', 'mailbox', {
+          access_token: encryptedAccessToken,
+          refresh_token: encryptedRefreshToken,
+          token_expires_at: tokens.expires_at,
+          scopes_granted: tokens.scopes,
+          connected_email_address: userInfo.email,
+          mailbox_connected: true,
+        });
+
+        console.log('[Main] Google mailbox connection completed successfully');
+
+        // Notify renderer of successful connection
+        if (mainWindow) {
+          mainWindow.webContents.send('google:mailbox-connected', {
+            success: true,
+            email: userInfo.email,
+          });
+        }
+      } catch (error) {
+        console.error('[Main] Google mailbox connection background processing failed:', error);
+        if (mainWindow) {
+          mainWindow.webContents.send('google:mailbox-connected', {
+            success: false,
+            error: error.message,
+          });
+        }
+      }
+    }, 0);
+
+    // Return immediately with authUrl
     return {
       success: true,
-      authUrl: result.authUrl,
-      scopes: result.scopes,
+      authUrl,
+      scopes,
     };
   } catch (error) {
     console.error('[Main] Google mailbox connection failed:', error);
-    return {
-      success: false,
-      error: error.message,
-    };
-  }
-};
-
-// Google Auth: Complete mailbox connection
-const handleGoogleCompleteMailboxConnection = async (event, authCode, userId) => {
-  try {
-    console.log('[Main] Completing Google mailbox connection');
-
-    // Exchange code for tokens
-    const { tokens } = await googleAuthService.exchangeCodeForTokens(authCode);
-
-    // Encrypt tokens
-    const encryptedAccessToken = tokenEncryptionService.encrypt(tokens.access_token);
-    const encryptedRefreshToken = tokens.refresh_token
-      ? tokenEncryptionService.encrypt(tokens.refresh_token)
-      : null;
-
-    // Get user's email for the connected_email_address field
-    const userInfo = await googleAuthService.getUserInfo(tokens.access_token);
-
-    // Save mailbox token
-    await databaseService.saveOAuthToken(userId, 'google', 'mailbox', {
-      access_token: encryptedAccessToken,
-      refresh_token: encryptedRefreshToken,
-      token_expires_at: tokens.expires_at,
-      scopes_granted: tokens.scopes,
-      connected_email_address: userInfo.email,
-      mailbox_connected: true,
-    });
-
-    console.log('[Main] Google mailbox connection completed successfully');
-
-    return {
-      success: true,
-      email: userInfo.email,
-    };
-  } catch (error) {
-    console.error('[Main] Google mailbox connection completion failed:', error);
     return {
       success: false,
       error: error.message,
@@ -599,11 +678,9 @@ const handleMicrosoftConnectMailbox = async (mainWindow, userId) => {
 const registerAuthHandlers = (mainWindow) => {
   // Google Auth - Login
   ipcMain.handle('auth:google:login', () => handleGoogleLogin(mainWindow));
-  ipcMain.handle('auth:google:complete-login', handleGoogleCompleteLogin);
 
   // Google Auth - Mailbox Connection
-  ipcMain.handle('auth:google:connect-mailbox', handleGoogleConnectMailbox);
-  ipcMain.handle('auth:google:complete-mailbox-connection', handleGoogleCompleteMailboxConnection);
+  ipcMain.handle('auth:google:connect-mailbox', (event, userId) => handleGoogleConnectMailbox(mainWindow, userId));
 
   // Microsoft Auth - Login
   ipcMain.handle('auth:microsoft:login', () => handleMicrosoftLogin(mainWindow));

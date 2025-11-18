@@ -11,8 +11,6 @@ function Settings({ onClose, userId }) {
   const [connections, setConnections] = useState({ google: null, microsoft: null });
   const [loadingConnections, setLoadingConnections] = useState(true);
   const [connectingProvider, setConnectingProvider] = useState(null);
-  const [googleAuthCode, setGoogleAuthCode] = useState('');
-  const [showGoogleCodeInput, setShowGoogleCodeInput] = useState(false);
 
   // Load connection status on mount
   useEffect(() => {
@@ -42,32 +40,18 @@ function Settings({ onClose, userId }) {
     setConnectingProvider('google');
     try {
       const result = await window.api.auth.googleConnectMailbox(userId);
-      if (result.success && result.authUrl) {
-        await window.api.shell.openExternal(result.authUrl);
-        setShowGoogleCodeInput(true);
+      if (result.success) {
+        // Auth popup window opens automatically and will close when done
+        // Listen for connection completion
+        window.api.onGoogleMailboxConnected(async (connectionResult) => {
+          if (connectionResult.success) {
+            await checkConnections();
+          }
+          setConnectingProvider(null);
+        });
       }
     } catch (error) {
       console.error('Failed to connect Google:', error);
-    } finally {
-      setConnectingProvider(null);
-    }
-  };
-
-  const handleGoogleCodeSubmit = async (e) => {
-    e.preventDefault();
-    if (!googleAuthCode.trim()) return;
-
-    setConnectingProvider('google');
-    try {
-      const result = await window.api.auth.googleCompleteMailboxConnection(googleAuthCode.trim(), userId);
-      if (result.success) {
-        setShowGoogleCodeInput(false);
-        setGoogleAuthCode('');
-        await checkConnections();
-      }
-    } catch (error) {
-      console.error('Failed to complete Google connection:', error);
-    } finally {
       setConnectingProvider(null);
     }
   };
@@ -206,47 +190,13 @@ function Settings({ onClose, userId }) {
                 {connections.google?.email && (
                   <p className="text-xs text-gray-600 mb-3">{connections.google.email}</p>
                 )}
-                {showGoogleCodeInput ? (
-                  <form onSubmit={handleGoogleCodeSubmit} className="mt-3">
-                    <label className="block text-xs text-gray-700 mb-1">
-                      Paste the authorization code from your browser:
-                    </label>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={googleAuthCode}
-                        onChange={(e) => setGoogleAuthCode(e.target.value)}
-                        placeholder="Authorization code"
-                        className="flex-1 text-sm border border-gray-300 rounded px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                      <button
-                        type="submit"
-                        disabled={connectingProvider === 'google'}
-                        className="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded transition-all disabled:opacity-50"
-                      >
-                        {connectingProvider === 'google' ? 'Connecting...' : 'Submit'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowGoogleCodeInput(false);
-                          setGoogleAuthCode('');
-                        }}
-                        className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm font-medium rounded transition-all"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </form>
-                ) : (
-                  <button
-                    onClick={handleConnectGoogle}
-                    disabled={connectingProvider === 'google' || connections.google?.connected}
-                    className="w-full mt-2 px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {connectingProvider === 'google' ? 'Connecting...' : connections.google?.connected ? 'Connected' : 'Connect Gmail'}
-                  </button>
-                )}
+                <button
+                  onClick={handleConnectGoogle}
+                  disabled={connectingProvider === 'google' || connections.google?.connected}
+                  className="w-full mt-2 px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {connectingProvider === 'google' ? 'Connecting...' : connections.google?.connected ? 'Connected' : 'Connect Gmail'}
+                </button>
               </div>
 
               {/* Outlook Connection */}

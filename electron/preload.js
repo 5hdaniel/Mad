@@ -7,13 +7,10 @@ contextBridge.exposeInMainWorld('api', {
   auth: {
     // Login
     googleLogin: () => ipcRenderer.invoke('auth:google:login'),
-    googleCompleteLogin: (code) => ipcRenderer.invoke('auth:google:complete-login', code),
     microsoftLogin: () => ipcRenderer.invoke('auth:microsoft:login'),
-    microsoftCompleteLogin: (code) => ipcRenderer.invoke('auth:microsoft:complete-login', code),
 
     // Mailbox Connection
     googleConnectMailbox: (userId) => ipcRenderer.invoke('auth:google:connect-mailbox', userId),
-    googleCompleteMailboxConnection: (code, userId) => ipcRenderer.invoke('auth:google:complete-mailbox-connection', code, userId),
     microsoftConnectMailbox: (userId) => ipcRenderer.invoke('auth:microsoft:connect-mailbox', userId),
 
     // Session Management
@@ -94,6 +91,8 @@ contextBridge.exposeInMainWorld('api', {
   },
 
   // IPC event listeners
+  onGoogleLoginComplete: (callback) => ipcRenderer.on('google:login-complete', (_, result) => callback(result)),
+  onGoogleMailboxConnected: (callback) => ipcRenderer.on('google:mailbox-connected', (_, result) => callback(result)),
   onMicrosoftLoginComplete: (callback) => ipcRenderer.on('microsoft:login-complete', (_, result) => callback(result)),
   onMicrosoftMailboxConnected: (callback) => ipcRenderer.on('microsoft:mailbox-connected', (_, result) => callback(result)),
   onTransactionScanProgress: (callback) => ipcRenderer.on('transactions:scan-progress', (_, progress) => callback(progress)),
