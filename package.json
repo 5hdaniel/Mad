@@ -1,6 +1,6 @@
 {
   "name": "magic-audit",
-  "version": "1.0.7",
+  "version": "1.1.0",
   "description": "Magic Audit - Export and archive iMessage conversations and emails",
   "main": "electron/main.js",
   "scripts": {
@@ -18,7 +18,14 @@
     "lint": "eslint electron src",
     "lint:fix": "eslint electron src --fix"
   },
-  "keywords": ["electron", "react", "audit", "archive", "imessage", "outlook"],
+  "keywords": [
+    "electron",
+    "react",
+    "audit",
+    "archive",
+    "imessage",
+    "outlook"
+  ],
   "author": "",
   "license": "MIT",
   "devDependencies": {
@@ -79,11 +86,17 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["arm64", "x64"]
+          "arch": [
+            "arm64",
+            "x64"
+          ]
         },
         {
           "target": "zip",
-          "arch": ["arm64", "x64"]
+          "arch": [
+            "arm64",
+            "x64"
+          ]
         }
       ]
     },
