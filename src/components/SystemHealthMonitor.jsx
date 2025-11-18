@@ -71,14 +71,15 @@ function SystemHealthMonitor({ userId, provider }) {
         // Trigger Google mailbox connection
         try {
           const result = await window.api.auth.googleConnectMailbox(userId);
-          if (result.success && result.authUrl) {
-            // Open auth URL in browser
-            await window.api.shell.openExternal(result.authUrl);
-            // Note: User will need to complete the flow in browser
-            // We'll re-check health after a delay
-            setTimeout(async () => {
-              await checkSystemHealth();
-            }, 5000);
+          if (result.success) {
+            // Auth popup window opens automatically and will close when done
+            // Listen for connection completion
+            const cleanup = window.api.onGoogleMailboxConnected(async (connectionResult) => {
+              if (connectionResult.success) {
+                await checkSystemHealth();
+              }
+              if (cleanup) cleanup(); // Clean up listener after handling the event
+            });
           }
         } catch (error) {
           console.error('Google mailbox connection failed:', error);
