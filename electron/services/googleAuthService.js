@@ -1,16 +1,20 @@
 /**
  * Google Auth Service
- * Handles Google OAuth authentication using Device Code Flow
+ * Handles Google OAuth authentication using Authorization Code Flow with local redirect
  * Supports two-step consent: login (minimal scopes) + mailbox access (Gmail scopes)
  */
 
 const { google } = require('googleapis');
+const http = require('http');
+const url = require('url');
 require('dotenv').config({ path: '.env.development' });
 
 class GoogleAuthService {
   constructor() {
     this.oauth2Client = null;
     this.initialized = false;
+    this.redirectUri = 'http://localhost:3001/callback'; // Different port than Microsoft
+    this.server = null;
   }
 
   /**
@@ -34,7 +38,7 @@ class GoogleAuthService {
     this.oauth2Client = new google.auth.OAuth2(
       clientId,
       clientSecret,
-      'urn:ietf:wg:oauth:2.0:oob' // For device code flow
+      this.redirectUri // Use local redirect URI
     );
 
     this.initialized = true;
@@ -52,12 +56,143 @@ class GoogleAuthService {
   }
 
   /**
+   * Start a temporary local HTTP server to catch OAuth redirect
+   * @returns {Promise<string>} Authorization code from redirect
+   */
+  startLocalServer() {
+    return new Promise((resolve, reject) => {
+      this.server = http.createServer((req, res) => {
+        const parsedUrl = url.parse(req.url, true);
+
+        if (parsedUrl.pathname === '/callback') {
+          const code = parsedUrl.query.code;
+          const error = parsedUrl.query.error;
+
+          if (error) {
+            res.writeHead(200, { 'Content-Type': 'text/html' });
+            res.end(`
+              <!DOCTYPE html>
+              <html>
+                <head>
+                  <meta charset="UTF-8">
+                  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                  <title>Authentication Failed</title>
+                </head>
+                <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                  <div style="text-align: center; background: white; padding: 3rem 4rem; border-radius: 1rem; box-shadow: 0 20px 60px rgba(0,0,0,0.3); max-width: 500px;">
+                    <div style="width: 80px; height: 80px; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem;">
+                      <svg style="width: 48px; height: 48px; color: white;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path>
+                      </svg>
+                    </div>
+                    <h1 style="color: #1a202c; font-size: 1.875rem; font-weight: 700; margin: 0 0 1rem 0;">Authentication Failed</h1>
+                    <p style="color: #4a5568; font-size: 1rem; margin: 0 0 1.5rem 0; line-height: 1.5;">${parsedUrl.query.error_description || error}</p>
+                    <p style="color: #718096; font-size: 0.875rem; margin: 0;">You can close this window and try again.</p>
+                  </div>
+                </body>
+              </html>
+            `);
+            this.stopLocalServer();
+            reject(new Error(parsedUrl.query.error_description || error));
+          } else if (code) {
+            res.writeHead(200, { 'Content-Type': 'text/html' });
+            res.end(`
+              <!DOCTYPE html>
+              <html>
+                <head>
+                  <meta charset="UTF-8">
+                  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                  <title>Authentication Successful</title>
+                </head>
+                <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                  <div style="text-align: center; background: white; padding: 3rem 4rem; border-radius: 1rem; box-shadow: 0 20px 60px rgba(0,0,0,0.3); max-width: 500px;">
+                    <div style="width: 80px; height: 80px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem;">
+                      <svg style="width: 48px; height: 48px; color: white;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path>
+                      </svg>
+                    </div>
+                    <h1 style="color: #1a202c; font-size: 1.875rem; font-weight: 700; margin: 0 0 1rem 0;">Authentication Successful!</h1>
+                    <p id="status-message" style="color: #4a5568; font-size: 1rem; margin: 0 0 1.5rem 0; line-height: 1.5;">You've been successfully authenticated with Google.</p>
+                    <p id="close-message" style="color: #718096; font-size: 0.875rem; margin: 0 0 1rem 0;">Attempting to close this window...</p>
+                    <button id="return-button" style="display: none; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 0.75rem 2rem; border-radius: 0.5rem; font-size: 1rem; font-weight: 600; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">Return to Application</button>
+                  </div>
+                  <script>
+                    // Try to close the window
+                    setTimeout(() => {
+                      window.close();
+
+                      // If window didn't close (we're still here after 500ms), show fallback
+                      setTimeout(() => {
+                        const closeMsg = document.getElementById('close-message');
+                        const returnBtn = document.getElementById('return-button');
+
+                        closeMsg.innerHTML = 'Please return to the application to continue.';
+                        closeMsg.style.color = '#4a5568';
+                        closeMsg.style.fontSize = '1rem';
+                        closeMsg.style.marginBottom = '1.5rem';
+                        returnBtn.style.display = 'inline-block';
+
+                        // Try to focus the app if possible (won't work in all browsers)
+                        returnBtn.onclick = () => {
+                          // Attempt to close again
+                          window.close();
+                          // If still here, user needs to manually return
+                          if (!window.closed) {
+                            closeMsg.innerHTML = 'You can close this tab and return to the Mad Accountant application.';
+                          }
+                        };
+                      }, 500);
+                    }, 2000);
+                  </script>
+                </body>
+              </html>
+            `);
+            this.stopLocalServer();
+            resolve(code);
+          } else {
+            res.writeHead(400, { 'Content-Type': 'text/html' });
+            res.end(`
+              <html>
+                <body style="font-family: system-ui; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0;">
+                  <div style="text-align: center;">
+                    <h1 style="color: #c33;">Invalid Request</h1>
+                    <p style="color: #666;">No authorization code received.</p>
+                  </div>
+                </body>
+              </html>
+            `);
+          }
+        }
+      });
+
+      this.server.listen(3001, 'localhost', () => {
+        console.log('[GoogleAuth] Local callback server listening on http://localhost:3001');
+      });
+
+      this.server.on('error', (err) => {
+        reject(err);
+      });
+    });
+  }
+
+  /**
+   * Stop the local HTTP server
+   */
+  stopLocalServer() {
+    if (this.server) {
+      this.server.close();
+      this.server = null;
+      console.log('[GoogleAuth] Local callback server stopped');
+    }
+  }
+
+  /**
    * Authenticate for login (minimal scopes)
    * Step 1: Get user into the app
-   * @param {Function} onDeviceCode - Callback with device code info
-   * @returns {Object} Authentication result with user info and tokens
+   * Opens browser, user logs in, redirects back to local server
+   * @returns {Promise<{authUrl: string, codePromise: Promise<string>, scopes: string[]}>}
    */
-  async authenticateForLogin(onDeviceCode) {
+  async authenticateForLogin() {
     this._ensureInitialized();
 
     const scopes = [
@@ -69,37 +204,26 @@ class GoogleAuthService {
     try {
       console.log('[GoogleAuth] Starting login flow with minimal scopes');
 
-      // Get device code
-      const deviceCodeResponse = await this.oauth2Client.generateAuthUrl({
-        access_type: 'offline',
-        scope: scopes,
-        prompt: 'select_account', // Show account picker, only consent if needed
-      });
+      // Start local server to catch redirect
+      const codePromise = this.startLocalServer();
 
-      // For device code flow, we need to use a different approach
-      // Google doesn't have native device code flow in googleapis library
-      // We'll use the authorization code flow with manual user input
-
+      // Generate auth URL
       const authUrl = this.oauth2Client.generateAuthUrl({
         access_type: 'offline',
         scope: scopes,
         prompt: 'select_account', // Show account picker, only consent if needed
       });
 
-      // Return auth URL for user to open in browser
-      if (onDeviceCode) {
-        onDeviceCode({
-          authUrl,
-          message: 'Please sign in using your browser',
-        });
-      }
+      console.log('[GoogleAuth] Auth URL generated, local server started');
 
       return {
         authUrl,
+        codePromise,
         scopes,
       };
     } catch (error) {
       console.error('[GoogleAuth] Login flow failed:', error);
+      this.stopLocalServer();
       throw error;
     }
   }
@@ -143,10 +267,11 @@ class GoogleAuthService {
   /**
    * Authenticate for mailbox access (Gmail scopes)
    * Step 2: Connect to Gmail (incremental consent)
-   * @param {Function} onDeviceCode - Callback with device code info
-   * @returns {Object} Authentication result with tokens
+   * Opens browser, user grants Gmail access, redirects back to local server
+   * @param {string} loginHint - Optional email to pre-fill
+   * @returns {Promise<{authUrl: string, codePromise: Promise<string>, scopes: string[]}>}
    */
-  async authenticateForMailbox(onDeviceCode) {
+  async authenticateForMailbox(loginHint) {
     this._ensureInitialized();
 
     const scopes = [
@@ -156,25 +281,32 @@ class GoogleAuthService {
     try {
       console.log('[GoogleAuth] Starting mailbox connection flow');
 
-      const authUrl = this.oauth2Client.generateAuthUrl({
+      // Start local server to catch redirect
+      const codePromise = this.startLocalServer();
+
+      // Generate auth URL with optional login hint
+      const authUrlOptions = {
         access_type: 'offline',
         scope: scopes,
         prompt: 'select_account', // Show account picker, only consent if needed
-      });
+      };
 
-      if (onDeviceCode) {
-        onDeviceCode({
-          authUrl,
-          message: 'Please grant Gmail access in your browser',
-        });
+      if (loginHint) {
+        authUrlOptions.login_hint = loginHint;
       }
+
+      const authUrl = this.oauth2Client.generateAuthUrl(authUrlOptions);
+
+      console.log('[GoogleAuth] Mailbox auth URL generated, local server started');
 
       return {
         authUrl,
+        codePromise,
         scopes,
       };
     } catch (error) {
       console.error('[GoogleAuth] Mailbox flow failed:', error);
+      this.stopLocalServer();
       throw error;
     }
   }

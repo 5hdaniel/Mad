@@ -13,7 +13,6 @@ contextBridge.exposeInMainWorld('api', {
 
     // Mailbox Connection
     googleConnectMailbox: (userId) => ipcRenderer.invoke('auth:google:connect-mailbox', userId),
-    googleCompleteMailboxConnection: (code, userId) => ipcRenderer.invoke('auth:google:complete-mailbox-connection', code, userId),
     microsoftConnectMailbox: (userId) => ipcRenderer.invoke('auth:microsoft:connect-mailbox', userId),
 
     // Session Management
@@ -94,6 +93,16 @@ contextBridge.exposeInMainWorld('api', {
   },
 
   // IPC event listeners
+  onGoogleLoginComplete: (callback) => {
+    const listener = (_, result) => callback(result);
+    ipcRenderer.on('google:login-complete', listener);
+    return () => ipcRenderer.removeListener('google:login-complete', listener);
+  },
+  onGoogleMailboxConnected: (callback) => {
+    const listener = (_, result) => callback(result);
+    ipcRenderer.on('google:mailbox-connected', listener);
+    return () => ipcRenderer.removeListener('google:mailbox-connected', listener);
+  },
   onMicrosoftLoginComplete: (callback) => {
     const listener = (_, result) => callback(result);
     ipcRenderer.on('microsoft:login-complete', listener);
