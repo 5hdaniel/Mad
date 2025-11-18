@@ -184,7 +184,7 @@ function Contacts({ userId, onClose }) {
             {filteredContacts.map((contact) => (
               <div
                 key={contact.id}
-                className="bg-white border-2 border-gray-200 rounded-xl p-6 hover:border-purple-400 hover:shadow-xl transition-all"
+                className="bg-white border-2 border-gray-200 rounded-xl p-6 hover:border-purple-400 hover:shadow-xl transition-all flex flex-col h-full"
               >
                 {/* Contact Header */}
                 <div className="flex items-start justify-between mb-4">
@@ -202,7 +202,7 @@ function Contacts({ userId, onClose }) {
                 </div>
 
                 {/* Contact Details */}
-                <div className="space-y-2 mb-4 text-sm">
+                <div className="space-y-2 mb-4 text-sm flex-1">
                   {/* Show all emails for Contacts app contacts, or just primary email for manual contacts */}
                   {contact.source === 'contacts_app' && contact.allEmails?.length > 0 ? (
                     contact.allEmails.map((email, idx) => (
