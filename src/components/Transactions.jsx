@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import AuditTransactionModal from './AuditTransactionModal';
 import ExportModal from './ExportModal';
+import ContactSelectModal from './ContactSelectModal';
+import { ROLE_TO_CATEGORY, AUDIT_WORKFLOW_STEPS } from '../constants/contactRoles';
+import { filterRolesByTransactionType, getRoleDisplayName } from '../utils/transactionRoleUtils';
 
 /**
  * Transactions Component
@@ -407,11 +410,14 @@ function Transactions({ userId, provider, onClose }) {
  */
 function TransactionDetails({ transaction, onClose, onTransactionUpdated }) {
   const [communications, setCommunications] = useState([]);
+  const [contactAssignments, setContactAssignments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportSuccess, setExportSuccess] = useState(null);
   const [showArchivePrompt, setShowArchivePrompt] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [activeTab, setActiveTab] = useState('details'); // 'details' or 'contacts'
 
   useEffect(() => {
     loadDetails();
@@ -424,6 +430,7 @@ function TransactionDetails({ transaction, onClose, onTransactionUpdated }) {
 
       if (result.success) {
         setCommunications(result.transaction.communications || []);
+        setContactAssignments(result.transaction.contact_assignments || []);
       }
     } catch (err) {
       console.error('Failed to load details:', err);
@@ -453,6 +460,20 @@ function TransactionDetails({ transaction, onClose, onTransactionUpdated }) {
       }
     } catch (err) {
       console.error('Failed to archive transaction:', err);
+    }
+  };
+
+  const handleDelete = async () => {
+    try {
+      await window.api.transactions.delete(transaction.id);
+      setShowDeleteConfirm(false);
+      onClose(); // Close the details modal
+      if (onTransactionUpdated) {
+        onTransactionUpdated(); // Refresh the transaction list
+      }
+    } catch (err) {
+      console.error('Failed to delete transaction:', err);
+      alert('Failed to delete transaction. Please try again.');
     }
   };
 
@@ -491,6 +512,16 @@ function TransactionDetails({ transaction, onClose, onTransactionUpdated }) {
               </svg>
               Export
             </button>
+            {/* Delete Button */}
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-white text-red-600 hover:bg-opacity-90 shadow-md hover:shadow-lg"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              Delete
+            </button>
             {/* Close Button */}
             <button
               onClick={onClose}
@@ -518,56 +549,150 @@ function TransactionDetails({ transaction, onClose, onTransactionUpdated }) {
           </div>
         )}
 
+        {/* Tabs */}
+        <div className="flex-shrink-0 border-b border-gray-200 px-6">
+          <div className="flex gap-4">
+            <button
+              onClick={() => setActiveTab('details')}
+              className={`px-4 py-3 font-medium text-sm transition-all ${
+                activeTab === 'details'
+                  ? 'border-b-2 border-green-500 text-green-600'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Transaction Details
+            </button>
+            <button
+              onClick={() => setActiveTab('contacts')}
+              className={`px-4 py-3 font-medium text-sm transition-all ${
+                activeTab === 'contacts'
+                  ? 'border-b-2 border-green-500 text-green-600'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Roles & Contacts ({contactAssignments.length})
+            </button>
+          </div>
+        </div>
+
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
-          {/* Transaction Info */}
-          <div className="grid grid-cols-2 gap-4 mb-6">
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <p className="text-sm text-gray-600 mb-1">Sale Price</p>
-              <p className="text-xl font-bold text-gray-900">
-                {transaction.sale_price
-                  ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(
-                      transaction.sale_price
-                    )
-                  : 'N/A'}
-              </p>
-            </div>
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <p className="text-sm text-gray-600 mb-1">Closing Date</p>
-              <p className="text-xl font-bold text-gray-900">
-                {transaction.closing_date ? new Date(transaction.closing_date).toLocaleDateString() : 'N/A'}
-              </p>
-            </div>
-          </div>
+          {activeTab === 'details' && (
+            <>
+              {/* Transaction Info */}
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <p className="text-sm text-gray-600 mb-1">Sale Price</p>
+                  <p className="text-xl font-bold text-gray-900">
+                    {transaction.sale_price
+                      ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(
+                          transaction.sale_price
+                        )
+                      : 'N/A'}
+                  </p>
+                </div>
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <p className="text-sm text-gray-600 mb-1">Closing Date</p>
+                  <p className="text-xl font-bold text-gray-900">
+                    {transaction.closing_date ? new Date(transaction.closing_date).toLocaleDateString() : 'N/A'}
+                  </p>
+                </div>
+              </div>
 
-          {/* Communications */}
-          <div>
-            <h4 className="text-lg font-semibold text-gray-900 mb-3">Related Emails ({communications.length})</h4>
-            {loading ? (
-              <div className="text-center py-8">
-                <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
-              </div>
-            ) : communications.length === 0 ? (
-              <p className="text-gray-600 text-center py-8">No emails found</p>
-            ) : (
-              <div className="space-y-3">
-                {communications.map((comm) => (
-                  <div key={comm.id} className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                    <div className="flex items-start justify-between mb-2">
-                      <h5 className="font-semibold text-gray-900">{comm.subject || '(No Subject)'}</h5>
-                      <span className="text-xs text-gray-500">
-                        {comm.sent_at ? new Date(comm.sent_at).toLocaleDateString() : 'Unknown date'}
-                      </span>
+              {/* Communications */}
+              {communications.length > 0 && (
+                <div>
+                  <h4 className="text-lg font-semibold text-gray-900 mb-3">Related Emails ({communications.length})</h4>
+                  {loading ? (
+                    <div className="text-center py-8">
+                      <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
                     </div>
-                    <p className="text-sm text-gray-600 mb-2">From: {comm.sender || 'Unknown'}</p>
-                    {comm.body_plain && (
-                      <p className="text-sm text-gray-700 line-clamp-3">{comm.body_plain.substring(0, 200)}...</p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {communications.map((comm) => (
+                        <div key={comm.id} className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                          <div className="flex items-start justify-between mb-2">
+                            <h5 className="font-semibold text-gray-900">{comm.subject || '(No Subject)'}</h5>
+                            <span className="text-xs text-gray-500">
+                              {comm.sent_at ? new Date(comm.sent_at).toLocaleDateString() : 'Unknown date'}
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-600 mb-2">From: {comm.sender || 'Unknown'}</p>
+                          {comm.body_plain && (
+                            <p className="text-sm text-gray-700 line-clamp-3">{comm.body_plain.substring(0, 200)}...</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+
+          {activeTab === 'contacts' && (
+            <div>
+              <h4 className="text-lg font-semibold text-gray-900 mb-4">Contact Assignments</h4>
+              {loading ? (
+                <div className="text-center py-8">
+                  <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                </div>
+              ) : contactAssignments.length === 0 ? (
+                <p className="text-gray-600 text-center py-8">No contacts assigned to this transaction</p>
+              ) : (
+                <div className="space-y-4">
+                  {contactAssignments.map((assignment) => (
+                    <div key={assignment.id} className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="inline-block px-3 py-1 bg-green-100 text-green-800 text-xs font-semibold rounded-full">
+                              {assignment.specific_role || assignment.role || 'Unknown Role'}
+                            </span>
+                            {assignment.is_primary === 1 && (
+                              <span className="inline-block px-2 py-1 bg-blue-100 text-blue-800 text-xs font-semibold rounded-full">
+                                Primary
+                              </span>
+                            )}
+                          </div>
+                          <h5 className="font-semibold text-gray-900 text-lg">{assignment.contact_name || 'Unknown Contact'}</h5>
+                          {assignment.contact_email && (
+                            <p className="text-sm text-gray-600 mt-1">
+                              <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                              </svg>
+                              {assignment.contact_email}
+                            </p>
+                          )}
+                          {assignment.contact_phone && (
+                            <p className="text-sm text-gray-600 mt-1">
+                              <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                              </svg>
+                              {assignment.contact_phone}
+                            </p>
+                          )}
+                          {assignment.contact_company && (
+                            <p className="text-sm text-gray-600 mt-1">
+                              <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                              </svg>
+                              {assignment.contact_company}
+                            </p>
+                          )}
+                          {assignment.notes && (
+                            <p className="text-sm text-gray-700 mt-2 italic">
+                              Note: {assignment.notes}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -575,7 +700,7 @@ function TransactionDetails({ transaction, onClose, onTransactionUpdated }) {
       {showExportModal && (
         <ExportModal
           transaction={transaction}
-          userId={userId}
+          userId={transaction.user_id}
           onClose={() => setShowExportModal(false)}
           onExportComplete={handleExportComplete}
         />
@@ -620,15 +745,55 @@ function TransactionDetails({ transaction, onClose, onTransactionUpdated }) {
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[70] p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-bold text-gray-900">Delete Transaction?</h3>
+            </div>
+            <p className="text-sm text-gray-600 mb-2">
+              Are you sure you want to delete this transaction? This will permanently remove:
+            </p>
+            <ul className="text-sm text-gray-600 mb-6 ml-6 list-disc">
+              <li>Transaction details for <strong>{transaction.property_address}</strong></li>
+              <li>All contact assignments</li>
+              <li>All related communications</li>
+            </ul>
+            <p className="text-sm text-red-600 font-semibold mb-6">This action cannot be undone.</p>
+            <div className="flex items-center gap-3 justify-end">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg font-medium transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg font-semibold transition-all"
+              >
+                Delete Transaction
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 /**
  * Edit Transaction Modal
- * Allows editing transaction details
+ * Allows editing transaction details and contact assignments
  */
 function EditTransactionModal({ transaction, onClose, onSuccess }) {
+  const [activeTab, setActiveTab] = useState('details'); // 'details' or 'contacts'
   const [formData, setFormData] = useState({
     property_address: transaction.property_address || '',
     transaction_type: transaction.transaction_type || 'purchase',
@@ -637,11 +802,65 @@ function EditTransactionModal({ transaction, onClose, onSuccess }) {
     sale_price: transaction.sale_price || '',
     listing_price: transaction.listing_price || '',
   });
+  const [contactAssignments, setContactAssignments] = useState({});
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
+  // Load existing contact assignments
+  useEffect(() => {
+    loadContactAssignments();
+  }, [transaction.id]);
+
+  const loadContactAssignments = async () => {
+    try {
+      const result = await window.api.transactions.getDetails(transaction.id);
+      if (result.success && result.transaction.contact_assignments) {
+        // Group assignments by role
+        const grouped = {};
+        result.transaction.contact_assignments.forEach((assignment) => {
+          const role = assignment.specific_role || assignment.role;
+          if (!grouped[role]) {
+            grouped[role] = [];
+          }
+          grouped[role].push({
+            contactId: assignment.contact_id,
+            contactName: assignment.contact_name,
+            contactEmail: assignment.contact_email,
+            contactPhone: assignment.contact_phone,
+            contactCompany: assignment.contact_company,
+            isPrimary: assignment.is_primary === 1,
+            notes: assignment.notes,
+            assignmentId: assignment.id, // Keep track of existing assignment ID
+          });
+        });
+        setContactAssignments(grouped);
+      }
+    } catch (err) {
+      console.error('Failed to load contact assignments:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleChange = (field, value) => {
     setFormData({ ...formData, [field]: value });
+  };
+
+  // Handle adding contact to a role
+  const handleAssignContact = (role, contact) => {
+    setContactAssignments({
+      ...contactAssignments,
+      [role]: [...(contactAssignments[role] || []), contact],
+    });
+  };
+
+  // Handle removing contact from a role
+  const handleRemoveContact = (role, contactId) => {
+    setContactAssignments({
+      ...contactAssignments,
+      [role]: (contactAssignments[role] || []).filter((c) => c.contactId !== contactId),
+    });
   };
 
   const handleSave = async () => {
@@ -654,6 +873,7 @@ function EditTransactionModal({ transaction, onClose, onSuccess }) {
     setError(null);
 
     try {
+      // Update transaction details
       const updates = {
         property_address: formData.property_address.trim(),
         transaction_type: formData.transaction_type,
@@ -663,25 +883,58 @@ function EditTransactionModal({ transaction, onClose, onSuccess }) {
         listing_price: formData.listing_price ? parseFloat(formData.listing_price) : null,
       };
 
-      const result = await window.api.transactions.update(transaction.id, updates);
+      await window.api.transactions.update(transaction.id, updates);
 
-      if (result.success) {
-        onSuccess();
-      } else {
-        setError(result.error || 'Failed to update transaction');
+      // Update contact assignments
+      // First, get all current assignments to determine what to delete
+      const currentResult = await window.api.transactions.getDetails(transaction.id);
+      const currentAssignments = currentResult.success ? currentResult.transaction.contact_assignments || [] : [];
+
+      // Delete removed contacts
+      for (const existing of currentAssignments) {
+        const role = existing.specific_role || existing.role;
+        const stillAssigned = (contactAssignments[role] || []).some(
+          (c) => c.contactId === existing.contact_id
+        );
+        if (!stillAssigned) {
+          await window.api.transactions.removeContact(transaction.id, existing.contact_id);
+        }
       }
+
+      // Add new contacts
+      for (const [role, contacts] of Object.entries(contactAssignments)) {
+        for (const contact of contacts) {
+          // Check if this is a new assignment
+          const isExisting = currentAssignments.some(
+            (existing) => existing.contact_id === contact.contactId && (existing.specific_role || existing.role) === role
+          );
+
+          if (!isExisting) {
+            const roleCategory = ROLE_TO_CATEGORY[role] || 'support';
+            await window.api.transactions.assignContact(
+              transaction.id,
+              contact.contactId,
+              role,
+              roleCategory,
+              contact.isPrimary,
+              contact.notes
+            );
+          }
+        }
+      }
+
+      onSuccess();
     } catch (err) {
       setError(err.message || 'Failed to update transaction');
-    } finally {
       setSaving(false);
     }
   };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[70] p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-4 flex items-center justify-between rounded-t-xl sticky top-0 z-10">
+        <div className="flex-shrink-0 bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
           <h3 className="text-xl font-bold text-white">Edit Transaction</h3>
           <button
             onClick={onClose}
@@ -693,113 +946,163 @@ function EditTransactionModal({ transaction, onClose, onSuccess }) {
           </button>
         </div>
 
-        {/* Form */}
-        <div className="p-6 space-y-4">
+        {/* Tabs */}
+        <div className="flex-shrink-0 border-b border-gray-200 px-6">
+          <div className="flex gap-4">
+            <button
+              onClick={() => setActiveTab('details')}
+              className={`px-4 py-3 font-medium text-sm transition-all ${
+                activeTab === 'details'
+                  ? 'border-b-2 border-blue-500 text-blue-600'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Transaction Details
+            </button>
+            <button
+              onClick={() => setActiveTab('contacts')}
+              className={`px-4 py-3 font-medium text-sm transition-all ${
+                activeTab === 'contacts'
+                  ? 'border-b-2 border-blue-500 text-blue-600'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Roles & Contacts
+            </button>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-6">
           {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
               <p className="text-sm text-red-800">{error}</p>
             </div>
           )}
 
-          {/* Property Address */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Property Address *
-            </label>
-            <input
-              type="text"
-              value={formData.property_address}
-              onChange={(e) => handleChange('property_address', e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
+          {activeTab === 'details' && (
+            <div className="space-y-4">
+              {/* Property Address */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Property Address *
+                </label>
+                <input
+                  type="text"
+                  value={formData.property_address}
+                  onChange={(e) => handleChange('property_address', e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
 
-          {/* Transaction Type */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Transaction Type
-            </label>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={() => handleChange('transaction_type', 'purchase')}
-                className={`px-4 py-3 rounded-lg font-medium transition-all ${
-                  formData.transaction_type === 'purchase'
-                    ? 'bg-blue-500 text-white shadow-md'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                Purchase
-              </button>
-              <button
-                onClick={() => handleChange('transaction_type', 'sale')}
-                className={`px-4 py-3 rounded-lg font-medium transition-all ${
-                  formData.transaction_type === 'sale'
-                    ? 'bg-blue-500 text-white shadow-md'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                Sale
-              </button>
-            </div>
-          </div>
+              {/* Transaction Type */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Transaction Type
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => handleChange('transaction_type', 'purchase')}
+                    className={`px-4 py-3 rounded-lg font-medium transition-all ${
+                      formData.transaction_type === 'purchase'
+                        ? 'bg-blue-500 text-white shadow-md'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    Purchase
+                  </button>
+                  <button
+                    onClick={() => handleChange('transaction_type', 'sale')}
+                    className={`px-4 py-3 rounded-lg font-medium transition-all ${
+                      formData.transaction_type === 'sale'
+                        ? 'bg-blue-500 text-white shadow-md'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    Sale
+                  </button>
+                </div>
+              </div>
 
-          {/* Dates */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Representation Start Date
-              </label>
-              <input
-                type="date"
-                value={formData.representation_start_date}
-                onChange={(e) => handleChange('representation_start_date', e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Closing Date
-              </label>
-              <input
-                type="date"
-                value={formData.closing_date}
-                onChange={(e) => handleChange('closing_date', e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-          </div>
+              {/* Dates */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Representation Start Date
+                  </label>
+                  <input
+                    type="date"
+                    value={formData.representation_start_date}
+                    onChange={(e) => handleChange('representation_start_date', e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Closing Date
+                  </label>
+                  <input
+                    type="date"
+                    value={formData.closing_date}
+                    onChange={(e) => handleChange('closing_date', e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
 
-          {/* Prices */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Sale Price
-              </label>
-              <input
-                type="number"
-                value={formData.sale_price}
-                onChange={(e) => handleChange('sale_price', e.target.value)}
-                placeholder="0"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
+              {/* Prices */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Sale Price
+                  </label>
+                  <input
+                    type="number"
+                    value={formData.sale_price}
+                    onChange={(e) => handleChange('sale_price', e.target.value)}
+                    placeholder="0"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Listing Price
+                  </label>
+                  <input
+                    type="number"
+                    value={formData.listing_price}
+                    onChange={(e) => handleChange('listing_price', e.target.value)}
+                    placeholder="0"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
             </div>
+          )}
+
+          {activeTab === 'contacts' && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Listing Price
-              </label>
-              <input
-                type="number"
-                value={formData.listing_price}
-                onChange={(e) => handleChange('listing_price', e.target.value)}
-                placeholder="0"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
+              {loading ? (
+                <div className="text-center py-12">
+                  <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                  <p className="text-gray-600 mt-4">Loading contacts...</p>
+                </div>
+              ) : (
+                <EditContactAssignments
+                  transactionType={formData.transaction_type}
+                  contactAssignments={contactAssignments}
+                  onAssignContact={handleAssignContact}
+                  onRemoveContact={handleRemoveContact}
+                  userId={transaction.user_id}
+                  propertyAddress={formData.property_address}
+                />
+              )}
             </div>
-          </div>
+          )}
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 bg-gray-50 rounded-b-xl flex items-center gap-3 justify-end sticky bottom-0">
+        <div className="flex-shrink-0 px-6 py-4 bg-gray-50 rounded-b-xl flex items-center gap-3 justify-end">
           <button
             onClick={onClose}
             className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg font-medium transition-all"
@@ -819,6 +1122,156 @@ function EditTransactionModal({ transaction, onClose, onSuccess }) {
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Edit Contact Assignments Component
+ * Reusable component for editing contact assignments
+ */
+function EditContactAssignments({ transactionType, contactAssignments, onAssignContact, onRemoveContact, userId, propertyAddress }) {
+  return (
+    <div className="space-y-6">
+      {AUDIT_WORKFLOW_STEPS.map((step, idx) => {
+        const stepRoles = filterRolesByTransactionType(step.roles, transactionType);
+        if (stepRoles.length === 0) return null;
+
+        return (
+          <div key={idx}>
+            <h4 className="text-lg font-semibold text-gray-900 mb-3">{step.title}</h4>
+            <p className="text-sm text-gray-600 mb-4">{step.description}</p>
+            <div className="space-y-4">
+              {stepRoles.map((roleConfig) => (
+                <EditRoleAssignment
+                  key={roleConfig.role}
+                  role={roleConfig.role}
+                  required={roleConfig.required}
+                  multiple={roleConfig.multiple}
+                  assignments={contactAssignments[roleConfig.role] || []}
+                  onAssign={onAssignContact}
+                  onRemove={onRemoveContact}
+                  userId={userId}
+                  propertyAddress={propertyAddress}
+                  transactionType={transactionType}
+                />
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * Edit Single Role Assignment Component
+ */
+function EditRoleAssignment({ role, required, multiple, assignments, onAssign, onRemove, userId, propertyAddress, transactionType }) {
+  const [contacts, setContacts] = React.useState([]);
+  const [_loading, setLoading] = React.useState(true);
+  const [_error, setError] = React.useState(null);
+  const [showContactSelect, setShowContactSelect] = React.useState(false);
+
+  React.useEffect(() => {
+    loadContacts();
+  }, [propertyAddress]);
+
+  const loadContacts = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Use sorted API when property address is available, otherwise use regular API
+      const result = propertyAddress
+        ? await window.api.contacts.getSortedByActivity(userId, propertyAddress)
+        : await window.api.contacts.getAll(userId);
+
+      if (result.success) {
+        setContacts(result.contacts || []);
+      } else {
+        setError(result.error || 'Failed to load contacts');
+      }
+    } catch (err) {
+      console.error('Failed to load contacts:', err);
+      setError('Unable to load contacts');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleContactSelected = (selectedContacts) => {
+    selectedContacts.forEach((contact) => {
+      onAssign(role, {
+        contactId: contact.id,
+        contactName: contact.name,
+        contactEmail: contact.email,
+        contactPhone: contact.phone,
+        contactCompany: contact.company,
+        isPrimary: false,
+        notes: null,
+      });
+    });
+    setShowContactSelect(false);
+  };
+
+  const canAddMore = multiple || assignments.length === 0;
+
+  return (
+    <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-medium text-gray-900">
+            {getRoleDisplayName(role, transactionType)}
+          </label>
+          {required && <span className="text-xs text-red-500 font-semibold">*</span>}
+          {multiple && <span className="text-xs text-gray-500">(can assign multiple)</span>}
+        </div>
+        {canAddMore && (
+          <button
+            onClick={() => setShowContactSelect(true)}
+            className="px-3 py-1.5 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 transition-all"
+          >
+            + Add Contact
+          </button>
+        )}
+      </div>
+
+      {/* Assigned contacts */}
+      {assignments.length > 0 && (
+        <div className="space-y-2">
+          {assignments.map((assignment) => (
+            <div key={assignment.contactId} className="flex items-center justify-between bg-white border border-gray-200 rounded-lg p-3">
+              <div className="flex-1">
+                <p className="font-medium text-gray-900">{assignment.contactName}</p>
+                {assignment.contactEmail && (
+                  <p className="text-xs text-gray-600">{assignment.contactEmail}</p>
+                )}
+              </div>
+              <button
+                onClick={() => onRemove(role, assignment.contactId)}
+                className="text-red-600 hover:text-red-800 p-1"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Contact Select Modal */}
+      {showContactSelect && (
+        <ContactSelectModal
+          contacts={contacts}
+          excludeIds={assignments.map((a) => a.contactId)}
+          multiple={multiple}
+          onSelect={handleContactSelected}
+          onClose={() => setShowContactSelect(false)}
+          propertyAddress={propertyAddress}
+        />
+      )}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { SPECIFIC_ROLES, ROLE_DISPLAY_NAMES, ROLE_TO_CATEGORY, AUDIT_WORKFLOW_STEPS } from '../constants/contactRoles';
-import { filterRolesByTransactionType, getTransactionTypeContext } from '../utils/transactionRoleUtils';
+import { filterRolesByTransactionType, getTransactionTypeContext, getRoleDisplayName } from '../utils/transactionRoleUtils';
 import ContactSelectModal from './ContactSelectModal';
 
 /**
@@ -190,6 +190,11 @@ function AuditTransactionModal({ userId, provider, onClose, onSuccess }) {
    * Create the transaction with all contact assignments
    */
   const handleCreateTransaction = async () => {
+    // Prevent duplicate submissions
+    if (loading) {
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
@@ -213,13 +218,14 @@ function AuditTransactionModal({ userId, provider, onClose, onSuccess }) {
 
       if (result.success) {
         onSuccess(result.transaction);
+        onClose(); // Close modal immediately after success
       } else {
         setError(result.error || 'Failed to create transaction');
+        setLoading(false); // Only reset loading on error
       }
     } catch (err) {
       setError(err.message || 'Failed to create transaction');
-    } finally {
-      setLoading(false);
+      setLoading(false); // Only reset loading on error
     }
   };
 
@@ -488,6 +494,7 @@ function ContactAssignmentStep({ stepConfig, contactAssignments, onAssignContact
           onRemove={onRemoveContact}
           userId={userId}
           propertyAddress={propertyAddress}
+          transactionType={transactionType}
         />
       ))}
     </div>
@@ -497,7 +504,7 @@ function ContactAssignmentStep({ stepConfig, contactAssignments, onAssignContact
 /**
  * Single Role Assignment Component
  */
-function RoleAssignment({ role, required, multiple, assignments, onAssign, onRemove, userId, propertyAddress }) {
+function RoleAssignment({ role, required, multiple, assignments, onAssign, onRemove, userId, propertyAddress, transactionType }) {
   const [contacts, setContacts] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState(null);
@@ -561,7 +568,7 @@ function RoleAssignment({ role, required, multiple, assignments, onAssign, onRem
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <label className="text-sm font-medium text-gray-900">
-            {ROLE_DISPLAY_NAMES[role]}
+            {getRoleDisplayName(role, transactionType)}
           </label>
           {required && <span className="text-xs text-red-500 font-semibold">*</span>}
           {multiple && <span className="text-xs text-gray-500">(can assign multiple)</span>}
