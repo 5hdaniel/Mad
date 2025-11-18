@@ -247,12 +247,12 @@ function AuditTransactionModal({ userId, provider, onClose, onSuccess }) {
         </div>
 
         {/* Progress Bar */}
-        <div className="flex-shrink-0 bg-gray-100 px-6 py-3">
-          <div className="flex items-center justify-between mb-2">
+        <div className="flex-shrink-0 bg-gray-100 px-3 sm:px-6 py-3">
+          <div className="flex items-center justify-center gap-1 sm:gap-2 mb-2 max-w-md mx-auto">
             {[1, 2, 3].map((s) => (
-              <div key={s} className="flex items-center flex-1">
+              <React.Fragment key={s}>
                 <div
-                  className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold ${
+                  className={`w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center text-sm sm:text-base font-semibold transition-all ${
                     s < step
                       ? 'bg-green-500 text-white'
                       : s === step
@@ -264,10 +264,10 @@ function AuditTransactionModal({ userId, provider, onClose, onSuccess }) {
                 </div>
                 {s < 3 && (
                   <div
-                    className={`flex-1 h-1 mx-2 ${s < step ? 'bg-green-500' : 'bg-gray-300'}`}
+                    className={`flex-1 h-1 transition-all ${s < step ? 'bg-green-500' : 'bg-gray-300'}`}
                   ></div>
                 )}
-              </div>
+              </React.Fragment>
             ))}
           </div>
         </div>
