@@ -557,18 +557,32 @@ const registerAuthHandlers = (mainWindow) => {
         privacy_version: CURRENT_PRIVACY_POLICY_VERSION,
       });
 
+      // Save to local database
       const updatedUser = await databaseService.acceptTerms(
         userId,
         CURRENT_TERMS_VERSION,
         CURRENT_PRIVACY_POLICY_VERSION
       );
 
-      console.log('[Auth] Terms accepted successfully. Updated user:', {
+      console.log('[Auth] Terms accepted successfully (local). Updated user:', {
         terms_accepted_at: updatedUser.terms_accepted_at,
         terms_version_accepted: updatedUser.terms_version_accepted,
         privacy_policy_accepted_at: updatedUser.privacy_policy_accepted_at,
         privacy_policy_version_accepted: updatedUser.privacy_policy_version_accepted,
       });
+
+      // Sync to Supabase (cloud backup for legal compliance)
+      try {
+        await supabaseService.syncTermsAcceptance(
+          userId,
+          CURRENT_TERMS_VERSION,
+          CURRENT_PRIVACY_POLICY_VERSION
+        );
+        console.log('[Auth] Terms acceptance synced to Supabase');
+      } catch (syncError) {
+        // Don't fail the acceptance if sync fails - user already accepted locally
+        console.error('[Auth] Failed to sync terms to Supabase (continuing anyway):', syncError);
+      }
 
       return { success: true, user: updatedUser };
     } catch (error) {

@@ -168,6 +168,38 @@ class SupabaseService {
   }
 
   /**
+   * Sync terms acceptance to cloud
+   * @param {string} userId - User UUID
+   * @param {string} termsVersion - Version of Terms of Service accepted
+   * @param {string} privacyVersion - Version of Privacy Policy accepted
+   */
+  async syncTermsAcceptance(userId, termsVersion, privacyVersion) {
+    this._ensureInitialized();
+
+    try {
+      const { data, error } = await this.client
+        .from('users')
+        .update({
+          terms_accepted_at: new Date().toISOString(),
+          terms_version_accepted: termsVersion,
+          privacy_policy_accepted_at: new Date().toISOString(),
+          privacy_policy_version_accepted: privacyVersion,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', userId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      console.log('[Supabase] Terms acceptance synced for user:', userId);
+      return data;
+    } catch (error) {
+      console.error('[Supabase] Failed to sync terms acceptance:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Validate user's subscription status
    * @param {string} userId - User UUID
    * @returns {Object} Subscription status
