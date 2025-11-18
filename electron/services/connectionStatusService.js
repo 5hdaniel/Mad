@@ -126,18 +126,59 @@ class ConnectionStatusService {
       const now = new Date();
 
       if (tokenExpiry < now) {
-        this.connectionStatus.microsoft = {
-          connected: false,
-          lastCheck: Date.now(),
-          error: {
-            type: 'TOKEN_EXPIRED',
-            userMessage: 'Outlook connection expired',
-            action: 'Reconnect your Outlook account',
-            actionHandler: 'reconnect-microsoft',
-            details: 'Authentication token has expired',
-          },
-        };
-        return this.connectionStatus.microsoft;
+        // Token expired - try to refresh
+        try {
+          const microsoftAuthService = require('./microsoftAuthService');
+          const tokenEncryptionService = require('./tokenEncryptionService');
+
+          // Decrypt refresh token
+          if (!token.refresh_token) {
+            throw new Error('No refresh token available');
+          }
+
+          const refreshToken = tokenEncryptionService.decrypt(token.refresh_token);
+
+          // Refresh the token
+          const newTokens = await microsoftAuthService.refreshToken(refreshToken);
+
+          // Encrypt new tokens
+          const encryptedAccessToken = tokenEncryptionService.encrypt(newTokens.access_token);
+          const encryptedRefreshToken = newTokens.refresh_token
+            ? tokenEncryptionService.encrypt(newTokens.refresh_token)
+            : token.refresh_token; // Keep old refresh token if new one not provided
+
+          // Update token in database
+          const expiresAt = new Date(Date.now() + newTokens.expires_in * 1000).toISOString();
+          await databaseService.updateOAuthToken(token.id, {
+            access_token: encryptedAccessToken,
+            refresh_token: encryptedRefreshToken,
+            token_expires_at: expiresAt,
+          });
+
+          console.log('[ConnectionStatus] Microsoft token refreshed successfully');
+
+          this.connectionStatus.microsoft = {
+            connected: true,
+            lastCheck: Date.now(),
+            email: token.connected_email_address,
+            error: null,
+          };
+          return this.connectionStatus.microsoft;
+        } catch (refreshError) {
+          console.error('[ConnectionStatus] Microsoft token refresh failed:', refreshError);
+          this.connectionStatus.microsoft = {
+            connected: false,
+            lastCheck: Date.now(),
+            error: {
+              type: 'TOKEN_REFRESH_FAILED',
+              userMessage: 'Outlook connection expired',
+              action: 'Reconnect your Outlook account',
+              actionHandler: 'reconnect-microsoft',
+              details: refreshError.message,
+            },
+          };
+          return this.connectionStatus.microsoft;
+        }
       }
 
       // Token is valid

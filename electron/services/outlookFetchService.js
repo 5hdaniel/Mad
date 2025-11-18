@@ -1,6 +1,7 @@
 const axios = require('axios');
 const tokenEncryptionService = require('./tokenEncryptionService');
 const databaseService = require('./databaseService');
+const microsoftAuthService = require('./microsoftAuthService');
 
 /**
  * Outlook Fetch Service
@@ -11,6 +12,7 @@ class OutlookFetchService {
     this.graphApiUrl = 'https://graph.microsoft.com/v1.0';
     this.accessToken = null;
     this.userId = null;
+    this.tokenRecord = null;
   }
 
   /**
@@ -22,14 +24,14 @@ class OutlookFetchService {
       this.userId = userId;
 
       // Get OAuth token from database
-      const tokenRecord = await databaseService.getOAuthToken(userId, 'microsoft', 'mailbox');
+      this.tokenRecord = await databaseService.getOAuthToken(userId, 'microsoft', 'mailbox');
 
-      if (!tokenRecord) {
+      if (!this.tokenRecord) {
         throw new Error('No Outlook OAuth token found. User needs to connect Outlook first.');
       }
 
       // Decrypt access token
-      this.accessToken = tokenEncryptionService.decrypt(tokenRecord.access_token);
+      this.accessToken = tokenEncryptionService.decrypt(this.tokenRecord.access_token);
 
       console.log('[OutlookFetch] Initialized successfully');
       return true;
@@ -40,10 +42,58 @@ class OutlookFetchService {
   }
 
   /**
+   * Refresh the access token using refresh token
+   * @private
+   */
+  async _refreshAccessToken() {
+    try {
+      console.log('[OutlookFetch] Refreshing access token');
+
+      if (!this.tokenRecord || !this.tokenRecord.refresh_token) {
+        throw new Error('No refresh token available');
+      }
+
+      // Decrypt refresh token
+      const refreshToken = tokenEncryptionService.decrypt(this.tokenRecord.refresh_token);
+
+      // Refresh the token using Microsoft Auth Service
+      const newTokens = await microsoftAuthService.refreshToken(refreshToken);
+
+      // Encrypt new tokens
+      const encryptedAccessToken = tokenEncryptionService.encrypt(newTokens.access_token);
+      const encryptedRefreshToken = newTokens.refresh_token
+        ? tokenEncryptionService.encrypt(newTokens.refresh_token)
+        : this.tokenRecord.refresh_token; // Keep old refresh token if new one not provided
+
+      // Update token in database
+      const expiresAt = new Date(Date.now() + newTokens.expires_in * 1000).toISOString();
+      await databaseService.updateOAuthToken(this.tokenRecord.id, {
+        access_token: encryptedAccessToken,
+        refresh_token: encryptedRefreshToken,
+        token_expires_at: expiresAt,
+      });
+
+      // Update in-memory access token
+      this.accessToken = newTokens.access_token;
+
+      // Update tokenRecord with new values
+      this.tokenRecord.access_token = encryptedAccessToken;
+      this.tokenRecord.refresh_token = encryptedRefreshToken;
+      this.tokenRecord.token_expires_at = expiresAt;
+
+      console.log('[OutlookFetch] Access token refreshed successfully');
+      return true;
+    } catch (error) {
+      console.error('[OutlookFetch] Token refresh failed:', error);
+      throw new Error('Failed to refresh access token. Please reconnect your Outlook account.');
+    }
+  }
+
+  /**
    * Make authenticated request to Microsoft Graph API
    * @private
    */
-  async _graphRequest(endpoint, method = 'GET', data = null) {
+  async _graphRequest(endpoint, method = 'GET', data = null, retryCount = 0) {
     try {
       const config = {
         method,
@@ -61,10 +111,17 @@ class OutlookFetchService {
       const response = await axios(config);
       return response.data;
     } catch (error) {
-      // Handle token expiration
-      if (error.response && error.response.status === 401) {
-        console.error('[OutlookFetch] Access token expired, need to refresh');
-        // TODO: Implement token refresh logic
+      // Handle token expiration - automatically refresh and retry once
+      if (error.response && error.response.status === 401 && retryCount === 0) {
+        console.log('[OutlookFetch] Access token expired, attempting refresh');
+        try {
+          await this._refreshAccessToken();
+          // Retry the request with the new token
+          return await this._graphRequest(endpoint, method, data, retryCount + 1);
+        } catch (refreshError) {
+          console.error('[OutlookFetch] Token refresh failed:', refreshError);
+          throw new Error('Outlook connection expired. Please reconnect your Outlook account.');
+        }
       }
       throw error;
     }
