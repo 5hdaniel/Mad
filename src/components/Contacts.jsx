@@ -206,8 +206,16 @@ function Contacts({ userId, onClose }) {
               <p className="text-gray-600 mb-4">
                 {searchQuery
                   ? 'Try adjusting your search'
-                  : 'Click "Add Contact" to create your first contact.'}
+                  : 'Get started by adding your first contact'}
               </p>
+              {!searchQuery && (
+                <div className="flex flex-col items-center gap-2 text-purple-600">
+                  <svg className="w-8 h-8 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                  </svg>
+                  <p className="text-sm font-medium">Click "Add Contact" above</p>
+                </div>
+              )}
             </div>
           </div>
         ) : (
