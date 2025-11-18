@@ -1171,10 +1171,40 @@ function EditContactAssignments({ transactionType, contactAssignments, onAssignC
  * Edit Single Role Assignment Component
  */
 function EditRoleAssignment({ role, required, multiple, assignments, onAssign, onRemove, userId, propertyAddress, transactionType }) {
+  const [contacts, setContacts] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState(null);
   const [showContactSelect, setShowContactSelect] = React.useState(false);
 
-  const handleContactSelected = (contacts) => {
-    contacts.forEach((contact) => {
+  React.useEffect(() => {
+    loadContacts();
+  }, [propertyAddress]);
+
+  const loadContacts = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Use sorted API when property address is available, otherwise use regular API
+      const result = propertyAddress
+        ? await window.api.contacts.getSortedByActivity(userId, propertyAddress)
+        : await window.api.contacts.getAll(userId);
+
+      if (result.success) {
+        setContacts(result.contacts || []);
+      } else {
+        setError(result.error || 'Failed to load contacts');
+      }
+    } catch (err) {
+      console.error('Failed to load contacts:', err);
+      setError('Unable to load contacts');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleContactSelected = (selectedContacts) => {
+    selectedContacts.forEach((contact) => {
       onAssign(role, {
         contactId: contact.id,
         contactName: contact.name,
@@ -1237,9 +1267,10 @@ function EditRoleAssignment({ role, required, multiple, assignments, onAssign, o
       {/* Contact Select Modal */}
       {showContactSelect && (
         <ContactSelectModal
-          userId={userId}
+          contacts={contacts}
+          excludeIds={assignments.map((a) => a.contactId)}
           multiple={multiple}
-          onSelectContacts={handleContactSelected}
+          onSelect={handleContactSelected}
           onClose={() => setShowContactSelect(false)}
           propertyAddress={propertyAddress}
         />
