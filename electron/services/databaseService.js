@@ -694,6 +694,159 @@ class DatabaseService {
   }
 
   /**
+   * Get all transactions associated with a contact
+   * Checks direct FK references, junction table, and JSON array
+   */
+  async getTransactionsByContact(contactId) {
+    const transactions = [];
+    const transactionMap = new Map();
+
+    // 1. Check direct FK references (buyer_agent_id, seller_agent_id, escrow_officer_id, inspector_id)
+    const directQuery = `
+      SELECT DISTINCT
+        id,
+        property_address,
+        closing_date,
+        transaction_type,
+        status,
+        CASE
+          WHEN buyer_agent_id = ? THEN 'Buyer Agent'
+          WHEN seller_agent_id = ? THEN 'Seller Agent'
+          WHEN escrow_officer_id = ? THEN 'Escrow Officer'
+          WHEN inspector_id = ? THEN 'Inspector'
+        END as role
+      FROM transactions
+      WHERE buyer_agent_id = ?
+         OR seller_agent_id = ?
+         OR escrow_officer_id = ?
+         OR inspector_id = ?
+    `;
+
+    const directResults = await this._all(directQuery, [
+      contactId, contactId, contactId, contactId,
+      contactId, contactId, contactId, contactId
+    ]);
+
+    directResults.forEach(txn => {
+      if (!transactionMap.has(txn.id)) {
+        transactionMap.set(txn.id, {
+          id: txn.id,
+          property_address: txn.property_address,
+          closing_date: txn.closing_date,
+          transaction_type: txn.transaction_type,
+          status: txn.status,
+          roles: [txn.role]
+        });
+      } else {
+        transactionMap.get(txn.id).roles.push(txn.role);
+      }
+    });
+
+    // 2. Check junction table (transaction_contacts)
+    const junctionQuery = `
+      SELECT DISTINCT
+        t.id,
+        t.property_address,
+        t.closing_date,
+        t.transaction_type,
+        t.status,
+        tc.specific_role,
+        tc.role_category
+      FROM transaction_contacts tc
+      JOIN transactions t ON tc.transaction_id = t.id
+      WHERE tc.contact_id = ?
+    `;
+
+    const junctionResults = await this._all(junctionQuery, [contactId]);
+
+    junctionResults.forEach(txn => {
+      const role = txn.specific_role || txn.role_category || 'Associated Contact';
+      if (!transactionMap.has(txn.id)) {
+        transactionMap.set(txn.id, {
+          id: txn.id,
+          property_address: txn.property_address,
+          closing_date: txn.closing_date,
+          transaction_type: txn.transaction_type,
+          status: txn.status,
+          roles: [role]
+        });
+      } else {
+        transactionMap.get(txn.id).roles.push(role);
+      }
+    });
+
+    // 3. Check JSON array (other_contacts) using json_each
+    try {
+      const jsonQuery = `
+        SELECT DISTINCT
+          t.id,
+          t.property_address,
+          t.closing_date,
+          t.transaction_type,
+          t.status
+        FROM transactions t, json_each(t.other_contacts) j
+        WHERE j.value = ?
+      `;
+
+      const jsonResults = await this._all(jsonQuery, [contactId]);
+
+      jsonResults.forEach(txn => {
+        if (!transactionMap.has(txn.id)) {
+          transactionMap.set(txn.id, {
+            id: txn.id,
+            property_address: txn.property_address,
+            closing_date: txn.closing_date,
+            transaction_type: txn.transaction_type,
+            status: txn.status,
+            roles: ['Other Contact']
+          });
+        } else {
+          transactionMap.get(txn.id).roles.push('Other Contact');
+        }
+      });
+    } catch (error) {
+      // If json_each is not supported, fall back to LIKE (less efficient)
+      console.warn('[DatabaseService] json_each not supported, using LIKE fallback:', error.message);
+      const fallbackQuery = `
+        SELECT id, property_address, closing_date, transaction_type, status, other_contacts
+        FROM transactions
+        WHERE other_contacts LIKE ?
+      `;
+
+      const fallbackResults = await this._all(fallbackQuery, [`%"${contactId}"%`]);
+
+      fallbackResults.forEach(txn => {
+        // Verify the contact ID is actually in the JSON array
+        try {
+          const contacts = JSON.parse(txn.other_contacts || '[]');
+          if (contacts.includes(contactId)) {
+            if (!transactionMap.has(txn.id)) {
+              transactionMap.set(txn.id, {
+                id: txn.id,
+                property_address: txn.property_address,
+                closing_date: txn.closing_date,
+                transaction_type: txn.transaction_type,
+                status: txn.status,
+                roles: ['Other Contact']
+              });
+            } else {
+              transactionMap.get(txn.id).roles.push('Other Contact');
+            }
+          }
+        } catch (parseError) {
+          console.error('[DatabaseService] Error parsing other_contacts JSON:', parseError);
+        }
+      });
+    }
+
+    // Convert map to array and format roles
+    return Array.from(transactionMap.values()).map(txn => ({
+      ...txn,
+      roles: [...new Set(txn.roles)].join(', ') // Deduplicate and join roles
+    }));
+  }
+
+  /**
    * Delete a contact
    */
   async deleteContact(contactId) {

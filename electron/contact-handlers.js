@@ -200,10 +200,44 @@ function registerContactHandlers() {
     }
   });
 
+  // Check if contact can be deleted (get associated transactions)
+  ipcMain.handle('contacts:checkCanDelete', async (event, contactId) => {
+    try {
+      console.log('[Main] Checking if contact can be deleted:', contactId);
+
+      const transactions = await databaseService.getTransactionsByContact(contactId);
+
+      return {
+        success: true,
+        canDelete: transactions.length === 0,
+        transactions: transactions,
+        count: transactions.length
+      };
+    } catch (error) {
+      console.error('[Main] Check can delete contact failed:', error);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  });
+
   // Delete contact
   ipcMain.handle('contacts:delete', async (event, contactId) => {
     try {
       console.log('[Main] Deleting contact:', contactId);
+
+      // Check if contact has associated transactions
+      const check = await databaseService.getTransactionsByContact(contactId);
+      if (check.length > 0) {
+        return {
+          success: false,
+          error: 'Cannot delete contact with associated transactions',
+          canDelete: false,
+          transactions: check,
+          count: check.length
+        };
+      }
 
       await databaseService.deleteContact(contactId);
 
@@ -223,6 +257,18 @@ function registerContactHandlers() {
   ipcMain.handle('contacts:remove', async (event, contactId) => {
     try {
       console.log('[Main] Removing contact from local database:', contactId);
+
+      // Check if contact has associated transactions
+      const check = await databaseService.getTransactionsByContact(contactId);
+      if (check.length > 0) {
+        return {
+          success: false,
+          error: 'Cannot remove contact with associated transactions',
+          canDelete: false,
+          transactions: check,
+          count: check.length
+        };
+      }
 
       await databaseService.removeContact(contactId);
 
