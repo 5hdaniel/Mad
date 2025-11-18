@@ -100,8 +100,10 @@ class DatabaseService {
    * @private
    */
   async _runAdditionalMigrations() {
+    console.log('[DatabaseService] 🔄 Starting database migrations...');
     try {
       // Migration 1: Add legal compliance columns to users_local
+      console.log('[DatabaseService] Running Migration 1: User compliance columns');
       const userColumns = await this._all(`PRAGMA table_info(users_local)`);
       if (!userColumns.some(col => col.name === 'terms_accepted_at')) {
         console.log('[DatabaseService] Adding terms_accepted_at column to users_local');
@@ -121,6 +123,7 @@ class DatabaseService {
       }
 
       // Migration 2: Add new transaction columns
+      console.log('[DatabaseService] Running Migration 2: Transaction columns');
       const transactionColumns = await this._all(`PRAGMA table_info(transactions)`);
       const transactionMigrations = [
         { name: 'status', sql: `ALTER TABLE transactions ADD COLUMN status TEXT DEFAULT 'active'` },
@@ -152,7 +155,9 @@ class DatabaseService {
       `);
 
       // Migration 3: Enhanced contact roles for transaction_contacts
+      console.log('[DatabaseService] Running Migration 3: Transaction contacts enhanced roles');
       const tcColumns = await this._all(`PRAGMA table_info(transaction_contacts)`);
+      console.log('[DatabaseService] Current transaction_contacts columns:', tcColumns.map(c => c.name).join(', '));
       const tcMigrations = [
         {
           name: 'role_category',
@@ -194,7 +199,21 @@ class DatabaseService {
         END;
       `);
 
+      // Verify all columns were added successfully
+      const verifyTcColumns = await this._all(`PRAGMA table_info(transaction_contacts)`);
+      const columnNames = verifyTcColumns.map(c => c.name);
+      console.log('[DatabaseService] ✅ Migration 3 complete. Final transaction_contacts columns:', columnNames.join(', '));
+
+      const requiredColumns = ['role_category', 'specific_role', 'is_primary', 'notes', 'updated_at'];
+      const missingColumns = requiredColumns.filter(col => !columnNames.includes(col));
+      if (missingColumns.length > 0) {
+        console.error('[DatabaseService] ❌ ERROR: Missing required columns:', missingColumns.join(', '));
+      } else {
+        console.log('[DatabaseService] ✅ All required columns present');
+      }
+
       // Migration 4: User feedback and extraction metrics
+      console.log('[DatabaseService] Running Migration 4: User feedback tables');
       const feedbackTableExists = await this._get(`SELECT name FROM sqlite_master WHERE type='table' AND name='user_feedback'`);
       if (!feedbackTableExists) {
         console.log('[DatabaseService] Creating user feedback tables');
@@ -260,9 +279,18 @@ class DatabaseService {
         `);
       }
 
+      console.log('[DatabaseService] ✅ All database migrations completed successfully');
+
     } catch (error) {
-      // Log but don't fail on migration errors
-      console.log('[DatabaseService] Migration check:', error.message);
+      // Log migration errors prominently but don't fail initialization
+      console.error('[DatabaseService] ⚠️  MIGRATION ERROR - Some features may not work correctly:');
+      console.error('[DatabaseService] Error:', error.message);
+      console.error('[DatabaseService] Stack:', error.stack);
+
+      // For critical errors, we should probably fail
+      if (error.message.includes('syntax error') || error.message.includes('no such column')) {
+        console.error('[DatabaseService] This is a critical migration error. Database may be in inconsistent state.');
+      }
     }
   }
 
