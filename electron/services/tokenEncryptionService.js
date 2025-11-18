@@ -66,7 +66,7 @@ class TokenEncryptionService {
       return safeStorage.decryptString(buffer);
     } catch (error) {
       console.error('[TokenEncryption] Decryption failed:', error);
-      throw new Error('Failed to decrypt token: ' + error.message);
+      throw new Error('Decryption failed');
     }
   }
 
