@@ -44,10 +44,13 @@ contextBridge.exposeInMainWorld('api', {
   // Contact methods
   contacts: {
     getAll: (userId) => ipcRenderer.invoke('contacts:get-all', userId),
+    getAvailable: (userId) => ipcRenderer.invoke('contacts:get-available', userId),
+    import: (userId, contactsToImport) => ipcRenderer.invoke('contacts:import', userId, contactsToImport),
     getSortedByActivity: (userId, propertyAddress) => ipcRenderer.invoke('contacts:get-sorted-by-activity', userId, propertyAddress),
     create: (userId, contactData) => ipcRenderer.invoke('contacts:create', userId, contactData),
     update: (contactId, updates) => ipcRenderer.invoke('contacts:update', contactId, updates),
     delete: (contactId) => ipcRenderer.invoke('contacts:delete', contactId),
+    remove: (contactId) => ipcRenderer.invoke('contacts:remove', contactId),
   },
 
   // Address verification methods (Google Places API)
@@ -67,6 +70,13 @@ contextBridge.exposeInMainWorld('api', {
     getSuggestion: (userId, fieldName, extractedValue, confidence) =>
       ipcRenderer.invoke('feedback:get-suggestion', userId, fieldName, extractedValue, confidence),
     getLearningStats: (userId, fieldName) => ipcRenderer.invoke('feedback:get-learning-stats', userId, fieldName),
+  },
+
+  // User preference methods
+  preferences: {
+    get: (userId) => ipcRenderer.invoke('preferences:get', userId),
+    save: (userId, preferences) => ipcRenderer.invoke('preferences:save', userId, preferences),
+    update: (userId, partialPreferences) => ipcRenderer.invoke('preferences:update', userId, partialPreferences),
   },
 
   // System health and permission checks

@@ -117,6 +117,9 @@ CREATE TABLE IF NOT EXISTS contacts (
   -- Source
   source TEXT DEFAULT 'manual' CHECK (source IN ('manual', 'email', 'contacts_app')),
 
+  -- Import tracking
+  is_imported INTEGER DEFAULT 1,
+
   -- Metadata
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -298,6 +301,8 @@ CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(session_token);
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_contacts_user_id ON contacts(user_id);
 CREATE INDEX IF NOT EXISTS idx_contacts_email ON contacts(email);
+CREATE INDEX IF NOT EXISTS idx_contacts_is_imported ON contacts(is_imported);
+CREATE INDEX IF NOT EXISTS idx_contacts_user_imported ON contacts(user_id, is_imported);
 CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_property ON transactions(property_address);
 CREATE INDEX IF NOT EXISTS idx_transaction_contacts_transaction_id ON transaction_contacts(transaction_id);
