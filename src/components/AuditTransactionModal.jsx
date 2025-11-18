@@ -190,6 +190,11 @@ function AuditTransactionModal({ userId, provider, onClose, onSuccess }) {
    * Create the transaction with all contact assignments
    */
   const handleCreateTransaction = async () => {
+    // Prevent duplicate submissions
+    if (loading) {
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
@@ -213,13 +218,14 @@ function AuditTransactionModal({ userId, provider, onClose, onSuccess }) {
 
       if (result.success) {
         onSuccess(result.transaction);
+        onClose(); // Close modal immediately after success
       } else {
         setError(result.error || 'Failed to create transaction');
+        setLoading(false); // Only reset loading on error
       }
     } catch (err) {
       setError(err.message || 'Failed to create transaction');
-    } finally {
-      setLoading(false);
+      setLoading(false); // Only reset loading on error
     }
   };
 
