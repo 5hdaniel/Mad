@@ -94,9 +94,21 @@ contextBridge.exposeInMainWorld('api', {
   },
 
   // IPC event listeners
-  onMicrosoftLoginComplete: (callback) => ipcRenderer.on('microsoft:login-complete', (_, result) => callback(result)),
-  onMicrosoftMailboxConnected: (callback) => ipcRenderer.on('microsoft:mailbox-connected', (_, result) => callback(result)),
-  onTransactionScanProgress: (callback) => ipcRenderer.on('transactions:scan-progress', (_, progress) => callback(progress)),
+  onMicrosoftLoginComplete: (callback) => {
+    const listener = (_, result) => callback(result);
+    ipcRenderer.on('microsoft:login-complete', listener);
+    return () => ipcRenderer.removeListener('microsoft:login-complete', listener);
+  },
+  onMicrosoftMailboxConnected: (callback) => {
+    const listener = (_, result) => callback(result);
+    ipcRenderer.on('microsoft:mailbox-connected', listener);
+    return () => ipcRenderer.removeListener('microsoft:mailbox-connected', listener);
+  },
+  onTransactionScanProgress: (callback) => {
+    const listener = (_, progress) => callback(progress);
+    ipcRenderer.on('transactions:scan-progress', listener);
+    return () => ipcRenderer.removeListener('transactions:scan-progress', listener);
+  },
 
   // Shell methods (opens URLs in external browser)
   shell: {
@@ -120,9 +132,21 @@ contextBridge.exposeInMainWorld('electron', {
   openFolder: (folderPath) => ipcRenderer.invoke('open-folder', folderPath),
 
   // Auto-update methods
-  onUpdateAvailable: (callback) => ipcRenderer.on('update-available', (_, info) => callback(info)),
-  onUpdateProgress: (callback) => ipcRenderer.on('update-progress', (_, progress) => callback(progress)),
-  onUpdateDownloaded: (callback) => ipcRenderer.on('update-downloaded', (_, info) => callback(info)),
+  onUpdateAvailable: (callback) => {
+    const listener = (_, info) => callback(info);
+    ipcRenderer.on('update-available', listener);
+    return () => ipcRenderer.removeListener('update-available', listener);
+  },
+  onUpdateProgress: (callback) => {
+    const listener = (_, progress) => callback(progress);
+    ipcRenderer.on('update-progress', listener);
+    return () => ipcRenderer.removeListener('update-progress', listener);
+  },
+  onUpdateDownloaded: (callback) => {
+    const listener = (_, info) => callback(info);
+    ipcRenderer.on('update-downloaded', listener);
+    return () => ipcRenderer.removeListener('update-downloaded', listener);
+  },
   installUpdate: () => ipcRenderer.send('install-update'),
 
   // Outlook integration methods
@@ -132,6 +156,14 @@ contextBridge.exposeInMainWorld('electron', {
   outlookGetUserEmail: () => ipcRenderer.invoke('outlook-get-user-email'),
   outlookExportEmails: (contacts) => ipcRenderer.invoke('outlook-export-emails', contacts),
   outlookSignout: () => ipcRenderer.invoke('outlook-signout'),
-  onDeviceCode: (callback) => ipcRenderer.on('device-code-received', (_, info) => callback(info)),
-  onExportProgress: (callback) => ipcRenderer.on('export-progress', (_, progress) => callback(progress))
+  onDeviceCode: (callback) => {
+    const listener = (_, info) => callback(info);
+    ipcRenderer.on('device-code-received', listener);
+    return () => ipcRenderer.removeListener('device-code-received', listener);
+  },
+  onExportProgress: (callback) => {
+    const listener = (_, progress) => callback(progress);
+    ipcRenderer.on('export-progress', listener);
+    return () => ipcRenderer.removeListener('export-progress', listener);
+  }
 });

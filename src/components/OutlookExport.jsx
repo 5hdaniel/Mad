@@ -20,9 +20,14 @@ function OutlookExport({ conversations, selectedIds, onComplete, onCancel }) {
       setExportProgress(progress);
     };
 
+    let cleanup;
     if (window.electron.onExportProgress) {
-      window.electron.onExportProgress(progressListener);
+      cleanup = window.electron.onExportProgress(progressListener);
     }
+
+    return () => {
+      if (cleanup) cleanup();
+    };
   }, []);
 
   const initializeOutlook = async () => {

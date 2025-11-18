@@ -74,21 +74,24 @@ function Settings({ onClose, userId }) {
 
   const handleConnectMicrosoft = async () => {
     setConnectingProvider('microsoft');
+    let cleanup;
     try {
       const result = await window.api.auth.microsoftConnectMailbox(userId);
       if (result.success) {
         // Auth popup window opens automatically and will close when done
         // Listen for connection completion
-        window.api.onMicrosoftMailboxConnected(async (connectionResult) => {
+        cleanup = window.api.onMicrosoftMailboxConnected(async (connectionResult) => {
           if (connectionResult.success) {
             await checkConnections();
           }
           setConnectingProvider(null);
+          if (cleanup) cleanup(); // Clean up listener after handling the event
         });
       }
     } catch (error) {
       console.error('Failed to connect Microsoft:', error);
       setConnectingProvider(null);
+      if (cleanup) cleanup();
     }
   };
 

@@ -66,8 +66,9 @@ function MicrosoftLogin({ onLoginComplete, onSkip }) {
     };
 
     // Set up listener (will be cleaned up when authentication completes)
+    let cleanup;
     if (window.electron.onDeviceCode) {
-      window.electron.onDeviceCode(handleDeviceCode);
+      cleanup = window.electron.onDeviceCode(handleDeviceCode);
     }
 
     try {
@@ -88,6 +89,7 @@ function MicrosoftLogin({ onLoginComplete, onSkip }) {
     } catch (err) {
       setError(err.message);
     } finally {
+      if (cleanup) cleanup();
       setIsAuthenticating(false);
     }
   };
