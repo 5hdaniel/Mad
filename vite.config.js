@@ -6,5 +6,10 @@ export default defineConfig({
   base: './',
   build: {
     outDir: 'dist'
+  },
+  server: {
+    port: 5173,
+    strictPort: false, // If port 5173 is taken, automatically find another available port
+    host: true // Listen on all addresses
   }
 });
