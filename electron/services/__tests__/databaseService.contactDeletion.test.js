@@ -21,7 +21,11 @@ const mockDatabase = {
 jest.mock('sqlite3', () => {
   return {
     verbose: () => ({
-      Database: jest.fn().mockImplementation(() => mockDatabase),
+      Database: jest.fn().mockImplementation((dbPath, callback) => {
+        // Call the callback to simulate successful connection
+        if (callback) callback(null);
+        return mockDatabase;
+      }),
     }),
   };
 });
