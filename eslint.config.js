@@ -1,0 +1,127 @@
+/**
+ * ESLint v9+ Flat Config
+ * This configuration file supports ESLint 9+
+ * For more information: https://eslint.org/docs/latest/use/configure/configuration-files
+ */
+
+const reactPlugin = require('eslint-plugin-react');
+
+module.exports = [
+  // Ignore patterns
+  {
+    ignores: [
+      'node_modules/**',
+      'dist/**',
+      'build/**',
+      '**/*.min.js',
+    ],
+  },
+
+  // Base configuration for all files
+  {
+    files: ['**/*.js', '**/*.jsx'],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      parserOptions: {
+        ecmaFeatures: {
+          jsx: true,
+        },
+      },
+      globals: {
+        // Browser globals
+        window: 'readonly',
+        document: 'readonly',
+        navigator: 'readonly',
+        console: 'readonly',
+        localStorage: 'readonly',
+        sessionStorage: 'readonly',
+        alert: 'readonly',
+        confirm: 'readonly',
+        prompt: 'readonly',
+        fetch: 'readonly',
+        URL: 'readonly',
+        URLSearchParams: 'readonly',
+
+        // Node globals
+        require: 'readonly',
+        module: 'readonly',
+        exports: 'readonly',
+        __dirname: 'readonly',
+        __filename: 'readonly',
+        process: 'readonly',
+        Buffer: 'readonly',
+        global: 'readonly',
+        setTimeout: 'readonly',
+        setInterval: 'readonly',
+        setImmediate: 'readonly',
+        clearTimeout: 'readonly',
+        clearInterval: 'readonly',
+        clearImmediate: 'readonly',
+        Intl: 'readonly',
+
+        // Jest globals
+        describe: 'readonly',
+        test: 'readonly',
+        it: 'readonly',
+        expect: 'readonly',
+        beforeEach: 'readonly',
+        afterEach: 'readonly',
+        beforeAll: 'readonly',
+        afterAll: 'readonly',
+        jest: 'readonly',
+      },
+    },
+    plugins: {
+      react: reactPlugin,
+    },
+    rules: {
+      // Core ESLint recommended rules (manually specified to avoid @eslint/js dependency)
+      'no-undef': 'error',
+      'no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      'no-console': ['warn', { allow: ['warn', 'error'] }],
+      'no-debugger': 'warn',
+      'no-constant-condition': 'error',
+      'no-dupe-args': 'error',
+      'no-dupe-keys': 'error',
+      'no-duplicate-case': 'error',
+      'no-empty': 'warn',
+      'no-ex-assign': 'error',
+      'no-extra-boolean-cast': 'warn',
+      'no-func-assign': 'error',
+      'no-inner-declarations': 'warn',
+      'no-invalid-regexp': 'error',
+      'no-irregular-whitespace': 'error',
+      'no-obj-calls': 'error',
+      'no-sparse-arrays': 'error',
+      'no-unreachable': 'error',
+      'use-isnan': 'error',
+      'valid-typeof': 'error',
+
+      // React rules
+      'react/react-in-jsx-scope': 'off', // Not needed in React 17+
+      'react/prop-types': 'off', // We're not using PropTypes
+      'react/display-name': 'off',
+      'react/jsx-uses-react': 'error',
+      'react/jsx-uses-vars': 'error',
+
+      // Best Practices
+      'eqeqeq': ['error', 'always'], // Require === instead of ==
+      'no-eval': 'error', // No eval() for security
+      'no-implied-eval': 'error',
+      'no-new-func': 'error', // No new Function() for security
+
+      // ES6
+      'prefer-const': 'warn',
+      'no-var': 'warn',
+
+      // Allow async without await (common in event handlers)
+      'require-await': 'off',
+    },
+    settings: {
+      react: {
+        version: 'detect',
+      },
+    },
+  },
+];

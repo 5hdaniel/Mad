@@ -8,18 +8,69 @@ const transactionService = require('./services/transactionService');
 const pdfExportService = require('./services/pdfExportService');
 const enhancedExportService = require('./services/enhancedExportService');
 
+// Import validation utilities
+const {
+  ValidationError,
+  validateUserId,
+  validateTransactionId,
+  validateTransactionData,
+  validateProvider,
+  validateFilePath,
+  sanitizeObject,
+} = require('./utils/validation');
+
 /**
  * Register all transaction-related IPC handlers
  * @param {BrowserWindow} mainWindow - Main window instance
  */
 const registerTransactionHandlers = (mainWindow) => {
-  // Scan and extract transactions from emails
+  /**
+   * Scan and extract transactions from emails
+   *
+   * COMPLEX IPC OPERATION - Long-Running Email Processing with Progress Updates
+   * This handler scans Gmail/Outlook emails for real estate transaction data.
+   * Can process thousands of emails and takes minutes to complete.
+   *
+   * FLOW:
+   * 1. Retrieve encrypted OAuth tokens from database
+   * 2. Decrypt tokens using OS keychain
+   * 3. Connect to Gmail/Outlook API
+   * 4. Fetch emails in batches (paginated)
+   * 5. For each email: Extract transaction data using regex patterns
+   * 6. Save transactions to SQLite database
+   * 7. Send progress updates to renderer every N items
+   *
+   * PROGRESS UPDATES:
+   * - Emits 'transactions:scan-progress' events to renderer
+   * - Includes: processedCount, totalCount, currentItem, percentage
+   * - Allows UI to show real-time progress bar
+   *
+   * PERFORMANCE CONSIDERATIONS:
+   * - Processes emails in batches to avoid memory issues
+   * - Uses streaming API calls where possible
+   * - Implements retry logic for network failures
+   * - Can be cancelled by user (checked between batches)
+   *
+   * @param {Event} event - IPC event object
+   * @param {number} userId - User ID for email account lookup
+   * @param {Object} options - Scan options
+   * @param {string} options.provider - 'google' or 'microsoft'
+   * @param {Date} [options.startDate] - Optional start date for scan range
+   * @param {Date} [options.endDate] - Optional end date for scan range
+   * @param {string} [options.propertyAddress] - Optional filter for specific property
+   * @returns {Promise<{success: boolean, transactionsFound?: number, emailsScanned?: number, error?: string}>}
+   * @emits transactions:scan-progress - Periodic progress updates during scan
+   */
   ipcMain.handle('transactions:scan', async (event, userId, options) => {
     try {
       console.log('[Main] Starting transaction scan for user:', userId);
 
-      const result = await transactionService.scanAndExtractTransactions(userId, {
-        ...options,
+      // INPUT VALIDATION
+      const validatedUserId = validateUserId(userId);
+      const sanitizedOptions = sanitizeObject(options || {});
+
+      const result = await transactionService.scanAndExtractTransactions(validatedUserId, {
+        ...sanitizedOptions,
         onProgress: (progress) => {
           // Send progress updates to renderer
           if (mainWindow) {
@@ -64,7 +115,11 @@ const registerTransactionHandlers = (mainWindow) => {
   // Create manual transaction
   ipcMain.handle('transactions:create', async (event, userId, transactionData) => {
     try {
-      const transaction = await transactionService.createManualTransaction(userId, transactionData);
+      // INPUT VALIDATION
+      const validatedUserId = validateUserId(userId);
+      const validatedData = validateTransactionData(transactionData, false);
+
+      const transaction = await transactionService.createManualTransaction(validatedUserId, validatedData);
 
       return {
         success: true,
@@ -107,7 +162,11 @@ const registerTransactionHandlers = (mainWindow) => {
   // Update transaction
   ipcMain.handle('transactions:update', async (event, transactionId, updates) => {
     try {
-      const updated = await transactionService.updateTransaction(transactionId, updates);
+      // INPUT VALIDATION
+      const validatedTransactionId = validateTransactionId(transactionId);
+      const validatedUpdates = validateTransactionData(updates, true);
+
+      const updated = await transactionService.updateTransaction(validatedTransactionId, validatedUpdates);
 
       return {
         success: true,
@@ -125,7 +184,10 @@ const registerTransactionHandlers = (mainWindow) => {
   // Delete transaction
   ipcMain.handle('transactions:delete', async (event, transactionId) => {
     try {
-      await transactionService.deleteTransaction(transactionId);
+      // INPUT VALIDATION
+      const validatedTransactionId = validateTransactionId(transactionId);
+
+      await transactionService.deleteTransaction(validatedTransactionId);
 
       return {
         success: true,

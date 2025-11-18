@@ -24,13 +24,16 @@ class TokenEncryptionService {
    * Encrypt a plaintext string
    * @param {string} plaintext - The string to encrypt
    * @returns {string} Base64-encoded encrypted data
+   * @throws {Error} If encryption is not available or fails
    */
   encrypt(plaintext) {
     if (!this.isEncryptionAvailable()) {
-      console.warn('[TokenEncryption] Encryption not available, storing as plaintext (DEVELOPMENT ONLY)');
-      // In development, if encryption isn't available, encode as base64
-      // This should NEVER happen in production on macOS/Windows
-      return Buffer.from(plaintext).toString('base64');
+      // SECURITY: Fail-safe instead of fallback to plaintext
+      // This prevents tokens from being stored unencrypted
+      console.error('[TokenEncryption] CRITICAL: Encryption not available. Cannot store tokens securely.');
+      throw new Error(
+        'Token encryption is not available. Please ensure your system supports secure storage (macOS Keychain, Windows DPAPI, or Linux Secret Service).'
+      );
     }
 
     try {
@@ -38,7 +41,7 @@ class TokenEncryptionService {
       return buffer.toString('base64');
     } catch (error) {
       console.error('[TokenEncryption] Encryption failed:', error);
-      throw new Error('Failed to encrypt token');
+      throw new Error('Failed to encrypt token: ' + error.message);
     }
   }
 
@@ -46,12 +49,16 @@ class TokenEncryptionService {
    * Decrypt base64-encoded encrypted data
    * @param {string} encryptedBase64 - Base64-encoded encrypted data
    * @returns {string} Decrypted plaintext
+   * @throws {Error} If decryption is not available or fails
    */
   decrypt(encryptedBase64) {
     if (!this.isEncryptionAvailable()) {
-      console.warn('[TokenEncryption] Encryption not available, decoding as plaintext (DEVELOPMENT ONLY)');
-      // In development, decode from base64
-      return Buffer.from(encryptedBase64, 'base64').toString('utf8');
+      // SECURITY: Fail-safe instead of attempting plaintext decode
+      // This prevents the application from running with unencrypted tokens
+      console.error('[TokenEncryption] CRITICAL: Decryption not available. Cannot access encrypted tokens.');
+      throw new Error(
+        'Token decryption is not available. Please ensure your system supports secure storage.'
+      );
     }
 
     try {
@@ -59,7 +66,7 @@ class TokenEncryptionService {
       return safeStorage.decryptString(buffer);
     } catch (error) {
       console.error('[TokenEncryption] Decryption failed:', error);
-      throw new Error('Failed to decrypt token');
+      throw new Error('Failed to decrypt token: ' + error.message);
     }
   }
 

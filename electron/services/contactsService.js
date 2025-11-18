@@ -25,7 +25,7 @@ async function getContactNames() {
   const contactMap = {};
   const phoneToContactInfo = {};
   let lastError = null;
-  let attemptedPaths = [];
+  const attemptedPaths = [];
 
   try {
     const baseDir = path.join(process.env.HOME, CONTACTS_BASE_DIR);

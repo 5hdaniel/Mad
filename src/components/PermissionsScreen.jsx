@@ -10,6 +10,7 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain }) {
   const [clickPlusComplete, setClickPlusComplete] = useState(false);
   const [selectAppComplete, setSelectAppComplete] = useState(false);
   const [quitReopenComplete, setQuitReopenComplete] = useState(false);
+  const [appleScriptStepComplete, setAppleScriptStepComplete] = useState(false);
   const [macOSInfo, setMacOSInfo] = useState(null);
   const [appInfo, setAppInfo] = useState(null);
 

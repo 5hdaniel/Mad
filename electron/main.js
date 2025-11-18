@@ -36,6 +36,7 @@ const microsoftAuthService = require('./services/microsoftAuthService');
 const supabaseService = require('./services/supabaseService');
 const tokenEncryptionService = require('./services/tokenEncryptionService');
 const connectionStatusService = require('./services/connectionStatusService');
+const outlookService = require('./outlookService');
 const { initializeDatabase, registerAuthHandlers } = require('./auth-handlers');
 const { registerTransactionHandlers } = require('./transaction-handlers');
 const { registerContactHandlers } = require('./contact-handlers');
@@ -1140,7 +1141,7 @@ ipcMain.handle('outlook-export-emails', async (event, contacts) => {
       let textMessageCount = 0;
       let totalEmails = 0;
       let anySuccess = false;
-      let errors = [];
+      const errors = [];
 
       // 1. Export text messages (if chatId exists or if we have phone/email identifiers)
       if (contact.chatId || contact.phones?.length > 0 || contact.emails?.length > 0) {
