@@ -69,7 +69,7 @@ const handleGoogleLogin = async (mainWindow) => {
 
     console.log('[Main] Opening Google auth URL in popup window');
 
-    // Create a popup window for auth
+    // Create a popup window for auth with webSecurity disabled to allow Google's scripts
     const { BrowserWindow } = require('electron');
 
     const authWindow = new BrowserWindow({
@@ -78,9 +78,21 @@ const handleGoogleLogin = async (mainWindow) => {
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
+        webSecurity: false, // Disable to allow Google's CDN scripts to load
+        allowRunningInsecureContent: true
       },
       autoHideMenuBar: true,
       title: 'Sign in with Google'
+    });
+
+    // Strip CSP headers to allow Google's scripts to load
+    const filter = { urls: ['*://*.google.com/*', '*://*.googleapis.com/*', '*://*.gstatic.com/*', '*://*.googleusercontent.com/*'] };
+    authWindow.webContents.session.webRequest.onHeadersReceived(filter, (details, callback) => {
+      const responseHeaders = details.responseHeaders || {};
+      delete responseHeaders['content-security-policy'];
+      delete responseHeaders['content-security-policy-report-only'];
+      delete responseHeaders['x-content-security-policy'];
+      callback({ responseHeaders });
     });
 
     // Load the auth URL
@@ -257,7 +269,7 @@ const handleGoogleConnectMailbox = async (mainWindow, userId) => {
 
     console.log('[Main] Opening Google mailbox auth URL in popup window');
 
-    // Create a popup window for auth
+    // Create a popup window for auth with webSecurity disabled to allow Google's scripts
     const { BrowserWindow } = require('electron');
 
     const authWindow = new BrowserWindow({
@@ -266,9 +278,21 @@ const handleGoogleConnectMailbox = async (mainWindow, userId) => {
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
+        webSecurity: false, // Disable to allow Google's CDN scripts to load
+        allowRunningInsecureContent: true
       },
       autoHideMenuBar: true,
       title: 'Connect to Gmail'
+    });
+
+    // Strip CSP headers to allow Google's scripts to load
+    const filter = { urls: ['*://*.google.com/*', '*://*.googleapis.com/*', '*://*.gstatic.com/*', '*://*.googleusercontent.com/*'] };
+    authWindow.webContents.session.webRequest.onHeadersReceived(filter, (details, callback) => {
+      const responseHeaders = details.responseHeaders || {};
+      delete responseHeaders['content-security-policy'];
+      delete responseHeaders['content-security-policy-report-only'];
+      delete responseHeaders['x-content-security-policy'];
+      callback({ responseHeaders });
     });
 
     // Load the auth URL
