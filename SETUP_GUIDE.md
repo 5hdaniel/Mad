@@ -105,8 +105,12 @@ The Mad application uses:
 6. On "Test users" page:
    - Click "+ ADD USERS"
    - Add your email address and any testers
+   - **IMPORTANT**: While your app is in "Testing" mode, ONLY users added here can sign in
+   - Add all users who will test the app (e.g., danielxhaim@gmail.com, magicauditwa@gmail.com)
    - Click "SAVE AND CONTINUE"
 7. Click "BACK TO DASHBOARD"
+
+**⚠️ Common Issue**: If users get "Error 403: access_denied" when signing in, they need to be added as test users. See `GOOGLE_OAUTH_SETUP.md` for detailed troubleshooting.
 
 ### Step 4: Create OAuth Credentials
 
@@ -327,9 +331,15 @@ Before deploying to production:
 
 ### Google OAuth Not Working
 
+**Error 403: "The developer hasn't given you access to this app"**
+- ✅ **Solution**: Add the user to test users list in OAuth consent screen
+- See detailed guide: `GOOGLE_OAUTH_SETUP.md`
+
+**Other Issues:**
 - Verify app is in "Testing" mode with test users added
 - Check that required APIs are enabled
 - Ensure scopes match what you requested in consent screen
+- For detailed troubleshooting, see `GOOGLE_OAUTH_SETUP.md`
 
 ### Microsoft OAuth Fails
 
