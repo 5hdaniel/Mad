@@ -142,6 +142,15 @@ class DatabaseService {
         }
       }
 
+      // Create trigger for transactions timestamp (after ensuring updated_at column exists)
+      await this._run(`
+        CREATE TRIGGER IF NOT EXISTS update_transactions_timestamp
+        AFTER UPDATE ON transactions
+        BEGIN
+          UPDATE transactions SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+        END;
+      `);
+
       // Migration 3: Enhanced contact roles for transaction_contacts
       const tcColumns = await this._all(`PRAGMA table_info(transaction_contacts)`);
       const tcMigrations = [

@@ -312,6 +312,9 @@ CREATE INDEX IF NOT EXISTS idx_extracted_data_transaction_id ON extracted_transa
 -- ============================================
 -- TRIGGERS (Auto-update timestamps)
 -- ============================================
+-- Note: Additional triggers are created in the migration code
+-- after ensuring required columns exist
+
 CREATE TRIGGER IF NOT EXISTS update_users_local_timestamp
 AFTER UPDATE ON users_local
 BEGIN
@@ -328,16 +331,4 @@ CREATE TRIGGER IF NOT EXISTS update_contacts_timestamp
 AFTER UPDATE ON contacts
 BEGIN
   UPDATE contacts SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
-END;
-
-CREATE TRIGGER IF NOT EXISTS update_transactions_timestamp
-AFTER UPDATE ON transactions
-BEGIN
-  UPDATE transactions SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
-END;
-
-CREATE TRIGGER IF NOT EXISTS update_transaction_contacts_timestamp
-AFTER UPDATE ON transaction_contacts
-BEGIN
-  UPDATE transaction_contacts SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
 END;
