@@ -428,13 +428,9 @@ function TransactionDetails({ transaction, onClose, onTransactionUpdated }) {
       setLoading(true);
       const result = await window.api.transactions.getDetails(transaction.id);
 
-      console.log('[TransactionDetails] API result:', result);
-
       if (result.success) {
         setCommunications(result.transaction.communications || []);
         setContactAssignments(result.transaction.contact_assignments || []);
-
-        console.log('[TransactionDetails] Contact assignments loaded:', result.transaction.contact_assignments);
       }
     } catch (err) {
       console.error('Failed to load details:', err);
