@@ -256,16 +256,22 @@ class DatabaseService {
       if (!contactColumns.some(col => col.name === 'is_imported')) {
         console.log('[DatabaseService] Adding is_imported column to contacts');
         await this._run(`ALTER TABLE contacts ADD COLUMN is_imported INTEGER DEFAULT 1`);
+        console.log('[DatabaseService] Successfully added is_imported column');
         // Mark all existing manual and email contacts as imported
         await this._run(`UPDATE contacts SET is_imported = 1 WHERE source IN ('manual', 'email')`);
+        console.log('[DatabaseService] Marked existing contacts as imported');
         // Create index for better performance
         await this._run(`CREATE INDEX IF NOT EXISTS idx_contacts_is_imported ON contacts(is_imported)`);
         await this._run(`CREATE INDEX IF NOT EXISTS idx_contacts_user_imported ON contacts(user_id, is_imported)`);
+        console.log('[DatabaseService] Created indexes for is_imported');
+      } else {
+        console.log('[DatabaseService] is_imported column already exists');
       }
 
     } catch (error) {
-      // Log but don't fail on migration errors
-      console.log('[DatabaseService] Migration check:', error.message);
+      // Log full error details for debugging
+      console.error('[DatabaseService] Migration failed:', error);
+      console.error('[DatabaseService] Error stack:', error.stack);
     }
   }
 
