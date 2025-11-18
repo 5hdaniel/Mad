@@ -75,6 +75,38 @@ To grant permissions:
 - No cloud uploads (unless you choose to export to cloud storage)
 - Open source and transparent
 
+## Troubleshooting
+
+### Architecture Mismatch Error (Apple Silicon)
+
+If you see an error like:
+```
+Error: dlopen(...node_sqlite3.node, 0x0001): mach-o file, but is an incompatible architecture (have 'x86_64', need 'arm64e' or 'arm64')
+```
+
+This means the sqlite3 native module was built for the wrong architecture. This commonly happens when:
+- Dependencies were installed on an Intel Mac or using Rosetta
+- You're running on Apple Silicon (M1/M2/M3/M4 Mac)
+- Node modules were copied from another machine
+
+**Solution:**
+
+The app includes an automatic rebuild system using `electron-rebuild`. Simply run:
+```bash
+npm install
+```
+
+The `postinstall` script will automatically rebuild all native modules (including sqlite3) for your current architecture and Electron version.
+
+**If the problem persists:**
+```bash
+# Remove node_modules and reinstall
+rm -rf node_modules package-lock.json
+npm install
+```
+
+This ensures all native modules are compiled correctly for your system.
+
 ## Future Enhancements
 
 - Cloud storage integrations (Google Drive, Dropbox, OneDrive)
