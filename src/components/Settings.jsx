@@ -5,17 +5,17 @@ import React, { useState, useEffect } from 'react';
  * Application settings and preferences
  */
 function Settings({ onClose, userId }) {
-  const [autoExport, setAutoExport] = useState(false);
-  const [notifications, setNotifications] = useState(true);
-  const [darkMode, setDarkMode] = useState(false);
   const [connections, setConnections] = useState({ google: null, microsoft: null });
   const [loadingConnections, setLoadingConnections] = useState(true);
   const [connectingProvider, setConnectingProvider] = useState(null);
+  const [exportFormat, setExportFormat] = useState('pdf'); // Default export format
+  const [loadingPreferences, setLoadingPreferences] = useState(true);
 
-  // Load connection status on mount
+  // Load connection status and preferences on mount
   useEffect(() => {
     if (userId) {
       checkConnections();
+      loadPreferences();
     }
   }, [userId]);
 
@@ -33,6 +33,41 @@ function Settings({ onClose, userId }) {
       console.error('Failed to check connections:', error);
     } finally {
       setLoadingConnections(false);
+    }
+  };
+
+  const loadPreferences = async () => {
+    setLoadingPreferences(true);
+    try {
+      const result = await window.api.preferences.get(userId);
+      if (result.success && result.preferences) {
+        // Load export format preference
+        if (result.preferences.export?.defaultFormat) {
+          setExportFormat(result.preferences.export.defaultFormat);
+        }
+        // TODO: Load other preferences when they are implemented
+      }
+    } catch (error) {
+      console.error('Failed to load preferences:', error);
+    } finally {
+      setLoadingPreferences(false);
+    }
+  };
+
+  const handleExportFormatChange = async (newFormat) => {
+    setExportFormat(newFormat);
+    try {
+      // Update only the export format preference
+      const result = await window.api.preferences.update(userId, {
+        export: {
+          defaultFormat: newFormat
+        }
+      });
+      if (!result.success) {
+        console.error('Failed to save export format preference');
+      }
+    } catch (error) {
+      console.error('Failed to save export format preference:', error);
     }
   };
 
@@ -104,30 +139,9 @@ function Settings({ onClose, userId }) {
           <div className="mb-8">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">General</h3>
             <div className="space-y-4">
-              {/* Auto Export */}
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
-                <div className="flex-1">
-                  <h4 className="text-sm font-medium text-gray-900">Auto Export</h4>
-                  <p className="text-xs text-gray-600 mt-1">
-                    Automatically export new transactions daily
-                  </p>
-                </div>
-                <button
-                  onClick={() => setAutoExport(!autoExport)}
-                  className={`ml-4 relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    autoExport ? 'bg-blue-600' : 'bg-gray-300'
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      autoExport ? 'translate-x-6' : 'translate-x-1'
-                    }`}
-                  />
-                </button>
-              </div>
-
               {/* Notifications */}
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+              {/* TODO: Implement desktop notifications system */}
+              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200 opacity-50">
                 <div className="flex-1">
                   <h4 className="text-sm font-medium text-gray-900">Notifications</h4>
                   <p className="text-xs text-gray-600 mt-1">
@@ -135,20 +149,32 @@ function Settings({ onClose, userId }) {
                   </p>
                 </div>
                 <button
-                  onClick={() => setNotifications(!notifications)}
-                  className={`ml-4 relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    notifications ? 'bg-blue-600' : 'bg-gray-300'
-                  }`}
+                  disabled
+                  className="ml-4 relative inline-flex h-6 w-11 items-center rounded-full bg-gray-300 cursor-not-allowed"
                 >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      notifications ? 'translate-x-6' : 'translate-x-1'
-                    }`}
-                  />
+                  <span className="inline-block h-4 w-4 transform rounded-full bg-white translate-x-1" />
                 </button>
               </div>
 
-              {/* Dark Mode - Coming Soon */}
+              {/* Auto Export */}
+              {/* TODO: Implement automatic daily export functionality */}
+              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200 opacity-50">
+                <div className="flex-1">
+                  <h4 className="text-sm font-medium text-gray-900">Auto Export</h4>
+                  <p className="text-xs text-gray-600 mt-1">
+                    Automatically export new transactions daily
+                  </p>
+                </div>
+                <button
+                  disabled
+                  className="ml-4 relative inline-flex h-6 w-11 items-center rounded-full bg-gray-300 cursor-not-allowed"
+                >
+                  <span className="inline-block h-4 w-4 transform rounded-full bg-white translate-x-1" />
+                </button>
+              </div>
+
+              {/* Dark Mode */}
+              {/* TODO: Implement dark mode theme system */}
               <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200 opacity-50">
                 <div className="flex-1">
                   <h4 className="text-sm font-medium text-gray-900">Dark Mode</h4>
@@ -248,15 +274,23 @@ function Settings({ onClose, userId }) {
             <div className="space-y-3 bg-gray-50 rounded-lg p-4 border border-gray-200">
               <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-700">Default Format</span>
-                <select className="text-sm border border-gray-300 rounded px-3 py-1.5 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                  <option>PDF</option>
-                  <option>CSV</option>
-                  <option>Excel</option>
+                <select
+                  value={exportFormat}
+                  onChange={(e) => handleExportFormatChange(e.target.value)}
+                  disabled={loadingPreferences}
+                  className="text-sm border border-gray-300 rounded px-3 py-1.5 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <option value="pdf">PDF</option>
+                  <option value="excel">Excel (.xlsx)</option>
+                  <option value="csv">CSV</option>
+                  <option value="json">JSON</option>
+                  <option value="txt_eml">TXT + EML Files</option>
                 </select>
               </div>
-              <div className="flex justify-between items-center">
+              {/* TODO: Implement export location chooser with native folder picker */}
+              <div className="flex justify-between items-center opacity-50">
                 <span className="text-sm text-gray-700">Export Location</span>
-                <button className="text-sm text-blue-600 hover:text-blue-700 font-medium">
+                <button disabled className="text-sm text-gray-400 font-medium cursor-not-allowed">
                   Choose Folder
                 </button>
               </div>
@@ -267,7 +301,8 @@ function Settings({ onClose, userId }) {
           <div className="mb-8">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Data & Privacy</h3>
             <div className="space-y-3">
-              <button className="w-full text-left p-4 bg-gray-50 hover:bg-gray-100 rounded-lg border border-gray-200 transition-all">
+              {/* TODO: Implement data viewer showing transactions, contacts, and cached emails */}
+              <button disabled className="w-full text-left p-4 bg-gray-50 rounded-lg border border-gray-200 opacity-50 cursor-not-allowed">
                 <div className="flex items-center justify-between">
                   <div>
                     <h4 className="text-sm font-medium text-gray-900">View Stored Data</h4>
@@ -281,7 +316,8 @@ function Settings({ onClose, userId }) {
                 </div>
               </button>
 
-              <button className="w-full text-left p-4 bg-red-50 hover:bg-red-100 rounded-lg border border-red-200 transition-all">
+              {/* TODO: Implement data clearing with confirmation dialog */}
+              <button disabled className="w-full text-left p-4 bg-red-50 rounded-lg border border-red-200 opacity-50 cursor-not-allowed">
                 <div className="flex items-center justify-between">
                   <div>
                     <h4 className="text-sm font-medium text-red-700">Clear All Data</h4>
@@ -311,16 +347,20 @@ function Settings({ onClose, userId }) {
                 </div>
               </div>
               <div className="space-y-2 text-xs">
-                <button className="w-full text-left text-blue-600 hover:text-blue-700 font-medium">
+                {/* TODO: Implement manual update check using electron-updater */}
+                <button disabled className="w-full text-left text-gray-400 font-medium cursor-not-allowed">
                   Check for Updates
                 </button>
-                <button className="w-full text-left text-blue-600 hover:text-blue-700 font-medium">
+                {/* TODO: Implement release notes viewer/link to GitHub releases */}
+                <button disabled className="w-full text-left text-gray-400 font-medium cursor-not-allowed">
                   View Release Notes
                 </button>
-                <button className="w-full text-left text-blue-600 hover:text-blue-700 font-medium">
+                {/* TODO: Implement privacy policy viewer/link */}
+                <button disabled className="w-full text-left text-gray-400 font-medium cursor-not-allowed">
                   Privacy Policy
                 </button>
-                <button className="w-full text-left text-blue-600 hover:text-blue-700 font-medium">
+                {/* TODO: Implement terms of service viewer/link */}
+                <button disabled className="w-full text-left text-gray-400 font-medium cursor-not-allowed">
                   Terms of Service
                 </button>
               </div>

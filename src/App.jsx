@@ -410,12 +410,14 @@ function App() {
           onLogout={handleLogout}
           onClose={() => setShowProfile(false)}
           onViewTransactions={() => setShowTransactions(true)}
+          onOpenSettings={() => setShowSettings(true)}
         />
       )}
 
       {/* Settings Modal */}
-      {showSettings && (
+      {showSettings && currentUser && (
         <Settings
+          userId={currentUser.id}
           onClose={() => setShowSettings(false)}
         />
       )}

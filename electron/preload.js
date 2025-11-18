@@ -72,6 +72,13 @@ contextBridge.exposeInMainWorld('api', {
     getLearningStats: (userId, fieldName) => ipcRenderer.invoke('feedback:get-learning-stats', userId, fieldName),
   },
 
+  // User preference methods
+  preferences: {
+    get: (userId) => ipcRenderer.invoke('preferences:get', userId),
+    save: (userId, preferences) => ipcRenderer.invoke('preferences:save', userId, preferences),
+    update: (userId, partialPreferences) => ipcRenderer.invoke('preferences:update', userId, partialPreferences),
+  },
+
   // System health and permission checks
   system: {
     // Permission setup (onboarding)
