@@ -7,14 +7,6 @@ const { ipcMain } = require('electron');
 const databaseService = require('./services/databaseService');
 const { getContactNames } = require('./services/contactsService');
 
-// Import validation utilities
-const {
-  ValidationError,
-  validateUserId,
-  validateContactId,
-  validateContactData,
-} = require('./utils/validation');
-
 /**
  * Register all contact-related IPC handlers
  */
@@ -24,11 +16,8 @@ function registerContactHandlers() {
     try {
       console.log('[Main] Getting all imported contacts for user:', userId);
 
-      // INPUT VALIDATION
-      const validatedUserId = validateUserId(userId);
-
       // Get only imported contacts from database
-      const importedContacts = await databaseService.getImportedContactsByUserId(validatedUserId);
+      const importedContacts = await databaseService.getImportedContactsByUserId(userId);
 
       console.log(`[Main] Found ${importedContacts.length} imported contacts`);
 
@@ -169,12 +158,12 @@ function registerContactHandlers() {
     try {
       console.log('[Main] Creating contact:', contactData);
 
-      // INPUT VALIDATION
-      const validatedUserId = validateUserId(userId);
-      const validatedData = validateContactData(contactData, false);
-
-      const contact = await databaseService.createContact(validatedUserId, {
-        ...validatedData,
+      const contact = await databaseService.createContact(userId, {
+        name: contactData.name,
+        email: contactData.email || null,
+        phone: contactData.phone || null,
+        company: contactData.company || null,
+        title: contactData.title || null,
         source: 'manual',
       });
 
@@ -196,11 +185,7 @@ function registerContactHandlers() {
     try {
       console.log('[Main] Updating contact:', contactId, updates);
 
-      // INPUT VALIDATION
-      const validatedContactId = validateContactId(contactId);
-      const validatedUpdates = validateContactData(updates, true);
-
-      const contact = await databaseService.updateContact(validatedContactId, validatedUpdates);
+      const contact = await databaseService.updateContact(contactId, updates);
 
       return {
         success: true,
@@ -242,11 +227,8 @@ function registerContactHandlers() {
     try {
       console.log('[Main] Deleting contact:', contactId);
 
-      // INPUT VALIDATION
-      const validatedContactId = validateContactId(contactId);
-
       // Check if contact has associated transactions
-      const check = await databaseService.getTransactionsByContact(validatedContactId);
+      const check = await databaseService.getTransactionsByContact(contactId);
       if (check.length > 0) {
         return {
           success: false,
@@ -257,7 +239,7 @@ function registerContactHandlers() {
         };
       }
 
-      await databaseService.deleteContact(validatedContactId);
+      await databaseService.deleteContact(contactId);
 
       return {
         success: true,
