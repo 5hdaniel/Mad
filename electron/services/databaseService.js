@@ -154,6 +154,9 @@ class DatabaseService {
         END;
       `);
 
+      // Create index for status column (added by migration)
+      await this._run(`CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions(status)`);
+
       // Migration 3: Enhanced contact roles for transaction_contacts
       console.log('[DatabaseService] Running Migration 3: Transaction contacts enhanced roles');
       const tcColumns = await this._all(`PRAGMA table_info(transaction_contacts)`);

@@ -291,6 +291,7 @@ CREATE TABLE IF NOT EXISTS extracted_transaction_data (
 -- ============================================
 -- INDEXES (Performance Optimization)
 -- ============================================
+-- Note: Indexes for migration-added columns are created in the migration code
 CREATE INDEX IF NOT EXISTS idx_users_local_email ON users_local(email);
 CREATE INDEX IF NOT EXISTS idx_oauth_tokens_user_provider ON oauth_tokens(user_id, provider, purpose);
 CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(session_token);
@@ -299,11 +300,7 @@ CREATE INDEX IF NOT EXISTS idx_contacts_user_id ON contacts(user_id);
 CREATE INDEX IF NOT EXISTS idx_contacts_email ON contacts(email);
 CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_property ON transactions(property_address);
-CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions(status);
 CREATE INDEX IF NOT EXISTS idx_transaction_contacts_transaction_id ON transaction_contacts(transaction_id);
-CREATE INDEX IF NOT EXISTS idx_transaction_contacts_specific_role ON transaction_contacts(specific_role);
-CREATE INDEX IF NOT EXISTS idx_transaction_contacts_category ON transaction_contacts(role_category);
-CREATE INDEX IF NOT EXISTS idx_transaction_contacts_primary ON transaction_contacts(is_primary);
 CREATE INDEX IF NOT EXISTS idx_communications_user_id ON communications(user_id);
 CREATE INDEX IF NOT EXISTS idx_communications_transaction_id ON communications(transaction_id);
 CREATE INDEX IF NOT EXISTS idx_communications_sent_at ON communications(sent_at);
