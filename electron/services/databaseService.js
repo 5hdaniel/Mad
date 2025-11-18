@@ -215,8 +215,23 @@ class DatabaseService {
         console.log('[DatabaseService] ✅ All required columns present');
       }
 
-      // Migration 4: User feedback and extraction metrics
-      console.log('[DatabaseService] Running Migration 4: User feedback tables');
+      // Migration 4: Add export tracking columns to transactions
+      console.log('[DatabaseService] Running Migration 4: Export tracking columns');
+      const exportStatusExists = transactionColumns.some(col => col.name === 'export_status');
+      if (!exportStatusExists) {
+        console.log('[DatabaseService] Adding export tracking columns to transactions');
+        await this._run(`ALTER TABLE transactions ADD COLUMN export_status TEXT DEFAULT 'not_exported' CHECK (export_status IN ('not_exported', 'exported', 're_export_needed'))`);
+        await this._run(`ALTER TABLE transactions ADD COLUMN export_format TEXT CHECK (export_format IN ('pdf', 'csv', 'json', 'txt_eml', 'excel'))`);
+        await this._run(`ALTER TABLE transactions ADD COLUMN export_count INTEGER DEFAULT 0`);
+        await this._run(`ALTER TABLE transactions ADD COLUMN last_exported_on DATETIME`);
+
+        // Create indexes for better query performance
+        await this._run(`CREATE INDEX IF NOT EXISTS idx_transactions_export_status ON transactions(export_status)`);
+        await this._run(`CREATE INDEX IF NOT EXISTS idx_transactions_last_exported_on ON transactions(last_exported_on)`);
+      }
+
+      // Migration 5: User feedback and extraction metrics
+      console.log('[DatabaseService] Running Migration 5: User feedback tables');
       const feedbackTableExists = await this._get(`SELECT name FROM sqlite_master WHERE type='table' AND name='user_feedback'`);
       if (!feedbackTableExists) {
         console.log('[DatabaseService] Creating user feedback tables');
@@ -280,6 +295,24 @@ class DatabaseService {
             UPDATE extraction_metrics SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
           END;
         `);
+      }
+
+      // Migration 6: Contact import tracking
+      console.log('[DatabaseService] Running Migration 6: Contact import tracking');
+      const contactColumns = await this._all(`PRAGMA table_info(contacts)`);
+      if (!contactColumns.some(col => col.name === 'is_imported')) {
+        console.log('[DatabaseService] Adding is_imported column to contacts');
+        await this._run(`ALTER TABLE contacts ADD COLUMN is_imported INTEGER DEFAULT 1`);
+        console.log('[DatabaseService] Successfully added is_imported column');
+        // Mark all existing manual and email contacts as imported
+        await this._run(`UPDATE contacts SET is_imported = 1 WHERE source IN ('manual', 'email')`);
+        console.log('[DatabaseService] Marked existing contacts as imported');
+        // Create index for better performance
+        await this._run(`CREATE INDEX IF NOT EXISTS idx_contacts_is_imported ON contacts(is_imported)`);
+        await this._run(`CREATE INDEX IF NOT EXISTS idx_contacts_user_imported ON contacts(user_id, is_imported)`);
+        console.log('[DatabaseService] Created indexes for is_imported');
+      } else {
+        console.log('[DatabaseService] is_imported column already exists');
       }
 
       console.log('[DatabaseService] ✅ All database migrations completed successfully');
@@ -569,8 +602,8 @@ class DatabaseService {
     const id = crypto.randomUUID();
     const sql = `
       INSERT INTO contacts (
-        id, user_id, name, email, phone, company, title, source
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        id, user_id, name, email, phone, company, title, source, is_imported
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     const params = [
@@ -582,6 +615,7 @@ class DatabaseService {
       contactData.company || null,
       contactData.title || null,
       contactData.source || 'manual',
+      contactData.is_imported !== undefined ? contactData.is_imported : 1, // Default to imported
     ];
 
     await this._run(sql, params);
@@ -601,6 +635,16 @@ class DatabaseService {
    */
   async getContactsByUserId(userId) {
     const sql = 'SELECT * FROM contacts WHERE user_id = ? ORDER BY name ASC';
+    return await this._all(sql, [userId]);
+  }
+
+  /**
+   * Get only imported contacts for a user
+   * @param {string} userId - User ID
+   * @returns {Promise<Array>} Imported contacts
+   */
+  async getImportedContactsByUserId(userId) {
+    const sql = 'SELECT * FROM contacts WHERE user_id = ? AND is_imported = 1 ORDER BY name ASC';
     return await this._all(sql, [userId]);
   }
 
@@ -628,7 +672,7 @@ class DatabaseService {
         AND (comm.sender = c.email OR comm.recipients LIKE '%' || c.email || '%')
         AND comm.user_id = c.user_id
       )
-      WHERE c.user_id = ?
+      WHERE c.user_id = ? AND c.is_imported = 1
       GROUP BY c.id
       ORDER BY
         ${propertyAddress ? 'address_mention_count DESC,' : ''}
@@ -695,6 +739,15 @@ class DatabaseService {
    */
   async deleteContact(contactId) {
     const sql = 'DELETE FROM contacts WHERE id = ?';
+    await this._run(sql, [contactId]);
+  }
+
+  /**
+   * Remove a contact from local database (un-import)
+   * Sets is_imported = 0 so it disappears from the list but can be re-imported
+   */
+  async removeContact(contactId) {
+    const sql = 'UPDATE contacts SET is_imported = 0 WHERE id = ?';
     await this._run(sql, [contactId]);
   }
 

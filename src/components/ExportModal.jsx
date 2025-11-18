@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 /**
  * ExportModal Component
  * Enhanced export with date verification, content/format selection
  */
-function ExportModal({ transaction, onClose, onExportComplete }) {
+function ExportModal({ transaction, userId, onClose, onExportComplete }) {
   const [step, setStep] = useState(1); // 1: Date Verification, 2: Export Options, 3: Exporting
   const [representationStartDate, setRepresentationStartDate] = useState(
     transaction.representation_start_date || ''
@@ -14,6 +14,25 @@ function ExportModal({ transaction, onClose, onExportComplete }) {
   const [exportFormat, setExportFormat] = useState('pdf'); // pdf, excel, csv, json, txt_eml
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState(null);
+
+  // Load user preferences to set default export format
+  useEffect(() => {
+    const loadDefaultFormat = async () => {
+      if (userId) {
+        try {
+          const result = await window.api.preferences.get(userId);
+          if (result.success && result.preferences?.export?.defaultFormat) {
+            setExportFormat(result.preferences.export.defaultFormat);
+          }
+        } catch (error) {
+          console.error('Failed to load export format preference:', error);
+          // If loading fails, keep the default 'pdf' format
+        }
+      }
+    };
+
+    loadDefaultFormat();
+  }, [userId]);
 
   const handleDateVerification = () => {
     if (!representationStartDate || !closingDate) {
