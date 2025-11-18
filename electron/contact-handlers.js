@@ -11,29 +11,62 @@ const { getContactNames } = require('./services/contactsService');
  * Register all contact-related IPC handlers
  */
 function registerContactHandlers() {
-  // Get all contacts for a user
+  // Get all imported contacts for a user (local database only)
   ipcMain.handle('contacts:get-all', async (event, userId) => {
     try {
-      console.log('[Main] Getting all contacts for user:', userId);
+      console.log('[Main] Getting all imported contacts for user:', userId);
 
-      // Get manual contacts from database
-      const manualContacts = await databaseService.getContactsByUserId(userId);
+      // Get only imported contacts from database
+      const importedContacts = await databaseService.getImportedContactsByUserId(userId);
+
+      console.log(`[Main] Found ${importedContacts.length} imported contacts`);
+
+      return {
+        success: true,
+        contacts: importedContacts,
+      };
+    } catch (error) {
+      console.error('[Main] Get contacts failed:', error);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  });
+
+  // Get available contacts for import (from external sources)
+  ipcMain.handle('contacts:get-available', async (event, userId) => {
+    try {
+      console.log('[Main] Getting available contacts for import for user:', userId);
 
       // Get contacts from macOS Contacts app
       const { phoneToContactInfo, status } = await getContactNames();
 
+      // Get already imported contact names/emails to filter them out
+      const importedContacts = await databaseService.getImportedContactsByUserId(userId);
+      const importedNames = new Set(importedContacts.map(c => c.name?.toLowerCase()));
+      const importedEmails = new Set(importedContacts.map(c => c.email?.toLowerCase()).filter(Boolean));
+
       // Convert Contacts app data to contact objects
-      const contactsAppContacts = [];
+      const availableContacts = [];
       const seenContacts = new Set();
 
       if (phoneToContactInfo && Object.keys(phoneToContactInfo).length > 0) {
         for (const [phone, contactInfo] of Object.entries(phoneToContactInfo)) {
           // Use the contact name as unique key to avoid duplicates
           // (same contact may have multiple phone numbers)
+          const nameLower = contactInfo.name?.toLowerCase();
+          const primaryEmail = contactInfo.emails?.[0]?.toLowerCase();
+
+          // Skip if already imported (by name or email)
+          if (importedNames.has(nameLower) || (primaryEmail && importedEmails.has(primaryEmail))) {
+            continue;
+          }
+
           if (!seenContacts.has(contactInfo.name)) {
             seenContacts.add(contactInfo.name);
 
-            contactsAppContacts.push({
+            availableContacts.push({
               id: `contacts-app-${contactInfo.name}`, // Temporary ID for UI
               name: contactInfo.name,
               phone: contactInfo.phones?.[0] || null, // Primary phone
@@ -46,18 +79,50 @@ function registerContactHandlers() {
         }
       }
 
-      console.log(`[Main] Found ${manualContacts.length} manual contacts and ${contactsAppContacts.length} Contacts app contacts`);
-
-      // Merge manual contacts and Contacts app contacts
-      const allContacts = [...manualContacts, ...contactsAppContacts];
+      console.log(`[Main] Found ${availableContacts.length} available contacts for import`);
 
       return {
         success: true,
-        contacts: allContacts,
+        contacts: availableContacts,
         contactsStatus: status, // Include loading status
       };
     } catch (error) {
-      console.error('[Main] Get contacts failed:', error);
+      console.error('[Main] Get available contacts failed:', error);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  });
+
+  // Import contacts from external sources
+  ipcMain.handle('contacts:import', async (event, userId, contactsToImport) => {
+    try {
+      console.log('[Main] Importing contacts for user:', userId, 'count:', contactsToImport.length);
+
+      const importedContacts = [];
+
+      for (const contact of contactsToImport) {
+        const importedContact = await databaseService.createContact(userId, {
+          name: contact.name,
+          email: contact.email || null,
+          phone: contact.phone || null,
+          company: contact.company || null,
+          title: contact.title || null,
+          source: contact.source || 'contacts_app',
+          is_imported: 1,
+        });
+        importedContacts.push(importedContact);
+      }
+
+      console.log(`[Main] Successfully imported ${importedContacts.length} contacts`);
+
+      return {
+        success: true,
+        contacts: importedContacts,
+      };
+    } catch (error) {
+      console.error('[Main] Import contacts failed:', error);
       return {
         success: false,
         error: error.message,
@@ -70,43 +135,14 @@ function registerContactHandlers() {
     try {
       console.log('[Main] Getting contacts sorted by activity for user:', userId, 'address:', propertyAddress);
 
-      // Get manual contacts sorted by activity
-      const manualContacts = await databaseService.getContactsSortedByActivity(userId, propertyAddress);
+      // Get only imported contacts sorted by activity
+      const importedContacts = await databaseService.getContactsSortedByActivity(userId, propertyAddress);
 
-      // Get contacts from macOS Contacts app
-      const { phoneToContactInfo } = await getContactNames();
-
-      // Convert Contacts app data to contact objects
-      const contactsAppContacts = [];
-      const seenContacts = new Set();
-
-      if (phoneToContactInfo && Object.keys(phoneToContactInfo).length > 0) {
-        for (const [phone, contactInfo] of Object.entries(phoneToContactInfo)) {
-          if (!seenContacts.has(contactInfo.name)) {
-            seenContacts.add(contactInfo.name);
-
-            contactsAppContacts.push({
-              id: `contacts-app-${contactInfo.name}`,
-              name: contactInfo.name,
-              phone: contactInfo.phones?.[0] || null,
-              email: contactInfo.emails?.[0] || null,
-              source: 'contacts_app',
-              allPhones: contactInfo.phones || [],
-              allEmails: contactInfo.emails || [],
-              activityScore: 0, // Contacts app contacts have no activity score
-            });
-          }
-        }
-      }
-
-      // Manual contacts come first (already sorted by activity), then Contacts app contacts
-      const allContacts = [...manualContacts, ...contactsAppContacts];
-
-      console.log(`[Main] Returning ${allContacts.length} total contacts (${manualContacts.length} with activity, ${contactsAppContacts.length} from Contacts app)`);
+      console.log(`[Main] Returning ${importedContacts.length} imported contacts sorted by activity`);
 
       return {
         success: true,
-        contacts: allContacts,
+        contacts: importedContacts,
       };
     } catch (error) {
       console.error('[Main] Get sorted contacts failed:', error);

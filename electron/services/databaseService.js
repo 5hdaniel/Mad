@@ -251,6 +251,18 @@ class DatabaseService {
         `);
       }
 
+      // Migration 5: Contact import tracking
+      const contactColumns = await this._all(`PRAGMA table_info(contacts)`);
+      if (!contactColumns.some(col => col.name === 'is_imported')) {
+        console.log('[DatabaseService] Adding is_imported column to contacts');
+        await this._run(`ALTER TABLE contacts ADD COLUMN is_imported INTEGER DEFAULT 1`);
+        // Mark all existing manual and email contacts as imported
+        await this._run(`UPDATE contacts SET is_imported = 1 WHERE source IN ('manual', 'email')`);
+        // Create index for better performance
+        await this._run(`CREATE INDEX IF NOT EXISTS idx_contacts_is_imported ON contacts(is_imported)`);
+        await this._run(`CREATE INDEX IF NOT EXISTS idx_contacts_user_imported ON contacts(user_id, is_imported)`);
+      }
+
     } catch (error) {
       // Log but don't fail on migration errors
       console.log('[DatabaseService] Migration check:', error.message);
@@ -529,8 +541,8 @@ class DatabaseService {
     const id = crypto.randomUUID();
     const sql = `
       INSERT INTO contacts (
-        id, user_id, name, email, phone, company, title, source
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        id, user_id, name, email, phone, company, title, source, is_imported
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     const params = [
@@ -542,6 +554,7 @@ class DatabaseService {
       contactData.company || null,
       contactData.title || null,
       contactData.source || 'manual',
+      contactData.is_imported !== undefined ? contactData.is_imported : 1, // Default to imported
     ];
 
     await this._run(sql, params);
@@ -561,6 +574,16 @@ class DatabaseService {
    */
   async getContactsByUserId(userId) {
     const sql = 'SELECT * FROM contacts WHERE user_id = ? ORDER BY name ASC';
+    return await this._all(sql, [userId]);
+  }
+
+  /**
+   * Get only imported contacts for a user
+   * @param {string} userId - User ID
+   * @returns {Promise<Array>} Imported contacts
+   */
+  async getImportedContactsByUserId(userId) {
+    const sql = 'SELECT * FROM contacts WHERE user_id = ? AND is_imported = 1 ORDER BY name ASC';
     return await this._all(sql, [userId]);
   }
 
@@ -588,7 +611,7 @@ class DatabaseService {
         AND (comm.sender = c.email OR comm.recipients LIKE '%' || c.email || '%')
         AND comm.user_id = c.user_id
       )
-      WHERE c.user_id = ?
+      WHERE c.user_id = ? AND c.is_imported = 1
       GROUP BY c.id
       ORDER BY
         ${propertyAddress ? 'address_mention_count DESC,' : ''}
