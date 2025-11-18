@@ -214,10 +214,12 @@ class TransactionService {
     }
 
     const communications = await databaseService.getCommunicationsByTransactionId(transactionId);
+    const contact_assignments = await databaseService.getTransactionContacts(transactionId);
 
     return {
       ...transaction,
       communications,
+      contact_assignments,
     };
   }
 
