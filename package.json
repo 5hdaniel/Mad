@@ -119,9 +119,6 @@
     "files": [
       "dist/**/*",
       "electron/**/*"
-    ],
-    "directories": {
-      "buildResources": "build"
-    }
+    ]
   }
 }
