@@ -17,25 +17,30 @@ class ValidationError extends Error {
 
 /**
  * Validate user ID
- * @param {any} userId - User ID to validate
+ * @param {any} userId - User ID to validate (UUID string)
  * @param {boolean} required - Whether the field is required
- * @returns {number} Validated user ID
+ * @returns {string} Validated user ID
  * @throws {ValidationError} If validation fails
  */
 function validateUserId(userId, required = true) {
-  if (userId === null || userId === undefined) {
+  if (userId === null || userId === undefined || userId === '') {
     if (required) {
       throw new ValidationError('User ID is required', 'userId');
     }
     return null;
   }
 
-  const parsed = Number(userId);
-  if (isNaN(parsed) || parsed <= 0 || !Number.isInteger(parsed)) {
-    throw new ValidationError('User ID must be a positive integer', 'userId');
+  if (typeof userId !== 'string') {
+    throw new ValidationError('User ID must be a string', 'userId');
   }
 
-  return parsed;
+  // Validate UUID format (standard UUID v4 format)
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!uuidRegex.test(userId.trim())) {
+    throw new ValidationError('User ID must be a valid UUID', 'userId');
+  }
+
+  return userId.trim();
 }
 
 /**
