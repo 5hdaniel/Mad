@@ -3,15 +3,25 @@
  * Tests the getTransactionsByContact method in databaseService
  */
 
+// Create a mock database before requiring the service
+const mockDatabase = {
+  all: jest.fn((sql, params, callback) => {
+    // Default implementation - will be overridden in tests
+    callback(null, []);
+  }),
+  get: jest.fn((sql, params, callback) => {
+    callback(null, null);
+  }),
+  run: jest.fn((sql, params, callback) => {
+    callback && callback(null);
+  }),
+};
+
 // Mock sqlite3 before requiring databaseService
 jest.mock('sqlite3', () => {
   return {
     verbose: () => ({
-      Database: jest.fn().mockImplementation(() => ({
-        all: jest.fn(),
-        get: jest.fn(),
-        run: jest.fn(),
-      })),
+      Database: jest.fn().mockImplementation(() => mockDatabase),
     }),
   };
 });
@@ -19,32 +29,24 @@ jest.mock('sqlite3', () => {
 const databaseService = require('../databaseService');
 
 describe('DatabaseService - Contact Deletion Prevention', () => {
-  let _allSpy;
-
   beforeEach(() => {
     jest.clearAllMocks();
-    // Create spy that we'll configure in each test
-    _allSpy = jest.spyOn(databaseService, '_all');
-  });
-
-  afterEach(() => {
-    jest.restoreAllMocks();
   });
 
   describe('getTransactionsByContact', () => {
     const contactId = 'contact-123';
 
     it('should return empty array when contact has no associated transactions', async () => {
-      // Mock all three queries to return empty results
-      _allSpy
-        .mockResolvedValueOnce([]) // Direct FK query
-        .mockResolvedValueOnce([]) // Junction table query
-        .mockResolvedValueOnce([]); // JSON array query
+      // Mock db.all to return empty results for all three queries
+      mockDatabase.all
+        .mockImplementationOnce((sql, params, callback) => callback(null, [])) // Direct FK
+        .mockImplementationOnce((sql, params, callback) => callback(null, [])) // Junction
+        .mockImplementationOnce((sql, params, callback) => callback(null, [])); // JSON
 
       const result = await databaseService.getTransactionsByContact(contactId);
 
       expect(result).toEqual([]);
-      expect(_allSpy).toHaveBeenCalledTimes(3);
+      expect(mockDatabase.all).toHaveBeenCalledTimes(3);
     });
 
     it('should find transactions via direct FK references (buyer_agent_id)', async () => {
@@ -57,10 +59,10 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
         role: 'Buyer Agent',
       };
 
-      _allSpy
-        .mockResolvedValueOnce([mockTransaction]) // Direct FK query
-        .mockResolvedValueOnce([]) // Junction table query
-        .mockResolvedValueOnce([]); // JSON array query
+      mockDatabase.all
+        .mockImplementationOnce((sql, params, callback) => callback(null, [mockTransaction]))
+        .mockImplementationOnce((sql, params, callback) => callback(null, []))
+        .mockImplementationOnce((sql, params, callback) => callback(null, []));
 
       const result = await databaseService.getTransactionsByContact(contactId);
 
@@ -83,10 +85,10 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
         role_category: 'inspection',
       };
 
-      _allSpy
-        .mockResolvedValueOnce([]) // Direct FK query
-        .mockResolvedValueOnce([mockTransaction]) // Junction table query
-        .mockResolvedValueOnce([]); // JSON array query
+      mockDatabase.all
+        .mockImplementationOnce((sql, params, callback) => callback(null, []))
+        .mockImplementationOnce((sql, params, callback) => callback(null, [mockTransaction]))
+        .mockImplementationOnce((sql, params, callback) => callback(null, []));
 
       const result = await databaseService.getTransactionsByContact(contactId);
 
@@ -107,10 +109,10 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
         status: 'closed',
       };
 
-      _allSpy
-        .mockResolvedValueOnce([]) // Direct FK query
-        .mockResolvedValueOnce([]) // Junction table query
-        .mockResolvedValueOnce([mockTransaction]); // JSON array query
+      mockDatabase.all
+        .mockImplementationOnce((sql, params, callback) => callback(null, []))
+        .mockImplementationOnce((sql, params, callback) => callback(null, []))
+        .mockImplementationOnce((sql, params, callback) => callback(null, [mockTransaction]));
 
       const result = await databaseService.getTransactionsByContact(contactId);
 
@@ -133,7 +135,7 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
       };
 
       const junctionTxn = {
-        id: 'txn-1', // Same transaction ID
+        id: 'txn-1',
         property_address: '123 Main St',
         closing_date: '2024-01-15',
         transaction_type: 'purchase',
@@ -142,14 +144,13 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
         role_category: 'title_escrow',
       };
 
-      _allSpy
-        .mockResolvedValueOnce([directTxn]) // Direct FK query
-        .mockResolvedValueOnce([junctionTxn]) // Junction table query
-        .mockResolvedValueOnce([]); // JSON array query
+      mockDatabase.all
+        .mockImplementationOnce((sql, params, callback) => callback(null, [directTxn]))
+        .mockImplementationOnce((sql, params, callback) => callback(null, [junctionTxn]))
+        .mockImplementationOnce((sql, params, callback) => callback(null, []));
 
       const result = await databaseService.getTransactionsByContact(contactId);
 
-      // Should only have one transaction, but with combined roles
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('txn-1');
       expect(result[0].roles).toContain('Buyer Agent');
@@ -157,28 +158,29 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
     });
 
     it('should combine multiple roles from the same transaction', async () => {
-      const directTxn1 = {
-        id: 'txn-1',
-        property_address: '123 Main St',
-        closing_date: '2024-01-15',
-        transaction_type: 'purchase',
-        status: 'active',
-        role: 'Buyer Agent',
-      };
+      const transactions = [
+        {
+          id: 'txn-1',
+          property_address: '123 Main St',
+          closing_date: '2024-01-15',
+          transaction_type: 'purchase',
+          status: 'active',
+          role: 'Buyer Agent',
+        },
+        {
+          id: 'txn-1',
+          property_address: '123 Main St',
+          closing_date: '2024-01-15',
+          transaction_type: 'purchase',
+          status: 'active',
+          role: 'Seller Agent',
+        }
+      ];
 
-      const directTxn2 = {
-        id: 'txn-1',
-        property_address: '123 Main St',
-        closing_date: '2024-01-15',
-        transaction_type: 'purchase',
-        status: 'active',
-        role: 'Seller Agent',
-      };
-
-      _allSpy
-        .mockResolvedValueOnce([directTxn1, directTxn2]) // Direct FK query returns both
-        .mockResolvedValueOnce([]) // Junction table query
-        .mockResolvedValueOnce([]); // JSON array query
+      mockDatabase.all
+        .mockImplementationOnce((sql, params, callback) => callback(null, transactions))
+        .mockImplementationOnce((sql, params, callback) => callback(null, []))
+        .mockImplementationOnce((sql, params, callback) => callback(null, []));
 
       const result = await databaseService.getTransactionsByContact(contactId);
 
@@ -213,10 +215,10 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
         status: 'closed',
       };
 
-      _allSpy
-        .mockResolvedValueOnce([directTxn])
-        .mockResolvedValueOnce([junctionTxn])
-        .mockResolvedValueOnce([jsonTxn]);
+      mockDatabase.all
+        .mockImplementationOnce((sql, params, callback) => callback(null, [directTxn]))
+        .mockImplementationOnce((sql, params, callback) => callback(null, [junctionTxn]))
+        .mockImplementationOnce((sql, params, callback) => callback(null, [jsonTxn]));
 
       const result = await databaseService.getTransactionsByContact(contactId);
 
@@ -231,20 +233,20 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
         closing_date: '2024-01-15',
         transaction_type: 'purchase',
         status: 'active',
-        other_contacts: `["contact-123", "contact-456"]`,
+        other_contacts: `["${contactId}", "contact-456"]`,
       };
 
-      _allSpy
-        .mockResolvedValueOnce([]) // Direct FK query
-        .mockResolvedValueOnce([]) // Junction table query
-        .mockRejectedValueOnce(new Error('json_each not supported')) // JSON array query fails
-        .mockResolvedValueOnce([fallbackTxn]); // Fallback LIKE query
+      mockDatabase.all
+        .mockImplementationOnce((sql, params, callback) => callback(null, []))
+        .mockImplementationOnce((sql, params, callback) => callback(null, []))
+        .mockImplementationOnce((sql, params, callback) => callback(new Error('json_each not supported')))
+        .mockImplementationOnce((sql, params, callback) => callback(null, [fallbackTxn]));
 
       const result = await databaseService.getTransactionsByContact(contactId);
 
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('txn-1');
-      expect(_allSpy).toHaveBeenCalledTimes(4); // 3 original + 1 fallback
+      expect(mockDatabase.all).toHaveBeenCalledTimes(4);
     });
 
     it('should handle fallback query with invalid JSON gracefully', async () => {
@@ -257,11 +259,11 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
         other_contacts: 'invalid-json',
       };
 
-      _allSpy
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([])
-        .mockRejectedValueOnce(new Error('json_each not supported'))
-        .mockResolvedValueOnce([invalidJsonTxn]);
+      mockDatabase.all
+        .mockImplementationOnce((sql, params, callback) => callback(null, []))
+        .mockImplementationOnce((sql, params, callback) => callback(null, []))
+        .mockImplementationOnce((sql, params, callback) => callback(new Error('json_each not supported')))
+        .mockImplementationOnce((sql, params, callback) => callback(null, [invalidJsonTxn]));
 
       const result = await databaseService.getTransactionsByContact(contactId);
 
@@ -270,30 +272,30 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
     });
 
     it('should pass correct SQL parameters for all queries', async () => {
-      _allSpy
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([]);
+      mockDatabase.all
+        .mockImplementationOnce((sql, params, callback) => {
+          // Verify direct FK query has 8 parameters
+          expect(params).toHaveLength(8);
+          expect(params).toEqual([
+            contactId, contactId, contactId, contactId,
+            contactId, contactId, contactId, contactId
+          ]);
+          callback(null, []);
+        })
+        .mockImplementationOnce((sql, params, callback) => {
+          // Verify junction query has 1 parameter
+          expect(params).toEqual([contactId]);
+          callback(null, []);
+        })
+        .mockImplementationOnce((sql, params, callback) => {
+          // Verify JSON query has 1 parameter
+          expect(params).toEqual([contactId]);
+          callback(null, []);
+        });
 
       await databaseService.getTransactionsByContact(contactId);
 
-      // Check direct FK query parameters (8 times - 4 for CASE, 4 for WHERE)
-      expect(_allSpy.mock.calls[0][1]).toEqual([
-        contactId,
-        contactId,
-        contactId,
-        contactId,
-        contactId,
-        contactId,
-        contactId,
-        contactId,
-      ]);
-
-      // Check junction table query parameters
-      expect(_allSpy.mock.calls[1][1]).toEqual([contactId]);
-
-      // Check JSON array query parameters
-      expect(_allSpy.mock.calls[2][1]).toEqual([contactId]);
+      expect(mockDatabase.all).toHaveBeenCalledTimes(3);
     });
 
     it('should use role_category when specific_role is not available', async () => {
@@ -307,10 +309,10 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
         role_category: 'inspection',
       };
 
-      _allSpy
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([mockTransaction])
-        .mockResolvedValueOnce([]);
+      mockDatabase.all
+        .mockImplementationOnce((sql, params, callback) => callback(null, []))
+        .mockImplementationOnce((sql, params, callback) => callback(null, [mockTransaction]))
+        .mockImplementationOnce((sql, params, callback) => callback(null, []));
 
       const result = await databaseService.getTransactionsByContact(contactId);
 
@@ -328,10 +330,10 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
         role_category: null,
       };
 
-      _allSpy
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([mockTransaction])
-        .mockResolvedValueOnce([]);
+      mockDatabase.all
+        .mockImplementationOnce((sql, params, callback) => callback(null, []))
+        .mockImplementationOnce((sql, params, callback) => callback(null, [mockTransaction]))
+        .mockImplementationOnce((sql, params, callback) => callback(null, []));
 
       const result = await databaseService.getTransactionsByContact(contactId);
 
@@ -339,28 +341,29 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
     });
 
     it('should handle all transaction types and statuses', async () => {
-      const purchaseTxn = {
-        id: 'txn-1',
-        property_address: '123 Main St',
-        closing_date: '2024-01-15',
-        transaction_type: 'purchase',
-        status: 'active',
-        role: 'Buyer Agent',
-      };
+      const transactions = [
+        {
+          id: 'txn-1',
+          property_address: '123 Main St',
+          closing_date: '2024-01-15',
+          transaction_type: 'purchase',
+          status: 'active',
+          role: 'Buyer Agent',
+        },
+        {
+          id: 'txn-2',
+          property_address: '456 Oak Ave',
+          closing_date: '2024-02-20',
+          transaction_type: 'sale',
+          status: 'closed',
+          role: 'Seller Agent',
+        }
+      ];
 
-      const saleTxn = {
-        id: 'txn-2',
-        property_address: '456 Oak Ave',
-        closing_date: '2024-02-20',
-        transaction_type: 'sale',
-        status: 'closed',
-        role: 'Seller Agent',
-      };
-
-      _allSpy
-        .mockResolvedValueOnce([purchaseTxn, saleTxn])
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([]);
+      mockDatabase.all
+        .mockImplementationOnce((sql, params, callback) => callback(null, transactions))
+        .mockImplementationOnce((sql, params, callback) => callback(null, []))
+        .mockImplementationOnce((sql, params, callback) => callback(null, []));
 
       const result = await databaseService.getTransactionsByContact(contactId);
 
