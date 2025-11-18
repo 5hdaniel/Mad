@@ -147,17 +147,11 @@ class DatabaseService {
       const tcMigrations = [
         {
           name: 'role_category',
-          sql: `ALTER TABLE transaction_contacts ADD COLUMN role_category TEXT CHECK (role_category IN (
-            'client', 'agent', 'lending', 'inspection', 'title_escrow', 'legal', 'support', 'property_management', 'insurance'
-          ))`
+          sql: `ALTER TABLE transaction_contacts ADD COLUMN role_category TEXT`
         },
         {
           name: 'specific_role',
-          sql: `ALTER TABLE transaction_contacts ADD COLUMN specific_role TEXT CHECK (specific_role IN (
-            'client', 'buyer_agent', 'seller_agent', 'listing_agent', 'appraiser', 'inspector',
-            'title_company', 'escrow_officer', 'mortgage_broker', 'lender', 'real_estate_attorney',
-            'transaction_coordinator', 'insurance_agent', 'surveyor', 'hoa_management', 'condo_management', 'other'
-          ))`
+          sql: `ALTER TABLE transaction_contacts ADD COLUMN specific_role TEXT`
         },
         { name: 'is_primary', sql: `ALTER TABLE transaction_contacts ADD COLUMN is_primary INTEGER DEFAULT 0` },
         { name: 'notes', sql: `ALTER TABLE transaction_contacts ADD COLUMN notes TEXT` },
@@ -167,7 +161,13 @@ class DatabaseService {
       for (const migration of tcMigrations) {
         if (!tcColumns.some(col => col.name === migration.name)) {
           console.log(`[DatabaseService] Adding ${migration.name} column to transaction_contacts`);
-          await this._run(migration.sql);
+          try {
+            await this._run(migration.sql);
+            console.log(`[DatabaseService] Successfully added ${migration.name} column`);
+          } catch (err) {
+            console.error(`[DatabaseService] Failed to add ${migration.name} column:`, err.message);
+            throw err; // Re-throw to make migration errors visible
+          }
         }
       }
 
