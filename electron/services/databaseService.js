@@ -185,7 +185,21 @@ class DatabaseService {
         END;
       `);
 
-      // Migration 4: User feedback and extraction metrics
+      // Migration 4: Add export tracking columns to transactions
+      const exportStatusExists = transactionColumns.some(col => col.name === 'export_status');
+      if (!exportStatusExists) {
+        console.log('[DatabaseService] Adding export tracking columns to transactions');
+        await this._run(`ALTER TABLE transactions ADD COLUMN export_status TEXT DEFAULT 'not_exported' CHECK (export_status IN ('not_exported', 'exported', 're_export_needed'))`);
+        await this._run(`ALTER TABLE transactions ADD COLUMN export_format TEXT CHECK (export_format IN ('pdf', 'csv', 'json', 'txt_eml', 'excel'))`);
+        await this._run(`ALTER TABLE transactions ADD COLUMN export_count INTEGER DEFAULT 0`);
+        await this._run(`ALTER TABLE transactions ADD COLUMN last_exported_on DATETIME`);
+
+        // Create indexes for better query performance
+        await this._run(`CREATE INDEX IF NOT EXISTS idx_transactions_export_status ON transactions(export_status)`);
+        await this._run(`CREATE INDEX IF NOT EXISTS idx_transactions_last_exported_on ON transactions(last_exported_on)`);
+      }
+
+      // Migration 5: User feedback and extraction metrics
       const feedbackTableExists = await this._get(`SELECT name FROM sqlite_master WHERE type='table' AND name='user_feedback'`);
       if (!feedbackTableExists) {
         console.log('[DatabaseService] Creating user feedback tables');
