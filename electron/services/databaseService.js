@@ -646,7 +646,7 @@ class DatabaseService {
    * @returns {Promise<Array>} Contacts with metadata about recent communication and address relevance
    */
   async getContactsSortedByActivity(userId, propertyAddress = null) {
-    let sql = `
+    const sql = `
       SELECT
         c.*,
         MAX(comm.sent_at) as last_communication_at,

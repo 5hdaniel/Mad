@@ -15,8 +15,8 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "lint": "eslint electron src --ext .js,.jsx",
-    "lint:fix": "eslint electron src --ext .js,.jsx --fix"
+    "lint": "eslint electron src",
+    "lint:fix": "eslint electron src --fix"
   },
   "keywords": ["electron", "react", "audit", "archive", "imessage", "outlook"],
   "author": "",
