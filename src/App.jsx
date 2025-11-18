@@ -410,6 +410,7 @@ function App() {
           onLogout={handleLogout}
           onClose={() => setShowProfile(false)}
           onViewTransactions={() => setShowTransactions(true)}
+          onOpenSettings={() => setShowSettings(true)}
         />
       )}
 
