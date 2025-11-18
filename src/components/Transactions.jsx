@@ -575,6 +575,7 @@ function TransactionDetails({ transaction, onClose, onTransactionUpdated }) {
       {showExportModal && (
         <ExportModal
           transaction={transaction}
+          userId={userId}
           onClose={() => setShowExportModal(false)}
           onExportComplete={handleExportComplete}
         />

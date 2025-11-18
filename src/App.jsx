@@ -414,8 +414,9 @@ function App() {
       )}
 
       {/* Settings Modal */}
-      {showSettings && (
+      {showSettings && currentUser && (
         <Settings
+          userId={currentUser.id}
           onClose={() => setShowSettings(false)}
         />
       )}

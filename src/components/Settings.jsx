@@ -11,11 +11,14 @@ function Settings({ onClose, userId }) {
   const [connections, setConnections] = useState({ google: null, microsoft: null });
   const [loadingConnections, setLoadingConnections] = useState(true);
   const [connectingProvider, setConnectingProvider] = useState(null);
+  const [exportFormat, setExportFormat] = useState('pdf'); // Default export format
+  const [loadingPreferences, setLoadingPreferences] = useState(true);
 
-  // Load connection status on mount
+  // Load connection status and preferences on mount
   useEffect(() => {
     if (userId) {
       checkConnections();
+      loadPreferences();
     }
   }, [userId]);
 
@@ -33,6 +36,47 @@ function Settings({ onClose, userId }) {
       console.error('Failed to check connections:', error);
     } finally {
       setLoadingConnections(false);
+    }
+  };
+
+  const loadPreferences = async () => {
+    setLoadingPreferences(true);
+    try {
+      const result = await window.api.preferences.get(userId);
+      if (result.success && result.preferences) {
+        // Load export format preference
+        if (result.preferences.export?.defaultFormat) {
+          setExportFormat(result.preferences.export.defaultFormat);
+        }
+        // Load other preferences as needed
+        if (result.preferences.general?.autoExport !== undefined) {
+          setAutoExport(result.preferences.general.autoExport);
+        }
+        if (result.preferences.general?.notifications !== undefined) {
+          setNotifications(result.preferences.general.notifications);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load preferences:', error);
+    } finally {
+      setLoadingPreferences(false);
+    }
+  };
+
+  const handleExportFormatChange = async (newFormat) => {
+    setExportFormat(newFormat);
+    try {
+      // Update only the export format preference
+      const result = await window.api.preferences.update(userId, {
+        export: {
+          defaultFormat: newFormat
+        }
+      });
+      if (!result.success) {
+        console.error('Failed to save export format preference');
+      }
+    } catch (error) {
+      console.error('Failed to save export format preference:', error);
     }
   };
 
@@ -248,10 +292,17 @@ function Settings({ onClose, userId }) {
             <div className="space-y-3 bg-gray-50 rounded-lg p-4 border border-gray-200">
               <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-700">Default Format</span>
-                <select className="text-sm border border-gray-300 rounded px-3 py-1.5 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                  <option>PDF</option>
-                  <option>CSV</option>
-                  <option>Excel</option>
+                <select
+                  value={exportFormat}
+                  onChange={(e) => handleExportFormatChange(e.target.value)}
+                  disabled={loadingPreferences}
+                  className="text-sm border border-gray-300 rounded px-3 py-1.5 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <option value="pdf">PDF</option>
+                  <option value="excel">Excel (.xlsx)</option>
+                  <option value="csv">CSV</option>
+                  <option value="json">JSON</option>
+                  <option value="txt_eml">TXT + EML Files</option>
                 </select>
               </div>
               <div className="flex justify-between items-center">
