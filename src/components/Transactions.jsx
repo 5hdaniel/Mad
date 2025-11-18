@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import AuditTransactionModal from './AuditTransactionModal';
 import ExportModal from './ExportModal';
-import { ROLE_TO_CATEGORY } from '../constants/contactRoles';
+import ContactSelectModal from './ContactSelectModal';
+import { ROLE_TO_CATEGORY, AUDIT_WORKFLOW_STEPS } from '../constants/contactRoles';
+import { filterRolesByTransactionType, getRoleDisplayName } from '../utils/transactionRoleUtils';
 
 /**
  * Transactions Component
@@ -1128,10 +1130,6 @@ function EditTransactionModal({ transaction, onClose, onSuccess }) {
  * Reusable component for editing contact assignments
  */
 function EditContactAssignments({ transactionType, contactAssignments, onAssignContact, onRemoveContact, userId, propertyAddress }) {
-  const { AUDIT_WORKFLOW_STEPS } = require('../constants/contactRoles');
-  const { filterRolesByTransactionType, getRoleDisplayName } = require('../utils/transactionRoleUtils');
-  const ContactSelectModal = require('./ContactSelectModal').default;
-
   // Get all roles from the workflow
   const allRoles = AUDIT_WORKFLOW_STEPS.flatMap(step => step.roles);
   const filteredRoles = filterRolesByTransactionType(allRoles, transactionType);
@@ -1173,8 +1171,6 @@ function EditContactAssignments({ transactionType, contactAssignments, onAssignC
  * Edit Single Role Assignment Component
  */
 function EditRoleAssignment({ role, required, multiple, assignments, onAssign, onRemove, userId, propertyAddress, transactionType }) {
-  const { getRoleDisplayName } = require('../utils/transactionRoleUtils');
-  const ContactSelectModal = require('./ContactSelectModal').default;
   const [showContactSelect, setShowContactSelect] = React.useState(false);
 
   const handleContactSelected = (contacts) => {
