@@ -22,9 +22,14 @@ function Transactions({ userId, provider, onClose }) {
     loadTransactions();
 
     // Listen for scan progress
+    let cleanup;
     if (window.api?.onTransactionScanProgress) {
-      window.api.onTransactionScanProgress(handleScanProgress);
+      cleanup = window.api.onTransactionScanProgress(handleScanProgress);
     }
+
+    return () => {
+      if (cleanup) cleanup();
+    };
   }, []);
 
   const loadTransactions = async () => {

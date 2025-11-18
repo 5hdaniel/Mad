@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 /**
  * Profile Component
@@ -6,6 +6,10 @@ import React, { useState } from 'react';
  */
 function Profile({ user, provider, subscription, onLogout, onClose, onViewTransactions }) {
   const [showConfirmLogout, setShowConfirmLogout] = useState(false);
+  const [emailConnections, setEmailConnections] = useState({
+    google: { connected: false, email: null },
+    microsoft: { connected: false, email: null }
+  });
 
   const handleLogoutClick = () => {
     setShowConfirmLogout(true);
@@ -19,6 +23,35 @@ function Profile({ user, provider, subscription, onLogout, onClose, onViewTransa
   const handleCancelLogout = () => {
     setShowConfirmLogout(false);
   };
+
+  useEffect(() => {
+    // Check email connection status when component mounts
+    const checkEmailConnections = async () => {
+      if (!user?.id || !window.api?.system) return;
+
+      try {
+        const [googleStatus, microsoftStatus] = await Promise.all([
+          window.api.system.checkGoogleConnection(user.id),
+          window.api.system.checkMicrosoftConnection(user.id)
+        ]);
+
+        setEmailConnections({
+          google: {
+            connected: googleStatus?.connected || false,
+            email: googleStatus?.email || null
+          },
+          microsoft: {
+            connected: microsoftStatus?.connected || false,
+            email: microsoftStatus?.email || null
+          }
+        });
+      } catch (error) {
+        console.error('Error checking email connections:', error);
+      }
+    };
+
+    checkEmailConnections();
+  }, [user?.id]);
 
   const getProviderDisplay = () => {
     if (provider === 'google') {
@@ -84,13 +117,50 @@ function Profile({ user, provider, subscription, onLogout, onClose, onViewTransa
           </div>
 
           {/* Provider Badge */}
-          <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full ${providerInfo.bgColor} ${providerInfo.borderColor} border mb-6`}>
+          <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full ${providerInfo.bgColor} ${providerInfo.borderColor} border mb-4`}>
             <svg className={`w-4 h-4 ${providerInfo.color}`} fill="currentColor" viewBox="0 0 24 24">
               <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
             </svg>
             <span className={`text-sm font-medium ${providerInfo.color}`}>
               Signed in with {providerInfo.name}
             </span>
+          </div>
+
+          {/* Email Connection Status */}
+          <div className="space-y-2 mb-6">
+            {/* Gmail Connection Status */}
+            <div className="flex items-center gap-2">
+              <div className={`w-2 h-2 rounded-full ${emailConnections.google.connected ? 'bg-green-500' : 'bg-gray-300'}`} />
+              <span className="text-xs text-gray-600">
+                {emailConnections.google.connected ? (
+                  <>
+                    <span className="font-medium text-green-700">Connected to Gmail</span>
+                    {emailConnections.google.email && (
+                      <span className="text-gray-500"> ({emailConnections.google.email})</span>
+                    )}
+                  </>
+                ) : (
+                  <span className="text-gray-500">Gmail not connected</span>
+                )}
+              </span>
+            </div>
+
+            {/* Outlook Connection Status */}
+            <div className="flex items-center gap-2">
+              <div className={`w-2 h-2 rounded-full ${emailConnections.microsoft.connected ? 'bg-green-500' : 'bg-gray-300'}`} />
+              <span className="text-xs text-gray-600">
+                {emailConnections.microsoft.connected ? (
+                  <>
+                    <span className="font-medium text-green-700">Connected to Outlook</span>
+                    {emailConnections.microsoft.email && (
+                      <span className="text-gray-500"> ({emailConnections.microsoft.email})</span>
+                    )}
+                  </>
+                ) : (
+                  <span className="text-gray-500">Outlook not connected</span>
+                )}
+              </span>
+            </div>
           </div>
 
           {/* Subscription Info */}

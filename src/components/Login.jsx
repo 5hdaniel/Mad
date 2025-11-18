@@ -52,8 +52,9 @@ const Login = ({ onLoginSuccess }) => {
     setProvider('microsoft');
 
     // Listen for login completion from main process
+    let cleanup;
     if (window.api.onMicrosoftLoginComplete) {
-      window.api.onMicrosoftLoginComplete((result) => {
+      cleanup = window.api.onMicrosoftLoginComplete((result) => {
         console.log('Microsoft login complete:', result);
 
         if (result.success && onLoginSuccess) {
@@ -63,6 +64,9 @@ const Login = ({ onLoginSuccess }) => {
           setLoading(false);
           setProvider(null);
         }
+
+        // Clean up listener after handling the event
+        if (cleanup) cleanup();
       });
     }
 
@@ -77,12 +81,14 @@ const Login = ({ onLoginSuccess }) => {
         setError(result.error || 'Failed to start Microsoft login');
         setLoading(false);
         setProvider(null);
+        if (cleanup) cleanup();
       }
     } catch (err) {
       console.error('Microsoft login error:', err);
       setError(err.message || 'Failed to start Microsoft login');
       setLoading(false);
       setProvider(null);
+      if (cleanup) cleanup();
     }
   };
 
