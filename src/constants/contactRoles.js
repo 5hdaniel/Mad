@@ -104,6 +104,7 @@ export const ROLE_TO_CATEGORY = {
   [SPECIFIC_ROLES.INSURANCE_AGENT]: ROLE_CATEGORIES.INSURANCE,
   [SPECIFIC_ROLES.HOA_MANAGEMENT]: ROLE_CATEGORIES.PROPERTY_MANAGEMENT,
   [SPECIFIC_ROLES.CONDO_MANAGEMENT]: ROLE_CATEGORIES.PROPERTY_MANAGEMENT,
+  [SPECIFIC_ROLES.OTHER]: ROLE_CATEGORIES.SUPPORT,
 };
 
 // Organized roles by step in the wizard
@@ -131,6 +132,8 @@ export const AUDIT_WORKFLOW_STEPS = [
       { role: SPECIFIC_ROLES.TRANSACTION_COORDINATOR, required: false, multiple: false },
       { role: SPECIFIC_ROLES.INSURANCE_AGENT, required: false, multiple: false },
       { role: SPECIFIC_ROLES.HOA_MANAGEMENT, required: false, multiple: false },
+      { role: SPECIFIC_ROLES.CONDO_MANAGEMENT, required: false, multiple: false },
+      { role: SPECIFIC_ROLES.OTHER, required: false, multiple: true },
     ],
   },
 ];
