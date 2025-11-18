@@ -1,9 +1,14 @@
 module.exports = {
-  // Test environment
-  testEnvironment: 'jsdom',
+  // Test environment - use node for backend, jsdom for frontend
+  testEnvironment: 'jest-environment-jsdom',
 
   // Setup files
   setupFilesAfterEnv: ['<rootDir>/tests/setup.js'],
+
+  // Use node environment for backend tests
+  testEnvironmentOptions: {
+    customExportConditions: ['node', 'node-addons'],
+  },
 
   // Module paths
   moduleDirectories: ['node_modules', 'src'],

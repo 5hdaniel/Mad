@@ -1,4 +1,4 @@
-import { SPECIFIC_ROLES } from '../constants/contactRoles';
+import { SPECIFIC_ROLES, ROLE_DISPLAY_NAMES } from '../constants/contactRoles';
 
 /**
  * Transaction Role Utilities
@@ -88,4 +88,29 @@ export function validateRoleAssignments(contactAssignments, roles) {
     isValid: missingRoles.length === 0,
     missingRoles,
   };
+}
+
+/**
+ * Get role display name based on transaction type
+ *
+ * For CLIENT role:
+ * - Purchase: "Client (Buyer)" - agent represents the buyer
+ * - Sale: "Client (Seller)" - agent represents the seller
+ *
+ * @param {string} role - The specific role constant
+ * @param {string} transactionType - 'purchase' or 'sale'
+ * @returns {string} Display name for the role
+ */
+export function getRoleDisplayName(role, transactionType) {
+  // Special handling for CLIENT role - changes based on transaction type
+  if (role === SPECIFIC_ROLES.CLIENT) {
+    if (transactionType === 'purchase') {
+      return 'Client (Buyer)';
+    } else if (transactionType === 'sale') {
+      return 'Client (Seller)';
+    }
+  }
+
+  // For all other roles, use the standard display name
+  return ROLE_DISPLAY_NAMES[role] || role;
 }

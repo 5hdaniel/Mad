@@ -100,8 +100,10 @@ class DatabaseService {
    * @private
    */
   async _runAdditionalMigrations() {
+    console.log('[DatabaseService] 🔄 Starting database migrations...');
     try {
       // Migration 1: Add legal compliance columns to users_local
+      console.log('[DatabaseService] Running Migration 1: User compliance columns');
       const userColumns = await this._all(`PRAGMA table_info(users_local)`);
       if (!userColumns.some(col => col.name === 'terms_accepted_at')) {
         console.log('[DatabaseService] Adding terms_accepted_at column to users_local');
@@ -121,6 +123,7 @@ class DatabaseService {
       }
 
       // Migration 2: Add new transaction columns
+      console.log('[DatabaseService] Running Migration 2: Transaction columns');
       const transactionColumns = await this._all(`PRAGMA table_info(transactions)`);
       const transactionMigrations = [
         { name: 'status', sql: `ALTER TABLE transactions ADD COLUMN status TEXT DEFAULT 'active'` },
@@ -142,22 +145,30 @@ class DatabaseService {
         }
       }
 
+      // Create trigger for transactions timestamp (after ensuring updated_at column exists)
+      await this._run(`
+        CREATE TRIGGER IF NOT EXISTS update_transactions_timestamp
+        AFTER UPDATE ON transactions
+        BEGIN
+          UPDATE transactions SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+        END;
+      `);
+
+      // Create index for status column (added by migration)
+      await this._run(`CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions(status)`);
+
       // Migration 3: Enhanced contact roles for transaction_contacts
+      console.log('[DatabaseService] Running Migration 3: Transaction contacts enhanced roles');
       const tcColumns = await this._all(`PRAGMA table_info(transaction_contacts)`);
+      console.log('[DatabaseService] Current transaction_contacts columns:', tcColumns.map(c => c.name).join(', '));
       const tcMigrations = [
         {
           name: 'role_category',
-          sql: `ALTER TABLE transaction_contacts ADD COLUMN role_category TEXT CHECK (role_category IN (
-            'client', 'agent', 'lending', 'inspection', 'title_escrow', 'legal', 'support', 'property_management', 'insurance'
-          ))`
+          sql: `ALTER TABLE transaction_contacts ADD COLUMN role_category TEXT`
         },
         {
           name: 'specific_role',
-          sql: `ALTER TABLE transaction_contacts ADD COLUMN specific_role TEXT CHECK (specific_role IN (
-            'client', 'buyer_agent', 'seller_agent', 'listing_agent', 'appraiser', 'inspector',
-            'title_company', 'escrow_officer', 'mortgage_broker', 'lender', 'real_estate_attorney',
-            'transaction_coordinator', 'insurance_agent', 'surveyor', 'hoa_management', 'condo_management', 'other'
-          ))`
+          sql: `ALTER TABLE transaction_contacts ADD COLUMN specific_role TEXT`
         },
         { name: 'is_primary', sql: `ALTER TABLE transaction_contacts ADD COLUMN is_primary INTEGER DEFAULT 0` },
         { name: 'notes', sql: `ALTER TABLE transaction_contacts ADD COLUMN notes TEXT` },
@@ -167,7 +178,13 @@ class DatabaseService {
       for (const migration of tcMigrations) {
         if (!tcColumns.some(col => col.name === migration.name)) {
           console.log(`[DatabaseService] Adding ${migration.name} column to transaction_contacts`);
-          await this._run(migration.sql);
+          try {
+            await this._run(migration.sql);
+            console.log(`[DatabaseService] Successfully added ${migration.name} column`);
+          } catch (err) {
+            console.error(`[DatabaseService] Failed to add ${migration.name} column:`, err.message);
+            throw err; // Re-throw to make migration errors visible
+          }
         }
       }
 
@@ -184,6 +201,19 @@ class DatabaseService {
           UPDATE transaction_contacts SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
         END;
       `);
+
+      // Verify all columns were added successfully
+      const verifyTcColumns = await this._all(`PRAGMA table_info(transaction_contacts)`);
+      const columnNames = verifyTcColumns.map(c => c.name);
+      console.log('[DatabaseService] ✅ Migration 3 complete. Final transaction_contacts columns:', columnNames.join(', '));
+
+      const requiredColumns = ['role_category', 'specific_role', 'is_primary', 'notes', 'updated_at'];
+      const missingColumns = requiredColumns.filter(col => !columnNames.includes(col));
+      if (missingColumns.length > 0) {
+        console.error('[DatabaseService] ❌ ERROR: Missing required columns:', missingColumns.join(', '));
+      } else {
+        console.log('[DatabaseService] ✅ All required columns present');
+      }
 
       // Migration 4: Add export tracking columns to transactions
       const exportStatusExists = transactionColumns.some(col => col.name === 'export_status');
@@ -265,7 +295,7 @@ class DatabaseService {
         `);
       }
 
-      // Migration 5: Contact import tracking
+      // Migration 6: Contact import tracking
       const contactColumns = await this._all(`PRAGMA table_info(contacts)`);
       if (!contactColumns.some(col => col.name === 'is_imported')) {
         console.log('[DatabaseService] Adding is_imported column to contacts');
@@ -281,6 +311,8 @@ class DatabaseService {
       } else {
         console.log('[DatabaseService] is_imported column already exists');
       }
+
+      console.log('[DatabaseService] ✅ All database migrations completed successfully');
 
     } catch (error) {
       // Log full error details for debugging

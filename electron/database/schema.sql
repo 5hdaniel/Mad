@@ -204,8 +204,13 @@ CREATE TABLE IF NOT EXISTS transaction_contacts (
   transaction_id TEXT NOT NULL,
   contact_id TEXT NOT NULL,
   role TEXT,
+  role_category TEXT,
+  specific_role TEXT,
+  is_primary INTEGER DEFAULT 0,
+  notes TEXT,
 
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 
   FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE CASCADE,
   UNIQUE(transaction_id, contact_id)
@@ -289,6 +294,7 @@ CREATE TABLE IF NOT EXISTS extracted_transaction_data (
 -- ============================================
 -- INDEXES (Performance Optimization)
 -- ============================================
+-- Note: Indexes for migration-added columns are created in the migration code
 CREATE INDEX IF NOT EXISTS idx_users_local_email ON users_local(email);
 CREATE INDEX IF NOT EXISTS idx_oauth_tokens_user_provider ON oauth_tokens(user_id, provider, purpose);
 CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(session_token);
@@ -299,7 +305,6 @@ CREATE INDEX IF NOT EXISTS idx_contacts_is_imported ON contacts(is_imported);
 CREATE INDEX IF NOT EXISTS idx_contacts_user_imported ON contacts(user_id, is_imported);
 CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_property ON transactions(property_address);
-CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions(status);
 CREATE INDEX IF NOT EXISTS idx_transaction_contacts_transaction_id ON transaction_contacts(transaction_id);
 CREATE INDEX IF NOT EXISTS idx_communications_user_id ON communications(user_id);
 CREATE INDEX IF NOT EXISTS idx_communications_transaction_id ON communications(transaction_id);
@@ -309,6 +314,9 @@ CREATE INDEX IF NOT EXISTS idx_extracted_data_transaction_id ON extracted_transa
 -- ============================================
 -- TRIGGERS (Auto-update timestamps)
 -- ============================================
+-- Note: Additional triggers are created in the migration code
+-- after ensuring required columns exist
+
 CREATE TRIGGER IF NOT EXISTS update_users_local_timestamp
 AFTER UPDATE ON users_local
 BEGIN
@@ -325,10 +333,4 @@ CREATE TRIGGER IF NOT EXISTS update_contacts_timestamp
 AFTER UPDATE ON contacts
 BEGIN
   UPDATE contacts SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
-END;
-
-CREATE TRIGGER IF NOT EXISTS update_transactions_timestamp
-AFTER UPDATE ON transactions
-BEGIN
-  UPDATE transactions SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
 END;

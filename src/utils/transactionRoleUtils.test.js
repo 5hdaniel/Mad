@@ -2,6 +2,7 @@ import {
   filterRolesByTransactionType,
   getTransactionTypeContext,
   validateRoleAssignments,
+  getRoleDisplayName,
 } from './transactionRoleUtils';
 import { SPECIFIC_ROLES } from '../constants/contactRoles';
 
@@ -151,6 +152,33 @@ describe('transactionRoleUtils', () => {
 
       expect(result.isValid).toBe(true);
       expect(result.missingRoles.length).toBe(0);
+    });
+  });
+
+  describe('getRoleDisplayName', () => {
+    it('should return "Client (Buyer)" for CLIENT role in purchase transaction', () => {
+      const result = getRoleDisplayName(SPECIFIC_ROLES.CLIENT, 'purchase');
+      expect(result).toBe('Client (Buyer)');
+    });
+
+    it('should return "Client (Seller)" for CLIENT role in sale transaction', () => {
+      const result = getRoleDisplayName(SPECIFIC_ROLES.CLIENT, 'sale');
+      expect(result).toBe('Client (Seller)');
+    });
+
+    it('should return standard display name for non-CLIENT roles', () => {
+      const result = getRoleDisplayName(SPECIFIC_ROLES.BUYER_AGENT, 'purchase');
+      expect(result).toBe('Buyer Agent');
+    });
+
+    it('should return standard display name for inspector', () => {
+      const result = getRoleDisplayName(SPECIFIC_ROLES.INSPECTOR, 'sale');
+      expect(result).toBe('Inspector');
+    });
+
+    it('should return standard display name for transaction coordinator', () => {
+      const result = getRoleDisplayName(SPECIFIC_ROLES.TRANSACTION_COORDINATOR, 'purchase');
+      expect(result).toBe('Transaction Coordinator (TC)');
     });
   });
 });
