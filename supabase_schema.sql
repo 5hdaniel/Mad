@@ -39,7 +39,9 @@ CREATE TABLE IF NOT EXISTS users (
 
   -- Legal (US/CCPA)
   terms_accepted_at TIMESTAMPTZ,
+  terms_version_accepted TEXT,
   privacy_policy_accepted_at TIMESTAMPTZ,
+  privacy_policy_version_accepted TEXT,
   do_not_sell_data BOOLEAN DEFAULT false,
   ccpa_opt_out_date TIMESTAMPTZ,
 

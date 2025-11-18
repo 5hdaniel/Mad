@@ -15,6 +15,40 @@ const supabaseService = require('./services/supabaseService');
 const tokenEncryptionService = require('./services/tokenEncryptionService');
 const sessionService = require('./services/sessionService');
 
+// Import constants
+const { CURRENT_TERMS_VERSION, CURRENT_PRIVACY_POLICY_VERSION } = require('./constants/legalVersions');
+
+/**
+ * Check if user needs to accept or re-accept terms
+ * Returns true if user hasn't accepted OR if the accepted versions are outdated
+ */
+function needsToAcceptTerms(user) {
+  // User hasn't accepted terms at all (truly new user)
+  if (!user.terms_accepted_at) {
+    return true;
+  }
+
+  // Backward compatibility: If user accepted before we added version tracking,
+  // don't force them to re-accept (version fields will be null/undefined)
+  if (!user.terms_version_accepted && !user.privacy_policy_version_accepted) {
+    // User accepted in old system, consider them accepted
+    return false;
+  }
+
+  // Check if versions have been updated since user last accepted
+  if (user.terms_version_accepted && user.terms_version_accepted !== CURRENT_TERMS_VERSION) {
+    console.log('[Auth] User needs to re-accept terms: Terms version updated');
+    return true;
+  }
+
+  if (user.privacy_policy_version_accepted && user.privacy_policy_version_accepted !== CURRENT_PRIVACY_POLICY_VERSION) {
+    console.log('[Auth] User needs to re-accept terms: Privacy Policy version updated');
+    return true;
+  }
+
+  return false;
+}
+
 // Initialize database when app is ready
 const initializeDatabase = async () => {
   try {
@@ -144,8 +178,8 @@ const handleGoogleCompleteLogin = async (event, authCode) => {
 
     console.log('[Main] Google login completed successfully');
 
-    // Check if user is new (hasn't accepted terms yet)
-    const isNewUser = !localUser.terms_accepted_at;
+    // Check if user needs to accept terms (new user or outdated versions)
+    const isNewUser = needsToAcceptTerms(localUser);
 
     // Save session for persistence (30 days expiration)
     const sessionExpiresAt = Date.now() + (30 * 24 * 60 * 60 * 1000);
@@ -389,8 +423,8 @@ const handleMicrosoftLogin = async (mainWindow) => {
 
         console.log('[Main] Microsoft login completed successfully');
 
-        // Check if user is new (hasn't accepted terms yet)
-        const isNewUser = !localUser.terms_accepted_at;
+        // Check if user needs to accept terms (new user or outdated versions)
+        const isNewUser = needsToAcceptTerms(localUser);
 
         // Save session for persistence (30 days expiration)
         const sessionExpiresAt = Date.now() + (30 * 24 * 60 * 60 * 1000);
@@ -592,10 +626,30 @@ const registerAuthHandlers = (mainWindow) => {
   // Accept terms
   ipcMain.handle('auth:accept-terms', async (event, userId) => {
     try {
-      const updatedUser = await databaseService.acceptTerms(userId);
+      // Save to local database
+      const updatedUser = await databaseService.acceptTerms(
+        userId,
+        CURRENT_TERMS_VERSION,
+        CURRENT_PRIVACY_POLICY_VERSION
+      );
+
+      console.log('[Auth] Terms accepted:', userId, `v${CURRENT_TERMS_VERSION}`);
+
+      // Sync to Supabase (cloud backup for legal compliance)
+      try {
+        await supabaseService.syncTermsAcceptance(
+          userId,
+          CURRENT_TERMS_VERSION,
+          CURRENT_PRIVACY_POLICY_VERSION
+        );
+      } catch (syncError) {
+        // Don't fail the acceptance if sync fails - user already accepted locally
+        console.error('[Auth] Failed to sync terms to Supabase:', syncError.message);
+      }
+
       return { success: true, user: updatedUser };
     } catch (error) {
-      console.error('[Main] Accept terms failed:', error);
+      console.error('[Auth] Accept terms failed:', error);
       return { success: false, error: error.message };
     }
   });
@@ -634,12 +688,17 @@ const registerAuthHandlers = (mainWindow) => {
         return { success: false, error: 'Session expired or invalid' };
       }
 
+      // Load fresh user data from database to ensure we have latest terms acceptance status
+      const freshUser = await databaseService.getUserById(session.user.id);
+      const user = freshUser || session.user; // Fallback to session user if db read fails
+
       return {
         success: true,
-        user: session.user,
+        user,
         sessionToken: session.sessionToken,
         subscription: session.subscription,
         provider: session.provider,
+        isNewUser: needsToAcceptTerms(user), // Flag if user needs to accept/re-accept terms
       };
     } catch (error) {
       console.error('[Main] Get current user failed:', error);

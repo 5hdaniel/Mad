@@ -31,7 +31,12 @@ CREATE TABLE IF NOT EXISTS users_local (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   last_login_at DATETIME,
+
+  -- Legal compliance
   terms_accepted_at DATETIME,
+  terms_version_accepted TEXT,
+  privacy_policy_accepted_at DATETIME,
+  privacy_policy_version_accepted TEXT,
 
   -- Preferences (local, synced to cloud)
   timezone TEXT DEFAULT 'America/Los_Angeles',
