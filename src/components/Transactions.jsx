@@ -597,33 +597,33 @@ function TransactionDetails({ transaction, onClose, onTransactionUpdated }) {
               </div>
 
               {/* Communications */}
-              <div>
-                <h4 className="text-lg font-semibold text-gray-900 mb-3">Related Emails ({communications.length})</h4>
-                {loading ? (
-                  <div className="text-center py-8">
-                    <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
-                  </div>
-                ) : communications.length === 0 ? (
-                  <p className="text-gray-600 text-center py-8">No emails found</p>
-                ) : (
-                  <div className="space-y-3">
-                    {communications.map((comm) => (
-                      <div key={comm.id} className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                        <div className="flex items-start justify-between mb-2">
-                          <h5 className="font-semibold text-gray-900">{comm.subject || '(No Subject)'}</h5>
-                          <span className="text-xs text-gray-500">
-                            {comm.sent_at ? new Date(comm.sent_at).toLocaleDateString() : 'Unknown date'}
-                          </span>
+              {communications.length > 0 && (
+                <div>
+                  <h4 className="text-lg font-semibold text-gray-900 mb-3">Related Emails ({communications.length})</h4>
+                  {loading ? (
+                    <div className="text-center py-8">
+                      <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {communications.map((comm) => (
+                        <div key={comm.id} className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                          <div className="flex items-start justify-between mb-2">
+                            <h5 className="font-semibold text-gray-900">{comm.subject || '(No Subject)'}</h5>
+                            <span className="text-xs text-gray-500">
+                              {comm.sent_at ? new Date(comm.sent_at).toLocaleDateString() : 'Unknown date'}
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-600 mb-2">From: {comm.sender || 'Unknown'}</p>
+                          {comm.body_plain && (
+                            <p className="text-sm text-gray-700 line-clamp-3">{comm.body_plain.substring(0, 200)}...</p>
+                          )}
                         </div>
-                        <p className="text-sm text-gray-600 mb-2">From: {comm.sender || 'Unknown'}</p>
-                        {comm.body_plain && (
-                          <p className="text-sm text-gray-700 line-clamp-3">{comm.body_plain.substring(0, 200)}...</p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </>
           )}
 
