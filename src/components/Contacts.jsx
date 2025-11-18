@@ -180,7 +180,7 @@ function Contacts({ userId, onClose }) {
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
             </svg>
-            <p className="text-xs font-medium whitespace-nowrap">Click here to get started</p>
+            <p className="text-xs font-medium whitespace-nowrap">Click "Add Contact" to begin</p>
           </div>
         )}
       </div>
@@ -213,19 +213,11 @@ function Contacts({ userId, onClose }) {
               <h3 className="text-lg font-semibold text-gray-900 mb-2">
                 {searchQuery ? 'No matching contacts' : 'No contacts yet'}
               </h3>
-              <p className="text-gray-600 mb-4">
+              <p className="text-gray-600">
                 {searchQuery
                   ? 'Try adjusting your search'
                   : 'Get started by adding your first contact'}
               </p>
-              {!searchQuery && (
-                <div className="flex flex-col items-center gap-2 text-purple-600">
-                  <svg className="w-8 h-8 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
-                  </svg>
-                  <p className="text-sm font-medium">Click "Add Contact" above</p>
-                </div>
-              )}
             </div>
           </div>
         ) : (
