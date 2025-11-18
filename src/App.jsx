@@ -276,6 +276,7 @@ function App() {
               onClick={() => setShowProfile(true)}
               className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 hover:from-blue-500 hover:to-purple-600 flex items-center justify-center text-white text-sm font-bold shadow-md transition-all hover:shadow-lg"
               title={`${currentUser.display_name || currentUser.email} - Click for account settings`}
+              data-tour="profile-button"
             >
               {currentUser.avatar_url ? (
                 <img src={currentUser.avatar_url} alt="Profile" className="w-8 h-8 rounded-full" />

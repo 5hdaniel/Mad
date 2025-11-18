@@ -124,7 +124,7 @@ function SystemHealthMonitor({ userId, provider }) {
   }
 
   return (
-    <div className="fixed top-4 right-4 z-50 space-y-3" style={{ maxWidth: '420px' }}>
+    <div className="fixed top-16 right-4 z-50 space-y-3" style={{ maxWidth: '420px' }}>
       {visibleIssues.map((issue, index) => {
         const originalIndex = issues.findIndex((i, idx) => i === issue && !dismissed.has(idx));
         const severity = issue.severity || 'warning';
