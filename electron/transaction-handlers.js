@@ -8,6 +8,18 @@ const transactionService = require('./services/transactionService');
 const pdfExportService = require('./services/pdfExportService');
 const enhancedExportService = require('./services/enhancedExportService');
 
+// Import validation utilities
+const {
+  ValidationError,
+  validateUserId,
+  validateTransactionId,
+  validateContactId,
+  validateTransactionData,
+  validateFilePath,
+  validateProvider,
+  sanitizeObject,
+} = require('./utils/validation');
+
 /**
  * Register all transaction-related IPC handlers
  * @param {BrowserWindow} mainWindow - Main window instance
@@ -18,8 +30,12 @@ const registerTransactionHandlers = (mainWindow) => {
     try {
       console.log('[Main] Starting transaction scan for user:', userId);
 
-      const result = await transactionService.scanAndExtractTransactions(userId, {
-        ...options,
+      // Validate input
+      const validatedUserId = validateUserId(userId);
+      const sanitizedOptions = sanitizeObject(options || {});
+
+      const result = await transactionService.scanAndExtractTransactions(validatedUserId, {
+        ...sanitizedOptions,
         onProgress: (progress) => {
           // Send progress updates to renderer
           if (mainWindow) {
@@ -36,6 +52,12 @@ const registerTransactionHandlers = (mainWindow) => {
       };
     } catch (error) {
       console.error('[Main] Transaction scan failed:', error);
+      if (error instanceof ValidationError) {
+        return {
+          success: false,
+          error: `Validation error: ${error.message}`,
+        };
+      }
       return {
         success: false,
         error: error.message,
@@ -46,7 +68,10 @@ const registerTransactionHandlers = (mainWindow) => {
   // Get all transactions for a user
   ipcMain.handle('transactions:get-all', async (event, userId) => {
     try {
-      const transactions = await transactionService.getTransactions(userId);
+      // Validate input
+      const validatedUserId = validateUserId(userId);
+
+      const transactions = await transactionService.getTransactions(validatedUserId);
 
       return {
         success: true,
@@ -54,6 +79,12 @@ const registerTransactionHandlers = (mainWindow) => {
       };
     } catch (error) {
       console.error('[Main] Get transactions failed:', error);
+      if (error instanceof ValidationError) {
+        return {
+          success: false,
+          error: `Validation error: ${error.message}`,
+        };
+      }
       return {
         success: false,
         error: error.message,
