@@ -39,8 +39,7 @@
     // Other options
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "allowSyntheticDefaultImports": true,
-    "types": ["jest", "node"]
+    "allowSyntheticDefaultImports": true
   },
   "include": [
     "electron/**/*",
