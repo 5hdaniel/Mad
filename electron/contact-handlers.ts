@@ -5,7 +5,7 @@
 
 import { ipcMain } from 'electron';
 import type { IpcMainInvokeEvent } from 'electron';
-import { databaseService } from './services/databaseService';
+import databaseService from './services/databaseService';
 import { getContactNames } from './services/contactsService';
 import type { Contact, Transaction } from './types/models';
 

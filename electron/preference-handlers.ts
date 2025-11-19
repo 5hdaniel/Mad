@@ -5,7 +5,7 @@
 
 import { ipcMain } from 'electron';
 import type { IpcMainInvokeEvent } from 'electron';
-import { supabaseService } from './services/supabaseService';
+import supabaseService from './services/supabaseService';
 
 // Import validation utilities
 import {

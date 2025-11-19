@@ -5,7 +5,7 @@
 
 import { ipcMain, BrowserWindow } from 'electron';
 import type { IpcMainInvokeEvent } from 'electron';
-import { transactionService } from './services/transactionService';
+import transactionService from './services/transactionService';
 import type { Transaction } from './types/models';
 
 // Services (still JS - to be migrated)
@@ -33,6 +33,16 @@ interface TransactionResponse {
   path?: string;
 }
 
+interface ScanOptions {
+  onProgress?: (progress: unknown) => void;
+  [key: string]: unknown;
+}
+
+interface ExportOptions {
+  exportFormat?: string;
+  [key: string]: unknown;
+}
+
 interface ScanProgressCallback {
   (progress: unknown): void;
 }
@@ -49,7 +59,7 @@ export const registerTransactionHandlers = (mainWindow: BrowserWindow | null): v
 
       // Validate input
       const validatedUserId = validateUserId(userId);
-      const sanitizedOptions = sanitizeObject(options || {});
+      const sanitizedOptions = sanitizeObject(options || {}) as ScanOptions;
 
       const result = await transactionService.scanAndExtractTransactions(validatedUserId, {
         ...sanitizedOptions,
@@ -478,7 +488,7 @@ export const registerTransactionHandlers = (mainWindow: BrowserWindow | null): v
 
       // Validate inputs
       const validatedTransactionId = validateTransactionId(transactionId);
-      const sanitizedOptions = sanitizeObject(options || {});
+      const sanitizedOptions = sanitizeObject(options || {}) as ExportOptions;
 
       // Get transaction details with communications
       const details = await transactionService.getTransactionDetails(validatedTransactionId);

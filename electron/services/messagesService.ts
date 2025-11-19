@@ -286,6 +286,9 @@ export {
   getMessagesForContact,
   getMessagesForChat,
   getRecentChats,
+};
+
+export type {
   Conversation,
   Participant,
   Message,

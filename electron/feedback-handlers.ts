@@ -5,7 +5,7 @@
 
 import { ipcMain } from 'electron';
 import type { IpcMainInvokeEvent } from 'electron';
-import { databaseService } from './services/databaseService';
+import databaseService from './services/databaseService';
 
 // Services (still JS - to be migrated)
 const feedbackLearningService = require('./services/feedbackLearningService');

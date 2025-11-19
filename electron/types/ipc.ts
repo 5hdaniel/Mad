@@ -16,6 +16,7 @@ import type {
   NewTransaction,
   OAuthProvider,
   ExportFormat,
+  Subscription,
 } from './models';
 import type { ExportResult, ExtractionResult, SyncStatus } from './database';
 
@@ -384,7 +385,7 @@ export interface WindowApi {
     microsoftConnectMailbox: (userId: string) => Promise<{ success: boolean; error?: string }>;
     logout: (sessionToken: string) => Promise<{ success: boolean; error?: string }>;
     validateSession: (sessionToken: string) => Promise<{ valid: boolean; user?: User; error?: string }>;
-    getCurrentUser: () => Promise<{ success: boolean; user?: User; error?: string }>;
+    getCurrentUser: () => Promise<{ success: boolean; user?: User; sessionToken?: string; subscription?: Subscription; provider?: string; isNewUser?: boolean; error?: string }>;
     acceptTerms: (userId: string) => Promise<{ success: boolean; error?: string }>;
   };
 
@@ -411,9 +412,26 @@ export interface WindowApi {
     update: (userId: string, partialPreferences: Record<string, unknown>) => Promise<{ success: boolean }>;
   };
 
+  // Contact methods
+  contacts: {
+    getAll: (userId: string) => Promise<{ success: boolean; contacts?: Contact[]; error?: string }>;
+    checkCanDelete: (contactId: string) => Promise<{ canDelete: boolean; transactionCount?: number; error?: string }>;
+    delete: (contactId: string) => Promise<{ success: boolean; error?: string }>;
+  };
+
+  // Transaction methods
+  transactions: {
+    getAll: (userId: string) => Promise<{ success: boolean; transactions?: Transaction[]; error?: string }>;
+    scan: (userId: string, options?: Record<string, unknown>) => Promise<{ success: boolean; transactions?: Transaction[]; error?: string }>;
+    getDetails: (transactionId: string) => Promise<{ success: boolean; transaction?: unknown; error?: string }>;
+    update: (transactionId: string, data: Record<string, unknown>) => Promise<{ success: boolean; error?: string }>;
+    delete: (transactionId: string) => Promise<{ success: boolean; error?: string }>;
+  };
+
   // Event listeners for mailbox connections
   onGoogleMailboxConnected: (callback: (result: { success: boolean }) => void) => () => void;
   onMicrosoftMailboxConnected: (callback: (result: { success: boolean }) => void) => () => void;
+  onTransactionScanProgress: (callback: (progress: unknown) => void) => () => void;
 }
 
 // Augment Window interface
@@ -423,8 +441,8 @@ declare global {
     electron: {
       getAppInfo: () => Promise<{ version: string; name: string }>;
       getMacOSVersion: () => Promise<{ version: string }>;
-      checkAppLocation: () => Promise<{ inApplications: boolean; path: string }>;
-      checkPermissions: () => Promise<unknown>;
+      checkAppLocation: () => Promise<{ isInApplications: boolean; shouldPrompt: boolean; appPath: string }>;
+      checkPermissions: () => Promise<{ hasPermission: boolean; error?: string }>;
       triggerFullDiskAccess: () => Promise<{ granted: boolean }>;
       requestPermissions: () => Promise<unknown>;
       requestContactsPermission: () => Promise<{ granted: boolean }>;

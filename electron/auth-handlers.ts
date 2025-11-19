@@ -9,12 +9,12 @@ import crypto from 'crypto';
 import type { IpcMainInvokeEvent } from 'electron';
 
 // Import services
-import { databaseService } from './services/databaseService';
-import { googleAuthService } from './services/googleAuthService';
-import { microsoftAuthService } from './services/microsoftAuthService';
-import { supabaseService } from './services/supabaseService';
-import { tokenEncryptionService } from './services/tokenEncryptionService';
-import { sessionService } from './services/sessionService';
+import databaseService from './services/databaseService';
+import googleAuthService from './services/googleAuthService';
+import microsoftAuthService from './services/microsoftAuthService';
+import supabaseService from './services/supabaseService';
+import tokenEncryptionService from './services/tokenEncryptionService';
+import sessionService from './services/sessionService';
 
 // Import types
 import type { User, Subscription } from './types/models';
