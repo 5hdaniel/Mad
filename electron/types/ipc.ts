@@ -373,11 +373,63 @@ export interface WindowApi {
     chrome: string;
     electron: string;
   };
+
+  // Auth methods
+  auth: {
+    googleLogin: () => Promise<{ success: boolean; authUrl?: string; error?: string }>;
+    googleCompleteLogin: (code: string) => Promise<{ success: boolean; user?: User; sessionToken?: string; error?: string }>;
+    microsoftLogin: () => Promise<{ success: boolean; authUrl?: string; error?: string }>;
+    microsoftCompleteLogin: (code: string) => Promise<{ success: boolean; user?: User; sessionToken?: string; error?: string }>;
+    googleConnectMailbox: (userId: string) => Promise<{ success: boolean; error?: string }>;
+    microsoftConnectMailbox: (userId: string) => Promise<{ success: boolean; error?: string }>;
+    logout: (sessionToken: string) => Promise<{ success: boolean; error?: string }>;
+    validateSession: (sessionToken: string) => Promise<{ valid: boolean; user?: User; error?: string }>;
+    getCurrentUser: () => Promise<{ success: boolean; user?: User; error?: string }>;
+    acceptTerms: (userId: string) => Promise<{ success: boolean; error?: string }>;
+  };
+
+  // System methods
+  system: {
+    runPermissionSetup: () => Promise<{ success: boolean }>;
+    requestContactsPermission: () => Promise<{ granted: boolean }>;
+    setupFullDiskAccess: () => Promise<{ success: boolean }>;
+    openPrivacyPane: (pane: string) => Promise<{ success: boolean }>;
+    checkFullDiskAccessStatus: () => Promise<{ hasAccess: boolean }>;
+    checkFullDiskAccess: () => Promise<{ hasAccess: boolean }>;
+    checkContactsPermission: () => Promise<{ hasPermission: boolean }>;
+    checkAllPermissions: () => Promise<{ fullDiskAccess: boolean; contactsAccess: boolean; allGranted: boolean }>;
+    checkGoogleConnection: (userId: string) => Promise<{ connected: boolean; email?: string; error?: string }>;
+    checkMicrosoftConnection: (userId: string) => Promise<{ connected: boolean; email?: string; error?: string }>;
+    checkAllConnections: (userId: string) => Promise<{ success: boolean; google?: { connected: boolean; email?: string }; microsoft?: { connected: boolean; email?: string } }>;
+    healthCheck: (userId: string, provider: OAuthProvider) => Promise<{ healthy: boolean; provider?: OAuthProvider; issues?: string[] }>;
+  };
+
+  // Preferences methods
+  preferences: {
+    get: (userId: string) => Promise<{ success: boolean; preferences?: Record<string, unknown> }>;
+    save: (userId: string, preferences: Record<string, unknown>) => Promise<{ success: boolean }>;
+    update: (userId: string, partialPreferences: Record<string, unknown>) => Promise<{ success: boolean }>;
+  };
+
+  // Event listeners for mailbox connections
+  onGoogleMailboxConnected: (callback: (result: { success: boolean }) => void) => () => void;
+  onMicrosoftMailboxConnected: (callback: (result: { success: boolean }) => void) => () => void;
 }
 
 // Augment Window interface
 declare global {
   interface Window {
     api: WindowApi;
+    electron: {
+      getAppInfo: () => Promise<{ version: string; name: string }>;
+      getMacOSVersion: () => Promise<{ version: string }>;
+      checkAppLocation: () => Promise<{ inApplications: boolean; path: string }>;
+      checkPermissions: () => Promise<unknown>;
+      triggerFullDiskAccess: () => Promise<{ granted: boolean }>;
+      requestPermissions: () => Promise<unknown>;
+      requestContactsPermission: () => Promise<{ granted: boolean }>;
+      openSystemSettings: () => Promise<{ success: boolean }>;
+      exportConversations: (conversationIds: string[]) => Promise<{ success: boolean; error?: string; canceled?: boolean }>;
+    };
   }
 }
