@@ -5,9 +5,58 @@
 
 const {
   ValidationError,
+  validateContactId,
   validateTransactionId,
   validateTransactionData,
 } = require('../validation');
+
+describe('Contact Validation', () => {
+  describe('validateContactId', () => {
+    it('should accept valid UUID strings', () => {
+      const validUUID = '9cc92292-400f-406b-a9e6-02522278a65a';
+      expect(validateContactId(validUUID)).toBe(validUUID);
+    });
+
+    it('should trim whitespace from valid UUIDs', () => {
+      const uuidWithSpaces = '  448aa043-9866-4cc7-8d14-8975003dc216  ';
+      const trimmedUUID = '448aa043-9866-4cc7-8d14-8975003dc216';
+      expect(validateContactId(uuidWithSpaces)).toBe(trimmedUUID);
+    });
+
+    it('should reject non-string values', () => {
+      expect(() => validateContactId(123)).toThrow(ValidationError);
+      expect(() => validateContactId(123)).toThrow('Contact ID must be a string');
+    });
+
+    it('should reject invalid UUID format', () => {
+      expect(() => validateContactId('not-a-uuid')).toThrow(ValidationError);
+      expect(() => validateContactId('not-a-uuid')).toThrow('Contact ID must be a valid UUID');
+    });
+
+    it('should reject integer IDs (regression test for the bug)', () => {
+      // This tests the original bug - contact IDs were being validated as integers
+      expect(() => validateContactId(12345)).toThrow(ValidationError);
+      expect(() => validateContactId('12345')).toThrow(ValidationError);
+    });
+
+    it('should handle required parameter', () => {
+      expect(() => validateContactId(null, true)).toThrow('Contact ID is required');
+      expect(validateContactId(null, false)).toBeNull();
+      expect(() => validateContactId('', true)).toThrow('Contact ID is required');
+      expect(validateContactId('', false)).toBeNull();
+    });
+
+    it('should accept UUIDs in different cases', () => {
+      const lowerUUID = 'a6f3ccec-5e25-48f7-85dc-8be3f4c1048d';
+      const upperUUID = 'A6F3CCEC-5E25-48F7-85DC-8BE3F4C1048D';
+      const mixedUUID = 'A6f3CceC-5E25-48f7-85dC-8Be3f4C1048D';
+
+      expect(validateContactId(lowerUUID)).toBe(lowerUUID);
+      expect(validateContactId(upperUUID)).toBe(upperUUID);
+      expect(validateContactId(mixedUUID)).toBe(mixedUUID);
+    });
+  });
+});
 
 describe('Transaction Validation', () => {
   describe('validateTransactionId', () => {
