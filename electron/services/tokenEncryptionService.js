@@ -27,10 +27,8 @@ class TokenEncryptionService {
    */
   encrypt(plaintext) {
     if (!this.isEncryptionAvailable()) {
-      console.warn('[TokenEncryption] Encryption not available, storing as plaintext (DEVELOPMENT ONLY)');
-      // In development, if encryption isn't available, encode as base64
-      // This should NEVER happen in production on macOS/Windows
-      return Buffer.from(plaintext).toString('base64');
+      console.error('[TokenEncryption] Encryption not available - cannot proceed');
+      throw new Error('Encryption not available. Token storage requires OS-level encryption support.');
     }
 
     try {
@@ -49,9 +47,8 @@ class TokenEncryptionService {
    */
   decrypt(encryptedBase64) {
     if (!this.isEncryptionAvailable()) {
-      console.warn('[TokenEncryption] Encryption not available, decoding as plaintext (DEVELOPMENT ONLY)');
-      // In development, decode from base64
-      return Buffer.from(encryptedBase64, 'base64').toString('utf8');
+      console.error('[TokenEncryption] Encryption not available - cannot proceed');
+      throw new Error('Encryption not available. Token decryption requires OS-level encryption support.');
     }
 
     try {

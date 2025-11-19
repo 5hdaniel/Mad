@@ -464,10 +464,11 @@ async assignContactToTransaction(transactionId, contactId, role) {
 - Requires dependency updates
 - Tracked at https://github.com/5hdaniel/Mad/security/dependabot
 
-⚠️ **Development Fallback**: If encryption unavailable in dev, falls back to base64
-- Only for development
-- Would fail in production (encryption always available)
-- Adds warning log when fallback used
+✅ **Encryption Fail-Safe**: No plaintext token fallback
+- Encryption is required for all token operations
+- Throws error if OS-level encryption unavailable
+- Startup check warns users with platform-specific instructions
+- Prevents tokens from ever being stored in plaintext
 
 ✅ **macOS Permissions**: Full Disk Access properly requested
 - macOS security model enforced
