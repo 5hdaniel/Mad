@@ -1,0 +1,395 @@
+/**
+ * Microsoft OAuth Service with Authorization Code Flow
+ * Uses temporary local HTTP server to catch redirect
+ * Better UX than device code flow - browser redirects back to app
+ */
+
+import axios from 'axios';
+import http from 'http';
+import url from 'url';
+import crypto from 'crypto';
+
+// ============================================
+// TYPES
+// ============================================
+
+interface AuthResult {
+  authUrl: string;
+  codePromise: Promise<string>;
+  codeVerifier: string;
+  scopes: string[];
+}
+
+interface TokenResponse {
+  access_token: string;
+  refresh_token: string;
+  expires_in: number;
+  scope: string;
+}
+
+interface UserInfo {
+  id: string;
+  email: string;
+  name: string;
+  given_name: string;
+  family_name: string;
+}
+
+interface MailboxInfo {
+  displayName: string;
+  totalItemCount: number;
+  unreadItemCount: number;
+}
+
+interface RevokeResult {
+  success: boolean;
+  message: string;
+}
+
+class MicrosoftAuthService {
+  private clientId: string;
+  private tenantId: string;
+  private redirectUri: string;
+  private authorizeUrl: string;
+  private tokenUrl: string;
+  private server: http.Server | null;
+
+  constructor() {
+    this.clientId = process.env.MICROSOFT_CLIENT_ID as string;
+    // Note: client_secret not needed for public clients (desktop apps)
+    // We use PKCE (Proof Key for Code Exchange) for security instead
+    this.tenantId = process.env.MICROSOFT_TENANT_ID || 'common';
+    this.redirectUri = 'http://localhost:3000/callback';
+
+    // Microsoft OAuth2 endpoints
+    this.authorizeUrl = `https://login.microsoftonline.com/${this.tenantId}/oauth2/v2.0/authorize`;
+    this.tokenUrl = `https://login.microsoftonline.com/${this.tenantId}/oauth2/v2.0/token`;
+
+    this.server = null;
+  }
+
+  /**
+   * Start a temporary local HTTP server to catch OAuth redirect
+   */
+  startLocalServer(): Promise<string> {
+    return new Promise((resolve, reject) => {
+      this.server = http.createServer((req, res) => {
+        const parsedUrl = url.parse(req.url as string, true);
+
+        if (parsedUrl.pathname === '/callback') {
+          const code = parsedUrl.query.code as string;
+          const error = parsedUrl.query.error as string;
+
+          if (error) {
+            res.writeHead(200, { 'Content-Type': 'text/html' });
+            res.end(`
+              <!DOCTYPE html>
+              <html>
+                <head>
+                  <meta charset="UTF-8">
+                  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                  <title>Authentication Failed</title>
+                </head>
+                <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                  <div style="text-align: center; background: white; padding: 3rem 4rem; border-radius: 1rem; box-shadow: 0 20px 60px rgba(0,0,0,0.3); max-width: 500px;">
+                    <div style="width: 80px; height: 80px; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem;">
+                      <svg style="width: 48px; height: 48px; color: white;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path>
+                      </svg>
+                    </div>
+                    <h1 style="color: #1a202c; font-size: 1.875rem; font-weight: 700; margin: 0 0 1rem 0;">Authentication Failed</h1>
+                    <p style="color: #4a5568; font-size: 1rem; margin: 0 0 1.5rem 0; line-height: 1.5;">${parsedUrl.query.error_description || error}</p>
+                    <p style="color: #718096; font-size: 0.875rem; margin: 0;">You can close this window and try again.</p>
+                  </div>
+                </body>
+              </html>
+            `);
+            this.stopLocalServer();
+            reject(new Error((parsedUrl.query.error_description as string) || error));
+          } else if (code) {
+            res.writeHead(200, { 'Content-Type': 'text/html' });
+            res.end(`
+              <!DOCTYPE html>
+              <html>
+                <head>
+                  <meta charset="UTF-8">
+                  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                  <title>Authentication Successful</title>
+                </head>
+                <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                  <div style="text-align: center; background: white; padding: 3rem 4rem; border-radius: 1rem; box-shadow: 0 20px 60px rgba(0,0,0,0.3); max-width: 500px;">
+                    <div style="width: 80px; height: 80px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem;">
+                      <svg style="width: 48px; height: 48px; color: white;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path>
+                      </svg>
+                    </div>
+                    <h1 style="color: #1a202c; font-size: 1.875rem; font-weight: 700; margin: 0 0 1rem 0;">Authentication Successful!</h1>
+                    <p id="status-message" style="color: #4a5568; font-size: 1rem; margin: 0 0 1.5rem 0; line-height: 1.5;">You've been successfully authenticated with Microsoft.</p>
+                    <p id="close-message" style="color: #718096; font-size: 0.875rem; margin: 0 0 1rem 0;">Attempting to close this window...</p>
+                    <button id="return-button" style="display: none; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 0.75rem 2rem; border-radius: 0.5rem; font-size: 1rem; font-weight: 600; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">Return to Application</button>
+                  </div>
+                  <script>
+                    // Try to close the window
+                    setTimeout(() => {
+                      window.close();
+
+                      // If window didn't close (we're still here after 500ms), show fallback
+                      setTimeout(() => {
+                        const closeMsg = document.getElementById('close-message');
+                        const returnBtn = document.getElementById('return-button');
+
+                        closeMsg.innerHTML = 'Please return to the application to continue.';
+                        closeMsg.style.color = '#4a5568';
+                        closeMsg.style.fontSize = '1rem';
+                        closeMsg.style.marginBottom = '1.5rem';
+                        returnBtn.style.display = 'inline-block';
+
+                        // Try to focus the app if possible (won't work in all browsers)
+                        returnBtn.onclick = () => {
+                          // Attempt to close again
+                          window.close();
+                          // If still here, user needs to manually return
+                          if (!window.closed) {
+                            closeMsg.innerHTML = 'You can close this tab and return to the Mad Accountant application.';
+                          }
+                        };
+                      }, 500);
+                    }, 2000);
+                  </script>
+                </body>
+              </html>
+            `);
+            this.stopLocalServer();
+            resolve(code);
+          } else {
+            res.writeHead(400, { 'Content-Type': 'text/html' });
+            res.end(`
+              <html>
+                <body style="font-family: system-ui; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0;">
+                  <div style="text-align: center;">
+                    <h1 style="color: #c33;">Invalid Request</h1>
+                    <p style="color: #666;">No authorization code received.</p>
+                  </div>
+                </body>
+              </html>
+            `);
+          }
+        }
+      });
+
+      this.server.listen(3000, 'localhost', () => {
+        console.log('[MicrosoftAuth] Local callback server listening on http://localhost:3000');
+      });
+
+      this.server.on('error', (err) => {
+        reject(err);
+      });
+    });
+  }
+
+  /**
+   * Stop the local HTTP server
+   */
+  stopLocalServer(): void {
+    if (this.server) {
+      this.server.close();
+      this.server = null;
+      console.log('[MicrosoftAuth] Local callback server stopped');
+    }
+  }
+
+  /**
+   * Step 1: Authenticate for Login (minimal scopes)
+   * Opens browser, user logs in, redirects back to local server
+   */
+  async authenticateForLogin(): Promise<AuthResult> {
+    const scopes = ['openid', 'profile', 'email', 'User.Read', 'offline_access'];
+
+    // Generate PKCE challenge (optional but recommended)
+    const codeVerifier = crypto.randomBytes(32).toString('base64url');
+    const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('base64url');
+
+    // Build authorization URL
+    const params = new URLSearchParams({
+      client_id: this.clientId,
+      response_type: 'code',
+      redirect_uri: this.redirectUri,
+      scope: scopes.join(' '),
+      response_mode: 'query',
+      prompt: 'select_account', // Show account picker, only consent if needed
+      code_challenge: codeChallenge,
+      code_challenge_method: 'S256',
+    });
+
+    const authUrl = `${this.authorizeUrl}?${params.toString()}`;
+
+    // Start local server to catch redirect
+    const codePromise = this.startLocalServer();
+
+    return {
+      authUrl,
+      codePromise,
+      codeVerifier,
+      scopes,
+    };
+  }
+
+  /**
+   * Step 2: Authenticate for Mailbox Access
+   * Requests full mailbox permissions
+   */
+  async authenticateForMailbox(loginHint?: string): Promise<AuthResult> {
+    const scopes = [
+      'openid',
+      'profile',
+      'email',
+      'User.Read',
+      'Mail.Read',
+      'Mail.ReadWrite',
+      'offline_access',
+    ];
+
+    const codeVerifier = crypto.randomBytes(32).toString('base64url');
+    const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('base64url');
+
+    const params = new URLSearchParams({
+      client_id: this.clientId,
+      response_type: 'code',
+      redirect_uri: this.redirectUri,
+      scope: scopes.join(' '),
+      response_mode: 'query',
+      prompt: 'select_account', // Show account picker, only consent if needed
+      code_challenge: codeChallenge,
+      code_challenge_method: 'S256',
+    });
+
+    if (loginHint) {
+      params.append('login_hint', loginHint);
+    }
+
+    const authUrl = `${this.authorizeUrl}?${params.toString()}`;
+    const codePromise = this.startLocalServer();
+
+    return {
+      authUrl,
+      codePromise,
+      codeVerifier,
+      scopes,
+    };
+  }
+
+  /**
+   * Exchange authorization code for tokens
+   */
+  async exchangeCodeForTokens(code: string, codeVerifier: string): Promise<TokenResponse> {
+    try {
+      const params = new URLSearchParams({
+        client_id: this.clientId,
+        code: code,
+        redirect_uri: this.redirectUri,
+        grant_type: 'authorization_code',
+        code_verifier: codeVerifier,
+      });
+
+      const response = await axios.post(this.tokenUrl, params.toString(), {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+      });
+
+      return response.data;
+    } catch (error: any) {
+      console.error('Error exchanging code for tokens:', error.response?.data || error.message);
+      throw new Error(
+        error.response?.data?.error_description || 'Failed to exchange authorization code'
+      );
+    }
+  }
+
+  /**
+   * Get user information from Microsoft Graph API
+   */
+  async getUserInfo(accessToken: string): Promise<UserInfo> {
+    try {
+      const response = await axios.get('https://graph.microsoft.com/v1.0/me', {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+      const user = response.data;
+
+      return {
+        id: user.id,
+        email: user.mail || user.userPrincipalName,
+        name: user.displayName,
+        given_name: user.givenName,
+        family_name: user.surname,
+      };
+    } catch (error: any) {
+      console.error('Error getting user info:', error.response?.data || error.message);
+      throw new Error('Failed to get user information');
+    }
+  }
+
+  /**
+   * Refresh access token using refresh token
+   */
+  async refreshToken(refreshToken: string): Promise<TokenResponse> {
+    try {
+      const params = new URLSearchParams({
+        client_id: this.clientId,
+        refresh_token: refreshToken,
+        grant_type: 'refresh_token',
+      });
+
+      const response = await axios.post(this.tokenUrl, params.toString(), {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+      });
+
+      return response.data;
+    } catch (error: any) {
+      console.error('Error refreshing token:', error.response?.data || error.message);
+      throw new Error('Failed to refresh access token');
+    }
+  }
+
+  /**
+   * Revoke access token (logout)
+   */
+  async revokeToken(accessToken: string): Promise<RevokeResult> {
+    // Microsoft OAuth2 doesn't provide a revocation endpoint
+    // For proper logout, direct user to: https://login.microsoftonline.com/common/oauth2/v2.0/logout
+    console.log(
+      'Microsoft tokens cannot be revoked programmatically. User should sign out from Microsoft account.'
+    );
+    return { success: true, message: 'Token will expire naturally' };
+  }
+
+  /**
+   * Get mailbox metadata (for testing connection)
+   */
+  async getMailboxInfo(accessToken: string): Promise<MailboxInfo> {
+    try {
+      const response = await axios.get('https://graph.microsoft.com/v1.0/me/mailFolders/inbox', {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+      return {
+        displayName: response.data.displayName,
+        totalItemCount: response.data.totalItemCount,
+        unreadItemCount: response.data.unreadItemCount,
+      };
+    } catch (error: any) {
+      console.error('Error getting mailbox info:', error.response?.data || error.message);
+      throw new Error('Failed to get mailbox information');
+    }
+  }
+}
+
+// Export singleton instance
+export = new MicrosoftAuthService();
