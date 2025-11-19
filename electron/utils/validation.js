@@ -68,25 +68,30 @@ function validateContactId(contactId, required = true) {
 
 /**
  * Validate transaction ID
- * @param {any} transactionId - Transaction ID to validate
+ * @param {any} transactionId - Transaction ID to validate (UUID string)
  * @param {boolean} required - Whether the field is required
- * @returns {number} Validated transaction ID
+ * @returns {string} Validated transaction ID
  * @throws {ValidationError} If validation fails
  */
 function validateTransactionId(transactionId, required = true) {
-  if (transactionId === null || transactionId === undefined) {
+  if (transactionId === null || transactionId === undefined || transactionId === '') {
     if (required) {
       throw new ValidationError('Transaction ID is required', 'transactionId');
     }
     return null;
   }
 
-  const parsed = Number(transactionId);
-  if (isNaN(parsed) || parsed <= 0 || !Number.isInteger(parsed)) {
-    throw new ValidationError('Transaction ID must be a positive integer', 'transactionId');
+  if (typeof transactionId !== 'string') {
+    throw new ValidationError('Transaction ID must be a string', 'transactionId');
   }
 
-  return parsed;
+  // Validate UUID format (standard UUID v4 format)
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!uuidRegex.test(transactionId.trim())) {
+    throw new ValidationError('Transaction ID must be a valid UUID', 'transactionId');
+  }
+
+  return transactionId.trim();
 }
 
 /**
