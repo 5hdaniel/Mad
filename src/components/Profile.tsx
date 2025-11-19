@@ -1,32 +1,82 @@
 import React, { useState, useEffect } from 'react';
 
+interface User {
+  id: string;
+  display_name?: string;
+  email: string;
+  avatar_url?: string;
+  last_login_at?: string | Date;
+  created_at?: string | Date;
+}
+
+interface Subscription {
+  subscription_status?: string;
+  subscription_tier?: string;
+  trial_ends_at?: string | Date;
+}
+
+interface EmailConnectionStatus {
+  connected: boolean;
+  email: string | null;
+}
+
+interface EmailConnections {
+  google: EmailConnectionStatus;
+  microsoft: EmailConnectionStatus;
+}
+
+interface ProviderDisplayInfo {
+  name: string;
+  color: string;
+  bgColor: string;
+  borderColor: string;
+}
+
+interface ProfileProps {
+  user: User;
+  provider: string;
+  subscription?: Subscription;
+  onLogout: () => void;
+  onClose: () => void;
+  onViewTransactions: () => void;
+  onOpenSettings: () => void;
+}
+
 /**
  * Profile Component
  * Displays user information, session details, and account actions
  */
-function Profile({ user, provider, subscription, onLogout, onClose, onViewTransactions, onOpenSettings }) {
-  const [showConfirmLogout, setShowConfirmLogout] = useState(false);
-  const [emailConnections, setEmailConnections] = useState({
+function Profile({
+  user,
+  provider,
+  subscription,
+  onLogout,
+  onClose,
+  onViewTransactions,
+  onOpenSettings
+}: ProfileProps) {
+  const [showConfirmLogout, setShowConfirmLogout] = useState<boolean>(false);
+  const [emailConnections, setEmailConnections] = useState<EmailConnections>({
     google: { connected: false, email: null },
     microsoft: { connected: false, email: null }
   });
 
-  const handleLogoutClick = () => {
+  const handleLogoutClick = (): void => {
     setShowConfirmLogout(true);
   };
 
-  const handleConfirmLogout = () => {
+  const handleConfirmLogout = (): void => {
     setShowConfirmLogout(false);
     onLogout();
   };
 
-  const handleCancelLogout = () => {
+  const handleCancelLogout = (): void => {
     setShowConfirmLogout(false);
   };
 
   useEffect(() => {
     // Check email connection status when component mounts
-    const checkEmailConnections = async () => {
+    const checkEmailConnections = async (): Promise<void> => {
       if (!user?.id || !window.api?.system) return;
 
       try {
@@ -53,7 +103,7 @@ function Profile({ user, provider, subscription, onLogout, onClose, onViewTransa
     checkEmailConnections();
   }, [user?.id]);
 
-  const getProviderDisplay = () => {
+  const getProviderDisplay = (): ProviderDisplayInfo => {
     if (provider === 'google') {
       return {
         name: 'Google',
@@ -78,6 +128,11 @@ function Profile({ user, provider, subscription, onLogout, onClose, onViewTransa
   };
 
   const providerInfo = getProviderDisplay();
+
+  const handleSettingsClick = (): void => {
+    onClose();
+    onOpenSettings();
+  };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -211,10 +266,7 @@ function Profile({ user, provider, subscription, onLogout, onClose, onViewTransa
 
           {/* Settings Button */}
           <button
-            onClick={() => {
-              onClose();
-              onOpenSettings();
-            }}
+            onClick={handleSettingsClick}
             className="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-4 rounded-lg transition-all shadow-md hover:shadow-lg mb-3"
           >
             <div className="flex items-center justify-center gap-2">

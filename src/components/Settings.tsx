@@ -1,15 +1,43 @@
 import React, { useState, useEffect } from 'react';
 
+interface ConnectionStatus {
+  connected: boolean;
+  email?: string;
+}
+
+interface Connections {
+  google: ConnectionStatus | null;
+  microsoft: ConnectionStatus | null;
+}
+
+interface PreferencesResult {
+  success: boolean;
+  preferences?: {
+    export?: {
+      defaultFormat?: string;
+    };
+  };
+}
+
+interface ConnectionResult {
+  success: boolean;
+}
+
+interface SettingsComponentProps {
+  onClose: () => void;
+  userId: string;
+}
+
 /**
  * Settings Component
  * Application settings and preferences
  */
-function Settings({ onClose, userId }) {
-  const [connections, setConnections] = useState({ google: null, microsoft: null });
-  const [loadingConnections, setLoadingConnections] = useState(true);
-  const [connectingProvider, setConnectingProvider] = useState(null);
-  const [exportFormat, setExportFormat] = useState('pdf'); // Default export format
-  const [loadingPreferences, setLoadingPreferences] = useState(true);
+function Settings({ onClose, userId }: SettingsComponentProps) {
+  const [connections, setConnections] = useState<Connections>({ google: null, microsoft: null });
+  const [loadingConnections, setLoadingConnections] = useState<boolean>(true);
+  const [connectingProvider, setConnectingProvider] = useState<string | null>(null);
+  const [exportFormat, setExportFormat] = useState<string>('pdf'); // Default export format
+  const [loadingPreferences, setLoadingPreferences] = useState<boolean>(true);
 
   // Load connection status and preferences on mount
   useEffect(() => {
@@ -19,7 +47,7 @@ function Settings({ onClose, userId }) {
     }
   }, [userId]);
 
-  const checkConnections = async () => {
+  const checkConnections = async (): Promise<void> => {
     setLoadingConnections(true);
     try {
       const result = await window.api.system.checkAllConnections(userId);
@@ -36,10 +64,10 @@ function Settings({ onClose, userId }) {
     }
   };
 
-  const loadPreferences = async () => {
+  const loadPreferences = async (): Promise<void> => {
     setLoadingPreferences(true);
     try {
-      const result = await window.api.preferences.get(userId);
+      const result: PreferencesResult = await window.api.preferences.get(userId);
       if (result.success && result.preferences) {
         // Load export format preference
         if (result.preferences.export?.defaultFormat) {
@@ -54,7 +82,7 @@ function Settings({ onClose, userId }) {
     }
   };
 
-  const handleExportFormatChange = async (newFormat) => {
+  const handleExportFormatChange = async (newFormat: string): Promise<void> => {
     setExportFormat(newFormat);
     try {
       // Update only the export format preference
@@ -71,15 +99,15 @@ function Settings({ onClose, userId }) {
     }
   };
 
-  const handleConnectGoogle = async () => {
+  const handleConnectGoogle = async (): Promise<void> => {
     setConnectingProvider('google');
-    let cleanup;
+    let cleanup: (() => void) | undefined;
     try {
       const result = await window.api.auth.googleConnectMailbox(userId);
       if (result.success) {
         // Auth popup window opens automatically and will close when done
         // Listen for connection completion
-        cleanup = window.api.onGoogleMailboxConnected(async (connectionResult) => {
+        cleanup = window.api.onGoogleMailboxConnected(async (connectionResult: ConnectionResult) => {
           if (connectionResult.success) {
             await checkConnections();
           }
@@ -94,15 +122,15 @@ function Settings({ onClose, userId }) {
     }
   };
 
-  const handleConnectMicrosoft = async () => {
+  const handleConnectMicrosoft = async (): Promise<void> => {
     setConnectingProvider('microsoft');
-    let cleanup;
+    let cleanup: (() => void) | undefined;
     try {
       const result = await window.api.auth.microsoftConnectMailbox(userId);
       if (result.success) {
         // Auth popup window opens automatically and will close when done
         // Listen for connection completion
-        cleanup = window.api.onMicrosoftMailboxConnected(async (connectionResult) => {
+        cleanup = window.api.onMicrosoftMailboxConnected(async (connectionResult: ConnectionResult) => {
           if (connectionResult.success) {
             await checkConnections();
           }
@@ -115,6 +143,10 @@ function Settings({ onClose, userId }) {
       setConnectingProvider(null);
       if (cleanup) cleanup();
     }
+  };
+
+  const handleSelectChange = (e: React.ChangeEvent<HTMLSelectElement>): void => {
+    handleExportFormatChange(e.target.value);
   };
 
   return (
@@ -276,7 +308,7 @@ function Settings({ onClose, userId }) {
                 <span className="text-sm text-gray-700">Default Format</span>
                 <select
                   value={exportFormat}
-                  onChange={(e) => handleExportFormatChange(e.target.value)}
+                  onChange={handleSelectChange}
                   disabled={loadingPreferences}
                   className="text-sm border border-gray-300 rounded px-3 py-1.5 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 >

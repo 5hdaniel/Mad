@@ -9,7 +9,7 @@
  * - Extracting utility functions
  */
 import React, { useState } from 'react';
-import Joyride from 'react-joyride';
+import Joyride, { CallBackProps } from 'react-joyride';
 
 // Custom hooks
 import { useConversations } from '../../hooks/useConversations';
@@ -27,20 +27,58 @@ import { ContactInfoModal } from './ContactInfoModal';
 import { getExportTourSteps, JOYRIDE_STYLES, JOYRIDE_LOCALE } from '../../config/tourSteps';
 import { formatMessageDate } from '../../utils/dateFormatters';
 
-function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook, outlookConnected }) {
+interface Conversation {
+  id: string;
+  name: string;
+  contactId?: string;
+  phones?: string[];
+  emails?: string[];
+  directChatCount: number;
+  groupChatCount: number;
+  directMessageCount: number;
+  groupMessageCount: number;
+  messageCount?: number;
+  lastMessageDate: Date | string | number;
+}
+
+interface ContactInfo {
+  name: string;
+  phones?: string[];
+  emails?: string[];
+}
+
+interface ExportResult {
+  success: boolean;
+  error?: string;
+  canceled?: boolean;
+}
+
+interface ConversationListProps {
+  onExportComplete: (result: ExportResult) => void;
+  onOutlookExport: (selectedIds: Set<string>) => void;
+  onConnectOutlook: () => void;
+  outlookConnected: boolean;
+}
+
+function ConversationList({
+  onExportComplete,
+  onOutlookExport,
+  onConnectOutlook,
+  outlookConnected
+}: ConversationListProps) {
   // State management using custom hooks
   const { conversations, isLoading, error, reload } = useConversations();
   const selection = useSelection();
   const tour = useTour(conversations.length > 0 && !isLoading, 'hasSeenExportTour');
 
   // Local state
-  const [isExporting, setIsExporting] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [contactInfoModal, setContactInfoModal] = useState(null);
-  const [showOnlySelected, setShowOnlySelected] = useState(false);
+  const [isExporting, setIsExporting] = useState<boolean>(false);
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [contactInfoModal, setContactInfoModal] = useState<ContactInfo | null>(null);
+  const [showOnlySelected, setShowOnlySelected] = useState<boolean>(false);
 
   // Filter conversations based on search and selection
-  const filteredConversations = conversations.filter((conv) => {
+  const filteredConversations = conversations.filter((conv: Conversation) => {
     const matchesSearch =
       conv.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       conv.contactId?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -51,7 +89,7 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
   });
 
   // Export handlers
-  const handleExport = async () => {
+  const handleExport = async (): Promise<void> => {
     if (selection.count === 0) {
       alert('Please select at least one contact to export');
       return;
@@ -68,13 +106,13 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
         alert(result.error || 'Export failed');
       }
     } catch (err) {
-      alert(err.message);
+      alert((err as Error).message);
     } finally {
       setIsExporting(false);
     }
   };
 
-  const handleOutlookExport = () => {
+  const handleOutlookExport = (): void => {
     if (selection.count === 0) {
       alert('Please select at least one contact to export');
       return;
@@ -124,13 +162,12 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
     <div className="flex flex-col min-h-full">
       {/* Joyride Tour */}
       <Joyride
-        steps={getExportTourSteps(outlookConnected)}
+        steps={getExportTourSteps(outlookConnected) as any}
         run={tour.runTour}
         continuous
         showProgress
         showSkipButton
         hideCloseButton
-        scrollToSteps={false}
         disableScrolling={true}
         callback={tour.handleJoyrideCallback}
         locale={JOYRIDE_LOCALE}
@@ -193,14 +230,14 @@ function ConversationList({ onExportComplete, onOutlookExport, onConnectOutlook,
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-3">
-            {filteredConversations.map((conversation, index) => (
+            {filteredConversations.map((conversation: Conversation, index: number) => (
               <ConversationCard
                 key={conversation.id || `contact-${conversation.name}-${conversation.contactId}`}
                 conversation={conversation}
                 isSelected={selection.isSelected(conversation.id)}
                 onToggle={selection.toggleSelection}
                 onViewInfo={setContactInfoModal}
-                formatDate={formatMessageDate}
+                formatDate={formatMessageDate as (date: Date | string | number) => string}
                 isFirstCard={index === 0}
               />
             ))}

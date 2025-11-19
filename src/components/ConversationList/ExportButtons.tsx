@@ -4,6 +4,16 @@
  */
 import React from 'react';
 
+interface ExportButtonsProps {
+  outlookConnected: boolean;
+  selectedCount: number;
+  isExporting: boolean;
+  onExportAll: () => void;
+  onExportEmailsOnly: () => void;
+  onExportTextsOnly: () => void;
+  onConnectOutlook: () => void;
+}
+
 export function ExportButtons({
   outlookConnected,
   selectedCount,
@@ -12,7 +22,7 @@ export function ExportButtons({
   onExportEmailsOnly,
   onExportTextsOnly,
   onConnectOutlook
-}) {
+}: ExportButtonsProps) {
   return (
     <div className="border border-gray-300 rounded-lg p-4 bg-gray-50" data-tour="export-section">
       <h3 className="text-sm font-semibold text-gray-700 mb-3">Export</h3>

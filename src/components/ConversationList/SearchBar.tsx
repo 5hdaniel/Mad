@@ -4,14 +4,23 @@
  */
 import React from 'react';
 
-export function SearchBar({ value, onChange }) {
+interface SearchBarProps {
+  value: string;
+  onChange: (value: string) => void;
+}
+
+export function SearchBar({ value, onChange }: SearchBarProps) {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
+    onChange(e.target.value);
+  };
+
   return (
     <div className="flex-1 relative" data-tour="search">
       <input
         type="text"
         placeholder="Search contacts..."
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={handleChange}
         className="w-full px-4 py-2 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
       />
       <svg

@@ -4,6 +4,29 @@
  */
 import React from 'react';
 
+interface Conversation {
+  id: string;
+  name: string;
+  contactId?: string;
+  phones?: string[];
+  emails?: string[];
+  directChatCount: number;
+  groupChatCount: number;
+  directMessageCount: number;
+  groupMessageCount: number;
+  messageCount?: number;
+  lastMessageDate: Date | string | number;
+}
+
+interface ConversationCardProps {
+  conversation: Conversation;
+  isSelected: boolean;
+  onToggle: (id: string) => void;
+  onViewInfo: (conversation: Conversation) => void;
+  formatDate: (date: Date | string | number) => string;
+  isFirstCard?: boolean;
+}
+
 export function ConversationCard({
   conversation,
   isSelected,
@@ -11,10 +34,19 @@ export function ConversationCard({
   onViewInfo,
   formatDate,
   isFirstCard = false
-}) {
+}: ConversationCardProps) {
+  const handleCardClick = (): void => {
+    onToggle(conversation.id);
+  };
+
+  const handleViewInfo = (e: React.MouseEvent<HTMLButtonElement>): void => {
+    e.stopPropagation();
+    onViewInfo(conversation);
+  };
+
   return (
     <div
-      onClick={() => onToggle(conversation.id)}
+      onClick={handleCardClick}
       data-tour={isFirstCard ? "contact-list" : undefined}
       className={`p-4 bg-white border-2 rounded-lg cursor-pointer transition-all ${
         isSelected
@@ -42,15 +74,15 @@ export function ConversationCard({
             <h3 className="font-semibold text-gray-900 truncate">{conversation.name}</h3>
 
             {/* Contact info summary */}
-            {(conversation.phones?.length > 0 || conversation.emails?.length > 0) && (
+            {(conversation.phones?.length || conversation.emails?.length) && (
               <p className="text-xs text-gray-500 mt-0.5">
-                {conversation.phones?.length > 0 && (
+                {conversation.phones?.length && (
                   <span>
                     {conversation.phones.length} Phone{conversation.phones.length > 1 ? 's' : ''}
                   </span>
                 )}
-                {conversation.phones?.length > 0 && conversation.emails?.length > 0 && ' · '}
-                {conversation.emails?.length > 0 && (
+                {conversation.phones?.length && conversation.emails?.length && ' · '}
+                {conversation.emails?.length && (
                   <span>
                     {conversation.emails.length} Email{conversation.emails.length > 1 ? 's' : ''}
                   </span>
@@ -95,12 +127,9 @@ export function ConversationCard({
         {/* Action buttons */}
         <div className="ml-4 flex gap-2 items-center">
           {/* Contact Info Button */}
-          {(conversation.phones?.length > 0 || conversation.emails?.length > 0) && (
+          {(conversation.phones?.length || conversation.emails?.length) && (
             <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onViewInfo(conversation);
-              }}
+              onClick={handleViewInfo}
               className="p-2 text-gray-400 hover:text-primary hover:bg-blue-50 rounded transition-colors"
               title="View contact info"
             >

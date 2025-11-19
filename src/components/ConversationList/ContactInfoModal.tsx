@@ -4,17 +4,36 @@
  */
 import React from 'react';
 
-export function ContactInfoModal({ contact, onClose }) {
+interface ContactInfo {
+  name: string;
+  phones?: string[];
+  emails?: string[];
+}
+
+interface ContactInfoModalProps {
+  contact: ContactInfo | null;
+  onClose: () => void;
+}
+
+export function ContactInfoModal({ contact, onClose }: ContactInfoModalProps) {
   if (!contact) return null;
+
+  const handleOverlayClick = (): void => {
+    onClose();
+  };
+
+  const handleModalClick = (e: React.MouseEvent<HTMLDivElement>): void => {
+    e.stopPropagation();
+  };
 
   return (
     <div
       className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-      onClick={onClose}
+      onClick={handleOverlayClick}
     >
       <div
         className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6"
-        onClick={(e) => e.stopPropagation()}
+        onClick={handleModalClick}
       >
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold text-gray-900">{contact.name}</h2>
@@ -27,7 +46,7 @@ export function ContactInfoModal({ contact, onClose }) {
 
         <div className="space-y-4">
           {/* Phone Numbers */}
-          {contact.phones?.length > 0 && (
+          {contact.phones && contact.phones.length > 0 && (
             <div>
               <h3 className="text-sm font-semibold text-gray-700 mb-2">
                 Phone Numbers ({contact.phones.length})
@@ -56,7 +75,7 @@ export function ContactInfoModal({ contact, onClose }) {
           )}
 
           {/* Email Addresses */}
-          {contact.emails?.length > 0 && (
+          {contact.emails && contact.emails.length > 0 && (
             <div>
               <h3 className="text-sm font-semibold text-gray-700 mb-2">
                 Email Addresses ({contact.emails.length})

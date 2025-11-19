@@ -4,13 +4,21 @@
  */
 import React from 'react';
 
+interface SelectionControlsProps {
+  onSelectAll: () => void;
+  onDeselectAll: () => void;
+  onToggleShowSelected: () => void;
+  showOnlySelected: boolean;
+  selectedCount: number;
+}
+
 export function SelectionControls({
   onSelectAll,
   onDeselectAll,
   onToggleShowSelected,
   showOnlySelected,
   selectedCount
-}) {
+}: SelectionControlsProps) {
   return (
     <>
       <button
