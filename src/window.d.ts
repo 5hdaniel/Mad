@@ -27,6 +27,15 @@ interface ElectronAPI {
   getMessages: (chatId: string) => Promise<unknown[]>;
   exportConversations: (conversationIds: string[]) => Promise<{ success: boolean; exportPath?: string }>;
 
+  // Transactions
+  transactions: {
+    scan: () => Promise<{ success: boolean }>;
+    getAll: () => Promise<unknown[]>;
+    update: (id: string, data: unknown) => Promise<{ success: boolean }>;
+    delete: (id: string) => Promise<{ success: boolean }>;
+  };
+  onTransactionScanProgress: (callback: (progress: unknown) => void) => () => void;
+
   // File System
   openFolder: (folderPath: string) => Promise<{ success: boolean }>;
 

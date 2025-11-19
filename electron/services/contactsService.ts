@@ -418,6 +418,9 @@ export {
   loadContactsFromDatabase,
   resolveContactName,
   buildDisplayName,
+};
+
+export type {
   ContactMap,
   ContactInfo,
   PhoneToContactInfo,
