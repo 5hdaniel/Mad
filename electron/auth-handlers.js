@@ -15,6 +15,15 @@ const supabaseService = require('./services/supabaseService');
 const tokenEncryptionService = require('./services/tokenEncryptionService');
 const sessionService = require('./services/sessionService');
 
+// Import validation utilities
+const {
+  ValidationError,
+  validateUserId,
+  validateAuthCode,
+  validateSessionToken,
+  validateUrl,
+} = require('./utils/validation');
+
 // Import constants
 const { CURRENT_TERMS_VERSION, CURRENT_PRIVACY_POLICY_VERSION } = require('./constants/legalVersions');
 
@@ -90,8 +99,11 @@ const handleGoogleCompleteLogin = async (event, authCode) => {
   try {
     console.log('[Main] Completing Google login');
 
+    // Validate input
+    const validatedAuthCode = validateAuthCode(authCode);
+
     // Exchange code for tokens
-    const { tokens, userInfo } = await googleAuthService.exchangeCodeForTokens(authCode);
+    const { tokens, userInfo } = await googleAuthService.exchangeCodeForTokens(validatedAuthCode);
 
     // Encrypt tokens
     const encryptedAccessToken = tokenEncryptionService.encrypt(tokens.access_token);
@@ -212,8 +224,11 @@ const handleGoogleConnectMailbox = async (mainWindow, userId) => {
   try {
     console.log('[Main] Starting Google mailbox connection with redirect');
 
+    // Validate input
+    const validatedUserId = validateUserId(userId);
+
     // Get user info to use as login hint
-    const user = await databaseService.getUserById(userId);
+    const user = await databaseService.getUserById(validatedUserId);
     const loginHint = user?.email;
 
     // Start auth flow - returns authUrl and a promise for the code
@@ -532,8 +547,11 @@ const handleMicrosoftConnectMailbox = async (mainWindow, userId) => {
   try {
     console.log('[Main] Starting Microsoft mailbox connection with redirect');
 
+    // Validate input
+    const validatedUserId = validateUserId(userId);
+
     // Get user info to use as login hint
-    const user = await databaseService.getUserById(userId);
+    const user = await databaseService.getUserById(validatedUserId);
     const loginHint = user?.email;
 
     // Start auth flow - returns authUrl and a promise for the code
@@ -668,11 +686,17 @@ const registerAuthHandlers = (mainWindow) => {
   // Logout
   ipcMain.handle('auth:logout', async (event, sessionToken) => {
     try {
-      await databaseService.deleteSession(sessionToken);
+      // Validate input
+      const validatedSessionToken = validateSessionToken(sessionToken);
+
+      await databaseService.deleteSession(validatedSessionToken);
       await sessionService.clearSession();
       return { success: true };
     } catch (error) {
       console.error('[Main] Logout failed:', error);
+      if (error instanceof ValidationError) {
+        return { success: false, error: `Validation error: ${error.message}` };
+      }
       return { success: false, error: error.message };
     }
   });
@@ -680,9 +704,12 @@ const registerAuthHandlers = (mainWindow) => {
   // Accept terms
   ipcMain.handle('auth:accept-terms', async (event, userId) => {
     try {
+      // Validate input
+      const validatedUserId = validateUserId(userId);
+
       // Save to local database
       const updatedUser = await databaseService.acceptTerms(
-        userId,
+        validatedUserId,
         CURRENT_TERMS_VERSION,
         CURRENT_PRIVACY_POLICY_VERSION
       );
@@ -704,6 +731,9 @@ const registerAuthHandlers = (mainWindow) => {
       return { success: true, user: updatedUser };
     } catch (error) {
       console.error('[Auth] Accept terms failed:', error);
+      if (error instanceof ValidationError) {
+        return { success: false, error: `Validation error: ${error.message}` };
+      }
       return { success: false, error: error.message };
     }
   });
@@ -711,7 +741,10 @@ const registerAuthHandlers = (mainWindow) => {
   // Validate session
   ipcMain.handle('auth:validate-session', async (event, sessionToken) => {
     try {
-      const session = await databaseService.validateSession(sessionToken);
+      // Validate input
+      const validatedSessionToken = validateSessionToken(sessionToken);
+
+      const session = await databaseService.validateSession(validatedSessionToken);
 
       if (!session) {
         return { success: false, valid: false };
@@ -720,6 +753,9 @@ const registerAuthHandlers = (mainWindow) => {
       return { success: true, valid: true, user: session };
     } catch (error) {
       console.error('[Main] Session validation failed:', error);
+      if (error instanceof ValidationError) {
+        return { success: false, valid: false, error: `Validation error: ${error.message}` };
+      }
       return { success: false, valid: false, error: error.message };
     }
   });
@@ -763,10 +799,16 @@ const registerAuthHandlers = (mainWindow) => {
   // Shell: Open external URL
   ipcMain.handle('shell:open-external', async (event, url) => {
     try {
-      await shell.openExternal(url);
+      // Validate input - prevent opening malicious URLs
+      const validatedUrl = validateUrl(url);
+
+      await shell.openExternal(validatedUrl);
       return { success: true };
     } catch (error) {
       console.error('[Main] Failed to open external URL:', error);
+      if (error instanceof ValidationError) {
+        return { success: false, error: `Validation error: ${error.message}` };
+      }
       return { success: false, error: error.message };
     }
   });
