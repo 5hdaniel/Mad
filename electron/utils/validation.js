@@ -45,25 +45,30 @@ function validateUserId(userId, required = true) {
 
 /**
  * Validate contact ID
- * @param {any} contactId - Contact ID to validate
+ * @param {any} contactId - Contact ID to validate (UUID string)
  * @param {boolean} required - Whether the field is required
- * @returns {number} Validated contact ID
+ * @returns {string} Validated contact ID
  * @throws {ValidationError} If validation fails
  */
 function validateContactId(contactId, required = true) {
-  if (contactId === null || contactId === undefined) {
+  if (contactId === null || contactId === undefined || contactId === '') {
     if (required) {
       throw new ValidationError('Contact ID is required', 'contactId');
     }
     return null;
   }
 
-  const parsed = Number(contactId);
-  if (isNaN(parsed) || parsed <= 0 || !Number.isInteger(parsed)) {
-    throw new ValidationError('Contact ID must be a positive integer', 'contactId');
+  if (typeof contactId !== 'string') {
+    throw new ValidationError('Contact ID must be a string', 'contactId');
   }
 
-  return parsed;
+  // Validate UUID format (standard UUID v4 format)
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!uuidRegex.test(contactId.trim())) {
+    throw new ValidationError('Contact ID must be a valid UUID', 'contactId');
+  }
+
+  return contactId.trim();
 }
 
 /**
