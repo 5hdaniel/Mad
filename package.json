@@ -16,12 +16,21 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "lint": "eslint electron src --ext .js,.jsx",
-    "lint:fix": "eslint electron src --ext .js,.jsx --fix",
+    "lint": "eslint electron src",
+    "lint:fix": "eslint electron src --fix",
+    "type-check": "tsc --noEmit",
+    "type-check:watch": "tsc --noEmit --watch",
     "deps:check": "depcheck",
     "deps:check-ci": "depcheck --json | node -e \"const d=JSON.parse(require('fs').readFileSync(0,'utf-8')); if(d.dependencies.length||d.missing&&Object.keys(d.missing).length){console.error('Unused or missing deps found'); process.exit(1)}\""
   },
-  "keywords": ["electron", "react", "audit", "archive", "imessage", "outlook"],
+  "keywords": [
+    "electron",
+    "react",
+    "audit",
+    "archive",
+    "imessage",
+    "outlook"
+  ],
   "author": "",
   "license": "MIT",
   "devDependencies": {
@@ -30,8 +39,14 @@
     "@electron/notarize": "^2.4.1",
     "@testing-library/jest-dom": "^6.1.5",
     "@testing-library/react": "^14.1.2",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/jest": "^29.5.14",
     "@types/node": "^22.10.2",
+    "@types/react": "^19.2.6",
+    "@types/react-dom": "^19.2.3",
+    "@types/uuid": "^10.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.47.0",
+    "@typescript-eslint/parser": "^8.47.0",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
     "babel-jest": "^29.7.0",
@@ -48,6 +63,8 @@
     "jest-environment-jsdom": "^29.7.0",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
+    "ts-jest": "^29.4.5",
+    "typescript": "^5.9.3",
     "vite": "^5.4.11",
     "wait-on": "^8.0.1"
   },
@@ -86,11 +103,17 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["arm64", "x64"]
+          "arch": [
+            "arm64",
+            "x64"
+          ]
         },
         {
           "target": "zip",
-          "arch": ["arm64", "x64"]
+          "arch": [
+            "arm64",
+            "x64"
+          ]
         }
       ]
     },

@@ -16,6 +16,13 @@ module.exports = {
   // Transform files
   transform: {
     '^.+\\.(js|jsx)$': ['babel-jest', { presets: ['@babel/preset-react'] }],
+    '^.+\\.(ts|tsx)$': ['ts-jest', {
+      tsconfig: {
+        jsx: 'react-jsx',
+        esModuleInterop: true,
+        allowSyntheticDefaultImports: true,
+      },
+    }],
   },
 
   // Module name mapper for CSS and assets
@@ -26,9 +33,11 @@ module.exports = {
 
   // Coverage configuration
   collectCoverageFrom: [
-    'src/**/*.{js,jsx}',
-    'electron/services/**/*.js',
-    '!src/**/*.test.{js,jsx}',
+    'src/**/*.{js,jsx,ts,tsx}',
+    'electron/services/**/*.{js,ts}',
+    'electron/utils/**/*.{js,ts}',
+    '!src/**/*.test.{js,jsx,ts,tsx}',
+    '!electron/**/*.test.{js,ts}',
     '!electron/main.js',
     '!**/node_modules/**',
   ],
@@ -44,9 +53,9 @@ module.exports = {
 
   // Test match patterns
   testMatch: [
-    '**/__tests__/**/*.(test|spec).{js,jsx}',
-    '**/tests/**/*.(test|spec).{js,jsx}',
-    '**/?(*.)+(spec|test).{js,jsx}',
+    '**/__tests__/**/*.(test|spec).{js,jsx,ts,tsx}',
+    '**/tests/**/*.(test|spec).{js,jsx,ts,tsx}',
+    '**/?(*.)+(spec|test).{js,jsx,ts,tsx}',
   ],
 
   // Ignore patterns
