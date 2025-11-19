@@ -8,6 +8,14 @@ const permissionService = require('./services/permissionService');
 const connectionStatusService = require('./services/connectionStatusService');
 const macOSPermissionHelper = require('./services/macOSPermissionHelper');
 
+// Import validation utilities
+const {
+  ValidationError,
+  validateUserId,
+  validateString,
+  validateProvider,
+} = require('./utils/validation');
+
 /**
  * Register all system and permission-related IPC handlers
  */
@@ -70,10 +78,22 @@ function registerSystemHandlers() {
    */
   ipcMain.handle('system:open-privacy-pane', async (event, pane) => {
     try {
-      const result = await macOSPermissionHelper.openPrivacyPane(pane);
+      // Validate pane parameter
+      const validatedPane = validateString(pane, 'pane', {
+        required: true,
+        maxLength: 100,
+      });
+
+      const result = await macOSPermissionHelper.openPrivacyPane(validatedPane);
       return result;
     } catch (error) {
       console.error('[Main] Failed to open privacy pane:', error);
+      if (error instanceof ValidationError) {
+        return {
+          success: false,
+          error: `Validation error: ${error.message}`,
+        };
+      }
       return {
         success: false,
         error: error.message,
@@ -169,13 +189,27 @@ function registerSystemHandlers() {
    */
   ipcMain.handle('system:check-google-connection', async (event, userId) => {
     try {
-      const result = await connectionStatusService.checkGoogleConnection(userId);
+      // Validate input
+      const validatedUserId = validateUserId(userId);
+
+      const result = await connectionStatusService.checkGoogleConnection(validatedUserId);
       return {
         success: true,
         ...result,
       };
     } catch (error) {
       console.error('[Main] Google connection check failed:', error);
+      if (error instanceof ValidationError) {
+        return {
+          success: false,
+          connected: false,
+          error: {
+            type: 'VALIDATION_ERROR',
+            userMessage: 'Invalid user ID',
+            details: error.message,
+          },
+        };
+      }
       return {
         success: false,
         connected: false,
@@ -193,13 +227,27 @@ function registerSystemHandlers() {
    */
   ipcMain.handle('system:check-microsoft-connection', async (event, userId) => {
     try {
-      const result = await connectionStatusService.checkMicrosoftConnection(userId);
+      // Validate input
+      const validatedUserId = validateUserId(userId);
+
+      const result = await connectionStatusService.checkMicrosoftConnection(validatedUserId);
       return {
         success: true,
         ...result,
       };
     } catch (error) {
       console.error('[Main] Microsoft connection check failed:', error);
+      if (error instanceof ValidationError) {
+        return {
+          success: false,
+          connected: false,
+          error: {
+            type: 'VALIDATION_ERROR',
+            userMessage: 'Invalid user ID',
+            details: error.message,
+          },
+        };
+      }
       return {
         success: false,
         connected: false,
@@ -217,13 +265,26 @@ function registerSystemHandlers() {
    */
   ipcMain.handle('system:check-all-connections', async (event, userId) => {
     try {
-      const result = await connectionStatusService.checkAllConnections(userId);
+      // Validate input
+      const validatedUserId = validateUserId(userId);
+
+      const result = await connectionStatusService.checkAllConnections(validatedUserId);
       return {
         success: true,
         ...result,
       };
     } catch (error) {
       console.error('[Main] All connections check failed:', error);
+      if (error instanceof ValidationError) {
+        return {
+          success: false,
+          error: {
+            type: 'VALIDATION_ERROR',
+            userMessage: 'Invalid user ID',
+            details: error.message,
+          },
+        };
+      }
       return {
         success: false,
         error: {
@@ -240,14 +301,18 @@ function registerSystemHandlers() {
    */
   ipcMain.handle('system:health-check', async (event, userId, provider = null) => {
     try {
-      console.log('[Main] Health check called with userId:', userId, 'provider:', provider);
+      // Validate inputs (both optional)
+      const validatedUserId = userId ? validateUserId(userId) : null;
+      const validatedProvider = provider ? validateProvider(provider) : null;
+
+      console.log('[Main] Health check called with userId:', validatedUserId, 'provider:', validatedProvider);
 
       const [permissions, connection, contactsLoading] = await Promise.all([
         permissionService.checkAllPermissions(),
-        userId && provider ? (
-          provider === 'google'
-            ? connectionStatusService.checkGoogleConnection(userId)
-            : connectionStatusService.checkMicrosoftConnection(userId)
+        validatedUserId && validatedProvider ? (
+          validatedProvider === 'google'
+            ? connectionStatusService.checkGoogleConnection(validatedUserId)
+            : connectionStatusService.checkMicrosoftConnection(validatedUserId)
         ) : null,
         permissionService.checkContactsLoading(),
       ]);
@@ -270,10 +335,10 @@ function registerSystemHandlers() {
 
       // Add connection issue (only for the provider the user logged in with)
       if (connection && connection.error) {
-        console.log('[Main] Adding connection issue for provider:', provider);
+        console.log('[Main] Adding connection issue for provider:', validatedProvider);
         issues.push({
           type: 'OAUTH_CONNECTION',
-          provider: provider,
+          provider: validatedProvider,
           ...connection.error,
         });
       }
@@ -293,6 +358,17 @@ function registerSystemHandlers() {
       };
     } catch (error) {
       console.error('[Main] System health check failed:', error);
+      if (error instanceof ValidationError) {
+        return {
+          success: false,
+          healthy: false,
+          error: {
+            type: 'VALIDATION_ERROR',
+            userMessage: 'Invalid input parameters',
+            details: error.message,
+          },
+        };
+      }
       return {
         success: false,
         healthy: false,
