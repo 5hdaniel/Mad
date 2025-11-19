@@ -375,6 +375,57 @@ function validateTransactionData(transactionData, isUpdate = false) {
     });
   }
 
+  // Sale price (optional)
+  if (transactionData.sale_price !== undefined && transactionData.sale_price !== null) {
+    const price = Number(transactionData.sale_price);
+    if (isNaN(price) || price < 0) {
+      throw new ValidationError('Sale price must be a non-negative number', 'sale_price');
+    }
+    validated.sale_price = price;
+  }
+
+  // Listing price (optional)
+  if (transactionData.listing_price !== undefined && transactionData.listing_price !== null) {
+    const price = Number(transactionData.listing_price);
+    if (isNaN(price) || price < 0) {
+      throw new ValidationError('Listing price must be a non-negative number', 'listing_price');
+    }
+    validated.listing_price = price;
+  }
+
+  // Representation start date (optional, must be valid date string)
+  if (transactionData.representation_start_date !== undefined && transactionData.representation_start_date !== null) {
+    if (typeof transactionData.representation_start_date === 'string' && transactionData.representation_start_date.trim()) {
+      // Validate it's a valid date format (YYYY-MM-DD or ISO date string)
+      const dateStr = transactionData.representation_start_date.trim();
+      if (!/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
+        throw new ValidationError('Representation start date must be in YYYY-MM-DD format', 'representation_start_date');
+      }
+      validated.representation_start_date = dateStr;
+    }
+  }
+
+  // Closing date (optional, must be valid date string)
+  if (transactionData.closing_date !== undefined && transactionData.closing_date !== null) {
+    if (typeof transactionData.closing_date === 'string' && transactionData.closing_date.trim()) {
+      // Validate it's a valid date format (YYYY-MM-DD or ISO date string)
+      const dateStr = transactionData.closing_date.trim();
+      if (!/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
+        throw new ValidationError('Closing date must be in YYYY-MM-DD format', 'closing_date');
+      }
+      validated.closing_date = dateStr;
+    }
+  }
+
+  // Closing date verified flag (optional, must be 0 or 1)
+  if (transactionData.closing_date_verified !== undefined && transactionData.closing_date_verified !== null) {
+    const verified = Number(transactionData.closing_date_verified);
+    if (verified !== 0 && verified !== 1) {
+      throw new ValidationError('Closing date verified must be 0 or 1', 'closing_date_verified');
+    }
+    validated.closing_date_verified = verified;
+  }
+
   return validated;
 }
 
