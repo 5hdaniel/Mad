@@ -1,0 +1,476 @@
+import React, { useState, useEffect } from 'react';
+import type { Transaction, OAuthProvider } from '@/types';
+import AuditTransactionModal from './AuditTransactionModal';
+import ExportModal from './ExportModal';
+import TransactionDetails from './TransactionDetails';
+
+interface ScanProgress {
+  step: string;
+  message: string;
+}
+
+interface TransactionListComponentProps {
+  userId: string;
+  provider: OAuthProvider;
+  onClose: () => void;
+}
+
+/**
+ * TransactionList Component
+ * Main transaction management interface
+ * Lists transactions, triggers scans, shows progress
+ */
+function TransactionList({ userId, provider, onClose }: TransactionListComponentProps): JSX.Element {
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [scanning, setScanning] = useState<boolean>(false);
+  const [scanProgress, setScanProgress] = useState<ScanProgress | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<'active' | 'closed' | 'all'>('active');
+  const [showAuditCreate, setShowAuditCreate] = useState<boolean>(false);
+  const [quickExportTransaction, setQuickExportTransaction] = useState<Transaction | null>(null);
+  const [quickExportSuccess, setQuickExportSuccess] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadTransactions();
+
+    // Listen for scan progress
+    let cleanup: (() => void) | undefined;
+    if (window.api?.onTransactionScanProgress) {
+      cleanup = window.api.onTransactionScanProgress(handleScanProgress);
+    }
+
+    return () => {
+      if (cleanup) cleanup();
+    };
+  }, []);
+
+  const loadTransactions = async (): Promise<void> => {
+    try {
+      setLoading(true);
+      const result = await window.api.transactions.getAll(userId);
+
+      if (result.success) {
+        setTransactions(result.transactions || []);
+      } else {
+        setError(result.error || 'Failed to load transactions');
+      }
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleScanProgress = (progress: ScanProgress): void => {
+    setScanProgress(progress);
+  };
+
+  const startScan = async (): Promise<void> => {
+    try {
+      setScanning(true);
+      setError(null);
+      setScanProgress({ step: 'starting', message: 'Starting scan...' });
+
+      const result = await window.api.transactions.scan(userId, {
+        provider,
+        startDate: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000), // 1 year back
+        endDate: new Date(),
+      });
+
+      if (result.success) {
+        setScanProgress({
+          step: 'complete',
+          message: `Found ${result.transactionsFound} transactions from ${result.emailsScanned} emails!`,
+        });
+
+        // Reload transactions
+        await loadTransactions();
+      } else {
+        setError(result.error || 'Scan failed');
+      }
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setScanning(false);
+      setTimeout(() => setScanProgress(null), 3000);
+    }
+  };
+
+  const formatCurrency = (amount: number | null | undefined): string => {
+    if (!amount) return 'N/A';
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+    }).format(amount);
+  };
+
+  const formatDate = (dateString: string | null | undefined): string => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  };
+
+  const filteredTransactions = transactions.filter((t) => {
+    const matchesSearch = t.property_address?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesStatus =
+      statusFilter === 'all' ||
+      (statusFilter === 'active' && t.status === 'active') ||
+      (statusFilter === 'closed' && t.status === 'closed');
+    return matchesSearch && matchesStatus;
+  });
+
+  const handleQuickExport = (transaction: Transaction, e: React.MouseEvent<HTMLButtonElement>): void => {
+    e.stopPropagation(); // Prevent opening transaction details
+    setQuickExportTransaction(transaction);
+  };
+
+  const handleQuickExportComplete = (result: { path?: string }): void => {
+    setQuickExportTransaction(null);
+    setQuickExportSuccess(result.path || 'Export completed successfully!');
+    // Auto-hide success message after 5 seconds
+    setTimeout(() => setQuickExportSuccess(null), 5000);
+    // Reload transactions to update export status
+    loadTransactions();
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex flex-col">
+      {/* Header */}
+      <div className="flex-shrink-0 bg-gradient-to-r from-blue-500 to-purple-600 px-6 py-6 flex items-center justify-between shadow-lg">
+        <button
+          onClick={onClose}
+          className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg px-4 py-2 transition-all flex items-center gap-2 font-medium"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
+          Back to Dashboard
+        </button>
+        <div className="text-right">
+          <h2 className="text-2xl font-bold text-white">Transactions</h2>
+          <p className="text-blue-100 text-sm">{transactions.length} properties found</p>
+        </div>
+      </div>
+
+      {/* Toolbar */}
+      <div className="flex-shrink-0 p-6 bg-white shadow-md">
+          {/* Status Filter Toggle */}
+          <div className="inline-flex items-center bg-gray-200 rounded-lg p-1 mb-3">
+            <button
+              onClick={() => setStatusFilter('active')}
+              className={`px-4 py-2 rounded-md font-medium transition-all ${
+                statusFilter === 'active'
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Active ({transactions.filter((t) => t.status === 'active').length})
+            </button>
+            <button
+              onClick={() => setStatusFilter('closed')}
+              className={`px-4 py-2 rounded-md font-medium transition-all ${
+                statusFilter === 'closed'
+                  ? 'bg-white text-gray-800 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Closed ({transactions.filter((t) => t.status === 'closed').length})
+            </button>
+            <button
+              onClick={() => setStatusFilter('all')}
+              className={`px-4 py-2 rounded-md font-medium transition-all ${
+                statusFilter === 'all'
+                  ? 'bg-white text-purple-600 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              All ({transactions.length})
+            </button>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {/* Search */}
+            <div className="flex-1 relative">
+              <input
+                type="text"
+                placeholder="Search by address..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+              <svg
+                className="w-5 h-5 text-gray-400 absolute left-3 top-2.5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                />
+              </svg>
+            </div>
+
+            {/* Audit New Transaction Button */}
+            <button
+              onClick={() => setShowAuditCreate(true)}
+              className="px-4 py-2 rounded-lg font-semibold transition-all bg-green-500 text-white hover:bg-green-600 shadow-md hover:shadow-lg flex items-center gap-2"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+              New Transaction
+            </button>
+
+            {/* Scan Button */}
+            <button
+              onClick={startScan}
+              disabled={scanning}
+              className={`px-4 py-2 rounded-lg font-semibold transition-all ${
+                scanning
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-blue-500 to-purple-600 text-white hover:from-blue-600 hover:to-purple-700 shadow-md hover:shadow-lg'
+              }`}
+            >
+              {scanning ? (
+                <span className="flex items-center gap-2">
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  Scanning...
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    />
+                  </svg>
+                  Scan Emails
+                </span>
+              )}
+            </button>
+          </div>
+
+          {/* Scan Progress */}
+          {scanProgress && (
+            <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-center gap-2">
+                {scanProgress.step !== 'complete' && (
+                  <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                )}
+                {scanProgress.step === 'complete' && (
+                  <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
+                <span className="text-sm font-medium text-blue-900">{scanProgress.message}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Error */}
+          {error && (
+            <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-sm text-red-800">{error}</p>
+            </div>
+          )}
+
+          {/* Quick Export Success */}
+          {quickExportSuccess && (
+            <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+              <div className="flex items-start gap-2">
+                <svg className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-green-900">Export completed successfully!</p>
+                  <p className="text-xs text-green-700 mt-1 break-all">{quickExportSuccess}</p>
+                </div>
+              </div>
+            </div>
+          )}
+      </div>
+
+      {/* Transactions List */}
+      <div className="flex-1 overflow-y-auto p-6 max-w-7xl mx-auto w-full">
+          {loading ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center">
+                <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                <p className="text-gray-600">Loading transactions...</p>
+              </div>
+            </div>
+          ) : filteredTransactions.length === 0 ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center max-w-md">
+                <svg
+                  className="w-16 h-16 text-gray-300 mx-auto mb-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                  />
+                </svg>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  {searchQuery ? 'No matching transactions' : 'No transactions yet'}
+                </h3>
+                {searchQuery && (
+                  <p className="text-gray-600 mb-4">Try adjusting your search</p>
+                )}
+                {!searchQuery && (
+                  <button
+                    onClick={() => setShowAuditCreate(true)}
+                    className="inline-flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all font-semibold shadow-md hover:shadow-lg"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                    </svg>
+                    Audit new transaction
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="grid gap-6">
+              {filteredTransactions.map((transaction) => (
+                <div
+                  key={transaction.id}
+                  className="bg-white border-2 border-gray-200 rounded-xl p-6 hover:border-blue-400 hover:shadow-xl transition-all cursor-pointer transform hover:scale-[1.01]"
+                  onClick={() => setSelectedTransaction(transaction)}
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-gray-900 mb-1">{transaction.property_address}</h3>
+                      <div className="flex items-center gap-4 text-sm text-gray-600">
+                        {transaction.transaction_type && (
+                          <span className="flex items-center gap-1">
+                            <span
+                              className={`w-2 h-2 rounded-full ${
+                                transaction.transaction_type === 'purchase' ? 'bg-green-500' : 'bg-blue-500'
+                              }`}
+                            ></span>
+                            {transaction.transaction_type === 'purchase' ? 'Purchase' : 'Sale'}
+                          </span>
+                        )}
+                        {transaction.sale_price && (
+                          <span className="font-semibold text-gray-900">{formatCurrency(transaction.sale_price)}</span>
+                        )}
+                        {transaction.closing_date && (
+                          <span className="flex items-center gap-1">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                              />
+                            </svg>
+                            Closed: {formatDate(transaction.closing_date)}
+                          </span>
+                        )}
+                      </div>
+                      <div className="mt-2 flex items-center gap-2 text-xs text-gray-500">
+                        <span className="flex items-center gap-1">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                            />
+                          </svg>
+                          {transaction.total_communications_count || 0} emails
+                        </span>
+                        {transaction.extraction_confidence && (
+                          <span className="flex items-center gap-1">
+                            <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-blue-500 rounded-full"
+                                style={{ width: `${transaction.extraction_confidence}%` }}
+                              ></div>
+                            </div>
+                            {transaction.extraction_confidence}% confidence
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {/* Quick Export Button */}
+                      <button
+                        onClick={(e) => handleQuickExport(transaction, e)}
+                        className="px-3 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-green-500 text-white hover:bg-green-600 shadow-md hover:shadow-lg"
+                        title="Quick Export"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                          />
+                        </svg>
+                        Export
+                      </button>
+                      <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+      </div>
+
+      {/* Transaction Details Modal */}
+      {selectedTransaction && (
+        <TransactionDetails
+          transaction={selectedTransaction}
+          onClose={() => setSelectedTransaction(null)}
+          onTransactionUpdated={loadTransactions}
+        />
+      )}
+
+      {/* Audit Transaction Creation Modal */}
+      {showAuditCreate && (
+        <AuditTransactionModal
+          userId={userId}
+          provider={provider}
+          onClose={() => setShowAuditCreate(false)}
+          onSuccess={() => {
+            setShowAuditCreate(false);
+            loadTransactions();
+          }}
+        />
+      )}
+
+      {/* Quick Export Modal */}
+      {quickExportTransaction && (
+        <ExportModal
+          transaction={quickExportTransaction}
+          userId={quickExportTransaction.user_id}
+          onClose={() => setQuickExportTransaction(null)}
+          onExportComplete={handleQuickExportComplete}
+        />
+      )}
+    </div>
+  );
+}
+
+export default TransactionList;
