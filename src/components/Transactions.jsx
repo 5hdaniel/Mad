@@ -20,6 +20,8 @@ function Transactions({ userId, provider, onClose }) {
   const [error, setError] = useState(null);
   const [statusFilter, setStatusFilter] = useState('active'); // active, closed, all
   const [showAuditCreate, setShowAuditCreate] = useState(false);
+  const [quickExportTransaction, setQuickExportTransaction] = useState(null);
+  const [quickExportSuccess, setQuickExportSuccess] = useState(null);
 
   useEffect(() => {
     loadTransactions();
@@ -113,6 +115,20 @@ function Transactions({ userId, provider, onClose }) {
       (statusFilter === 'closed' && t.status === 'closed');
     return matchesSearch && matchesStatus;
   });
+
+  const handleQuickExport = (transaction, e) => {
+    e.stopPropagation(); // Prevent opening transaction details
+    setQuickExportTransaction(transaction);
+  };
+
+  const handleQuickExportComplete = (result) => {
+    setQuickExportTransaction(null);
+    setQuickExportSuccess(result.path || 'Export completed successfully!');
+    // Auto-hide success message after 5 seconds
+    setTimeout(() => setQuickExportSuccess(null), 5000);
+    // Reload transactions to update export status
+    loadTransactions();
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex flex-col">
@@ -259,6 +275,21 @@ function Transactions({ userId, provider, onClose }) {
               <p className="text-sm text-red-800">{error}</p>
             </div>
           )}
+
+          {/* Quick Export Success */}
+          {quickExportSuccess && (
+            <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+              <div className="flex items-start gap-2">
+                <svg className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-green-900">Export completed successfully!</p>
+                  <p className="text-xs text-green-700 mt-1 break-all">{quickExportSuccess}</p>
+                </div>
+              </div>
+            </div>
+          )}
       </div>
 
       {/* Transactions List */}
@@ -313,7 +344,7 @@ function Transactions({ userId, provider, onClose }) {
                   className="bg-white border-2 border-gray-200 rounded-xl p-6 hover:border-blue-400 hover:shadow-xl transition-all cursor-pointer transform hover:scale-[1.01]"
                   onClick={() => setSelectedTransaction(transaction)}
                 >
-                  <div className="flex items-start justify-between">
+                  <div className="flex items-start justify-between gap-4">
                     <div className="flex-1">
                       <h3 className="font-semibold text-gray-900 mb-1">{transaction.property_address}</h3>
                       <div className="flex items-center gap-4 text-sm text-gray-600">
@@ -369,9 +400,27 @@ function Transactions({ userId, provider, onClose }) {
                         )}
                       </div>
                     </div>
-                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
+                    <div className="flex items-center gap-2">
+                      {/* Quick Export Button */}
+                      <button
+                        onClick={(e) => handleQuickExport(transaction, e)}
+                        className="px-3 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-green-500 text-white hover:bg-green-600 shadow-md hover:shadow-lg"
+                        title="Quick Export"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                          />
+                        </svg>
+                        Export
+                      </button>
+                      <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -398,6 +447,16 @@ function Transactions({ userId, provider, onClose }) {
             setShowAuditCreate(false);
             loadTransactions();
           }}
+        />
+      )}
+
+      {/* Quick Export Modal */}
+      {quickExportTransaction && (
+        <ExportModal
+          transaction={quickExportTransaction}
+          userId={quickExportTransaction.user_id}
+          onClose={() => setQuickExportTransaction(null)}
+          onExportComplete={handleQuickExportComplete}
         />
       )}
     </div>
