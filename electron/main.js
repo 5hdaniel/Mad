@@ -10,39 +10,39 @@ const log = require('electron-log');
 require('dotenv').config({ path: path.join(__dirname, '../.env.local') });
 
 // Import services and utilities
-const { getContactNames, resolveContactName } = require('./services/contactsService');
+const { getContactNames, resolveContactName } = require('./services/contactsService.ts');
 const {
   getAllConversations,
   getGroupChatParticipants,
   isGroupChat,
   getMessagesForContact,
   openMessagesDatabase
-} = require('./services/messagesService');
-const { macTimestampToDate, getYearsAgoTimestamp } = require('./utils/dateUtils');
-const { normalizePhoneNumber, formatPhoneNumber } = require('./utils/phoneUtils');
-const { sanitizeFilename, createTimestampedFilename } = require('./utils/fileUtils');
-const { getMessageText } = require('./utils/messageParser');
+} = require('./services/messagesService.ts');
+const { macTimestampToDate, getYearsAgoTimestamp } = require('./utils/dateUtils.ts');
+const { normalizePhoneNumber, formatPhoneNumber } = require('./utils/phoneUtils.ts');
+const { sanitizeFilename, createTimestampedFilename } = require('./utils/fileUtils.ts');
+const { getMessageText } = require('./utils/messageParser.ts');
 const {
   WINDOW_CONFIG,
   DEV_SERVER_URL,
   UPDATE_CHECK_DELAY,
   FIVE_YEARS_IN_MS
-} = require('./constants');
+} = require('./constants.ts');
 
 // Import new authentication services
-const databaseService = require('./services/databaseService');
-const googleAuthService = require('./services/googleAuthService');
-const microsoftAuthService = require('./services/microsoftAuthService');
-const supabaseService = require('./services/supabaseService');
+const databaseService = require('./services/databaseService.ts');
+const googleAuthService = require('./services/googleAuthService.ts');
+const microsoftAuthService = require('./services/microsoftAuthService.ts');
+const supabaseService = require('./services/supabaseService.ts');
 const tokenEncryptionService = require('./services/tokenEncryptionService');
 const connectionStatusService = require('./services/connectionStatusService');
-const { initializeDatabase, registerAuthHandlers } = require('./auth-handlers');
-const { registerTransactionHandlers } = require('./transaction-handlers');
-const { registerContactHandlers } = require('./contact-handlers');
-const { registerAddressHandlers } = require('./address-handlers');
-const { registerFeedbackHandlers } = require('./feedback-handlers');
-const { registerSystemHandlers } = require('./system-handlers');
-const { registerPreferenceHandlers } = require('./preference-handlers');
+const { initializeDatabase, registerAuthHandlers } = require('./auth-handlers.ts');
+const { registerTransactionHandlers } = require('./transaction-handlers.ts');
+const { registerContactHandlers } = require('./contact-handlers.ts');
+const { registerAddressHandlers } = require('./address-handlers.ts');
+const { registerFeedbackHandlers } = require('./feedback-handlers.ts');
+const { registerSystemHandlers } = require('./system-handlers.ts');
+const { registerPreferenceHandlers } = require('./preference-handlers.ts');
 
 // Configure logging for auto-updater
 log.transports.file.level = 'info';

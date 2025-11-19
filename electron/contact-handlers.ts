@@ -165,10 +165,11 @@ export function registerContactHandlers(): void {
         const sanitizedContact = sanitizeObject(contact);
         const validatedData = validateContactData(sanitizedContact, false);
 
-        const importedContact = await databaseService.createContact(validatedUserId, {
+        const importedContact = await databaseService.createContact({
+          user_id: validatedUserId,
           ...validatedData,
           source: (sanitizedContact as any).source || 'contacts_app',
-          is_imported: 1,
+          is_imported: true,
         });
         importedContacts.push(importedContact);
       }
@@ -240,7 +241,8 @@ export function registerContactHandlers(): void {
       const validatedUserId = validateUserId(userId);
       const validatedData = validateContactData(contactData, false);
 
-      const contact = await databaseService.createContact(validatedUserId, {
+      const contact = await databaseService.createContact({
+        user_id: validatedUserId,
         ...validatedData,
         source: 'manual',
       });
@@ -273,11 +275,12 @@ export function registerContactHandlers(): void {
       const validatedContactId = validateContactId(contactId);
       const validatedUpdates = validateContactData(sanitizeObject(updates || {}), true);
 
-      const contact = await databaseService.updateContact(validatedContactId, validatedUpdates);
+      await databaseService.updateContact(validatedContactId, validatedUpdates);
+      const contact = await databaseService.getContactById(validatedContactId);
 
       return {
         success: true,
-        contact,
+        contact: contact || undefined,
       };
     } catch (error) {
       console.error('[Main] Update contact failed:', error);

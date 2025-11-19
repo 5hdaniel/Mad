@@ -116,12 +116,7 @@ const handleGoogleLogin = async (mainWindow: BrowserWindow | null): Promise<Logi
   try {
     console.log('[Main] Starting Google login flow');
 
-    const result = await googleAuthService.authenticateForLogin((deviceCodeInfo: unknown) => {
-      // Device code callback - send to renderer
-      if (mainWindow) {
-        mainWindow.webContents.send('auth:device-code', deviceCodeInfo);
-      }
-    });
+    const result = await googleAuthService.authenticateForLogin();
 
     return {
       success: true,
@@ -169,7 +164,7 @@ const handleGoogleCompleteLogin = async (event: IpcMainInvokeEvent, authCode: st
     let localUser = await databaseService.getUserByOAuthId('google', userInfo.id);
 
     if (!localUser) {
-      const userId = await databaseService.createUser({
+      localUser = await databaseService.createUser({
         email: userInfo.email,
         first_name: userInfo.given_name,
         last_name: userInfo.family_name,
@@ -180,12 +175,11 @@ const handleGoogleCompleteLogin = async (event: IpcMainInvokeEvent, authCode: st
         subscription_tier: cloudUser.subscription_tier,
         subscription_status: cloudUser.subscription_status,
         trial_ends_at: cloudUser.trial_ends_at,
+        is_active: true,
       });
-
-      localUser = await databaseService.getUserById(userId);
     } else {
       // Update existing user
-      localUser = await databaseService.updateUser(localUser.id, {
+      await databaseService.updateUser(localUser.id, {
         email: userInfo.email,
         first_name: userInfo.given_name,
         last_name: userInfo.family_name,
@@ -204,7 +198,7 @@ const handleGoogleCompleteLogin = async (event: IpcMainInvokeEvent, authCode: st
       access_token: encryptedAccessToken,
       refresh_token: encryptedRefreshToken,
       token_expires_at: tokens.expires_at,
-      scopes_granted: tokens.scopes,
+      scopes_granted: Array.isArray(tokens.scopes) ? tokens.scopes.join(' ') : tokens.scopes,
     });
 
     // Create session
@@ -343,7 +337,7 @@ const handleGoogleConnectMailbox = async (mainWindow: BrowserWindow | null, user
           access_token: encryptedAccessToken,
           refresh_token: encryptedRefreshToken,
           token_expires_at: tokens.expires_at,
-          scopes_granted: tokens.scopes,
+          scopes_granted: Array.isArray(tokens.scopes) ? tokens.scopes.join(' ') : tokens.scopes,
           connected_email_address: userInfo.email,
           mailbox_connected: true,
         });
@@ -467,7 +461,7 @@ const handleMicrosoftLogin = async (mainWindow: BrowserWindow | null): Promise<L
         let localUser = await databaseService.getUserByOAuthId('microsoft', userInfo.id);
 
         if (!localUser) {
-          const userId = await databaseService.createUser({
+          localUser = await databaseService.createUser({
             email: userInfo.email,
             first_name: userInfo.given_name,
             last_name: userInfo.family_name,
@@ -478,12 +472,11 @@ const handleMicrosoftLogin = async (mainWindow: BrowserWindow | null): Promise<L
             subscription_tier: cloudUser.subscription_tier,
             subscription_status: cloudUser.subscription_status,
             trial_ends_at: cloudUser.trial_ends_at,
+            is_active: true,
           });
-
-          localUser = await databaseService.getUserById(userId);
         } else {
           // Update existing user
-          localUser = await databaseService.updateUser(localUser.id, {
+          await databaseService.updateUser(localUser.id, {
             email: userInfo.email,
             first_name: userInfo.given_name,
             last_name: userInfo.family_name,
