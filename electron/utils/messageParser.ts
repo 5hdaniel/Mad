@@ -3,7 +3,7 @@
  * Handles extraction of text from macOS Messages attributed body format
  */
 
-const {
+import {
   MAX_MESSAGE_TEXT_LENGTH,
   MIN_MESSAGE_TEXT_LENGTH,
   MIN_CLEANED_TEXT_LENGTH,
@@ -11,23 +11,32 @@ const {
   STREAMTYPED_OFFSET,
   REGEX_PATTERNS,
   FALLBACK_MESSAGES
-} = require('../constants');
+} from '../constants';
+
+/**
+ * Message object interface
+ */
+export interface Message {
+  text?: string | null;
+  attributedBody?: Buffer | null;
+  cache_has_attachments?: number;
+}
 
 /**
  * Extract text from macOS Messages attributedBody blob (NSKeyedArchiver format)
  * This contains NSAttributedString with the actual message text
  *
- * @param {Buffer} attributedBodyBuffer - The attributedBody buffer from Messages database
- * @returns {string} Extracted text or fallback message
+ * @param attributedBodyBuffer - The attributedBody buffer from Messages database
+ * @returns Extracted text or fallback message
  */
-function extractTextFromAttributedBody(attributedBodyBuffer) {
+export function extractTextFromAttributedBody(attributedBodyBuffer: Buffer | null | undefined): string {
   if (!attributedBodyBuffer) {
     return FALLBACK_MESSAGES.REACTION_OR_SYSTEM;
   }
 
   try {
     const bodyText = attributedBodyBuffer.toString('utf8');
-    let extractedText = null;
+    let extractedText: string | null = null;
 
     // Method 1: Look for text after NSString marker
     // The format is: ...NSString[binary][length markers]ACTUAL_TEXT
@@ -51,17 +60,17 @@ function extractTextFromAttributedBody(attributedBodyBuffer) {
       return FALLBACK_MESSAGES.UNABLE_TO_EXTRACT;
     }
   } catch (e) {
-    console.error('Error parsing attributedBody:', e.message);
+    console.error('Error parsing attributedBody:', (e as Error).message);
     return FALLBACK_MESSAGES.PARSING_ERROR;
   }
 }
 
 /**
  * Extract text by looking for NSString marker
- * @param {string} bodyText - The attributedBody as text
- * @returns {string|null} Extracted text or null
+ * @param bodyText - The attributedBody as text
+ * @returns Extracted text or null
  */
-function extractFromNSString(bodyText) {
+function extractFromNSString(bodyText: string): string | null {
   const nsStringIndex = bodyText.indexOf('NSString');
   if (nsStringIndex === -1) {
     return null;
@@ -97,10 +106,10 @@ function extractFromNSString(bodyText) {
 
 /**
  * Extract text by looking for streamtyped marker
- * @param {string} bodyText - The attributedBody as text
- * @returns {string|null} Extracted text or null
+ * @param bodyText - The attributedBody as text
+ * @returns Extracted text or null
  */
-function extractFromStreamtyped(bodyText) {
+function extractFromStreamtyped(bodyText: string): string | null {
   const streamIndex = bodyText.indexOf(STREAMTYPED_MARKER);
   if (streamIndex === -1) {
     return null;
@@ -120,10 +129,10 @@ function extractFromStreamtyped(bodyText) {
 
 /**
  * Clean extracted text by removing control characters and null bytes
- * @param {string} text - Text to clean
- * @returns {string} Cleaned text
+ * @param text - Text to clean
+ * @returns Cleaned text
  */
-function cleanExtractedText(text) {
+export function cleanExtractedText(text: string): string {
   return text
     .replace(REGEX_PATTERNS.NULL_BYTES, '') // Remove null bytes
     .replace(REGEX_PATTERNS.CONTROL_CHARS, '') // Remove control chars
@@ -134,13 +143,10 @@ function cleanExtractedText(text) {
  * Get message text from a message object
  * Handles both plain text and attributed body formats
  *
- * @param {Object} message - Message object from database
- * @param {string} message.text - Plain text (if available)
- * @param {Buffer} message.attributedBody - Attributed body buffer (if available)
- * @param {number} message.cache_has_attachments - Whether message has attachments
- * @returns {string} Message text or fallback message
+ * @param message - Message object from database
+ * @returns Message text or fallback message
  */
-function getMessageText(message) {
+export function getMessageText(message: Message): string {
   // Plain text is preferred
   if (message.text) {
     return message.text;
@@ -158,9 +164,3 @@ function getMessageText(message) {
 
   return FALLBACK_MESSAGES.REACTION_OR_SYSTEM;
 }
-
-module.exports = {
-  extractTextFromAttributedBody,
-  getMessageText,
-  cleanExtractedText
-};

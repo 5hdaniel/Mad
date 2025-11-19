@@ -3,14 +3,14 @@
  * Handles date formatting and conversion, especially for macOS timestamps
  */
 
-const { MAC_EPOCH } = require('../constants');
+import { MAC_EPOCH } from '../constants';
 
 /**
  * Convert macOS timestamp (nanoseconds since 2001-01-01) to JavaScript Date
- * @param {number} macTimestamp - macOS timestamp in nanoseconds
- * @returns {Date} JavaScript Date object
+ * @param macTimestamp - macOS timestamp in nanoseconds
+ * @returns JavaScript Date object
  */
-function macTimestampToDate(macTimestamp) {
+export function macTimestampToDate(macTimestamp: number | null | undefined): Date {
   if (!macTimestamp) {
     return new Date(0);
   }
@@ -20,19 +20,19 @@ function macTimestampToDate(macTimestamp) {
 
 /**
  * Get timestamp from N years ago
- * @param {number} years - Number of years to go back
- * @returns {number} Timestamp in milliseconds
+ * @param years - Number of years to go back
+ * @returns Timestamp in milliseconds
  */
-function getYearsAgoTimestamp(years) {
+export function getYearsAgoTimestamp(years: number): number {
   return Date.now() - (years * 365 * 24 * 60 * 60 * 1000);
 }
 
 /**
  * Format date for file names (YYYYMMDD_HHMMSS)
- * @param {Date} date - Date to format
- * @returns {string} Formatted date string
+ * @param date - Date to format
+ * @returns Formatted date string
  */
-function formatDateForFilename(date) {
+export function formatDateForFilename(date: Date): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
@@ -42,9 +42,3 @@ function formatDateForFilename(date) {
 
   return `${year}${month}${day}_${hours}${minutes}${seconds}`;
 }
-
-module.exports = {
-  macTimestampToDate,
-  getYearsAgoTimestamp,
-  formatDateForFilename
-};

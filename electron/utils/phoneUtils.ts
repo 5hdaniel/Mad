@@ -3,14 +3,14 @@
  * Handles phone number normalization and formatting
  */
 
-const { REGEX_PATTERNS } = require('../constants');
+import { REGEX_PATTERNS } from '../constants';
 
 /**
  * Normalize phone number by removing all non-digit characters
- * @param {string} phone - Phone number to normalize
- * @returns {string} Normalized phone number (digits only)
+ * @param phone - Phone number to normalize
+ * @returns Normalized phone number (digits only)
  */
-function normalizePhoneNumber(phone) {
+export function normalizePhoneNumber(phone: string | null | undefined): string {
   if (!phone) return '';
   return phone.replace(REGEX_PATTERNS.PHONE_NORMALIZE, '');
 }
@@ -18,10 +18,10 @@ function normalizePhoneNumber(phone) {
 /**
  * Format phone number for display
  * Returns email as-is if it contains @, otherwise formats as US phone number
- * @param {string} phone - Phone number or email to format
- * @returns {string} Formatted phone number or email
+ * @param phone - Phone number or email to format
+ * @returns Formatted phone number or email
  */
-function formatPhoneNumber(phone) {
+export function formatPhoneNumber(phone: string | null | undefined): string {
   if (!phone) return '';
 
   // Check if it's an email
@@ -50,11 +50,11 @@ function formatPhoneNumber(phone) {
 
 /**
  * Check if two phone numbers match (after normalization)
- * @param {string} phone1 - First phone number
- * @param {string} phone2 - Second phone number
- * @returns {boolean} True if phone numbers match
+ * @param phone1 - First phone number
+ * @param phone2 - Second phone number
+ * @returns True if phone numbers match
  */
-function phoneNumbersMatch(phone1, phone2) {
+export function phoneNumbersMatch(phone1: string | null | undefined, phone2: string | null | undefined): boolean {
   const normalized1 = normalizePhoneNumber(phone1);
   const normalized2 = normalizePhoneNumber(phone2);
 
@@ -70,9 +70,3 @@ function phoneNumbersMatch(phone1, phone2) {
 
   return false;
 }
-
-module.exports = {
-  normalizePhoneNumber,
-  formatPhoneNumber,
-  phoneNumbersMatch
-};

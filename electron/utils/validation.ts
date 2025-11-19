@@ -7,22 +7,25 @@
 /**
  * Validation error class
  */
-class ValidationError extends Error {
-  constructor(message, field = null) {
+export class ValidationError extends Error {
+  field?: string;
+
+  constructor(message: string, field?: string) {
     super(message);
     this.name = 'ValidationError';
     this.field = field;
+    Object.setPrototypeOf(this, ValidationError.prototype);
   }
 }
 
 /**
  * Validate user ID
- * @param {any} userId - User ID to validate (UUID string)
- * @param {boolean} required - Whether the field is required
- * @returns {string} Validated user ID
- * @throws {ValidationError} If validation fails
+ * @param userId - User ID to validate (UUID string)
+ * @param required - Whether the field is required
+ * @returns Validated user ID
+ * @throws ValidationError if validation fails
  */
-function validateUserId(userId, required = true) {
+export function validateUserId(userId: unknown, required: boolean = true): string | null {
   if (userId === null || userId === undefined || userId === '') {
     if (required) {
       throw new ValidationError('User ID is required', 'userId');
@@ -45,12 +48,12 @@ function validateUserId(userId, required = true) {
 
 /**
  * Validate contact ID
- * @param {any} contactId - Contact ID to validate (UUID string)
- * @param {boolean} required - Whether the field is required
- * @returns {string} Validated contact ID
- * @throws {ValidationError} If validation fails
+ * @param contactId - Contact ID to validate (UUID string)
+ * @param required - Whether the field is required
+ * @returns Validated contact ID
+ * @throws ValidationError if validation fails
  */
-function validateContactId(contactId, required = true) {
+export function validateContactId(contactId: unknown, required: boolean = true): string | null {
   if (contactId === null || contactId === undefined || contactId === '') {
     if (required) {
       throw new ValidationError('Contact ID is required', 'contactId');
@@ -73,12 +76,12 @@ function validateContactId(contactId, required = true) {
 
 /**
  * Validate transaction ID
- * @param {any} transactionId - Transaction ID to validate (UUID string)
- * @param {boolean} required - Whether the field is required
- * @returns {string} Validated transaction ID
- * @throws {ValidationError} If validation fails
+ * @param transactionId - Transaction ID to validate (UUID string)
+ * @param required - Whether the field is required
+ * @returns Validated transaction ID
+ * @throws ValidationError if validation fails
  */
-function validateTransactionId(transactionId, required = true) {
+export function validateTransactionId(transactionId: unknown, required: boolean = true): string | null {
   if (transactionId === null || transactionId === undefined || transactionId === '') {
     if (required) {
       throw new ValidationError('Transaction ID is required', 'transactionId');
@@ -101,12 +104,12 @@ function validateTransactionId(transactionId, required = true) {
 
 /**
  * Validate email address
- * @param {any} email - Email to validate
- * @param {boolean} required - Whether the field is required
- * @returns {string|null} Validated email
- * @throws {ValidationError} If validation fails
+ * @param email - Email to validate
+ * @param required - Whether the field is required
+ * @returns Validated email
+ * @throws ValidationError if validation fails
  */
-function validateEmail(email, required = true) {
+export function validateEmail(email: unknown, required: boolean = true): string | null {
   if (!email) {
     if (required) {
       throw new ValidationError('Email is required', 'email');
@@ -133,18 +136,24 @@ function validateEmail(email, required = true) {
 }
 
 /**
- * Validate string input
- * @param {any} value - Value to validate
- * @param {string} fieldName - Field name for error messages
- * @param {Object} options - Validation options
- * @param {boolean} options.required - Whether the field is required
- * @param {number} options.minLength - Minimum length
- * @param {number} options.maxLength - Maximum length
- * @param {RegExp} options.pattern - Pattern to match
- * @returns {string|null} Validated string
- * @throws {ValidationError} If validation fails
+ * Validation options for string validation
  */
-function validateString(value, fieldName, options = {}) {
+export interface StringValidationOptions {
+  required?: boolean;
+  minLength?: number;
+  maxLength?: number;
+  pattern?: RegExp | null;
+}
+
+/**
+ * Validate string input
+ * @param value - Value to validate
+ * @param fieldName - Field name for error messages
+ * @param options - Validation options
+ * @returns Validated string
+ * @throws ValidationError if validation fails
+ */
+export function validateString(value: unknown, fieldName: string, options: StringValidationOptions = {}): string | null {
   const { required = false, minLength = 0, maxLength = Infinity, pattern = null } = options;
 
   if (!value) {
@@ -183,11 +192,11 @@ function validateString(value, fieldName, options = {}) {
 
 /**
  * Validate OAuth authorization code
- * @param {any} authCode - Authorization code to validate
- * @returns {string} Validated auth code
- * @throws {ValidationError} If validation fails
+ * @param authCode - Authorization code to validate
+ * @returns Validated auth code
+ * @throws ValidationError if validation fails
  */
-function validateAuthCode(authCode) {
+export function validateAuthCode(authCode: unknown): string {
   if (!authCode || typeof authCode !== 'string') {
     throw new ValidationError('Authorization code is required and must be a string', 'authCode');
   }
@@ -212,11 +221,11 @@ function validateAuthCode(authCode) {
 
 /**
  * Validate session token
- * @param {any} sessionToken - Session token to validate
- * @returns {string} Validated session token
- * @throws {ValidationError} If validation fails
+ * @param sessionToken - Session token to validate
+ * @returns Validated session token
+ * @throws ValidationError if validation fails
  */
-function validateSessionToken(sessionToken) {
+export function validateSessionToken(sessionToken: unknown): string {
   if (!sessionToken || typeof sessionToken !== 'string') {
     throw new ValidationError('Session token is required and must be a string', 'sessionToken');
   }
@@ -233,11 +242,11 @@ function validateSessionToken(sessionToken) {
 
 /**
  * Validate OAuth provider
- * @param {any} provider - Provider to validate
- * @returns {string} Validated provider
- * @throws {ValidationError} If validation fails
+ * @param provider - Provider to validate
+ * @returns Validated provider
+ * @throws ValidationError if validation fails
  */
-function validateProvider(provider) {
+export function validateProvider(provider: unknown): string {
   if (!provider || typeof provider !== 'string') {
     throw new ValidationError('Provider is required and must be a string', 'provider');
   }
@@ -256,22 +265,45 @@ function validateProvider(provider) {
 }
 
 /**
- * Validate contact data for creation/update
- * @param {any} contactData - Contact data to validate
- * @param {boolean} isUpdate - Whether this is an update operation
- * @returns {Object} Validated contact data
- * @throws {ValidationError} If validation fails
+ * Validated contact data interface
  */
-function validateContactData(contactData, isUpdate = false) {
+export interface ValidatedContactData {
+  name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  company?: string | null;
+  title?: string | null;
+}
+
+/**
+ * Raw contact data interface
+ */
+export interface RawContactData {
+  name?: unknown;
+  email?: unknown;
+  phone?: unknown;
+  company?: unknown;
+  title?: unknown;
+}
+
+/**
+ * Validate contact data for creation/update
+ * @param contactData - Contact data to validate
+ * @param isUpdate - Whether this is an update operation
+ * @returns Validated contact data
+ * @throws ValidationError if validation fails
+ */
+export function validateContactData(contactData: unknown, isUpdate: boolean = false): ValidatedContactData {
   if (!contactData || typeof contactData !== 'object') {
     throw new ValidationError('Contact data must be an object', 'contactData');
   }
 
-  const validated = {};
+  const data = contactData as RawContactData;
+  const validated: ValidatedContactData = {};
 
   // Name is required for creation, optional for update
-  if (!isUpdate || contactData.name !== undefined) {
-    validated.name = validateString(contactData.name, 'name', {
+  if (!isUpdate || data.name !== undefined) {
+    validated.name = validateString(data.name, 'name', {
       required: !isUpdate,
       minLength: 1,
       maxLength: 200,
@@ -279,29 +311,29 @@ function validateContactData(contactData, isUpdate = false) {
   }
 
   // Email is optional but must be valid if provided
-  if (contactData.email !== undefined && contactData.email !== null) {
-    validated.email = validateEmail(contactData.email, false);
+  if (data.email !== undefined && data.email !== null) {
+    validated.email = validateEmail(data.email, false);
   }
 
   // Phone is optional
-  if (contactData.phone !== undefined && contactData.phone !== null) {
-    validated.phone = validateString(contactData.phone, 'phone', {
+  if (data.phone !== undefined && data.phone !== null) {
+    validated.phone = validateString(data.phone, 'phone', {
       required: false,
       maxLength: 50,
     });
   }
 
   // Company is optional
-  if (contactData.company !== undefined && contactData.company !== null) {
-    validated.company = validateString(contactData.company, 'company', {
+  if (data.company !== undefined && data.company !== null) {
+    validated.company = validateString(data.company, 'company', {
       required: false,
       maxLength: 200,
     });
   }
 
   // Title is optional
-  if (contactData.title !== undefined && contactData.title !== null) {
-    validated.title = validateString(contactData.title, 'title', {
+  if (data.title !== undefined && data.title !== null) {
+    validated.title = validateString(data.title, 'title', {
       required: false,
       maxLength: 100,
     });
@@ -311,23 +343,56 @@ function validateContactData(contactData, isUpdate = false) {
 }
 
 /**
- * Validate transaction data for creation/update
- * @param {any} transactionData - Transaction data to validate
- * @param {boolean} isUpdate - Whether this is an update operation
- * @returns {Object} Validated transaction data
- * @throws {ValidationError} If validation fails
+ * Validated transaction data interface
  */
-function validateTransactionData(transactionData, isUpdate = false) {
+export interface ValidatedTransactionData {
+  property_address?: string | null;
+  transaction_type?: string;
+  amount?: number;
+  status?: string;
+  notes?: string | null;
+  sale_price?: number;
+  listing_price?: number;
+  representation_start_date?: string;
+  closing_date?: string;
+  closing_date_verified?: number;
+}
+
+/**
+ * Raw transaction data interface
+ */
+export interface RawTransactionData {
+  property_address?: unknown;
+  transaction_type?: unknown;
+  amount?: unknown;
+  status?: unknown;
+  notes?: unknown;
+  sale_price?: unknown;
+  listing_price?: unknown;
+  representation_start_date?: unknown;
+  closing_date?: unknown;
+  closing_date_verified?: unknown;
+}
+
+/**
+ * Validate transaction data for creation/update
+ * @param transactionData - Transaction data to validate
+ * @param isUpdate - Whether this is an update operation
+ * @returns Validated transaction data
+ * @throws ValidationError if validation fails
+ */
+export function validateTransactionData(transactionData: unknown, isUpdate: boolean = false): ValidatedTransactionData {
   if (!transactionData || typeof transactionData !== 'object') {
     throw new ValidationError('Transaction data must be an object', 'transactionData');
   }
 
-  const validated = {};
+  const data = transactionData as RawTransactionData;
+  const validated: ValidatedTransactionData = {};
 
   // Property address is required for creation
-  if (!isUpdate || transactionData.property_address !== undefined) {
+  if (!isUpdate || data.property_address !== undefined) {
     validated.property_address = validateString(
-      transactionData.property_address,
+      data.property_address,
       'property_address',
       {
         required: !isUpdate,
@@ -338,9 +403,9 @@ function validateTransactionData(transactionData, isUpdate = false) {
   }
 
   // Transaction type
-  if (transactionData.transaction_type !== undefined) {
+  if (data.transaction_type !== undefined) {
     const validTypes = ['purchase', 'sale', 'lease', 'refinance', 'other'];
-    const type = transactionData.transaction_type?.toLowerCase();
+    const type = typeof data.transaction_type === 'string' ? data.transaction_type.toLowerCase() : '';
     if (!validTypes.includes(type)) {
       throw new ValidationError(
         `Transaction type must be one of: ${validTypes.join(', ')}`,
@@ -351,8 +416,8 @@ function validateTransactionData(transactionData, isUpdate = false) {
   }
 
   // Amount (if provided)
-  if (transactionData.amount !== undefined && transactionData.amount !== null) {
-    const amount = Number(transactionData.amount);
+  if (data.amount !== undefined && data.amount !== null) {
+    const amount = Number(data.amount);
     if (isNaN(amount) || amount < 0) {
       throw new ValidationError('Amount must be a non-negative number', 'amount');
     }
@@ -360,9 +425,9 @@ function validateTransactionData(transactionData, isUpdate = false) {
   }
 
   // Status
-  if (transactionData.status !== undefined) {
+  if (data.status !== undefined) {
     const validStatuses = ['active', 'pending', 'closed', 'cancelled'];
-    const status = transactionData.status?.toLowerCase();
+    const status = typeof data.status === 'string' ? data.status.toLowerCase() : '';
     if (!validStatuses.includes(status)) {
       throw new ValidationError(
         `Status must be one of: ${validStatuses.join(', ')}`,
@@ -373,16 +438,16 @@ function validateTransactionData(transactionData, isUpdate = false) {
   }
 
   // Notes (optional)
-  if (transactionData.notes !== undefined && transactionData.notes !== null) {
-    validated.notes = validateString(transactionData.notes, 'notes', {
+  if (data.notes !== undefined && data.notes !== null) {
+    validated.notes = validateString(data.notes, 'notes', {
       required: false,
       maxLength: 10000,
     });
   }
 
   // Sale price (optional)
-  if (transactionData.sale_price !== undefined && transactionData.sale_price !== null) {
-    const price = Number(transactionData.sale_price);
+  if (data.sale_price !== undefined && data.sale_price !== null) {
+    const price = Number(data.sale_price);
     if (isNaN(price) || price < 0) {
       throw new ValidationError('Sale price must be a non-negative number', 'sale_price');
     }
@@ -390,8 +455,8 @@ function validateTransactionData(transactionData, isUpdate = false) {
   }
 
   // Listing price (optional)
-  if (transactionData.listing_price !== undefined && transactionData.listing_price !== null) {
-    const price = Number(transactionData.listing_price);
+  if (data.listing_price !== undefined && data.listing_price !== null) {
+    const price = Number(data.listing_price);
     if (isNaN(price) || price < 0) {
       throw new ValidationError('Listing price must be a non-negative number', 'listing_price');
     }
@@ -399,10 +464,10 @@ function validateTransactionData(transactionData, isUpdate = false) {
   }
 
   // Representation start date (optional, must be valid date string)
-  if (transactionData.representation_start_date !== undefined && transactionData.representation_start_date !== null) {
-    if (typeof transactionData.representation_start_date === 'string' && transactionData.representation_start_date.trim()) {
+  if (data.representation_start_date !== undefined && data.representation_start_date !== null) {
+    if (typeof data.representation_start_date === 'string' && data.representation_start_date.trim()) {
       // Validate it's a valid date format (YYYY-MM-DD or ISO date string)
-      const dateStr = transactionData.representation_start_date.trim();
+      const dateStr = data.representation_start_date.trim();
       if (!/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
         throw new ValidationError('Representation start date must be in YYYY-MM-DD format', 'representation_start_date');
       }
@@ -411,10 +476,10 @@ function validateTransactionData(transactionData, isUpdate = false) {
   }
 
   // Closing date (optional, must be valid date string)
-  if (transactionData.closing_date !== undefined && transactionData.closing_date !== null) {
-    if (typeof transactionData.closing_date === 'string' && transactionData.closing_date.trim()) {
+  if (data.closing_date !== undefined && data.closing_date !== null) {
+    if (typeof data.closing_date === 'string' && data.closing_date.trim()) {
       // Validate it's a valid date format (YYYY-MM-DD or ISO date string)
-      const dateStr = transactionData.closing_date.trim();
+      const dateStr = data.closing_date.trim();
       if (!/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
         throw new ValidationError('Closing date must be in YYYY-MM-DD format', 'closing_date');
       }
@@ -423,8 +488,8 @@ function validateTransactionData(transactionData, isUpdate = false) {
   }
 
   // Closing date verified flag (optional, must be 0 or 1)
-  if (transactionData.closing_date_verified !== undefined && transactionData.closing_date_verified !== null) {
-    const verified = Number(transactionData.closing_date_verified);
+  if (data.closing_date_verified !== undefined && data.closing_date_verified !== null) {
+    const verified = Number(data.closing_date_verified);
     if (verified !== 0 && verified !== 1) {
       throw new ValidationError('Closing date verified must be 0 or 1', 'closing_date_verified');
     }
@@ -436,11 +501,11 @@ function validateTransactionData(transactionData, isUpdate = false) {
 
 /**
  * Validate file path for security
- * @param {any} filePath - File path to validate
- * @returns {string} Validated file path
- * @throws {ValidationError} If validation fails
+ * @param filePath - File path to validate
+ * @returns Validated file path
+ * @throws ValidationError if validation fails
  */
-function validateFilePath(filePath) {
+export function validateFilePath(filePath: unknown): string {
   if (!filePath || typeof filePath !== 'string') {
     throw new ValidationError('File path is required and must be a string', 'filePath');
   }
@@ -462,11 +527,11 @@ function validateFilePath(filePath) {
 
 /**
  * Validate URL for security
- * @param {any} url - URL to validate
- * @returns {string} Validated URL
- * @throws {ValidationError} If validation fails
+ * @param url - URL to validate
+ * @returns Validated URL
+ * @throws ValidationError if validation fails
  */
-function validateUrl(url) {
+export function validateUrl(url: unknown): string {
   if (!url || typeof url !== 'string') {
     throw new ValidationError('URL is required and must be a string', 'url');
   }
@@ -489,42 +554,25 @@ function validateUrl(url) {
 
 /**
  * Sanitize object to prevent prototype pollution
- * @param {any} obj - Object to sanitize
- * @returns {Object} Sanitized object
+ * @param obj - Object to sanitize
+ * @returns Sanitized object
  */
-function sanitizeObject(obj) {
+export function sanitizeObject(obj: unknown): Record<string, unknown> | unknown {
   if (!obj || typeof obj !== 'object') {
     return obj;
   }
 
   // Prevent prototype pollution
   const dangerous = ['__proto__', 'constructor', 'prototype'];
-  const cleaned = {};
+  const cleaned: Record<string, unknown> = {};
 
   for (const key in obj) {
     if (Object.prototype.hasOwnProperty.call(obj, key)) {
       if (!dangerous.includes(key)) {
-        cleaned[key] = obj[key];
+        cleaned[key] = (obj as Record<string, unknown>)[key];
       }
     }
   }
 
   return cleaned;
 }
-
-module.exports = {
-  ValidationError,
-  validateUserId,
-  validateContactId,
-  validateTransactionId,
-  validateEmail,
-  validateString,
-  validateAuthCode,
-  validateSessionToken,
-  validateProvider,
-  validateContactData,
-  validateTransactionData,
-  validateFilePath,
-  validateUrl,
-  sanitizeObject,
-};
