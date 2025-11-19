@@ -3,12 +3,18 @@ import Joyride from 'react-joyride';
 import { useTour } from '../hooks/useTour';
 import { getDashboardTourSteps, JOYRIDE_STYLES, JOYRIDE_LOCALE } from '../config/tourSteps';
 
+interface DashboardActionProps {
+  onAuditNew: () => void;
+  onViewTransactions: () => void;
+  onManageContacts: () => void;
+}
+
 /**
  * Dashboard Component
  * Main landing screen after login
  * Provides three primary actions: Start New Audit, Browse Transactions, and Manage Contacts
  */
-function Dashboard({ onAuditNew, onViewTransactions, onManageContacts }) {
+function Dashboard({ onAuditNew, onViewTransactions, onManageContacts }: DashboardActionProps): JSX.Element {
   // Initialize the onboarding tour for first-time users
   const { runTour, handleJoyrideCallback } = useTour(true, 'hasSeenDashboardTour');
 
