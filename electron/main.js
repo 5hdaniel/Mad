@@ -165,6 +165,35 @@ app.whenReady().then(async () => {
   // Set up Content Security Policy
   setupContentSecurityPolicy();
 
+  // Check if encryption is available (required for secure token storage)
+  if (!tokenEncryptionService.isEncryptionAvailable()) {
+    const platform = process.platform;
+    let errorMessage = 'Encryption is not available on your system. MagicAudit requires OS-level encryption to securely store OAuth tokens.';
+
+    if (platform === 'linux') {
+      errorMessage += '\n\nOn Linux, please install one of the following:\n- gnome-keyring\n- kwallet\n- libsecret\n\nThen restart the application.';
+    } else if (platform === 'darwin') {
+      errorMessage += '\n\nThis is unexpected on macOS. Please ensure your system keychain is accessible.';
+    } else if (platform === 'win32') {
+      errorMessage += '\n\nThis is unexpected on Windows. Please ensure DPAPI is available.';
+    }
+
+    log.error('[Main] Encryption not available:', { platform });
+    console.error('[Main] Encryption not available. OAuth functionality will fail.');
+
+    // Show error dialog
+    await dialog.showMessageBox({
+      type: 'error',
+      title: 'Encryption Not Available',
+      message: errorMessage,
+      buttons: ['Exit', 'Continue Anyway']
+    }).then(result => {
+      if (result.response === 0) {
+        app.quit();
+      }
+    });
+  }
+
   await initializeDatabase();
   createWindow();
   registerAuthHandlers(mainWindow);
