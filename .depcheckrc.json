@@ -1,0 +1,31 @@
+{
+  "ignores": [
+    "@babel/preset-env",
+    "@babel/preset-react",
+    "@vitejs/plugin-react",
+    "autoprefixer",
+    "babel-jest",
+    "concurrently",
+    "depcheck",
+    "dotenv-cli",
+    "electron",
+    "electron-builder",
+    "electron-rebuild",
+    "eslint",
+    "eslint-plugin-react",
+    "identity-obj-proxy",
+    "jest",
+    "jest-environment-jsdom",
+    "postcss",
+    "tailwindcss",
+    "vite",
+    "wait-on",
+    "@electron/notarize"
+  ],
+  "skip-missing": false,
+  "ignore-patterns": [
+    "dist",
+    "build",
+    "coverage"
+  ]
+}
