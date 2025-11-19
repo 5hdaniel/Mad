@@ -4,58 +4,49 @@
  */
 
 // Mock Electron's safeStorage before requiring the service
-let mockEncryptionAvailable = true;
-let mockEncryptString = jest.fn();
-let mockDecryptString = jest.fn();
+const mockSafeStorage = {
+  isEncryptionAvailable: jest.fn(),
+  encryptString: jest.fn(),
+  decryptString: jest.fn(),
+};
 
 jest.mock('electron', () => ({
-  safeStorage: {
-    isEncryptionAvailable: jest.fn(() => mockEncryptionAvailable),
-    encryptString: jest.fn((text) => mockEncryptString(text)),
-    decryptString: jest.fn((buffer) => mockDecryptString(buffer)),
-  },
+  safeStorage: mockSafeStorage,
 }));
 
-const { safeStorage } = require('electron');
+const tokenEncryptionService = require('../tokenEncryptionService');
 
 describe('TokenEncryptionService', () => {
-  let tokenEncryptionService;
-
   beforeEach(() => {
-    // Clear mocks
+    // Clear all mock calls and implementations
     jest.clearAllMocks();
 
-    // Reset mock state
-    mockEncryptionAvailable = true;
-
     // Setup default mock implementations
-    mockEncryptString.mockImplementation((text) => {
+    mockSafeStorage.isEncryptionAvailable.mockReturnValue(true);
+
+    mockSafeStorage.encryptString.mockImplementation((text) => {
       return Buffer.from(`encrypted:${text}`);
     });
 
-    mockDecryptString.mockImplementation((buffer) => {
+    mockSafeStorage.decryptString.mockImplementation((buffer) => {
       const str = buffer.toString();
       return str.replace('encrypted:', '');
     });
-
-    // Re-require the service to get fresh instance
-    jest.resetModules();
-    tokenEncryptionService = require('../tokenEncryptionService');
   });
 
   describe('isEncryptionAvailable', () => {
     it('should return true when encryption is available', () => {
-      mockEncryptionAvailable = true;
+      mockSafeStorage.isEncryptionAvailable.mockReturnValue(true);
       expect(tokenEncryptionService.isEncryptionAvailable()).toBe(true);
     });
 
     it('should return false when encryption is not available', () => {
-      mockEncryptionAvailable = false;
+      mockSafeStorage.isEncryptionAvailable.mockReturnValue(false);
       expect(tokenEncryptionService.isEncryptionAvailable()).toBe(false);
     });
 
     it('should return false when safeStorage throws an error', () => {
-      safeStorage.isEncryptionAvailable.mockImplementation(() => {
+      mockSafeStorage.isEncryptionAvailable.mockImplementation(() => {
         throw new Error('safeStorage error');
       });
       expect(tokenEncryptionService.isEncryptionAvailable()).toBe(false);
@@ -67,12 +58,12 @@ describe('TokenEncryptionService', () => {
       const plaintext = 'my-secret-token';
       const result = tokenEncryptionService.encrypt(plaintext);
 
-      expect(safeStorage.encryptString).toHaveBeenCalledWith(plaintext);
+      expect(mockSafeStorage.encryptString).toHaveBeenCalledWith(plaintext);
       expect(result).toBe(Buffer.from('encrypted:my-secret-token').toString('base64'));
     });
 
     it('should throw error when encryption is not available', () => {
-      mockEncryptionAvailable = false;
+      mockSafeStorage.isEncryptionAvailable.mockReturnValue(false);
 
       expect(() => {
         tokenEncryptionService.encrypt('my-secret-token');
@@ -80,7 +71,7 @@ describe('TokenEncryptionService', () => {
     });
 
     it('should throw error when encryptString fails', () => {
-      safeStorage.encryptString.mockImplementation(() => {
+      mockSafeStorage.encryptString.mockImplementation(() => {
         throw new Error('Encryption failed');
       });
 
@@ -91,7 +82,7 @@ describe('TokenEncryptionService', () => {
 
     it('should return base64-encoded encrypted data', () => {
       const plaintext = 'test-token-123';
-      mockEncryptString.mockReturnValue(Buffer.from('encrypted-bytes'));
+      mockSafeStorage.encryptString.mockReturnValue(Buffer.from('encrypted-bytes'));
 
       const result = tokenEncryptionService.encrypt(plaintext);
 
@@ -104,12 +95,12 @@ describe('TokenEncryptionService', () => {
       const encrypted = Buffer.from('encrypted:my-secret-token').toString('base64');
       const result = tokenEncryptionService.decrypt(encrypted);
 
-      expect(safeStorage.decryptString).toHaveBeenCalled();
+      expect(mockSafeStorage.decryptString).toHaveBeenCalled();
       expect(result).toBe('my-secret-token');
     });
 
     it('should throw error when encryption is not available', () => {
-      mockEncryptionAvailable = false;
+      mockSafeStorage.isEncryptionAvailable.mockReturnValue(false);
       const encrypted = Buffer.from('some-data').toString('base64');
 
       expect(() => {
@@ -118,7 +109,7 @@ describe('TokenEncryptionService', () => {
     });
 
     it('should throw error when decryptString fails', () => {
-      safeStorage.decryptString.mockImplementation(() => {
+      mockSafeStorage.decryptString.mockImplementation(() => {
         throw new Error('Decryption failed');
       });
 
@@ -137,7 +128,7 @@ describe('TokenEncryptionService', () => {
       tokenEncryptionService.decrypt(base64);
 
       // Verify that safeStorage.decryptString received the decoded buffer
-      expect(safeStorage.decryptString).toHaveBeenCalledWith(
+      expect(mockSafeStorage.decryptString).toHaveBeenCalledWith(
         Buffer.from(base64, 'base64')
       );
     });
@@ -149,12 +140,12 @@ describe('TokenEncryptionService', () => {
       const result = tokenEncryptionService.encryptObject(obj);
 
       const jsonString = JSON.stringify(obj);
-      expect(safeStorage.encryptString).toHaveBeenCalledWith(jsonString);
+      expect(mockSafeStorage.encryptString).toHaveBeenCalledWith(jsonString);
       expect(result).toBe(Buffer.from(`encrypted:${jsonString}`).toString('base64'));
     });
 
     it('should throw error when encryption is not available', () => {
-      mockEncryptionAvailable = false;
+      mockSafeStorage.isEncryptionAvailable.mockReturnValue(false);
 
       expect(() => {
         tokenEncryptionService.encryptObject({ token: 'test' });
@@ -174,7 +165,7 @@ describe('TokenEncryptionService', () => {
     });
 
     it('should throw error when encryption is not available', () => {
-      mockEncryptionAvailable = false;
+      mockSafeStorage.isEncryptionAvailable.mockReturnValue(false);
       const encrypted = Buffer.from('some-data').toString('base64');
 
       expect(() => {
@@ -185,7 +176,7 @@ describe('TokenEncryptionService', () => {
 
   describe('fail-safe behavior', () => {
     it('should never store tokens in plaintext when encryption is unavailable', () => {
-      mockEncryptionAvailable = false;
+      mockSafeStorage.isEncryptionAvailable.mockReturnValue(false);
 
       // Attempting to encrypt should throw, not fall back to plaintext
       expect(() => {
@@ -193,11 +184,11 @@ describe('TokenEncryptionService', () => {
       }).toThrow('Encryption not available');
 
       // Verify safeStorage.encryptString was never called (no plaintext storage)
-      expect(safeStorage.encryptString).not.toHaveBeenCalled();
+      expect(mockSafeStorage.encryptString).not.toHaveBeenCalled();
     });
 
     it('should never retrieve tokens as plaintext when encryption is unavailable', () => {
-      mockEncryptionAvailable = false;
+      mockSafeStorage.isEncryptionAvailable.mockReturnValue(false);
 
       // Attempting to decrypt should throw, not fall back to plaintext
       expect(() => {
@@ -205,7 +196,7 @@ describe('TokenEncryptionService', () => {
       }).toThrow('Encryption not available');
 
       // Verify safeStorage.decryptString was never called (no plaintext retrieval)
-      expect(safeStorage.decryptString).not.toHaveBeenCalled();
+      expect(mockSafeStorage.decryptString).not.toHaveBeenCalled();
     });
   });
 });
