@@ -6,16 +6,22 @@ import { useState, useEffect } from 'react';
 
 /**
  * Conversation structure from iMessage database
- * This represents a single conversation/chat thread
+ * This represents a single conversation/chat thread with contact info
  */
 export interface Conversation {
   id: string;
-  chat_identifier: string;
-  display_name?: string;
-  participants?: string[];
-  last_message_date?: number;
-  message_count?: number;
-  [key: string]: unknown; // Allow additional properties from the database
+  chatId?: string;
+  name: string;
+  contactId?: string;
+  phones?: string[];
+  emails?: string[];
+  directChatCount: number;
+  groupChatCount: number;
+  directMessageCount: number;
+  groupMessageCount: number;
+  messageCount?: number;
+  lastMessageDate: Date | string | number;
+  showBothNameAndNumber?: boolean;
 }
 
 /**

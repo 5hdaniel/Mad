@@ -3,20 +3,7 @@
  * Displays a single conversation/contact card with selection and info
  */
 import React from 'react';
-
-interface Conversation {
-  id: string;
-  name: string;
-  contactId?: string;
-  phones?: string[];
-  emails?: string[];
-  directChatCount: number;
-  groupChatCount: number;
-  directMessageCount: number;
-  groupMessageCount: number;
-  messageCount?: number;
-  lastMessageDate: Date | string | number;
-}
+import type { Conversation } from '../../hooks/useConversations';
 
 interface ConversationCardProps {
   conversation: Conversation;

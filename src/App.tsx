@@ -26,11 +26,6 @@ interface User {
   avatar_url?: string;
 }
 
-interface Subscription {
-  tier?: string;
-  status?: string;
-}
-
 function App() {
   const [currentStep, setCurrentStep] = useState<AppStep>('login');
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
@@ -51,7 +46,7 @@ function App() {
   const [showWelcomeTerms, setShowWelcomeTerms] = useState<boolean>(false);
   const [showAuditTransaction, setShowAuditTransaction] = useState<boolean>(false);
   const [authProvider, setAuthProvider] = useState<string | null>(null);
-  const [subscription, setSubscription] = useState<Subscription | null>(null);
+  const [subscription, setSubscription] = useState<any>(null);
 
   useEffect(() => {
     checkSession();
@@ -70,7 +65,7 @@ function App() {
           setCurrentUser(result.user);
           setSessionToken(result.sessionToken);
           setAuthProvider(result.provider);
-          setSubscription(result.subscription);
+          setSubscription(result.subscription || null);
           // Also store in localStorage for backward compatibility
           localStorage.setItem('sessionToken', result.sessionToken);
 
@@ -97,7 +92,7 @@ function App() {
     }
   };
 
-  const handleLoginSuccess = (user: User, token: string, provider: string, subscription: Subscription, isNewUser: boolean): void => {
+  const handleLoginSuccess = (user: User, token: string, provider: string, subscription: any, isNewUser: boolean): void => {
     setIsAuthenticated(true);
     setCurrentUser(user);
     setSessionToken(token);

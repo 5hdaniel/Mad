@@ -12,7 +12,7 @@ import React, { useState } from 'react';
 import Joyride, { CallBackProps } from 'react-joyride';
 
 // Custom hooks
-import { useConversations } from '../../hooks/useConversations';
+import { useConversations, type Conversation } from '../../hooks/useConversations';
 import { useSelection } from '../../hooks/useSelection';
 import { useTour } from '../../hooks/useTour';
 
@@ -26,20 +26,6 @@ import { ContactInfoModal } from './ContactInfoModal';
 // Configuration and utilities
 import { getExportTourSteps, JOYRIDE_STYLES, JOYRIDE_LOCALE } from '../../config/tourSteps';
 import { formatMessageDate } from '../../utils/dateFormatters';
-
-interface Conversation {
-  id: string;
-  name: string;
-  contactId?: string;
-  phones?: string[];
-  emails?: string[];
-  directChatCount: number;
-  groupChatCount: number;
-  directMessageCount: number;
-  groupMessageCount: number;
-  messageCount?: number;
-  lastMessageDate: Date | string | number;
-}
 
 interface ContactInfo {
   name: string;

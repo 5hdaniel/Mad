@@ -3,21 +3,8 @@
  * Handles tour initialization and completion
  */
 import { useState, useEffect, Dispatch, SetStateAction } from 'react';
+import { CallBackProps, STATUS } from 'react-joyride';
 import confetti from 'canvas-confetti';
-
-/**
- * Joyride callback data structure
- */
-export interface JoyrideCallbackData {
-  status: 'finished' | 'skipped' | 'error' | 'running' | 'ready' | 'idle';
-  type?: string;
-  index?: number;
-  action?: string;
-  controlled?: boolean;
-  lifecycle?: string;
-  size?: number;
-  step?: unknown;
-}
 
 /**
  * Return type for useTour hook
@@ -25,7 +12,7 @@ export interface JoyrideCallbackData {
 export interface UseTourReturn {
   runTour: boolean;
   setRunTour: Dispatch<SetStateAction<boolean>>;
-  handleJoyrideCallback: (data: JoyrideCallbackData) => void;
+  handleJoyrideCallback: (data: CallBackProps) => void;
 }
 
 /**
@@ -47,16 +34,15 @@ export function useTour(shouldStart: boolean, storageKey: string = 'hasSeenTour'
     }
   }, [shouldStart, storageKey]);
 
-  const handleJoyrideCallback = (data: JoyrideCallbackData): void => {
+  const handleJoyrideCallback = (data: CallBackProps): void => {
     const { status } = data;
-    const finishedStatuses: JoyrideCallbackData['status'][] = ['finished', 'skipped'];
 
-    if (finishedStatuses.includes(status)) {
+    if (status === STATUS.FINISHED || status === STATUS.SKIPPED) {
       setRunTour(false);
       localStorage.setItem(storageKey, 'true');
 
       // Trigger confetti when tour is completed (not skipped)
-      if (status === 'finished') {
+      if (status === STATUS.FINISHED) {
         confetti({
           particleCount: 100,
           spread: 70,

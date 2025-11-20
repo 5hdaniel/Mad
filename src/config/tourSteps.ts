@@ -2,9 +2,10 @@
  * Tour Steps Configuration
  * Defines the steps for Joyride tours throughout the app
  */
+import { Step } from 'react-joyride';
 
 // Main Dashboard Tour - shown to first-time users
-export const getDashboardTourSteps = () => [
+export const getDashboardTourSteps = (): Step[] => [
   {
     target: 'body',
     content: '👋 Welcome to Magic Audit! Let me give you a quick tour of the main features.',
@@ -42,7 +43,7 @@ export const getDashboardTourSteps = () => [
 ];
 
 // Export Screen Tour - shown when user first visits export screen
-export const getExportTourSteps = (outlookConnected) => [
+export const getExportTourSteps = (outlookConnected: boolean): Step[] => [
   {
     target: 'body',
     content: 'Welcome to the Export screen! Let me show you around and explain the different features available.',
