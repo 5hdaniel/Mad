@@ -3,11 +3,67 @@
  * Centralized permission checking and error handling
  */
 
-const { app } = require('electron');
-const fs = require('fs').promises;
-const path = require('path');
+import { app } from 'electron';
+import { promises as fs } from 'fs';
+import path from 'path';
+
+interface PermissionResult {
+  hasPermission: boolean;
+  error?: string;
+  errorCode?: string;
+  userMessage?: string;
+  action?: string;
+}
+
+interface ContactsLoadingResult {
+  canLoadContacts: boolean;
+  contactCount?: number;
+  error?: {
+    type: string;
+    title: string;
+    message: string;
+    details: string;
+    action: string;
+    actionHandler: string;
+    severity: string;
+  };
+}
+
+interface AllPermissionsResult {
+  allGranted: boolean;
+  permissions: {
+    fullDiskAccess?: PermissionResult;
+    contacts?: PermissionResult;
+  };
+  errors: PermissionResult[];
+}
+
+interface PermissionCache {
+  fullDiskAccess: boolean | null;
+  contacts: boolean | null;
+  cachedAt: number | null;
+}
+
+interface CachedPermissions {
+  fullDiskAccess: boolean | null;
+  contacts: boolean | null;
+  cachedAt: number;
+}
+
+interface PermissionError {
+  type: string;
+  title: string;
+  message: string;
+  details: string;
+  action: string;
+  actionHandler?: string;
+  severity: string;
+}
 
 class PermissionService {
+  private lastPermissionCheck: number | null;
+  private permissionCache: PermissionCache;
+
   constructor() {
     this.lastPermissionCheck = null;
     this.permissionCache = {
@@ -21,9 +77,9 @@ class PermissionService {
    * Check Full Disk Access permission
    * @returns {Promise<{hasPermission: boolean, error?: string}>}
    */
-  async checkFullDiskAccess() {
+  async checkFullDiskAccess(): Promise<PermissionResult> {
     try {
-      const messagesDbPath = path.join(process.env.HOME, 'Library/Messages/chat.db');
+      const messagesDbPath = path.join(process.env.HOME!, 'Library/Messages/chat.db');
       await fs.access(messagesDbPath, fs.constants.R_OK);
 
       this.permissionCache.fullDiskAccess = true;
@@ -38,7 +94,7 @@ class PermissionService {
 
       return {
         hasPermission: false,
-        error: error.message,
+        error: (error as Error).message,
         errorCode: 'FULL_DISK_ACCESS_DENIED',
         userMessage: 'Full Disk Access permission is required to read iMessages.',
         action: 'Please grant Full Disk Access in System Settings > Privacy & Security > Full Disk Access',
@@ -50,10 +106,10 @@ class PermissionService {
    * Check Contacts permission
    * @returns {Promise<{hasPermission: boolean, error?: string}>}
    */
-  async checkContactsPermission() {
+  async checkContactsPermission(): Promise<PermissionResult> {
     try {
       const contactsDbPath = path.join(
-        process.env.HOME,
+        process.env.HOME!,
         'Library/Application Support/AddressBook/Sources'
       );
       await fs.access(contactsDbPath, fs.constants.R_OK);
@@ -70,7 +126,7 @@ class PermissionService {
 
       return {
         hasPermission: false,
-        error: error.message,
+        error: (error as Error).message,
         errorCode: 'CONTACTS_ACCESS_DENIED',
         userMessage: 'Contacts permission is required to match phone numbers to names.',
         action:
@@ -84,10 +140,10 @@ class PermissionService {
    * This is a more thorough check than just checking directory access
    * @returns {Promise<{canLoadContacts: boolean, contactCount?: number, error?: Object}>}
    */
-  async checkContactsLoading() {
+  async checkContactsLoading(): Promise<ContactsLoadingResult> {
     try {
       // Import contactsService here to avoid circular dependencies
-      const { getContactNames } = require('./contactsService');
+      const { getContactNames } = await import('./contactsService');
 
       const result = await getContactNames();
 
@@ -138,7 +194,7 @@ class PermissionService {
           type: 'CONTACTS_CHECK_FAILED',
           title: 'Contacts Check Failed',
           message: 'Could not verify contacts access',
-          details: error.message,
+          details: (error as Error).message,
           action: 'Grant Full Disk Access',
           actionHandler: 'open-system-settings',
           severity: 'error',
@@ -151,8 +207,8 @@ class PermissionService {
    * Check all required permissions
    * @returns {Promise<{allGranted: boolean, permissions: Object, errors: Array}>}
    */
-  async checkAllPermissions() {
-    const results = {
+  async checkAllPermissions(): Promise<AllPermissionsResult> {
+    const results: AllPermissionsResult = {
       allGranted: true,
       permissions: {},
       errors: [],
@@ -182,7 +238,7 @@ class PermissionService {
    * @param {number} maxAge - Maximum cache age in milliseconds (default: 30 seconds)
    * @returns {Object|null} Cached permissions or null if expired
    */
-  getCachedPermissions(maxAge = 30000) {
+  getCachedPermissions(maxAge: number = 30000): CachedPermissions | null {
     if (!this.permissionCache.cachedAt) {
       return null;
     }
@@ -202,7 +258,7 @@ class PermissionService {
   /**
    * Clear permission cache
    */
-  clearCache() {
+  clearCache(): void {
     this.permissionCache = {
       fullDiskAccess: null,
       contacts: null,
@@ -215,7 +271,7 @@ class PermissionService {
    * @param {Error} error
    * @returns {Object} Structured error with user message and actions
    */
-  getPermissionError(error) {
+  getPermissionError(error: Error): PermissionError {
     const errorMessage = error.message.toLowerCase();
 
     // Full Disk Access errors
@@ -271,4 +327,4 @@ class PermissionService {
   }
 }
 
-module.exports = new PermissionService();
+export default new PermissionService();

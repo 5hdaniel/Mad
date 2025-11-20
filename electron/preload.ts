@@ -11,7 +11,7 @@
  * - Return value structure
  */
 
-const { contextBridge, ipcRenderer } = require('electron');
+import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
 
 // Expose protected methods that allow the renderer process to use
 // ipcRenderer without exposing the entire object
@@ -34,7 +34,7 @@ contextBridge.exposeInMainWorld('api', {
      * @param {string} code - OAuth authorization code from Google
      * @returns {Promise<{success: boolean, user?: object, sessionToken?: string, error?: string}>} Login completion result
      */
-    googleCompleteLogin: (code) => ipcRenderer.invoke('auth:google:complete-login', code),
+    googleCompleteLogin: (code: string) => ipcRenderer.invoke('auth:google:complete-login', code),
 
     /**
      * Initiates Microsoft OAuth login flow
@@ -47,35 +47,35 @@ contextBridge.exposeInMainWorld('api', {
      * @param {string} code - OAuth authorization code from Microsoft
      * @returns {Promise<{success: boolean, user?: object, sessionToken?: string, error?: string}>} Login completion result
      */
-    microsoftCompleteLogin: (code) => ipcRenderer.invoke('auth:microsoft:complete-login', code),
+    microsoftCompleteLogin: (code: string) => ipcRenderer.invoke('auth:microsoft:complete-login', code),
 
     /**
      * Connects Google mailbox for a logged-in user
      * @param {string} userId - User ID to connect mailbox for
      * @returns {Promise<{success: boolean, error?: string}>} Connection result
      */
-    googleConnectMailbox: (userId) => ipcRenderer.invoke('auth:google:connect-mailbox', userId),
+    googleConnectMailbox: (userId: string) => ipcRenderer.invoke('auth:google:connect-mailbox', userId),
 
     /**
      * Connects Microsoft mailbox for a logged-in user
      * @param {string} userId - User ID to connect mailbox for
      * @returns {Promise<{success: boolean, error?: string}>} Connection result
      */
-    microsoftConnectMailbox: (userId) => ipcRenderer.invoke('auth:microsoft:connect-mailbox', userId),
+    microsoftConnectMailbox: (userId: string) => ipcRenderer.invoke('auth:microsoft:connect-mailbox', userId),
 
     /**
      * Logs out the current user and invalidates session
      * @param {string} sessionToken - Session token to invalidate
      * @returns {Promise<{success: boolean, error?: string}>} Logout result
      */
-    logout: (sessionToken) => ipcRenderer.invoke('auth:logout', sessionToken),
+    logout: (sessionToken: string) => ipcRenderer.invoke('auth:logout', sessionToken),
 
     /**
      * Validates an existing session token
      * @param {string} sessionToken - Session token to validate
      * @returns {Promise<{valid: boolean, user?: object, error?: string}>} Validation result
      */
-    validateSession: (sessionToken) => ipcRenderer.invoke('auth:validate-session', sessionToken),
+    validateSession: (sessionToken: string) => ipcRenderer.invoke('auth:validate-session', sessionToken),
 
     /**
      * Gets the currently authenticated user
@@ -88,7 +88,7 @@ contextBridge.exposeInMainWorld('api', {
      * @param {string} userId - User ID accepting terms
      * @returns {Promise<{success: boolean, error?: string}>} Acceptance result
      */
-    acceptTerms: (userId) => ipcRenderer.invoke('auth:accept-terms', userId),
+    acceptTerms: (userId: string) => ipcRenderer.invoke('auth:accept-terms', userId),
   },
 
   /**
@@ -104,14 +104,14 @@ contextBridge.exposeInMainWorld('api', {
      * @param {Object} options - Scan options (provider, dateRange, propertyAddress, etc.)
      * @returns {Promise<{success: boolean, newCount?: number, updatedCount?: number, error?: string}>} Scan results
      */
-    scan: (userId, options) => ipcRenderer.invoke('transactions:scan', userId, options),
+    scan: (userId: string, options: any) => ipcRenderer.invoke('transactions:scan', userId, options),
 
     /**
      * Retrieves all transactions for a user
      * @param {string} userId - User ID to get transactions for
      * @returns {Promise<{success: boolean, transactions?: Array, error?: string}>} All user transactions
      */
-    getAll: (userId) => ipcRenderer.invoke('transactions:get-all', userId),
+    getAll: (userId: string) => ipcRenderer.invoke('transactions:get-all', userId),
 
     /**
      * Creates a new manual transaction
@@ -119,7 +119,7 @@ contextBridge.exposeInMainWorld('api', {
      * @param {Object} transactionData - Transaction details (address, type, status, dates, etc.)
      * @returns {Promise<{success: boolean, transaction?: object, error?: string}>} Created transaction
      */
-    create: (userId, transactionData) => ipcRenderer.invoke('transactions:create', userId, transactionData),
+    create: (userId: string, transactionData: any) => ipcRenderer.invoke('transactions:create', userId, transactionData),
 
     /**
      * Creates a new audited transaction with verified data
@@ -127,21 +127,21 @@ contextBridge.exposeInMainWorld('api', {
      * @param {Object} transactionData - Audited transaction details
      * @returns {Promise<{success: boolean, transaction?: object, error?: string}>} Created audited transaction
      */
-    createAudited: (userId, transactionData) => ipcRenderer.invoke('transactions:create-audited', userId, transactionData),
+    createAudited: (userId: string, transactionData: any) => ipcRenderer.invoke('transactions:create-audited', userId, transactionData),
 
     /**
      * Gets detailed information for a specific transaction
      * @param {string} transactionId - Transaction ID to retrieve
      * @returns {Promise<{success: boolean, transaction?: object, error?: string}>} Transaction details
      */
-    getDetails: (transactionId) => ipcRenderer.invoke('transactions:get-details', transactionId),
+    getDetails: (transactionId: string) => ipcRenderer.invoke('transactions:get-details', transactionId),
 
     /**
      * Gets transaction with all associated contacts
      * @param {string} transactionId - Transaction ID to retrieve
      * @returns {Promise<{success: boolean, transaction?: object, contacts?: Array, error?: string}>} Transaction with contacts
      */
-    getWithContacts: (transactionId) => ipcRenderer.invoke('transactions:get-with-contacts', transactionId),
+    getWithContacts: (transactionId: string) => ipcRenderer.invoke('transactions:get-with-contacts', transactionId),
 
     /**
      * Updates transaction details
@@ -149,14 +149,14 @@ contextBridge.exposeInMainWorld('api', {
      * @param {Object} updates - Fields to update (status, dates, address, etc.)
      * @returns {Promise<{success: boolean, transaction?: object, error?: string}>} Updated transaction
      */
-    update: (transactionId, updates) => ipcRenderer.invoke('transactions:update', transactionId, updates),
+    update: (transactionId: string, updates: any) => ipcRenderer.invoke('transactions:update', transactionId, updates),
 
     /**
      * Deletes a transaction
      * @param {string} transactionId - Transaction ID to delete
      * @returns {Promise<{success: boolean, error?: string}>} Deletion result
      */
-    delete: (transactionId) => ipcRenderer.invoke('transactions:delete', transactionId),
+    delete: (transactionId: string) => ipcRenderer.invoke('transactions:delete', transactionId),
 
     /**
      * Assigns a contact to a transaction with a specific role
@@ -168,7 +168,7 @@ contextBridge.exposeInMainWorld('api', {
      * @param {string} notes - Additional notes about this assignment
      * @returns {Promise<{success: boolean, error?: string}>} Assignment result
      */
-    assignContact: (transactionId, contactId, role, roleCategory, isPrimary, notes) =>
+    assignContact: (transactionId: string, contactId: string, role: string, roleCategory: string, isPrimary: boolean, notes: string) =>
       ipcRenderer.invoke('transactions:assign-contact', transactionId, contactId, role, roleCategory, isPrimary, notes),
 
     /**
@@ -177,7 +177,7 @@ contextBridge.exposeInMainWorld('api', {
      * @param {string} contactId - Contact ID to remove
      * @returns {Promise<{success: boolean, error?: string}>} Removal result
      */
-    removeContact: (transactionId, contactId) => ipcRenderer.invoke('transactions:remove-contact', transactionId, contactId),
+    removeContact: (transactionId: string, contactId: string) => ipcRenderer.invoke('transactions:remove-contact', transactionId, contactId),
 
     /**
      * Re-analyzes emails for a specific property and date range
@@ -187,7 +187,7 @@ contextBridge.exposeInMainWorld('api', {
      * @param {Object} dateRange - Date range to search within {start, end}
      * @returns {Promise<{success: boolean, newCount?: number, updatedCount?: number, error?: string}>} Re-analysis results
      */
-    reanalyze: (userId, provider, propertyAddress, dateRange) =>
+    reanalyze: (userId: string, provider: string, propertyAddress: string, dateRange: any) =>
       ipcRenderer.invoke('transactions:reanalyze', userId, provider, propertyAddress, dateRange),
 
     /**
@@ -196,7 +196,7 @@ contextBridge.exposeInMainWorld('api', {
      * @param {string} outputPath - File path to save PDF
      * @returns {Promise<{success: boolean, filePath?: string, error?: string}>} Export result
      */
-    exportPDF: (transactionId, outputPath) => ipcRenderer.invoke('transactions:export-pdf', transactionId, outputPath),
+    exportPDF: (transactionId: string, outputPath: string) => ipcRenderer.invoke('transactions:export-pdf', transactionId, outputPath),
 
     /**
      * Exports transaction with enhanced options (format, included data, etc.)
@@ -204,7 +204,7 @@ contextBridge.exposeInMainWorld('api', {
      * @param {Object} options - Export options (format, includeContacts, includeEmails, etc.)
      * @returns {Promise<{success: boolean, filePath?: string, error?: string}>} Export result
      */
-    exportEnhanced: (transactionId, options) => ipcRenderer.invoke('transactions:export-enhanced', transactionId, options),
+    exportEnhanced: (transactionId: string, options: any) => ipcRenderer.invoke('transactions:export-enhanced', transactionId, options),
   },
 
   /**
@@ -219,14 +219,14 @@ contextBridge.exposeInMainWorld('api', {
      * @param {string} userId - User ID to get contacts for
      * @returns {Promise<{success: boolean, contacts?: Array, error?: string}>} All user contacts
      */
-    getAll: (userId) => ipcRenderer.invoke('contacts:get-all', userId),
+    getAll: (userId: string) => ipcRenderer.invoke('contacts:get-all', userId),
 
     /**
      * Gets contacts available for assignment (not deleted/archived)
      * @param {string} userId - User ID to get available contacts for
      * @returns {Promise<{success: boolean, contacts?: Array, error?: string}>} Available contacts
      */
-    getAvailable: (userId) => ipcRenderer.invoke('contacts:get-available', userId),
+    getAvailable: (userId: string) => ipcRenderer.invoke('contacts:get-available', userId),
 
     /**
      * Imports contacts from system address book or external source
@@ -234,7 +234,7 @@ contextBridge.exposeInMainWorld('api', {
      * @param {Array} contactsToImport - Array of contact objects to import
      * @returns {Promise<{success: boolean, imported?: number, skipped?: number, error?: string}>} Import results
      */
-    import: (userId, contactsToImport) => ipcRenderer.invoke('contacts:import', userId, contactsToImport),
+    import: (userId: string, contactsToImport: any[]) => ipcRenderer.invoke('contacts:import', userId, contactsToImport),
 
     /**
      * Gets contacts sorted by activity/relevance for a property
@@ -242,7 +242,7 @@ contextBridge.exposeInMainWorld('api', {
      * @param {string} propertyAddress - Property address to find relevant contacts for
      * @returns {Promise<{success: boolean, contacts?: Array, error?: string}>} Sorted contacts
      */
-    getSortedByActivity: (userId, propertyAddress) => ipcRenderer.invoke('contacts:get-sorted-by-activity', userId, propertyAddress),
+    getSortedByActivity: (userId: string, propertyAddress: string) => ipcRenderer.invoke('contacts:get-sorted-by-activity', userId, propertyAddress),
 
     /**
      * Creates a new contact
@@ -250,7 +250,7 @@ contextBridge.exposeInMainWorld('api', {
      * @param {Object} contactData - Contact details (name, email, phone, company, etc.)
      * @returns {Promise<{success: boolean, contact?: object, error?: string}>} Created contact
      */
-    create: (userId, contactData) => ipcRenderer.invoke('contacts:create', userId, contactData),
+    create: (userId: string, contactData: any) => ipcRenderer.invoke('contacts:create', userId, contactData),
 
     /**
      * Updates contact details
@@ -258,28 +258,28 @@ contextBridge.exposeInMainWorld('api', {
      * @param {Object} updates - Fields to update (name, email, phone, etc.)
      * @returns {Promise<{success: boolean, contact?: object, error?: string}>} Updated contact
      */
-    update: (contactId, updates) => ipcRenderer.invoke('contacts:update', contactId, updates),
+    update: (contactId: string, updates: any) => ipcRenderer.invoke('contacts:update', contactId, updates),
 
     /**
      * Checks if a contact can be deleted (not assigned to transactions)
      * @param {string} contactId - Contact ID to check
      * @returns {Promise<{canDelete: boolean, reason?: string, transactionCount?: number}>} Deletion eligibility
      */
-    checkCanDelete: (contactId) => ipcRenderer.invoke('contacts:checkCanDelete', contactId),
+    checkCanDelete: (contactId: string) => ipcRenderer.invoke('contacts:checkCanDelete', contactId),
 
     /**
      * Deletes a contact (only if not assigned to transactions)
      * @param {string} contactId - Contact ID to delete
      * @returns {Promise<{success: boolean, error?: string}>} Deletion result
      */
-    delete: (contactId) => ipcRenderer.invoke('contacts:delete', contactId),
+    delete: (contactId: string) => ipcRenderer.invoke('contacts:delete', contactId),
 
     /**
      * Removes a contact (soft delete/archive)
      * @param {string} contactId - Contact ID to remove
      * @returns {Promise<{success: boolean, error?: string}>} Removal result
      */
-    remove: (contactId) => ipcRenderer.invoke('contacts:remove', contactId),
+    remove: (contactId: string) => ipcRenderer.invoke('contacts:remove', contactId),
   },
 
   /**
@@ -294,7 +294,7 @@ contextBridge.exposeInMainWorld('api', {
      * @param {string} apiKey - Google Places API key
      * @returns {Promise<{success: boolean, error?: string}>} Initialization result
      */
-    initialize: (apiKey) => ipcRenderer.invoke('address:initialize', apiKey),
+    initialize: (apiKey: string) => ipcRenderer.invoke('address:initialize', apiKey),
 
     /**
      * Gets address autocomplete suggestions
@@ -302,28 +302,28 @@ contextBridge.exposeInMainWorld('api', {
      * @param {string} sessionToken - Session token for request batching
      * @returns {Promise<{success: boolean, suggestions?: Array, error?: string}>} Address suggestions
      */
-    getSuggestions: (input, sessionToken) => ipcRenderer.invoke('address:get-suggestions', input, sessionToken),
+    getSuggestions: (input: string, sessionToken: string) => ipcRenderer.invoke('address:get-suggestions', input, sessionToken),
 
     /**
      * Gets detailed information for a specific place
      * @param {string} placeId - Google Place ID
      * @returns {Promise<{success: boolean, place?: object, error?: string}>} Place details
      */
-    getDetails: (placeId) => ipcRenderer.invoke('address:get-details', placeId),
+    getDetails: (placeId: string) => ipcRenderer.invoke('address:get-details', placeId),
 
     /**
      * Geocodes an address to coordinates
      * @param {string} address - Address to geocode
      * @returns {Promise<{success: boolean, coordinates?: {lat: number, lng: number}, error?: string}>} Geocoding result
      */
-    geocode: (address) => ipcRenderer.invoke('address:geocode', address),
+    geocode: (address: string) => ipcRenderer.invoke('address:geocode', address),
 
     /**
      * Validates and standardizes an address
      * @param {string} address - Address to validate
      * @returns {Promise<{valid: boolean, standardized?: string, components?: object, error?: string}>} Validation result
      */
-    validate: (address) => ipcRenderer.invoke('address:validate', address),
+    validate: (address: string) => ipcRenderer.invoke('address:validate', address),
   },
 
   /**
@@ -339,14 +339,14 @@ contextBridge.exposeInMainWorld('api', {
      * @param {Object} feedbackData - Feedback details (field, original, corrected, etc.)
      * @returns {Promise<{success: boolean, error?: string}>} Submission result
      */
-    submit: (userId, feedbackData) => ipcRenderer.invoke('feedback:submit', userId, feedbackData),
+    submit: (userId: string, feedbackData: any) => ipcRenderer.invoke('feedback:submit', userId, feedbackData),
 
     /**
      * Gets all feedback entries for a transaction
      * @param {string} transactionId - Transaction ID
      * @returns {Promise<{success: boolean, feedback?: Array, error?: string}>} Transaction feedback
      */
-    getForTransaction: (transactionId) => ipcRenderer.invoke('feedback:get-for-transaction', transactionId),
+    getForTransaction: (transactionId: string) => ipcRenderer.invoke('feedback:get-for-transaction', transactionId),
 
     /**
      * Gets accuracy metrics for a specific field
@@ -354,7 +354,7 @@ contextBridge.exposeInMainWorld('api', {
      * @param {string} fieldName - Field name to get metrics for (e.g., 'propertyAddress')
      * @returns {Promise<{success: boolean, metrics?: object, error?: string}>} Field metrics
      */
-    getMetrics: (userId, fieldName) => ipcRenderer.invoke('feedback:get-metrics', userId, fieldName),
+    getMetrics: (userId: string, fieldName: string) => ipcRenderer.invoke('feedback:get-metrics', userId, fieldName),
 
     /**
      * Gets AI suggestion based on learning from past feedback
@@ -364,7 +364,7 @@ contextBridge.exposeInMainWorld('api', {
      * @param {number} confidence - Confidence score (0-1)
      * @returns {Promise<{success: boolean, suggestion?: any, confidence?: number, error?: string}>} AI suggestion
      */
-    getSuggestion: (userId, fieldName, extractedValue, confidence) =>
+    getSuggestion: (userId: string, fieldName: string, extractedValue: any, confidence: number) =>
       ipcRenderer.invoke('feedback:get-suggestion', userId, fieldName, extractedValue, confidence),
 
     /**
@@ -373,7 +373,7 @@ contextBridge.exposeInMainWorld('api', {
      * @param {string} fieldName - Field name
      * @returns {Promise<{success: boolean, stats?: object, error?: string}>} Learning stats
      */
-    getLearningStats: (userId, fieldName) => ipcRenderer.invoke('feedback:get-learning-stats', userId, fieldName),
+    getLearningStats: (userId: string, fieldName: string) => ipcRenderer.invoke('feedback:get-learning-stats', userId, fieldName),
   },
 
   /**
@@ -388,7 +388,7 @@ contextBridge.exposeInMainWorld('api', {
      * @param {string} userId - User ID
      * @returns {Promise<{success: boolean, preferences?: object, error?: string}>} User preferences
      */
-    get: (userId) => ipcRenderer.invoke('preferences:get', userId),
+    get: (userId: string) => ipcRenderer.invoke('preferences:get', userId),
 
     /**
      * Saves all user preferences (overwrites existing)
@@ -396,7 +396,7 @@ contextBridge.exposeInMainWorld('api', {
      * @param {Object} preferences - Complete preferences object
      * @returns {Promise<{success: boolean, error?: string}>} Save result
      */
-    save: (userId, preferences) => ipcRenderer.invoke('preferences:save', userId, preferences),
+    save: (userId: string, preferences: any) => ipcRenderer.invoke('preferences:save', userId, preferences),
 
     /**
      * Updates specific preference fields (merges with existing)
@@ -404,7 +404,7 @@ contextBridge.exposeInMainWorld('api', {
      * @param {Object} partialPreferences - Preferences to update
      * @returns {Promise<{success: boolean, preferences?: object, error?: string}>} Update result
      */
-    update: (userId, partialPreferences) => ipcRenderer.invoke('preferences:update', userId, partialPreferences),
+    update: (userId: string, partialPreferences: any) => ipcRenderer.invoke('preferences:update', userId, partialPreferences),
   },
 
   /**
@@ -437,7 +437,7 @@ contextBridge.exposeInMainWorld('api', {
      * @param {string} pane - Privacy pane identifier (e.g., 'Privacy_AllFiles', 'Privacy_Contacts')
      * @returns {Promise<{success: boolean, error?: string}>} Open result
      */
-    openPrivacyPane: (pane) => ipcRenderer.invoke('system:open-privacy-pane', pane),
+    openPrivacyPane: (pane: string) => ipcRenderer.invoke('system:open-privacy-pane', pane),
 
     /**
      * Checks current Full Disk Access status
@@ -468,21 +468,21 @@ contextBridge.exposeInMainWorld('api', {
      * @param {string} userId - User ID to check
      * @returns {Promise<{connected: boolean, valid: boolean, error?: string}>} Connection status
      */
-    checkGoogleConnection: (userId) => ipcRenderer.invoke('system:check-google-connection', userId),
+    checkGoogleConnection: (userId: string) => ipcRenderer.invoke('system:check-google-connection', userId),
 
     /**
      * Checks Microsoft account connection and token validity
      * @param {string} userId - User ID to check
      * @returns {Promise<{connected: boolean, valid: boolean, error?: string}>} Connection status
      */
-    checkMicrosoftConnection: (userId) => ipcRenderer.invoke('system:check-microsoft-connection', userId),
+    checkMicrosoftConnection: (userId: string) => ipcRenderer.invoke('system:check-microsoft-connection', userId),
 
     /**
      * Checks all email provider connections
      * @param {string} userId - User ID to check
      * @returns {Promise<{google: object, microsoft: object, error?: string}>} All connection statuses
      */
-    checkAllConnections: (userId) => ipcRenderer.invoke('system:check-all-connections', userId),
+    checkAllConnections: (userId: string) => ipcRenderer.invoke('system:check-all-connections', userId),
 
     /**
      * Runs comprehensive health check for a provider
@@ -490,7 +490,7 @@ contextBridge.exposeInMainWorld('api', {
      * @param {string} provider - Provider to check ('google' or 'microsoft')
      * @returns {Promise<{healthy: boolean, issues?: Array, error?: string}>} Health check result
      */
-    healthCheck: (userId, provider) => ipcRenderer.invoke('system:health-check', userId, provider),
+    healthCheck: (userId: string, provider: string) => ipcRenderer.invoke('system:health-check', userId, provider),
   },
 
   /**
@@ -505,8 +505,8 @@ contextBridge.exposeInMainWorld('api', {
    * @param {Function} callback - Callback function to handle login result
    * @returns {Function} Cleanup function to remove listener
    */
-  onGoogleLoginComplete: (callback) => {
-    const listener = (_, result) => callback(result);
+  onGoogleLoginComplete: (callback: (result: any) => void) => {
+    const listener = (_: IpcRendererEvent, result: any) => callback(result);
     ipcRenderer.on('google:login-complete', listener);
     return () => ipcRenderer.removeListener('google:login-complete', listener);
   },
@@ -516,8 +516,8 @@ contextBridge.exposeInMainWorld('api', {
    * @param {Function} callback - Callback function to handle connection result
    * @returns {Function} Cleanup function to remove listener
    */
-  onGoogleMailboxConnected: (callback) => {
-    const listener = (_, result) => callback(result);
+  onGoogleMailboxConnected: (callback: (result: any) => void) => {
+    const listener = (_: IpcRendererEvent, result: any) => callback(result);
     ipcRenderer.on('google:mailbox-connected', listener);
     return () => ipcRenderer.removeListener('google:mailbox-connected', listener);
   },
@@ -527,8 +527,8 @@ contextBridge.exposeInMainWorld('api', {
    * @param {Function} callback - Callback function to handle login result
    * @returns {Function} Cleanup function to remove listener
    */
-  onMicrosoftLoginComplete: (callback) => {
-    const listener = (_, result) => callback(result);
+  onMicrosoftLoginComplete: (callback: (result: any) => void) => {
+    const listener = (_: IpcRendererEvent, result: any) => callback(result);
     ipcRenderer.on('microsoft:login-complete', listener);
     return () => ipcRenderer.removeListener('microsoft:login-complete', listener);
   },
@@ -538,8 +538,8 @@ contextBridge.exposeInMainWorld('api', {
    * @param {Function} callback - Callback function to handle connection result
    * @returns {Function} Cleanup function to remove listener
    */
-  onMicrosoftMailboxConnected: (callback) => {
-    const listener = (_, result) => callback(result);
+  onMicrosoftMailboxConnected: (callback: (result: any) => void) => {
+    const listener = (_: IpcRendererEvent, result: any) => callback(result);
     ipcRenderer.on('microsoft:mailbox-connected', listener);
     return () => ipcRenderer.removeListener('microsoft:mailbox-connected', listener);
   },
@@ -549,8 +549,8 @@ contextBridge.exposeInMainWorld('api', {
    * @param {Function} callback - Callback function to handle progress updates
    * @returns {Function} Cleanup function to remove listener
    */
-  onTransactionScanProgress: (callback) => {
-    const listener = (_, progress) => callback(progress);
+  onTransactionScanProgress: (callback: (progress: any) => void) => {
+    const listener = (_: IpcRendererEvent, progress: any) => callback(progress);
     ipcRenderer.on('transactions:scan-progress', listener);
     return () => ipcRenderer.removeListener('transactions:scan-progress', listener);
   },
@@ -567,7 +567,7 @@ contextBridge.exposeInMainWorld('api', {
      * @param {string} url - URL to open
      * @returns {Promise<{success: boolean, error?: string}>} Open result
      */
-    openExternal: (url) => ipcRenderer.invoke('shell:open-external', url),
+    openExternal: (url: string) => ipcRenderer.invoke('shell:open-external', url),
   },
 });
 
@@ -638,21 +638,21 @@ contextBridge.exposeInMainWorld('electron', {
    * @param {string} chatId - Chat ID to get messages for
    * @returns {Promise<Array>} List of messages
    */
-  getMessages: (chatId) => ipcRenderer.invoke('get-messages', chatId),
+  getMessages: (chatId: string) => ipcRenderer.invoke('get-messages', chatId),
 
   /**
    * Exports conversations to text files
    * @param {Array<string>} conversationIds - Array of conversation IDs to export
    * @returns {Promise<{success: boolean, exportPath?: string}>} Export result
    */
-  exportConversations: (conversationIds) => ipcRenderer.invoke('export-conversations', conversationIds),
+  exportConversations: (conversationIds: string[]) => ipcRenderer.invoke('export-conversations', conversationIds),
 
   /**
    * Opens a folder in Finder
    * @param {string} folderPath - Path to folder to open
    * @returns {Promise<{success: boolean}>} Open result
    */
-  openFolder: (folderPath) => ipcRenderer.invoke('open-folder', folderPath),
+  openFolder: (folderPath: string) => ipcRenderer.invoke('open-folder', folderPath),
 
   /**
    * ============================================
@@ -665,8 +665,8 @@ contextBridge.exposeInMainWorld('electron', {
    * @param {Function} callback - Callback with update info
    * @returns {Function} Cleanup function
    */
-  onUpdateAvailable: (callback) => {
-    const listener = (_, info) => callback(info);
+  onUpdateAvailable: (callback: (info: any) => void) => {
+    const listener = (_: IpcRendererEvent, info: any) => callback(info);
     ipcRenderer.on('update-available', listener);
     return () => ipcRenderer.removeListener('update-available', listener);
   },
@@ -676,8 +676,8 @@ contextBridge.exposeInMainWorld('electron', {
    * @param {Function} callback - Callback with progress info
    * @returns {Function} Cleanup function
    */
-  onUpdateProgress: (callback) => {
-    const listener = (_, progress) => callback(progress);
+  onUpdateProgress: (callback: (progress: any) => void) => {
+    const listener = (_: IpcRendererEvent, progress: any) => callback(progress);
     ipcRenderer.on('update-progress', listener);
     return () => ipcRenderer.removeListener('update-progress', listener);
   },
@@ -687,8 +687,8 @@ contextBridge.exposeInMainWorld('electron', {
    * @param {Function} callback - Callback with update info
    * @returns {Function} Cleanup function
    */
-  onUpdateDownloaded: (callback) => {
-    const listener = (_, info) => callback(info);
+  onUpdateDownloaded: (callback: (info: any) => void) => {
+    const listener = (_: IpcRendererEvent, info: any) => callback(info);
     ipcRenderer.on('update-downloaded', listener);
     return () => ipcRenderer.removeListener('update-downloaded', listener);
   },
@@ -734,7 +734,7 @@ contextBridge.exposeInMainWorld('electron', {
    * @param {Array} contacts - Contacts to export emails for
    * @returns {Promise<{success: boolean}>} Export result
    */
-  outlookExportEmails: (contacts) => ipcRenderer.invoke('outlook-export-emails', contacts),
+  outlookExportEmails: (contacts: any[]) => ipcRenderer.invoke('outlook-export-emails', contacts),
 
   /**
    * Signs out from Outlook
@@ -747,8 +747,8 @@ contextBridge.exposeInMainWorld('electron', {
    * @param {Function} callback - Callback with device code info
    * @returns {Function} Cleanup function
    */
-  onDeviceCode: (callback) => {
-    const listener = (_, info) => callback(info);
+  onDeviceCode: (callback: (info: any) => void) => {
+    const listener = (_: IpcRendererEvent, info: any) => callback(info);
     ipcRenderer.on('device-code-received', listener);
     return () => ipcRenderer.removeListener('device-code-received', listener);
   },
@@ -758,8 +758,8 @@ contextBridge.exposeInMainWorld('electron', {
    * @param {Function} callback - Callback with progress info
    * @returns {Function} Cleanup function
    */
-  onExportProgress: (callback) => {
-    const listener = (_, progress) => callback(progress);
+  onExportProgress: (callback: (progress: any) => void) => {
+    const listener = (_: IpcRendererEvent, progress: any) => callback(progress);
     ipcRenderer.on('export-progress', listener);
     return () => ipcRenderer.removeListener('export-progress', listener);
   }

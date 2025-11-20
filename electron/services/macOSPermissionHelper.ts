@@ -1,20 +1,54 @@
-const { app, shell } = require('electron');
-const { exec } = require('child_process');
-const { promisify } = require('util');
+import { app, shell, Notification } from 'electron';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import { promises as fs } from 'fs';
+import path from 'path';
+
 const execAsync = promisify(exec);
-const path = require('path');
 
 /**
  * macOS Permission Helper
  * Handles permission requests and system preferences navigation
  */
 
+interface PermissionResult {
+  success: boolean;
+  message?: string;
+  error?: string;
+}
+
+interface FullDiskAccessResult {
+  success: boolean;
+  message: string;
+  appPath: string;
+  nextStep: string;
+  error?: string;
+}
+
+interface PrivacyPaneResult {
+  success: boolean;
+  error?: string;
+}
+
+interface FullDiskAccessStatus {
+  granted: boolean;
+  message: string;
+  error?: string;
+}
+
+interface PermissionSetupFlowResult {
+  contacts: PermissionResult | null;
+  fullDiskAccess: FullDiskAccessResult | null;
+  overallSuccess: boolean;
+  error?: string;
+}
+
 class MacOSPermissionHelper {
   /**
    * Request Contacts permission (standard macOS API)
    * This shows the native macOS permission dialog
    */
-  async requestContactsPermission() {
+  async requestContactsPermission(): Promise<PermissionResult> {
     try {
       // Use Contacts framework to trigger permission request
       const script = `
@@ -41,7 +75,7 @@ class MacOSPermissionHelper {
       console.error('[MacOS] Failed to request Contacts permission:', error);
       return {
         success: false,
-        error: error.message,
+        error: (error as Error).message,
       };
     }
   }
@@ -53,7 +87,7 @@ class MacOSPermissionHelper {
    * but we can open System Preferences to the correct location and
    * optionally add the app to the list (requires user approval)
    */
-  async setupFullDiskAccess() {
+  async setupFullDiskAccess(): Promise<FullDiskAccessResult> {
     try {
       const appPath = app.getPath('exe');
       const bundleId = 'com.realestate.archiveapp';
@@ -98,7 +132,10 @@ class MacOSPermissionHelper {
       console.error('[MacOS] Failed to setup Full Disk Access:', error);
       return {
         success: false,
-        error: error.message,
+        message: 'Failed to setup Full Disk Access',
+        appPath: '',
+        nextStep: '',
+        error: (error as Error).message,
       };
     }
   }
@@ -107,8 +144,8 @@ class MacOSPermissionHelper {
    * Open System Preferences to specific Privacy pane
    * @param {string} pane - Privacy pane identifier
    */
-  async openPrivacyPane(pane = 'Privacy_AllFiles') {
-    const privacyPanes = {
+  async openPrivacyPane(pane: string = 'Privacy_AllFiles'): Promise<PrivacyPaneResult> {
+    const privacyPanes: Record<string, string> = {
       fullDiskAccess: 'Privacy_AllFiles',
       contacts: 'Privacy_Contacts',
       calendar: 'Privacy_Calendars',
@@ -123,7 +160,7 @@ class MacOSPermissionHelper {
       return { success: true };
     } catch (error) {
       console.error('[MacOS] Failed to open privacy pane:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: (error as Error).message };
     }
   }
 
@@ -131,9 +168,8 @@ class MacOSPermissionHelper {
    * Check if app is already in Full Disk Access list
    * Note: Can't reliably check this programmatically, but we can test by trying to access protected files
    */
-  async checkFullDiskAccessStatus() {
-    const fs = require('fs').promises;
-    const messagesDbPath = path.join(process.env.HOME, 'Library/Messages/chat.db');
+  async checkFullDiskAccessStatus(): Promise<FullDiskAccessStatus> {
+    const messagesDbPath = path.join(process.env.HOME!, 'Library/Messages/chat.db');
 
     try {
       await fs.access(messagesDbPath, fs.constants.R_OK);
@@ -145,7 +181,7 @@ class MacOSPermissionHelper {
       return {
         granted: false,
         message: 'Full Disk Access is not enabled',
-        error: error.code,
+        error: (error as NodeJS.ErrnoException).code,
       };
     }
   }
@@ -153,9 +189,7 @@ class MacOSPermissionHelper {
   /**
    * Show system notification about permissions
    */
-  async showPermissionNotification(title, body) {
-    const { Notification } = require('electron');
-
+  async showPermissionNotification(title: string, body: string): Promise<void> {
     if (Notification.isSupported()) {
       const notification = new Notification({
         title,
@@ -171,10 +205,10 @@ class MacOSPermissionHelper {
    * Complete permission setup flow
    * Returns status of each step
    */
-  async runPermissionSetupFlow() {
+  async runPermissionSetupFlow(): Promise<PermissionSetupFlowResult> {
     console.log('[MacOS] Starting permission setup flow...');
 
-    const results = {
+    const results: PermissionSetupFlowResult = {
       contacts: null,
       fullDiskAccess: null,
       overallSuccess: false,
@@ -205,11 +239,11 @@ class MacOSPermissionHelper {
       console.error('[MacOS] Permission setup flow failed:', error);
       return {
         ...results,
-        error: error.message,
+        error: (error as Error).message,
         overallSuccess: false,
       };
     }
   }
 }
 
-module.exports = new MacOSPermissionHelper();
+export default new MacOSPermissionHelper();
