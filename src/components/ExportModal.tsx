@@ -21,8 +21,11 @@ function ExportModal({ transaction, userId, onClose, onExportComplete }) {
       if (userId) {
         try {
           const result = await window.api.preferences.get(userId);
-          if (result.success && result.preferences?.export?.defaultFormat) {
-            setExportFormat(result.preferences.export.defaultFormat);
+          if (result.success && result.preferences) {
+            const prefs = result.preferences as { export?: { defaultFormat?: string } };
+            if (prefs.export?.defaultFormat) {
+              setExportFormat(prefs.export.defaultFormat);
+            }
           }
         } catch (error) {
           console.error('Failed to load export format preference:', error);
@@ -56,13 +59,8 @@ function ExportModal({ transaction, userId, onClose, onExportComplete }) {
         closing_date_verified: 1,
       });
 
-      // Export with options
-      const result = await window.api.transactions.exportEnhanced(transaction.id, {
-        contentType,
-        exportFormat,
-        representationStartDate,
-        closingDate,
-      });
+      // Export with the selected format (PDF or DOCX)
+      const result = await window.api.transactions.exportEnhanced(transaction.id, exportFormat);
 
       if (result.success) {
         onExportComplete(result);

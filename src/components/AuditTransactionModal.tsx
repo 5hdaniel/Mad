@@ -40,7 +40,8 @@ function AuditTransactionModal({ userId, provider, onClose, onSuccess }) {
         // Try to initialize with API key from environment
         // If no API key, address verification will gracefully degrade
         try {
-          await window.api.address.initialize();
+          // Initialize with empty string - backend will use environment variable
+          await window.api.address.initialize('');
         } catch (error) {
           console.warn('[AuditTransaction] Address verification not available:', error);
         }
@@ -91,16 +92,15 @@ function AuditTransactionModal({ userId, provider, onClose, onSuccess }) {
 
     try {
       const result = await window.api.address.getDetails(suggestion.place_id);
-      if (result.success && result.address) {
-        const addr = result.address;
+      if (result.success) {
         setAddressData({
           ...addressData,
-          property_address: addr.formatted_address,
-          property_street: addr.street,
-          property_city: addr.city,
-          property_state: addr.state_short || addr.state,
-          property_zip: addr.zip,
-          property_coordinates: addr.coordinates,
+          property_address: result.formatted_address || result.address || suggestion.formatted_address,
+          property_street: result.street,
+          property_city: result.city,
+          property_state: result.state_short || result.state,
+          property_zip: result.zip,
+          property_coordinates: result.coordinates,
         });
       } else {
         // Fallback
@@ -201,7 +201,7 @@ function AuditTransactionModal({ userId, provider, onClose, onSuccess }) {
     try {
       // Prepare contact assignments for API
       const assignments = Object.entries(contactAssignments).flatMap(([role, contacts]) =>
-        contacts.map((contact) => ({
+        (contacts as any[]).map((contact) => ({
           role: role,
           role_category: ROLE_TO_CATEGORY[role],
           contact_id: contact.contactId,

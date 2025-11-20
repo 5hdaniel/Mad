@@ -455,7 +455,7 @@ export interface WindowApi {
   // Event listeners for mailbox connections
   onGoogleMailboxConnected: (callback: (result: { success: boolean }) => void) => () => void;
   onMicrosoftMailboxConnected: (callback: (result: { success: boolean }) => void) => () => void;
-  onMicrosoftLoginComplete: (callback: (result: { success: boolean; user?: User; sessionToken?: string }) => void) => () => void;
+  onMicrosoftLoginComplete: (callback: (result: { success: boolean; user?: User; sessionToken?: string; subscription?: Subscription; isNewUser?: boolean; error?: string }) => void) => () => void;
   onTransactionScanProgress: (callback: (progress: unknown) => void) => () => void;
 }
 

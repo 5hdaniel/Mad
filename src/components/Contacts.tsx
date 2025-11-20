@@ -67,15 +67,14 @@ function Contacts({ userId, onClose }) {
       // First check if contact has associated transactions
       const checkResult = await window.api.contacts.checkCanDelete(contactId);
 
-      if (!checkResult.success) {
+      if (checkResult.error) {
         alert(`Failed to check contact: ${checkResult.error}`);
         return;
       }
 
       // If contact has associated transactions, show blocking modal
       if (!checkResult.canDelete) {
-        setBlockingTransactions(checkResult.transactions || []);
-        setShowBlockingModal(true);
+        alert(`Cannot delete contact: They are associated with ${checkResult.transactionCount || 0} transactions`);
         return;
       }
 
@@ -100,15 +99,14 @@ function Contacts({ userId, onClose }) {
       // First check if contact has associated transactions
       const checkResult = await window.api.contacts.checkCanDelete(contactId);
 
-      if (!checkResult.success) {
+      if (checkResult.error) {
         alert(`Failed to check contact: ${checkResult.error}`);
         return;
       }
 
       // If contact has associated transactions, show blocking modal
       if (!checkResult.canDelete) {
-        setBlockingTransactions(checkResult.transactions || []);
-        setShowBlockingModal(true);
+        alert(`Cannot delete contact: They are associated with ${checkResult.transactionCount || 0} transactions`);
         return;
       }
 
