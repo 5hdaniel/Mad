@@ -3,10 +3,68 @@
  * Monitor OAuth connections to Google and Microsoft
  */
 
-const databaseService = require('./databaseService');
-const googleAuthService = require('./googleAuthService');
+import databaseService from './databaseService';
+import googleAuthService from './googleAuthService';
+import { OAuthToken } from '../types/models';
+
+/**
+ * Connection error types
+ */
+type ConnectionErrorType =
+  | 'NOT_CONNECTED'
+  | 'TOKEN_EXPIRED'
+  | 'TOKEN_REFRESH_FAILED'
+  | 'CONNECTION_CHECK_FAILED';
+
+/**
+ * Connection error details
+ */
+interface ConnectionError {
+  type: ConnectionErrorType;
+  userMessage: string;
+  action: string;
+  actionHandler: string;
+  details?: string;
+}
+
+/**
+ * Connection status for a single provider
+ */
+interface ProviderConnectionStatus {
+  connected: boolean;
+  lastCheck: number | null;
+  email?: string;
+  error: ConnectionError | null;
+}
+
+/**
+ * All connection statuses
+ */
+interface AllConnectionStatuses {
+  google: ProviderConnectionStatus;
+  microsoft: ProviderConnectionStatus;
+  allConnected: boolean;
+  anyConnected: boolean;
+}
+
+/**
+ * Formatted user error
+ */
+interface FormattedUserError {
+  title: string;
+  message: string;
+  action: string;
+  actionHandler: string;
+  details?: string;
+  severity: 'info' | 'warning';
+}
 
 class ConnectionStatusService {
+  private connectionStatus: {
+    google: ProviderConnectionStatus;
+    microsoft: ProviderConnectionStatus;
+  };
+
   constructor() {
     this.connectionStatus = {
       google: { connected: false, lastCheck: null, error: null },
@@ -16,13 +74,13 @@ class ConnectionStatusService {
 
   /**
    * Check Google OAuth connection status
-   * @param {string} userId
-   * @returns {Promise<{connected: boolean, email?: string, error?: Object}>}
+   * @param userId
+   * @returns Connection status
    */
-  async checkGoogleConnection(userId) {
+  async checkGoogleConnection(userId: string): Promise<ProviderConnectionStatus> {
     try {
       // Get Google auth token from database
-      const token = await databaseService.getOAuthToken(userId, 'google', 'mailbox');
+      const token: OAuthToken | null = await databaseService.getOAuthToken(userId, 'google', 'mailbox');
 
       if (!token || !token.access_token) {
         this.connectionStatus.google = {
@@ -39,13 +97,14 @@ class ConnectionStatusService {
       }
 
       // Check if token is expired
-      const tokenExpiry = new Date(token.token_expires_at);
+      const tokenExpiry = new Date(token.token_expires_at || 0);
       const now = new Date();
 
       if (tokenExpiry < now) {
         // Token expired - try to refresh
         try {
-          const refreshResult = await googleAuthService.refreshAccessToken(userId);
+          // Note: googleAuthService is still a JS file, so we use 'any' type
+          const refreshResult = await (googleAuthService as any).refreshAccessToken(userId);
           if (refreshResult.success) {
             this.connectionStatus.google = {
               connected: true,
@@ -55,7 +114,7 @@ class ConnectionStatusService {
             };
             return this.connectionStatus.google;
           }
-        } catch (refreshError) {
+        } catch (refreshError: any) {
           this.connectionStatus.google = {
             connected: false,
             lastCheck: Date.now(),
@@ -79,7 +138,7 @@ class ConnectionStatusService {
         error: null,
       };
       return this.connectionStatus.google;
-    } catch (error) {
+    } catch (error: any) {
       console.error('[ConnectionStatus] Error checking Google connection:', error);
 
       this.connectionStatus.google = {
@@ -99,13 +158,13 @@ class ConnectionStatusService {
 
   /**
    * Check Microsoft OAuth connection status
-   * @param {string} userId
-   * @returns {Promise<{connected: boolean, email?: string, error?: Object}>}
+   * @param userId
+   * @returns Connection status
    */
-  async checkMicrosoftConnection(userId) {
+  async checkMicrosoftConnection(userId: string): Promise<ProviderConnectionStatus> {
     try {
       // Get Microsoft auth token from database
-      const token = await databaseService.getOAuthToken(userId, 'microsoft', 'mailbox');
+      const token: OAuthToken | null = await databaseService.getOAuthToken(userId, 'microsoft', 'mailbox');
 
       if (!token || !token.access_token) {
         this.connectionStatus.microsoft = {
@@ -122,7 +181,7 @@ class ConnectionStatusService {
       }
 
       // Check if token is expired
-      const tokenExpiry = new Date(token.token_expires_at);
+      const tokenExpiry = new Date(token.token_expires_at || 0);
       const now = new Date();
 
       if (tokenExpiry < now) {
@@ -148,7 +207,7 @@ class ConnectionStatusService {
         error: null,
       };
       return this.connectionStatus.microsoft;
-    } catch (error) {
+    } catch (error: any) {
       console.error('[ConnectionStatus] Error checking Microsoft connection:', error);
 
       this.connectionStatus.microsoft = {
@@ -168,10 +227,10 @@ class ConnectionStatusService {
 
   /**
    * Check all connections
-   * @param {string} userId
-   * @returns {Promise<{google: Object, microsoft: Object, allConnected: boolean}>}
+   * @param userId
+   * @returns All connection statuses
    */
-  async checkAllConnections(userId) {
+  async checkAllConnections(userId: string): Promise<AllConnectionStatuses> {
     const [google, microsoft] = await Promise.all([
       this.checkGoogleConnection(userId),
       this.checkMicrosoftConnection(userId),
@@ -187,10 +246,10 @@ class ConnectionStatusService {
 
   /**
    * Get cached connection status (avoid repeated database queries)
-   * @param {number} maxAge - Maximum cache age in milliseconds (default: 60 seconds)
-   * @returns {Object|null}
+   * @param maxAge - Maximum cache age in milliseconds (default: 60 seconds)
+   * @returns Cached status or null if expired
    */
-  getCachedStatus(maxAge = 60000) {
+  getCachedStatus(maxAge: number = 60000): AllConnectionStatuses | null {
     const googleAge = this.connectionStatus.google.lastCheck
       ? Date.now() - this.connectionStatus.google.lastCheck
       : Infinity;
@@ -215,7 +274,7 @@ class ConnectionStatusService {
   /**
    * Clear connection cache
    */
-  clearCache() {
+  clearCache(): void {
     this.connectionStatus = {
       google: { connected: false, lastCheck: null, error: null },
       microsoft: { connected: false, lastCheck: null, error: null },
@@ -224,10 +283,10 @@ class ConnectionStatusService {
 
   /**
    * Format error message for user display
-   * @param {Object} error
-   * @returns {Object}
+   * @param error
+   * @returns Formatted error
    */
-  formatUserError(error) {
+  formatUserError(error: ConnectionError): FormattedUserError {
     return {
       title: error.type === 'NOT_CONNECTED' ? 'Not Connected' : 'Connection Lost',
       message: error.userMessage,
@@ -239,4 +298,4 @@ class ConnectionStatusService {
   }
 }
 
-module.exports = new ConnectionStatusService();
+export default new ConnectionStatusService();

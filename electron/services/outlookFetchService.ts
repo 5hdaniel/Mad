@@ -1,35 +1,119 @@
-const axios = require('axios');
-const tokenEncryptionService = require('./tokenEncryptionService');
-const databaseService = require('./databaseService');
+import axios, { AxiosRequestConfig } from 'axios';
+import tokenEncryptionService from './tokenEncryptionService';
+import databaseService from './databaseService';
+import { OAuthToken } from '../types/models';
+
+/**
+ * Microsoft Graph API email recipient
+ */
+interface GraphEmailRecipient {
+  emailAddress?: {
+    address: string;
+    name?: string;
+  };
+}
+
+/**
+ * Microsoft Graph API email body
+ */
+interface GraphEmailBody {
+  content: string;
+  contentType: 'text' | 'html';
+}
+
+/**
+ * Microsoft Graph API message
+ */
+interface GraphMessage {
+  id: string;
+  conversationId: string;
+  subject: string;
+  from?: GraphEmailRecipient;
+  toRecipients?: GraphEmailRecipient[];
+  ccRecipients?: GraphEmailRecipient[];
+  bccRecipients?: GraphEmailRecipient[];
+  receivedDateTime: string;
+  sentDateTime: string;
+  hasAttachments: boolean;
+  body?: GraphEmailBody;
+  bodyPreview?: string;
+}
+
+/**
+ * Microsoft Graph API response wrapper
+ */
+interface GraphApiResponse<T> {
+  value: T[];
+}
+
+/**
+ * Microsoft Graph attachment
+ */
+interface GraphAttachment {
+  id: string;
+  name: string;
+  contentType: string;
+  size: number;
+  contentBytes?: string;
+}
+
+/**
+ * Parsed email message
+ */
+interface ParsedEmail {
+  id: string;
+  threadId: string;
+  subject: string;
+  from: string | null;
+  to: string | null;
+  cc: string | null;
+  bcc: string | null;
+  date: Date;
+  sentDate: Date;
+  body: string;
+  bodyPlain: string;
+  snippet: string;
+  hasAttachments: boolean;
+  attachmentCount: number;
+  raw: GraphMessage;
+}
+
+/**
+ * Search options for email queries
+ */
+interface EmailSearchOptions {
+  query?: string;
+  after?: Date | null;
+  before?: Date | null;
+  maxResults?: number;
+}
 
 /**
  * Outlook Fetch Service
  * Fetches emails from Outlook/Office 365 using Microsoft Graph API
  */
 class OutlookFetchService {
-  constructor() {
-    this.graphApiUrl = 'https://graph.microsoft.com/v1.0';
-    this.accessToken = null;
-    this.userId = null;
-  }
+  private graphApiUrl = 'https://graph.microsoft.com/v1.0';
+  private accessToken: string | null = null;
+  private userId: string | null = null;
 
   /**
    * Initialize Outlook API with user's OAuth tokens
-   * @param {string} userId - User ID to fetch tokens for
+   * @param userId - User ID to fetch tokens for
    */
-  async initialize(userId) {
+  async initialize(userId: string): Promise<boolean> {
     try {
       this.userId = userId;
 
       // Get OAuth token from database
-      const tokenRecord = await databaseService.getOAuthToken(userId, 'microsoft', 'mailbox');
+      const tokenRecord: OAuthToken | null = await databaseService.getOAuthToken(userId, 'microsoft', 'mailbox');
 
       if (!tokenRecord) {
         throw new Error('No Outlook OAuth token found. User needs to connect Outlook first.');
       }
 
       // Decrypt access token
-      this.accessToken = tokenEncryptionService.decrypt(tokenRecord.access_token);
+      this.accessToken = tokenEncryptionService.decrypt(tokenRecord.access_token || '');
 
       console.log('[OutlookFetch] Initialized successfully');
       return true;
@@ -43,9 +127,9 @@ class OutlookFetchService {
    * Make authenticated request to Microsoft Graph API
    * @private
    */
-  async _graphRequest(endpoint, method = 'GET', data = null) {
+  private async _graphRequest<T = any>(endpoint: string, method: string = 'GET', data: any = null): Promise<T> {
     try {
-      const config = {
+      const config: AxiosRequestConfig = {
         method,
         url: `${this.graphApiUrl}${endpoint}`,
         headers: {
@@ -60,7 +144,7 @@ class OutlookFetchService {
 
       const response = await axios(config);
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
       // Handle token expiration
       if (error.response && error.response.status === 401) {
         console.error('[OutlookFetch] Access token expired, need to refresh');
@@ -72,21 +156,17 @@ class OutlookFetchService {
 
   /**
    * Search for emails matching query
-   * @param {Object} options - Search options
-   * @param {string} options.query - Search query
-   * @param {Date} options.after - Only emails after this date
-   * @param {Date} options.before - Only emails before this date
-   * @param {number} options.maxResults - Max number of results (default 100)
-   * @returns {Promise<Array>} Array of email messages
+   * @param options - Search options
+   * @returns Array of email messages
    */
-  async searchEmails({ query = '', after = null, before = null, maxResults = 100 } = {}) {
+  async searchEmails({ query = '', after = null, before = null, maxResults = 100 }: EmailSearchOptions = {}): Promise<ParsedEmail[]> {
     try {
       if (!this.accessToken) {
         throw new Error('Outlook API not initialized. Call initialize() first.');
       }
 
       // Build filter string
-      const filters = [];
+      const filters: string[] = [];
 
       if (query) {
         // Search in subject and body
@@ -110,7 +190,7 @@ class OutlookFetchService {
       console.log('[OutlookFetch] Searching emails');
 
       // Fetch messages
-      const data = await this._graphRequest(`/me/messages?${queryParams}`);
+      const data = await this._graphRequest<GraphApiResponse<GraphMessage>>(`/me/messages?${queryParams}`);
       const messages = data.value || [];
 
       console.log(`[OutlookFetch] Found ${messages.length} messages`);
@@ -125,12 +205,12 @@ class OutlookFetchService {
 
   /**
    * Get email by ID
-   * @param {string} messageId - Outlook message ID
-   * @returns {Promise<Object>} Parsed email object
+   * @param messageId - Outlook message ID
+   * @returns Parsed email object
    */
-  async getEmailById(messageId) {
+  async getEmailById(messageId: string): Promise<ParsedEmail> {
     try {
-      const data = await this._graphRequest(`/me/messages/${messageId}`);
+      const data = await this._graphRequest<GraphMessage>(`/me/messages/${messageId}`);
       return this._parseMessage(data);
     } catch (error) {
       console.error(`[OutlookFetch] Failed to get message ${messageId}:`, error);
@@ -142,9 +222,9 @@ class OutlookFetchService {
    * Parse Outlook message into structured format
    * @private
    */
-  _parseMessage(message) {
+  private _parseMessage(message: GraphMessage): ParsedEmail {
     // Extract email addresses
-    const getEmailAddress = (recipient) => {
+    const getEmailAddress = (recipient: GraphEmailRecipient | undefined | null): string | null => {
       if (!recipient) return null;
       return recipient.emailAddress ? recipient.emailAddress.address : null;
     };
@@ -172,7 +252,7 @@ class OutlookFetchService {
       sentDate: new Date(message.sentDateTime),
       body: body,
       bodyPlain: bodyPlain,
-      snippet: message.bodyPreview,
+      snippet: message.bodyPreview || '',
       hasAttachments: message.hasAttachments || false,
       attachmentCount: 0, // Would need separate call to get attachment count
       raw: message,
@@ -181,12 +261,12 @@ class OutlookFetchService {
 
   /**
    * Get email attachments
-   * @param {string} messageId - Outlook message ID
-   * @returns {Promise<Array>} Array of attachments
+   * @param messageId - Outlook message ID
+   * @returns Array of attachments
    */
-  async getAttachments(messageId) {
+  async getAttachments(messageId: string): Promise<GraphAttachment[]> {
     try {
-      const data = await this._graphRequest(`/me/messages/${messageId}/attachments`);
+      const data = await this._graphRequest<GraphApiResponse<GraphAttachment>>(`/me/messages/${messageId}/attachments`);
       return data.value || [];
     } catch (error) {
       console.error(`[OutlookFetch] Failed to get attachments:`, error);
@@ -196,13 +276,13 @@ class OutlookFetchService {
 
   /**
    * Get specific attachment
-   * @param {string} messageId - Outlook message ID
-   * @param {string} attachmentId - Attachment ID
-   * @returns {Promise<Buffer>} Attachment data
+   * @param messageId - Outlook message ID
+   * @param attachmentId - Attachment ID
+   * @returns Attachment data
    */
-  async getAttachment(messageId, attachmentId) {
+  async getAttachment(messageId: string, attachmentId: string): Promise<Buffer> {
     try {
-      const data = await this._graphRequest(`/me/messages/${messageId}/attachments/${attachmentId}`);
+      const data = await this._graphRequest<GraphAttachment>(`/me/messages/${messageId}/attachments/${attachmentId}`);
 
       if (data.contentBytes) {
         return Buffer.from(data.contentBytes, 'base64');
@@ -217,12 +297,12 @@ class OutlookFetchService {
 
   /**
    * Get user's email address
-   * @returns {Promise<string>} User's Outlook email address
+   * @returns User's Outlook email address
    */
-  async getUserEmail() {
+  async getUserEmail(): Promise<string> {
     try {
-      const data = await this._graphRequest('/me');
-      return data.mail || data.userPrincipalName;
+      const data = await this._graphRequest<{ mail?: string; userPrincipalName?: string }>('/me');
+      return data.mail || data.userPrincipalName || '';
     } catch (error) {
       console.error('[OutlookFetch] Failed to get user email:', error);
       throw error;
@@ -231,11 +311,11 @@ class OutlookFetchService {
 
   /**
    * Get folders/mailboxes
-   * @returns {Promise<Array>} Array of mail folders
+   * @returns Array of mail folders
    */
-  async getFolders() {
+  async getFolders(): Promise<any[]> {
     try {
-      const data = await this._graphRequest('/me/mailFolders');
+      const data = await this._graphRequest<GraphApiResponse<any>>('/me/mailFolders');
       return data.value || [];
     } catch (error) {
       console.error('[OutlookFetch] Failed to get folders:', error);
@@ -244,4 +324,4 @@ class OutlookFetchService {
   }
 }
 
-module.exports = new OutlookFetchService();
+export default new OutlookFetchService();
