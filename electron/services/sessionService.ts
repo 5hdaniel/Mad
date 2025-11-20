@@ -1,23 +1,17 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import { app } from 'electron';
-import type { User, OAuthProvider, SubscriptionTier } from '../types/models';
+import type { User, OAuthProvider, Subscription } from '../types/models';
 
 // ============================================
 // TYPES & INTERFACES
 // ============================================
 
-interface SubscriptionInfo {
-  tier: SubscriptionTier;
-  status: string;
-  trial_ends_at?: string;
-}
-
 interface SessionData {
   user: User;
   sessionToken: string;
   provider: OAuthProvider;
-  subscription?: SubscriptionInfo;
+  subscription?: Subscription;
   expiresAt: number;
   savedAt?: number;
 }

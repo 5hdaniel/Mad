@@ -451,7 +451,7 @@ ipcMain.handle('get-conversations', async () => {
     );
 
     const db = new sqlite3.Database(messagesDbPath, sqlite3.OPEN_READONLY);
-    const dbAll = promisify(db.all.bind(db));
+    const dbAll = promisify(db.all.bind(db)) as (sql: string, params?: any) => Promise<any[]>;
     const dbClose = promisify(db.close.bind(db));
 
     let db2: sqlite3.Database | null = null;
@@ -486,7 +486,7 @@ ipcMain.handle('get-conversations', async () => {
 
       // Re-open database to query group chat participants
       db2 = new sqlite3.Database(messagesDbPath, sqlite3.OPEN_READONLY);
-      const dbAll2 = promisify(db2.all.bind(db2));
+      const dbAll2 = promisify(db2.all.bind(db2)) as (sql: string, params?: any) => Promise<any[]>;
       dbClose2 = promisify(db2.close.bind(db2));
 
       // Map conversations and deduplicate by contact NAME
@@ -733,7 +733,7 @@ ipcMain.handle('get-messages', async (event: IpcMainInvokeEvent, chatId: number)
     );
 
     const db = new sqlite3.Database(messagesDbPath, sqlite3.OPEN_READONLY);
-    const dbAll = promisify(db.all.bind(db));
+    const dbAll = promisify(db.all.bind(db)) as (sql: string, params?: any) => Promise<any[]>;
     const dbClose = promisify(db.close.bind(db));
 
     try {
@@ -824,7 +824,7 @@ ipcMain.handle('export-conversations', async (event: IpcMainInvokeEvent, convers
     );
 
     const db = new sqlite3.Database(messagesDbPath, sqlite3.OPEN_READONLY);
-    const dbAll = promisify(db.all.bind(db));
+    const dbAll = promisify(db.all.bind(db)) as (sql: string, params?: any) => Promise<any[]>;
     const dbClose = promisify(db.close.bind(db));
 
     // Load contact names for resolving names in export
@@ -1148,7 +1148,7 @@ ipcMain.handle('outlook-export-emails', async (event: IpcMainInvokeEvent, contac
       'Library/Messages/chat.db'
     );
     const db = new sqlite3.Database(messagesDbPath, sqlite3.OPEN_READONLY);
-    const dbAll = promisify(db.all.bind(db));
+    const dbAll = promisify(db.all.bind(db)) as (sql: string, params?: any) => Promise<any[]>;
     const dbClose = promisify(db.close.bind(db));
 
     // Load contact names for resolving names in export

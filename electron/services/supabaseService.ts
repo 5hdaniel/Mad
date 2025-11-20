@@ -6,7 +6,7 @@
  */
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { User, SubscriptionTier } from '../types/models';
+import { User, SubscriptionTier, Subscription, SubscriptionStatus as SubscriptionStatusType } from '../types/models';
 import * as dotenv from 'dotenv';
 
 dotenv.config({ path: '.env.development' });
@@ -290,7 +290,7 @@ class SupabaseService {
    * @param userId - User UUID
    * @returns Subscription status
    */
-  async validateSubscription(userId: string): Promise<SubscriptionStatus> {
+  async validateSubscription(userId: string): Promise<Subscription> {
     this._ensureInitialized();
 
     try {
@@ -299,7 +299,7 @@ class SupabaseService {
       const now = new Date();
       const trialEndsAt = user.trial_ends_at ? new Date(user.trial_ends_at) : null;
 
-      const status: SubscriptionStatus = {
+      const subscription: Subscription = {
         tier: user.subscription_tier,
         status: user.subscription_status,
         isActive: user.subscription_status === 'active',
@@ -311,17 +311,17 @@ class SupabaseService {
       };
 
       // If trial has ended, update status
-      if (status.isTrial && status.trialEnded) {
+      if (subscription.isTrial && subscription.trialEnded) {
         await this.client!
           .from('users')
           .update({ subscription_status: 'expired' })
           .eq('id', userId);
 
-        status.status = 'expired';
-        status.isActive = false;
+        subscription.status = 'expired';
+        subscription.isActive = false;
       }
 
-      return status;
+      return subscription;
     } catch (error) {
       console.error('[Supabase] Failed to validate subscription:', error);
       throw error;
