@@ -32,3 +32,5 @@ Thumbs.db
 # Project management (using Linear)
 linear-import.csv
 ROADMAP.md
+# Compiled preload script
+electron/preload.js
