@@ -22,7 +22,7 @@ export default function UpdateNotification() {
     }
 
     if (window.electron?.onUpdateDownloaded) {
-      window.electron.onUpdateDownloaded((info) => {
+      window.electron.onUpdateDownloaded(() => {
         setUpdateDownloaded(true);
       });
     }

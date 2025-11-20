@@ -42,9 +42,9 @@ function MicrosoftLogin({ onLoginComplete, onSkip }) {
       const isAuth = await window.electron.outlookIsAuthenticated();
 
       if (isAuth) {
-        const emailResult = await window.electron.outlookGetUserEmail();
-        if (emailResult.success) {
-          setUserEmail(emailResult.email);
+        const email = await window.electron.outlookGetUserEmail();
+        if (email) {
+          setUserEmail(email);
           setIsAuthenticated(true);
         }
       }

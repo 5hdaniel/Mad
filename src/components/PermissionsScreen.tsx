@@ -53,7 +53,8 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain }) {
   };
 
   const handleAppleScriptAllow = () => {
-    setAppleScriptStepComplete(true);
+    // TODO: Implement AppleScript permission handling if needed
+    // setAppleScriptStepComplete(true);
   };
 
   const handleOpenSystemSettings = async () => {

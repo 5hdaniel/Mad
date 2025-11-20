@@ -59,9 +59,9 @@ function OutlookExport({ conversations, selectedIds, onComplete, onCancel }) {
 
   const loadUserEmail = async () => {
     try {
-      const result = await window.electron.outlookGetUserEmail();
-      if (result.success) {
-        setUserEmail(result.email);
+      const email = await window.electron.outlookGetUserEmail();
+      if (email) {
+        setUserEmail(email);
       }
     } catch (err) {
       console.error('Error loading user email:', err);
@@ -78,7 +78,7 @@ function OutlookExport({ conversations, selectedIds, onComplete, onCancel }) {
 
       if (result.success) {
         setIsAuthenticated(true);
-        setUserEmail(result.userInfo?.username);
+        await loadUserEmail(); // Load email after successful authentication
       } else {
         setError(result.error || 'Authentication failed');
       }

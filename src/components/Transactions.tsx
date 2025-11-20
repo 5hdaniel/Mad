@@ -488,8 +488,9 @@ function TransactionDetails({ transaction, onClose, onTransactionUpdated }) {
       const result = await window.api.transactions.getDetails(transaction.id);
 
       if (result.success) {
-        setCommunications(result.transaction.communications || []);
-        setContactAssignments(result.transaction.contact_assignments || []);
+        const txn = result.transaction as any;
+        setCommunications(txn.communications || []);
+        setContactAssignments(txn.contact_assignments || []);
       }
     } catch (err) {
       console.error('Failed to load details:', err);
@@ -874,10 +875,11 @@ function EditTransactionModal({ transaction, onClose, onSuccess }) {
   const loadContactAssignments = async () => {
     try {
       const result = await window.api.transactions.getDetails(transaction.id);
-      if (result.success && result.transaction.contact_assignments) {
+      const txn = result.transaction as any;
+      if (result.success && txn.contact_assignments) {
         // Group assignments by role
         const grouped = {};
-        result.transaction.contact_assignments.forEach((assignment) => {
+        txn.contact_assignments.forEach((assignment) => {
           const role = assignment.specific_role || assignment.role;
           if (!grouped[role]) {
             grouped[role] = [];
@@ -947,7 +949,7 @@ function EditTransactionModal({ transaction, onClose, onSuccess }) {
       // Update contact assignments
       // First, get all current assignments to determine what to delete
       const currentResult = await window.api.transactions.getDetails(transaction.id);
-      const currentAssignments = currentResult.success ? currentResult.transaction.contact_assignments || [] : [];
+      const currentAssignments = currentResult.success ? (currentResult.transaction as any).contact_assignments || [] : [];
 
       // Delete removed contacts
       for (const existing of currentAssignments) {
@@ -962,7 +964,7 @@ function EditTransactionModal({ transaction, onClose, onSuccess }) {
 
       // Add new contacts
       for (const [role, contacts] of Object.entries(contactAssignments)) {
-        for (const contact of contacts) {
+        for (const contact of (contacts as any[])) {
           // Check if this is a new assignment
           const isExisting = currentAssignments.some(
             (existing) => existing.contact_id === contact.contactId && (existing.specific_role || existing.role) === role
@@ -1193,7 +1195,7 @@ function EditContactAssignments({ transactionType, contactAssignments, onAssignC
   return (
     <div className="space-y-6">
       {AUDIT_WORKFLOW_STEPS.map((step, idx) => {
-        const stepRoles = filterRolesByTransactionType(step.roles, transactionType);
+        const stepRoles = filterRolesByTransactionType(step.roles, transactionType, step.title);
         if (stepRoles.length === 0) return null;
 
         return (

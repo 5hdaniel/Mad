@@ -24,7 +24,7 @@ function OnboardingWizard({ onComplete }) {
     if (step === 4) {
       const interval = setInterval(async () => {
         const result = await window.api.system.checkFullDiskAccessStatus();
-        if (result.granted) {
+        if (result.hasAccess) {
           setFullDiskGranted(true);
           setStep(5);
           clearInterval(interval);
@@ -42,7 +42,7 @@ function OnboardingWizard({ onComplete }) {
     try {
       const result = await window.api.system.requestContactsPermission();
 
-      if (result.success) {
+      if (result.granted) {
         setContactsGranted(true);
         // Wait a moment for user to see the result
         setTimeout(() => {

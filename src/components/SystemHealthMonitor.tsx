@@ -27,7 +27,7 @@ function SystemHealthMonitor({ userId, provider }) {
       const result = await window.api.system.healthCheck(userId, provider);
 
       console.log('[SystemHealthMonitor] Health check result:', result);
-      if (result.success && result.issues) {
+      if (!result.healthy && result.issues) {
         setIssues(result.issues);
       }
     } catch (error) {
