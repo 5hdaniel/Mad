@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import type { Subscription } from '../electron/types/models';
+import type { Subscription } from '../../electron/types/models';
 
 interface User {
   id: string;

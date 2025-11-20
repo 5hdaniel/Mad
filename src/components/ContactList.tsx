@@ -18,7 +18,7 @@ interface ContactListComponentProps {
  * - Add/Edit/Delete contacts
  * - View contact details
  */
-function ContactList({ userId, onClose }: ContactListComponentProps): JSX.Element {
+function ContactList({ userId, onClose }: ContactListComponentProps) {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -57,14 +57,14 @@ function ContactList({ userId, onClose }: ContactListComponentProps): JSX.Elemen
       // First check if contact has associated transactions
       const checkResult = await window.api.contacts.checkCanDelete(contactId);
 
-      if (!checkResult.success) {
+      if (checkResult.error) {
         alert(`Failed to check contact: ${checkResult.error}`);
         return;
       }
 
       // If contact has associated transactions, show error
       if (!checkResult.canDelete) {
-        alert(`Cannot delete contact: They are associated with ${checkResult.transactions?.length || 0} transactions`);
+        alert(`Cannot delete contact: They are associated with ${checkResult.transactionCount || 0} transactions`);
         return;
       }
 

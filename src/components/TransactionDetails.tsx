@@ -29,7 +29,7 @@ function TransactionDetails({
   transaction,
   onClose,
   onTransactionUpdated,
-}: TransactionDetailsComponentProps): JSX.Element {
+}: TransactionDetailsComponentProps) {
   const [communications, setCommunications] = useState<Communication[]>([]);
   const [contactAssignments, setContactAssignments] = useState<ContactAssignment[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -49,8 +49,8 @@ function TransactionDetails({
       const result = await window.api.transactions.getDetails(transaction.id);
 
       if (result.success) {
-        setCommunications(result.transaction.communications || []);
-        setContactAssignments(result.transaction.contact_assignments || []);
+        setCommunications((result.transaction as any).communications || []);
+        setContactAssignments((result.transaction as any).contact_assignments || []);
       }
     } catch (err) {
       console.error('Failed to load details:', err);

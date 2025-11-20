@@ -422,7 +422,7 @@ export interface WindowApi {
   // Transaction methods
   transactions: {
     getAll: (userId: string) => Promise<{ success: boolean; transactions?: Transaction[]; error?: string }>;
-    scan: (userId: string, options?: Record<string, unknown>) => Promise<{ success: boolean; transactions?: Transaction[]; error?: string }>;
+    scan: (userId: string, options?: Record<string, unknown>) => Promise<{ success: boolean; transactions?: Transaction[]; transactionsFound?: number; emailsScanned?: number; error?: string }>;
     getDetails: (transactionId: string) => Promise<{ success: boolean; transaction?: unknown; error?: string }>;
     update: (transactionId: string, data: Record<string, unknown>) => Promise<{ success: boolean; error?: string }>;
     delete: (transactionId: string) => Promise<{ success: boolean; error?: string }>;

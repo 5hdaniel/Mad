@@ -168,7 +168,11 @@ export function registerContactHandlers(): void {
 
         const importedContact = await databaseService.createContact({
           user_id: validatedUserId,
-          ...validatedData,
+          name: validatedData.name || 'Unknown',
+          email: validatedData.email,
+          phone: validatedData.phone,
+          company: validatedData.company,
+          title: validatedData.title,
           source: (sanitizedContact as any).source || 'contacts_app',
           is_imported: true,
         });
@@ -244,8 +248,13 @@ export function registerContactHandlers(): void {
 
       const contact = await databaseService.createContact({
         user_id: validatedUserId,
-        ...validatedData,
+        name: validatedData.name || 'Unknown',
+        email: validatedData.email,
+        phone: validatedData.phone,
+        company: validatedData.company,
+        title: validatedData.title,
         source: 'manual',
+        is_imported: false,
       });
 
       return {

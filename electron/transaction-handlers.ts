@@ -130,7 +130,7 @@ export const registerTransactionHandlers = (mainWindow: BrowserWindow | null): v
       const validatedUserId = validateUserId(userId);
       const validatedData = validateTransactionData(transactionData, false);
 
-      const transaction = await transactionService.createManualTransaction(validatedUserId, validatedData as Partial<NewTransaction>);
+      const transaction = await transactionService.createManualTransaction(validatedUserId, validatedData as unknown as Partial<NewTransaction>);
 
       return {
         success: true,
@@ -192,7 +192,7 @@ export const registerTransactionHandlers = (mainWindow: BrowserWindow | null): v
       const validatedTransactionId = validateTransactionId(transactionId);
       const validatedUpdates = validateTransactionData(sanitizeObject(updates || {}), true);
 
-      const updated = await transactionService.updateTransaction(validatedTransactionId, validatedUpdates as Partial<UpdateTransaction>);
+      const updated = await transactionService.updateTransaction(validatedTransactionId, validatedUpdates as unknown as Partial<UpdateTransaction>);
 
       return {
         success: true,

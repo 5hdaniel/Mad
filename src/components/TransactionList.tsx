@@ -20,7 +20,7 @@ interface TransactionListComponentProps {
  * Main transaction management interface
  * Lists transactions, triggers scans, shows progress
  */
-function TransactionList({ userId, provider, onClose }: TransactionListComponentProps): JSX.Element {
+function TransactionList({ userId, provider, onClose }: TransactionListComponentProps) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [scanning, setScanning] = useState<boolean>(false);
@@ -64,8 +64,9 @@ function TransactionList({ userId, provider, onClose }: TransactionListComponent
     }
   };
 
-  const handleScanProgress = (progress: ScanProgress): void => {
-    setScanProgress(progress);
+  const handleScanProgress = (progress: unknown): void => {
+    const scanProgress = progress as ScanProgress;
+    setScanProgress(scanProgress);
   };
 
   const startScan = async (): Promise<void> => {
@@ -108,7 +109,7 @@ function TransactionList({ userId, provider, onClose }: TransactionListComponent
     }).format(amount);
   };
 
-  const formatDate = (dateString: string | null | undefined): string => {
+  const formatDate = (dateString: string | Date | null | undefined): string => {
     if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',

@@ -22,7 +22,7 @@ function ContactDetails({
   onClose,
   onEdit,
   onRemove,
-}: ContactDetailsComponentProps): JSX.Element {
+}: ContactDetailsComponentProps) {
   const getSourceBadge = (source: string | undefined): SourceBadgeConfig => {
     const badges: Record<string, SourceBadgeConfig> = {
       manual: { text: 'Manual', color: 'bg-blue-100 text-blue-700' },

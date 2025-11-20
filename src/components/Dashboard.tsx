@@ -14,7 +14,7 @@ interface DashboardActionProps {
  * Main landing screen after login
  * Provides three primary actions: Start New Audit, Browse Transactions, and Manage Contacts
  */
-function Dashboard({ onAuditNew, onViewTransactions, onManageContacts }: DashboardActionProps): JSX.Element {
+function Dashboard({ onAuditNew, onViewTransactions, onManageContacts }: DashboardActionProps) {
   // Initialize the onboarding tour for first-time users
   const { runTour, handleJoyrideCallback } = useTour(true, 'hasSeenDashboardTour');
 

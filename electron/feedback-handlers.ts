@@ -58,7 +58,7 @@ export const registerFeedbackHandlers = (): void => {
 
       const feedback = await databaseService.saveFeedback({
         user_id: validatedUserId,
-        ...sanitizedData,
+        ...(sanitizedData as any),
       } as Omit<UserFeedback, 'id' | 'created_at'>);
 
       // Clear pattern cache for this field so new patterns are detected
