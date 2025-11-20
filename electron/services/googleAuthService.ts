@@ -4,23 +4,65 @@
  * Supports two-step consent: login (minimal scopes) + mailbox access (Gmail scopes)
  */
 
-const { google } = require('googleapis');
-const http = require('http');
-const url = require('url');
-require('dotenv').config({ path: '.env.development' });
+import { google, Auth } from 'googleapis';
+import http from 'http';
+import url from 'url';
+import dotenv from 'dotenv';
+
+dotenv.config({ path: '.env.development' });
+
+// ============================================
+// TYPES & INTERFACES
+// ============================================
+
+interface AuthFlowResult {
+  authUrl: string;
+  codePromise: Promise<string>;
+  scopes: string[];
+}
+
+interface TokenData {
+  access_token: string;
+  refresh_token?: string;
+  expires_at: string | null;
+  scopes: string[];
+}
+
+interface UserInfo {
+  id: string;
+  email: string;
+  verified_email?: boolean;
+  name?: string;
+  given_name?: string;
+  family_name?: string;
+  picture?: string;
+  locale?: string;
+}
+
+interface TokenExchangeResult {
+  tokens: TokenData;
+  userInfo: UserInfo;
+}
+
+interface RefreshTokenResult {
+  access_token: string;
+  expires_at: string | null;
+}
+
+// ============================================
+// SERVICE CLASS
+// ============================================
 
 class GoogleAuthService {
-  constructor() {
-    this.oauth2Client = null;
-    this.initialized = false;
-    this.redirectUri = 'http://localhost:3001/callback'; // Different port than Microsoft
-    this.server = null;
-  }
+  private oauth2Client: Auth.OAuth2Client | null = null;
+  private initialized: boolean = false;
+  private redirectUri: string = 'http://localhost:3001/callback'; // Different port than Microsoft
+  private server: http.Server | null = null;
 
   /**
    * Initialize Google OAuth2 client
    */
-  initialize() {
+  initialize(): void {
     if (this.initialized) {
       return;
     }
@@ -49,7 +91,7 @@ class GoogleAuthService {
    * Ensure client is initialized
    * @private
    */
-  _ensureInitialized() {
+  private _ensureInitialized(): void {
     if (!this.initialized) {
       this.initialize();
     }
@@ -59,14 +101,14 @@ class GoogleAuthService {
    * Start a temporary local HTTP server to catch OAuth redirect
    * @returns {Promise<string>} Authorization code from redirect
    */
-  startLocalServer() {
+  startLocalServer(): Promise<string> {
     return new Promise((resolve, reject) => {
       this.server = http.createServer((req, res) => {
-        const parsedUrl = url.parse(req.url, true);
+        const parsedUrl = url.parse(req.url || '', true);
 
         if (parsedUrl.pathname === '/callback') {
-          const code = parsedUrl.query.code;
-          const error = parsedUrl.query.error;
+          const code = parsedUrl.query.code as string | undefined;
+          const error = parsedUrl.query.error as string | undefined;
 
           if (error) {
             res.writeHead(200, { 'Content-Type': 'text/html' });
@@ -93,7 +135,7 @@ class GoogleAuthService {
               </html>
             `);
             this.stopLocalServer();
-            reject(new Error(parsedUrl.query.error_description || error));
+            reject(new Error((parsedUrl.query.error_description as string) || error));
           } else if (code) {
             res.writeHead(200, { 'Content-Type': 'text/html' });
             res.end(`
@@ -169,7 +211,7 @@ class GoogleAuthService {
         console.log('[GoogleAuth] Local callback server listening on http://localhost:3001');
       });
 
-      this.server.on('error', (err) => {
+      this.server.on('error', (err: Error) => {
         reject(err);
       });
     });
@@ -178,7 +220,7 @@ class GoogleAuthService {
   /**
    * Stop the local HTTP server
    */
-  stopLocalServer() {
+  stopLocalServer(): void {
     if (this.server) {
       this.server.close();
       this.server = null;
@@ -190,9 +232,8 @@ class GoogleAuthService {
    * Authenticate for login (minimal scopes)
    * Step 1: Get user into the app
    * Opens browser, user logs in, redirects back to local server
-   * @returns {Promise<{authUrl: string, codePromise: Promise<string>, scopes: string[]}>}
    */
-  async authenticateForLogin() {
+  async authenticateForLogin(): Promise<AuthFlowResult> {
     this._ensureInitialized();
 
     const scopes = [
@@ -208,7 +249,7 @@ class GoogleAuthService {
       const codePromise = this.startLocalServer();
 
       // Generate auth URL
-      const authUrl = this.oauth2Client.generateAuthUrl({
+      const authUrl = this.oauth2Client!.generateAuthUrl({
         access_type: 'offline',
         scope: scopes,
         prompt: 'select_account', // Show account picker, only consent if needed
@@ -230,26 +271,26 @@ class GoogleAuthService {
 
   /**
    * Exchange authorization code for tokens
-   * @param {string} code - Authorization code from OAuth callback
-   * @returns {Object} Tokens and user info
+   * @param code - Authorization code from OAuth callback
+   * @returns Tokens and user info
    */
-  async exchangeCodeForTokens(code) {
+  async exchangeCodeForTokens(code: string): Promise<TokenExchangeResult> {
     this._ensureInitialized();
 
     try {
       console.log('[GoogleAuth] Exchanging code for tokens');
 
-      const { tokens } = await this.oauth2Client.getToken(code);
-      this.oauth2Client.setCredentials(tokens);
+      const { tokens } = await this.oauth2Client!.getToken(code);
+      this.oauth2Client!.setCredentials(tokens);
 
       console.log('[GoogleAuth] Tokens obtained successfully');
 
       // Get user info
-      const userInfo = await this.getUserInfo(tokens.access_token);
+      const userInfo = await this.getUserInfo(tokens.access_token!);
 
       return {
         tokens: {
-          access_token: tokens.access_token,
+          access_token: tokens.access_token!,
           refresh_token: tokens.refresh_token,
           expires_at: tokens.expiry_date
             ? new Date(tokens.expiry_date).toISOString()
@@ -268,10 +309,9 @@ class GoogleAuthService {
    * Authenticate for mailbox access (Gmail scopes)
    * Step 2: Connect to Gmail (incremental consent)
    * Opens browser, user grants Gmail access, redirects back to local server
-   * @param {string} loginHint - Optional email to pre-fill
-   * @returns {Promise<{authUrl: string, codePromise: Promise<string>, scopes: string[]}>}
+   * @param loginHint - Optional email to pre-fill
    */
-  async authenticateForMailbox(loginHint) {
+  async authenticateForMailbox(loginHint?: string): Promise<AuthFlowResult> {
     this._ensureInitialized();
 
     const scopes = [
@@ -285,7 +325,7 @@ class GoogleAuthService {
       const codePromise = this.startLocalServer();
 
       // Generate auth URL with optional login hint
-      const authUrlOptions = {
+      const authUrlOptions: Auth.GenerateAuthUrlOpts = {
         access_type: 'offline',
         scope: scopes,
         prompt: 'select_account', // Show account picker, only consent if needed
@@ -295,7 +335,7 @@ class GoogleAuthService {
         authUrlOptions.login_hint = loginHint;
       }
 
-      const authUrl = this.oauth2Client.generateAuthUrl(authUrlOptions);
+      const authUrl = this.oauth2Client!.generateAuthUrl(authUrlOptions);
 
       console.log('[GoogleAuth] Mailbox auth URL generated, local server started');
 
@@ -313,18 +353,18 @@ class GoogleAuthService {
 
   /**
    * Get user profile information
-   * @param {string} accessToken - Access token
-   * @returns {Object} User info
+   * @param accessToken - Access token
+   * @returns User info
    */
-  async getUserInfo(accessToken) {
+  async getUserInfo(accessToken: string): Promise<UserInfo> {
     this._ensureInitialized();
 
     try {
-      const oauth2 = google.oauth2({ version: 'v2', auth: this.oauth2Client });
+      const oauth2 = google.oauth2({ version: 'v2', auth: this.oauth2Client! });
 
       // Set credentials if provided
       if (accessToken) {
-        this.oauth2Client.setCredentials({ access_token: accessToken });
+        this.oauth2Client!.setCredentials({ access_token: accessToken });
       }
 
       const { data } = await oauth2.userinfo.get();
@@ -332,14 +372,14 @@ class GoogleAuthService {
       console.log('[GoogleAuth] User info retrieved:', data.email);
 
       return {
-        id: data.id,
-        email: data.email,
+        id: data.id!,
+        email: data.email!,
         verified_email: data.verified_email,
-        name: data.name,
-        given_name: data.given_name,
-        family_name: data.family_name,
-        picture: data.picture,
-        locale: data.locale,
+        name: data.name || undefined,
+        given_name: data.given_name || undefined,
+        family_name: data.family_name || undefined,
+        picture: data.picture || undefined,
+        locale: data.locale || undefined,
       };
     } catch (error) {
       console.error('[GoogleAuth] Failed to get user info:', error);
@@ -349,25 +389,25 @@ class GoogleAuthService {
 
   /**
    * Refresh access token using refresh token
-   * @param {string} refreshToken - Refresh token
-   * @returns {Object} New tokens
+   * @param refreshToken - Refresh token
+   * @returns New tokens
    */
-  async refreshToken(refreshToken) {
+  async refreshToken(refreshToken: string): Promise<RefreshTokenResult> {
     this._ensureInitialized();
 
     try {
       console.log('[GoogleAuth] Refreshing access token');
 
-      this.oauth2Client.setCredentials({
+      this.oauth2Client!.setCredentials({
         refresh_token: refreshToken,
       });
 
-      const { credentials } = await this.oauth2Client.refreshAccessToken();
+      const { credentials } = await this.oauth2Client!.refreshAccessToken();
 
       console.log('[GoogleAuth] Token refreshed successfully');
 
       return {
-        access_token: credentials.access_token,
+        access_token: credentials.access_token!,
         expires_at: credentials.expiry_date
           ? new Date(credentials.expiry_date).toISOString()
           : null,
@@ -380,15 +420,15 @@ class GoogleAuthService {
 
   /**
    * Revoke tokens (sign out)
-   * @param {string} accessToken - Access token to revoke
+   * @param accessToken - Access token to revoke
    */
-  async revokeToken(accessToken) {
+  async revokeToken(accessToken: string): Promise<void> {
     this._ensureInitialized();
 
     try {
       console.log('[GoogleAuth] Revoking token');
 
-      await this.oauth2Client.revokeToken(accessToken);
+      await this.oauth2Client!.revokeToken(accessToken);
 
       console.log('[GoogleAuth] Token revoked successfully');
     } catch (error) {
@@ -399,10 +439,10 @@ class GoogleAuthService {
 
   /**
    * Check if user is authenticated
-   * @param {string} accessToken - Access token to check
-   * @returns {boolean} True if authenticated
+   * @param accessToken - Access token to check
+   * @returns True if authenticated
    */
-  async isAuthenticated(accessToken) {
+  async isAuthenticated(accessToken: string): Promise<boolean> {
     if (!accessToken) {
       return false;
     }
@@ -418,4 +458,4 @@ class GoogleAuthService {
 }
 
 // Export singleton instance
-module.exports = new GoogleAuthService();
+export default new GoogleAuthService();
