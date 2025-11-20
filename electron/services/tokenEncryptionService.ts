@@ -4,14 +4,14 @@
  * Stores tokens securely in the OS keychain (macOS Keychain, Windows DPAPI, Linux Secret Service)
  */
 
-const { safeStorage } = require('electron');
+import { safeStorage } from 'electron';
 
 class TokenEncryptionService {
   /**
    * Check if encryption is available
    * @returns {boolean}
    */
-  isEncryptionAvailable() {
+  isEncryptionAvailable(): boolean {
     try {
       return safeStorage.isEncryptionAvailable();
     } catch (error) {
@@ -25,7 +25,7 @@ class TokenEncryptionService {
    * @param {string} plaintext - The string to encrypt
    * @returns {string} Base64-encoded encrypted data
    */
-  encrypt(plaintext) {
+  encrypt(plaintext: string): string {
     if (!this.isEncryptionAvailable()) {
       console.error('[TokenEncryption] Encryption not available - cannot proceed');
       throw new Error('Encryption not available. Token storage requires OS-level encryption support.');
@@ -45,7 +45,7 @@ class TokenEncryptionService {
    * @param {string} encryptedBase64 - Base64-encoded encrypted data
    * @returns {string} Decrypted plaintext
    */
-  decrypt(encryptedBase64) {
+  decrypt(encryptedBase64: string): string {
     if (!this.isEncryptionAvailable()) {
       console.error('[TokenEncryption] Encryption not available - cannot proceed');
       throw new Error('Encryption not available. Token decryption requires OS-level encryption support.');
@@ -65,7 +65,7 @@ class TokenEncryptionService {
    * @param {Object} data - The object to encrypt
    * @returns {string} Base64-encoded encrypted data
    */
-  encryptObject(data) {
+  encryptObject(data: unknown): string {
     const json = JSON.stringify(data);
     return this.encrypt(json);
   }
@@ -75,11 +75,11 @@ class TokenEncryptionService {
    * @param {string} encryptedBase64 - Base64-encoded encrypted data
    * @returns {Object} Decrypted object
    */
-  decryptObject(encryptedBase64) {
+  decryptObject<T = unknown>(encryptedBase64: string): T {
     const json = this.decrypt(encryptedBase64);
-    return JSON.parse(json);
+    return JSON.parse(json) as T;
   }
 }
 
 // Export singleton instance
-module.exports = new TokenEncryptionService();
+export default new TokenEncryptionService();

@@ -1,19 +1,13 @@
-/**
- * Microsoft OAuth Service with Authorization Code Flow
- * Uses temporary local HTTP server to catch redirect
- * Better UX than device code flow - browser redirects back to app
- */
-
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 import http from 'http';
 import url from 'url';
 import crypto from 'crypto';
 
 // ============================================
-// TYPES
+// TYPES & INTERFACES
 // ============================================
 
-interface AuthResult {
+interface AuthFlowResult {
   authUrl: string;
   codePromise: Promise<string>;
   codeVerifier: string;
@@ -41,44 +35,51 @@ interface MailboxInfo {
   unreadItemCount: number;
 }
 
-interface RevokeResult {
+interface RevokeTokenResult {
   success: boolean;
   message: string;
 }
 
+// ============================================
+// SERVICE CLASS
+// ============================================
+
+/**
+ * Microsoft OAuth Service with Authorization Code Flow
+ * Uses temporary local HTTP server to catch redirect
+ * Better UX than device code flow - browser redirects back to app
+ */
 class MicrosoftAuthService {
   private clientId: string;
   private tenantId: string;
-  private redirectUri: string;
+  private redirectUri: string = 'http://localhost:3000/callback';
   private authorizeUrl: string;
   private tokenUrl: string;
-  private server: http.Server | null;
+  private server: http.Server | null = null;
 
   constructor() {
-    this.clientId = process.env.MICROSOFT_CLIENT_ID as string;
+    this.clientId = process.env.MICROSOFT_CLIENT_ID || '';
     // Note: client_secret not needed for public clients (desktop apps)
     // We use PKCE (Proof Key for Code Exchange) for security instead
     this.tenantId = process.env.MICROSOFT_TENANT_ID || 'common';
-    this.redirectUri = 'http://localhost:3000/callback';
 
     // Microsoft OAuth2 endpoints
     this.authorizeUrl = `https://login.microsoftonline.com/${this.tenantId}/oauth2/v2.0/authorize`;
     this.tokenUrl = `https://login.microsoftonline.com/${this.tenantId}/oauth2/v2.0/token`;
-
-    this.server = null;
   }
 
   /**
    * Start a temporary local HTTP server to catch OAuth redirect
+   * @returns {Promise<string>} Authorization code from redirect
    */
   startLocalServer(): Promise<string> {
     return new Promise((resolve, reject) => {
       this.server = http.createServer((req, res) => {
-        const parsedUrl = url.parse(req.url as string, true);
+        const parsedUrl = url.parse(req.url || '', true);
 
         if (parsedUrl.pathname === '/callback') {
-          const code = parsedUrl.query.code as string;
-          const error = parsedUrl.query.error as string;
+          const code = parsedUrl.query.code as string | undefined;
+          const error = parsedUrl.query.error as string | undefined;
 
           if (error) {
             res.writeHead(200, { 'Content-Type': 'text/html' });
@@ -181,7 +182,7 @@ class MicrosoftAuthService {
         console.log('[MicrosoftAuth] Local callback server listening on http://localhost:3000');
       });
 
-      this.server.on('error', (err) => {
+      this.server.on('error', (err: Error) => {
         reject(err);
       });
     });
@@ -202,8 +203,14 @@ class MicrosoftAuthService {
    * Step 1: Authenticate for Login (minimal scopes)
    * Opens browser, user logs in, redirects back to local server
    */
-  async authenticateForLogin(): Promise<AuthResult> {
-    const scopes = ['openid', 'profile', 'email', 'User.Read', 'offline_access'];
+  async authenticateForLogin(): Promise<AuthFlowResult> {
+    const scopes = [
+      'openid',
+      'profile',
+      'email',
+      'User.Read',
+      'offline_access'
+    ];
 
     // Generate PKCE challenge (optional but recommended)
     const codeVerifier = crypto.randomBytes(32).toString('base64url');
@@ -218,7 +225,7 @@ class MicrosoftAuthService {
       response_mode: 'query',
       prompt: 'select_account', // Show account picker, only consent if needed
       code_challenge: codeChallenge,
-      code_challenge_method: 'S256',
+      code_challenge_method: 'S256'
     });
 
     const authUrl = `${this.authorizeUrl}?${params.toString()}`;
@@ -230,15 +237,16 @@ class MicrosoftAuthService {
       authUrl,
       codePromise,
       codeVerifier,
-      scopes,
+      scopes
     };
   }
 
   /**
    * Step 2: Authenticate for Mailbox Access
    * Requests full mailbox permissions
+   * @param loginHint - User email to pre-fill
    */
-  async authenticateForMailbox(loginHint?: string): Promise<AuthResult> {
+  async authenticateForMailbox(loginHint?: string): Promise<AuthFlowResult> {
     const scopes = [
       'openid',
       'profile',
@@ -246,7 +254,7 @@ class MicrosoftAuthService {
       'User.Read',
       'Mail.Read',
       'Mail.ReadWrite',
-      'offline_access',
+      'offline_access'
     ];
 
     const codeVerifier = crypto.randomBytes(32).toString('base64url');
@@ -260,7 +268,7 @@ class MicrosoftAuthService {
       response_mode: 'query',
       prompt: 'select_account', // Show account picker, only consent if needed
       code_challenge: codeChallenge,
-      code_challenge_method: 'S256',
+      code_challenge_method: 'S256'
     });
 
     if (loginHint) {
@@ -274,12 +282,14 @@ class MicrosoftAuthService {
       authUrl,
       codePromise,
       codeVerifier,
-      scopes,
+      scopes
     };
   }
 
   /**
    * Exchange authorization code for tokens
+   * @param code - Authorization code from OAuth flow
+   * @param codeVerifier - PKCE code verifier
    */
   async exchangeCodeForTokens(code: string, codeVerifier: string): Promise<TokenResponse> {
     try {
@@ -288,33 +298,33 @@ class MicrosoftAuthService {
         code: code,
         redirect_uri: this.redirectUri,
         grant_type: 'authorization_code',
-        code_verifier: codeVerifier,
+        code_verifier: codeVerifier
       });
 
       const response = await axios.post(this.tokenUrl, params.toString(), {
         headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
       });
 
       return response.data;
-    } catch (error: any) {
-      console.error('Error exchanging code for tokens:', error.response?.data || error.message);
-      throw new Error(
-        error.response?.data?.error_description || 'Failed to exchange authorization code'
-      );
+    } catch (error) {
+      const axiosError = error as AxiosError;
+      console.error('Error exchanging code for tokens:', axiosError.response?.data || axiosError.message);
+      throw new Error((axiosError.response?.data as any)?.error_description || 'Failed to exchange authorization code');
     }
   }
 
   /**
    * Get user information from Microsoft Graph API
+   * @param accessToken - Access token
    */
   async getUserInfo(accessToken: string): Promise<UserInfo> {
     try {
       const response = await axios.get('https://graph.microsoft.com/v1.0/me', {
         headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
+          Authorization: `Bearer ${accessToken}`
+        }
       });
 
       const user = response.data;
@@ -324,72 +334,76 @@ class MicrosoftAuthService {
         email: user.mail || user.userPrincipalName,
         name: user.displayName,
         given_name: user.givenName,
-        family_name: user.surname,
+        family_name: user.surname
       };
-    } catch (error: any) {
-      console.error('Error getting user info:', error.response?.data || error.message);
+    } catch (error) {
+      const axiosError = error as AxiosError;
+      console.error('Error getting user info:', axiosError.response?.data || axiosError.message);
       throw new Error('Failed to get user information');
     }
   }
 
   /**
    * Refresh access token using refresh token
+   * @param refreshToken - Refresh token
    */
   async refreshToken(refreshToken: string): Promise<TokenResponse> {
     try {
       const params = new URLSearchParams({
         client_id: this.clientId,
         refresh_token: refreshToken,
-        grant_type: 'refresh_token',
+        grant_type: 'refresh_token'
       });
 
       const response = await axios.post(this.tokenUrl, params.toString(), {
         headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
       });
 
       return response.data;
-    } catch (error: any) {
-      console.error('Error refreshing token:', error.response?.data || error.message);
+    } catch (error) {
+      const axiosError = error as AxiosError;
+      console.error('Error refreshing token:', axiosError.response?.data || axiosError.message);
       throw new Error('Failed to refresh access token');
     }
   }
 
   /**
    * Revoke access token (logout)
+   * @param accessToken - Access token to revoke
    */
-  async revokeToken(accessToken: string): Promise<RevokeResult> {
+  async revokeToken(accessToken: string): Promise<RevokeTokenResult> {
     // Microsoft OAuth2 doesn't provide a revocation endpoint
     // For proper logout, direct user to: https://login.microsoftonline.com/common/oauth2/v2.0/logout
-    console.log(
-      'Microsoft tokens cannot be revoked programmatically. User should sign out from Microsoft account.'
-    );
+    console.log('Microsoft tokens cannot be revoked programmatically. User should sign out from Microsoft account.');
     return { success: true, message: 'Token will expire naturally' };
   }
 
   /**
    * Get mailbox metadata (for testing connection)
+   * @param accessToken - Access token with Mail.Read scope
    */
   async getMailboxInfo(accessToken: string): Promise<MailboxInfo> {
     try {
       const response = await axios.get('https://graph.microsoft.com/v1.0/me/mailFolders/inbox', {
         headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
+          Authorization: `Bearer ${accessToken}`
+        }
       });
 
       return {
         displayName: response.data.displayName,
         totalItemCount: response.data.totalItemCount,
-        unreadItemCount: response.data.unreadItemCount,
+        unreadItemCount: response.data.unreadItemCount
       };
-    } catch (error: any) {
-      console.error('Error getting mailbox info:', error.response?.data || error.message);
+    } catch (error) {
+      const axiosError = error as AxiosError;
+      console.error('Error getting mailbox info:', axiosError.response?.data || axiosError.message);
       throw new Error('Failed to get mailbox information');
     }
   }
 }
 
 // Export singleton instance
-export = new MicrosoftAuthService();
+export default new MicrosoftAuthService();

@@ -1,13 +1,94 @@
-const { PublicClientApplication, InteractionRequiredAuthError } = require('@azure/msal-node');
-const { FilePersistence } = require('@azure/msal-node-extensions');
-const { Client } = require('@microsoft/microsoft-graph-client');
-require('isomorphic-fetch');
-const fs = require('fs');
-const path = require('path');
-const { app, BrowserWindow } = require('electron');
-const os = require('os');
+import { PublicClientApplication, InteractionRequiredAuthError, AccountInfo, AuthenticationResult } from '@azure/msal-node';
+import { Client, PageCollection } from '@microsoft/microsoft-graph-client';
+import 'isomorphic-fetch';
+import fs from 'fs';
+import path from 'path';
+import { app, BrowserWindow, shell } from 'electron';
+
+interface MsalConfig {
+  auth: {
+    clientId: string;
+    authority: string;
+  };
+  cache: {
+    cachePlugin: {
+      beforeCacheAccess: (cacheContext: any) => Promise<void>;
+      afterCacheAccess: (cacheContext: any) => Promise<void>;
+    };
+  };
+  system: {
+    loggerOptions: {
+      loggerCallback: (loglevel: number, message: string) => void;
+      piiLoggingEnabled: boolean;
+      logLevel: number;
+    };
+  };
+}
+
+interface AuthenticateResult {
+  success: boolean;
+  account?: AccountInfo;
+  userInfo?: {
+    username: string;
+    name: string | undefined;
+  };
+  error?: string;
+}
+
+interface ExportResult {
+  success: boolean;
+  message?: string;
+  emailCount?: number;
+  exportPath?: string;
+  files?: string[];
+  error?: string;
+}
+
+interface EmailMessage {
+  id: string;
+  subject?: string;
+  from?: {
+    emailAddress?: {
+      name?: string;
+      address?: string;
+    };
+  };
+  toRecipients?: Array<{
+    emailAddress?: {
+      name?: string;
+      address?: string;
+    };
+  }>;
+  ccRecipients?: Array<{
+    emailAddress?: {
+      name?: string;
+      address?: string;
+    };
+  }>;
+  receivedDateTime: string;
+  body?: {
+    content: string;
+    contentType: string;
+  };
+  bodyPreview?: string;
+  hasAttachments?: boolean;
+  importance?: string;
+}
+
+interface ExportProgress {
+  stage: string;
+  message: string;
+  current?: number;
+  total?: number;
+}
 
 class OutlookService {
+  private msalInstance: PublicClientApplication | null;
+  private graphClient: Client | null;
+  private authWindow: BrowserWindow | null;
+  private accessToken: string | null;
+  private cacheLocation: string | null;
+
   constructor() {
     this.msalInstance = null;
     this.graphClient = null;
@@ -20,12 +101,12 @@ class OutlookService {
    * Initialize MSAL with configuration from environment variables
    * Includes persistent token caching so users don't have to re-authenticate every time
    */
-  async initialize(clientId, tenantId = 'common') {
+  async initialize(clientId: string, tenantId: string = 'common'): Promise<void> {
     // Set up cache location in app's user data directory
     const userDataPath = app.getPath('userData');
     this.cacheLocation = path.join(userDataPath, 'msal-cache.json');
 
-    const msalConfig = {
+    const msalConfig: MsalConfig = {
       auth: {
         clientId: clientId,
         authority: `https://login.microsoftonline.com/${tenantId}`,
@@ -34,22 +115,22 @@ class OutlookService {
         cachePlugin: {
           beforeCacheAccess: async (cacheContext) => {
             // Read cache from disk
-            if (fs.existsSync(this.cacheLocation)) {
-              const cacheData = fs.readFileSync(this.cacheLocation, 'utf8');
+            if (fs.existsSync(this.cacheLocation!)) {
+              const cacheData = fs.readFileSync(this.cacheLocation!, 'utf8');
               cacheContext.tokenCache.deserialize(cacheData);
             }
           },
           afterCacheAccess: async (cacheContext) => {
             // Write cache to disk if it changed
             if (cacheContext.cacheHasChanged) {
-              fs.writeFileSync(this.cacheLocation, cacheContext.tokenCache.serialize());
+              fs.writeFileSync(this.cacheLocation!, cacheContext.tokenCache.serialize());
             }
           },
         },
       },
       system: {
         loggerOptions: {
-          loggerCallback(loglevel, message) {
+          loggerCallback(loglevel: number, message: string) {
             // Logging disabled for production
           },
           piiLoggingEnabled: false,
@@ -65,13 +146,12 @@ class OutlookService {
    * Authenticate user using device code flow (best for desktop apps)
    * Returns user account info on success
    */
-  async authenticate(parentWindow) {
+  async authenticate(parentWindow: BrowserWindow | null): Promise<AuthenticateResult> {
     if (!this.msalInstance) {
       throw new Error('OutlookService not initialized. Call initialize() first.');
     }
 
     const scopes = ['User.Read', 'Mail.Read'];
-    const { shell } = require('electron');
 
     try {
       // Try to get token silently from cache first
@@ -100,7 +180,7 @@ class OutlookService {
       // Interactive authentication using device code flow
       const deviceCodeRequest = {
         scopes: scopes,
-        deviceCodeCallback: (response) => {
+        deviceCodeCallback: (response: any) => {
           // Automatically open the browser for the user
 
           // Open browser automatically
@@ -138,7 +218,7 @@ class OutlookService {
       console.error('Authentication error:', error);
       return {
         success: false,
-        error: error.message
+        error: (error as Error).message
       };
     }
   }
@@ -146,7 +226,7 @@ class OutlookService {
   /**
    * Initialize Microsoft Graph client with access token
    */
-  initializeGraphClient() {
+  private initializeGraphClient(): void {
     this.graphClient = Client.init({
       authProvider: (done) => {
         done(null, this.accessToken);
@@ -157,7 +237,7 @@ class OutlookService {
   /**
    * Get user's email address
    */
-  async getUserEmail() {
+  async getUserEmail(): Promise<string> {
     if (!this.graphClient) {
       throw new Error('Not authenticated. Call authenticate() first.');
     }
@@ -176,7 +256,7 @@ class OutlookService {
    * @param {string} contactEmail - Email address to search for
    * @param {number} maxResults - Maximum number of emails to retrieve (default: 100)
    */
-  async getEmailsWithContact(contactEmail, maxResults = 100) {
+  async getEmailsWithContact(contactEmail: string, maxResults: number = 100): Promise<EmailMessage[]> {
     if (!this.graphClient) {
       throw new Error('Not authenticated. Call authenticate() first.');
     }
@@ -185,13 +265,13 @@ class OutlookService {
       // Use Microsoft Graph API $search to filter on server-side
       // $search uses KQL (Keyword Query Language) and searches across from/to/cc/bcc
       const emailLower = contactEmail.toLowerCase();
-      let matchingEmails = [];
+      let matchingEmails: EmailMessage[] = [];
 
       // Helper function to add timeout to promises
-      const withTimeout = (promise, timeoutMs = 60000) => {
+      const withTimeout = <T>(promise: Promise<T>, timeoutMs: number = 60000): Promise<T> => {
         return Promise.race([
           promise,
-          new Promise((_, reject) =>
+          new Promise<T>((_, reject) =>
             setTimeout(() => reject(new Error(`Request timeout after ${timeoutMs}ms`)), timeoutMs)
           )
         ]);
@@ -200,7 +280,7 @@ class OutlookService {
       // Try $search first (server-side filtering)
       // $search requires the query to be quoted and uses KQL syntax
 
-      let emailsToFetch = [];
+      let emailsToFetch: EmailMessage[] = [];
       try {
         let response = await withTimeout(
           this.graphClient
@@ -216,7 +296,7 @@ class OutlookService {
         emailsToFetch = response.value || [];
       } catch (searchError) {
         // Fallback: Fetch and filter in memory with early stopping
-        let nextLink = null;
+        let nextLink: string | null = null;
         let pageCount = 0;
         const maxPages = 20;
 
@@ -230,12 +310,12 @@ class OutlookService {
           60000
         );
 
-        const matchingEmailIds = [];
+        const matchingEmailIds: EmailMessage[] = [];
         let consecutivePagesWithNoMatches = 0;
         const maxConsecutivePagesWithNoMatches = 5;
 
         do {
-          const emails = response.value || [];
+          const emails: EmailMessage[] = response.value || [];
 
           const matching = emails.filter(email => {
             const fromEmail = email.from?.emailAddress?.address?.toLowerCase();
@@ -266,7 +346,7 @@ class OutlookService {
           pageCount++;
 
           if (nextLink && pageCount < maxPages) {
-            response = await withTimeout(this.graphClient.api(nextLink).get(), 60000);
+            response = await withTimeout(this.graphClient!.api(nextLink).get(), 60000);
           } else {
             break;
           }
@@ -281,7 +361,7 @@ class OutlookService {
         try {
           // Fetch full email details including body
           const fullEmail = await withTimeout(
-            this.graphClient
+            this.graphClient!
               .api(`/me/messages/${email.id}`)
               .select('id,subject,from,toRecipients,ccRecipients,receivedDateTime,body,bodyPreview,hasAttachments,importance')
               .get(),
@@ -291,7 +371,7 @@ class OutlookService {
           // Merge the body into the email object
           matchingEmails.push(fullEmail);
         } catch (error) {
-          console.error(`[Email Fetch] Error fetching body for email ${email.id}:`, error.message);
+          console.error(`[Email Fetch] Error fetching body for email ${email.id}:`, (error as Error).message);
           // Still include the email but without body
           matchingEmails.push(email);
         }
@@ -301,10 +381,10 @@ class OutlookService {
     } catch (error) {
       console.error('[Email Fetch] Error fetching emails:', error);
       console.error('[Email Fetch] Error details:', {
-        message: error.message,
-        code: error.code,
-        statusCode: error.statusCode,
-        stack: error.stack
+        message: (error as Error).message,
+        code: (error as any).code,
+        statusCode: (error as any).statusCode,
+        stack: (error as Error).stack
       });
       throw error;
     }
@@ -317,7 +397,12 @@ class OutlookService {
    * @param {string} exportPath - Path to export folder
    * @param {Function} onProgress - Optional callback for progress updates
    */
-  async exportEmailsToAudit(contactName, contactEmail, exportPath, onProgress = null) {
+  async exportEmailsToAudit(
+    contactName: string,
+    contactEmail: string,
+    exportPath: string,
+    onProgress: ((progress: ExportProgress) => void) | null = null
+  ): Promise<ExportResult> {
     try {
       if (onProgress) onProgress({ stage: 'fetching', message: `Fetching emails for ${contactName}...` });
 
@@ -360,7 +445,7 @@ class OutlookService {
       content += `\n${'='.repeat(80)}\n\n`;
 
       // Sort emails by date (oldest first)
-      emails.sort((a, b) => new Date(a.receivedDateTime) - new Date(b.receivedDateTime));
+      emails.sort((a, b) => new Date(a.receivedDateTime).getTime() - new Date(b.receivedDateTime).getTime());
 
       emails.forEach((email, index) => {
         content += `EMAIL ${index + 1}\n`;
@@ -379,7 +464,7 @@ class OutlookService {
         if (email.toRecipients && email.toRecipients.length > 0) {
           const recipients = email.toRecipients
             .filter(r => r.emailAddress)
-            .map(r => `${r.emailAddress.name || 'Unknown'} <${r.emailAddress.address || 'unknown@unknown.com'}>`)
+            .map(r => `${r.emailAddress!.name || 'Unknown'} <${r.emailAddress!.address || 'unknown@unknown.com'}>`)
             .join(', ');
           if (recipients) {
             content += `To: ${recipients}\n`;
@@ -389,7 +474,7 @@ class OutlookService {
         if (email.ccRecipients && email.ccRecipients.length > 0) {
           const cc = email.ccRecipients
             .filter(r => r.emailAddress)
-            .map(r => `${r.emailAddress.name || 'Unknown'} <${r.emailAddress.address || 'unknown@unknown.com'}>`)
+            .map(r => `${r.emailAddress!.name || 'Unknown'} <${r.emailAddress!.address || 'unknown@unknown.com'}>`)
             .join(', ');
           if (cc) {
             content += `CC: ${cc}\n`;
@@ -448,7 +533,7 @@ class OutlookService {
       console.error('Error exporting emails:', error);
       return {
         success: false,
-        error: error.message,
+        error: (error as Error).message,
       };
     }
   }
@@ -456,14 +541,14 @@ class OutlookService {
   /**
    * Check if user is authenticated
    */
-  isAuthenticated() {
+  isAuthenticated(): boolean {
     return this.accessToken !== null && this.graphClient !== null;
   }
 
   /**
    * Sign out and clear cached tokens
    */
-  async signOut() {
+  async signOut(): Promise<void> {
     if (this.msalInstance) {
       const accounts = await this.msalInstance.getTokenCache().getAllAccounts();
       for (const account of accounts) {
@@ -481,4 +566,4 @@ class OutlookService {
   }
 }
 
-module.exports = OutlookService;
+export default OutlookService;

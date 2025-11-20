@@ -4,62 +4,60 @@
  * Supports two-step consent: login (minimal scopes) + mailbox access (Gmail scopes)
  */
 
-import { google } from 'googleapis';
+import { google, Auth } from 'googleapis';
 import http from 'http';
 import url from 'url';
 import dotenv from 'dotenv';
-import { OAuth2Client } from 'google-auth-library';
 
 dotenv.config({ path: '.env.development' });
 
 // ============================================
-// TYPES
+// TYPES & INTERFACES
 // ============================================
 
-interface AuthResult {
+interface AuthFlowResult {
   authUrl: string;
   codePromise: Promise<string>;
   scopes: string[];
 }
 
-interface TokenResult {
-  tokens: {
-    access_token: string | null | undefined;
-    refresh_token: string | null | undefined;
-    expires_at: string | null;
-    scopes: string[];
-  };
-  userInfo: UserInfo;
+interface TokenData {
+  access_token: string;
+  refresh_token?: string;
+  expires_at: string | null;
+  scopes: string[];
 }
 
 interface UserInfo {
   id: string;
   email: string;
-  verified_email: boolean;
-  name: string;
-  given_name: string;
-  family_name: string;
-  picture: string;
-  locale: string;
+  verified_email?: boolean;
+  name?: string;
+  given_name?: string;
+  family_name?: string;
+  picture?: string;
+  locale?: string;
+}
+
+interface TokenExchangeResult {
+  tokens: TokenData;
+  userInfo: UserInfo;
 }
 
 interface RefreshTokenResult {
-  access_token: string | null | undefined;
+  access_token: string;
   expires_at: string | null;
 }
 
-class GoogleAuthService {
-  private oauth2Client: OAuth2Client | null;
-  private initialized: boolean;
-  private redirectUri: string;
-  private server: http.Server | null;
+// ============================================
+// SERVICE CLASS
+// ============================================
 
-  constructor() {
-    this.oauth2Client = null;
-    this.initialized = false;
-    this.redirectUri = 'http://localhost:3001/callback'; // Different port than Microsoft
-    this.server = null;
-  }
+class GoogleAuthService {
+  private oauth2Client: Auth.OAuth2Client | null = null;
+  private initialized: boolean = false;
+  private redirectUri: string = 'http://localhost:3001/callback'; // Different port than Microsoft
+  private server: http.Server | null = null;
 
   /**
    * Initialize Google OAuth2 client
@@ -101,16 +99,16 @@ class GoogleAuthService {
 
   /**
    * Start a temporary local HTTP server to catch OAuth redirect
-   * @returns Authorization code from redirect
+   * @returns {Promise<string>} Authorization code from redirect
    */
   startLocalServer(): Promise<string> {
     return new Promise((resolve, reject) => {
       this.server = http.createServer((req, res) => {
-        const parsedUrl = url.parse(req.url as string, true);
+        const parsedUrl = url.parse(req.url || '', true);
 
         if (parsedUrl.pathname === '/callback') {
-          const code = parsedUrl.query.code as string;
-          const error = parsedUrl.query.error as string;
+          const code = parsedUrl.query.code as string | undefined;
+          const error = parsedUrl.query.error as string | undefined;
 
           if (error) {
             res.writeHead(200, { 'Content-Type': 'text/html' });
@@ -213,7 +211,7 @@ class GoogleAuthService {
         console.log('[GoogleAuth] Local callback server listening on http://localhost:3001');
       });
 
-      this.server.on('error', (err) => {
+      this.server.on('error', (err: Error) => {
         reject(err);
       });
     });
@@ -235,7 +233,7 @@ class GoogleAuthService {
    * Step 1: Get user into the app
    * Opens browser, user logs in, redirects back to local server
    */
-  async authenticateForLogin(): Promise<AuthResult> {
+  async authenticateForLogin(): Promise<AuthFlowResult> {
     this._ensureInitialized();
 
     const scopes = [
@@ -273,8 +271,10 @@ class GoogleAuthService {
 
   /**
    * Exchange authorization code for tokens
+   * @param code - Authorization code from OAuth callback
+   * @returns Tokens and user info
    */
-  async exchangeCodeForTokens(code: string): Promise<TokenResult> {
+  async exchangeCodeForTokens(code: string): Promise<TokenExchangeResult> {
     this._ensureInitialized();
 
     try {
@@ -290,9 +290,11 @@ class GoogleAuthService {
 
       return {
         tokens: {
-          access_token: tokens.access_token,
+          access_token: tokens.access_token!,
           refresh_token: tokens.refresh_token,
-          expires_at: tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : null,
+          expires_at: tokens.expiry_date
+            ? new Date(tokens.expiry_date).toISOString()
+            : null,
           scopes: tokens.scope ? tokens.scope.split(' ') : [],
         },
         userInfo,
@@ -307,11 +309,14 @@ class GoogleAuthService {
    * Authenticate for mailbox access (Gmail scopes)
    * Step 2: Connect to Gmail (incremental consent)
    * Opens browser, user grants Gmail access, redirects back to local server
+   * @param loginHint - Optional email to pre-fill
    */
-  async authenticateForMailbox(loginHint?: string): Promise<AuthResult> {
+  async authenticateForMailbox(loginHint?: string): Promise<AuthFlowResult> {
     this._ensureInitialized();
 
-    const scopes = ['https://www.googleapis.com/auth/gmail.readonly'];
+    const scopes = [
+      'https://www.googleapis.com/auth/gmail.readonly',
+    ];
 
     try {
       console.log('[GoogleAuth] Starting mailbox connection flow');
@@ -320,7 +325,7 @@ class GoogleAuthService {
       const codePromise = this.startLocalServer();
 
       // Generate auth URL with optional login hint
-      const authUrlOptions: any = {
+      const authUrlOptions: Auth.GenerateAuthUrlOpts = {
         access_type: 'offline',
         scope: scopes,
         prompt: 'select_account', // Show account picker, only consent if needed
@@ -348,6 +353,8 @@ class GoogleAuthService {
 
   /**
    * Get user profile information
+   * @param accessToken - Access token
+   * @returns User info
    */
   async getUserInfo(accessToken: string): Promise<UserInfo> {
     this._ensureInitialized();
@@ -365,14 +372,14 @@ class GoogleAuthService {
       console.log('[GoogleAuth] User info retrieved:', data.email);
 
       return {
-        id: data.id as string,
-        email: data.email as string,
-        verified_email: data.verified_email as boolean,
-        name: data.name as string,
-        given_name: data.given_name as string,
-        family_name: data.family_name as string,
-        picture: data.picture as string,
-        locale: data.locale as string,
+        id: data.id!,
+        email: data.email!,
+        verified_email: data.verified_email,
+        name: data.name || undefined,
+        given_name: data.given_name || undefined,
+        family_name: data.family_name || undefined,
+        picture: data.picture || undefined,
+        locale: data.locale || undefined,
       };
     } catch (error) {
       console.error('[GoogleAuth] Failed to get user info:', error);
@@ -382,6 +389,8 @@ class GoogleAuthService {
 
   /**
    * Refresh access token using refresh token
+   * @param refreshToken - Refresh token
+   * @returns New tokens
    */
   async refreshToken(refreshToken: string): Promise<RefreshTokenResult> {
     this._ensureInitialized();
@@ -398,8 +407,10 @@ class GoogleAuthService {
       console.log('[GoogleAuth] Token refreshed successfully');
 
       return {
-        access_token: credentials.access_token,
-        expires_at: credentials.expiry_date ? new Date(credentials.expiry_date).toISOString() : null,
+        access_token: credentials.access_token!,
+        expires_at: credentials.expiry_date
+          ? new Date(credentials.expiry_date).toISOString()
+          : null,
       };
     } catch (error) {
       console.error('[GoogleAuth] Token refresh failed:', error);
@@ -409,6 +420,7 @@ class GoogleAuthService {
 
   /**
    * Revoke tokens (sign out)
+   * @param accessToken - Access token to revoke
    */
   async revokeToken(accessToken: string): Promise<void> {
     this._ensureInitialized();
@@ -427,6 +439,8 @@ class GoogleAuthService {
 
   /**
    * Check if user is authenticated
+   * @param accessToken - Access token to check
+   * @returns True if authenticated
    */
   async isAuthenticated(accessToken: string): Promise<boolean> {
     if (!accessToken) {
@@ -444,4 +458,4 @@ class GoogleAuthService {
 }
 
 // Export singleton instance
-export = new GoogleAuthService();
+export default new GoogleAuthService();

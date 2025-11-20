@@ -1,7 +1,8 @@
-const path = require('path');
-const fs = require('fs').promises;
-const { app } = require('electron');
-const pdfExportService = require('./pdfExportService');
+import path from 'path';
+import fs from 'fs/promises';
+import { app } from 'electron';
+import pdfExportService from './pdfExportService';
+import { Transaction, Communication } from '../types/models';
 
 /**
  * Enhanced Export Service
@@ -12,21 +13,29 @@ const pdfExportService = require('./pdfExportService');
  * - JSON
  * - TXT + EML files in folders
  */
+
+interface ExportOptions {
+  contentType?: 'text' | 'email' | 'both';
+  exportFormat?: 'pdf' | 'excel' | 'csv' | 'json' | 'txt_eml';
+  representationStartDate?: string;
+  closingDate?: string;
+}
+
 class EnhancedExportService {
   constructor() {}
 
   /**
    * Export transaction with enhanced options
-   * @param {Object} transaction - Transaction data
-   * @param {Array} communications - All communications for the transaction
-   * @param {Object} options - Export options
-   * @param {string} options.contentType - 'text', 'email', or 'both'
-   * @param {string} options.exportFormat - 'pdf', 'excel', 'csv', 'json', 'txt_eml'
-   * @param {string} options.representationStartDate - Filter start date
-   * @param {string} options.closingDate - Filter end date
-   * @returns {Promise<string>} Path to exported file/folder
+   * @param transaction - Transaction data
+   * @param communications - All communications for the transaction
+   * @param options - Export options
+   * @returns Path to exported file/folder
    */
-  async exportTransaction(transaction, communications, options = {}) {
+  async exportTransaction(
+    transaction: Transaction,
+    communications: Communication[],
+    options: ExportOptions = {}
+  ): Promise<string> {
     const {
       contentType = 'both',
       exportFormat = 'pdf',
@@ -60,14 +69,14 @@ class EnhancedExportService {
       filteredComms = this._filterByContentType(filteredComms, contentType);
 
       // Sort descending (most recent first)
-      filteredComms.sort((a, b) => new Date(b.sent_at) - new Date(a.sent_at));
+      filteredComms.sort((a, b) => new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime());
 
       console.log(
         `[Enhanced Export] Filtered to ${filteredComms.length} communications (verified address relevance)`
       );
 
       // Export based on format
-      let exportPath;
+      let exportPath: string;
       switch (exportFormat) {
         case 'pdf':
           exportPath = await this._exportPDF(transaction, filteredComms);
@@ -98,7 +107,11 @@ class EnhancedExportService {
    * Filter communications by date range
    * @private
    */
-  _filterCommunicationsByDate(communications, startDate, endDate) {
+  private _filterCommunicationsByDate(
+    communications: Communication[],
+    startDate?: string,
+    endDate?: string
+  ): Communication[] {
     if (!startDate && !endDate) {
       return communications;
     }
@@ -118,7 +131,10 @@ class EnhancedExportService {
    * Filter by content type (text/email/both)
    * @private
    */
-  _filterByContentType(communications, contentType) {
+  private _filterByContentType(
+    communications: Communication[],
+    contentType: 'text' | 'email' | 'both'
+  ): Communication[] {
     if (contentType === 'both') {
       return communications;
     }
@@ -140,7 +156,10 @@ class EnhancedExportService {
    * Example: Inspector working on 4 different transactions should only show emails for THIS property
    * @private
    */
-  _filterByAddressRelevance(communications, propertyAddress) {
+  private _filterByAddressRelevance(
+    communications: Communication[],
+    propertyAddress?: string
+  ): Communication[] {
     if (!propertyAddress) {
       console.warn('[Enhanced Export] No property address provided, skipping address verification');
       return communications;
@@ -178,7 +197,7 @@ class EnhancedExportService {
       if (comm.keywords_detected) {
         const keywords = Array.isArray(comm.keywords_detected)
           ? comm.keywords_detected.join(' ').toLowerCase()
-          : comm.keywords_detected.toLowerCase();
+          : (comm.keywords_detected as string).toLowerCase();
         if (addressParts.some((part) => part.length >= 3 && keywords.includes(part))) {
           return true;
         }
@@ -196,7 +215,7 @@ class EnhancedExportService {
    * Normalize address for comparison (lowercase, remove extra spaces)
    * @private
    */
-  _normalizeAddress(address) {
+  private _normalizeAddress(address: string): string {
     return address.toLowerCase().replace(/\s+/g, ' ').trim();
   }
 
@@ -206,8 +225,8 @@ class EnhancedExportService {
    *   "123 Main St, Anytown, CA 12345" → ["123", "main", "st", "anytown", "ca", "12345", "123 main", "main st"]
    * @private
    */
-  _extractAddressParts(normalizedAddress) {
-    const parts = [];
+  private _extractAddressParts(normalizedAddress: string): string[] {
+    const parts: string[] = [];
 
     // Remove common separators and split
     const words = normalizedAddress
@@ -235,7 +254,7 @@ class EnhancedExportService {
    * Export as PDF using existing PDF export service
    * @private
    */
-  async _exportPDF(transaction, communications) {
+  private async _exportPDF(transaction: Transaction, communications: Communication[]): Promise<string> {
     const downloadsPath = app.getPath('downloads');
     const fileName = this._sanitizeFileName(
       `Transaction_${transaction.property_address}_${Date.now()}.pdf`
@@ -253,7 +272,11 @@ class EnhancedExportService {
    * Export as CSV or Excel (CSV format)
    * @private
    */
-  async _exportCSV(transaction, communications, format) {
+  private async _exportCSV(
+    transaction: Transaction,
+    communications: Communication[],
+    format: 'excel' | 'csv'
+  ): Promise<string> {
     const downloadsPath = app.getPath('downloads');
     const ext = format === 'excel' ? 'xlsx' : 'csv';
     const fileName = this._sanitizeFileName(
@@ -315,7 +338,7 @@ class EnhancedExportService {
    * Export as JSON
    * @private
    */
-  async _exportJSON(transaction, communications) {
+  private async _exportJSON(transaction: Transaction, communications: Communication[]): Promise<string> {
     const downloadsPath = app.getPath('downloads');
     const fileName = this._sanitizeFileName(
       `Transaction_${transaction.property_address}_${Date.now()}.json`
@@ -367,7 +390,7 @@ class EnhancedExportService {
    * Creates: {address}_{client}/emails/ and texts/
    * @private
    */
-  async _exportTxtEml(transaction, communications) {
+  private async _exportTxtEml(transaction: Transaction, communications: Communication[]): Promise<string> {
     const downloadsPath = app.getPath('downloads');
     const folderName = this._sanitizeFileName(
       `${transaction.property_address}_Export_${Date.now()}`
@@ -414,8 +437,8 @@ class EnhancedExportService {
    * Create EML file content (RFC 822 format)
    * @private
    */
-  _createEMLContent(email) {
-    const lines = [];
+  private _createEMLContent(email: Communication): string {
+    const lines: string[] = [];
 
     lines.push(`From: ${email.sender || 'Unknown'}`);
     if (email.recipients) lines.push(`To: ${email.recipients}`);
@@ -443,8 +466,8 @@ class EnhancedExportService {
    * Create text message content
    * @private
    */
-  _createTextContent(text) {
-    const lines = [];
+  private _createTextContent(text: Communication): string {
+    const lines: string[] = [];
 
     lines.push('=== TEXT MESSAGE ===');
     lines.push(`From: ${text.sender || 'Unknown'}`);
@@ -462,8 +485,8 @@ class EnhancedExportService {
    * Create summary file
    * @private
    */
-  _createSummary(transaction, communications) {
-    const lines = [];
+  private _createSummary(transaction: Transaction, communications: Communication[]): string {
+    const lines: string[] = [];
 
     lines.push('========================================');
     lines.push('  TRANSACTION EXPORT SUMMARY');
@@ -524,7 +547,7 @@ class EnhancedExportService {
    * Sanitize file/folder name
    * @private
    */
-  _sanitizeFileName(name) {
+  private _sanitizeFileName(name: string): string {
     return name
       .replace(/[^a-z0-9_\-\.]/gi, '_')
       .replace(/_+/g, '_')
@@ -532,4 +555,4 @@ class EnhancedExportService {
   }
 }
 
-module.exports = new EnhancedExportService();
+export default new EnhancedExportService();

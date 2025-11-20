@@ -6,17 +6,28 @@
  */
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import type {
-  User,
-  NewUser,
-  OAuthProvider,
-  SubscriptionTier,
-  SubscriptionStatus as UserSubscriptionStatus,
-} from '../types';
+import { User, SubscriptionTier } from '../types/models';
+import * as dotenv from 'dotenv';
 
-import { DatabaseError } from '../types';
+dotenv.config({ path: '.env.development' });
 
-// Device information interface
+/**
+ * User data for sync operations
+ */
+interface UserSyncData {
+  email: string;
+  first_name?: string;
+  last_name?: string;
+  display_name?: string;
+  avatar_url?: string;
+  oauth_provider: string;
+  oauth_id: string;
+  subscription_tier?: SubscriptionTier;
+}
+
+/**
+ * Device information
+ */
 interface DeviceInfo {
   device_id: string;
   device_name: string;
@@ -24,7 +35,9 @@ interface DeviceInfo {
   app_version: string;
 }
 
-// Device record from database
+/**
+ * Device record from database
+ */
 interface DeviceRecord {
   id: string;
   user_id: string;
@@ -32,45 +45,51 @@ interface DeviceRecord {
   device_name: string;
   os: string;
   app_version: string;
-  last_seen_at: string;
-  created_at: string;
+  last_seen_at?: string;
 }
 
-// License information
-interface License {
-  id: string;
-  user_id: string;
-  status: 'active' | 'inactive' | 'expired';
+/**
+ * License record
+ */
+interface LicenseRecord {
   max_devices: number;
 }
 
-// Subscription status result
-interface SubscriptionStatusResult {
+/**
+ * Subscription validation result
+ */
+interface SubscriptionStatus {
   tier: SubscriptionTier;
-  status: UserSubscriptionStatus;
+  status: string;
   isActive: boolean;
   isTrial: boolean;
   trialEnded: boolean;
   trialDaysRemaining: number;
 }
 
-// Device limit check result
-interface DeviceLimitResult {
+/**
+ * Device limit check result
+ */
+interface DeviceLimitCheck {
   allowed: boolean;
   current: number;
   max: number;
   isCurrentDevice?: boolean;
 }
 
-// API usage check result
-interface ApiLimitResult {
+/**
+ * API usage check result
+ */
+interface ApiUsageCheck {
   allowed: boolean;
   current: number;
   limit: number;
   remaining: number;
 }
 
-// Tier limits for API usage
+/**
+ * Tier limits for API usage
+ */
 interface TierLimits {
   free: number;
   pro: number;
@@ -79,7 +98,7 @@ interface TierLimits {
 
 class SupabaseService {
   private client: SupabaseClient | null = null;
-  private initialized: boolean = false;
+  private initialized = false;
 
   /**
    * Initialize Supabase client
@@ -94,7 +113,7 @@ class SupabaseService {
 
     if (!supabaseUrl || !supabaseKey) {
       console.error('[Supabase] Missing credentials. Check .env.development file.');
-      throw new DatabaseError('Supabase credentials not configured');
+      throw new Error('Supabase credentials not configured');
     }
 
     console.log('[Supabase] Initializing with URL:', supabaseUrl);
@@ -112,6 +131,7 @@ class SupabaseService {
 
   /**
    * Ensure client is initialized
+   * @private
    */
   private _ensureInitialized(): void {
     if (!this.initialized) {
@@ -125,8 +145,10 @@ class SupabaseService {
 
   /**
    * Sync user to cloud (create or update)
+   * @param userData - User data to sync
+   * @returns Synced user data
    */
-  async syncUser(userData: Partial<NewUser> & { oauth_provider: OAuthProvider; oauth_id: string }): Promise<User> {
+  async syncUser(userData: UserSyncData): Promise<User> {
     this._ensureInitialized();
 
     try {
@@ -163,7 +185,6 @@ class SupabaseService {
           .single();
 
         if (error) throw error;
-        if (!data) throw new DatabaseError('Failed to update user');
 
         // Increment login count
         await this.client!.rpc('increment', {
@@ -198,8 +219,6 @@ class SupabaseService {
           .single();
 
         if (error) throw error;
-        if (!data) throw new DatabaseError('Failed to create user');
-
         result = data as User;
         console.log('[Supabase] New user created:', result.id);
       }
@@ -213,6 +232,8 @@ class SupabaseService {
 
   /**
    * Get user by ID
+   * @param userId - User UUID
+   * @returns User data
    */
   async getUserById(userId: string): Promise<User> {
     this._ensureInitialized();
@@ -225,8 +246,6 @@ class SupabaseService {
         .single();
 
       if (error) throw error;
-      if (!data) throw new DatabaseError(`User not found: ${userId}`);
-
       return data as User;
     } catch (error) {
       console.error('[Supabase] Failed to get user:', error);
@@ -236,6 +255,9 @@ class SupabaseService {
 
   /**
    * Sync terms acceptance to cloud
+   * @param userId - User UUID
+   * @param termsVersion - Version of Terms of Service accepted
+   * @param privacyVersion - Version of Privacy Policy accepted
    */
   async syncTermsAcceptance(userId: string, termsVersion: string, privacyVersion: string): Promise<User> {
     this._ensureInitialized();
@@ -255,8 +277,6 @@ class SupabaseService {
         .single();
 
       if (error) throw error;
-      if (!data) throw new DatabaseError('Failed to sync terms acceptance');
-
       console.log('[Supabase] Terms acceptance synced for user:', userId);
       return data as User;
     } catch (error) {
@@ -267,8 +287,10 @@ class SupabaseService {
 
   /**
    * Validate user's subscription status
+   * @param userId - User UUID
+   * @returns Subscription status
    */
-  async validateSubscription(userId: string): Promise<SubscriptionStatusResult> {
+  async validateSubscription(userId: string): Promise<SubscriptionStatus> {
     this._ensureInitialized();
 
     try {
@@ -277,7 +299,7 @@ class SupabaseService {
       const now = new Date();
       const trialEndsAt = user.trial_ends_at ? new Date(user.trial_ends_at) : null;
 
-      const status: SubscriptionStatusResult = {
+      const status: SubscriptionStatus = {
         tier: user.subscription_tier,
         status: user.subscription_status,
         isActive: user.subscription_status === 'active',
@@ -295,7 +317,7 @@ class SupabaseService {
           .update({ subscription_status: 'expired' })
           .eq('id', userId);
 
-        status.status = 'expired' as UserSubscriptionStatus;
+        status.status = 'expired';
         status.isActive = false;
       }
 
@@ -312,6 +334,9 @@ class SupabaseService {
 
   /**
    * Register a device for a user
+   * @param userId - User UUID
+   * @param deviceInfo - Device information
+   * @returns Device record
    */
   async registerDevice(userId: string, deviceInfo: DeviceInfo): Promise<DeviceRecord> {
     this._ensureInitialized();
@@ -344,8 +369,6 @@ class SupabaseService {
           .single();
 
         if (error) throw error;
-        if (!data) throw new DatabaseError('Failed to update device');
-
         console.log('[Supabase] Device updated:', data.id);
         return data as DeviceRecord;
       } else {
@@ -363,8 +386,6 @@ class SupabaseService {
           .single();
 
         if (error) throw error;
-        if (!data) throw new DatabaseError('Failed to register device');
-
         console.log('[Supabase] Device registered:', data.id);
         return data as DeviceRecord;
       }
@@ -376,8 +397,11 @@ class SupabaseService {
 
   /**
    * Check if user has reached device limit
+   * @param userId - User UUID
+   * @param deviceId - Current device ID
+   * @returns Device limit check result
    */
-  async checkDeviceLimit(userId: string, deviceId: string): Promise<DeviceLimitResult> {
+  async checkDeviceLimit(userId: string, deviceId: string): Promise<DeviceLimitCheck> {
     this._ensureInitialized();
 
     try {
@@ -421,14 +445,13 @@ class SupabaseService {
 
   /**
    * Track an analytics event
+   * @param userId - User UUID
+   * @param eventName - Event name
+   * @param eventData - Event data
+   * @param deviceId - Device ID
+   * @param appVersion - App version
    */
-  async trackEvent(
-    userId: string,
-    eventName: string,
-    eventData: Record<string, any> = {},
-    deviceId: string | null = null,
-    appVersion: string | null = null
-  ): Promise<void> {
+  async trackEvent(userId: string, eventName: string, eventData: Record<string, any> = {}, deviceId: string | null = null, appVersion: string | null = null): Promise<void> {
     this._ensureInitialized();
 
     try {
@@ -453,6 +476,10 @@ class SupabaseService {
 
   /**
    * Track API usage for rate limiting
+   * @param userId - User UUID
+   * @param apiName - API name (e.g., 'google_maps')
+   * @param endpoint - Endpoint called
+   * @param estimatedCost - Estimated cost in USD
    */
   async trackApiUsage(userId: string, apiName: string, endpoint: string, estimatedCost: number = 0): Promise<void> {
     this._ensureInitialized();
@@ -474,8 +501,12 @@ class SupabaseService {
 
   /**
    * Check API usage limit for current month
+   * @param userId - User UUID
+   * @param apiName - API name
+   * @param tierLimits - Limits by subscription tier
+   * @returns Usage check result
    */
-  async checkApiLimit(userId: string, apiName: string, tierLimits: TierLimits = { free: 10, pro: 100, enterprise: 1000 }): Promise<ApiLimitResult> {
+  async checkApiLimit(userId: string, apiName: string, tierLimits: TierLimits = { free: 10, pro: 100, enterprise: 1000 }): Promise<ApiUsageCheck> {
     this._ensureInitialized();
 
     try {
@@ -517,6 +548,8 @@ class SupabaseService {
 
   /**
    * Sync user preferences to cloud
+   * @param userId - User UUID
+   * @param preferences - User preferences
    */
   async syncPreferences(userId: string, preferences: Record<string, any>): Promise<void> {
     this._ensureInitialized();
@@ -540,6 +573,8 @@ class SupabaseService {
 
   /**
    * Get user preferences from cloud
+   * @param userId - User UUID
+   * @returns User preferences
    */
   async getPreferences(userId: string): Promise<Record<string, any>> {
     this._ensureInitialized();
@@ -568,17 +603,20 @@ class SupabaseService {
 
   /**
    * Call a Supabase Edge Function
+   * @param functionName - Function name
+   * @param payload - Request payload
+   * @returns Function response
    */
-  async callEdgeFunction<T = any>(functionName: string, payload: Record<string, any>): Promise<T> {
+  async callEdgeFunction(functionName: string, payload: Record<string, any>): Promise<any> {
     this._ensureInitialized();
 
     try {
-      const { data, error } = await this.client!.functions.invoke<T>(functionName, {
+      const { data, error } = await this.client!.functions.invoke(functionName, {
         body: payload,
       });
 
       if (error) throw error;
-      return data as T;
+      return data;
     } catch (error) {
       console.error(`[Supabase] Edge function '${functionName}' failed:`, error);
       throw error;

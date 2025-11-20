@@ -1,6 +1,30 @@
-const fs = require('fs').promises;
-const path = require('path');
-const { app } = require('electron');
+import { promises as fs } from 'fs';
+import path from 'path';
+import { app } from 'electron';
+import type { User, OAuthProvider, SubscriptionTier } from '../types/models';
+
+// ============================================
+// TYPES & INTERFACES
+// ============================================
+
+interface SubscriptionInfo {
+  tier: SubscriptionTier;
+  status: string;
+  trial_ends_at?: string;
+}
+
+interface SessionData {
+  user: User;
+  sessionToken: string;
+  provider: OAuthProvider;
+  subscription?: SubscriptionInfo;
+  expiresAt: number;
+  savedAt?: number;
+}
+
+// ============================================
+// SERVICE CLASS
+// ============================================
 
 /**
  * Session Service
@@ -8,22 +32,19 @@ const { app } = require('electron');
  * Session data is stored in app's user data directory
  */
 class SessionService {
+  private sessionFilePath: string;
+
   constructor() {
     this.sessionFilePath = path.join(app.getPath('userData'), 'session.json');
   }
 
   /**
    * Save session data to disk
-   * @param {Object} sessionData - Session data to save
-   * @param {Object} sessionData.user - User object
-   * @param {string} sessionData.sessionToken - Session token
-   * @param {string} sessionData.provider - Auth provider (google/microsoft)
-   * @param {Object} sessionData.subscription - Subscription info
-   * @param {number} sessionData.expiresAt - Session expiration timestamp
+   * @param sessionData - Session data to save
    */
-  async saveSession(sessionData) {
+  async saveSession(sessionData: SessionData): Promise<boolean> {
     try {
-      const data = {
+      const data: SessionData = {
         ...sessionData,
         savedAt: Date.now()
       };
@@ -38,12 +59,12 @@ class SessionService {
 
   /**
    * Load session data from disk
-   * @returns {Promise<Object|null>} Session data or null if not found/expired
+   * @returns Session data or null if not found/expired
    */
-  async loadSession() {
+  async loadSession(): Promise<SessionData | null> {
     try {
       const data = await fs.readFile(this.sessionFilePath, 'utf8');
-      const session = JSON.parse(data);
+      const session: SessionData = JSON.parse(data);
 
       // Check if session is expired
       if (session.expiresAt && Date.now() > session.expiresAt) {
@@ -54,7 +75,7 @@ class SessionService {
 
       console.log('Session loaded successfully');
       return session;
-    } catch (error) {
+    } catch (error: any) {
       if (error.code === 'ENOENT') {
         console.log('No existing session found');
         return null;
@@ -66,14 +87,13 @@ class SessionService {
 
   /**
    * Clear session data
-   * @returns {Promise<boolean>}
    */
-  async clearSession() {
+  async clearSession(): Promise<boolean> {
     try {
       await fs.unlink(this.sessionFilePath);
       console.log('Session cleared successfully');
       return true;
-    } catch (error) {
+    } catch (error: any) {
       if (error.code === 'ENOENT') {
         // File doesn't exist, that's fine
         return true;
@@ -85,18 +105,17 @@ class SessionService {
 
   /**
    * Check if a valid session exists
-   * @returns {Promise<boolean>}
    */
-  async hasValidSession() {
+  async hasValidSession(): Promise<boolean> {
     const session = await this.loadSession();
     return session !== null;
   }
 
   /**
    * Update session data (merge with existing)
-   * @param {Object} updates - Partial session data to update
+   * @param updates - Partial session data to update
    */
-  async updateSession(updates) {
+  async updateSession(updates: Partial<SessionData>): Promise<boolean> {
     try {
       const currentSession = await this.loadSession();
       if (!currentSession) {
@@ -104,7 +123,7 @@ class SessionService {
         return false;
       }
 
-      const updatedSession = {
+      const updatedSession: SessionData = {
         ...currentSession,
         ...updates,
         savedAt: Date.now()
@@ -119,4 +138,4 @@ class SessionService {
   }
 }
 
-module.exports = new SessionService();
+export default new SessionService();

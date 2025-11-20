@@ -1,32 +1,74 @@
-const { google } = require('googleapis');
-const tokenEncryptionService = require('./tokenEncryptionService');
-const databaseService = require('./databaseService');
+import { google, gmail_v1 } from 'googleapis';
+import { OAuth2Client } from 'google-auth-library';
+import tokenEncryptionService from './tokenEncryptionService';
+import databaseService from './databaseService';
+import { OAuthToken } from '../types/models';
+
+/**
+ * Email attachment metadata
+ */
+interface EmailAttachment {
+  filename: string;
+  mimeType: string;
+  size: number;
+  attachmentId: string;
+}
+
+/**
+ * Parsed email message
+ */
+interface ParsedEmail {
+  id: string;
+  threadId: string;
+  subject: string | null;
+  from: string | null;
+  to: string | null;
+  cc: string | null;
+  bcc: string | null;
+  date: Date;
+  body: string;
+  bodyPlain: string;
+  snippet: string;
+  hasAttachments: boolean;
+  attachmentCount: number;
+  attachments: EmailAttachment[];
+  labels: string[];
+  raw: gmail_v1.Schema$Message;
+}
+
+/**
+ * Search options for email queries
+ */
+interface EmailSearchOptions {
+  query?: string;
+  after?: Date | null;
+  before?: Date | null;
+  maxResults?: number;
+}
 
 /**
  * Gmail Fetch Service
  * Fetches emails from Gmail for transaction extraction
  */
 class GmailFetchService {
-  constructor() {
-    this.gmail = null;
-    this.oauth2Client = null;
-  }
+  private gmail: gmail_v1.Gmail | null = null;
+  private oauth2Client: OAuth2Client | null = null;
 
   /**
    * Initialize Gmail API with user's OAuth tokens
-   * @param {string} userId - User ID to fetch tokens for
+   * @param userId - User ID to fetch tokens for
    */
-  async initialize(userId) {
+  async initialize(userId: string): Promise<boolean> {
     try {
       // Get OAuth token from database
-      const tokenRecord = await databaseService.getOAuthToken(userId, 'google', 'mailbox');
+      const tokenRecord: OAuthToken | null = await databaseService.getOAuthToken(userId, 'google', 'mailbox');
 
       if (!tokenRecord) {
         throw new Error('No Gmail OAuth token found. User needs to connect Gmail first.');
       }
 
       // Decrypt tokens
-      const accessToken = tokenEncryptionService.decrypt(tokenRecord.access_token);
+      const accessToken = tokenEncryptionService.decrypt(tokenRecord.access_token || '');
       const refreshToken = tokenRecord.refresh_token
         ? tokenEncryptionService.decrypt(tokenRecord.refresh_token)
         : null;
@@ -59,7 +101,7 @@ class GmailFetchService {
           const encryptedAccessToken = tokenEncryptionService.encrypt(tokens.access_token);
           await databaseService.updateOAuthToken(tokenRecord.id, {
             access_token: encryptedAccessToken,
-            token_expires_at: new Date(Date.now() + tokens.expiry_date).toISOString(),
+            token_expires_at: new Date(Date.now() + (tokens.expiry_date || 3600000)).toISOString(),
           });
         }
       });
@@ -77,14 +119,10 @@ class GmailFetchService {
 
   /**
    * Search for emails matching query
-   * @param {Object} options - Search options
-   * @param {string} options.query - Gmail search query (e.g., 'from:realtor@example.com')
-   * @param {Date} options.after - Only emails after this date
-   * @param {Date} options.before - Only emails before this date
-   * @param {number} options.maxResults - Max number of results (default 100)
-   * @returns {Promise<Array>} Array of email messages
+   * @param options - Search options
+   * @returns Array of email messages
    */
-  async searchEmails({ query = '', after = null, before = null, maxResults = 100 } = {}) {
+  async searchEmails({ query = '', after = null, before = null, maxResults = 100 }: EmailSearchOptions = {}): Promise<ParsedEmail[]> {
     try {
       if (!this.gmail) {
         throw new Error('Gmail API not initialized. Call initialize() first.');
@@ -117,7 +155,7 @@ class GmailFetchService {
 
       // Fetch full message details for each
       const fullMessages = await Promise.all(
-        messages.map(msg => this.getEmailById(msg.id))
+        messages.map(msg => this.getEmailById(msg.id!))
       );
 
       return fullMessages;
@@ -129,11 +167,15 @@ class GmailFetchService {
 
   /**
    * Get email by ID
-   * @param {string} messageId - Gmail message ID
-   * @returns {Promise<Object>} Parsed email object
+   * @param messageId - Gmail message ID
+   * @returns Parsed email object
    */
-  async getEmailById(messageId) {
+  async getEmailById(messageId: string): Promise<ParsedEmail> {
     try {
+      if (!this.gmail) {
+        throw new Error('Gmail API not initialized. Call initialize() first.');
+      }
+
       const response = await this.gmail.users.messages.get({
         userId: 'me',
         id: messageId,
@@ -152,21 +194,21 @@ class GmailFetchService {
    * Parse Gmail message into structured format
    * @private
    */
-  _parseMessage(message) {
-    const headers = message.payload.headers;
-    const getHeader = (name) => {
-      const header = headers.find(h => h.name.toLowerCase() === name.toLowerCase());
-      return header ? header.value : null;
+  private _parseMessage(message: gmail_v1.Schema$Message): ParsedEmail {
+    const headers = message.payload?.headers || [];
+    const getHeader = (name: string): string | null => {
+      const header = headers.find(h => h.name?.toLowerCase() === name.toLowerCase());
+      return header ? header.value || null : null;
     };
 
     // Extract body
     let body = '';
     let bodyPlain = '';
 
-    const extractBody = (part) => {
-      if (part.mimeType === 'text/plain' && part.body.data) {
+    const extractBody = (part: gmail_v1.Schema$MessagePart): void => {
+      if (part.mimeType === 'text/plain' && part.body?.data) {
         bodyPlain = Buffer.from(part.body.data, 'base64').toString('utf-8');
-      } else if (part.mimeType === 'text/html' && part.body.data) {
+      } else if (part.mimeType === 'text/html' && part.body?.data) {
         body = Buffer.from(part.body.data, 'base64').toString('utf-8');
       }
 
@@ -175,9 +217,9 @@ class GmailFetchService {
       }
     };
 
-    if (message.payload.parts) {
+    if (message.payload?.parts) {
       message.payload.parts.forEach(extractBody);
-    } else if (message.payload.body.data) {
+    } else if (message.payload?.body?.data) {
       // Single part message
       const content = Buffer.from(message.payload.body.data, 'base64').toString('utf-8');
       if (message.payload.mimeType === 'text/plain') {
@@ -188,13 +230,13 @@ class GmailFetchService {
     }
 
     // Extract attachments
-    const attachments = [];
-    const extractAttachments = (part) => {
-      if (part.filename && part.body.attachmentId) {
+    const attachments: EmailAttachment[] = [];
+    const extractAttachments = (part: gmail_v1.Schema$MessagePart): void => {
+      if (part.filename && part.body?.attachmentId) {
         attachments.push({
           filename: part.filename,
-          mimeType: part.mimeType,
-          size: part.body.size,
+          mimeType: part.mimeType || 'application/octet-stream',
+          size: part.body.size || 0,
           attachmentId: part.body.attachmentId,
         });
       }
@@ -203,22 +245,22 @@ class GmailFetchService {
       }
     };
 
-    if (message.payload.parts) {
+    if (message.payload?.parts) {
       message.payload.parts.forEach(extractAttachments);
     }
 
     return {
-      id: message.id,
-      threadId: message.threadId,
+      id: message.id || '',
+      threadId: message.threadId || '',
       subject: getHeader('Subject'),
       from: getHeader('From'),
       to: getHeader('To'),
       cc: getHeader('Cc'),
       bcc: getHeader('Bcc'),
-      date: new Date(parseInt(message.internalDate)),
+      date: new Date(parseInt(message.internalDate || '0')),
       body: body,
       bodyPlain: bodyPlain || body,
-      snippet: message.snippet,
+      snippet: message.snippet || '',
       hasAttachments: attachments.length > 0,
       attachmentCount: attachments.length,
       attachments: attachments,
@@ -229,19 +271,23 @@ class GmailFetchService {
 
   /**
    * Get email attachment
-   * @param {string} messageId - Gmail message ID
-   * @param {string} attachmentId - Attachment ID
-   * @returns {Promise<Buffer>} Attachment data
+   * @param messageId - Gmail message ID
+   * @param attachmentId - Attachment ID
+   * @returns Attachment data
    */
-  async getAttachment(messageId, attachmentId) {
+  async getAttachment(messageId: string, attachmentId: string): Promise<Buffer> {
     try {
+      if (!this.gmail) {
+        throw new Error('Gmail API not initialized. Call initialize() first.');
+      }
+
       const response = await this.gmail.users.messages.attachments.get({
         userId: 'me',
         messageId: messageId,
         id: attachmentId,
       });
 
-      return Buffer.from(response.data.data, 'base64');
+      return Buffer.from(response.data.data || '', 'base64');
     } catch (error) {
       console.error(`[GmailFetch] Failed to get attachment:`, error);
       throw error;
@@ -250,15 +296,19 @@ class GmailFetchService {
 
   /**
    * Get user's email address
-   * @returns {Promise<string>} User's Gmail address
+   * @returns User's Gmail address
    */
-  async getUserEmail() {
+  async getUserEmail(): Promise<string> {
     try {
+      if (!this.gmail) {
+        throw new Error('Gmail API not initialized. Call initialize() first.');
+      }
+
       const response = await this.gmail.users.getProfile({
         userId: 'me',
       });
 
-      return response.data.emailAddress;
+      return response.data.emailAddress || '';
     } catch (error) {
       console.error('[GmailFetch] Failed to get user email:', error);
       throw error;
@@ -266,4 +316,4 @@ class GmailFetchService {
   }
 }
 
-module.exports = new GmailFetchService();
+export default new GmailFetchService();

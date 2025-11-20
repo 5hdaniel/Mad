@@ -1,21 +1,40 @@
 import crypto from 'crypto';
 
-// ============================================
-// TYPES
-// ============================================
-
-interface EmailObject {
+/**
+ * Email object structure
+ */
+interface Email {
   subject?: string;
   from?: string;
   to?: string;
-  date: string | Date;
   body?: string;
   bodyPlain?: string;
   snippet?: string;
   bodyPreview?: string;
+  date: string | Date;
 }
 
-interface AnalysisResult {
+/**
+ * Party with role
+ */
+interface Party {
+  email?: string;
+  role?: string;
+  name?: string;
+}
+
+/**
+ * Keyword match
+ */
+interface KeywordMatch {
+  category: string;
+  keyword: string;
+}
+
+/**
+ * Analysis result
+ */
+export interface AnalysisResult {
   isRealEstateRelated: boolean;
   transactionType: 'purchase' | 'sale' | null;
   confidence: number;
@@ -31,40 +50,10 @@ interface AnalysisResult {
   snippet?: string;
 }
 
-interface Party {
-  email?: string;
-  role?: string;
-  name?: string;
-}
-
-interface KeywordMatch {
-  category: string;
-  keyword: string;
-}
-
-interface Keywords {
-  transaction: string[];
-  purchase: string[];
-  sale: string[];
-  parties: string[];
-}
-
-interface Patterns {
-  address: RegExp;
-  money: RegExp;
-  largeAmount: RegExp;
-  date: RegExp;
-  dateNumeric: RegExp;
-  email: RegExp;
-  phone: RegExp;
-  mls: RegExp;
-}
-
-interface PropertyGroups {
-  [address: string]: AnalysisResult[];
-}
-
-interface TransactionSummary {
+/**
+ * Transaction summary
+ */
+export interface TransactionSummary {
   propertyAddress: string;
   transactionType: 'purchase' | 'sale' | null;
   salePrice: number | null;
@@ -78,117 +67,90 @@ interface TransactionSummary {
 }
 
 /**
+ * Keywords for classification
+ */
+interface Keywords {
+  transaction: string[];
+  purchase: string[];
+  sale: string[];
+  parties: string[];
+  [key: string]: string[];
+}
+
+/**
+ * Regex patterns
+ */
+interface Patterns {
+  address: RegExp;
+  money: RegExp;
+  largeAmount: RegExp;
+  date: RegExp;
+  dateNumeric: RegExp;
+  email: RegExp;
+  phone: RegExp;
+  mls: RegExp;
+}
+
+/**
  * Transaction Extractor Service
  * Analyzes emails and extracts real estate transaction data
  * Uses pattern matching and keyword detection
  */
 class TransactionExtractorService {
-  private keywords: Keywords;
-  private patterns: Patterns;
+  private keywords: Keywords = {
+    transaction: [
+      'closing', 'escrow', 'earnest money', 'offer', 'acceptance',
+      'mutual acceptance', 'purchase agreement', 'sale agreement',
+      'mls', 'listing', 'buyer', 'seller', 'real estate',
+      'property', 'contract', 'addendum', 'inspection',
+      'house', 'home', 'condo', 'townhouse', 'apartment',
+      'viewing', 'showing', 'tour', 'open house',
+      'representation agreement', 'buyer representation', 'listing agreement',
+      'commission', 'appraisal', 'title', 'deed',
+      'mortgage', 'loan', 'financing', 'pre-approval',
+    ],
+    purchase: [
+      'buying', 'buyer', 'purchase', 'offer to purchase', 'buying agent',
+      'purchase price', 'down payment', 'buyer representation',
+    ],
+    sale: [
+      'selling', 'seller', 'listing', 'list price', 'selling agent',
+      'sale price', 'listing agreement',
+    ],
+    parties: [
+      'buyer', 'seller', 'agent', 'broker', 'escrow officer',
+      'title company', 'lender', 'inspector', 'appraiser',
+    ],
+  };
 
-  constructor() {
-    // Real estate keywords for classification
-    this.keywords = {
-      transaction: [
-        'closing',
-        'escrow',
-        'earnest money',
-        'offer',
-        'acceptance',
-        'mutual acceptance',
-        'purchase agreement',
-        'sale agreement',
-        'mls',
-        'listing',
-        'buyer',
-        'seller',
-        'real estate',
-        'property',
-        'contract',
-        'addendum',
-        'inspection',
-        'house',
-        'home',
-        'condo',
-        'townhouse',
-        'apartment',
-        'viewing',
-        'showing',
-        'tour',
-        'open house',
-        'representation agreement',
-        'buyer representation',
-        'listing agreement',
-        'commission',
-        'appraisal',
-        'title',
-        'deed',
-        'mortgage',
-        'loan',
-        'financing',
-        'pre-approval',
-      ],
-      purchase: [
-        'buying',
-        'buyer',
-        'purchase',
-        'offer to purchase',
-        'buying agent',
-        'purchase price',
-        'down payment',
-        'buyer representation',
-      ],
-      sale: [
-        'selling',
-        'seller',
-        'listing',
-        'list price',
-        'selling agent',
-        'sale price',
-        'listing agreement',
-      ],
-      parties: [
-        'buyer',
-        'seller',
-        'agent',
-        'broker',
-        'escrow officer',
-        'title company',
-        'lender',
-        'inspector',
-        'appraiser',
-      ],
-    };
+  private patterns: Patterns = {
+    // Address patterns
+    address: /\b\d+\s+[A-Z][a-z]+\s+(?:Street|St|Avenue|Ave|Road|Rd|Drive|Dr|Lane|Ln|Way|Court|Ct|Boulevard|Blvd|Place|Pl|Circle|Cir)[,\s]+[A-Z][a-z]+[,\s]+[A-Z]{2}\s+\d{5}(?:-\d{4})?\b/gi,
 
-    // Regex patterns for extraction
-    this.patterns = {
-      // Address patterns
-      address:
-        /\b\d+\s+[A-Z][a-z]+\s+(?:Street|St|Avenue|Ave|Road|Rd|Drive|Dr|Lane|Ln|Way|Court|Ct|Boulevard|Blvd|Place|Pl|Circle|Cir)[,\s]+[A-Z][a-z]+[,\s]+[A-Z]{2}\s+\d{5}(?:-\d{4})?\b/gi,
+    // Money amounts
+    money: /\$\s?(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)/g,
+    largeAmount: /\$\s?(\d{1,3}(?:,\d{3})+(?:\.\d{2})?)/g, // For property prices
 
-      // Money amounts
-      money: /\$\s?(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)/g,
-      largeAmount: /\$\s?(\d{1,3}(?:,\d{3})+(?:\.\d{2})?)/g, // For property prices
+    // Dates
+    date: /\b(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[,\s]+\d{1,2}[,\s]+\d{4}\b/gi,
+    dateNumeric: /\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/g,
 
-      // Dates
-      date: /\b(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[,\s]+\d{1,2}[,\s]+\d{4}\b/gi,
-      dateNumeric: /\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/g,
+    // Email addresses
+    email: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g,
 
-      // Email addresses
-      email: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g,
+    // Phone numbers
+    phone: /\b\d{3}[-.]?\d{3}[-.]?\d{4}\b/g,
 
-      // Phone numbers
-      phone: /\b\d{3}[-.]?\d{3}[-.]?\d{4}\b/g,
-
-      // MLS numbers
-      mls: /\bMLS[#\s]*(\d+)\b/gi,
-    };
-  }
+    // MLS numbers
+    mls: /\bMLS[#\s]*(\d+)\b/gi,
+  };
 
   /**
    * Analyze an email and extract transaction data
+   * @param email - Email object from Gmail/Outlook
+   * @returns Extracted transaction data
    */
-  analyzeEmail(email: EmailObject): AnalysisResult {
+  analyzeEmail(email: Email): AnalysisResult {
     const text = this._getEmailText(email);
 
     return {
@@ -219,8 +181,12 @@ class TransactionExtractorService {
    * Get searchable text from email
    * @private
    */
-  private _getEmailText(email: EmailObject): string {
-    const parts = [email.subject || '', email.bodyPlain || email.body || '', email.snippet || ''];
+  private _getEmailText(email: Email): string {
+    const parts = [
+      email.subject || '',
+      email.bodyPlain || email.body || '',
+      email.snippet || '',
+    ];
     return parts.join(' ').toLowerCase();
   }
 
@@ -229,7 +195,7 @@ class TransactionExtractorService {
    * @private
    */
   private _isRealEstateRelated(text: string): boolean {
-    const keywordCount = this.keywords.transaction.filter((keyword) =>
+    const keywordCount = this.keywords.transaction.filter(keyword =>
       text.includes(keyword.toLowerCase())
     ).length;
 
@@ -241,12 +207,13 @@ class TransactionExtractorService {
    * @private
    */
   private _detectTransactionType(text: string): 'purchase' | 'sale' | null {
-    const purchaseScore = this.keywords.purchase.filter((keyword) =>
+    const purchaseScore = this.keywords.purchase.filter(keyword =>
       text.includes(keyword.toLowerCase())
     ).length;
 
-    const saleScore = this.keywords.sale.filter((keyword) => text.includes(keyword.toLowerCase()))
-      .length;
+    const saleScore = this.keywords.sale.filter(keyword =>
+      text.includes(keyword.toLowerCase())
+    ).length;
 
     if (purchaseScore > saleScore) return 'purchase';
     if (saleScore > purchaseScore) return 'sale';
@@ -262,7 +229,7 @@ class TransactionExtractorService {
     let bonusMultiplier = 1.0;
 
     // 1. Keywords present (max 40 points)
-    const keywordMatches = this.keywords.transaction.filter((keyword) =>
+    const keywordMatches = this.keywords.transaction.filter(keyword =>
       text.includes(keyword.toLowerCase())
     ).length;
     const keywordScore = Math.min(keywordMatches * 5, 40);
@@ -285,17 +252,17 @@ class TransactionExtractorService {
     const moneyMatches = (text.match(this.patterns.largeAmount) || []).length;
     if (moneyMatches > 0) {
       // More amounts = more likely real transaction
-      score += Math.min(10 + moneyMatches * 3, 20);
+      score += Math.min(10 + (moneyMatches * 3), 20);
     }
 
     // 4. Has dates (up to 15 points)
     const dateMatches = [
       ...(text.match(this.patterns.date) || []),
-      ...(text.match(this.patterns.dateNumeric) || []),
+      ...(text.match(this.patterns.dateNumeric) || [])
     ];
     if (dateMatches.length > 0) {
       // Multiple dates = timeline discussion
-      score += Math.min(10 + dateMatches.length * 2, 15);
+      score += Math.min(10 + (dateMatches.length * 2), 15);
     }
 
     // 5. Has MLS number (15 points - strong indicator)
@@ -307,18 +274,13 @@ class TransactionExtractorService {
     // 6. Context analysis bonuses
     // Check for common real estate phrases
     const contextPhrases = [
-      'mutual acceptance',
-      'purchase agreement',
-      'closing disclosure',
-      'earnest money',
-      'inspection contingency',
-      'title report',
-      'escrow instructions',
-      'final walkthrough',
-      'loan approval',
+      'mutual acceptance', 'purchase agreement', 'closing disclosure',
+      'earnest money', 'inspection contingency', 'title report',
+      'escrow instructions', 'final walkthrough', 'loan approval'
     ];
-    const contextMatches = contextPhrases.filter((phrase) => text.includes(phrase.toLowerCase()))
-      .length;
+    const contextMatches = contextPhrases.filter(phrase =>
+      text.includes(phrase.toLowerCase())
+    ).length;
     if (contextMatches > 0) {
       score += Math.min(contextMatches * 3, 10);
     }
@@ -349,7 +311,7 @@ class TransactionExtractorService {
 
     // Subject contains transaction keywords
     const subjectKeywords = ['closing', 'offer', 'accepted', 'pending', 'sold', 'contract'];
-    const subjectMatches = subjectKeywords.filter((kw) => firstLine.includes(kw)).length;
+    const subjectMatches = subjectKeywords.filter(kw => firstLine.includes(kw)).length;
     bonus += subjectMatches * 2;
 
     return Math.min(bonus, 10);
@@ -359,12 +321,7 @@ class TransactionExtractorService {
    * Calculate field-specific confidence
    * Used for individual field extractions (closing_date, sale_price, etc.)
    */
-  calculateFieldConfidence(
-    fieldName: string,
-    extractedValue: any,
-    text: string,
-    allMatches: number[] = []
-  ): number {
+  calculateFieldConfidence(fieldName: string, extractedValue: string, text: string, allMatches: any[] = []): number {
     let confidence = 0;
 
     switch (fieldName) {
@@ -373,10 +330,7 @@ class TransactionExtractorService {
         // - Appears near "closing" keyword
         // - Format is consistent (MM/DD/YYYY)
         // - Date is in reasonable range (not too far in past/future)
-        if (
-          text.includes('closing') &&
-          text.indexOf(extractedValue) - text.indexOf('closing') < 100
-        ) {
+        if (text.includes('closing') && text.indexOf(extractedValue) - text.indexOf('closing') < 100) {
           confidence += 30;
         }
         if (allMatches.length === 1) confidence += 20; // Only one date = likely correct
@@ -402,12 +356,11 @@ class TransactionExtractorService {
         // - Listing agreement vs purchase agreement mentioned
         const purchaseKeywords = ['buying', 'buyer', 'purchase agreement'];
         const saleKeywords = ['selling', 'seller', 'listing agreement'];
-        const pCount = purchaseKeywords.filter((kw) => text.includes(kw)).length;
-        const sCount = saleKeywords.filter((kw) => text.includes(kw)).length;
+        const pCount = purchaseKeywords.filter(kw => text.includes(kw)).length;
+        const sCount = saleKeywords.filter(kw => text.includes(kw)).length;
         const diff = Math.abs(pCount - sCount);
         confidence += Math.min(diff * 20, 80);
-        if (text.includes('representing buyer') || text.includes('representing seller'))
-          confidence += 20;
+        if (text.includes('representing buyer') || text.includes('representing seller')) confidence += 20;
         break;
 
       case 'property_address':
@@ -417,11 +370,7 @@ class TransactionExtractorService {
         // - Has zip code
         if (this.patterns.address.test(extractedValue)) confidence += 50;
         if (extractedValue.match(/\d{5}(-\d{4})?/)) confidence += 20; // Has zip
-        const occurrences = (
-          text.match(
-            new RegExp(extractedValue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')
-          ) || []
-        ).length;
+        const occurrences = (text.match(new RegExp(extractedValue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')) || []).length;
         confidence += Math.min(occurrences * 5, 30);
         break;
 
@@ -457,7 +406,7 @@ class TransactionExtractorService {
   private _extractAddresses(text: string): string[] {
     const matches = text.match(this.patterns.address) || [];
     // Remove duplicates and return
-    return [...new Set(matches)].map((addr) => addr.trim());
+    return [...new Set(matches)].map(addr => addr.trim());
   }
 
   /**
@@ -466,13 +415,11 @@ class TransactionExtractorService {
    */
   private _extractAmounts(text: string): number[] {
     const matches = text.match(this.patterns.money) || [];
-    return matches
-      .map((amount) => {
-        // Remove $ and commas, convert to number
-        const cleaned = amount.replace(/[\$,]/g, '');
-        return parseFloat(cleaned);
-      })
-      .filter((amount) => amount > 0);
+    return matches.map(amount => {
+      // Remove $ and commas, convert to number
+      const cleaned = amount.replace(/[\$,]/g, '');
+      return parseFloat(cleaned);
+    }).filter(amount => amount > 0);
   }
 
   /**
@@ -486,42 +433,40 @@ class TransactionExtractorService {
     const allDates = [...textDates, ...numericDates];
 
     // Try to parse and validate dates
-    return allDates
-      .map((dateStr) => {
-        try {
-          const parsed = new Date(dateStr);
-          if (!isNaN(parsed.getTime())) {
-            return parsed.toISOString().split('T')[0]; // Return YYYY-MM-DD format
-          }
-        } catch (e) {
-          // Invalid date, skip
+    return allDates.map(dateStr => {
+      try {
+        const parsed = new Date(dateStr);
+        if (!isNaN(parsed.getTime())) {
+          return parsed.toISOString().split('T')[0]; // Return YYYY-MM-DD format
         }
-        return null;
-      })
-      .filter(Boolean) as string[];
+      } catch (e) {
+        // Invalid date, skip
+      }
+      return null;
+    }).filter(Boolean) as string[];
   }
 
   /**
    * Extract parties involved
    * @private
    */
-  private _extractParties(email: EmailObject, text: string): Party[] {
+  private _extractParties(email: Email, text: string): Party[] {
     const parties: Party[] = [];
 
     // Extract from email participants
     if (email.from) parties.push({ email: email.from, role: 'sender' });
     if (email.to) {
-      email.to.split(',').forEach((addr) => {
+      email.to.split(',').forEach(addr => {
         parties.push({ email: addr.trim(), role: 'recipient' });
       });
     }
 
     // Detect roles from keywords
-    this.keywords.parties.forEach((role) => {
+    this.keywords.parties.forEach(role => {
       const rolePattern = new RegExp(`\\b${role}\\b[:\\s]*([A-Z][a-z]+\\s+[A-Z][a-z]+)`, 'gi');
       const matches = text.match(rolePattern);
       if (matches) {
-        matches.forEach((match) => {
+        matches.forEach(match => {
           parties.push({ role: role, name: match });
         });
       }
@@ -536,7 +481,7 @@ class TransactionExtractorService {
    */
   private _extractMLSNumbers(text: string): string[] {
     const matches = text.match(this.patterns.mls) || [];
-    return matches.map((match) => {
+    return matches.map(match => {
       const number = match.replace(/[^0-9]/g, '');
       return number;
     });
@@ -550,7 +495,7 @@ class TransactionExtractorService {
     const found: KeywordMatch[] = [];
 
     Object.entries(this.keywords).forEach(([category, words]) => {
-      words.forEach((keyword) => {
+      words.forEach(keyword => {
         if (text.includes(keyword.toLowerCase())) {
           found.push({ category, keyword });
         }
@@ -562,18 +507,22 @@ class TransactionExtractorService {
 
   /**
    * Batch analyze multiple emails
+   * @param emails - Array of email objects
+   * @returns Array of analysis results
    */
-  batchAnalyze(emails: EmailObject[]): AnalysisResult[] {
-    return emails.map((email) => this.analyzeEmail(email));
+  batchAnalyze(emails: Email[]): AnalysisResult[] {
+    return emails.map(email => this.analyzeEmail(email));
   }
 
   /**
    * Group emails by property address
+   * @param analyzedEmails - Array of analyzed email results
+   * @returns Emails grouped by address
    */
-  groupByProperty(analyzedEmails: AnalysisResult[]): PropertyGroups {
-    const groups: PropertyGroups = {};
+  groupByProperty(analyzedEmails: AnalysisResult[]): Record<string, AnalysisResult[]> {
+    const groups: Record<string, AnalysisResult[]> = {};
 
-    analyzedEmails.forEach((analysis) => {
+    analyzedEmails.forEach(analysis => {
       if (analysis.addresses.length > 0) {
         const primaryAddress = analysis.addresses[0];
 
@@ -590,6 +539,8 @@ class TransactionExtractorService {
 
   /**
    * Generate transaction summary from grouped emails
+   * @param emailGroup - Group of emails for same property
+   * @returns Transaction summary
    */
   generateTransactionSummary(emailGroup: AnalysisResult[]): TransactionSummary | null {
     if (emailGroup.length === 0) return null;
@@ -598,16 +549,16 @@ class TransactionExtractorService {
     const address = emailGroup[0].addresses[0];
 
     // Aggregate all amounts
-    const allAmounts = emailGroup.flatMap((e) => e.amounts);
+    const allAmounts = emailGroup.flatMap(e => e.amounts);
 
     // Get all dates
-    const allDates = emailGroup.flatMap((e) => e.dates).filter(Boolean);
+    const allDates = emailGroup.flatMap(e => e.dates).filter(Boolean);
 
     // Get all MLS numbers
-    const mlsNumbers = [...new Set(emailGroup.flatMap((e) => e.mlsNumbers))];
+    const mlsNumbers = [...new Set(emailGroup.flatMap(e => e.mlsNumbers))];
 
     // Determine transaction type (most common)
-    const types = emailGroup.map((e) => e.transactionType).filter(Boolean);
+    const types = emailGroup.map(e => e.transactionType).filter(Boolean);
     const transactionType = types.length > 0 ? types[0] : null;
 
     // Calculate average confidence
@@ -619,7 +570,9 @@ class TransactionExtractorService {
     const salePrice = allAmounts.length > 0 ? Math.max(...allAmounts) : null;
 
     // Find closing date (last date mentioned)
-    const closingDate = allDates.length > 0 ? allDates.sort().reverse()[0] : null;
+    const closingDate = allDates.length > 0
+      ? allDates.sort().reverse()[0]
+      : null;
 
     return {
       propertyAddress: address,
@@ -628,12 +581,12 @@ class TransactionExtractorService {
       closingDate,
       mlsNumbers,
       communicationsCount: emailGroup.length,
-      firstCommunication: Math.min(...emailGroup.map((e) => new Date(e.date).getTime())),
-      lastCommunication: Math.max(...emailGroup.map((e) => new Date(e.date).getTime())),
+      firstCommunication: Math.min(...emailGroup.map(e => new Date(e.date).getTime())),
+      lastCommunication: Math.max(...emailGroup.map(e => new Date(e.date).getTime())),
       confidence: avgConfidence,
       emails: emailGroup,
     };
   }
 }
 
-export = new TransactionExtractorService();
+export default new TransactionExtractorService();

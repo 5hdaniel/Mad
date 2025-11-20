@@ -3,19 +3,76 @@
  * Uses Google Places API to verify and autocomplete property addresses
  */
 
-const axios = require('axios');
+import axios from 'axios';
+
+/**
+ * Address suggestion from autocomplete
+ */
+export interface AddressSuggestion {
+  place_id: string;
+  formatted_address: string;
+  main_text: string;
+  secondary_text: string;
+}
+
+/**
+ * Coordinates
+ */
+interface Coordinates {
+  lat: number;
+  lng: number;
+}
+
+/**
+ * Detailed address information
+ */
+export interface AddressDetails {
+  formatted_address: string;
+  street_number?: string;
+  route?: string;
+  street: string;
+  city?: string;
+  state?: string;
+  state_short?: string;
+  zip?: string;
+  country?: string;
+  coordinates: Coordinates;
+  place_id: string;
+}
+
+/**
+ * Google address component
+ */
+interface GoogleAddressComponent {
+  long_name: string;
+  short_name: string;
+  types: string[];
+}
+
+/**
+ * Parsed address components
+ */
+interface ParsedAddressComponents {
+  street_number?: string;
+  route?: string;
+  locality?: string;
+  administrative_area_level_1?: string;
+  administrative_area_level_1_short?: string;
+  administrative_area_level_2?: string;
+  postal_code?: string;
+  country?: string;
+  country_short?: string;
+}
 
 class AddressVerificationService {
-  constructor() {
-    this.apiKey = null;
-    this.baseUrl = 'https://maps.googleapis.com/maps/api';
-  }
+  private apiKey: string | null = null;
+  private readonly baseUrl = 'https://maps.googleapis.com/maps/api';
 
   /**
    * Initialize with API key from environment or config
    */
-  initialize(apiKey) {
-    this.apiKey = apiKey || process.env.GOOGLE_MAPS_API_KEY;
+  initialize(apiKey?: string): boolean {
+    this.apiKey = apiKey || process.env.GOOGLE_MAPS_API_KEY || null;
 
     if (!this.apiKey) {
       console.warn('[AddressVerification] No Google Maps API key configured');
@@ -28,11 +85,11 @@ class AddressVerificationService {
 
   /**
    * Get address autocomplete suggestions
-   * @param {string} input - Partial address input
-   * @param {string} sessionToken - Session token for billing optimization
-   * @returns {Promise<Array>} Array of address suggestions
+   * @param input - Partial address input
+   * @param sessionToken - Session token for billing optimization
+   * @returns Array of address suggestions
    */
-  async getAddressSuggestions(input, sessionToken = null) {
+  async getAddressSuggestions(input: string, sessionToken: string | null = null): Promise<AddressSuggestion[]> {
     if (!this.apiKey) {
       throw new Error('Google Maps API key not configured');
     }
@@ -43,7 +100,7 @@ class AddressVerificationService {
 
     try {
       const url = `${this.baseUrl}/place/autocomplete/json`;
-      const params = {
+      const params: any = {
         input: input,
         key: this.apiKey,
         types: 'address',
@@ -64,7 +121,7 @@ class AddressVerificationService {
       }
 
       // Transform predictions to our format
-      const suggestions = (response.data.predictions || []).map((prediction) => ({
+      const suggestions = (response.data.predictions || []).map((prediction: any) => ({
         place_id: prediction.place_id,
         formatted_address: prediction.description,
         main_text: prediction.structured_formatting?.main_text || '',
@@ -75,17 +132,17 @@ class AddressVerificationService {
 
       return suggestions;
     } catch (error) {
-      console.error('[AddressVerification] Failed to fetch suggestions:', error.message);
+      console.error('[AddressVerification] Failed to fetch suggestions:', (error as Error).message);
       throw error;
     }
   }
 
   /**
    * Get detailed address information for a place ID
-   * @param {string} placeId - Google Place ID
-   * @returns {Promise<Object>} Detailed address object
+   * @param placeId - Google Place ID
+   * @returns Detailed address object
    */
-  async getAddressDetails(placeId) {
+  async getAddressDetails(placeId: string): Promise<AddressDetails> {
     if (!this.apiKey) {
       throw new Error('Google Maps API key not configured');
     }
@@ -129,7 +186,7 @@ class AddressVerificationService {
         place_id: placeId,
       };
     } catch (error) {
-      console.error('[AddressVerification] Failed to fetch address details:', error.message);
+      console.error('[AddressVerification] Failed to fetch address details:', (error as Error).message);
       throw error;
     }
   }
@@ -138,8 +195,8 @@ class AddressVerificationService {
    * Parse Google address components into usable format
    * @private
    */
-  _parseAddressComponents(components) {
-    const parsed = {};
+  private _parseAddressComponents(components: GoogleAddressComponent[]): ParsedAddressComponents {
+    const parsed: ParsedAddressComponents = {};
 
     components.forEach((component) => {
       const types = component.types;
@@ -174,10 +231,10 @@ class AddressVerificationService {
 
   /**
    * Geocode an address string to coordinates
-   * @param {string} address - Full address string
-   * @returns {Promise<Object>} Geocoded address with coordinates
+   * @param address - Full address string
+   * @returns Geocoded address with coordinates
    */
-  async geocodeAddress(address) {
+  async geocodeAddress(address: string): Promise<AddressDetails> {
     if (!this.apiKey) {
       throw new Error('Google Maps API key not configured');
     }
@@ -218,17 +275,17 @@ class AddressVerificationService {
         place_id: result.place_id,
       };
     } catch (error) {
-      console.error('[AddressVerification] Geocoding failed:', error.message);
+      console.error('[AddressVerification] Geocoding failed:', (error as Error).message);
       throw error;
     }
   }
 
   /**
    * Validate if an address exists and is complete
-   * @param {string} address - Address string to validate
-   * @returns {Promise<boolean>} True if address is valid
+   * @param address - Address string to validate
+   * @returns True if address is valid
    */
-  async validateAddress(address) {
+  async validateAddress(address: string): Promise<boolean> {
     try {
       const result = await this.geocodeAddress(address);
       return !!(result.street && result.city && result.state && result.zip);
@@ -239,4 +296,4 @@ class AddressVerificationService {
 }
 
 // Export singleton instance
-module.exports = new AddressVerificationService();
+export default new AddressVerificationService();

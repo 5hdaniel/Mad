@@ -1,7 +1,7 @@
-const { BrowserWindow } = require('electron');
-const path = require('path');
-const fs = require('fs').promises;
-const { app } = require('electron');
+import { BrowserWindow, app } from 'electron';
+import path from 'path';
+import fs from 'fs/promises';
+import { Transaction, Communication } from '../types/models';
 
 /**
  * PDF Export Service
@@ -9,18 +9,24 @@ const { app } = require('electron');
  * Uses HTML templates for beautiful, customizable reports
  */
 class PDFExportService {
+  private exportWindow: BrowserWindow | null;
+
   constructor() {
     this.exportWindow = null;
   }
 
   /**
    * Generate PDF for a transaction
-   * @param {Object} transaction - Transaction object with all data
-   * @param {Array} communications - Related emails
-   * @param {string} outputPath - Where to save the PDF
-   * @returns {Promise<string>} Path to generated PDF
+   * @param transaction - Transaction object with all data
+   * @param communications - Related emails
+   * @param outputPath - Where to save the PDF
+   * @returns Path to generated PDF
    */
-  async generateTransactionPDF(transaction, communications, outputPath) {
+  async generateTransactionPDF(
+    transaction: Transaction,
+    communications: Communication[],
+    outputPath: string
+  ): Promise<string> {
     try {
       console.log('[PDF Export] Generating PDF for transaction:', transaction.id);
 
@@ -46,12 +52,9 @@ class PDFExportService {
 
       // Generate PDF
       const pdfData = await this.exportWindow.webContents.printToPDF({
-        marginsType: 0,
         printBackground: true,
-        printSelectionOnly: false,
         landscape: false,
         pageSize: 'Letter',
-        scaleFactor: 100,
       });
 
       // Save PDF
@@ -77,8 +80,8 @@ class PDFExportService {
    * Generate HTML for PDF
    * @private
    */
-  _generateHTML(transaction, communications) {
-    const formatCurrency = (amount) => {
+  private _generateHTML(transaction: Transaction, communications: Communication[]): string {
+    const formatCurrency = (amount?: number | null): string => {
       if (!amount) return 'N/A';
       return new Intl.NumberFormat('en-US', {
         style: 'currency',
@@ -87,18 +90,20 @@ class PDFExportService {
       }).format(amount);
     };
 
-    const formatDate = (dateString) => {
+    const formatDate = (dateString?: string | Date | null): string => {
       if (!dateString) return 'N/A';
-      return new Date(dateString).toLocaleDateString('en-US', {
+      const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
+      return date.toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'long',
         day: 'numeric',
       });
     };
 
-    const formatDateTime = (dateString) => {
+    const formatDateTime = (dateString: string | Date): string => {
       if (!dateString) return 'N/A';
-      return new Date(dateString).toLocaleString('en-US', {
+      const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
+      return date.toLocaleString('en-US', {
         year: 'numeric',
         month: 'short',
         day: 'numeric',
@@ -331,7 +336,7 @@ class PDFExportService {
     <h3>Related Communications (${communications.length})</h3>
     <div class="communications">
       ${communications
-        .sort((a, b) => new Date(b.sent_at) - new Date(a.sent_at))
+        .sort((a, b) => new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime())
         .map(
           (comm) => `
         <div class="communication">
@@ -382,11 +387,11 @@ class PDFExportService {
   /**
    * Get default export path for a transaction
    */
-  getDefaultExportPath(transaction) {
+  getDefaultExportPath(transaction: Transaction): string {
     const downloadsPath = app.getPath('downloads');
     const fileName = `Transaction_${transaction.property_address?.replace(/[^a-z0-9]/gi, '_')}_${Date.now()}.pdf`;
     return path.join(downloadsPath, fileName);
   }
 }
 
-module.exports = new PDFExportService();
+export default new PDFExportService();
