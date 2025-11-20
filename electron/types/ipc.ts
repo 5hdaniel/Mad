@@ -447,6 +447,7 @@ declare global {
       requestPermissions: () => Promise<unknown>;
       requestContactsPermission: () => Promise<{ granted: boolean }>;
       openSystemSettings: () => Promise<{ success: boolean }>;
+      getConversations: () => Promise<{ success: boolean; conversations?: any[]; error?: string }>;
       exportConversations: (conversationIds: string[]) => Promise<{ success: boolean; error?: string; canceled?: boolean }>;
     };
   }

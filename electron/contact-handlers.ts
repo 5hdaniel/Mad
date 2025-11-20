@@ -27,8 +27,9 @@ interface ContactResponse {
   contacts?: Contact[];
   contactsStatus?: unknown;
   canDelete?: boolean;
-  transactions?: Transaction[];
+  transactions?: Transaction[] | any[]; // Can be Transaction[] or TransactionWithRoles[]
   count?: number;
+  transactionCount?: number;
 }
 
 /**

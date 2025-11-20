@@ -6,7 +6,7 @@
 import { ipcMain, BrowserWindow } from 'electron';
 import type { IpcMainInvokeEvent } from 'electron';
 import transactionService from './services/transactionService';
-import type { Transaction } from './types/models';
+import type { Transaction, NewTransaction, UpdateTransaction, OAuthProvider } from './types/models';
 
 // Services (still JS - to be migrated)
 const pdfExportService = require('./services/pdfExportService');
@@ -28,9 +28,13 @@ import {
 interface TransactionResponse {
   success: boolean;
   error?: string;
-  transaction?: Transaction;
-  transactions?: Transaction[];
+  transaction?: Transaction | any; // any allows for extended transaction details
+  transactions?: Transaction[] | any[];
   path?: string;
+  transactionsFound?: number;
+  emailsScanned?: number;
+  realEstateEmailsFound?: number;
+  [key: string]: unknown; // Allow additional fields
 }
 
 interface ScanOptions {
@@ -126,7 +130,7 @@ export const registerTransactionHandlers = (mainWindow: BrowserWindow | null): v
       const validatedUserId = validateUserId(userId);
       const validatedData = validateTransactionData(transactionData, false);
 
-      const transaction = await transactionService.createManualTransaction(validatedUserId, validatedData);
+      const transaction = await transactionService.createManualTransaction(validatedUserId, validatedData as Partial<NewTransaction>);
 
       return {
         success: true,
@@ -188,7 +192,7 @@ export const registerTransactionHandlers = (mainWindow: BrowserWindow | null): v
       const validatedTransactionId = validateTransactionId(transactionId);
       const validatedUpdates = validateTransactionData(sanitizeObject(updates || {}), true);
 
-      const updated = await transactionService.updateTransaction(validatedTransactionId, validatedUpdates);
+      const updated = await transactionService.updateTransaction(validatedTransactionId, validatedUpdates as Partial<UpdateTransaction>);
 
       return {
         success: true,
@@ -244,7 +248,7 @@ export const registerTransactionHandlers = (mainWindow: BrowserWindow | null): v
       const validatedUserId = validateUserId(userId);
       const validatedData = validateTransactionData(sanitizeObject(transactionData || {}), false);
 
-      const transaction = await transactionService.createAuditedTransaction(validatedUserId, validatedData);
+      const transaction = await transactionService.createAuditedTransaction(validatedUserId, validatedData as any);
 
       return {
         success: true,
@@ -407,7 +411,7 @@ export const registerTransactionHandlers = (mainWindow: BrowserWindow | null): v
 
       const result = await transactionService.reanalyzeProperty(
         validatedUserId,
-        validatedProvider,
+        validatedProvider as OAuthProvider,
         propertyAddress.trim(),
         sanitizedDateRange
       );
@@ -456,7 +460,7 @@ export const registerTransactionHandlers = (mainWindow: BrowserWindow | null): v
       // Generate PDF
       const generatedPath = await pdfExportService.generateTransactionPDF(
         details,
-        details.communications || [],
+        (details as any).communications || [],
         pdfPath
       );
 
@@ -503,7 +507,7 @@ export const registerTransactionHandlers = (mainWindow: BrowserWindow | null): v
       // Export with options
       const exportPath = await enhancedExportService.exportTransaction(
         details,
-        details.communications || [],
+        (details as any).communications || [],
         sanitizedOptions
       );
 

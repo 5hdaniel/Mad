@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import type { Subscription } from '../electron/types/models';
 
 interface User {
   id: string;
@@ -7,12 +8,6 @@ interface User {
   avatar_url?: string;
   last_login_at?: string | Date;
   created_at?: string | Date;
-}
-
-interface Subscription {
-  subscription_status?: string;
-  subscription_tier?: string;
-  trial_ends_at?: string | Date;
 }
 
 interface EmailConnectionStatus {
@@ -220,21 +215,21 @@ function Profile({
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium text-gray-700">Subscription</span>
                 <span className={`text-xs px-2 py-1 rounded-full ${
-                  subscription.subscription_status === 'active'
+                  subscription.status === 'active'
                     ? 'bg-green-100 text-green-700'
-                    : subscription.subscription_status === 'trial'
+                    : subscription.status === 'trial'
                     ? 'bg-blue-100 text-blue-700'
                     : 'bg-gray-100 text-gray-700'
                 }`}>
-                  {subscription.subscription_status || 'Unknown'}
+                  {subscription.status || 'Unknown'}
                 </span>
               </div>
               <p className="text-sm text-gray-600 capitalize">
-                {subscription.subscription_tier || 'Free'} Plan
+                {subscription.tier || 'Free'} Plan
               </p>
-              {subscription.trial_ends_at && (
+              {subscription.isTrial && subscription.trialDaysRemaining !== undefined && (
                 <p className="text-xs text-gray-500 mt-1">
-                  Trial ends: {new Date(subscription.trial_ends_at).toLocaleDateString()}
+                  Trial: {subscription.trialDaysRemaining} days remaining
                 </p>
               )}
             </div>
