@@ -828,7 +828,7 @@ ipcMain.handle('export-conversations', async (event: IpcMainInvokeEvent, convers
     const dbClose = promisify(db.close.bind(db));
 
     // Load contact names for resolving names in export
-    const contactMap = await getContactNames();
+    const { contactMap } = await getContactNames();
 
     const exportedFiles: string[] = [];
     const exportedContactNames: string[] = [];
