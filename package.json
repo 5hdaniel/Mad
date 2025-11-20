@@ -21,7 +21,8 @@
     "type-check": "tsc --noEmit",
     "type-check:watch": "tsc --noEmit --watch",
     "deps:check": "depcheck",
-    "deps:check-ci": "depcheck --json | node -e \"const d=JSON.parse(require('fs').readFileSync(0,'utf-8')); if(d.dependencies.length||d.missing&&Object.keys(d.missing).length){console.error('Unused or missing deps found'); process.exit(1)}\""
+    "deps:check-ci": "depcheck --json | node -e \"const d=JSON.parse(require('fs').readFileSync(0,'utf-8')); if(d.dependencies.length||d.missing&&Object.keys(d.missing).length){console.error('Unused or missing deps found'); process.exit(1)}\"",
+    "prepare": "husky"
   },
   "keywords": [
     "electron",
@@ -59,6 +60,7 @@
     "electron-rebuild": "^3.2.9",
     "eslint": "^8.55.0",
     "eslint-plugin-react": "^7.33.2",
+    "husky": "^9.1.7",
     "identity-obj-proxy": "^3.0.0",
     "jest": "^29.7.0",
     "jest-environment-jsdom": "^29.7.0",
