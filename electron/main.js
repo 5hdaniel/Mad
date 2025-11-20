@@ -1,3 +1,12 @@
+// Register ts-node to enable TypeScript support
+require('ts-node').register({
+  transpileOnly: true,
+  compilerOptions: {
+    module: 'commonjs',
+    target: 'es2020',
+  }
+});
+
 const { app, BrowserWindow, ipcMain, dialog, shell, systemPreferences, Notification, session } = require('electron');
 const path = require('path');
 const fs = require('fs').promises;
