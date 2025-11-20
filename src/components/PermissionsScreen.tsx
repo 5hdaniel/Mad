@@ -1,7 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import SystemSettingsMockup from './SystemSettingsMockup';
 
-function PermissionsScreen({ onPermissionsGranted, onCheckAgain }) {
+interface PermissionsScreenProps {
+  onPermissionsGranted: () => void;
+  onCheckAgain: () => void;
+}
+
+interface MacOSInfo {
+  version: number | string;
+  name: string;
+  uiStyle?: string;
+  appName?: string;
+}
+
+interface AppInfo {
+  version: string;
+  name: string;
+}
+
+function PermissionsScreen({ onPermissionsGranted, onCheckAgain }: PermissionsScreenProps) {
   const [isChecking, setIsChecking] = useState(false);
   const [currentStep, setCurrentStep] = useState(1); // 1: welcome, 2: full disk access
   const [openSettingsComplete, setOpenSettingsComplete] = useState(false);
@@ -10,8 +27,8 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain }) {
   const [clickPlusComplete, setClickPlusComplete] = useState(false);
   const [selectAppComplete, setSelectAppComplete] = useState(false);
   const [quitReopenComplete, setQuitReopenComplete] = useState(false);
-  const [macOSInfo, setMacOSInfo] = useState(null);
-  const [appInfo, setAppInfo] = useState(null);
+  const [macOSInfo, setMacOSInfo] = useState<MacOSInfo | null>(null);
+  const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
 
   // Auto-check permissions and detect macOS version when component loads
   useEffect(() => {
@@ -32,15 +49,21 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain }) {
   const detectMacOSVersion = async () => {
     try {
       const versionInfo = await window.electron.getMacOSVersion();
-      setMacOSInfo(versionInfo);
+      // Ensure the versionInfo has the required properties
+      if (versionInfo && typeof versionInfo === 'object' && 'version' in versionInfo) {
+        setMacOSInfo(versionInfo as MacOSInfo);
+      } else {
+        setMacOSInfo({
+          version: 15,
+          name: 'Unknown',
+        });
+      }
     } catch (error) {
       console.error('Error detecting macOS version:', error);
       // Default to modern style if detection fails
       setMacOSInfo({
         version: 15,
         name: 'Unknown',
-        uiStyle: 'settings',
-        appName: 'System Settings'
       });
     }
   };

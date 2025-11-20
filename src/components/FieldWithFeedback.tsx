@@ -1,5 +1,31 @@
 import React, { useState } from 'react';
 
+interface Suggestion {
+  value: string;
+  reason: string;
+}
+
+interface FieldWithFeedbackProps {
+  label: string;
+  value: string;
+  confidence?: number;
+  onChange: (value: string) => void;
+  onFeedback?: (feedback: {
+    field_name: string;
+    original_value: string;
+    corrected_value: string;
+    original_confidence?: number;
+    feedback_type: string;
+    user_notes?: string;
+  }) => void;
+  fieldName: string;
+  type?: string;
+  placeholder?: string;
+  disabled?: boolean;
+  required?: boolean;
+  suggestion?: Suggestion | null;
+}
+
 /**
  * Field with Feedback Component
  * Shows extracted field with confidence score and allows user to confirm/edit
@@ -16,8 +42,8 @@ function FieldWithFeedback({
   placeholder,
   disabled = false,
   required = false,
-  suggestion = null, // Auto-suggestion based on past patterns
-}) {
+  suggestion = null,
+}: FieldWithFeedbackProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [originalValue] = useState(value);
   const [localValue, setLocalValue] = useState(value);
@@ -90,6 +116,8 @@ function FieldWithFeedback({
   };
 
   const handleUseSuggestion = () => {
+    if (!suggestion) return;
+
     setLocalValue(suggestion.value);
     onChange(suggestion.value);
     setShowSuggestion(false);

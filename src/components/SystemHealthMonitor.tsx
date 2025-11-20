@@ -1,5 +1,22 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 
+import type { OAuthProvider } from '../../electron/types/models';
+
+interface SystemHealthMonitorProps {
+  userId: string;
+  provider: OAuthProvider;
+}
+
+interface SystemIssue {
+  severity?: 'error' | 'warning' | 'info';
+  title?: string;
+  message?: string;
+  userMessage?: string;
+  details?: string;
+  action?: string;
+  actionHandler?: string;
+}
+
 /**
  * System Health Monitor
  * Displays warnings and errors for lost permissions and connections
@@ -11,9 +28,9 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
  * - Shows dismissible notifications
  * - Provides action buttons to fix issues
  */
-function SystemHealthMonitor({ userId, provider }) {
-  const [issues, setIssues] = useState([]);
-  const [dismissed, setDismissed] = useState(new Set());
+function SystemHealthMonitor({ userId, provider }: SystemHealthMonitorProps) {
+  const [issues, setIssues] = useState<SystemIssue[]>([]);
+  const [dismissed, setDismissed] = useState(new Set<number>());
   const checkingRef = useRef(false);
 
   const checkSystemHealth = useCallback(async () => {
@@ -27,8 +44,8 @@ function SystemHealthMonitor({ userId, provider }) {
       const result = await window.api.system.healthCheck(userId, provider);
 
       console.log('[SystemHealthMonitor] Health check result:', result);
-      if (!result.healthy && result.issues) {
-        setIssues(result.issues);
+      if (!result.healthy && result.issues && Array.isArray(result.issues)) {
+        setIssues(result.issues as SystemIssue[]);
       }
     } catch (error) {
       console.error('System health check failed:', error);
@@ -54,11 +71,11 @@ function SystemHealthMonitor({ userId, provider }) {
   }, [checkSystemHealth]);
 
 
-  const handleDismiss = (issueIndex) => {
+  const handleDismiss = (issueIndex: number) => {
     setDismissed((prev) => new Set([...prev, issueIndex]));
   };
 
-  const handleAction = async (issue, issueIndex) => {
+  const handleAction = async (issue: SystemIssue, issueIndex: number) => {
     switch (issue.actionHandler) {
       case 'open-system-settings':
         if (window.api?.system?.openPrivacyPane) {
@@ -127,22 +144,22 @@ function SystemHealthMonitor({ userId, provider }) {
     <div className="fixed top-16 right-4 z-50 space-y-3" style={{ maxWidth: '420px' }}>
       {visibleIssues.map((issue, index) => {
         const originalIndex = issues.findIndex((i, idx) => i === issue && !dismissed.has(idx));
-        const severity = issue.severity || 'warning';
+        const severity: 'error' | 'warning' | 'info' = issue.severity || 'warning';
 
         // Severity styling
-        const severityClasses = {
+        const severityClasses: Record<'error' | 'warning' | 'info', string> = {
           error: 'bg-red-50 border-red-200',
           warning: 'bg-yellow-50 border-yellow-200',
           info: 'bg-blue-50 border-blue-200',
         };
 
-        const iconClasses = {
+        const iconClasses: Record<'error' | 'warning' | 'info', string> = {
           error: 'text-red-600',
           warning: 'text-yellow-600',
           info: 'text-blue-600',
         };
 
-        const buttonClasses = {
+        const buttonClasses: Record<'error' | 'warning' | 'info', string> = {
           error: 'bg-red-600 hover:bg-red-700',
           warning: 'bg-yellow-600 hover:bg-yellow-700',
           info: 'bg-blue-600 hover:bg-blue-700',

@@ -336,12 +336,16 @@ class PDFExportService {
     <h3>Related Communications (${communications.length})</h3>
     <div class="communications">
       ${communications
-        .sort((a, b) => new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime())
+        .sort((a, b) => {
+          const dateA = new Date(a.sent_at as string).getTime();
+          const dateB = new Date(b.sent_at as string).getTime();
+          return dateB - dateA;
+        })
         .map(
           (comm) => `
         <div class="communication">
           <div class="meta">
-            <span>${formatDateTime(comm.sent_at)}</span>
+            <span>${formatDateTime(comm.sent_at as string)}</span>
             ${comm.has_attachments ? '<span>📎 Has Attachments</span>' : ''}
           </div>
           <div class="subject">${comm.subject || '(No Subject)'}</div>

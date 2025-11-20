@@ -1,26 +1,63 @@
 import React, { useState, useEffect } from 'react';
+import type { Conversation } from '@/hooks/useConversations';
 
-function OutlookExport({ conversations, selectedIds, onComplete, onCancel }) {
+interface DeviceCodeInfo {
+  verificationUri: string;
+  userCode: string;
+}
+
+interface ContactExportResult {
+  contactName: string;
+  success: boolean;
+  textMessageCount: number;
+  emailCount?: number;
+  error: string | null;
+}
+
+interface ExportResults {
+  success: boolean;
+  exportPath?: string;
+  results?: ContactExportResult[];
+  error?: string;
+  canceled?: boolean;
+}
+
+interface ExportProgress {
+  stage?: string;
+  message?: string;
+  current?: number;
+  total?: number;
+  contactName?: string;
+}
+
+interface OutlookExportProps {
+  conversations: Conversation[];
+  selectedIds: Set<string>;
+  onComplete: (results: ExportResults | null) => void;
+  onCancel: () => void;
+}
+
+function OutlookExport({ conversations, selectedIds, onComplete, onCancel }: OutlookExportProps) {
   const [isInitializing, setIsInitializing] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
-  const [userEmail, setUserEmail] = useState(null);
-  const [error, setError] = useState(null);
-  const [deviceCode, setDeviceCode] = useState(null);
-  const [exportResults, setExportResults] = useState(null);
-  const [exportProgress, setExportProgress] = useState(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [deviceCode, setDeviceCode] = useState<DeviceCodeInfo | null>(null);
+  const [exportResults, setExportResults] = useState<ExportResults | null>(null);
+  const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
   const [showDetailedResults, setShowDetailedResults] = useState(false);
 
   useEffect(() => {
     initializeOutlook();
 
     // Listen for export progress updates
-    const progressListener = (progress) => {
+    const progressListener = (progress: ExportProgress) => {
       setExportProgress(progress);
     };
 
-    let cleanup;
+    let cleanup: (() => void) | undefined;
     if (window.electron.onExportProgress) {
       cleanup = window.electron.onExportProgress(progressListener);
     }
@@ -39,7 +76,7 @@ function OutlookExport({ conversations, selectedIds, onComplete, onCancel }) {
       const initResult = await window.electron.outlookInitialize();
 
       if (!initResult.success) {
-        setError(initResult.error);
+        setError(initResult.error || 'Failed to initialize Outlook');
         return;
       }
 
@@ -51,7 +88,7 @@ function OutlookExport({ conversations, selectedIds, onComplete, onCancel }) {
         await loadUserEmail();
       }
     } catch (err) {
-      setError(err.message);
+      setError(err instanceof Error ? err.message : 'Unknown error occurred');
     } finally {
       setIsInitializing(false);
     }
@@ -83,7 +120,7 @@ function OutlookExport({ conversations, selectedIds, onComplete, onCancel }) {
         setError(result.error || 'Authentication failed');
       }
     } catch (err) {
-      setError(err.message);
+      setError(err instanceof Error ? err.message : 'Unknown error occurred');
     } finally {
       setIsAuthenticating(false);
     }
@@ -95,9 +132,9 @@ function OutlookExport({ conversations, selectedIds, onComplete, onCancel }) {
 
     try {
       // Get selected conversations with their email addresses
-      const selectedConversations = conversations.filter(c => selectedIds.has(c.id));
+      const selectedConversations = conversations.filter((c: Conversation) => selectedIds.has(c.id));
 
-      const contactsToExport = selectedConversations.map(conv => ({
+      const contactsToExport = selectedConversations.map((conv: Conversation) => ({
         name: conv.name,
         chatId: conv.id, // Include chatId for text message export
         emails: conv.emails || [],
@@ -114,7 +151,7 @@ function OutlookExport({ conversations, selectedIds, onComplete, onCancel }) {
         setError(result.error || 'Export failed');
       }
     } catch (err) {
-      setError(err.message);
+      setError(err instanceof Error ? err.message : 'Unknown error occurred');
     } finally {
       setIsExporting(false);
     }
@@ -130,9 +167,9 @@ function OutlookExport({ conversations, selectedIds, onComplete, onCancel }) {
     onComplete(exportResults);
   };
 
-  const selectedConversations = conversations.filter(c => selectedIds.has(c.id));
-  const contactsWithEmail = selectedConversations.filter(c => c.emails && c.emails.length > 0);
-  const contactsWithoutEmail = selectedConversations.filter(c => !c.emails || c.emails.length === 0);
+  const selectedConversations = conversations.filter((c: Conversation) => selectedIds.has(c.id));
+  const contactsWithEmail = selectedConversations.filter((c: Conversation) => c.emails && c.emails.length > 0);
+  const contactsWithoutEmail = selectedConversations.filter((c: Conversation) => !c.emails || c.emails.length === 0);
 
   // Initialization screen
   if (isInitializing) {
@@ -173,9 +210,9 @@ function OutlookExport({ conversations, selectedIds, onComplete, onCancel }) {
 
   // Export results screen
   if (exportResults) {
-    const successCount = exportResults.results?.filter(r => r.success).length || 0;
-    const failureCount = exportResults.results?.filter(r => !r.success).length || 0;
-    const totalTexts = exportResults.results?.reduce((sum, r) => sum + (r.textMessageCount || 0), 0) || 0;
+    const successCount = exportResults.results?.filter((r: ContactExportResult) => r.success).length || 0;
+    const failureCount = exportResults.results?.filter((r: ContactExportResult) => !r.success).length || 0;
+    const totalTexts = exportResults.results?.reduce((sum: number, r: ContactExportResult) => sum + (r.textMessageCount || 0), 0) || 0;
 
     // Detailed results view
     if (showDetailedResults) {
@@ -190,7 +227,7 @@ function OutlookExport({ conversations, selectedIds, onComplete, onCancel }) {
 
           <div className="flex-1 overflow-y-auto p-6">
             <div className="max-w-2xl mx-auto space-y-4">
-              {exportResults.results?.map((result, idx) => (
+              {exportResults.results?.map((result: ContactExportResult, idx: number) => (
                 <div
                   key={idx}
                   className={`p-4 rounded-lg border-2 ${
@@ -389,12 +426,12 @@ function OutlookExport({ conversations, selectedIds, onComplete, onCancel }) {
             <div className="mb-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-3">Contacts to Export</h3>
               <div className="space-y-2">
-                {contactsWithEmail.map((conv) => (
+                {contactsWithEmail.map((conv: Conversation) => (
                   <div key={conv.id} className="p-3 bg-white border border-gray-200 rounded-lg">
                     <p className="font-semibold text-gray-900">{conv.name}</p>
                     {conv.emails && conv.emails.length > 0 && (
                       <div className="space-y-1 mt-1">
-                        {conv.emails.map((email, index) => (
+                        {conv.emails.map((email: string, index: number) => (
                           <p key={index} className="text-sm text-gray-600">{email}</p>
                         ))}
                       </div>
@@ -410,7 +447,7 @@ function OutlookExport({ conversations, selectedIds, onComplete, onCancel }) {
             <div className="mb-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-3">Contacts Without Email</h3>
               <div className="space-y-2">
-                {contactsWithoutEmail.map((conv) => (
+                {contactsWithoutEmail.map((conv: Conversation) => (
                   <div key={conv.id} className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
                     <p className="font-semibold text-gray-600">{conv.name}</p>
                     <p className="text-sm text-gray-500">No email address found</p>
@@ -446,7 +483,7 @@ function OutlookExport({ conversations, selectedIds, onComplete, onCancel }) {
                 <div className="w-full bg-blue-200 rounded-full h-2.5">
                   <div
                     className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
-                    style={{ width: `${(exportProgress.current / exportProgress.total) * 100}%` }}
+                    style={{ width: `${((exportProgress.current || 0) / exportProgress.total) * 100}%` }}
                   ></div>
                 </div>
               )}

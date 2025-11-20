@@ -69,7 +69,11 @@ class EnhancedExportService {
       filteredComms = this._filterByContentType(filteredComms, contentType);
 
       // Sort descending (most recent first)
-      filteredComms.sort((a, b) => new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime());
+      filteredComms.sort((a, b) => {
+        const dateA = a.sent_at ? new Date(a.sent_at as string).getTime() : 0;
+        const dateB = b.sent_at ? new Date(b.sent_at as string).getTime() : 0;
+        return dateB - dateA;
+      });
 
       console.log(
         `[Enhanced Export] Filtered to ${filteredComms.length} communications (verified address relevance)`
@@ -120,7 +124,7 @@ class EnhancedExportService {
     const end = endDate ? new Date(endDate) : null;
 
     return communications.filter((comm) => {
-      const commDate = new Date(comm.sent_at);
+      const commDate = new Date(comm.sent_at as string);
       if (start && commDate < start) return false;
       if (end && commDate > end) return false;
       return true;
@@ -297,7 +301,7 @@ class EnhancedExportService {
     ];
 
     const rows = communications.map((comm) => [
-      new Date(comm.sent_at).toLocaleString(),
+      new Date(comm.sent_at as string).toLocaleString(),
       comm.communication_type || 'email',
       comm.sender || '',
       comm.recipients || '',
@@ -421,7 +425,7 @@ class EnhancedExportService {
       const text = texts[i];
       const txtContent = this._createTextContent(text);
       const txtFileName = this._sanitizeFileName(
-        `${i + 1}_${new Date(text.sent_at).toISOString().split('T')[0]}.txt`
+        `${i + 1}_${new Date(text.sent_at as string).toISOString().split('T')[0]}.txt`
       );
       await fs.writeFile(path.join(textsPath, txtFileName), txtContent, 'utf8');
     }
@@ -447,7 +451,7 @@ class EnhancedExportService {
     lines.push(`Subject: ${email.subject || '(No Subject)'}`);
     lines.push(
       `Date: ${
-        email.sent_at ? new Date(email.sent_at).toUTCString() : 'Unknown'
+        email.sent_at ? new Date(email.sent_at as string).toUTCString() : 'Unknown'
       }`
     );
     if (email.has_attachments) {
@@ -473,7 +477,7 @@ class EnhancedExportService {
     lines.push(`From: ${text.sender || 'Unknown'}`);
     lines.push(`To: ${text.recipients || 'Unknown'}`);
     lines.push(
-      `Date: ${text.sent_at ? new Date(text.sent_at).toLocaleString() : 'Unknown'}`
+      `Date: ${text.sent_at ? new Date(text.sent_at as string).toLocaleString() : 'Unknown'}`
     );
     lines.push('');
     lines.push(text.body_plain || text.body || '(No content)');

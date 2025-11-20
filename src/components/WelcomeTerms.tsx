@@ -1,11 +1,18 @@
 import React, { useState } from 'react';
+import type { User } from '../../electron/types/models';
+
+interface WelcomeTermsProps {
+  user: User;
+  onAccept: () => Promise<void>;
+  onDecline: () => void;
+}
 
 /**
  * WelcomeTerms Component
  * Shows welcome message and terms acceptance for new users
  * Appears once after first OAuth login
  */
-function WelcomeTerms({ user, onAccept, onDecline }) {
+function WelcomeTerms({ user, onAccept, onDecline }: WelcomeTermsProps) {
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
   const [accepting, setAccepting] = useState(false);

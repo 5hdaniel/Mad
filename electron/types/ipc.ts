@@ -476,10 +476,27 @@ declare global {
       exportConversations: (conversationIds: string[]) => Promise<{ success: boolean; error?: string; canceled?: boolean }>;
       openFolder: (path: string) => Promise<void>;
       outlookInitialize: () => Promise<{ success: boolean; error?: string }>;
-      outlookIsAuthenticated: () => Promise<{ success: boolean; email?: string }>;
+      outlookIsAuthenticated: () => Promise<boolean>;
       outlookAuthenticate: () => Promise<{ success: boolean; error?: string; userInfo?: { username?: string } }>;
       outlookGetUserEmail: () => Promise<string | null>;
-      outlookExportEmails: (contactEmails: string[], startDate?: string, endDate?: string) => Promise<{ success: boolean; error?: string; canceled?: boolean }>;
+      outlookExportEmails: (contacts: Array<{
+        name: string;
+        chatId?: string;
+        emails?: string[];
+        phones?: string[];
+      }>) => Promise<{
+        success: boolean;
+        error?: string;
+        canceled?: boolean;
+        exportPath?: string;
+        results?: Array<{
+          contactName: string;
+          success: boolean;
+          textMessageCount: number;
+          emailCount?: number;
+          error: string | null;
+        }>;
+      }>;
       onDeviceCode: (callback: (code: string) => void) => () => void;
       onExportProgress: (callback: (progress: any) => void) => () => void;
       onUpdateAvailable: (callback: (info: any) => void) => () => void;

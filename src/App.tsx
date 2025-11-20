@@ -15,6 +15,8 @@ import Contacts from './components/Contacts';
 import WelcomeTerms from './components/WelcomeTerms';
 import Dashboard from './components/Dashboard';
 import AuditTransactionModal from './components/AuditTransactionModal';
+import type { Conversation } from './hooks/useConversations';
+import type { OAuthProvider, Subscription } from '../electron/types/models';
 
 // Type definitions
 type AppStep = 'login' | 'microsoft-login' | 'permissions' | 'dashboard' | 'outlook' | 'complete' | 'contacts';
@@ -26,6 +28,29 @@ interface User {
   avatar_url?: string;
 }
 
+interface AppExportResult {
+  exportPath?: string;
+  filesCreated?: string[];
+  results?: Array<{
+    contactName: string;
+    success: boolean;
+  }>;
+}
+
+interface OutlookExportResults {
+  success: boolean;
+  exportPath?: string;
+  results?: Array<{
+    contactName: string;
+    success: boolean;
+    textMessageCount: number;
+    emailCount?: number;
+    error: string | null;
+  }>;
+  error?: string;
+  canceled?: boolean;
+}
+
 function App() {
   const [currentStep, setCurrentStep] = useState<AppStep>('login');
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
@@ -33,9 +58,9 @@ function App() {
   const [sessionToken, setSessionToken] = useState<string | null>(null);
   const [hasPermissions, setHasPermissions] = useState<boolean>(false);
   const [outlookConnected, setOutlookConnected] = useState<boolean>(false);
-  const [exportResult, setExportResult] = useState<any>(null);
+  const [exportResult, setExportResult] = useState<AppExportResult | null>(null);
   const [showVersion, setShowVersion] = useState<boolean>(false);
-  const [conversations, setConversations] = useState<any[]>([]);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConversationIds, setSelectedConversationIds] = useState<Set<string>>(new Set());
   const [showMoveAppPrompt, setShowMoveAppPrompt] = useState<boolean>(false);
   const [appPath, setAppPath] = useState<string>('');
@@ -45,8 +70,8 @@ function App() {
   const [showContacts, setShowContacts] = useState<boolean>(false);
   const [showWelcomeTerms, setShowWelcomeTerms] = useState<boolean>(false);
   const [showAuditTransaction, setShowAuditTransaction] = useState<boolean>(false);
-  const [authProvider, setAuthProvider] = useState<string | null>(null);
-  const [subscription, setSubscription] = useState<any>(null);
+  const [authProvider, setAuthProvider] = useState<OAuthProvider | null>(null);
+  const [subscription, setSubscription] = useState<Subscription | undefined>(undefined);
 
   useEffect(() => {
     checkSession();
@@ -62,12 +87,14 @@ function App() {
         if (result.success) {
           console.log('Auto-login: Session found, logging in user');
           setIsAuthenticated(true);
-          setCurrentUser(result.user);
-          setSessionToken(result.sessionToken);
-          setAuthProvider(result.provider);
-          setSubscription(result.subscription || null);
+          setCurrentUser(result.user ?? null);
+          setSessionToken(result.sessionToken ?? null);
+          setAuthProvider((result.provider ?? null) as OAuthProvider | null);
+          setSubscription(result.subscription ?? undefined);
           // Also store in localStorage for backward compatibility
-          localStorage.setItem('sessionToken', result.sessionToken);
+          if (result.sessionToken) {
+            localStorage.setItem('sessionToken', result.sessionToken);
+          }
 
           // Check if user needs to accept terms (for new users or version updates)
           if (result.isNewUser) {
@@ -92,12 +119,12 @@ function App() {
     }
   };
 
-  const handleLoginSuccess = (user: User, token: string, provider: string, subscription: any, isNewUser: boolean): void => {
+  const handleLoginSuccess = (user: User, token: string, provider: string, subscription: Subscription | undefined, isNewUser: boolean): void => {
     setIsAuthenticated(true);
     setCurrentUser(user);
     setSessionToken(token);
-    setAuthProvider(provider);
-    setSubscription(subscription);
+    setAuthProvider(provider as OAuthProvider);
+    setSubscription(subscription ?? undefined);
     localStorage.setItem('sessionToken', token);
 
     // Show welcome modal for new users
@@ -150,7 +177,7 @@ function App() {
     setCurrentUser(null);
     setSessionToken(null);
     setAuthProvider(null);
-    setSubscription(null);
+    setSubscription(undefined);
     setShowProfile(false);
     setShowWelcomeTerms(false);
     localStorage.removeItem('sessionToken');
@@ -190,7 +217,7 @@ function App() {
     setShowMoveAppPrompt(false);
   };
 
-  const handleMicrosoftLogin = (userInfo) => {
+  const handleMicrosoftLogin = (userInfo: unknown) => {
     setOutlookConnected(true);
     // Check if we already have permissions
     if (hasPermissions) {
@@ -220,27 +247,23 @@ function App() {
     setCurrentStep('dashboard');
   };
 
-  const handleExportComplete = (result) => {
-    setExportResult(result);
+  const handleExportComplete = (result: any) => {
+    setExportResult(result as AppExportResult);
     setCurrentStep('complete');
   };
 
-  const handleOutlookExport = async (selectedIds) => {
+  const handleOutlookExport = async (selectedIds: Set<string>) => {
     // Load conversations if not already loaded
     if (conversations.length === 0) {
       const result = await window.electron.getConversations();
-      if (result.success) {
-        setConversations(result.conversations);
+      if (result.success && result.conversations) {
+        setConversations(result.conversations as Conversation[]);
       }
     }
     setSelectedConversationIds(selectedIds);
     setCurrentStep('outlook');
   };
 
-  const handleOutlookComplete = (result) => {
-    setExportResult(result);
-    setCurrentStep('complete');
-  };
 
   const handleOutlookCancel = () => {
     setCurrentStep('dashboard');
@@ -339,12 +362,25 @@ function App() {
           <OutlookExport
             conversations={conversations}
             selectedIds={selectedConversationIds}
-            onComplete={handleOutlookComplete}
+            onComplete={(results: OutlookExportResults | null) => {
+              if (results) {
+                setExportResult({
+                  exportPath: results.exportPath,
+                  results: results.results?.map(r => ({
+                    contactName: r.contactName,
+                    success: r.success
+                  }))
+                });
+              } else {
+                setExportResult(null);
+              }
+              setCurrentStep('complete');
+            }}
             onCancel={handleOutlookCancel}
           />
         )}
 
-        {currentStep === 'complete' && (
+        {currentStep === 'complete' && exportResult && (
           <ExportComplete
             result={exportResult}
             onStartOver={handleStartOver}
@@ -399,7 +435,7 @@ function App() {
       <UpdateNotification />
 
       {/* System Health Monitor - Show permission/connection errors */}
-      {isAuthenticated && currentUser && (
+      {isAuthenticated && currentUser && authProvider && (
         <SystemHealthMonitor userId={currentUser.id} provider={authProvider} />
       )}
 
@@ -413,7 +449,7 @@ function App() {
       )}
 
       {/* Profile Modal */}
-      {showProfile && currentUser && (
+      {showProfile && currentUser && authProvider && (
         <Profile
           user={currentUser}
           provider={authProvider}
@@ -434,7 +470,7 @@ function App() {
       )}
 
       {/* Transactions View */}
-      {showTransactions && currentUser && (
+      {showTransactions && currentUser && authProvider && (
         <Transactions
           userId={currentUser.id}
           provider={authProvider}
@@ -450,22 +486,22 @@ function App() {
         />
       )}
 
-      {/* Welcome Terms Modal (New Users Only) */}
+      {/* Welcome Terms Modal (New Users Only) - casting user to component's User type */}
       {showWelcomeTerms && currentUser && (
         <WelcomeTerms
-          user={currentUser}
+          user={currentUser as any}
           onAccept={handleAcceptTerms}
           onDecline={handleDeclineTerms}
         />
       )}
 
       {/* Audit Transaction Modal */}
-      {showAuditTransaction && currentUser && (
+      {showAuditTransaction && currentUser && authProvider && (
         <AuditTransactionModal
-          userId={currentUser.id}
+          userId={currentUser.id as any}
           provider={authProvider}
           onClose={() => setShowAuditTransaction(false)}
-          onSuccess={(newTransaction) => {
+          onSuccess={() => {
             setShowAuditTransaction(false);
             // Optionally show the transactions view after successful creation
             setShowTransactions(true);

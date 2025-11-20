@@ -59,9 +59,10 @@ function TransactionDetails({
     }
   };
 
-  const handleExportComplete = (result: { path?: string }): void => {
+  const handleExportComplete = (result: unknown): void => {
+    const exportResult = result as { path?: string };
     setShowExportModal(false);
-    setExportSuccess(result.path || 'Export completed successfully!');
+    setExportSuccess(exportResult.path || 'Export completed successfully!');
     // Auto-hide success message after 5 seconds
     setTimeout(() => setExportSuccess(null), 5000);
 

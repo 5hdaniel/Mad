@@ -1,6 +1,12 @@
 import React, { useState } from 'react';
 
-export default function MoveAppPrompt({ appPath, onDismiss, onNotNow }) {
+interface MoveAppPromptProps {
+  appPath: string;
+  onDismiss: () => void;
+  onNotNow: () => void;
+}
+
+export default function MoveAppPrompt({ appPath, onDismiss, onNotNow }: MoveAppPromptProps) {
   const [dontShowAgain, setDontShowAgain] = useState(false);
 
   const handleNotNow = () => {

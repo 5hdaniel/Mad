@@ -26,10 +26,10 @@
       "@types/*": ["types/*"]
     },
 
-    // Type checking (start lenient, will enable strict gradually)
-    "strict": false,
-    "noImplicitAny": false,
-    "strictNullChecks": false,
+    // Type checking (strict mode enabled - Sprint 3)
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
     "strictFunctionTypes": true,
     "strictBindCallApply": true,
     "noUnusedLocals": false,

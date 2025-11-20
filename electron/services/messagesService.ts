@@ -136,7 +136,7 @@ async function getGroupChatParticipants(chatId: number): Promise<Participant[]> 
  * Individual chats have phone numbers or emails
  */
 function isGroupChat(chatIdentifier: string): boolean {
-  return chatIdentifier && chatIdentifier.startsWith('chat') && !chatIdentifier.includes('@');
+  return Boolean(chatIdentifier) && chatIdentifier.startsWith('chat') && !chatIdentifier.includes('@');
 }
 
 /**

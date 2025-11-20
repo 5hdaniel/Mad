@@ -155,7 +155,7 @@ class PermissionService {
             type: 'CONTACTS_LOADING_FAILED',
             title: 'Cannot Load Contacts',
             message: result.status.userMessage || 'Could not load contacts from Contacts app',
-            details: result.status.error || result.status.lastError,
+            details: result.status.error || result.status.lastError || 'Unknown error',
             action: result.status.action || 'Grant Full Disk Access',
             actionHandler: 'open-system-settings',
             severity: 'error',

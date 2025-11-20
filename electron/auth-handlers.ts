@@ -196,8 +196,8 @@ const handleGoogleCompleteLogin = async (event: IpcMainInvokeEvent, authCode: st
     // Save auth token
     await databaseService.saveOAuthToken(localUser!.id, 'google', 'authentication', {
       access_token: encryptedAccessToken,
-      refresh_token: encryptedRefreshToken,
-      token_expires_at: tokens.expires_at,
+      refresh_token: encryptedRefreshToken ?? undefined,
+      token_expires_at: tokens.expires_at ?? undefined,
       scopes_granted: Array.isArray(tokens.scopes) ? tokens.scopes.join(' ') : tokens.scopes,
     });
 
@@ -262,11 +262,11 @@ const handleGoogleConnectMailbox = async (mainWindow: BrowserWindow | null, user
     console.log('[Main] Starting Google mailbox connection with redirect');
 
     // Validate input
-    const validatedUserId = validateUserId(userId);
+    const validatedUserId = validateUserId(userId)!; // Will throw if invalid, never null
 
     // Get user info to use as login hint
     const user = await databaseService.getUserById(validatedUserId);
-    const loginHint = user?.email;
+    const loginHint = user?.email ?? undefined;
 
     // Start auth flow - returns authUrl and a promise for the code
     const { authUrl, codePromise, scopes } = await googleAuthService.authenticateForMailbox(loginHint);
@@ -335,8 +335,8 @@ const handleGoogleConnectMailbox = async (mainWindow: BrowserWindow | null, user
         // Save mailbox token
         await databaseService.saveOAuthToken(userId, 'google', 'mailbox', {
           access_token: encryptedAccessToken,
-          refresh_token: encryptedRefreshToken,
-          token_expires_at: tokens.expires_at,
+          refresh_token: encryptedRefreshToken ?? undefined,
+          token_expires_at: tokens.expires_at ?? undefined,
           scopes_granted: Array.isArray(tokens.scopes) ? tokens.scopes.join(' ') : tokens.scopes,
           connected_email_address: userInfo.email,
           mailbox_connected: true,
@@ -452,7 +452,7 @@ const handleMicrosoftLogin = async (mainWindow: BrowserWindow | null): Promise<L
           first_name: userInfo.given_name,
           last_name: userInfo.family_name,
           display_name: userInfo.name,
-          avatar_url: null,
+          avatar_url: undefined,
           oauth_provider: 'microsoft',
           oauth_id: userInfo.id,
         });
@@ -466,7 +466,7 @@ const handleMicrosoftLogin = async (mainWindow: BrowserWindow | null): Promise<L
             first_name: userInfo.given_name,
             last_name: userInfo.family_name,
             display_name: userInfo.name,
-            avatar_url: null,
+            avatar_url: undefined,
             oauth_provider: 'microsoft',
             oauth_id: userInfo.id,
             subscription_tier: cloudUser.subscription_tier,
@@ -494,7 +494,7 @@ const handleMicrosoftLogin = async (mainWindow: BrowserWindow | null): Promise<L
 
         await databaseService.saveOAuthToken(localUser!.id, 'microsoft', 'authentication', {
           access_token: encryptedAccessToken,
-          refresh_token: encryptedRefreshToken,
+          refresh_token: encryptedRefreshToken ?? undefined,
           token_expires_at: expiresAt,
           scopes_granted: tokens.scope,
         });
@@ -580,11 +580,11 @@ const handleMicrosoftConnectMailbox = async (mainWindow: BrowserWindow | null, u
     console.log('[Main] Starting Microsoft mailbox connection with redirect');
 
     // Validate input
-    const validatedUserId = validateUserId(userId);
+    const validatedUserId = validateUserId(userId)!; // Will throw if invalid, never null
 
     // Get user info to use as login hint
     const user = await databaseService.getUserById(validatedUserId);
-    const loginHint = user?.email;
+    const loginHint = user?.email ?? undefined;
 
     // Start auth flow - returns authUrl and a promise for the code
     const { authUrl, codePromise, codeVerifier, scopes} = await microsoftAuthService.authenticateForMailbox(loginHint);
@@ -655,7 +655,7 @@ const handleMicrosoftConnectMailbox = async (mainWindow: BrowserWindow | null, u
 
         await databaseService.saveOAuthToken(userId, 'microsoft', 'mailbox', {
           access_token: encryptedAccessToken,
-          refresh_token: encryptedRefreshToken,
+          refresh_token: encryptedRefreshToken ?? undefined,
           token_expires_at: expiresAt,
           scopes_granted: tokens.scope,
           connected_email_address: userInfo.email,
@@ -735,7 +735,7 @@ export const registerAuthHandlers = (mainWindow: BrowserWindow | null): void => 
   ipcMain.handle('auth:accept-terms', async (event, userId: string): Promise<TermsAcceptanceResponse> => {
     try {
       // Validate input
-      const validatedUserId = validateUserId(userId);
+      const validatedUserId = validateUserId(userId)!; // Will throw if invalid, never null
 
       // Save to local database
       const updatedUser = await databaseService.acceptTerms(

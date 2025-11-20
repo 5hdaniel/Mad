@@ -1,12 +1,22 @@
 import React, { useState, useEffect } from 'react';
 
-function MicrosoftLogin({ onLoginComplete, onSkip }) {
+interface MicrosoftLoginProps {
+  onLoginComplete: (userInfo: { username?: string }) => void;
+  onSkip?: () => void;
+}
+
+interface DeviceCodeInfo {
+  verificationUri: string;
+  userCode: string;
+}
+
+function MicrosoftLogin({ onLoginComplete, onSkip }: MicrosoftLoginProps) {
   const [isInitializing, setIsInitializing] = useState(true);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [userEmail, setUserEmail] = useState(null);
-  const [error, setError] = useState(null);
-  const [deviceCode, setDeviceCode] = useState(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [deviceCode, setDeviceCode] = useState<DeviceCodeInfo | null>(null);
 
   useEffect(() => {
     checkAuthentication();
@@ -33,7 +43,7 @@ function MicrosoftLogin({ onLoginComplete, onSkip }) {
 
       if (!initResult.success) {
         // Not configured - allow user to skip
-        setError(initResult.error);
+        setError(initResult.error || null);
         setIsInitializing(false);
         return;
       }
@@ -46,10 +56,13 @@ function MicrosoftLogin({ onLoginComplete, onSkip }) {
         if (email) {
           setUserEmail(email);
           setIsAuthenticated(true);
+        } else {
+          setUserEmail(null);
         }
       }
     } catch (err) {
-      setError(err.message);
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      setError(errorMessage);
     } finally {
       setIsInitializing(false);
     }
@@ -61,8 +74,15 @@ function MicrosoftLogin({ onLoginComplete, onSkip }) {
     setDeviceCode(null);
 
     // Listen for device code from main process
-    const handleDeviceCode = (deviceCodeInfo) => {
-      setDeviceCode(deviceCodeInfo);
+    const handleDeviceCode = (code: string) => {
+      // Parse the code string if it's JSON, otherwise create a simple object
+      try {
+        const parsed = JSON.parse(code) as DeviceCodeInfo;
+        setDeviceCode(parsed);
+      } catch {
+        // If not JSON, assume it's a simple format
+        setDeviceCode({ verificationUri: '', userCode: code });
+      }
     };
 
     // Set up listener (will be cleaned up when authentication completes)
@@ -76,18 +96,21 @@ function MicrosoftLogin({ onLoginComplete, onSkip }) {
 
       if (result.success) {
         setIsAuthenticated(true);
-        setUserEmail(result.userInfo?.username);
+        setUserEmail(result.userInfo?.username || null);
         setDeviceCode(null); // Clear device code
 
         // Small delay to show success state
         setTimeout(() => {
-          onLoginComplete(result.userInfo);
+          if (result.userInfo) {
+            onLoginComplete(result.userInfo);
+          }
         }, 1000);
       } else {
         setError(result.error || 'Authentication failed');
       }
     } catch (err) {
-      setError(err.message);
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      setError(errorMessage);
     } finally {
       if (cleanup) cleanup();
       setIsAuthenticating(false);
@@ -96,7 +119,7 @@ function MicrosoftLogin({ onLoginComplete, onSkip }) {
 
   const handleContinue = () => {
     if (isAuthenticated) {
-      onLoginComplete({ username: userEmail });
+      onLoginComplete({ username: userEmail || undefined });
     }
   };
 

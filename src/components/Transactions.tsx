@@ -4,30 +4,91 @@ import ExportModal from './ExportModal';
 import ContactSelectModal from './ContactSelectModal';
 import { ROLE_TO_CATEGORY, AUDIT_WORKFLOW_STEPS } from '../constants/contactRoles';
 import { filterRolesByTransactionType, getRoleDisplayName } from '../utils/transactionRoleUtils';
+import type { Contact as BaseContact, Transaction } from '../../electron/types/models';
+
+interface ExtendedContact extends BaseContact {
+  address_mention_count?: number;
+  last_communication_at?: string | Date;
+}
+
+// Type definitions
+interface LocalTransaction {
+  id: string;
+  user_id: string;
+  property_address: string;
+  transaction_type: 'purchase' | 'sale';
+  status: 'active' | 'closed';
+  representation_start_date?: string;
+  closing_date?: string;
+  sale_price?: number;
+  listing_price?: number;
+  total_communications_count?: number;
+  extraction_confidence?: number;
+}
+
+interface Communication {
+  id: string;
+  subject?: string;
+  sender?: string;
+  sent_at?: string;
+  body_plain?: string;
+}
+
+interface ContactAssignment {
+  id: string;
+  contact_id: string;
+  contact_name: string;
+  contact_email?: string;
+  contact_phone?: string;
+  contact_company?: string;
+  role?: string;
+  specific_role?: string;
+  is_primary: number;
+  notes?: string;
+}
+
+interface LocalContact {
+  id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  company?: string;
+}
+
+interface ScanProgress {
+  step: string;
+  message: string;
+}
+
+interface TransactionsProps {
+  userId: string;
+  provider: string;
+  onClose: () => void;
+}
 
 /**
  * Transactions Component
  * Main transaction management interface
  * Lists transactions, triggers scans, shows progress
  */
-function Transactions({ userId, provider, onClose }) {
-  const [transactions, setTransactions] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [scanning, setScanning] = useState(false);
-  const [scanProgress, setScanProgress] = useState(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedTransaction, setSelectedTransaction] = useState(null);
-  const [error, setError] = useState(null);
-  const [statusFilter, setStatusFilter] = useState('active'); // active, closed, all
-  const [showAuditCreate, setShowAuditCreate] = useState(false);
-  const [quickExportTransaction, setQuickExportTransaction] = useState(null);
-  const [quickExportSuccess, setQuickExportSuccess] = useState(null);
+function Transactions({ userId, provider, onClose }: TransactionsProps) {
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [scanning, setScanning] = useState<boolean>(false);
+  const [scanProgress, setScanProgress] = useState<ScanProgress | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<'active' | 'closed' | 'all'>('active');
+  const [showAuditCreate, setShowAuditCreate] = useState<boolean>(false);
+  const [quickExportTransaction, setQuickExportTransaction] = useState<Transaction | null>(null);
+  const [quickExportSuccess, setQuickExportSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     loadTransactions();
 
     // Listen for scan progress
-    let cleanup;
+    let cleanup: (() => void) | undefined;
     if (window.api?.onTransactionScanProgress) {
       cleanup = window.api.onTransactionScanProgress(handleScanProgress);
     }
@@ -43,19 +104,20 @@ function Transactions({ userId, provider, onClose }) {
       const result = await window.api.transactions.getAll(userId);
 
       if (result.success) {
-        setTransactions(result.transactions || []);
+        setTransactions((result.transactions as Transaction[]) || []);
       } else {
         setError(result.error || 'Failed to load transactions');
       }
     } catch (err) {
-      setError(err.message);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load transactions';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleScanProgress = (progress) => {
-    setScanProgress(progress);
+  const handleScanProgress = (progress: unknown) => {
+    setScanProgress(progress as ScanProgress);
   };
 
   const startScan = async () => {
@@ -82,14 +144,15 @@ function Transactions({ userId, provider, onClose }) {
         setError(result.error || 'Scan failed');
       }
     } catch (err) {
-      setError(err.message);
+      const errorMessage = err instanceof Error ? err.message : 'Scan failed';
+      setError(errorMessage);
     } finally {
       setScanning(false);
       setTimeout(() => setScanProgress(null), 3000);
     }
   };
 
-  const formatCurrency = (amount) => {
+  const formatCurrency = (amount: number | undefined): string => {
     if (!amount) return 'N/A';
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -98,16 +161,17 @@ function Transactions({ userId, provider, onClose }) {
     }).format(amount);
   };
 
-  const formatDate = (dateString) => {
+  const formatDate = (dateString: string | Date | undefined): string => {
     if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString('en-US', {
+    const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
+    return date.toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
     });
   };
 
-  const filteredTransactions = transactions.filter((t) => {
+  const filteredTransactions = transactions.filter((t: Transaction) => {
     const matchesSearch = t.property_address?.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus =
       statusFilter === 'all' ||
@@ -116,14 +180,15 @@ function Transactions({ userId, provider, onClose }) {
     return matchesSearch && matchesStatus;
   });
 
-  const handleQuickExport = (transaction, e) => {
+  const handleQuickExport = (transaction: Transaction, e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent opening transaction details
     setQuickExportTransaction(transaction);
   };
 
-  const handleQuickExportComplete = (result) => {
+  const handleQuickExportComplete = (result: unknown) => {
+    const exportResult = result as { path?: string };
     setQuickExportTransaction(null);
-    setQuickExportSuccess(result.path || 'Export completed successfully!');
+    setQuickExportSuccess(exportResult.path || 'Export completed successfully!');
     // Auto-hide success message after 5 seconds
     setTimeout(() => setQuickExportSuccess(null), 5000);
     // Reload transactions to update export status
@@ -161,7 +226,7 @@ function Transactions({ userId, provider, onClose }) {
                   : 'text-gray-600 hover:text-gray-900'
               }`}
             >
-              Active ({transactions.filter((t) => t.status === 'active').length})
+              Active ({transactions.filter((t: Transaction) => t.status === 'active').length})
             </button>
             <button
               onClick={() => setStatusFilter('closed')}
@@ -171,7 +236,7 @@ function Transactions({ userId, provider, onClose }) {
                   : 'text-gray-600 hover:text-gray-900'
               }`}
             >
-              Closed ({transactions.filter((t) => t.status === 'closed').length})
+              Closed ({transactions.filter((t: Transaction) => t.status === 'closed').length})
             </button>
             <button
               onClick={() => setStatusFilter('all')}
@@ -338,7 +403,7 @@ function Transactions({ userId, provider, onClose }) {
             </div>
           ) : (
             <div className="grid gap-6">
-              {filteredTransactions.map((transaction) => (
+              {filteredTransactions.map((transaction: Transaction) => (
                 <div
                   key={transaction.id}
                   className="bg-white border-2 border-gray-200 rounded-xl p-6 hover:border-blue-400 hover:shadow-xl transition-all cursor-pointer transform hover:scale-[1.01]"
@@ -440,10 +505,10 @@ function Transactions({ userId, provider, onClose }) {
       {/* Audit Transaction Creation Modal */}
       {showAuditCreate && (
         <AuditTransactionModal
-          userId={userId}
+          userId={parseInt(userId)}
           provider={provider}
           onClose={() => setShowAuditCreate(false)}
-          onSuccess={(newTransaction) => {
+          onSuccess={() => {
             setShowAuditCreate(false);
             loadTransactions();
           }}
@@ -467,16 +532,22 @@ function Transactions({ userId, provider, onClose }) {
  * Transaction Details Modal
  * Shows full details of a single transaction
  */
-function TransactionDetails({ transaction, onClose, onTransactionUpdated }) {
-  const [communications, setCommunications] = useState([]);
-  const [contactAssignments, setContactAssignments] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showExportModal, setShowExportModal] = useState(false);
-  const [exportSuccess, setExportSuccess] = useState(null);
-  const [showArchivePrompt, setShowArchivePrompt] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [activeTab, setActiveTab] = useState('details'); // 'details' or 'contacts'
+interface TransactionDetailsProps {
+  transaction: Transaction;
+  onClose: () => void;
+  onTransactionUpdated?: () => void;
+}
+
+function TransactionDetails({ transaction, onClose, onTransactionUpdated }: TransactionDetailsProps) {
+  const [communications, setCommunications] = useState<Communication[]>([]);
+  const [contactAssignments, setContactAssignments] = useState<ContactAssignment[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [showExportModal, setShowExportModal] = useState<boolean>(false);
+  const [exportSuccess, setExportSuccess] = useState<string | null>(null);
+  const [showArchivePrompt, setShowArchivePrompt] = useState<boolean>(false);
+  const [showEditModal, setShowEditModal] = useState<boolean>(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean>(false);
+  const [activeTab, setActiveTab] = useState<'details' | 'contacts'>('details');
 
   useEffect(() => {
     loadDetails();
@@ -488,7 +559,7 @@ function TransactionDetails({ transaction, onClose, onTransactionUpdated }) {
       const result = await window.api.transactions.getDetails(transaction.id);
 
       if (result.success) {
-        const txn = result.transaction as any;
+        const txn = result.transaction as { communications?: Communication[]; contact_assignments?: ContactAssignment[] };
         setCommunications(txn.communications || []);
         setContactAssignments(txn.contact_assignments || []);
       }
@@ -499,9 +570,10 @@ function TransactionDetails({ transaction, onClose, onTransactionUpdated }) {
     }
   };
 
-  const handleExportComplete = (result) => {
+  const handleExportComplete = (result: unknown) => {
+    const exportResult = result as { path?: string };
     setShowExportModal(false);
-    setExportSuccess(result.path || 'Export completed successfully!');
+    setExportSuccess(exportResult.path || 'Export completed successfully!');
     // Auto-hide success message after 5 seconds
     setTimeout(() => setExportSuccess(null), 5000);
 
@@ -669,7 +741,7 @@ function TransactionDetails({ transaction, onClose, onTransactionUpdated }) {
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {communications.map((comm) => (
+                      {communications.map((comm: Communication) => (
                         <div key={comm.id} className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                           <div className="flex items-start justify-between mb-2">
                             <h5 className="font-semibold text-gray-900">{comm.subject || '(No Subject)'}</h5>
@@ -701,7 +773,7 @@ function TransactionDetails({ transaction, onClose, onTransactionUpdated }) {
                 <p className="text-gray-600 text-center py-8">No contacts assigned to this transaction</p>
               ) : (
                 <div className="space-y-4">
-                  {contactAssignments.map((assignment) => (
+                  {contactAssignments.map((assignment: ContactAssignment) => (
                     <div key={assignment.id} className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
@@ -852,20 +924,49 @@ function TransactionDetails({ transaction, onClose, onTransactionUpdated }) {
  * Edit Transaction Modal
  * Allows editing transaction details and contact assignments
  */
-function EditTransactionModal({ transaction, onClose, onSuccess }) {
-  const [activeTab, setActiveTab] = useState('details'); // 'details' or 'contacts'
+interface EditTransactionModalProps {
+  transaction: Transaction;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+interface ContactAssignmentMap {
+  [role: string]: Array<{
+    contactId: string;
+    contactName: string;
+    contactEmail?: string;
+    contactPhone?: string;
+    contactCompany?: string;
+    isPrimary: boolean;
+    notes?: string;
+    assignmentId?: string;
+  }>;
+}
+
+function EditTransactionModal({ transaction, onClose, onSuccess }: EditTransactionModalProps) {
+  const [activeTab, setActiveTab] = useState<'details' | 'contacts'>('details');
   const [formData, setFormData] = useState({
     property_address: transaction.property_address || '',
     transaction_type: transaction.transaction_type || 'purchase',
-    representation_start_date: transaction.representation_start_date || '',
-    closing_date: transaction.closing_date || '',
+    representation_start_date:
+      transaction.representation_start_date
+        ? typeof transaction.representation_start_date === 'string'
+          ? transaction.representation_start_date
+          : transaction.representation_start_date.toISOString().split('T')[0]
+        : '',
+    closing_date:
+      transaction.closing_date
+        ? typeof transaction.closing_date === 'string'
+          ? transaction.closing_date
+          : transaction.closing_date.toISOString().split('T')[0]
+        : '',
     sale_price: transaction.sale_price || '',
     listing_price: transaction.listing_price || '',
   });
-  const [contactAssignments, setContactAssignments] = useState({});
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
+  const [contactAssignments, setContactAssignments] = useState<ContactAssignmentMap>({});
+  const [loading, setLoading] = useState<boolean>(true);
+  const [saving, setSaving] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Load existing contact assignments
   useEffect(() => {
@@ -875,12 +976,13 @@ function EditTransactionModal({ transaction, onClose, onSuccess }) {
   const loadContactAssignments = async () => {
     try {
       const result = await window.api.transactions.getDetails(transaction.id);
-      const txn = result.transaction as any;
+      const txn = result.transaction as { contact_assignments?: ContactAssignment[] };
       if (result.success && txn.contact_assignments) {
         // Group assignments by role
-        const grouped = {};
-        txn.contact_assignments.forEach((assignment) => {
+        const grouped: ContactAssignmentMap = {};
+        txn.contact_assignments.forEach((assignment: ContactAssignment) => {
           const role = assignment.specific_role || assignment.role;
+          if (!role) return;
           if (!grouped[role]) {
             grouped[role] = [];
           }
@@ -904,12 +1006,12 @@ function EditTransactionModal({ transaction, onClose, onSuccess }) {
     }
   };
 
-  const handleChange = (field, value) => {
+  const handleChange = (field: string, value: string) => {
     setFormData({ ...formData, [field]: value });
   };
 
   // Handle adding contact to a role
-  const handleAssignContact = (role, contact) => {
+  const handleAssignContact = (role: string, contact: { contactId: string; contactName: string; contactEmail?: string; contactPhone?: string; contactCompany?: string; isPrimary: boolean; notes?: string }) => {
     setContactAssignments({
       ...contactAssignments,
       [role]: [...(contactAssignments[role] || []), contact],
@@ -917,7 +1019,7 @@ function EditTransactionModal({ transaction, onClose, onSuccess }) {
   };
 
   // Handle removing contact from a role
-  const handleRemoveContact = (role, contactId) => {
+  const handleRemoveContact = (role: string, contactId: string) => {
     setContactAssignments({
       ...contactAssignments,
       [role]: (contactAssignments[role] || []).filter((c) => c.contactId !== contactId),
@@ -940,8 +1042,8 @@ function EditTransactionModal({ transaction, onClose, onSuccess }) {
         transaction_type: formData.transaction_type,
         representation_start_date: formData.representation_start_date || null,
         closing_date: formData.closing_date || null,
-        sale_price: formData.sale_price ? parseFloat(formData.sale_price) : null,
-        listing_price: formData.listing_price ? parseFloat(formData.listing_price) : null,
+        sale_price: formData.sale_price ? parseFloat(formData.sale_price as string) : null,
+        listing_price: formData.listing_price ? parseFloat(formData.listing_price as string) : null,
       };
 
       await window.api.transactions.update(transaction.id, updates);
@@ -949,11 +1051,12 @@ function EditTransactionModal({ transaction, onClose, onSuccess }) {
       // Update contact assignments
       // First, get all current assignments to determine what to delete
       const currentResult = await window.api.transactions.getDetails(transaction.id);
-      const currentAssignments = currentResult.success ? (currentResult.transaction as any).contact_assignments || [] : [];
+      const currentAssignments = currentResult.success ? ((currentResult.transaction as { contact_assignments?: ContactAssignment[] }).contact_assignments || []) : [];
 
       // Delete removed contacts
       for (const existing of currentAssignments) {
         const role = existing.specific_role || existing.role;
+        if (!role) continue;
         const stillAssigned = (contactAssignments[role] || []).some(
           (c) => c.contactId === existing.contact_id
         );
@@ -964,10 +1067,10 @@ function EditTransactionModal({ transaction, onClose, onSuccess }) {
 
       // Add new contacts
       for (const [role, contacts] of Object.entries(contactAssignments)) {
-        for (const contact of (contacts as any[])) {
+        for (const contact of contacts) {
           // Check if this is a new assignment
           const isExisting = currentAssignments.some(
-            (existing) => existing.contact_id === contact.contactId && (existing.specific_role || existing.role) === role
+            (existing: ContactAssignment) => existing.contact_id === contact.contactId && (existing.specific_role || existing.role) === role
           );
 
           if (!isExisting) {
@@ -986,7 +1089,8 @@ function EditTransactionModal({ transaction, onClose, onSuccess }) {
 
       onSuccess();
     } catch (err) {
-      setError(err.message || 'Failed to update transaction');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to update transaction';
+      setError(errorMessage);
       setSaving(false);
     }
   };
@@ -1191,10 +1295,25 @@ function EditTransactionModal({ transaction, onClose, onSuccess }) {
  * Edit Contact Assignments Component
  * Reusable component for editing contact assignments
  */
-function EditContactAssignments({ transactionType, contactAssignments, onAssignContact, onRemoveContact, userId, propertyAddress }) {
+interface EditContactAssignmentsProps {
+  transactionType: 'purchase' | 'sale';
+  contactAssignments: ContactAssignmentMap;
+  onAssignContact: (role: string, contact: { contactId: string; contactName: string; contactEmail?: string; contactPhone?: string; contactCompany?: string; isPrimary: boolean; notes?: string }) => void;
+  onRemoveContact: (role: string, contactId: string) => void;
+  userId: string;
+  propertyAddress: string;
+}
+
+interface RoleConfig {
+  role: string;
+  required: boolean;
+  multiple: boolean;
+}
+
+function EditContactAssignments({ transactionType, contactAssignments, onAssignContact, onRemoveContact, userId, propertyAddress }: EditContactAssignmentsProps) {
   return (
     <div className="space-y-6">
-      {AUDIT_WORKFLOW_STEPS.map((step, idx) => {
+      {AUDIT_WORKFLOW_STEPS.map((step: { title: string; description: string; roles: RoleConfig[] }, idx: number) => {
         const stepRoles = filterRolesByTransactionType(step.roles, transactionType, step.title);
         if (stepRoles.length === 0) return null;
 
@@ -1203,7 +1322,7 @@ function EditContactAssignments({ transactionType, contactAssignments, onAssignC
             <h4 className="text-lg font-semibold text-gray-900 mb-3">{step.title}</h4>
             <p className="text-sm text-gray-600 mb-4">{step.description}</p>
             <div className="space-y-4">
-              {stepRoles.map((roleConfig) => (
+              {stepRoles.map((roleConfig: RoleConfig) => (
                 <EditRoleAssignment
                   key={roleConfig.role}
                   role={roleConfig.role}
@@ -1228,11 +1347,31 @@ function EditContactAssignments({ transactionType, contactAssignments, onAssignC
 /**
  * Edit Single Role Assignment Component
  */
-function EditRoleAssignment({ role, required, multiple, assignments, onAssign, onRemove, userId, propertyAddress, transactionType }) {
-  const [contacts, setContacts] = React.useState([]);
-  const [_loading, setLoading] = React.useState(true);
-  const [_error, setError] = React.useState(null);
-  const [showContactSelect, setShowContactSelect] = React.useState(false);
+interface EditRoleAssignmentProps {
+  role: string;
+  required: boolean;
+  multiple: boolean;
+  assignments: Array<{
+    contactId: string;
+    contactName: string;
+    contactEmail?: string;
+    contactPhone?: string;
+    contactCompany?: string;
+    isPrimary: boolean;
+    notes?: string;
+  }>;
+  onAssign: (role: string, contact: { contactId: string; contactName: string; contactEmail?: string; contactPhone?: string; contactCompany?: string; isPrimary: boolean; notes?: string }) => void;
+  onRemove: (role: string, contactId: string) => void;
+  userId: string;
+  propertyAddress: string;
+  transactionType: 'purchase' | 'sale';
+}
+
+function EditRoleAssignment({ role, required, multiple, assignments, onAssign, onRemove, userId, propertyAddress, transactionType }: EditRoleAssignmentProps) {
+  const [contacts, setContacts] = React.useState<ExtendedContact[]>([]);
+  const [_loading, setLoading] = React.useState<boolean>(true);
+  const [_error, setError] = React.useState<string | null>(null);
+  const [showContactSelect, setShowContactSelect] = React.useState<boolean>(false);
 
   React.useEffect(() => {
     loadContacts();
@@ -1261,8 +1400,8 @@ function EditRoleAssignment({ role, required, multiple, assignments, onAssign, o
     }
   };
 
-  const handleContactSelected = (selectedContacts) => {
-    selectedContacts.forEach((contact) => {
+  const handleContactSelected = (selectedContacts: ExtendedContact[]) => {
+    selectedContacts.forEach((contact: ExtendedContact) => {
       onAssign(role, {
         contactId: contact.id,
         contactName: contact.name,
@@ -1270,7 +1409,7 @@ function EditRoleAssignment({ role, required, multiple, assignments, onAssign, o
         contactPhone: contact.phone,
         contactCompany: contact.company,
         isPrimary: false,
-        notes: null,
+        notes: undefined,
       });
     });
     setShowContactSelect(false);
@@ -1301,7 +1440,7 @@ function EditRoleAssignment({ role, required, multiple, assignments, onAssign, o
       {/* Assigned contacts */}
       {assignments.length > 0 && (
         <div className="space-y-2">
-          {assignments.map((assignment) => (
+          {assignments.map((assignment: { contactId: string; contactName: string; contactEmail?: string }) => (
             <div key={assignment.contactId} className="flex items-center justify-between bg-white border border-gray-200 rounded-lg p-3">
               <div className="flex-1">
                 <p className="font-medium text-gray-900">{assignment.contactName}</p>
@@ -1326,7 +1465,7 @@ function EditRoleAssignment({ role, required, multiple, assignments, onAssign, o
       {showContactSelect && (
         <ContactSelectModal
           contacts={contacts}
-          excludeIds={assignments.map((a) => a.contactId)}
+          excludeIds={assignments.map((a: { contactId: string }): string => a.contactId) as never[]}
           multiple={multiple}
           onSelect={handleContactSelected}
           onClose={() => setShowContactSelect(false)}

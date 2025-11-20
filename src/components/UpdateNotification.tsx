@@ -1,10 +1,14 @@
 import { useState, useEffect } from 'react';
 
+interface UpdateInfo {
+  version: string;
+}
+
 export default function UpdateNotification() {
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [updateDownloaded, setUpdateDownloaded] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
-  const [updateInfo, setUpdateInfo] = useState(null);
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
 
   useEffect(() => {
     // Listen for update events

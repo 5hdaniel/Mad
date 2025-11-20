@@ -46,11 +46,22 @@ interface ElectronAPI {
   installUpdate: () => void;
 
   // Outlook Integration
-  outlookInitialize: () => Promise<{ success: boolean }>;
-  outlookAuthenticate: () => Promise<{ success: boolean }>;
-  outlookIsAuthenticated: () => Promise<{ authenticated: boolean }>;
-  outlookGetUserEmail: () => Promise<{ email: string }>;
-  outlookExportEmails: (contacts: unknown[]) => Promise<{ success: boolean }>;
+  outlookInitialize: () => Promise<{ success: boolean; error?: string }>;
+  outlookAuthenticate: () => Promise<{ success: boolean; error?: string }>;
+  outlookIsAuthenticated: () => Promise<boolean>;
+  outlookGetUserEmail: () => Promise<string | null>;
+  outlookExportEmails: (contacts: Array<{
+    name: string;
+    chatId?: string;
+    emails?: string[];
+    phones?: string[];
+  }>) => Promise<{ success: boolean; error?: string; canceled?: boolean; exportPath?: string; results?: Array<{
+    contactName: string;
+    success: boolean;
+    textMessageCount: number;
+    emailCount?: number;
+    error: string | null;
+  }> }>;
   outlookSignout: () => Promise<{ success: boolean }>;
   onDeviceCode: (callback: (info: unknown) => void) => () => void;
   onExportProgress: (callback: (progress: unknown) => void) => () => void;

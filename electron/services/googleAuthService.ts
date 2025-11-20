@@ -291,7 +291,7 @@ class GoogleAuthService {
       return {
         tokens: {
           access_token: tokens.access_token!,
-          refresh_token: tokens.refresh_token,
+          refresh_token: tokens.refresh_token ?? undefined,
           expires_at: tokens.expiry_date
             ? new Date(tokens.expiry_date).toISOString()
             : null,
@@ -374,7 +374,7 @@ class GoogleAuthService {
       return {
         id: data.id!,
         email: data.email!,
-        verified_email: data.verified_email,
+        verified_email: data.verified_email ?? undefined,
         name: data.name || undefined,
         given_name: data.given_name || undefined,
         family_name: data.family_name || undefined,

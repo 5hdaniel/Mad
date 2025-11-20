@@ -1,18 +1,26 @@
 import React, { useState, useEffect } from 'react';
+import type { Contact, Transaction } from '../../electron/types/models';
+
+interface ManualTransactionModalProps {
+  userId: string;
+  provider: string;
+  onClose: () => void;
+  onSuccess: (transaction: Transaction) => void;
+}
 
 /**
  * ManualTransactionModal Component
  * Allows users to manually create a transaction by entering address and details
  */
-function ManualTransactionModal({ userId, provider, onClose, onSuccess }) {
+function ManualTransactionModal({ userId, provider, onClose, onSuccess }: ManualTransactionModalProps) {
   const [propertyAddress, setPropertyAddress] = useState('');
   const [representationStartDate, setRepresentationStartDate] = useState('');
   const [closingDate, setClosingDate] = useState('');
   const [transactionType, setTransactionType] = useState('purchase');
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState(1); // 1: Address, 2: Dates, 3: Contacts
-  const [contacts, setContacts] = useState([]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
   const [loadingContacts, setLoadingContacts] = useState(false);
   const [buyerAgentId, setBuyerAgentId] = useState('');
   const [sellerAgentId, setSellerAgentId] = useState('');
@@ -60,14 +68,15 @@ function ManualTransactionModal({ userId, provider, onClose, onSuccess }) {
         status: 'active',
       });
 
-      if (result.success) {
+      if (result.success && result.transaction) {
         onSuccess(result.transaction);
         onClose();
       } else {
         setError(result.error || 'Failed to create transaction');
       }
     } catch (err) {
-      setError(err.message || 'Failed to create transaction');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to create transaction';
+      setError(errorMessage);
     } finally {
       setSaving(false);
     }

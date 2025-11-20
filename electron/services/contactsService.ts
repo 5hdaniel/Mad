@@ -323,7 +323,7 @@ function buildContactMaps(
 ): void {
   Object.values(personMap).forEach((person) => {
     // Map phone numbers to name and full contact info
-    person.phones.forEach((phone) => {
+    person.phones.forEach((phone: string) => {
       const normalized = normalizePhoneNumber(phone);
 
       // Map both normalized and original to name
@@ -341,7 +341,7 @@ function buildContactMaps(
     });
 
     // Map emails to name
-    person.emails.forEach((email) => {
+    person.emails.forEach((email: string) => {
       const emailLower = email.toLowerCase();
       contactMap[emailLower] = person.name;
     });

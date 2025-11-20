@@ -132,9 +132,10 @@ function TransactionList({ userId, provider, onClose }: TransactionListComponent
     setQuickExportTransaction(transaction);
   };
 
-  const handleQuickExportComplete = (result: { path?: string }): void => {
+  const handleQuickExportComplete = (result: unknown): void => {
+    const exportResult = result as { path?: string };
     setQuickExportTransaction(null);
-    setQuickExportSuccess(result.path || 'Export completed successfully!');
+    setQuickExportSuccess(exportResult.path || 'Export completed successfully!');
     // Auto-hide success message after 5 seconds
     setTimeout(() => setQuickExportSuccess(null), 5000);
     // Reload transactions to update export status
@@ -451,7 +452,7 @@ function TransactionList({ userId, provider, onClose }: TransactionListComponent
       {/* Audit Transaction Creation Modal */}
       {showAuditCreate && (
         <AuditTransactionModal
-          userId={userId}
+          userId={parseInt(userId)}
           provider={provider}
           onClose={() => setShowAuditCreate(false)}
           onSuccess={() => {

@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from 'react';
 
+interface OnboardingWizardProps {
+  onComplete: (result?: { skipped?: boolean }) => void;
+}
+
 /**
  * Onboarding Wizard
  * Guides new users through permission setup
@@ -11,10 +15,10 @@ import React, { useState, useEffect } from 'react';
  * 4. Wait for user to toggle on Full Disk Access
  * 5. Completion celebration
  */
-function OnboardingWizard({ onComplete }) {
+function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
   const [step, setStep] = useState(1); // 1=welcome, 2=contacts, 3=full-disk, 4=waiting, 5=complete
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
   const [contactsGranted, setContactsGranted] = useState(false);
   const [fullDiskGranted, setFullDiskGranted] = useState(false);
   const [checkingPermissions, setCheckingPermissions] = useState(false);
@@ -56,7 +60,8 @@ function OnboardingWizard({ onComplete }) {
       }
     } catch (err) {
       console.error('Failed to request contacts permission:', err);
-      setError(err.message);
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      setError(errorMessage);
       // Move on anyway after error
       setTimeout(() => {
         setStep(3);
@@ -82,7 +87,8 @@ function OnboardingWizard({ onComplete }) {
       }
     } catch (err) {
       console.error('Failed to setup Full Disk Access:', err);
-      setError(err.message);
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }

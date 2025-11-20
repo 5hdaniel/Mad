@@ -5,13 +5,24 @@
  */
 
 import React, { useState } from 'react';
+import type { User, Subscription } from '../../electron/types/models';
 
-const Login = ({ onLoginSuccess }) => {
+interface LoginProps {
+  onLoginSuccess: (
+    user: User,
+    sessionToken: string,
+    provider: string,
+    subscription: Subscription,
+    isNewUser: boolean
+  ) => void;
+}
+
+const Login = ({ onLoginSuccess }: LoginProps) => {
   const [loading, setLoading] = useState(false);
-  const [authUrl, setAuthUrl] = useState(null);
+  const [authUrl, setAuthUrl] = useState<string | null>(null);
   const [authCode, setAuthCode] = useState('');
-  const [provider, setProvider] = useState(null);
-  const [error, setError] = useState(null);
+  const [provider, setProvider] = useState<'google' | 'microsoft' | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   /**
    * Handle Google Sign In
@@ -36,7 +47,8 @@ const Login = ({ onLoginSuccess }) => {
       }
     } catch (err) {
       console.error('Google login error:', err);
-      setError(err.message || 'Failed to start Google login');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to start Google login';
+      setError(errorMessage);
       setLoading(false);
       setProvider(null);
     }
@@ -52,13 +64,13 @@ const Login = ({ onLoginSuccess }) => {
     setProvider('microsoft');
 
     // Listen for login completion from main process
-    let cleanup;
+    let cleanup: (() => void) | undefined;
     if (window.api.onMicrosoftLoginComplete) {
       cleanup = window.api.onMicrosoftLoginComplete((result) => {
         console.log('Microsoft login complete:', result);
 
-        if (result.success && onLoginSuccess) {
-          onLoginSuccess(result.user, result.sessionToken, 'microsoft', result.subscription, result.isNewUser);
+        if (result.success && result.user && result.sessionToken && result.subscription && onLoginSuccess) {
+          onLoginSuccess(result.user, result.sessionToken, 'microsoft', result.subscription, result.isNewUser || false);
         } else {
           setError(result.error || 'Failed to complete Microsoft login');
           setLoading(false);
@@ -85,7 +97,8 @@ const Login = ({ onLoginSuccess }) => {
       }
     } catch (err) {
       console.error('Microsoft login error:', err);
-      setError(err.message || 'Failed to start Microsoft login');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to start Microsoft login';
+      setError(errorMessage);
       setLoading(false);
       setProvider(null);
       if (cleanup) cleanup();
@@ -95,7 +108,7 @@ const Login = ({ onLoginSuccess }) => {
   /**
    * Handle authorization code submission
    */
-  const handleCodeSubmit = async (e) => {
+  const handleCodeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!authCode.trim()) {
@@ -114,16 +127,17 @@ const Login = ({ onLoginSuccess }) => {
         result = await window.api.auth.microsoftCompleteLogin(authCode.trim());
       }
 
-      if (result && result.success && onLoginSuccess) {
+      if (result && result.success && result.user && result.sessionToken && provider && result.subscription && onLoginSuccess) {
         // Call parent callback with user, session token, provider, subscription, and isNewUser flag
-        onLoginSuccess(result.user, result.sessionToken, provider, result.subscription, result.isNewUser);
+        onLoginSuccess(result.user, result.sessionToken, provider, result.subscription, result.isNewUser || false);
       } else if (result && !result.success) {
         setError(result.error || 'Login failed');
         setLoading(false);
       }
     } catch (err) {
       console.error('Code exchange error:', err);
-      setError(err.message || 'Failed to complete login');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to complete login';
+      setError(errorMessage);
       setLoading(false);
     }
   };

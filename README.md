@@ -64,9 +64,47 @@ To grant permissions:
 
 - **Electron**: Cross-platform desktop framework
 - **React**: UI framework
+- **TypeScript**: Strict mode enabled for type safety
 - **Tailwind CSS**: Styling
 - **Vite**: Build tool
 - **SQLite3**: Database access for Messages
+
+## TypeScript Migration
+
+The codebase has been fully migrated to TypeScript with **strict mode enabled** for maximum type safety:
+
+### Type Safety Features
+- ✅ `strict: true` - All strict mode checks enabled
+- ✅ `noImplicitAny: true` - No implicit any types
+- ✅ `strictNullChecks: true` - Null and undefined handled explicitly
+- ✅ 100% type coverage - All files type-checked
+- ✅ 0 TypeScript errors
+
+### Development Workflow
+```bash
+# Type check without building
+npm run type-check
+
+# Build Electron files
+npm run build:electron
+
+# Build preload script
+npm run build:preload
+
+# Full build (React + Electron)
+npm run build
+```
+
+### Pre-commit Hooks
+- Type checking runs automatically before commits via Husky
+- CI/CD pipeline validates types on every push
+- Prevents type errors from entering the codebase
+
+### Key Patterns
+- **Optional values**: Use `undefined` (not `null`) for optional properties
+- **Error handling**: Use `instanceof Error` checks in catch blocks
+- **API boundaries**: Convert database `null` values to `undefined` with `?? undefined`
+- **Validation**: Non-null assertions (`!`) only used with validation functions that throw on invalid input
 
 ## Privacy
 

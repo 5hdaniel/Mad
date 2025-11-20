@@ -86,10 +86,13 @@ export const registerFeedbackHandlers = (): void => {
   });
 
   // Get feedback for a transaction
-  ipcMain.handle('feedback:get-for-transaction', async (event: IpcMainInvokeEvent, transactionId: string): Promise<FeedbackResponse> => {
+  ipcMain.handle('feedback:get-for-transaction', async (event: IpcMainInvokeEvent, transactionId: string | null): Promise<FeedbackResponse> => {
     try {
       // Validate input
-      const validatedTransactionId = validateTransactionId(transactionId);
+      if (!transactionId) {
+        throw new ValidationError('Transaction ID is required', 'transactionId');
+      }
+      const validatedTransactionId = validateTransactionId(transactionId)!;
 
       const feedback = await databaseService.getFeedbackByTransaction(validatedTransactionId);
 

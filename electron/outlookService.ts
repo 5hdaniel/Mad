@@ -167,7 +167,7 @@ class OutlookService {
           const response = await this.msalInstance.acquireTokenSilent(silentRequest);
           this.accessToken = response.accessToken;
           this.initializeGraphClient();
-          return { success: true, account: response.account };
+          return { success: true, account: response.account ?? undefined };
         } catch (error) {
           if (error instanceof InteractionRequiredAuthError) {
             // Need interactive auth
@@ -202,15 +202,15 @@ class OutlookService {
       };
 
       const response = await this.msalInstance.acquireTokenByDeviceCode(deviceCodeRequest);
-      this.accessToken = response.accessToken;
+      this.accessToken = response?.accessToken ?? null;
       this.initializeGraphClient();
 
       return {
         success: true,
-        account: response.account,
+        account: response?.account ?? undefined,
         userInfo: {
-          username: response.account.username,
-          name: response.account.name,
+          username: response?.account?.username ?? '',
+          name: response?.account?.name ?? undefined,
         }
       };
 

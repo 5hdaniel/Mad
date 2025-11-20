@@ -126,7 +126,7 @@ class FeedbackLearningService {
   async generateSuggestion(
     userId: string,
     fieldName: string,
-    extractedValue: any,
+    extractedValue: unknown,
     confidence?: number
   ): Promise<Suggestion | null> {
     // Only suggest for medium/low confidence extractions
@@ -164,8 +164,9 @@ class FeedbackLearningService {
 
     for (const correction of corrections) {
       try {
+        if (!correction.corrected_value || !correction.original_value) continue;
         const original = new Date(correction.original_value);
-        const corrected = new Date(correction.corrected_value!);
+        const corrected = new Date(correction.corrected_value);
 
         if (isNaN(original.getTime()) || isNaN(corrected.getTime())) continue;
 
@@ -209,13 +210,14 @@ class FeedbackLearningService {
     const substitutions: Record<string, number> = {};
 
     for (const correction of corrections) {
+      if (!correction.original_value || !correction.corrected_value) continue;
       const key = `${correction.original_value} -> ${correction.corrected_value}`;
       substitutions[key] = (substitutions[key] || 0) + 1;
     }
 
     // Find most common substitution
     let maxCount = 0;
-    let mostCommon: string | null = null;
+    let mostCommon: string = '';
 
     Object.entries(substitutions).forEach(([sub, count]) => {
       if (count > maxCount) {
@@ -226,11 +228,13 @@ class FeedbackLearningService {
 
     // If substitution appears in >50% of corrections, it's a pattern
     if (mostCommon && maxCount / corrections.length > 0.5) {
-      const [original, corrected] = mostCommon.split(' -> ');
+      const parts = mostCommon.split(' -> ');
+      if (parts.length < 2) return null;
+      const [original, corrected] = parts;
       return {
         type: 'substitution',
-        from_value: original,
-        to_value: corrected,
+        from_value: original || '',
+        to_value: corrected || '',
         frequency: maxCount / corrections.length,
         sample_size: corrections.length,
       };
@@ -252,11 +256,12 @@ class FeedbackLearningService {
     const rejectedValues: Record<string, number> = {};
 
     for (const rejection of rejections) {
-      rejectedValues[rejection.original_value] = (rejectedValues[rejection.original_value] || 0) + 1;
+      const key = rejection.original_value || 'unknown';
+      rejectedValues[key] = (rejectedValues[key] || 0) + 1;
     }
 
     const frequentlyRejected = Object.entries(rejectedValues)
-      .filter(([_, count]) => count >= 2)
+      .filter(([, count]) => count >= 2)
       .map(([value]) => value);
 
     if (frequentlyRejected.length > 0) {
@@ -283,8 +288,9 @@ class FeedbackLearningService {
 
     for (const correction of corrections) {
       try {
+        if (!correction.corrected_value || !correction.original_value) continue;
         const original = parseFloat(correction.original_value.replace(/[^0-9.-]/g, ''));
-        const corrected = parseFloat(correction.corrected_value!.replace(/[^0-9.-]/g, ''));
+        const corrected = parseFloat(correction.corrected_value.replace(/[^0-9.-]/g, ''));
 
         if (isNaN(original) || isNaN(corrected)) continue;
 
@@ -320,12 +326,12 @@ class FeedbackLearningService {
    * Apply pattern to generate suggestion
    * @private
    */
-  private _applyPattern(pattern: Pattern, extractedValue: any, fieldName: string): Suggestion | null {
+  private _applyPattern(pattern: Pattern, extractedValue: unknown, fieldName: string): Suggestion | null {
     try {
       switch (pattern.type) {
         case 'date_adjustment': {
           const datePattern = pattern as DateAdjustmentPattern;
-          const date = new Date(extractedValue);
+          const date = new Date(extractedValue as string | number | Date);
           if (isNaN(date.getTime())) return null;
 
           const adjusted = new Date(date);
@@ -340,7 +346,7 @@ class FeedbackLearningService {
 
         case 'substitution': {
           const subPattern = pattern as SubstitutionPattern;
-          if (extractedValue === subPattern.from_value) {
+          if (String(extractedValue) === subPattern.from_value) {
             return {
               value: subPattern.to_value,
               reason: `You've changed "${subPattern.from_value}" to "${subPattern.to_value}" in ${Math.round(subPattern.frequency * 100)}% of past cases`,
@@ -352,7 +358,7 @@ class FeedbackLearningService {
 
         case 'rejection': {
           const rejPattern = pattern as RejectionPattern;
-          if (rejPattern.rejected_values.includes(extractedValue)) {
+          if (rejPattern.rejected_values.includes(String(extractedValue))) {
             return {
               value: null,
               reason: `You've rejected this value in past transactions`,

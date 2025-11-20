@@ -517,7 +517,7 @@ ipcMain.handle('get-conversations', async () => {
 
             // Add this group chat to each participant's statistics
             for (const participant of participants) {
-              const participantName = resolveContactName(participant.contact_id, participant.contact_id, null, contactMap);
+              const participantName = resolveContactName(participant.contact_id, participant.contact_id, undefined, contactMap);
               const normalizedKey = participantName.toLowerCase().trim();
 
               // Get or create contact entry
@@ -895,7 +895,7 @@ ipcMain.handle('export-conversations', async (event: IpcMainInvokeEvent, convers
             sender = 'Me';
           } else if (msg.sender) {
             // Try to resolve sender name from contacts
-            const resolvedName = resolveContactName(msg.sender, null, null, contactMap);
+            const resolvedName = resolveContactName(msg.sender, msg.sender, undefined, contactMap);
             sender = resolvedName !== msg.sender ? resolvedName : msg.sender;
           } else {
             sender = 'Unknown';
@@ -994,7 +994,7 @@ ipcMain.handle('outlook-authenticate', async (event: IpcMainInvokeEvent, userId:
     console.log('[Main] Starting Outlook authentication with redirect flow');
 
     // Get user info to use as login hint
-    let loginHint: string | null = null;
+    let loginHint: string | undefined = undefined;
     if (userId) {
       const user = await databaseService.getUserById(userId);
       if (user) {
@@ -1022,14 +1022,14 @@ ipcMain.handle('outlook-authenticate', async (event: IpcMainInvokeEvent, userId:
     const encryptedAccessToken = tokenEncryptionService.encrypt(tokens.access_token);
     const encryptedRefreshToken = tokens.refresh_token
       ? tokenEncryptionService.encrypt(tokens.refresh_token)
-      : null;
+      : undefined;
 
     // Save mailbox token to database
     const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
 
     await databaseService.saveOAuthToken(userId, 'microsoft', 'mailbox', {
       access_token: encryptedAccessToken,
-      refresh_token: encryptedRefreshToken,
+      refresh_token: encryptedRefreshToken ?? undefined,
       token_expires_at: expiresAt,
       scopes_granted: tokens.scope,
       connected_email_address: userInfo.email
@@ -1059,7 +1059,7 @@ ipcMain.handle('outlook-is-authenticated', async (event: IpcMainInvokeEvent, use
     if (!userId) return false;
 
     const token = await databaseService.getOAuthToken(userId, 'microsoft', 'mailbox');
-    if (!token || !token.access_token) return false;
+    if (!token || !token.access_token || !token.token_expires_at) return false;
 
     // Check if token is expired
     const tokenExpiry = new Date(token.token_expires_at);
@@ -1325,7 +1325,7 @@ ipcMain.handle('outlook-export-emails', async (event: IpcMainInvokeEvent, contac
                 if (msg.is_from_me) {
                   sender = 'Me';
                 } else if (msg.sender) {
-                  const resolvedName = resolveContactName(msg.sender, null, null, contactMap);
+                  const resolvedName = resolveContactName(msg.sender, msg.sender, undefined, contactMap);
                   sender = resolvedName !== msg.sender ? resolvedName : msg.sender;
                 } else {
                   sender = 'Unknown';
@@ -1365,7 +1365,7 @@ ipcMain.handle('outlook-export-emails', async (event: IpcMainInvokeEvent, contac
                 if (msg.is_from_me) {
                   sender = 'Me';
                 } else if (msg.sender) {
-                  const resolvedName = resolveContactName(msg.sender, null, null, contactMap);
+                  const resolvedName = resolveContactName(msg.sender, msg.sender, undefined, contactMap);
                   sender = resolvedName !== msg.sender ? resolvedName : msg.sender;
                 } else {
                   sender = 'Unknown';

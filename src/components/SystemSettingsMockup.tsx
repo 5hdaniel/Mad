@@ -1,7 +1,12 @@
 import React from 'react';
 
+interface SystemSettingsProps {
+  step: string;
+  macOSVersion?: number;
+}
+
 // Modern System Settings (macOS 13 Ventura and later) - Sequoia 15.6 accurate
-function ModernSystemSettings({ step, macOSVersion }) {
+function ModernSystemSettings({ step, macOSVersion = 15 }: SystemSettingsProps) {
   // Sequoia (15+) has a more refined, cleaner design
   const isSequoia = macOSVersion >= 15;
 
@@ -141,7 +146,7 @@ function ModernSystemSettings({ step, macOSVersion }) {
 }
 
 // Legacy System Preferences (macOS 12 Monterey and earlier)
-function LegacySystemPreferences({ step }) {
+function LegacySystemPreferences({ step }: { step: string }) {
   return (
     <div className="mx-auto max-w-3xl mb-4">
       <div className="bg-gradient-to-b from-gray-100 to-gray-200 rounded-xl shadow-2xl border border-gray-400 overflow-hidden">
@@ -258,7 +263,7 @@ function LegacySystemPreferences({ step }) {
 }
 
 // Main component that switches based on macOS version
-function SystemSettingsMockup({ macOSVersion, step }) {
+function SystemSettingsMockup({ macOSVersion = 15, step }: SystemSettingsProps) {
   // Use modern UI for Ventura (13) and later
   if (macOSVersion >= 13) {
     return <ModernSystemSettings step={step} macOSVersion={macOSVersion} />;

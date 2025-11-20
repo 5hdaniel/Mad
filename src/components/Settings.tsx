@@ -53,8 +53,8 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
       const result = await window.api.system.checkAllConnections(userId);
       if (result.success) {
         setConnections({
-          google: result.google,
-          microsoft: result.microsoft,
+          google: result.google || null,
+          microsoft: result.microsoft || null,
         });
       }
     } catch (error) {

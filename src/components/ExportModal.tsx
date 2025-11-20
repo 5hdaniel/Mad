@@ -1,19 +1,37 @@
 import React, { useState, useEffect } from 'react';
+import type { Transaction } from '../../electron/types/models';
+
+interface ExportModalProps {
+  transaction: Transaction;
+  userId: string;
+  onClose: () => void;
+  onExportComplete: (result: unknown) => void;
+}
 
 /**
  * ExportModal Component
  * Enhanced export with date verification, content/format selection
  */
-function ExportModal({ transaction, userId, onClose, onExportComplete }) {
+function ExportModal({ transaction, userId, onClose, onExportComplete }: ExportModalProps) {
   const [step, setStep] = useState(1); // 1: Date Verification, 2: Export Options, 3: Exporting
   const [representationStartDate, setRepresentationStartDate] = useState(
-    transaction.representation_start_date || ''
+    transaction.representation_start_date
+      ? typeof transaction.representation_start_date === 'string'
+        ? transaction.representation_start_date
+        : transaction.representation_start_date.toISOString().split('T')[0]
+      : ''
   );
-  const [closingDate, setClosingDate] = useState(transaction.closing_date || '');
+  const [closingDate, setClosingDate] = useState(
+    transaction.closing_date
+      ? typeof transaction.closing_date === 'string'
+        ? transaction.closing_date
+        : transaction.closing_date.toISOString().split('T')[0]
+      : ''
+  );
   const [contentType, setContentType] = useState('both'); // text, email, both
   const [exportFormat, setExportFormat] = useState('pdf'); // pdf, excel, csv, json, txt_eml
   const [exporting, setExporting] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
 
   // Load user preferences to set default export format
   useEffect(() => {
@@ -69,14 +87,15 @@ function ExportModal({ transaction, userId, onClose, onExportComplete }) {
         setStep(2);
       }
     } catch (err) {
-      setError(err.message || 'Export failed');
+      const errorMessage = err instanceof Error ? err.message : 'Export failed';
+      setError(errorMessage);
       setStep(2);
     } finally {
       setExporting(false);
     }
   };
 
-  const formatConfidence = (confidence) => {
+  const formatConfidence = (confidence?: number) => {
     if (!confidence) return null;
     if (confidence >= 80) return { text: 'High', color: 'text-green-600 bg-green-50' };
     if (confidence >= 50) return { text: 'Medium', color: 'text-yellow-600 bg-yellow-50' };
@@ -127,9 +146,9 @@ function ExportModal({ transaction, userId, onClose, onExportComplete }) {
                     <label className="block text-sm font-medium text-gray-700">
                       Representation Start Date *
                     </label>
-                    {transaction.representation_start_confidence && (
-                      <span className={`text-xs px-2 py-1 rounded ${formatConfidence(transaction.representation_start_confidence).color}`}>
-                        Confidence: {formatConfidence(transaction.representation_start_confidence).text}
+                    {transaction.representation_start_confidence && formatConfidence(transaction.representation_start_confidence) && (
+                      <span className={`text-xs px-2 py-1 rounded ${formatConfidence(transaction.representation_start_confidence)!.color}`}>
+                        Confidence: {formatConfidence(transaction.representation_start_confidence)!.text}
                       </span>
                     )}
                   </div>
@@ -149,9 +168,9 @@ function ExportModal({ transaction, userId, onClose, onExportComplete }) {
                     <label className="block text-sm font-medium text-gray-700">
                       Closing Date *
                     </label>
-                    {transaction.closing_date_confidence && (
-                      <span className={`text-xs px-2 py-1 rounded ${formatConfidence(transaction.closing_date_confidence).color}`}>
-                        Confidence: {formatConfidence(transaction.closing_date_confidence).text}
+                    {transaction.closing_date_confidence && formatConfidence(transaction.closing_date_confidence) && (
+                      <span className={`text-xs px-2 py-1 rounded ${formatConfidence(transaction.closing_date_confidence)!.color}`}>
+                        Confidence: {formatConfidence(transaction.closing_date_confidence)!.text}
                       </span>
                     )}
                   </div>

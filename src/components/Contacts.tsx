@@ -1,4 +1,21 @@
 import React, { useState, useEffect } from 'react';
+import type { Contact, ContactSource, Transaction } from '../../electron/types/models';
+
+// Extended contact type with additional fields from Contacts app
+interface ExtendedContact extends Contact {
+  allEmails?: string[];
+  allPhones?: string[];
+}
+
+// Transaction with roles field
+interface TransactionWithRoles extends Transaction {
+  roles?: string;
+}
+
+interface ContactsProps {
+  userId: string;
+  onClose: () => void;
+}
 
 /**
  * Contacts Component
@@ -7,17 +24,17 @@ import React, { useState, useEffect } from 'react';
  * - Add/Edit/Delete contacts
  * - View contact details
  */
-function Contacts({ userId, onClose }) {
-  const [contacts, setContacts] = useState([]);
+function Contacts({ userId, onClose }: ContactsProps) {
+  const [contacts, setContacts] = useState<ExtendedContact[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddEdit, setShowAddEdit] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
-  const [selectedContact, setSelectedContact] = useState(null);
-  const [error, setError] = useState(null);
+  const [selectedContact, setSelectedContact] = useState<ExtendedContact | undefined>(undefined);
+  const [error, setError] = useState<string | undefined>(undefined);
   const [showBlockingModal, setShowBlockingModal] = useState(false);
-  const [blockingTransactions, setBlockingTransactions] = useState([]);
+  const [blockingTransactions, setBlockingTransactions] = useState<TransactionWithRoles[]>([]);
 
   useEffect(() => {
     loadContacts();
@@ -34,7 +51,8 @@ function Contacts({ userId, onClose }) {
         setError(result.error || 'Failed to load contacts');
       }
     } catch (err) {
-      setError(err.message);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load contacts';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -47,22 +65,22 @@ function Contacts({ userId, onClose }) {
 
   const handleAddManually = () => {
     setShowImport(false);
-    setSelectedContact(null);
+    setSelectedContact(undefined);
     setShowAddEdit(true);
   };
 
-  const handleViewContact = (contact) => {
+  const handleViewContact = (contact: ExtendedContact) => {
     setSelectedContact(contact);
     setShowDetails(true);
   };
 
-  const handleEditContact = (contact) => {
+  const handleEditContact = (contact: ExtendedContact) => {
     setShowDetails(false);
     setSelectedContact(contact);
     setShowAddEdit(true);
   };
 
-  const handleDeleteContact = async (contactId) => {
+  const handleDeleteContact = async (contactId: string) => {
     try {
       // First check if contact has associated transactions
       const checkResult = await window.api.contacts.checkCanDelete(contactId);
@@ -90,11 +108,12 @@ function Contacts({ userId, onClose }) {
         alert(`Failed to delete contact: ${result.error}`);
       }
     } catch (err) {
-      alert(`Failed to delete contact: ${err.message}`);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to delete contact';
+      alert(`Failed to delete contact: ${errorMessage}`);
     }
   };
 
-  const handleRemoveContact = async (contactId) => {
+  const handleRemoveContact = async (contactId: string) => {
     try {
       // First check if contact has associated transactions
       const checkResult = await window.api.contacts.checkCanDelete(contactId);
@@ -122,7 +141,8 @@ function Contacts({ userId, onClose }) {
         alert(`Failed to remove contact: ${result.error}`);
       }
     } catch (err) {
-      alert(`Failed to remove contact: ${err.message}`);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to remove contact';
+      alert(`Failed to remove contact: ${errorMessage}`);
     }
   };
 
@@ -132,8 +152,8 @@ function Contacts({ userId, onClose }) {
     c.company?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const getSourceBadge = (source) => {
-    const badges = {
+  const getSourceBadge = (source: ContactSource) => {
+    const badges: Record<ContactSource, { text: string; color: string }> = {
       manual: { text: 'Manual', color: 'bg-blue-100 text-blue-700' },
       email: { text: 'From Email', color: 'bg-green-100 text-green-700' },
       contacts_app: { text: 'Contacts App', color: 'bg-purple-100 text-purple-700' },
@@ -278,8 +298,8 @@ function Contacts({ userId, onClose }) {
                 {/* Contact Details */}
                 <div className="space-y-2 mb-4 text-sm flex-1">
                   {/* Show all emails for Contacts app contacts, or just primary email for manual contacts */}
-                  {contact.source === 'contacts_app' && contact.allEmails?.length > 0 ? (
-                    contact.allEmails.map((email, idx) => (
+                  {contact.source === 'contacts_app' && contact.allEmails && contact.allEmails.length > 0 ? (
+                    contact.allEmails.map((email: string, idx: number) => (
                       <div key={`email-${idx}`} className="flex items-center gap-2 text-gray-600">
                         <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
@@ -297,8 +317,8 @@ function Contacts({ userId, onClose }) {
                   ) : null}
 
                   {/* Show all phones for Contacts app contacts, or just primary phone for manual contacts */}
-                  {contact.source === 'contacts_app' && contact.allPhones?.length > 0 ? (
-                    contact.allPhones.map((phone, idx) => (
+                  {contact.source === 'contacts_app' && contact.allPhones && contact.allPhones.length > 0 ? (
+                    contact.allPhones.map((phone: string, idx: number) => (
                       <div key={`phone-${idx}`} className="flex items-center gap-2 text-gray-600">
                         <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
@@ -358,11 +378,11 @@ function Contacts({ userId, onClose }) {
           contact={selectedContact}
           onClose={() => {
             setShowAddEdit(false);
-            setSelectedContact(null);
+            setSelectedContact(undefined);
           }}
           onSuccess={() => {
             setShowAddEdit(false);
-            setSelectedContact(null);
+            setSelectedContact(undefined);
             loadContacts();
           }}
         />
@@ -374,7 +394,7 @@ function Contacts({ userId, onClose }) {
           contact={selectedContact}
           onClose={() => {
             setShowDetails(false);
-            setSelectedContact(null);
+            setSelectedContact(undefined);
           }}
           onEdit={() => handleEditContact(selectedContact)}
           onRemove={() => {
@@ -428,7 +448,7 @@ function Contacts({ userId, onClose }) {
               {/* Transactions List */}
               <div className="space-y-3">
                 <h4 className="font-semibold text-gray-900 mb-3">Associated Transactions:</h4>
-                {blockingTransactions.slice(0, 20).map((txn) => (
+                {blockingTransactions.slice(0, 20).map((txn: TransactionWithRoles) => (
                   <div
                     key={txn.id}
                     className="bg-gray-50 border border-gray-200 rounded-lg p-4 hover:bg-gray-100 transition-colors"
@@ -513,17 +533,24 @@ function Contacts({ userId, onClose }) {
   );
 }
 
+interface ImportContactsModalProps {
+  userId: string;
+  onClose: () => void;
+  onSuccess: () => void;
+  onAddManually: () => void;
+}
+
 /**
  * Import Contacts Modal
  * Browse and import contacts from external sources (Contacts app, Outlook)
  */
-function ImportContactsModal({ userId, onClose, onSuccess, onAddManually }) {
-  const [availableContacts, setAvailableContacts] = useState([]);
+function ImportContactsModal({ userId, onClose, onSuccess, onAddManually }: ImportContactsModalProps) {
+  const [availableContacts, setAvailableContacts] = useState<ExtendedContact[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedContacts, setSelectedContacts] = useState(new Set());
+  const [selectedContacts, setSelectedContacts] = useState(new Set<string>());
   const [importing, setImporting] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     loadAvailableContacts();
@@ -540,13 +567,14 @@ function ImportContactsModal({ userId, onClose, onSuccess, onAddManually }) {
         setError(result.error || 'Failed to load available contacts');
       }
     } catch (err) {
-      setError(err.message);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load available contacts';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleToggleContact = (contactId) => {
+  const handleToggleContact = (contactId: string) => {
     const newSelected = new Set(selectedContacts);
     if (newSelected.has(contactId)) {
       newSelected.delete(contactId);
@@ -563,7 +591,7 @@ function ImportContactsModal({ userId, onClose, onSuccess, onAddManually }) {
     }
 
     setImporting(true);
-    setError(null);
+    setError(undefined);
 
     try {
       const contactsToImport = availableContacts.filter(c => selectedContacts.has(c.id));
@@ -575,7 +603,8 @@ function ImportContactsModal({ userId, onClose, onSuccess, onAddManually }) {
         setError(result.error || 'Failed to import contacts');
       }
     } catch (err) {
-      setError(err.message || 'Failed to import contacts');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to import contacts';
+      setError(errorMessage);
     } finally {
       setImporting(false);
     }
@@ -779,13 +808,20 @@ function ImportContactsModal({ userId, onClose, onSuccess, onAddManually }) {
   );
 }
 
+interface ContactDetailsModalProps {
+  contact: ExtendedContact;
+  onClose: () => void;
+  onEdit: () => void;
+  onRemove: () => void;
+}
+
 /**
  * Contact Details Modal
  * View contact details with edit/remove options
  */
-function ContactDetailsModal({ contact, onClose, onEdit, onRemove }) {
-  const getSourceBadge = (source) => {
-    const badges = {
+function ContactDetailsModal({ contact, onClose, onEdit, onRemove }: ContactDetailsModalProps) {
+  const getSourceBadge = (source: ContactSource) => {
+    const badges: Record<ContactSource, { text: string; color: string }> = {
       manual: { text: 'Manual', color: 'bg-blue-100 text-blue-700' },
       email: { text: 'From Email', color: 'bg-green-100 text-green-700' },
       contacts_app: { text: 'Contacts App', color: 'bg-purple-100 text-purple-700' },
@@ -825,8 +861,8 @@ function ContactDetailsModal({ contact, onClose, onEdit, onRemove }) {
 
           <div className="space-y-3">
             {/* Show all emails for Contacts app contacts */}
-            {contact.source === 'contacts_app' && contact.allEmails?.length > 0 ? (
-              contact.allEmails.map((email, idx) => (
+            {contact.source === 'contacts_app' && contact.allEmails && contact.allEmails.length > 0 ? (
+              contact.allEmails.map((email: string, idx: number) => (
                 <div key={`email-${idx}`} className="flex items-center gap-3 text-gray-700">
                   <svg className="w-5 h-5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
@@ -844,8 +880,8 @@ function ContactDetailsModal({ contact, onClose, onEdit, onRemove }) {
             ) : null}
 
             {/* Show all phones for Contacts app contacts */}
-            {contact.source === 'contacts_app' && contact.allPhones?.length > 0 ? (
-              contact.allPhones.map((phone, idx) => (
+            {contact.source === 'contacts_app' && contact.allPhones && contact.allPhones.length > 0 ? (
+              contact.allPhones.map((phone: string, idx: number) => (
                 <div key={`phone-${idx}`} className="flex items-center gap-3 text-gray-700">
                   <svg className="w-5 h-5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
@@ -927,12 +963,27 @@ function ContactDetailsModal({ contact, onClose, onEdit, onRemove }) {
   );
 }
 
+interface ContactModalProps {
+  userId: string;
+  contact: ExtendedContact | undefined;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+interface ContactFormData {
+  name: string;
+  email: string;
+  phone: string;
+  company: string;
+  title: string;
+}
+
 /**
  * Contact Modal
  * Add or edit a contact
  */
-function ContactModal({ userId, contact, onClose, onSuccess }) {
-  const [formData, setFormData] = useState({
+function ContactModal({ userId, contact, onClose, onSuccess }: ContactModalProps) {
+  const [formData, setFormData] = useState<ContactFormData>({
     name: contact?.name || '',
     email: contact?.email || '',
     phone: contact?.phone || '',
@@ -940,9 +991,9 @@ function ContactModal({ userId, contact, onClose, onSuccess }) {
     title: contact?.title || '',
   });
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | undefined>(undefined);
 
-  const handleChange = (field, value) => {
+  const handleChange = (field: keyof ContactFormData, value: string) => {
     setFormData({ ...formData, [field]: value });
   };
 
@@ -953,16 +1004,16 @@ function ContactModal({ userId, contact, onClose, onSuccess }) {
     }
 
     setSaving(true);
-    setError(null);
+    setError(undefined);
 
     try {
       let result;
       if (contact) {
         // Update existing contact
-        result = await window.api.contacts.update(contact.id, formData);
+        result = await window.api.contacts.update(contact.id, formData as unknown as Record<string, unknown>);
       } else {
         // Create new contact
-        result = await window.api.contacts.create(userId, formData);
+        result = await window.api.contacts.create(userId, formData as unknown as Record<string, unknown>);
       }
 
       if (result.success) {
@@ -971,7 +1022,8 @@ function ContactModal({ userId, contact, onClose, onSuccess }) {
         setError(result.error || 'Failed to save contact');
       }
     } catch (err) {
-      setError(err.message || 'Failed to save contact');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to save contact';
+      setError(errorMessage);
     } finally {
       setSaving(false);
     }

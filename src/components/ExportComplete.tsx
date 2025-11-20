@@ -1,6 +1,18 @@
 import React from 'react';
 
-function ExportComplete({ result, onStartOver }) {
+interface ExportCompleteProps {
+  result: {
+    exportPath?: string;
+    filesCreated?: string[];
+    results?: Array<{
+      contactName: string;
+      success: boolean;
+    }>;
+  };
+  onStartOver: () => void;
+}
+
+function ExportComplete({ result, onStartOver }: ExportCompleteProps) {
   // Handle both text message exports and email exports
   const filesCreated = result?.filesCreated || [];
   const hasFiles = filesCreated.length > 0;
@@ -80,7 +92,9 @@ function ExportComplete({ result, onStartOver }) {
             <button
               onClick={() => {
                 // Open the folder in Finder
-                window.electron.openFolder(result.exportPath);
+                if (result.exportPath) {
+                  window.electron.openFolder(result.exportPath);
+                }
               }}
               className="flex-1 bg-gray-100 text-gray-700 py-3 px-6 rounded-lg font-semibold hover:bg-gray-200 transition-colors"
             >

@@ -1,4 +1,19 @@
 import React from 'react';
+import type { Contact } from '../../electron/types/models';
+
+interface ExtendedContact extends Contact {
+  address_mention_count?: number;
+  last_communication_at?: string | Date;
+}
+
+interface ContactSelectModalProps {
+  contacts: ExtendedContact[];
+  excludeIds?: string[];
+  multiple?: boolean;
+  onSelect: (contacts: ExtendedContact[]) => void;
+  onClose: () => void;
+  propertyAddress?: string;
+}
 
 /**
  * Contact Select Modal
@@ -10,17 +25,17 @@ import React from 'react';
  * - Shows property address relevance badges
  * - Displays last communication date
  * - Checkbox-based selection with visual feedback
- *
- * @param {Array} contacts - List of contacts to choose from
- * @param {Array} excludeIds - Contact IDs to exclude from list
- * @param {boolean} multiple - Allow multiple selection
- * @param {Function} onSelect - Callback when contacts are selected
- * @param {Function} onClose - Callback to close modal
- * @param {string} propertyAddress - Optional address to show relevance
  */
-function ContactSelectModal({ contacts, excludeIds = [], multiple = false, onSelect, onClose, propertyAddress }) {
+function ContactSelectModal({
+  contacts,
+  excludeIds = [],
+  multiple = false,
+  onSelect,
+  onClose,
+  propertyAddress
+}: ContactSelectModalProps) {
   const [searchQuery, setSearchQuery] = React.useState('');
-  const [selectedIds, setSelectedIds] = React.useState([]);
+  const [selectedIds, setSelectedIds] = React.useState<string[]>([]);
 
   const availableContacts = contacts.filter((c) => !excludeIds.includes(c.id));
 
@@ -30,7 +45,7 @@ function ContactSelectModal({ contacts, excludeIds = [], multiple = false, onSel
     c.company?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleToggleContact = (contactId) => {
+  const handleToggleContact = (contactId: string) => {
     if (multiple) {
       setSelectedIds((prev) =>
         prev.includes(contactId) ? prev.filter((id) => id !== contactId) : [...prev, contactId]
@@ -157,7 +172,7 @@ function ContactSelectModal({ contacts, excludeIds = [], multiple = false, onSel
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <h4 className="font-semibold text-gray-900 truncate">{contact.name}</h4>
-                          {propertyAddress && contact.address_mention_count > 0 && (
+                          {propertyAddress && contact.address_mention_count && contact.address_mention_count > 0 && (
                             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 flex-shrink-0">
                               <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
