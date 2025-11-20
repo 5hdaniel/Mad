@@ -29,7 +29,7 @@ import {
 } from './utils/validation';
 
 // Import constants
-const { CURRENT_TERMS_VERSION, CURRENT_PRIVACY_POLICY_VERSION } = require('./constants/legalVersions');
+import { CURRENT_TERMS_VERSION, CURRENT_PRIVACY_POLICY_VERSION } from './constants/legalVersions';
 
 // Type definitions for handler responses
 interface AuthResponse {
