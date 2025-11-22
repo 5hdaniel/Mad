@@ -184,13 +184,21 @@ const handleGoogleCompleteLogin = async (event: IpcMainInvokeEvent, authCode: st
       });
     }
 
-    // Update last login
-    await databaseService.updateLastLogin(localUser!.id);
+    // Update last login (localUser is guaranteed non-null from the if/else above)
+    if (!localUser) {
+      throw new Error('Local user is unexpectedly null after creation/update');
+    }
+
+    await databaseService.updateLastLogin(localUser.id);
     // Re-fetch user to get updated last_login_at timestamp
-    localUser = await databaseService.getUserById(localUser!.id);
+    const refreshedUser = await databaseService.getUserById(localUser.id);
+    if (!refreshedUser) {
+      throw new Error('Failed to retrieve user after update');
+    }
+    localUser = refreshedUser;
 
     // Save auth token
-    await databaseService.saveOAuthToken(localUser!.id, 'google', 'authentication', {
+    await databaseService.saveOAuthToken(localUser.id, 'google', 'authentication', {
       access_token: encryptedAccessToken,
       refresh_token: encryptedRefreshToken ?? undefined,
       token_expires_at: tokens.expires_at ?? undefined,
@@ -198,7 +206,7 @@ const handleGoogleCompleteLogin = async (event: IpcMainInvokeEvent, authCode: st
     });
 
     // Create session
-    const sessionToken = await databaseService.createSession(localUser!.id);
+    const sessionToken = await databaseService.createSession(localUser.id);
 
     // Validate subscription
     const subscription = await supabaseService.validateSubscription(cloudUser.id);
@@ -224,12 +232,12 @@ const handleGoogleCompleteLogin = async (event: IpcMainInvokeEvent, authCode: st
     console.log('[Main] Google login completed successfully');
 
     // Check if user needs to accept terms (new user or outdated versions)
-    const isNewUser = needsToAcceptTerms(localUser!);
+    const isNewUser = needsToAcceptTerms(localUser);
 
     // Save session for persistence (30 days expiration)
     const sessionExpiresAt = Date.now() + (30 * 24 * 60 * 60 * 1000);
     await sessionService.saveSession({
-      user: localUser!,
+      user: localUser,
       sessionToken,
       provider: 'google',
       subscription,
@@ -238,7 +246,7 @@ const handleGoogleCompleteLogin = async (event: IpcMainInvokeEvent, authCode: st
 
     return {
       success: true,
-      user: localUser!,
+      user: localUser,
       sessionToken,
       subscription,
       isNewUser,
@@ -480,15 +488,23 @@ const handleMicrosoftLogin = async (mainWindow: BrowserWindow | null): Promise<L
           });
         }
 
-        // Update last login
-        await databaseService.updateLastLogin(localUser!.id);
+        // Update last login (localUser is guaranteed non-null from the if/else above)
+        if (!localUser) {
+          throw new Error('Local user is unexpectedly null after creation/update');
+        }
+
+        await databaseService.updateLastLogin(localUser.id);
         // Re-fetch user to get updated last_login_at timestamp
-        localUser = await databaseService.getUserById(localUser!.id);
+        const refreshedUser = await databaseService.getUserById(localUser.id);
+        if (!refreshedUser) {
+          throw new Error('Failed to retrieve user after update');
+        }
+        localUser = refreshedUser;
 
         // Save auth token
         const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
 
-        await databaseService.saveOAuthToken(localUser!.id, 'microsoft', 'authentication', {
+        await databaseService.saveOAuthToken(localUser.id, 'microsoft', 'authentication', {
           access_token: encryptedAccessToken,
           refresh_token: encryptedRefreshToken ?? undefined,
           token_expires_at: expiresAt,
@@ -496,7 +512,7 @@ const handleMicrosoftLogin = async (mainWindow: BrowserWindow | null): Promise<L
         });
 
         // Create session
-        const sessionToken = await databaseService.createSession(localUser!.id);
+        const sessionToken = await databaseService.createSession(localUser.id);
 
         // Validate subscription
         const subscription = await supabaseService.validateSubscription(cloudUser.id);
@@ -522,12 +538,12 @@ const handleMicrosoftLogin = async (mainWindow: BrowserWindow | null): Promise<L
         console.log('[Main] Microsoft login completed successfully');
 
         // Check if user needs to accept terms (new user or outdated versions)
-        const isNewUser = needsToAcceptTerms(localUser!);
+        const isNewUser = needsToAcceptTerms(localUser);
 
         // Save session for persistence (30 days expiration)
         const sessionExpiresAt = Date.now() + (30 * 24 * 60 * 60 * 1000);
         await sessionService.saveSession({
-          user: localUser!,
+          user: localUser,
           sessionToken,
           provider: 'microsoft',
           subscription,
