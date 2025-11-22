@@ -71,8 +71,9 @@ class FeedbackLearningService {
   async detectPatterns(userId: string, fieldName: string): Promise<Pattern[]> {
     // Check cache first
     const cacheKey = `${userId}_${fieldName}`;
-    if (this.patternCache.has(cacheKey)) {
-      return this.patternCache.get(cacheKey)!;
+    const cached = this.patternCache.get(cacheKey);
+    if (cached) {
+      return cached;
     }
 
     try {

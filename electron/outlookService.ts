@@ -466,7 +466,7 @@ class OutlookService {
         if (email.toRecipients && email.toRecipients.length > 0) {
           const recipients = email.toRecipients
             .filter(r => r.emailAddress)
-            .map(r => `${r.emailAddress!.name || 'Unknown'} <${r.emailAddress!.address || 'unknown@unknown.com'}>`)
+            .map(r => `${r.emailAddress?.name || 'Unknown'} <${r.emailAddress?.address || 'unknown@unknown.com'}>`)
             .join(', ');
           if (recipients) {
             content += `To: ${recipients}\n`;
@@ -476,7 +476,7 @@ class OutlookService {
         if (email.ccRecipients && email.ccRecipients.length > 0) {
           const cc = email.ccRecipients
             .filter(r => r.emailAddress)
-            .map(r => `${r.emailAddress!.name || 'Unknown'} <${r.emailAddress!.address || 'unknown@unknown.com'}>`)
+            .map(r => `${r.emailAddress?.name || 'Unknown'} <${r.emailAddress?.address || 'unknown@unknown.com'}>`)
             .join(', ');
           if (cc) {
             content += `CC: ${cc}\n`;

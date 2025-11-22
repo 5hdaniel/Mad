@@ -885,7 +885,7 @@ class DatabaseService implements IDatabaseService {
           roles: [txn.role]
         });
       } else {
-        transactionMap.get(txn.id)!.roles.push(txn.role);
+        transactionMap.get(txn.id)?.roles.push(txn.role);
       }
     });
 
@@ -918,7 +918,7 @@ class DatabaseService implements IDatabaseService {
           roles: [role]
         });
       } else {
-        transactionMap.get(txn.id)!.roles.push(role);
+        transactionMap.get(txn.id)?.roles.push(role);
       }
     });
 
@@ -948,7 +948,7 @@ class DatabaseService implements IDatabaseService {
             roles: ['Other Contact']
           });
         } else {
-          transactionMap.get(txn.id)!.roles.push('Other Contact');
+          transactionMap.get(txn.id)?.roles.push('Other Contact');
         }
       });
     } catch (error) {
@@ -976,7 +976,7 @@ class DatabaseService implements IDatabaseService {
                 roles: ['Other Contact']
               });
             } else {
-              transactionMap.get(txn.id)!.roles.push('Other Contact');
+              transactionMap.get(txn.id)?.roles.push('Other Contact');
             }
           }
         } catch (parseError) {
