@@ -1149,7 +1149,7 @@ ipcMain.handle('outlook-export-emails', async (event: IpcMainInvokeEvent, contac
       const contact = contacts[i];
 
       // Send progress update
-      mainWindow!.webContents.send('export-progress', {
+      mainWindow?.webContents.send('export-progress', {
         stage: 'contact',
         current: i + 1,
         total: contacts.length,
@@ -1169,7 +1169,7 @@ ipcMain.handle('outlook-export-emails', async (event: IpcMainInvokeEvent, contac
       // 1. Export text messages (if chatId exists or if we have phone/email identifiers)
       if (contact.chatId || contact.phones?.length > 0 || contact.emails?.length > 0) {
         try {
-          mainWindow!.webContents.send('export-progress', {
+          mainWindow?.webContents.send('export-progress', {
             stage: 'text-messages',
             message: `Exporting text messages for ${contact.name}...`,
             current: i + 1,
@@ -1388,7 +1388,7 @@ ipcMain.handle('outlook-export-emails', async (event: IpcMainInvokeEvent, contac
               exportPath,
               (progress: any) => {
                 // Forward progress to renderer
-                mainWindow!.webContents.send('export-progress', {
+                mainWindow?.webContents.send('export-progress', {
                   ...progress,
                   contactName: contact.name,
                   current: i + 1,
