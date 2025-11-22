@@ -42,7 +42,7 @@ function OutlookExport({ conversations, selectedIds, onComplete, onCancel }: Out
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [_userEmail, setUserEmail] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deviceCode, setDeviceCode] = useState<DeviceCodeInfo | null>(null);
   const [exportResults, setExportResults] = useState<ExportResults | null>(null);

@@ -12,7 +12,7 @@ interface ExtendedContact extends BaseContact {
 }
 
 // Type definitions
-interface LocalTransaction {
+interface _LocalTransaction {
   id: string;
   user_id: string;
   property_address: string;
@@ -47,7 +47,7 @@ interface ContactAssignment {
   notes?: string;
 }
 
-interface LocalContact {
+interface _LocalContact {
   id: string;
   name: string;
   email?: string;
