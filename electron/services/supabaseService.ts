@@ -6,7 +6,7 @@
  */
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { User, SubscriptionTier, Subscription, SubscriptionStatus as SubscriptionStatusType } from '../types/models';
+import { User, SubscriptionTier, Subscription } from '../types/models';
 import * as dotenv from 'dotenv';
 
 dotenv.config({ path: '.env.development' });
@@ -48,24 +48,6 @@ interface DeviceRecord {
   last_seen_at?: string;
 }
 
-/**
- * License record
- */
-interface LicenseRecord {
-  max_devices: number;
-}
-
-/**
- * Subscription validation result
- */
-interface SubscriptionStatus {
-  tier: SubscriptionTier;
-  status: string;
-  isActive: boolean;
-  isTrial: boolean;
-  trialEnded: boolean;
-  trialDaysRemaining: number;
-}
 
 /**
  * Device limit check result
@@ -406,7 +388,7 @@ class SupabaseService {
 
     try {
       // Get user's active license
-      const { data: license, error: licenseError } = await this.client!
+      const { data: license } = await this.client!
         .from('licenses')
         .select('max_devices')
         .eq('user_id', userId)
@@ -416,7 +398,7 @@ class SupabaseService {
       const maxDevices = license?.max_devices || 2; // Default to 2 devices
 
       // Count active devices
-      const { data: devices, error: devicesError } = await this.client!
+      const { data: devices } = await this.client!
         .from('devices')
         .select('device_id')
         .eq('user_id', userId);

@@ -217,7 +217,7 @@ function App() {
     setShowMoveAppPrompt(false);
   };
 
-  const handleMicrosoftLogin = (userInfo: unknown) => {
+  const handleMicrosoftLogin = (_userInfo: unknown) => {
     setOutlookConnected(true);
     // Check if we already have permissions
     if (hasPermissions) {

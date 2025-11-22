@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { SPECIFIC_ROLES, ROLE_DISPLAY_NAMES, ROLE_TO_CATEGORY, AUDIT_WORKFLOW_STEPS } from '../constants/contactRoles';
+import { SPECIFIC_ROLES, ROLE_TO_CATEGORY, AUDIT_WORKFLOW_STEPS } from '../constants/contactRoles';
 import { filterRolesByTransactionType, getTransactionTypeContext, getRoleDisplayName } from '../utils/transactionRoleUtils';
 import ContactSelectModal from './ContactSelectModal';
 import type { Contact, Transaction } from '../../electron/types/models';
@@ -80,7 +80,7 @@ interface RoleConfig {
  * Audit Transaction Modal
  * Comprehensive transaction creation with address verification and contact assignment
  */
-function AuditTransactionModal({ userId, provider, onClose, onSuccess }: AuditTransactionModalProps): React.ReactElement {
+function AuditTransactionModal({ userId, provider: _provider, onClose, onSuccess }: AuditTransactionModalProps): React.ReactElement {
   const [step, setStep] = useState<number>(1); // 1: Address, 2: Client & Agents, 3: Professional Services
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);

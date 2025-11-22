@@ -52,7 +52,7 @@ function ContactList({ userId, onClose }: ContactListComponentProps) {
     setShowDetails(true);
   };
 
-  const handleDeleteContact = async (contactId: string): Promise<void> => {
+  const _handleDeleteContact = async (contactId: string): Promise<void> => {
     try {
       // First check if contact has associated transactions
       const checkResult = await window.api.contacts.checkCanDelete(contactId);

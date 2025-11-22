@@ -289,7 +289,7 @@ class AddressVerificationService {
     try {
       const result = await this.geocodeAddress(address);
       return !!(result.street && result.city && result.state && result.zip);
-    } catch (error) {
+    } catch {
       return false;
     }
   }

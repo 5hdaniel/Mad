@@ -451,7 +451,7 @@ class GoogleAuthService {
       // Try to get user info - if it works, token is valid
       await this.getUserInfo(accessToken);
       return true;
-    } catch (error) {
+    } catch {
       return false;
     }
   }

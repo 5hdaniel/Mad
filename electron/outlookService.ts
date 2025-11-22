@@ -1,5 +1,5 @@
-import { PublicClientApplication, InteractionRequiredAuthError, AccountInfo, AuthenticationResult } from '@azure/msal-node';
-import { Client, PageCollection } from '@microsoft/microsoft-graph-client';
+import { PublicClientApplication, InteractionRequiredAuthError, AccountInfo } from '@azure/msal-node';
+import { Client } from '@microsoft/microsoft-graph-client';
 import 'isomorphic-fetch';
 import fs from 'fs';
 import path from 'path';
@@ -130,7 +130,7 @@ class OutlookService {
       },
       system: {
         loggerOptions: {
-          loggerCallback(loglevel: number, message: string) {
+          loggerCallback(_loglevel: number, _message: string) {
             // Logging disabled for production
           },
           piiLoggingEnabled: false,
@@ -294,7 +294,7 @@ class OutlookService {
         );
 
         emailsToFetch = response.value || [];
-      } catch (searchError) {
+      } catch {
         // Fallback: Fetch and filter in memory with early stopping
         let nextLink: string | null = null;
         let pageCount = 0;

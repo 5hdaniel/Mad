@@ -7,10 +7,9 @@ import path from 'path';
 import sqlite3 from 'sqlite3';
 import { promisify } from 'util';
 
-const { macTimestampToDate, getYearsAgoTimestamp } = require('../utils/dateUtils');
+const { getYearsAgoTimestamp } = require('../utils/dateUtils');
 const { normalizePhoneNumber } = require('../utils/phoneUtils');
-const { getMessageText } = require('../utils/messageParser');
-const { MESSAGES_DB_PATH, FIVE_YEARS_IN_MS } = require('../constants');
+const { MESSAGES_DB_PATH } = require('../constants');
 
 // ============================================
 // TYPES

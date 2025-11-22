@@ -172,7 +172,7 @@ class FeedbackLearningService {
 
         const diffDays = Math.round((corrected.getTime() - original.getTime()) / (1000 * 60 * 60 * 24));
         adjustments.push(diffDays);
-      } catch (e) {
+      } catch {
         continue;
       }
     }
@@ -298,7 +298,7 @@ class FeedbackLearningService {
         const percentDiff = (diff / original) * 100;
 
         adjustments.push({ absolute: diff, percent: percentDiff });
-      } catch (e) {
+      } catch {
         continue;
       }
     }
@@ -326,7 +326,7 @@ class FeedbackLearningService {
    * Apply pattern to generate suggestion
    * @private
    */
-  private _applyPattern(pattern: Pattern, extractedValue: unknown, fieldName: string): Suggestion | null {
+  private _applyPattern(pattern: Pattern, extractedValue: unknown, _fieldName: string): Suggestion | null {
     try {
       switch (pattern.type) {
         case 'date_adjustment': {

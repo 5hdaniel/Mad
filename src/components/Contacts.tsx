@@ -80,7 +80,7 @@ function Contacts({ userId, onClose }: ContactsProps) {
     setShowAddEdit(true);
   };
 
-  const handleDeleteContact = async (contactId: string) => {
+  const _handleDeleteContact = async (contactId: string) => {
     try {
       // First check if contact has associated transactions
       const checkResult = await window.api.contacts.checkCanDelete(contactId);
