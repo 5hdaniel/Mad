@@ -30,7 +30,7 @@ export class ValidationService {
   /**
    * Validate UUID format
    */
-  static validateUserId(userId: any): string {
+  static validateUserId(userId: unknown): string {
     if (typeof userId !== 'string') {
       throw new ValidationError('User ID must be a string', 'userId');
     }

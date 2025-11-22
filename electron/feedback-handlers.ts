@@ -133,7 +133,7 @@ export const registerFeedbackHandlers = (): void => {
 
       // TODO: Implement getExtractionMetrics in databaseService
       // For now, return empty metrics
-      const metrics: any[] = [];
+      const metrics:Record<string, unknown>[] = [];
 
       return {
         success: true,
