@@ -82,7 +82,7 @@ async function getContactNames(): Promise<ContactNamesResult> {
   const contactMap: ContactMap = {};
   const phoneToContactInfo: PhoneToContactInfo = {};
   let lastError: Error | null = null;
-  let attemptedPaths: string[] = [];
+  const attemptedPaths: string[] = [];
 
   try {
     const baseDir = path.join(process.env.HOME as string, CONTACTS_BASE_DIR);

@@ -265,7 +265,7 @@ class OutlookService {
       // Use Microsoft Graph API $search to filter on server-side
       // $search uses KQL (Keyword Query Language) and searches across from/to/cc/bcc
       const emailLower = contactEmail.toLowerCase();
-      let matchingEmails: EmailMessage[] = [];
+      const matchingEmails: EmailMessage[] = [];
 
       // Helper function to add timeout to promises
       const withTimeout = <T>(promise: Promise<T>, timeoutMs: number = 60000): Promise<T> => {

@@ -74,7 +74,7 @@ interface TransactionWithRoles {
 }
 
 // Feedback data for submission
-interface FeedbackData {
+interface _FeedbackData {
   transaction_id: string;
   field_name: string;
   original_value?: string;
@@ -744,7 +744,7 @@ class DatabaseService implements IDatabaseService {
    * Get contacts sorted by recent communication and optionally by property address relevance
    */
   async getContactsSortedByActivity(userId: string, propertyAddress?: string): Promise<ContactWithActivity[]> {
-    let sql = `
+    const sql = `
       SELECT
         c.*,
         MAX(comm.sent_at) as last_communication_at,

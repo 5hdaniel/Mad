@@ -62,10 +62,6 @@ interface CurrentUserResponse extends AuthResponse {
   isNewUser?: boolean;
 }
 
-interface MailboxConnectionResponse extends AuthResponse {
-  email?: string;
-}
-
 interface TermsAcceptanceResponse extends AuthResponse {
   user?: User;
 }
@@ -112,7 +108,7 @@ export const initializeDatabase = async (): Promise<void> => {
 };
 
 // Google Auth: Start login flow
-const handleGoogleLogin = async (mainWindow: BrowserWindow | null): Promise<LoginStartResponse> => {
+const handleGoogleLogin = async (_mainWindow: BrowserWindow | null): Promise<LoginStartResponse> => {
   try {
     console.log('[Main] Starting Google login flow');
 
