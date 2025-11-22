@@ -121,11 +121,27 @@ class DatabaseService implements IDatabaseService {
   }
 
   /**
+   * Ensure database is initialized and return it
+   * @private
+   * @throws {DatabaseError} If database is not initialized
+   */
+  private _ensureDb(): sqlite3.Database {
+    if (!this.db) {
+      throw new DatabaseError('Database is not initialized. Call initialize() first.');
+    }
+    return this.db;
+  }
+
+  /**
    * Open database connection
    */
   private _openDatabase(): Promise<sqlite3.Database> {
+    if (!this.dbPath) {
+      throw new DatabaseError('Database path is not set');
+    }
+
     return new Promise((resolve, reject) => {
-      const db = new sqlite3.Database(this.dbPath!, (err) => {
+      const db = new sqlite3.Database(this.dbPath, (err) => {
         if (err) {
           reject(err);
         } else {
@@ -146,11 +162,12 @@ class DatabaseService implements IDatabaseService {
    * Run database migrations (execute schema.sql)
    */
   async runMigrations(): Promise<void> {
+    const db = this._ensureDb();
     const schemaPath = path.join(__dirname, '../database/schema.sql');
     const schemaSql = fs.readFileSync(schemaPath, 'utf8');
 
     return new Promise((resolve, reject) => {
-      this.db!.exec(schemaSql, async (err) => {
+      db.exec(schemaSql, async (err) => {
         if (err) {
           reject(err);
         } else {
@@ -395,8 +412,9 @@ class DatabaseService implements IDatabaseService {
    * Helper: Run a query that returns a single row
    */
   private _get<T = any>(sql: string, params: any[] = []): Promise<T | undefined> {
+    const db = this._ensureDb();
     return new Promise((resolve, reject) => {
-      this.db!.get(sql, params, (err, row) => {
+      db.get(sql, params, (err, row) => {
         if (err) {
           reject(err);
         } else {
@@ -410,8 +428,9 @@ class DatabaseService implements IDatabaseService {
    * Helper: Run a query that returns multiple rows
    */
   private _all<T = any>(sql: string, params: any[] = []): Promise<T[]> {
+    const db = this._ensureDb();
     return new Promise((resolve, reject) => {
-      this.db!.all(sql, params, (err, rows) => {
+      db.all(sql, params, (err, rows) => {
         if (err) {
           reject(err);
         } else {
@@ -425,8 +444,9 @@ class DatabaseService implements IDatabaseService {
    * Helper: Run a query that modifies data (INSERT, UPDATE, DELETE)
    */
   private _run(sql: string, params: any[] = []): Promise<QueryResult> {
+    const db = this._ensureDb();
     return new Promise((resolve, reject) => {
-      this.db!.run(sql, params, function (err) {
+      db.run(sql, params, function (err) {
         if (err) {
           reject(err);
         } else {

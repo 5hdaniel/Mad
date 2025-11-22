@@ -261,6 +261,8 @@ class OutlookService {
       throw new Error('Not authenticated. Call authenticate() first.');
     }
 
+    const graphClient = this.graphClient; // Capture client for use in this method
+
     try {
       // Use Microsoft Graph API $search to filter on server-side
       // $search uses KQL (Keyword Query Language) and searches across from/to/cc/bcc
@@ -346,7 +348,7 @@ class OutlookService {
           pageCount++;
 
           if (nextLink && pageCount < maxPages) {
-            response = await withTimeout(this.graphClient!.api(nextLink).get(), 60000);
+            response = await withTimeout(graphClient.api(nextLink).get(), 60000);
           } else {
             break;
           }
@@ -361,7 +363,7 @@ class OutlookService {
         try {
           // Fetch full email details including body
           const fullEmail = await withTimeout(
-            this.graphClient!
+            graphClient
               .api(`/me/messages/${email.id}`)
               .select('id,subject,from,toRecipients,ccRecipients,receivedDateTime,body,bodyPreview,hasAttachments,importance')
               .get(),

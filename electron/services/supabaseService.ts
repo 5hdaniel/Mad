@@ -112,13 +112,18 @@ class SupabaseService {
   }
 
   /**
-   * Ensure client is initialized
+   * Ensure client is initialized and return it
    * @private
+   * @throws {Error} If client cannot be initialized
    */
-  private _ensureInitialized(): void {
-    if (!this.initialized) {
+  private _ensureClient(): SupabaseClient {
+    if (!this.initialized || !this.client) {
       this.initialize();
     }
+    if (!this.client) {
+      throw new Error('Supabase client is not initialized');
+    }
+    return this.client;
   }
 
   // ============================================
@@ -131,11 +136,11 @@ class SupabaseService {
    * @returns Synced user data
    */
   async syncUser(userData: UserSyncData): Promise<User> {
-    this._ensureInitialized();
+    const client = this._ensureClient();
 
     try {
       // Check if user exists
-      const { data: existingUser, error: fetchError } = await this.client!
+      const { data: existingUser, error: fetchError } = await client
         .from('users')
         .select('*')
         .eq('oauth_provider', userData.oauth_provider)
@@ -151,7 +156,7 @@ class SupabaseService {
 
       if (existingUser) {
         // Update existing user
-        const { data, error } = await this.client!
+        const { data, error } = await client
           .from('users')
           .update({
             email: userData.email,
@@ -169,7 +174,7 @@ class SupabaseService {
         if (error) throw error;
 
         // Increment login count
-        await this.client!.rpc('increment', {
+        await client.rpc('increment', {
           row_id: existingUser.id,
           x: 1,
           table_name: 'users',
@@ -180,7 +185,7 @@ class SupabaseService {
         console.log('[Supabase] User updated:', result.id);
       } else {
         // Create new user
-        const { data, error } = await this.client!
+        const { data, error } = await client
           .from('users')
           .insert({
             email: userData.email,
@@ -218,10 +223,10 @@ class SupabaseService {
    * @returns User data
    */
   async getUserById(userId: string): Promise<User> {
-    this._ensureInitialized();
+    const client = this._ensureClient();
 
     try {
-      const { data, error } = await this.client!
+      const { data, error } = await client
         .from('users')
         .select('*')
         .eq('id', userId)
@@ -242,10 +247,10 @@ class SupabaseService {
    * @param privacyVersion - Version of Privacy Policy accepted
    */
   async syncTermsAcceptance(userId: string, termsVersion: string, privacyVersion: string): Promise<User> {
-    this._ensureInitialized();
+    const client = this._ensureClient();
 
     try {
-      const { data, error } = await this.client!
+      const { data, error } = await client
         .from('users')
         .update({
           terms_accepted_at: new Date().toISOString(),
@@ -273,7 +278,7 @@ class SupabaseService {
    * @returns Subscription status
    */
   async validateSubscription(userId: string): Promise<Subscription> {
-    this._ensureInitialized();
+    const client = this._ensureClient();
 
     try {
       const user = await this.getUserById(userId);
@@ -294,7 +299,7 @@ class SupabaseService {
 
       // If trial has ended, update status
       if (subscription.isTrial && subscription.trialEnded) {
-        await this.client!
+        await client
           .from('users')
           .update({ subscription_status: 'expired' })
           .eq('id', userId);
@@ -321,11 +326,11 @@ class SupabaseService {
    * @returns Device record
    */
   async registerDevice(userId: string, deviceInfo: DeviceInfo): Promise<DeviceRecord> {
-    this._ensureInitialized();
+    const client = this._ensureClient();
 
     try {
       // Check if device already registered
-      const { data: existing, error: fetchError } = await this.client!
+      const { data: existing, error: fetchError } = await client
         .from('devices')
         .select('*')
         .eq('user_id', userId)
@@ -338,7 +343,7 @@ class SupabaseService {
 
       if (existing) {
         // Update last_seen_at
-        const { data, error } = await this.client!
+        const { data, error } = await client
           .from('devices')
           .update({
             device_name: deviceInfo.device_name,
@@ -355,7 +360,7 @@ class SupabaseService {
         return data as DeviceRecord;
       } else {
         // Create new device
-        const { data, error } = await this.client!
+        const { data, error } = await client
           .from('devices')
           .insert({
             user_id: userId,
@@ -384,11 +389,11 @@ class SupabaseService {
    * @returns Device limit check result
    */
   async checkDeviceLimit(userId: string, deviceId: string): Promise<DeviceLimitCheck> {
-    this._ensureInitialized();
+    const client = this._ensureClient();
 
     try {
       // Get user's active license
-      const { data: license } = await this.client!
+      const { data: license } = await client
         .from('licenses')
         .select('max_devices')
         .eq('user_id', userId)
@@ -398,7 +403,7 @@ class SupabaseService {
       const maxDevices = license?.max_devices || 2; // Default to 2 devices
 
       // Count active devices
-      const { data: devices } = await this.client!
+      const { data: devices, error: devicesError } = await client
         .from('devices')
         .select('device_id')
         .eq('user_id', userId);
@@ -434,10 +439,10 @@ class SupabaseService {
    * @param appVersion - App version
    */
   async trackEvent(userId: string, eventName: string, eventData: Record<string, any> = {}, deviceId: string | null = null, appVersion: string | null = null): Promise<void> {
-    this._ensureInitialized();
+    const client = this._ensureClient();
 
     try {
-      await this.client!.from('analytics_events').insert({
+      await client.from('analytics_events').insert({
         user_id: userId,
         event_name: eventName,
         event_data: eventData,
@@ -464,10 +469,10 @@ class SupabaseService {
    * @param estimatedCost - Estimated cost in USD
    */
   async trackApiUsage(userId: string, apiName: string, endpoint: string, estimatedCost: number = 0): Promise<void> {
-    this._ensureInitialized();
+    const client = this._ensureClient();
 
     try {
-      await this.client!.from('api_usage').insert({
+      await client.from('api_usage').insert({
         user_id: userId,
         api_name: apiName,
         endpoint: endpoint,
@@ -489,7 +494,7 @@ class SupabaseService {
    * @returns Usage check result
    */
   async checkApiLimit(userId: string, apiName: string, tierLimits: TierLimits = { free: 10, pro: 100, enterprise: 1000 }): Promise<ApiUsageCheck> {
-    this._ensureInitialized();
+    const client = this._ensureClient();
 
     try {
       // Get start of current month
@@ -498,7 +503,7 @@ class SupabaseService {
       startOfMonth.setHours(0, 0, 0, 0);
 
       // Count API calls this month
-      const { count, error } = await this.client!
+      const { count, error } = await client
         .from('api_usage')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', userId)
@@ -534,10 +539,10 @@ class SupabaseService {
    * @param preferences - User preferences
    */
   async syncPreferences(userId: string, preferences: Record<string, any>): Promise<void> {
-    this._ensureInitialized();
+    const client = this._ensureClient();
 
     try {
-      const { error } = await this.client!
+      const { error } = await client
         .from('user_preferences')
         .upsert({
           user_id: userId,
@@ -559,10 +564,10 @@ class SupabaseService {
    * @returns User preferences
    */
   async getPreferences(userId: string): Promise<Record<string, any>> {
-    this._ensureInitialized();
+    const client = this._ensureClient();
 
     try {
-      const { data, error } = await this.client!
+      const { data, error } = await client
         .from('user_preferences')
         .select('preferences')
         .eq('user_id', userId)
@@ -590,10 +595,10 @@ class SupabaseService {
    * @returns Function response
    */
   async callEdgeFunction(functionName: string, payload: Record<string, any>): Promise<any> {
-    this._ensureInitialized();
+    const client = this._ensureClient();
 
     try {
-      const { data, error } = await this.client!.functions.invoke(functionName, {
+      const { data, error } = await client.functions.invoke(functionName, {
         body: payload,
       });
 
