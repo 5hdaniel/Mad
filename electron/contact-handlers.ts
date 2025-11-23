@@ -42,7 +42,10 @@ export function registerContactHandlers(): void {
       console.log('[Main] Getting all imported contacts for user:', userId);
 
       // Validate input
-      const validatedUserId = validateUserId(userId)!; // Will throw if invalid, never null
+      const validatedUserId = validateUserId(userId); // Validated, will throw if invalid
+      if (!validatedUserId) {
+        throw new ValidationError('User ID validation failed', 'userId');
+      }
 
       // Get only imported contacts from database
       const importedContacts = await databaseService.getImportedContactsByUserId(validatedUserId);
@@ -74,7 +77,10 @@ export function registerContactHandlers(): void {
       console.log('[Main] Getting available contacts for import for user:', userId);
 
       // Validate input
-      const validatedUserId = validateUserId(userId)!; // Will throw if invalid, never null
+      const validatedUserId = validateUserId(userId); // Validated, will throw if invalid
+      if (!validatedUserId) {
+        throw new ValidationError('User ID validation failed', 'userId');
+      }
 
       // Get contacts from macOS Contacts app
       const { phoneToContactInfo, status } = await getContactNames();
@@ -144,7 +150,10 @@ export function registerContactHandlers(): void {
       console.log('[Main] Importing contacts for user:', userId, 'count:', contactsToImport.length);
 
       // Validate inputs
-      const validatedUserId = validateUserId(userId)!; // Will throw if invalid, never null
+      const validatedUserId = validateUserId(userId); // Validated, will throw if invalid
+      if (!validatedUserId) {
+        throw new ValidationError('User ID validation failed', 'userId');
+      }
 
       // Validate contacts array
       if (!Array.isArray(contactsToImport)) {
@@ -206,7 +215,10 @@ export function registerContactHandlers(): void {
       console.log('[Main] Getting contacts sorted by activity for user:', userId, 'address:', propertyAddress);
 
       // Validate inputs
-      const validatedUserId = validateUserId(userId)!; // Will throw if invalid, never null
+      const validatedUserId = validateUserId(userId); // Validated, will throw if invalid
+      if (!validatedUserId) {
+        throw new ValidationError('User ID validation failed', 'userId');
+      }
 
       // Validate propertyAddress (optional)
       const validatedAddress = propertyAddress
@@ -243,7 +255,10 @@ export function registerContactHandlers(): void {
       console.log('[Main] Creating contact:', contactData);
 
       // Validate inputs
-      const validatedUserId = validateUserId(userId)!; // Will throw if invalid, never null
+      const validatedUserId = validateUserId(userId); // Validated, will throw if invalid
+      if (!validatedUserId) {
+        throw new ValidationError('User ID validation failed', 'userId');
+      }
       const validatedData = validateContactData(contactData, false);
 
       const contact = await databaseService.createContact({
@@ -282,7 +297,10 @@ export function registerContactHandlers(): void {
       console.log('[Main] Updating contact:', contactId, updates);
 
       // Validate inputs
-      const validatedContactId = validateContactId(contactId)!; // Will throw if invalid, never null
+      const validatedContactId = validateContactId(contactId); // Validated, will throw if invalid
+      if (!validatedContactId) {
+        throw new ValidationError('Contact ID validation failed', 'contactId');
+      }
       const validatedUpdates = validateContactData(sanitizeObject(updates || {}), true);
 
       // Convert null to undefined for TypeScript strict mode
@@ -323,7 +341,10 @@ export function registerContactHandlers(): void {
       console.log('[Main] Checking if contact can be deleted:', contactId);
 
       // Validate input
-      const validatedContactId = validateContactId(contactId)!; // Will throw if invalid, never null
+      const validatedContactId = validateContactId(contactId); // Validated, will throw if invalid
+      if (!validatedContactId) {
+        throw new ValidationError('Contact ID validation failed', 'contactId');
+      }
 
       const transactions = await databaseService.getTransactionsByContact(validatedContactId);
 
@@ -354,7 +375,10 @@ export function registerContactHandlers(): void {
       console.log('[Main] Deleting contact:', contactId);
 
       // Validate input
-      const validatedContactId = validateContactId(contactId)!; // Will throw if invalid, never null
+      const validatedContactId = validateContactId(contactId); // Validated, will throw if invalid
+      if (!validatedContactId) {
+        throw new ValidationError('Contact ID validation failed', 'contactId');
+      }
 
       // Check if contact has associated transactions
       const check = await databaseService.getTransactionsByContact(validatedContactId);
@@ -394,7 +418,10 @@ export function registerContactHandlers(): void {
       console.log('[Main] Removing contact from local database:', contactId);
 
       // Validate input
-      const validatedContactId = validateContactId(contactId)!; // Will throw if invalid, never null
+      const validatedContactId = validateContactId(contactId); // Validated, will throw if invalid
+      if (!validatedContactId) {
+        throw new ValidationError('Contact ID validation failed', 'contactId');
+      }
 
       // Check if contact has associated transactions
       const check = await databaseService.getTransactionsByContact(validatedContactId);
