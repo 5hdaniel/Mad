@@ -121,10 +121,10 @@ export const registerFeedbackHandlers = (): void => {
   ipcMain.handle('feedback:get-metrics', async (event: IpcMainInvokeEvent, userId: string, fieldName: string | null = null): Promise<FeedbackResponse> => {
     try {
       // Validate inputs
-      const validatedUserId = validateUserId(userId);
+      const _validatedUserId = validateUserId(userId);
 
       // Validate fieldName (optional)
-      const validatedFieldName = fieldName
+      const _validatedFieldName = fieldName
         ? validateString(fieldName, 'fieldName', {
             required: false,
             maxLength: 100,

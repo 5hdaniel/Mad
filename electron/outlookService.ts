@@ -284,7 +284,7 @@ class OutlookService {
 
       let emailsToFetch: EmailMessage[] = [];
       try {
-        let response = await withTimeout(
+        const response = await withTimeout(
           this.graphClient
             .api('/me/messages')
             .search(`"participants:${emailLower}"`)

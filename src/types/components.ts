@@ -9,9 +9,6 @@ import type {
   Contact,
   Transaction,
   Communication,
-  TransactionType,
-  
-  
   ExportFormat,
   CommunicationType,
   OAuthProvider,

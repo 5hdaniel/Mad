@@ -845,7 +845,6 @@ class DatabaseService implements IDatabaseService {
    * Get all transactions associated with a contact
    */
   async getTransactionsByContact(contactId: string): Promise<TransactionWithRoles[]> {
-    const transactions: TransactionWithRoles[] = [];
     const transactionMap = new Map<string, { id: string; property_address: string; closing_date?: string | null; transaction_type?: string | null; status: string; roles: string[] }>();
 
     // 1. Check direct FK references

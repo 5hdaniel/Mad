@@ -547,7 +547,7 @@ export function validateUrl(url: unknown): string {
     }
 
     return trimmed;
-  } catch (error) {
+  } catch (_error) {
     throw new ValidationError('Invalid URL format', 'url');
   }
 }

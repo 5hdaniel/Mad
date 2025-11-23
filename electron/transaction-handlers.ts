@@ -47,10 +47,6 @@ interface ExportOptions {
   [key: string]: unknown;
 }
 
-interface ScanProgressCallback {
-  (progress: unknown): void;
-}
-
 /**
  * Register all transaction-related IPC handlers
  * @param mainWindow - Main window instance

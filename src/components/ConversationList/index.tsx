@@ -9,7 +9,7 @@
  * - Extracting utility functions
  */
 import React, { useState } from 'react';
-import Joyride, { CallBackProps } from 'react-joyride';
+import Joyride from 'react-joyride';
 
 // Custom hooks
 import { useConversations, type Conversation } from '../../hooks/useConversations';

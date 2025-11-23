@@ -25,7 +25,7 @@ import type {
 /**
  * Standard query result from better-sqlite3
  */
-export interface QueryResult<T = unknown> {
+export interface QueryResult {
   changes: number;
   lastInsertRowid: number | bigint;
 }

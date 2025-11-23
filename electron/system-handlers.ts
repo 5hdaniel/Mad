@@ -3,7 +3,7 @@
 // Permission checks, connection status, system health
 // ============================================
 
-import { ipcMain, shell } from 'electron';
+import { ipcMain } from 'electron';
 import type { IpcMainInvokeEvent } from 'electron';
 
 // Import services (still JS, will be migrated later)

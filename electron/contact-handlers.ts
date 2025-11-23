@@ -89,7 +89,7 @@ export function registerContactHandlers(): void {
       const seenContacts = new Set<string>();
 
       if (phoneToContactInfo && Object.keys(phoneToContactInfo).length > 0) {
-        for (const [phone, contactInfo] of Object.entries(phoneToContactInfo)) {
+        for (const [_phone, contactInfo] of Object.entries(phoneToContactInfo)) {
           // Use the contact name as unique key to avoid duplicates
           // (same contact may have multiple phone numbers)
           const nameLower = contactInfo.name?.toLowerCase();
