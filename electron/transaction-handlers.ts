@@ -59,9 +59,12 @@ export const registerTransactionHandlers = (mainWindow: BrowserWindow | null): v
 
       // Validate input
       const validatedUserId = validateUserId(userId);
+      if (!validatedUserId) {
+        throw new ValidationError('User ID validation failed', 'userId');
+      }
       const sanitizedOptions = sanitizeObject(options || {}) as ScanOptions;
 
-      const result = await transactionService.scanAndExtractTransactions(validatedUserId!, {
+      const result = await transactionService.scanAndExtractTransactions(validatedUserId, {
         ...sanitizedOptions,
         onProgress: (progress: unknown) => {
           // Send progress updates to renderer
@@ -96,8 +99,11 @@ export const registerTransactionHandlers = (mainWindow: BrowserWindow | null): v
     try {
       // Validate input
       const validatedUserId = validateUserId(userId);
+      if (!validatedUserId) {
+        throw new ValidationError('User ID validation failed', 'userId');
+      }
 
-      const transactions = await transactionService.getTransactions(validatedUserId!);
+      const transactions = await transactionService.getTransactions(validatedUserId);
 
       return {
         success: true,
@@ -123,9 +129,12 @@ export const registerTransactionHandlers = (mainWindow: BrowserWindow | null): v
     try {
       // Validate inputs
       const validatedUserId = validateUserId(userId);
+      if (!validatedUserId) {
+        throw new ValidationError('User ID validation failed', 'userId');
+      }
       const validatedData = validateTransactionData(transactionData, false);
 
-      const transaction = await transactionService.createManualTransaction(validatedUserId!, validatedData as unknown as Partial<NewTransaction>);
+      const transaction = await transactionService.createManualTransaction(validatedUserId, validatedData as unknown as Partial<NewTransaction>);
 
       return {
         success: true,
@@ -151,8 +160,11 @@ export const registerTransactionHandlers = (mainWindow: BrowserWindow | null): v
     try {
       // Validate input
       const validatedTransactionId = validateTransactionId(transactionId);
+      if (!validatedTransactionId) {
+        throw new ValidationError('Transaction ID validation failed', 'transactionId');
+      }
 
-      const details = await transactionService.getTransactionDetails(validatedTransactionId!);
+      const details = await transactionService.getTransactionDetails(validatedTransactionId);
 
       if (!details) {
         return {
@@ -185,9 +197,12 @@ export const registerTransactionHandlers = (mainWindow: BrowserWindow | null): v
     try {
       // Validate inputs
       const validatedTransactionId = validateTransactionId(transactionId);
+      if (!validatedTransactionId) {
+        throw new ValidationError('Transaction ID validation failed', 'transactionId');
+      }
       const validatedUpdates = validateTransactionData(sanitizeObject(updates || {}), true);
 
-      const updated = await transactionService.updateTransaction(validatedTransactionId!, validatedUpdates as unknown as Partial<UpdateTransaction>);
+      const updated = await transactionService.updateTransaction(validatedTransactionId, validatedUpdates as unknown as Partial<UpdateTransaction>);
 
       return {
         success: true,
@@ -214,7 +229,7 @@ export const registerTransactionHandlers = (mainWindow: BrowserWindow | null): v
       // Validate input
       const validatedTransactionId = validateTransactionId(transactionId);
 
-      await transactionService.deleteTransaction(validatedTransactionId!);
+      await transactionService.deleteTransaction(validatedTransactionId);
 
       return {
         success: true,
@@ -243,7 +258,7 @@ export const registerTransactionHandlers = (mainWindow: BrowserWindow | null): v
       const validatedUserId = validateUserId(userId);
       const validatedData = validateTransactionData(sanitizeObject(transactionData || {}), false);
 
-      const transaction = await transactionService.createAuditedTransaction(validatedUserId!, validatedData as any);
+      const transaction = await transactionService.createAuditedTransaction(validatedUserId, validatedData as any);
 
       return {
         success: true,
@@ -270,7 +285,7 @@ export const registerTransactionHandlers = (mainWindow: BrowserWindow | null): v
       // Validate input
       const validatedTransactionId = validateTransactionId(transactionId);
 
-      const transaction = await transactionService.getTransactionWithContacts(validatedTransactionId!);
+      const transaction = await transactionService.getTransactionWithContacts(validatedTransactionId);
 
       if (!transaction) {
         return {
@@ -330,8 +345,8 @@ export const registerTransactionHandlers = (mainWindow: BrowserWindow | null): v
       const validatedNotes = notes && typeof notes === 'string' ? notes.trim() : null;
 
       await transactionService.assignContactToTransaction(
-        validatedTransactionId!,
-        validatedContactId!,
+        validatedTransactionId,
+        validatedContactId,
         role.trim(),
         roleCategory.trim(),
         isPrimary,
@@ -363,7 +378,7 @@ export const registerTransactionHandlers = (mainWindow: BrowserWindow | null): v
       const validatedTransactionId = validateTransactionId(transactionId);
       const validatedContactId = validateContactId(contactId);
 
-      await transactionService.removeContactFromTransaction(validatedTransactionId!, validatedContactId!);
+      await transactionService.removeContactFromTransaction(validatedTransactionId, validatedContactId);
 
       return {
         success: true,
@@ -405,7 +420,7 @@ export const registerTransactionHandlers = (mainWindow: BrowserWindow | null): v
       const sanitizedDateRange = sanitizeObject(dateRange || {});
 
       const result = await transactionService.reanalyzeProperty(
-        validatedUserId!,
+        validatedUserId,
         validatedProvider as OAuthProvider,
         propertyAddress.trim(),
         sanitizedDateRange as { start?: Date; end?: Date }
@@ -440,7 +455,7 @@ export const registerTransactionHandlers = (mainWindow: BrowserWindow | null): v
       const validatedPath = outputPath ? validateFilePath(outputPath) : null;
 
       // Get transaction details with communications
-      const details = await transactionService.getTransactionDetails(validatedTransactionId!);
+      const details = await transactionService.getTransactionDetails(validatedTransactionId);
 
       if (!details) {
         return {
@@ -490,7 +505,7 @@ export const registerTransactionHandlers = (mainWindow: BrowserWindow | null): v
       const sanitizedOptions = sanitizeObject(options || {}) as ExportOptions;
 
       // Get transaction details with communications
-      const details = await transactionService.getTransactionDetails(validatedTransactionId!);
+      const details = await transactionService.getTransactionDetails(validatedTransactionId);
 
       if (!details) {
         return {
