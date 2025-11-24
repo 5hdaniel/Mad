@@ -11,8 +11,8 @@ exports.registerTransactionHandlers = void 0;
 const electron_1 = require("electron");
 const transactionService_1 = __importDefault(require("./services/transactionService"));
 // Services (still JS - to be migrated)
-const pdfExportService = require('./services/pdfExportService');
-const enhancedExportService = require('./services/enhancedExportService');
+const pdfExportService = require('./services/pdfExportService').default;
+const enhancedExportService = require('./services/enhancedExportService').default;
 // Import validation utilities
 const validation_1 = require("./utils/validation");
 /**
@@ -431,7 +431,7 @@ const registerTransactionHandlers = (mainWindow) => {
             const exportPath = await enhancedExportService.exportTransaction(details, details.communications || [], sanitizedOptions);
             console.log('[Main] Enhanced export successful:', exportPath);
             // Update export tracking in database
-            const { databaseService: db } = require('./services/databaseService');
+            const { databaseService: db } = require('./services/databaseService').default;
             await db.updateTransaction(validatedTransactionId, {
                 export_status: 'exported',
                 export_format: sanitizedOptions.exportFormat || 'pdf',

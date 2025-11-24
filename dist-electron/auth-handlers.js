@@ -534,6 +534,14 @@ const handleMicrosoftConnectMailbox = async (mainWindow, userId) => {
                     : null;
                 // Save mailbox token
                 const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
+                console.log('[Main] Saving Microsoft mailbox token:', {
+                    userId,
+                    provider: 'microsoft',
+                    purpose: 'mailbox',
+                    expiresAt,
+                    expiresInSeconds: tokens.expires_in,
+                    email: userInfo.email
+                });
                 await databaseService_1.default.saveOAuthToken(userId, 'microsoft', 'mailbox', {
                     access_token: encryptedAccessToken,
                     refresh_token: encryptedRefreshToken ?? undefined,
@@ -541,6 +549,14 @@ const handleMicrosoftConnectMailbox = async (mainWindow, userId) => {
                     scopes_granted: tokens.scope,
                     connected_email_address: userInfo.email,
                     mailbox_connected: true,
+                });
+                console.log('[Main] Microsoft mailbox token saved successfully');
+                // Verify token was saved
+                const savedToken = await databaseService_1.default.getOAuthToken(userId, 'microsoft', 'mailbox');
+                console.log('[Main] Verified saved token:', {
+                    exists: !!savedToken,
+                    expiresAt: savedToken?.token_expires_at,
+                    email: savedToken?.connected_email_address
                 });
                 console.log('[Main] Microsoft mailbox connection completed successfully');
                 // Notify renderer of successful connection
