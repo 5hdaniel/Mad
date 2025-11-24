@@ -13,32 +13,20 @@ dotenv.config({ path: path.join(__dirname, '../.env.local') });
 
 // Import services and utilities
 import { getContactNames, resolveContactName } from './services/contactsService';
-import {
-  getAllConversations,
-  getGroupChatParticipants,
-  isGroupChat,
-  getMessagesForContact,
-  openMessagesDatabase
-} from './services/messagesService';
 import { macTimestampToDate, getYearsAgoTimestamp } from './utils/dateUtils';
-import { normalizePhoneNumber, formatPhoneNumber } from './utils/phoneUtils';
 import { sanitizeFilename, createTimestampedFilename } from './utils/fileUtils';
 import { getMessageText } from './utils/messageParser';
 import {
   WINDOW_CONFIG,
   DEV_SERVER_URL,
   UPDATE_CHECK_DELAY,
-  FIVE_YEARS_IN_MS,
   MAC_EPOCH
 } from './constants';
 
 // Import new authentication services
 import databaseService from './services/databaseService';
-import googleAuthService from './services/googleAuthService';
 import microsoftAuthService from './services/microsoftAuthService';
-import supabaseService from './services/supabaseService';
 import tokenEncryptionService from './services/tokenEncryptionService';
-import connectionStatusService from './services/connectionStatusService';
 import { initializeDatabase, registerAuthHandlers } from './auth-handlers';
 import { registerTransactionHandlers } from './transaction-handlers';
 import { registerContactHandlers } from './contact-handlers';
@@ -361,7 +349,7 @@ ipcMain.handle('trigger-full-disk-access', async () => {
     // but it will cause macOS to add this app to the Full Disk Access list
     await fs.access(messagesDbPath, fs.constants.R_OK);
     return { triggered: true, alreadyGranted: true };
-  } catch (error) {
+  } catch {
     return { triggered: true, alreadyGranted: false };
   }
 });
@@ -1003,7 +991,7 @@ ipcMain.handle('outlook-authenticate', async (event: IpcMainInvokeEvent, userId:
     }
 
     // Start auth flow - returns authUrl and a promise for the code
-    const { authUrl, codePromise, codeVerifier, scopes } = await microsoftAuthService.authenticateForMailbox(loginHint);
+    const { authUrl, codePromise, codeVerifier, scopes: _scopes } = await microsoftAuthService.authenticateForMailbox(loginHint);
 
     // Open browser with auth URL
     await shell.openExternal(authUrl);
@@ -1161,7 +1149,7 @@ ipcMain.handle('outlook-export-emails', async (event: IpcMainInvokeEvent, contac
       const contact = contacts[i];
 
       // Send progress update
-      mainWindow!.webContents.send('export-progress', {
+      mainWindow?.webContents.send('export-progress', {
         stage: 'contact',
         current: i + 1,
         total: contacts.length,
@@ -1176,12 +1164,12 @@ ipcMain.handle('outlook-export-emails', async (event: IpcMainInvokeEvent, contac
       let textMessageCount = 0;
       let totalEmails = 0;
       let anySuccess = false;
-      let errors: string[] = [];
+      const errors: string[] = [];
 
       // 1. Export text messages (if chatId exists or if we have phone/email identifiers)
       if (contact.chatId || contact.phones?.length > 0 || contact.emails?.length > 0) {
         try {
-          mainWindow!.webContents.send('export-progress', {
+          mainWindow?.webContents.send('export-progress', {
             stage: 'text-messages',
             message: `Exporting text messages for ${contact.name}...`,
             current: i + 1,
@@ -1306,7 +1294,7 @@ ipcMain.handle('outlook-export-emails', async (event: IpcMainInvokeEvent, contac
             // Sort all 1:1 messages by date
             oneOnOneMessages.sort((a, b) => a.date - b.date);
 
-            let filesCreated = 0;
+            let _filesCreated = 0;
 
             // Export all 1:1 messages to a single file
             if (oneOnOneMessages.length > 0) {
@@ -1340,7 +1328,7 @@ ipcMain.handle('outlook-export-emails', async (event: IpcMainInvokeEvent, contac
               // Save 1:1 messages file
               const oneOnOneFilePath = path.join(contactFolder, '1-on-1_messages.txt');
               await fs.writeFile(oneOnOneFilePath, exportContent, 'utf8');
-              filesCreated++;
+              _filesCreated++;
               anySuccess = true;
             }
 
@@ -1380,7 +1368,7 @@ ipcMain.handle('outlook-export-emails', async (event: IpcMainInvokeEvent, contac
               // Save group chat file
               const groupFilePath = path.join(contactFolder, fileName);
               await fs.writeFile(groupFilePath, exportContent, 'utf8');
-              filesCreated++;
+              _filesCreated++;
               anySuccess = true;
             }
           }
@@ -1400,7 +1388,7 @@ ipcMain.handle('outlook-export-emails', async (event: IpcMainInvokeEvent, contac
               exportPath,
               (progress: any) => {
                 // Forward progress to renderer
-                mainWindow!.webContents.send('export-progress', {
+                mainWindow?.webContents.send('export-progress', {
                   ...progress,
                   contactName: contact.name,
                   current: i + 1,

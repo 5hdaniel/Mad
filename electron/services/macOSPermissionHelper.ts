@@ -50,12 +50,6 @@ class MacOSPermissionHelper {
    */
   async requestContactsPermission(): Promise<PermissionResult> {
     try {
-      // Use Contacts framework to trigger permission request
-      const script = `
-        const Contacts = require('@napi-rs/apple-contacts');
-        await Contacts.requestAccess();
-      `;
-
       // Alternative: Use AppleScript to trigger Contacts access
       const appleScript = `
         tell application "Contacts"
@@ -105,20 +99,10 @@ class MacOSPermissionHelper {
       // Method 2: Try to programmatically add app to the list
       // This requires admin privileges and may prompt the user
       try {
-        // Use tccutil to add app (requires admin)
-        // Note: This may not work on all macOS versions
-        const addToListScript = `
-          tell application "System Events"
-            tell process "System Preferences"
-              click button "Click the lock to make changes." of window "Security & Privacy"
-            end tell
-          end tell
-        `;
-
         // This is informational - actual addition requires user interaction
         console.log('[MacOS] App path:', appPath);
         console.log('[MacOS] Bundle ID:', bundleId);
-      } catch (adminError) {
+      } catch {
         console.log('[MacOS] Could not programmatically add app (expected - requires user action)');
       }
 

@@ -3,7 +3,7 @@
  * Tests application update management functionality
  */
 
-import { UpdateService, UpdateStatus, UpdateChannel } from '../updateService';
+import { UpdateService, UpdateChannel } from '../updateService';
 
 describe('UpdateService', () => {
   let updateService: UpdateService;

@@ -9,7 +9,7 @@ import databaseService from './services/databaseService';
 import type { UserFeedback } from './types/models';
 
 // Services (still JS - to be migrated)
-const feedbackLearningService = require('./services/feedbackLearningService');
+const feedbackLearningService = require('./services/feedbackLearningService').default;
 
 // Import validation utilities
 import {
@@ -121,10 +121,10 @@ export const registerFeedbackHandlers = (): void => {
   ipcMain.handle('feedback:get-metrics', async (event: IpcMainInvokeEvent, userId: string, fieldName: string | null = null): Promise<FeedbackResponse> => {
     try {
       // Validate inputs
-      const validatedUserId = validateUserId(userId);
+      const _validatedUserId = validateUserId(userId);
 
       // Validate fieldName (optional)
-      const validatedFieldName = fieldName
+      const _validatedFieldName = fieldName
         ? validateString(fieldName, 'fieldName', {
             required: false,
             maxLength: 100,
@@ -133,7 +133,7 @@ export const registerFeedbackHandlers = (): void => {
 
       // TODO: Implement getExtractionMetrics in databaseService
       // For now, return empty metrics
-      const metrics: any[] = [];
+      const metrics:Record<string, unknown>[] = [];
 
       return {
         success: true,

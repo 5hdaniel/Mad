@@ -142,7 +142,7 @@ function SystemHealthMonitor({ userId, provider }: SystemHealthMonitorProps) {
 
   return (
     <div className="fixed top-16 right-4 z-50 space-y-3" style={{ maxWidth: '420px' }}>
-      {visibleIssues.map((issue, index) => {
+      {visibleIssues.map((issue, _index) => {
         const originalIndex = issues.findIndex((i, idx) => i === issue && !dismissed.has(idx));
         const severity: 'error' | 'warning' | 'info' = issue.severity || 'warning';
 

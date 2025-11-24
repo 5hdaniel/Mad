@@ -12,7 +12,7 @@ interface ManualTransactionModalProps {
  * ManualTransactionModal Component
  * Allows users to manually create a transaction by entering address and details
  */
-function ManualTransactionModal({ userId, provider, onClose, onSuccess }: ManualTransactionModalProps) {
+function ManualTransactionModal({ userId, provider: _provider, onClose, onSuccess }: ManualTransactionModalProps) {
   const [propertyAddress, setPropertyAddress] = useState('');
   const [representationStartDate, setRepresentationStartDate] = useState('');
   const [closingDate, setClosingDate] = useState('');

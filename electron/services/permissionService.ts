@@ -3,7 +3,6 @@
  * Centralized permission checking and error handling
  */
 
-import { app } from 'electron';
 import { promises as fs } from 'fs';
 import path from 'path';
 

@@ -46,9 +46,23 @@ class DatabaseService {
         }
     }
     /**
+     * Ensure database is initialized and return it
+     * @private
+     * @throws {DatabaseError} If database is not initialized
+     */
+    _ensureDb() {
+        if (!this.db) {
+            throw new types_1.DatabaseError('Database is not initialized. Call initialize() first.');
+        }
+        return this.db;
+    }
+    /**
      * Open database connection
      */
     _openDatabase() {
+        if (!this.dbPath) {
+            throw new types_1.DatabaseError('Database path is not set');
+        }
         return new Promise((resolve, reject) => {
             const db = new sqlite3_1.default.Database(this.dbPath, (err) => {
                 if (err) {
@@ -72,10 +86,11 @@ class DatabaseService {
      * Run database migrations (execute schema.sql)
      */
     async runMigrations() {
+        const db = this._ensureDb();
         const schemaPath = path_1.default.join(__dirname, '../database/schema.sql');
         const schemaSql = fs_1.default.readFileSync(schemaPath, 'utf8');
         return new Promise((resolve, reject) => {
-            this.db.exec(schemaSql, async (err) => {
+            db.exec(schemaSql, async (err) => {
                 if (err) {
                     reject(err);
                 }
@@ -304,8 +319,9 @@ class DatabaseService {
      * Helper: Run a query that returns a single row
      */
     _get(sql, params = []) {
+        const db = this._ensureDb();
         return new Promise((resolve, reject) => {
-            this.db.get(sql, params, (err, row) => {
+            db.get(sql, params, (err, row) => {
                 if (err) {
                     reject(err);
                 }
@@ -319,8 +335,9 @@ class DatabaseService {
      * Helper: Run a query that returns multiple rows
      */
     _all(sql, params = []) {
+        const db = this._ensureDb();
         return new Promise((resolve, reject) => {
-            this.db.all(sql, params, (err, rows) => {
+            db.all(sql, params, (err, rows) => {
                 if (err) {
                     reject(err);
                 }
@@ -334,8 +351,9 @@ class DatabaseService {
      * Helper: Run a query that modifies data (INSERT, UPDATE, DELETE)
      */
     _run(sql, params = []) {
+        const db = this._ensureDb();
         return new Promise((resolve, reject) => {
-            this.db.run(sql, params, function (err) {
+            db.run(sql, params, function (err) {
                 if (err) {
                     reject(err);
                 }
@@ -609,7 +627,7 @@ class DatabaseService {
      * Get contacts sorted by recent communication and optionally by property address relevance
      */
     async getContactsSortedByActivity(userId, propertyAddress) {
-        let sql = `
+        const sql = `
       SELECT
         c.*,
         MAX(comm.sent_at) as last_communication_at,
@@ -683,7 +701,6 @@ class DatabaseService {
      * Get all transactions associated with a contact
      */
     async getTransactionsByContact(contactId) {
-        const transactions = [];
         const transactionMap = new Map();
         // 1. Check direct FK references
         const directQuery = `
@@ -721,7 +738,7 @@ class DatabaseService {
                 });
             }
             else {
-                transactionMap.get(txn.id).roles.push(txn.role);
+                transactionMap.get(txn.id)?.roles.push(txn.role);
             }
         });
         // 2. Check junction table (transaction_contacts)
@@ -752,7 +769,7 @@ class DatabaseService {
                 });
             }
             else {
-                transactionMap.get(txn.id).roles.push(role);
+                transactionMap.get(txn.id)?.roles.push(role);
             }
         });
         // 3. Check JSON array (other_contacts)
@@ -780,7 +797,7 @@ class DatabaseService {
                     });
                 }
                 else {
-                    transactionMap.get(txn.id).roles.push('Other Contact');
+                    transactionMap.get(txn.id)?.roles.push('Other Contact');
                 }
             });
         }
@@ -808,7 +825,7 @@ class DatabaseService {
                             });
                         }
                         else {
-                            transactionMap.get(txn.id).roles.push('Other Contact');
+                            transactionMap.get(txn.id)?.roles.push('Other Contact');
                         }
                     }
                 }

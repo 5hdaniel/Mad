@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import type { Transaction, Communication, Contact } from '@/types';
+import type { Transaction, Communication } from '@/types';
 import ExportModal from './ExportModal';
 
 interface ContactAssignment {

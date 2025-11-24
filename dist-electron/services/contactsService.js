@@ -26,7 +26,7 @@ async function getContactNames() {
     const contactMap = {};
     const phoneToContactInfo = {};
     let lastError = null;
-    let attemptedPaths = [];
+    const attemptedPaths = [];
     try {
         const baseDir = path_1.default.join(process.env.HOME, CONTACTS_BASE_DIR);
         // Use exec to find all .abcddb files

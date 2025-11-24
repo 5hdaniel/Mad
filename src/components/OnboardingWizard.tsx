@@ -20,8 +20,8 @@ function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [contactsGranted, setContactsGranted] = useState(false);
-  const [fullDiskGranted, setFullDiskGranted] = useState(false);
-  const [checkingPermissions, setCheckingPermissions] = useState(false);
+  const [_fullDiskGranted, setFullDiskGranted] = useState(false);
+  const [_checkingPermissions, _setCheckingPermissions] = useState(false);
 
   // Poll for Full Disk Access permission
   useEffect(() => {

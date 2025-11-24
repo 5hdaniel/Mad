@@ -49,7 +49,7 @@ class OutlookService {
             },
             system: {
                 loggerOptions: {
-                    loggerCallback(loglevel, message) {
+                    loggerCallback(_loglevel, _message) {
                         // Logging disabled for production
                     },
                     piiLoggingEnabled: false,
@@ -166,11 +166,12 @@ class OutlookService {
         if (!this.graphClient) {
             throw new Error('Not authenticated. Call authenticate() first.');
         }
+        const graphClient = this.graphClient; // Capture client for use in this method
         try {
             // Use Microsoft Graph API $search to filter on server-side
             // $search uses KQL (Keyword Query Language) and searches across from/to/cc/bcc
             const emailLower = contactEmail.toLowerCase();
-            let matchingEmails = [];
+            const matchingEmails = [];
             // Helper function to add timeout to promises
             const withTimeout = (promise, timeoutMs = 60000) => {
                 return Promise.race([
@@ -182,7 +183,7 @@ class OutlookService {
             // $search requires the query to be quoted and uses KQL syntax
             let emailsToFetch = [];
             try {
-                let response = await withTimeout(this.graphClient
+                const response = await withTimeout(this.graphClient
                     .api('/me/messages')
                     .search(`"participants:${emailLower}"`)
                     .select('id,subject,from,toRecipients,ccRecipients,receivedDateTime,hasAttachments,importance')
@@ -192,7 +193,7 @@ class OutlookService {
                 );
                 emailsToFetch = response.value || [];
             }
-            catch (searchError) {
+            catch {
                 // Fallback: Fetch and filter in memory with early stopping
                 let nextLink = null;
                 let pageCount = 0;
@@ -232,7 +233,7 @@ class OutlookService {
                     nextLink = response['@odata.nextLink'];
                     pageCount++;
                     if (nextLink && pageCount < maxPages) {
-                        response = await withTimeout(this.graphClient.api(nextLink).get(), 60000);
+                        response = await withTimeout(graphClient.api(nextLink).get(), 60000);
                     }
                     else {
                         break;
@@ -245,7 +246,7 @@ class OutlookService {
                 const email = emailsToFetch[i];
                 try {
                     // Fetch full email details including body
-                    const fullEmail = await withTimeout(this.graphClient
+                    const fullEmail = await withTimeout(graphClient
                         .api(`/me/messages/${email.id}`)
                         .select('id,subject,from,toRecipients,ccRecipients,receivedDateTime,body,bodyPreview,hasAttachments,importance')
                         .get(), 30000 // 30 second timeout per email
@@ -334,7 +335,7 @@ class OutlookService {
                 if (email.toRecipients && email.toRecipients.length > 0) {
                     const recipients = email.toRecipients
                         .filter(r => r.emailAddress)
-                        .map(r => `${r.emailAddress.name || 'Unknown'} <${r.emailAddress.address || 'unknown@unknown.com'}>`)
+                        .map(r => `${r.emailAddress?.name || 'Unknown'} <${r.emailAddress?.address || 'unknown@unknown.com'}>`)
                         .join(', ');
                     if (recipients) {
                         content += `To: ${recipients}\n`;
@@ -343,7 +344,7 @@ class OutlookService {
                 if (email.ccRecipients && email.ccRecipients.length > 0) {
                     const cc = email.ccRecipients
                         .filter(r => r.emailAddress)
-                        .map(r => `${r.emailAddress.name || 'Unknown'} <${r.emailAddress.address || 'unknown@unknown.com'}>`)
+                        .map(r => `${r.emailAddress?.name || 'Unknown'} <${r.emailAddress?.address || 'unknown@unknown.com'}>`)
                         .join(', ');
                     if (cc) {
                         content += `CC: ${cc}\n`;

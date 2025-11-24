@@ -270,7 +270,7 @@ class TransactionExtractorService {
             // Reasonable if within 2 years past to 1 year future
             return date >= twoYearsAgo && date <= oneYearAhead;
         }
-        catch (e) {
+        catch {
             return false;
         }
     }
@@ -311,7 +311,7 @@ class TransactionExtractorService {
                     return parsed.toISOString().split('T')[0]; // Return YYYY-MM-DD format
                 }
             }
-            catch (e) {
+            catch {
                 // Invalid date, skip
             }
             return null;

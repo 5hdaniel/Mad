@@ -14,7 +14,7 @@ jest.mock('electron', () => ({
   safeStorage: mockSafeStorage,
 }));
 
-const tokenEncryptionService = require('../tokenEncryptionService');
+const tokenEncryptionService = require('../tokenEncryptionService').default;
 
 describe('TokenEncryptionService', () => {
   beforeEach(() => {

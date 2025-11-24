@@ -409,7 +409,7 @@ function validateUrl(url) {
         }
         return trimmed;
     }
-    catch (error) {
+    catch {
         throw new ValidationError('Invalid URL format', 'url');
     }
 }

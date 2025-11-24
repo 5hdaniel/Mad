@@ -310,7 +310,7 @@ class MicrosoftAuthService {
      * Revoke access token (logout)
      * @param accessToken - Access token to revoke
      */
-    async revokeToken(accessToken) {
+    async revokeToken(_accessToken) {
         // Microsoft OAuth2 doesn't provide a revocation endpoint
         // For proper logout, direct user to: https://login.microsoftonline.com/common/oauth2/v2.0/logout
         console.log('Microsoft tokens cannot be revoked programmatically. User should sign out from Microsoft account.');

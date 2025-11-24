@@ -117,7 +117,7 @@ function MicrosoftLogin({ onLoginComplete, onSkip }: MicrosoftLoginProps) {
     }
   };
 
-  const handleContinue = () => {
+  const _handleContinue = () => {
     if (isAuthenticated) {
       onLoginComplete({ username: userEmail || undefined });
     }

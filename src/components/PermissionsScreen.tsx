@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import SystemSettingsMockup from './SystemSettingsMockup';
+// import SystemSettingsMockup from './SystemSettingsMockup';
 
 interface PermissionsScreenProps {
   onPermissionsGranted: () => void;
@@ -18,7 +18,7 @@ interface AppInfo {
   name: string;
 }
 
-function PermissionsScreen({ onPermissionsGranted, onCheckAgain }: PermissionsScreenProps) {
+function PermissionsScreen({ onPermissionsGranted, onCheckAgain: _onCheckAgain }: PermissionsScreenProps) {
   const [isChecking, setIsChecking] = useState(false);
   const [currentStep, setCurrentStep] = useState(1); // 1: welcome, 2: full disk access
   const [openSettingsComplete, setOpenSettingsComplete] = useState(false);
@@ -27,8 +27,8 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain }: PermissionsSc
   const [clickPlusComplete, setClickPlusComplete] = useState(false);
   const [selectAppComplete, setSelectAppComplete] = useState(false);
   const [quitReopenComplete, setQuitReopenComplete] = useState(false);
-  const [macOSInfo, setMacOSInfo] = useState<MacOSInfo | null>(null);
-  const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
+  const [_macOSInfo, setMacOSInfo] = useState<MacOSInfo | null>(null);
+  const [_appInfo, setAppInfo] = useState<AppInfo | null>(null);
 
   // Auto-check permissions and detect macOS version when component loads
   useEffect(() => {
@@ -75,12 +75,12 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain }: PermissionsSc
     }
   };
 
-  const handleAppleScriptAllow = () => {
+  const _handleAppleScriptAllow = () => {
     // TODO: Implement AppleScript permission handling if needed
     // setAppleScriptStepComplete(true);
   };
 
-  const handleOpenSystemSettings = async () => {
+  const _handleOpenSystemSettings = async () => {
     await window.electron.openSystemSettings();
     // Start checking periodically
     startPeriodicCheck();

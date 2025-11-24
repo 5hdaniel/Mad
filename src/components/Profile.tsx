@@ -47,7 +47,7 @@ function Profile({
   subscription,
   onLogout,
   onClose,
-  onViewTransactions,
+  onViewTransactions: _onViewTransactions,
   onOpenSettings
 }: ProfileProps) {
   const [showConfirmLogout, setShowConfirmLogout] = useState<boolean>(false);

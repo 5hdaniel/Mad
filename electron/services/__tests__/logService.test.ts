@@ -3,7 +3,7 @@
  * Tests logging functionality with different levels and outputs
  */
 
-import { LogService, LogLevel } from '../logService';
+import { LogService } from '../logService';
 import * as fs from 'fs';
 import * as path from 'path';
 

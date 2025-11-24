@@ -6,6 +6,9 @@ dist/
 build/
 !build/entitlements.mac.plist
 
+# Test coverage
+coverage/
+
 # Electron
 out/
 

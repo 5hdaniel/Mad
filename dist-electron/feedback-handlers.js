@@ -96,9 +96,9 @@ const registerFeedbackHandlers = () => {
     electron_1.ipcMain.handle('feedback:get-metrics', async (event, userId, fieldName = null) => {
         try {
             // Validate inputs
-            const validatedUserId = (0, validation_1.validateUserId)(userId);
+            const _validatedUserId = (0, validation_1.validateUserId)(userId);
             // Validate fieldName (optional)
-            const validatedFieldName = fieldName
+            const _validatedFieldName = fieldName
                 ? (0, validation_1.validateString)(fieldName, 'fieldName', {
                     required: false,
                     maxLength: 100,

@@ -88,13 +88,18 @@ class GoogleAuthService {
   }
 
   /**
-   * Ensure client is initialized
+   * Ensure client is initialized and return it
    * @private
+   * @throws {Error} If client cannot be initialized
    */
-  private _ensureInitialized(): void {
-    if (!this.initialized) {
+  private _ensureClient(): Auth.OAuth2Client {
+    if (!this.initialized || !this.oauth2Client) {
       this.initialize();
     }
+    if (!this.oauth2Client) {
+      throw new Error('Google OAuth2 client is not initialized');
+    }
+    return this.oauth2Client;
   }
 
   /**
@@ -234,7 +239,7 @@ class GoogleAuthService {
    * Opens browser, user logs in, redirects back to local server
    */
   async authenticateForLogin(): Promise<AuthFlowResult> {
-    this._ensureInitialized();
+    const client = this._ensureClient();
 
     const scopes = [
       'openid',
@@ -249,7 +254,7 @@ class GoogleAuthService {
       const codePromise = this.startLocalServer();
 
       // Generate auth URL
-      const authUrl = this.oauth2Client!.generateAuthUrl({
+      const authUrl = client.generateAuthUrl({
         access_type: 'offline',
         scope: scopes,
         prompt: 'select_account', // Show account picker, only consent if needed
@@ -275,13 +280,13 @@ class GoogleAuthService {
    * @returns Tokens and user info
    */
   async exchangeCodeForTokens(code: string): Promise<TokenExchangeResult> {
-    this._ensureInitialized();
+    const client = this._ensureClient();
 
     try {
       console.log('[GoogleAuth] Exchanging code for tokens');
 
-      const { tokens } = await this.oauth2Client!.getToken(code);
-      this.oauth2Client!.setCredentials(tokens);
+      const { tokens } = await client.getToken(code);
+      client.setCredentials(tokens);
 
       console.log('[GoogleAuth] Tokens obtained successfully');
 
@@ -312,7 +317,7 @@ class GoogleAuthService {
    * @param loginHint - Optional email to pre-fill
    */
   async authenticateForMailbox(loginHint?: string): Promise<AuthFlowResult> {
-    this._ensureInitialized();
+    const client = this._ensureClient();
 
     const scopes = [
       'https://www.googleapis.com/auth/gmail.readonly',
@@ -335,7 +340,7 @@ class GoogleAuthService {
         authUrlOptions.login_hint = loginHint;
       }
 
-      const authUrl = this.oauth2Client!.generateAuthUrl(authUrlOptions);
+      const authUrl = client.generateAuthUrl(authUrlOptions);
 
       console.log('[GoogleAuth] Mailbox auth URL generated, local server started');
 
@@ -357,14 +362,14 @@ class GoogleAuthService {
    * @returns User info
    */
   async getUserInfo(accessToken: string): Promise<UserInfo> {
-    this._ensureInitialized();
+    const client = this._ensureClient();
 
     try {
-      const oauth2 = google.oauth2({ version: 'v2', auth: this.oauth2Client! });
+      const oauth2 = google.oauth2({ version: 'v2', auth: client });
 
       // Set credentials if provided
       if (accessToken) {
-        this.oauth2Client!.setCredentials({ access_token: accessToken });
+        client.setCredentials({ access_token: accessToken });
       }
 
       const { data } = await oauth2.userinfo.get();
@@ -393,16 +398,16 @@ class GoogleAuthService {
    * @returns New tokens
    */
   async refreshToken(refreshToken: string): Promise<RefreshTokenResult> {
-    this._ensureInitialized();
+    const client = this._ensureClient();
 
     try {
       console.log('[GoogleAuth] Refreshing access token');
 
-      this.oauth2Client!.setCredentials({
+      client.setCredentials({
         refresh_token: refreshToken,
       });
 
-      const { credentials } = await this.oauth2Client!.refreshAccessToken();
+      const { credentials } = await client.refreshAccessToken();
 
       console.log('[GoogleAuth] Token refreshed successfully');
 
@@ -423,12 +428,12 @@ class GoogleAuthService {
    * @param accessToken - Access token to revoke
    */
   async revokeToken(accessToken: string): Promise<void> {
-    this._ensureInitialized();
+    const client = this._ensureClient();
 
     try {
       console.log('[GoogleAuth] Revoking token');
 
-      await this.oauth2Client!.revokeToken(accessToken);
+      await client.revokeToken(accessToken);
 
       console.log('[GoogleAuth] Token revoked successfully');
     } catch (error) {
@@ -451,7 +456,7 @@ class GoogleAuthService {
       // Try to get user info - if it works, token is valid
       await this.getUserInfo(accessToken);
       return true;
-    } catch (error) {
+    } catch {
       return false;
     }
   }
