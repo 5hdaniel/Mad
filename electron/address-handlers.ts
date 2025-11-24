@@ -7,7 +7,7 @@ import { ipcMain } from 'electron';
 import type { IpcMainInvokeEvent } from 'electron';
 
 // Service (still JS - to be migrated)
-const addressVerificationService = require('./services/addressVerificationService');
+const addressVerificationService = require('./services/addressVerificationService').default;
 
 // Import validation utilities
 import {

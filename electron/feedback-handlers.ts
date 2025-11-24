@@ -9,7 +9,7 @@ import databaseService from './services/databaseService';
 import type { UserFeedback } from './types/models';
 
 // Services (still JS - to be migrated)
-const feedbackLearningService = require('./services/feedbackLearningService');
+const feedbackLearningService = require('./services/feedbackLearningService').default;
 
 // Import validation utilities
 import {

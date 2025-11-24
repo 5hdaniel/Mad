@@ -6,10 +6,10 @@
 import { ipcMain } from 'electron';
 import type { IpcMainInvokeEvent } from 'electron';
 
-// Import services (still JS, will be migrated later)
-const permissionService = require('./services/permissionService');
-const connectionStatusService = require('./services/connectionStatusService');
-const macOSPermissionHelper = require('./services/macOSPermissionHelper');
+// Import services (TypeScript with default exports)
+const permissionService = require('./services/permissionService').default;
+const connectionStatusService = require('./services/connectionStatusService').default;
+const macOSPermissionHelper = require('./services/macOSPermissionHelper').default;
 
 // Import validation utilities
 import {

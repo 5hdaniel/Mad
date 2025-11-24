@@ -9,8 +9,8 @@ import transactionService from './services/transactionService';
 import type { Transaction, NewTransaction, UpdateTransaction, OAuthProvider } from './types/models';
 
 // Services (still JS - to be migrated)
-const pdfExportService = require('./services/pdfExportService');
-const enhancedExportService = require('./services/enhancedExportService');
+const pdfExportService = require('./services/pdfExportService').default;
+const enhancedExportService = require('./services/enhancedExportService').default;
 
 // Import validation utilities
 import {
@@ -542,7 +542,7 @@ export const registerTransactionHandlers = (mainWindow: BrowserWindow | null): v
       console.log('[Main] Enhanced export successful:', exportPath);
 
       // Update export tracking in database
-      const { databaseService: db } = require('./services/databaseService');
+      const { databaseService: db } = require('./services/databaseService').default;
       await db.updateTransaction(validatedTransactionId, {
         export_status: 'exported',
         export_format: sanitizedOptions.exportFormat || 'pdf',
