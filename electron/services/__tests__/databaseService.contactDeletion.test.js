@@ -41,7 +41,7 @@ jest.mock('sqlite3', () => {
   };
 });
 
-const databaseService = require('../databaseService');
+const databaseService = require('../databaseService').default;
 
 describe('DatabaseService - Contact Deletion Prevention', () => {
   beforeEach(() => {
