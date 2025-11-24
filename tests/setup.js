@@ -1,8 +1,10 @@
 // Jest setup file
 import '@testing-library/jest-dom';
 
-// Mock window.api for tests
-global.window.api = {
+// Mock window.api for tests (only in jsdom environment)
+if (typeof window !== 'undefined') {
+  global.window = global.window || {};
+  global.window.api = {
   auth: {
     loginWithGoogle: jest.fn(),
     loginWithMicrosoft: jest.fn(),
@@ -34,15 +36,16 @@ global.window.api = {
     checkAllConnections: jest.fn(),
     healthCheck: jest.fn(),
   },
-};
+  };
 
-// Mock electron for tests
-global.window.electron = {
-  getAppInfo: jest.fn(),
-  getMacOSVersion: jest.fn(),
-  checkPermissions: jest.fn(),
-  openSystemSettings: jest.fn(),
-};
+  // Mock electron for tests
+  global.window.electron = {
+    getAppInfo: jest.fn(),
+    getMacOSVersion: jest.fn(),
+    checkPermissions: jest.fn(),
+    openSystemSettings: jest.fn(),
+  };
+}
 
 // Suppress console errors in tests
 global.console = {

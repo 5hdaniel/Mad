@@ -2,13 +2,15 @@ import type {
   Transaction,
   NewTransaction,
   UpdateTransaction,
+  NewCommunication,
   OAuthProvider,
 } from '../types';
 
-const gmailFetchService = require('./gmailFetchService');
-const outlookFetchService = require('./outlookFetchService');
-const transactionExtractorService = require('./transactionExtractorService');
-const databaseService = require('./databaseService');
+import gmailFetchService from './gmailFetchService';
+import outlookFetchService from './outlookFetchService';
+import transactionExtractorService from './transactionExtractorService';
+import databaseService from './databaseService';
+import logService from './logService';
 
 // ============================================
 // TYPES
@@ -46,7 +48,7 @@ interface EmailFetchOptions {
 }
 
 interface AnalyzedEmail {
-  subject: string;
+  subject?: string;
   from: string;
   date: string | Date;
   isRealEstateRelated: boolean;
@@ -56,8 +58,9 @@ interface AnalyzedEmail {
 }
 
 interface EmailMessage {
-  subject: string;
+  subject?: string;
   from: string;
+  date?: string | Date;
   to?: string;
   cc?: string;
   bcc?: string;
@@ -157,7 +160,7 @@ class TransactionService {
         before: endDate,
       });
 
-      console.log(`[TransactionService] Fetched ${emails.length} emails`);
+      await logService.info(`Fetched ${emails.length} emails`, 'TransactionService.scanAndExtractTransactions', { emailCount: emails.length, userId, provider });
 
       // Step 2: Analyze emails
       if (onProgress) onProgress({ step: 'analyzing', message: `Analyzing ${emails.length} emails...` });
@@ -165,9 +168,9 @@ class TransactionService {
       const analyzed = transactionExtractorService.batchAnalyze(emails);
 
       // Filter to only real estate related emails
-      const realEstateEmails = analyzed.filter((a: AnalyzedEmail) => a.isRealEstateRelated);
+      const realEstateEmails = analyzed.filter((a: any) => a.isRealEstateRelated);
 
-      console.log(`[TransactionService] Found ${realEstateEmails.length} real estate related emails`);
+      await logService.info(`Found ${realEstateEmails.length} real estate related emails`, 'TransactionService.scanAndExtractTransactions', { realEstateCount: realEstateEmails.length, totalEmails: emails.length });
 
       // Step 3: Group by property
       if (onProgress) onProgress({ step: 'grouping', message: 'Grouping by property...' });
@@ -175,7 +178,7 @@ class TransactionService {
       const grouped = transactionExtractorService.groupByProperty(realEstateEmails);
       const propertyAddresses = Object.keys(grouped);
 
-      console.log(`[TransactionService] Found ${propertyAddresses.length} properties`);
+      await logService.info(`Found ${propertyAddresses.length} properties`, 'TransactionService.scanAndExtractTransactions', { propertyCount: propertyAddresses.length });
 
       // Step 4: Create transactions and save communications
       if (onProgress) onProgress({ step: 'saving', message: 'Saving transactions...' });
@@ -186,11 +189,12 @@ class TransactionService {
         const emailGroup = grouped[address];
         const summary = transactionExtractorService.generateTransactionSummary(emailGroup);
 
-        // Create transaction in database
+        // Create transaction in database if summary is valid
+        if (!summary) continue;
         const transactionId = await this._createTransactionFromSummary(userId, summary);
 
         // Save communications
-        await this._saveCommunications(userId, transactionId, emailGroup, emails);
+        await this._saveCommunications(userId, transactionId, emailGroup as any, emails as any);
 
         transactions.push({
           id: transactionId,
@@ -209,7 +213,11 @@ class TransactionService {
         transactions,
       };
     } catch (error) {
-      console.error('[TransactionService] Scan failed:', error);
+      await logService.error('Transaction scan failed', 'TransactionService.scanAndExtractTransactions', {
+        error: error instanceof Error ? error.message : String(error),
+        userId,
+        provider,
+      });
       throw error;
     }
   }
@@ -222,7 +230,7 @@ class TransactionService {
     userId: string,
     provider: OAuthProvider | undefined,
     options: EmailFetchOptions
-  ): Promise<EmailMessage[]> {
+  ): Promise<any[]> {
     if (provider === 'google') {
       await gmailFetchService.initialize(userId);
       return await gmailFetchService.searchEmails(options);
@@ -240,29 +248,37 @@ class TransactionService {
    */
   private async _createTransactionFromSummary(
     userId: string,
-    summary: TransactionSummary
+    summary: any
   ): Promise<string> {
     // Parse address into components
     const addressParts = this._parseAddress(summary.propertyAddress);
 
-    const transactionData = {
+    const transactionData: Partial<NewTransaction> = {
+      user_id: userId,
       property_address: summary.propertyAddress,
-      property_street: addressParts.street,
-      property_city: addressParts.city,
-      property_state: addressParts.state,
-      property_zip: addressParts.zip,
+      property_street: addressParts.street || undefined,
+      property_city: addressParts.city || undefined,
+      property_state: addressParts.state || undefined,
+      property_zip: addressParts.zip || undefined,
       transaction_type: summary.transactionType,
-      transaction_status: 'completed' as const,
-      closing_date: summary.closingDate,
-      communications_scanned: summary.communicationsCount,
+      transaction_status: 'completed',
+      status: 'active',
+      closing_date: summary.closingDate || undefined,
+      closing_date_verified: false,
+      communications_scanned: summary.communicationsCount || 0,
       extraction_confidence: summary.confidence,
       first_communication_date: new Date(summary.firstCommunication).toISOString(),
       last_communication_date: new Date(summary.lastCommunication).toISOString(),
-      total_communications_count: summary.communicationsCount,
+      total_communications_count: summary.communicationsCount || 0,
       sale_price: summary.salePrice,
+      export_status: 'not_exported',
+      export_count: 0,
+      offer_count: 0,
+      failed_offers_count: 0,
     };
 
-    return await databaseService.createTransaction(userId, transactionData);
+    const transaction = await databaseService.createTransaction(transactionData as NewTransaction);
+    return transaction.id;
   }
 
   /**
@@ -272,20 +288,21 @@ class TransactionService {
   private async _saveCommunications(
     userId: string,
     transactionId: string,
-    analyzedEmails: AnalyzedEmail[],
-    originalEmails: EmailMessage[]
+    analyzedEmails: any[],
+    originalEmails: any[]
   ): Promise<void> {
     for (const analyzed of analyzedEmails) {
       // Find original email
       const originalEmail = originalEmails.find(
-        (e) => e.subject === analyzed.subject && e.from === analyzed.from
+        (e: any) => e.subject === analyzed.subject && e.from === analyzed.from
       );
 
       if (!originalEmail) continue;
 
-      const commData = {
+      const commData: Partial<NewCommunication> = {
+        user_id: userId,
         transaction_id: transactionId,
-        communication_type: 'email' as const,
+        communication_type: 'email',
         source: analyzed.from.includes('@gmail') ? 'gmail' : 'outlook',
         email_thread_id: originalEmail.threadId,
         sender: analyzed.from,
@@ -297,16 +314,17 @@ class TransactionService {
         body_plain: originalEmail.bodyPlain,
         sent_at: analyzed.date,
         received_at: analyzed.date,
-        has_attachments: originalEmail.hasAttachments,
-        attachment_count: originalEmail.attachmentCount,
+        has_attachments: originalEmail.hasAttachments || false,
+        attachment_count: originalEmail.attachmentCount || 0,
         attachment_metadata: originalEmail.attachments,
         keywords_detected: analyzed.keywords,
         parties_involved: analyzed.parties,
         relevance_score: analyzed.confidence,
-        is_compliance_related: analyzed.isRealEstateRelated,
+        flagged_for_review: false,
+        is_compliance_related: analyzed.isRealEstateRelated || false,
       };
 
-      await databaseService.saveCommunication(userId, commData);
+      await databaseService.createCommunication(commData as NewCommunication);
     }
   }
 
@@ -330,7 +348,7 @@ class TransactionService {
    * Get all transactions for a user
    */
   async getTransactions(userId: string): Promise<Transaction[]> {
-    return await databaseService.getTransactionsByUserId(userId);
+    return await databaseService.getTransactions({ user_id: userId });
   }
 
   /**
@@ -343,14 +361,14 @@ class TransactionService {
       return null;
     }
 
-    const communications = await databaseService.getCommunicationsByTransactionId(transactionId);
+    const communications = await databaseService.getCommunicationsByTransaction(transactionId);
     const contact_assignments = await databaseService.getTransactionContacts(transactionId);
 
     return {
       ...transaction,
       communications,
       contact_assignments,
-    };
+    } as any;
   }
 
   /**
@@ -360,18 +378,30 @@ class TransactionService {
     userId: string,
     transactionData: Partial<NewTransaction>
   ): Promise<Transaction> {
-    const transactionId = await databaseService.createTransaction(userId, {
-      property_address: transactionData.property_address,
-      transaction_type: transactionData.transaction_type || null,
+    const transaction = await databaseService.createTransaction({
+      user_id: userId,
+      property_address: transactionData.property_address!,
+      property_street: transactionData.property_street,
+      property_city: transactionData.property_city,
+      property_state: transactionData.property_state,
+      property_zip: transactionData.property_zip,
+      transaction_type: transactionData.transaction_type,
+      transaction_status: 'pending',
       status: transactionData.status || 'active',
-      representation_start_date: transactionData.representation_start_date || null,
-      closing_date: transactionData.closing_date || null,
-      closing_date_verified: 0,
-      representation_start_confidence: null,
-      closing_date_confidence: null,
-    });
+      representation_start_date: transactionData.representation_start_date,
+      closing_date: transactionData.closing_date,
+      closing_date_verified: false,
+      representation_start_confidence: undefined,
+      closing_date_confidence: undefined,
+      export_status: 'not_exported',
+      export_count: 0,
+      communications_scanned: 0,
+      total_communications_count: 0,
+      offer_count: 0,
+      failed_offers_count: 0,
+    } as NewTransaction);
 
-    return await databaseService.getTransactionById(transactionId);
+    return transaction;
   }
 
   /**
@@ -395,7 +425,8 @@ class TransactionService {
       } = data;
 
       // Create the transaction
-      const transactionId = await databaseService.createTransaction(userId, {
+      const transaction = await databaseService.createTransaction({
+        user_id: userId,
         property_address,
         property_street,
         property_city,
@@ -403,9 +434,17 @@ class TransactionService {
         property_zip,
         property_coordinates,
         transaction_type,
+        transaction_status: 'pending',
         status: 'active',
-        closing_date_verified: property_coordinates ? 1 : 0, // Mark as verified if coordinates exist
-      });
+        closing_date_verified: property_coordinates ? true : false,
+        export_status: 'not_exported',
+        export_count: 0,
+        communications_scanned: 0,
+        total_communications_count: 0,
+        offer_count: 0,
+        failed_offers_count: 0,
+      } as NewTransaction);
+      const transactionId = transaction.id;
 
       // Assign all contacts
       if (contact_assignments && contact_assignments.length > 0) {
@@ -424,7 +463,11 @@ class TransactionService {
       // Fetch the complete transaction with contacts
       return await this.getTransactionWithContacts(transactionId);
     } catch (error) {
-      console.error('[TransactionService] Failed to create audited transaction:', error);
+      await logService.error('Failed to create audited transaction', 'TransactionService.createAuditedTransaction', {
+        error: error instanceof Error ? error.message : String(error),
+        userId,
+        propertyAddress: data.property_address,
+      });
       throw error;
     }
   }
@@ -445,7 +488,7 @@ class TransactionService {
     return {
       ...transaction,
       contact_assignments: contactAssignments,
-    };
+    } as any;
   }
 
   /**
@@ -465,7 +508,7 @@ class TransactionService {
       role_category: roleCategory,
       specific_role: role,
       is_primary: isPrimary ? 1 : 0,
-      notes,
+      notes: notes || undefined,
     });
   }
 
@@ -473,7 +516,7 @@ class TransactionService {
    * Remove contact from transaction
    */
   async removeContactFromTransaction(transactionId: string, contactId: string): Promise<void> {
-    return await databaseService.removeContactFromTransaction(transactionId, contactId);
+    return await databaseService.unlinkContactFromTransaction(transactionId, contactId);
   }
 
   /**
@@ -484,7 +527,10 @@ class TransactionService {
     contactId: string,
     updates: ContactRoleUpdate
   ): Promise<any> {
-    return await databaseService.updateContactRole(transactionId, contactId, updates);
+    return await databaseService.updateContactRole(transactionId, contactId, {
+      ...updates,
+      role: updates.role || undefined,
+    });
   }
 
   /**
@@ -517,14 +563,14 @@ class TransactionService {
     });
 
     const analyzed = transactionExtractorService.batchAnalyze(emails);
-    const realEstateEmails = analyzed.filter((a: AnalyzedEmail) => a.isRealEstateRelated);
+    const realEstateEmails = analyzed.filter((a: any) => a.isRealEstateRelated);
 
     return {
       emailsFound: emails.length,
       realEstateEmailsFound: realEstateEmails.length,
-      analyzed: realEstateEmails,
+      analyzed: realEstateEmails as any,
     };
   }
 }
 
-export = new TransactionService();
+export default new TransactionService();
