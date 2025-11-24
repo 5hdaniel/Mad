@@ -8,19 +8,11 @@ import type {
   Contact,
   Transaction,
   Communication,
-  ExtractedTransactionData,
   UserFeedback,
-  TransactionContact,
-  OAuthToken,
-  Session,
   NewUser,
   NewContact,
   NewTransaction,
   NewCommunication,
-  UpdateUser,
-  UpdateContact,
-  UpdateTransaction,
-  UpdateCommunication,
   TransactionFilters,
   CommunicationFilters,
   ContactFilters,
@@ -33,7 +25,7 @@ import type {
 /**
  * Standard query result from better-sqlite3
  */
-export interface QueryResult<T = unknown> {
+export interface QueryResult {
   changes: number;
   lastInsertRowid: number | bigint;
 }

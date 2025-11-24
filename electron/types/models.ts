@@ -104,6 +104,15 @@ export interface Session {
   last_accessed_at: Date | string;
 }
 
+export interface Subscription {
+  tier: SubscriptionTier;
+  status: SubscriptionStatus;
+  isActive: boolean;
+  isTrial: boolean;
+  trialEnded: boolean;
+  trialDaysRemaining: number;
+}
+
 // ============================================
 // CONTACT MODELS
 // ============================================

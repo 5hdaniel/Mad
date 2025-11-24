@@ -16,6 +16,7 @@ import type {
   NewTransaction,
   OAuthProvider,
   ExportFormat,
+  Subscription,
 } from './models';
 import type { ExportResult, ExtractionResult, SyncStatus } from './database';
 
@@ -373,11 +374,135 @@ export interface WindowApi {
     chrome: string;
     electron: string;
   };
+
+  // Auth methods
+  auth: {
+    googleLogin: () => Promise<{ success: boolean; authUrl?: string; error?: string }>;
+    googleCompleteLogin: (code: string) => Promise<{ success: boolean; user?: User; sessionToken?: string; subscription?: Subscription; isNewUser?: boolean; error?: string }>;
+    microsoftLogin: () => Promise<{ success: boolean; authUrl?: string; error?: string }>;
+    microsoftCompleteLogin: (code: string) => Promise<{ success: boolean; user?: User; sessionToken?: string; subscription?: Subscription; isNewUser?: boolean; error?: string }>;
+    googleConnectMailbox: (userId: string) => Promise<{ success: boolean; error?: string }>;
+    microsoftConnectMailbox: (userId: string) => Promise<{ success: boolean; error?: string }>;
+    logout: (sessionToken: string) => Promise<{ success: boolean; error?: string }>;
+    validateSession: (sessionToken: string) => Promise<{ valid: boolean; user?: User; error?: string }>;
+    getCurrentUser: () => Promise<{ success: boolean; user?: User; sessionToken?: string; subscription?: Subscription; provider?: string; isNewUser?: boolean; error?: string }>;
+    acceptTerms: (userId: string) => Promise<{ success: boolean; error?: string }>;
+  };
+
+  // System methods
+  system: {
+    runPermissionSetup: () => Promise<{ success: boolean }>;
+    requestContactsPermission: () => Promise<{ granted: boolean }>;
+    setupFullDiskAccess: () => Promise<{ success: boolean }>;
+    openPrivacyPane: (pane: string) => Promise<{ success: boolean }>;
+    checkFullDiskAccessStatus: () => Promise<{ hasAccess: boolean }>;
+    checkFullDiskAccess: () => Promise<{ hasAccess: boolean }>;
+    checkContactsPermission: () => Promise<{ hasPermission: boolean }>;
+    checkAllPermissions: () => Promise<{ fullDiskAccess: boolean; contactsAccess: boolean; allGranted: boolean }>;
+    checkGoogleConnection: (userId: string) => Promise<{ connected: boolean; email?: string; error?: string }>;
+    checkMicrosoftConnection: (userId: string) => Promise<{ connected: boolean; email?: string; error?: string }>;
+    checkAllConnections: (userId: string) => Promise<{ success: boolean; google?: { connected: boolean; email?: string }; microsoft?: { connected: boolean; email?: string } }>;
+    healthCheck: (userId: string, provider: OAuthProvider) => Promise<{ healthy: boolean; provider?: OAuthProvider; issues?: string[] }>;
+  };
+
+  // Preferences methods
+  preferences: {
+    get: (userId: string) => Promise<{ success: boolean; preferences?: Record<string, unknown> }>;
+    save: (userId: string, preferences: Record<string, unknown>) => Promise<{ success: boolean }>;
+    update: (userId: string, partialPreferences: Record<string, unknown>) => Promise<{ success: boolean }>;
+  };
+
+  // Contact methods
+  contacts: {
+    getAll: (userId: string) => Promise<{ success: boolean; contacts?: Contact[]; error?: string }>;
+    getSortedByActivity: (userId: string, propertyAddress?: string) => Promise<{ success: boolean; contacts?: Contact[]; error?: string }>;
+    getAvailable: (userId: string) => Promise<{ success: boolean; contacts?: Contact[]; error?: string }>;
+    checkCanDelete: (contactId: string) => Promise<{ canDelete: boolean; transactionCount?: number; error?: string }>;
+    create: (userId: string, contactData: Record<string, unknown>) => Promise<{ success: boolean; contact?: Contact; error?: string }>;
+    update: (contactId: string, updates: Record<string, unknown>) => Promise<{ success: boolean; error?: string }>;
+    delete: (contactId: string) => Promise<{ success: boolean; error?: string }>;
+    remove: (contactId: string) => Promise<{ success: boolean; error?: string }>;
+    import: (userId: string, contacts: any[]) => Promise<{ success: boolean; imported?: number; error?: string }>;
+  };
+
+  // Transaction methods
+  transactions: {
+    getAll: (userId: string) => Promise<{ success: boolean; transactions?: Transaction[]; error?: string }>;
+    scan: (userId: string, options?: Record<string, unknown>) => Promise<{ success: boolean; transactions?: Transaction[]; transactionsFound?: number; emailsScanned?: number; error?: string }>;
+    getDetails: (transactionId: string) => Promise<{ success: boolean; transaction?: unknown; error?: string }>;
+    create: (userId: string, transactionData: Record<string, unknown>) => Promise<{ success: boolean; transaction?: Transaction; error?: string }>;
+    createAudited: (userId: string, transactionData: Record<string, unknown>) => Promise<{ success: boolean; transaction?: Transaction; error?: string }>;
+    update: (transactionId: string, data: Record<string, unknown>) => Promise<{ success: boolean; error?: string }>;
+    delete: (transactionId: string) => Promise<{ success: boolean; error?: string }>;
+    exportEnhanced: (transactionId: string, format: string) => Promise<{ success: boolean; path?: string; error?: string }>;
+    assignContact: (transactionId: string, contactId: string, role: string, roleCategory?: string, isPrimary?: boolean, notes?: string) => Promise<{ success: boolean; error?: string }>;
+    removeContact: (transactionId: string, contactId: string) => Promise<{ success: boolean; error?: string }>;
+  };
+
+  // Address lookup methods
+  address: {
+    initialize: (apiKey: string) => Promise<{ success: boolean; error?: string }>;
+    getSuggestions: (input: string, sessionToken?: string) => Promise<{ success: boolean; suggestions?: Array<{ description: string; placeId: string }>; error?: string }>;
+    getDetails: (placeId: string) => Promise<{ success: boolean; address?: string; formatted_address?: string; street?: string; city?: string; state?: string; state_short?: string; zip?: string; coordinates?: { lat: number; lng: number }; error?: string }>;
+    geocode: (address: string) => Promise<{ lat: number; lng: number; formattedAddress: string }>;
+  };
+
+  // Shell methods
+  shell: {
+    openExternal: (url: string) => Promise<void>;
+  };
+
+  // Event listeners for mailbox connections
+  onGoogleMailboxConnected: (callback: (result: { success: boolean }) => void) => () => void;
+  onMicrosoftMailboxConnected: (callback: (result: { success: boolean }) => void) => () => void;
+  onMicrosoftLoginComplete: (callback: (result: { success: boolean; user?: User; sessionToken?: string; subscription?: Subscription; isNewUser?: boolean; error?: string }) => void) => () => void;
+  onTransactionScanProgress: (callback: (progress: unknown) => void) => () => void;
 }
 
 // Augment Window interface
 declare global {
   interface Window {
     api: WindowApi;
+    electron: {
+      getAppInfo: () => Promise<{ version: string; name: string }>;
+      getMacOSVersion: () => Promise<{ version: string }>;
+      checkAppLocation: () => Promise<{ isInApplications: boolean; shouldPrompt: boolean; appPath: string }>;
+      checkPermissions: () => Promise<{ hasPermission: boolean; error?: string }>;
+      triggerFullDiskAccess: () => Promise<{ hasAccess: boolean }>;
+      requestPermissions: () => Promise<{ success: boolean }>;
+      requestContactsPermission: () => Promise<{ granted: boolean }>;
+      openSystemSettings: () => Promise<{ success: boolean }>;
+      getConversations: () => Promise<{ success: boolean; conversations?: any[]; error?: string }>;
+      exportConversations: (conversationIds: string[]) => Promise<{ success: boolean; error?: string; canceled?: boolean }>;
+      openFolder: (path: string) => Promise<void>;
+      outlookInitialize: () => Promise<{ success: boolean; error?: string }>;
+      outlookIsAuthenticated: () => Promise<boolean>;
+      outlookAuthenticate: () => Promise<{ success: boolean; error?: string; userInfo?: { username?: string } }>;
+      outlookGetUserEmail: () => Promise<string | null>;
+      outlookExportEmails: (contacts: Array<{
+        name: string;
+        chatId?: string;
+        emails?: string[];
+        phones?: string[];
+      }>) => Promise<{
+        success: boolean;
+        error?: string;
+        canceled?: boolean;
+        exportPath?: string;
+        results?: Array<{
+          contactName: string;
+          success: boolean;
+          textMessageCount: number;
+          emailCount?: number;
+          error: string | null;
+        }>;
+      }>;
+      onDeviceCode: (callback: (code: string) => void) => () => void;
+      onExportProgress: (callback: (progress: any) => void) => () => void;
+      onUpdateAvailable: (callback: (info: any) => void) => () => void;
+      onUpdateProgress: (callback: (progress: any) => void) => () => void;
+      onUpdateDownloaded: (callback: () => void) => () => void;
+      installUpdate: () => void;
+    };
   }
 }
