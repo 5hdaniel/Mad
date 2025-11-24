@@ -93,7 +93,7 @@ describe('TransactionService - Database Method Fixes', () => {
           user_id: mockUserId,
           property_address: '456 Oak Ave',
           status: 'active',
-          closing_date_verified: 0,
+          closing_date_verified: false,
         })
       );
     });
