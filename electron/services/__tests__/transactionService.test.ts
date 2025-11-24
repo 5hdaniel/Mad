@@ -9,6 +9,7 @@
 
 import transactionService from '../transactionService';
 import databaseService from '../databaseService';
+import logService from '../logService';
 import type { Transaction, NewTransaction } from '../../types';
 
 // Mock the dependencies
@@ -207,6 +208,34 @@ describe('TransactionService - Database Method Fixes', () => {
       await transactionService.deleteTransaction(mockTransactionId);
 
       expect(databaseService.deleteTransaction).toHaveBeenCalledWith(mockTransactionId);
+    });
+  });
+
+  describe('Logging', () => {
+    describe('createAuditedTransaction error logging', () => {
+      it('should log errors when transaction creation fails', async () => {
+        const auditedData = {
+          property_address: '789 Pine Rd',
+          contact_assignments: [],
+        };
+
+        const error = new Error('Database error');
+        (databaseService.createTransaction as jest.Mock).mockRejectedValue(error);
+
+        await expect(
+          transactionService.createAuditedTransaction(mockUserId, auditedData)
+        ).rejects.toThrow('Database error');
+
+        expect(logService.error).toHaveBeenCalledWith(
+          'Failed to create audited transaction',
+          'TransactionService.createAuditedTransaction',
+          expect.objectContaining({
+            error: 'Database error',
+            userId: mockUserId,
+            propertyAddress: '789 Pine Rd',
+          })
+        );
+      });
     });
   });
 });
