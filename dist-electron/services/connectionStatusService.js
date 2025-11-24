@@ -9,6 +9,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const databaseService_1 = __importDefault(require("./databaseService"));
 const googleAuthService_1 = __importDefault(require("./googleAuthService"));
+const microsoftAuthService_1 = __importDefault(require("./microsoftAuthService"));
 class ConnectionStatusService {
     constructor() {
         this.connectionStatus = {
@@ -135,15 +136,37 @@ class ConnectionStatusService {
                 minutesUntilExpiry: (tokenExpiry.getTime() - now.getTime()) / 1000 / 60
             });
             if (tokenExpiry < now) {
+                // Token expired - try to refresh
+                console.log('[ConnectionStatus] Microsoft token expired, attempting refresh...');
+                try {
+                    const refreshResult = await microsoftAuthService_1.default.refreshAccessToken(userId);
+                    if (refreshResult.success) {
+                        console.log('[ConnectionStatus] Microsoft token refreshed successfully');
+                        this.connectionStatus.microsoft = {
+                            connected: true,
+                            lastCheck: Date.now(),
+                            email: token.connected_email_address,
+                            error: null,
+                        };
+                        return this.connectionStatus.microsoft;
+                    }
+                    else {
+                        console.error('[ConnectionStatus] Microsoft token refresh failed:', refreshResult.error);
+                    }
+                }
+                catch (refreshError) {
+                    console.error('[ConnectionStatus] Microsoft token refresh error:', refreshError);
+                }
+                // Refresh failed, mark as expired
                 this.connectionStatus.microsoft = {
                     connected: false,
                     lastCheck: Date.now(),
                     error: {
-                        type: 'TOKEN_EXPIRED',
+                        type: 'TOKEN_REFRESH_FAILED',
                         userMessage: 'Outlook connection expired',
                         action: 'Reconnect your Outlook account',
                         actionHandler: 'reconnect-microsoft',
-                        details: 'Authentication token has expired',
+                        details: 'Failed to refresh authentication token',
                     },
                 };
                 return this.connectionStatus.microsoft;
