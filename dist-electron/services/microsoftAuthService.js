@@ -7,6 +7,8 @@ const axios_1 = __importDefault(require("axios"));
 const http_1 = __importDefault(require("http"));
 const url_1 = __importDefault(require("url"));
 const crypto_1 = __importDefault(require("crypto"));
+const databaseService_1 = __importDefault(require("./databaseService"));
+const tokenEncryptionService_1 = __importDefault(require("./tokenEncryptionService"));
 // ============================================
 // SERVICE CLASS
 // ============================================
@@ -304,6 +306,51 @@ class MicrosoftAuthService {
             const axiosError = error;
             console.error('Error refreshing token:', axiosError.response?.data || axiosError.message);
             throw new Error('Failed to refresh access token');
+        }
+    }
+    /**
+     * Refresh access token for a user (high-level method with database integration)
+     * @param userId - User ID to refresh token for
+     * @returns Success status with new token data
+     */
+    async refreshAccessToken(userId) {
+        try {
+            console.log('[MicrosoftAuth] Refreshing access token for user:', userId);
+            // Get current token from database
+            const tokenRecord = await databaseService_1.default.getOAuthToken(userId, 'microsoft', 'mailbox');
+            if (!tokenRecord || !tokenRecord.refresh_token) {
+                console.error('[MicrosoftAuth] No refresh token found for user');
+                return { success: false, error: 'No refresh token available' };
+            }
+            // Decrypt refresh token
+            const decryptedRefreshToken = tokenEncryptionService_1.default.decrypt(tokenRecord.refresh_token);
+            // Call Microsoft to refresh the token
+            const newTokens = await this.refreshToken(decryptedRefreshToken);
+            // Encrypt new tokens
+            const encryptedAccessToken = tokenEncryptionService_1.default.encrypt(newTokens.access_token);
+            const encryptedRefreshToken = newTokens.refresh_token
+                ? tokenEncryptionService_1.default.encrypt(newTokens.refresh_token)
+                : tokenRecord.refresh_token; // Keep old refresh token if new one not provided
+            // Calculate new expiry time
+            const expiresAt = new Date(Date.now() + newTokens.expires_in * 1000).toISOString();
+            // Update database with new tokens
+            await databaseService_1.default.saveOAuthToken(userId, 'microsoft', 'mailbox', {
+                access_token: encryptedAccessToken,
+                refresh_token: encryptedRefreshToken,
+                token_expires_at: expiresAt,
+                scopes_granted: newTokens.scope,
+                connected_email_address: tokenRecord.connected_email_address,
+                mailbox_connected: true,
+            });
+            console.log('[MicrosoftAuth] Token refreshed successfully. New expiry:', expiresAt);
+            return { success: true };
+        }
+        catch (error) {
+            console.error('[MicrosoftAuth] Failed to refresh access token:', error);
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : 'Unknown error'
+            };
         }
     }
     /**

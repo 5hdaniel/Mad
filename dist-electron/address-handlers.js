@@ -7,7 +7,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerAddressHandlers = void 0;
 const electron_1 = require("electron");
 // Service (still JS - to be migrated)
-const addressVerificationService = require('./services/addressVerificationService');
+const addressVerificationService = require('./services/addressVerificationService').default;
 // Import validation utilities
 const validation_1 = require("./utils/validation");
 /**

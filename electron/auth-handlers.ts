@@ -665,6 +665,8 @@ const handleMicrosoftConnectMailbox = async (mainWindow: BrowserWindow | null, u
         // Save mailbox token
         const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
 
+        console.log('[Main] Saving Microsoft mailbox token for user:', userId);
+
         await databaseService.saveOAuthToken(userId, 'microsoft', 'mailbox', {
           access_token: encryptedAccessToken,
           refresh_token: encryptedRefreshToken ?? undefined,

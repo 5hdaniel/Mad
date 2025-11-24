@@ -5,6 +5,7 @@
 
 import databaseService from './databaseService';
 import googleAuthService from './googleAuthService';
+import microsoftAuthService from './microsoftAuthService';
 import { OAuthToken } from '../types/models';
 
 /**
@@ -102,10 +103,11 @@ class ConnectionStatusService {
 
       if (tokenExpiry < now) {
         // Token expired - try to refresh
+        console.log('[ConnectionStatus] Google token expired, attempting refresh...');
         try {
-          // Note: googleAuthService is still a JS file, so we use 'any' type
-          const refreshResult = await (googleAuthService as any).refreshAccessToken(userId);
+          const refreshResult = await googleAuthService.refreshAccessToken(userId);
           if (refreshResult.success) {
+            console.log('[ConnectionStatus] Google token refreshed successfully');
             this.connectionStatus.google = {
               connected: true,
               lastCheck: Date.now(),
@@ -113,21 +115,26 @@ class ConnectionStatusService {
               error: null,
             };
             return this.connectionStatus.google;
+          } else {
+            console.error('[ConnectionStatus] Google token refresh failed:', refreshResult.error);
           }
         } catch (refreshError: any) {
-          this.connectionStatus.google = {
-            connected: false,
-            lastCheck: Date.now(),
-            error: {
-              type: 'TOKEN_REFRESH_FAILED',
-              userMessage: 'Gmail connection expired',
-              action: 'Reconnect your Gmail account',
-              actionHandler: 'reconnect-google',
-              details: refreshError.message,
-            },
-          };
-          return this.connectionStatus.google;
+          console.error('[ConnectionStatus] Google token refresh error:', refreshError);
         }
+
+        // Refresh failed, mark as expired
+        this.connectionStatus.google = {
+          connected: false,
+          lastCheck: Date.now(),
+          error: {
+            type: 'TOKEN_REFRESH_FAILED',
+            userMessage: 'Gmail connection expired',
+            action: 'Reconnect your Gmail account',
+            actionHandler: 'reconnect-google',
+            details: 'Failed to refresh authentication token',
+          },
+        };
+        return this.connectionStatus.google;
       }
 
       // Token is valid
@@ -185,15 +192,36 @@ class ConnectionStatusService {
       const now = new Date();
 
       if (tokenExpiry < now) {
+        // Token expired - try to refresh
+        console.log('[ConnectionStatus] Microsoft token expired, attempting refresh...');
+        try {
+          const refreshResult = await microsoftAuthService.refreshAccessToken(userId);
+          if (refreshResult.success) {
+            console.log('[ConnectionStatus] Microsoft token refreshed successfully');
+            this.connectionStatus.microsoft = {
+              connected: true,
+              lastCheck: Date.now(),
+              email: token.connected_email_address,
+              error: null,
+            };
+            return this.connectionStatus.microsoft;
+          } else {
+            console.error('[ConnectionStatus] Microsoft token refresh failed:', refreshResult.error);
+          }
+        } catch (refreshError: any) {
+          console.error('[ConnectionStatus] Microsoft token refresh error:', refreshError);
+        }
+
+        // Refresh failed, mark as expired
         this.connectionStatus.microsoft = {
           connected: false,
           lastCheck: Date.now(),
           error: {
-            type: 'TOKEN_EXPIRED',
+            type: 'TOKEN_REFRESH_FAILED',
             userMessage: 'Outlook connection expired',
             action: 'Reconnect your Outlook account',
             actionHandler: 'reconnect-microsoft',
-            details: 'Authentication token has expired',
+            details: 'Failed to refresh authentication token',
           },
         };
         return this.connectionStatus.microsoft;

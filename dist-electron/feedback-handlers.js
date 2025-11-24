@@ -11,7 +11,7 @@ exports.registerFeedbackHandlers = void 0;
 const electron_1 = require("electron");
 const databaseService_1 = __importDefault(require("./services/databaseService"));
 // Services (still JS - to be migrated)
-const feedbackLearningService = require('./services/feedbackLearningService');
+const feedbackLearningService = require('./services/feedbackLearningService').default;
 // Import validation utilities
 const validation_1 = require("./utils/validation");
 /**
