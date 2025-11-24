@@ -9,6 +9,7 @@ import gmailFetchService from './gmailFetchService';
 import outlookFetchService from './outlookFetchService';
 import transactionExtractorService from './transactionExtractorService';
 import databaseService from './databaseService';
+import logService from './logService';
 
 // ============================================
 // TYPES
@@ -157,7 +158,7 @@ class TransactionService {
         before: endDate,
       });
 
-      console.log(`[TransactionService] Fetched ${emails.length} emails`);
+      await logService.info(`Fetched ${emails.length} emails`, 'TransactionService.scanAndExtractTransactions', { emailCount: emails.length, userId, provider });
 
       // Step 2: Analyze emails
       if (onProgress) onProgress({ step: 'analyzing', message: `Analyzing ${emails.length} emails...` });
@@ -167,7 +168,7 @@ class TransactionService {
       // Filter to only real estate related emails
       const realEstateEmails = analyzed.filter((a: AnalyzedEmail) => a.isRealEstateRelated);
 
-      console.log(`[TransactionService] Found ${realEstateEmails.length} real estate related emails`);
+      await logService.info(`Found ${realEstateEmails.length} real estate related emails`, 'TransactionService.scanAndExtractTransactions', { realEstateCount: realEstateEmails.length, totalEmails: emails.length });
 
       // Step 3: Group by property
       if (onProgress) onProgress({ step: 'grouping', message: 'Grouping by property...' });
@@ -175,7 +176,7 @@ class TransactionService {
       const grouped = transactionExtractorService.groupByProperty(realEstateEmails);
       const propertyAddresses = Object.keys(grouped);
 
-      console.log(`[TransactionService] Found ${propertyAddresses.length} properties`);
+      await logService.info(`Found ${propertyAddresses.length} properties`, 'TransactionService.scanAndExtractTransactions', { propertyCount: propertyAddresses.length });
 
       // Step 4: Create transactions and save communications
       if (onProgress) onProgress({ step: 'saving', message: 'Saving transactions...' });
@@ -209,7 +210,11 @@ class TransactionService {
         transactions,
       };
     } catch (error) {
-      console.error('[TransactionService] Scan failed:', error);
+      await logService.error('Transaction scan failed', 'TransactionService.scanAndExtractTransactions', {
+        error: error instanceof Error ? error.message : String(error),
+        userId,
+        provider,
+      });
       throw error;
     }
   }
@@ -430,7 +435,11 @@ class TransactionService {
       // Fetch the complete transaction with contacts
       return await this.getTransactionWithContacts(transactionId);
     } catch (error) {
-      console.error('[TransactionService] Failed to create audited transaction:', error);
+      await logService.error('Failed to create audited transaction', 'TransactionService.createAuditedTransaction', {
+        error: error instanceof Error ? error.message : String(error),
+        userId,
+        propertyAddress: data.property_address,
+      });
       throw error;
     }
   }
