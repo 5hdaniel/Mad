@@ -21,8 +21,9 @@ class FeedbackLearningService {
     async detectPatterns(userId, fieldName) {
         // Check cache first
         const cacheKey = `${userId}_${fieldName}`;
-        if (this.patternCache.has(cacheKey)) {
-            return this.patternCache.get(cacheKey);
+        const cached = this.patternCache.get(cacheKey);
+        if (cached) {
+            return cached;
         }
         try {
             // Get recent feedback for this field
@@ -106,7 +107,7 @@ class FeedbackLearningService {
                 const diffDays = Math.round((corrected.getTime() - original.getTime()) / (1000 * 60 * 60 * 24));
                 adjustments.push(diffDays);
             }
-            catch (e) {
+            catch {
                 continue;
             }
         }
@@ -215,7 +216,7 @@ class FeedbackLearningService {
                 const percentDiff = (diff / original) * 100;
                 adjustments.push({ absolute: diff, percent: percentDiff });
             }
-            catch (e) {
+            catch {
                 continue;
             }
         }
@@ -239,7 +240,7 @@ class FeedbackLearningService {
      * Apply pattern to generate suggestion
      * @private
      */
-    _applyPattern(pattern, extractedValue, fieldName) {
+    _applyPattern(pattern, extractedValue, _fieldName) {
         try {
             switch (pattern.type) {
                 case 'date_adjustment': {

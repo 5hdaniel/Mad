@@ -310,7 +310,7 @@ electron_1.ipcMain.handle('trigger-full-disk-access', async () => {
         await fs_1.promises.access(messagesDbPath, fs_1.promises.constants.R_OK);
         return { triggered: true, alreadyGranted: true };
     }
-    catch (error) {
+    catch {
         return { triggered: true, alreadyGranted: false };
     }
 });
@@ -873,7 +873,7 @@ electron_1.ipcMain.handle('outlook-authenticate', async (event, userId) => {
             }
         }
         // Start auth flow - returns authUrl and a promise for the code
-        const { authUrl, codePromise, codeVerifier, scopes } = await microsoftAuthService_1.default.authenticateForMailbox(loginHint);
+        const { authUrl, codePromise, codeVerifier, scopes: _scopes } = await microsoftAuthService_1.default.authenticateForMailbox(loginHint);
         // Open browser with auth URL
         await electron_1.shell.openExternal(authUrl);
         // Wait for user to complete auth in browser (local server will catch redirect)
@@ -1006,7 +1006,7 @@ electron_1.ipcMain.handle('outlook-export-emails', async (event, contacts) => {
         for (let i = 0; i < contacts.length; i++) {
             const contact = contacts[i];
             // Send progress update
-            mainWindow.webContents.send('export-progress', {
+            mainWindow?.webContents.send('export-progress', {
                 stage: 'contact',
                 current: i + 1,
                 total: contacts.length,
@@ -1019,11 +1019,11 @@ electron_1.ipcMain.handle('outlook-export-emails', async (event, contacts) => {
             let textMessageCount = 0;
             let totalEmails = 0;
             let anySuccess = false;
-            let errors = [];
+            const errors = [];
             // 1. Export text messages (if chatId exists or if we have phone/email identifiers)
             if (contact.chatId || contact.phones?.length > 0 || contact.emails?.length > 0) {
                 try {
-                    mainWindow.webContents.send('export-progress', {
+                    mainWindow?.webContents.send('export-progress', {
                         stage: 'text-messages',
                         message: `Exporting text messages for ${contact.name}...`,
                         current: i + 1,
@@ -1131,7 +1131,7 @@ electron_1.ipcMain.handle('outlook-export-emails', async (event, contacts) => {
                         }
                         // Sort all 1:1 messages by date
                         oneOnOneMessages.sort((a, b) => a.date - b.date);
-                        let filesCreated = 0;
+                        let _filesCreated = 0;
                         // Export all 1:1 messages to a single file
                         if (oneOnOneMessages.length > 0) {
                             let exportContent = `1-ON-1 MESSAGES\n`;
@@ -1161,7 +1161,7 @@ electron_1.ipcMain.handle('outlook-export-emails', async (event, contacts) => {
                             // Save 1:1 messages file
                             const oneOnOneFilePath = path_1.default.join(contactFolder, '1-on-1_messages.txt');
                             await fs_1.promises.writeFile(oneOnOneFilePath, exportContent, 'utf8');
-                            filesCreated++;
+                            _filesCreated++;
                             anySuccess = true;
                         }
                         // Export each group chat to its own file
@@ -1196,7 +1196,7 @@ electron_1.ipcMain.handle('outlook-export-emails', async (event, contacts) => {
                             // Save group chat file
                             const groupFilePath = path_1.default.join(contactFolder, fileName);
                             await fs_1.promises.writeFile(groupFilePath, exportContent, 'utf8');
-                            filesCreated++;
+                            _filesCreated++;
                             anySuccess = true;
                         }
                     }
@@ -1212,7 +1212,7 @@ electron_1.ipcMain.handle('outlook-export-emails', async (event, contacts) => {
                     try {
                         const result = await outlookService.exportEmailsToAudit(contact.name, email, exportPath, (progress) => {
                             // Forward progress to renderer
-                            mainWindow.webContents.send('export-progress', {
+                            mainWindow?.webContents.send('export-progress', {
                                 ...progress,
                                 contactName: contact.name,
                                 current: i + 1,

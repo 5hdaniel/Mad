@@ -17,10 +17,9 @@ exports.getRecentChats = getRecentChats;
 const path_1 = __importDefault(require("path"));
 const sqlite3_1 = __importDefault(require("sqlite3"));
 const util_1 = require("util");
-const { macTimestampToDate, getYearsAgoTimestamp } = require('../utils/dateUtils');
+const { getYearsAgoTimestamp } = require('../utils/dateUtils');
 const { normalizePhoneNumber } = require('../utils/phoneUtils');
-const { getMessageText } = require('../utils/messageParser');
-const { MESSAGES_DB_PATH, FIVE_YEARS_IN_MS } = require('../constants');
+const { MESSAGES_DB_PATH } = require('../constants');
 /**
  * Open Messages database connection
  */

@@ -60,7 +60,7 @@ const initializeDatabase = async () => {
 };
 exports.initializeDatabase = initializeDatabase;
 // Google Auth: Start login flow
-const handleGoogleLogin = async (mainWindow) => {
+const handleGoogleLogin = async (_mainWindow) => {
     try {
         console.log('[Main] Starting Google login flow');
         const result = await googleAuthService_1.default.authenticateForLogin();
@@ -128,10 +128,17 @@ const handleGoogleCompleteLogin = async (event, authCode) => {
                 avatar_url: userInfo.picture,
             });
         }
-        // Update last login
+        // Update last login (localUser is guaranteed non-null from the if/else above)
+        if (!localUser) {
+            throw new Error('Local user is unexpectedly null after creation/update');
+        }
         await databaseService_1.default.updateLastLogin(localUser.id);
         // Re-fetch user to get updated last_login_at timestamp
-        localUser = await databaseService_1.default.getUserById(localUser.id);
+        const refreshedUser = await databaseService_1.default.getUserById(localUser.id);
+        if (!refreshedUser) {
+            throw new Error('Failed to retrieve user after update');
+        }
+        localUser = refreshedUser;
         // Save auth token
         await databaseService_1.default.saveOAuthToken(localUser.id, 'google', 'authentication', {
             access_token: encryptedAccessToken,
@@ -381,10 +388,17 @@ const handleMicrosoftLogin = async (mainWindow) => {
                         display_name: userInfo.name,
                     });
                 }
-                // Update last login
+                // Update last login (localUser is guaranteed non-null from the if/else above)
+                if (!localUser) {
+                    throw new Error('Local user is unexpectedly null after creation/update');
+                }
                 await databaseService_1.default.updateLastLogin(localUser.id);
                 // Re-fetch user to get updated last_login_at timestamp
-                localUser = await databaseService_1.default.getUserById(localUser.id);
+                const refreshedUser = await databaseService_1.default.getUserById(localUser.id);
+                if (!refreshedUser) {
+                    throw new Error('Failed to retrieve user after update');
+                }
+                localUser = refreshedUser;
                 // Save auth token
                 const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
                 await databaseService_1.default.saveOAuthToken(localUser.id, 'microsoft', 'authentication', {

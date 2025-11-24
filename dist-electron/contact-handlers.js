@@ -22,7 +22,10 @@ function registerContactHandlers() {
         try {
             console.log('[Main] Getting all imported contacts for user:', userId);
             // Validate input
-            const validatedUserId = (0, validation_1.validateUserId)(userId); // Will throw if invalid, never null
+            const validatedUserId = (0, validation_1.validateUserId)(userId); // Validated, will throw if invalid
+            if (!validatedUserId) {
+                throw new validation_1.ValidationError('User ID validation failed', 'userId');
+            }
             // Get only imported contacts from database
             const importedContacts = await databaseService_1.default.getImportedContactsByUserId(validatedUserId);
             console.log(`[Main] Found ${importedContacts.length} imported contacts`);
@@ -50,7 +53,10 @@ function registerContactHandlers() {
         try {
             console.log('[Main] Getting available contacts for import for user:', userId);
             // Validate input
-            const validatedUserId = (0, validation_1.validateUserId)(userId); // Will throw if invalid, never null
+            const validatedUserId = (0, validation_1.validateUserId)(userId); // Validated, will throw if invalid
+            if (!validatedUserId) {
+                throw new validation_1.ValidationError('User ID validation failed', 'userId');
+            }
             // Get contacts from macOS Contacts app
             const { phoneToContactInfo, status } = await (0, contactsService_1.getContactNames)();
             // Get already imported contact names/emails to filter them out
@@ -61,7 +67,7 @@ function registerContactHandlers() {
             const availableContacts = [];
             const seenContacts = new Set();
             if (phoneToContactInfo && Object.keys(phoneToContactInfo).length > 0) {
-                for (const [phone, contactInfo] of Object.entries(phoneToContactInfo)) {
+                for (const [_phone, contactInfo] of Object.entries(phoneToContactInfo)) {
                     // Use the contact name as unique key to avoid duplicates
                     // (same contact may have multiple phone numbers)
                     const nameLower = contactInfo.name?.toLowerCase();
@@ -110,7 +116,10 @@ function registerContactHandlers() {
         try {
             console.log('[Main] Importing contacts for user:', userId, 'count:', contactsToImport.length);
             // Validate inputs
-            const validatedUserId = (0, validation_1.validateUserId)(userId); // Will throw if invalid, never null
+            const validatedUserId = (0, validation_1.validateUserId)(userId); // Validated, will throw if invalid
+            if (!validatedUserId) {
+                throw new validation_1.ValidationError('User ID validation failed', 'userId');
+            }
             // Validate contacts array
             if (!Array.isArray(contactsToImport)) {
                 throw new validation_1.ValidationError('Contacts to import must be an array', 'contactsToImport');
@@ -163,7 +172,10 @@ function registerContactHandlers() {
         try {
             console.log('[Main] Getting contacts sorted by activity for user:', userId, 'address:', propertyAddress);
             // Validate inputs
-            const validatedUserId = (0, validation_1.validateUserId)(userId); // Will throw if invalid, never null
+            const validatedUserId = (0, validation_1.validateUserId)(userId); // Validated, will throw if invalid
+            if (!validatedUserId) {
+                throw new validation_1.ValidationError('User ID validation failed', 'userId');
+            }
             // Validate propertyAddress (optional)
             const validatedAddress = propertyAddress
                 ? (0, validation_1.validateString)(propertyAddress, 'propertyAddress', { required: false, maxLength: 500 })
@@ -195,7 +207,10 @@ function registerContactHandlers() {
         try {
             console.log('[Main] Creating contact:', contactData);
             // Validate inputs
-            const validatedUserId = (0, validation_1.validateUserId)(userId); // Will throw if invalid, never null
+            const validatedUserId = (0, validation_1.validateUserId)(userId); // Validated, will throw if invalid
+            if (!validatedUserId) {
+                throw new validation_1.ValidationError('User ID validation failed', 'userId');
+            }
             const validatedData = (0, validation_1.validateContactData)(contactData, false);
             const contact = await databaseService_1.default.createContact({
                 user_id: validatedUserId,
@@ -231,7 +246,10 @@ function registerContactHandlers() {
         try {
             console.log('[Main] Updating contact:', contactId, updates);
             // Validate inputs
-            const validatedContactId = (0, validation_1.validateContactId)(contactId); // Will throw if invalid, never null
+            const validatedContactId = (0, validation_1.validateContactId)(contactId); // Validated, will throw if invalid
+            if (!validatedContactId) {
+                throw new validation_1.ValidationError('Contact ID validation failed', 'contactId');
+            }
             const validatedUpdates = (0, validation_1.validateContactData)((0, validation_1.sanitizeObject)(updates || {}), true);
             // Convert null to undefined for TypeScript strict mode
             const updatesData = {
@@ -268,7 +286,10 @@ function registerContactHandlers() {
         try {
             console.log('[Main] Checking if contact can be deleted:', contactId);
             // Validate input
-            const validatedContactId = (0, validation_1.validateContactId)(contactId); // Will throw if invalid, never null
+            const validatedContactId = (0, validation_1.validateContactId)(contactId); // Validated, will throw if invalid
+            if (!validatedContactId) {
+                throw new validation_1.ValidationError('Contact ID validation failed', 'contactId');
+            }
             const transactions = await databaseService_1.default.getTransactionsByContact(validatedContactId);
             return {
                 success: true,
@@ -296,7 +317,10 @@ function registerContactHandlers() {
         try {
             console.log('[Main] Deleting contact:', contactId);
             // Validate input
-            const validatedContactId = (0, validation_1.validateContactId)(contactId); // Will throw if invalid, never null
+            const validatedContactId = (0, validation_1.validateContactId)(contactId); // Validated, will throw if invalid
+            if (!validatedContactId) {
+                throw new validation_1.ValidationError('Contact ID validation failed', 'contactId');
+            }
             // Check if contact has associated transactions
             const check = await databaseService_1.default.getTransactionsByContact(validatedContactId);
             if (check.length > 0) {
@@ -332,7 +356,10 @@ function registerContactHandlers() {
         try {
             console.log('[Main] Removing contact from local database:', contactId);
             // Validate input
-            const validatedContactId = (0, validation_1.validateContactId)(contactId); // Will throw if invalid, never null
+            const validatedContactId = (0, validation_1.validateContactId)(contactId); // Validated, will throw if invalid
+            if (!validatedContactId) {
+                throw new validation_1.ValidationError('Contact ID validation failed', 'contactId');
+            }
             // Check if contact has associated transactions
             const check = await databaseService_1.default.getTransactionsByContact(validatedContactId);
             if (check.length > 0) {

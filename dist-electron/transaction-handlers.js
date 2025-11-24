@@ -26,6 +26,9 @@ const registerTransactionHandlers = (mainWindow) => {
             console.log('[Main] Starting transaction scan for user:', userId);
             // Validate input
             const validatedUserId = (0, validation_1.validateUserId)(userId);
+            if (!validatedUserId) {
+                throw new validation_1.ValidationError('User ID validation failed', 'userId');
+            }
             const sanitizedOptions = (0, validation_1.sanitizeObject)(options || {});
             const result = await transactionService_1.default.scanAndExtractTransactions(validatedUserId, {
                 ...sanitizedOptions,
@@ -60,6 +63,9 @@ const registerTransactionHandlers = (mainWindow) => {
         try {
             // Validate input
             const validatedUserId = (0, validation_1.validateUserId)(userId);
+            if (!validatedUserId) {
+                throw new validation_1.ValidationError('User ID validation failed', 'userId');
+            }
             const transactions = await transactionService_1.default.getTransactions(validatedUserId);
             return {
                 success: true,
@@ -85,6 +91,9 @@ const registerTransactionHandlers = (mainWindow) => {
         try {
             // Validate inputs
             const validatedUserId = (0, validation_1.validateUserId)(userId);
+            if (!validatedUserId) {
+                throw new validation_1.ValidationError('User ID validation failed', 'userId');
+            }
             const validatedData = (0, validation_1.validateTransactionData)(transactionData, false);
             const transaction = await transactionService_1.default.createManualTransaction(validatedUserId, validatedData);
             return {
@@ -111,6 +120,9 @@ const registerTransactionHandlers = (mainWindow) => {
         try {
             // Validate input
             const validatedTransactionId = (0, validation_1.validateTransactionId)(transactionId);
+            if (!validatedTransactionId) {
+                throw new validation_1.ValidationError('Transaction ID validation failed', 'transactionId');
+            }
             const details = await transactionService_1.default.getTransactionDetails(validatedTransactionId);
             if (!details) {
                 return {
@@ -142,6 +154,9 @@ const registerTransactionHandlers = (mainWindow) => {
         try {
             // Validate inputs
             const validatedTransactionId = (0, validation_1.validateTransactionId)(transactionId);
+            if (!validatedTransactionId) {
+                throw new validation_1.ValidationError('Transaction ID validation failed', 'transactionId');
+            }
             const validatedUpdates = (0, validation_1.validateTransactionData)((0, validation_1.sanitizeObject)(updates || {}), true);
             const updated = await transactionService_1.default.updateTransaction(validatedTransactionId, validatedUpdates);
             return {
@@ -168,6 +183,9 @@ const registerTransactionHandlers = (mainWindow) => {
         try {
             // Validate input
             const validatedTransactionId = (0, validation_1.validateTransactionId)(transactionId);
+            if (!validatedTransactionId) {
+                throw new validation_1.ValidationError('Transaction ID validation failed', 'transactionId');
+            }
             await transactionService_1.default.deleteTransaction(validatedTransactionId);
             return {
                 success: true,
@@ -219,6 +237,9 @@ const registerTransactionHandlers = (mainWindow) => {
         try {
             // Validate input
             const validatedTransactionId = (0, validation_1.validateTransactionId)(transactionId);
+            if (!validatedTransactionId) {
+                throw new validation_1.ValidationError('Transaction ID validation failed', 'transactionId');
+            }
             const transaction = await transactionService_1.default.getTransactionWithContacts(validatedTransactionId);
             if (!transaction) {
                 return {
@@ -250,6 +271,9 @@ const registerTransactionHandlers = (mainWindow) => {
         try {
             // Validate inputs
             const validatedTransactionId = (0, validation_1.validateTransactionId)(transactionId);
+            if (!validatedTransactionId) {
+                throw new validation_1.ValidationError('Transaction ID validation failed', 'transactionId');
+            }
             const validatedContactId = (0, validation_1.validateContactId)(contactId);
             // Validate role and roleCategory as strings
             if (!role || typeof role !== 'string' || role.trim().length === 0) {
@@ -288,6 +312,9 @@ const registerTransactionHandlers = (mainWindow) => {
         try {
             // Validate inputs
             const validatedTransactionId = (0, validation_1.validateTransactionId)(transactionId);
+            if (!validatedTransactionId) {
+                throw new validation_1.ValidationError('Transaction ID validation failed', 'transactionId');
+            }
             const validatedContactId = (0, validation_1.validateContactId)(contactId);
             await transactionService_1.default.removeContactFromTransaction(validatedTransactionId, validatedContactId);
             return {
@@ -346,6 +373,9 @@ const registerTransactionHandlers = (mainWindow) => {
             console.log('[Main] Exporting transaction to PDF:', transactionId);
             // Validate inputs
             const validatedTransactionId = (0, validation_1.validateTransactionId)(transactionId);
+            if (!validatedTransactionId) {
+                throw new validation_1.ValidationError('Transaction ID validation failed', 'transactionId');
+            }
             const validatedPath = outputPath ? (0, validation_1.validateFilePath)(outputPath) : null;
             // Get transaction details with communications
             const details = await transactionService_1.default.getTransactionDetails(validatedTransactionId);
@@ -385,6 +415,9 @@ const registerTransactionHandlers = (mainWindow) => {
             console.log('[Main] Enhanced export for transaction:', transactionId, options);
             // Validate inputs
             const validatedTransactionId = (0, validation_1.validateTransactionId)(transactionId);
+            if (!validatedTransactionId) {
+                throw new validation_1.ValidationError('Transaction ID validation failed', 'transactionId');
+            }
             const sanitizedOptions = (0, validation_1.sanitizeObject)(options || {});
             // Get transaction details with communications
             const details = await transactionService_1.default.getTransactionDetails(validatedTransactionId);

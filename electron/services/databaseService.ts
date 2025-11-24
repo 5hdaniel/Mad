@@ -141,7 +141,7 @@ class DatabaseService implements IDatabaseService {
     }
 
     return new Promise((resolve, reject) => {
-      const db = new sqlite3.Database(this.dbPath, (err) => {
+      const db = new sqlite3.Database(this.dbPath as string, (err) => {
         if (err) {
           reject(err);
         } else {
