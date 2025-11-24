@@ -5,10 +5,10 @@ import type {
   OAuthProvider,
 } from '../types';
 
-const gmailFetchService = require('./gmailFetchService');
-const outlookFetchService = require('./outlookFetchService');
-const transactionExtractorService = require('./transactionExtractorService');
-const databaseService = require('./databaseService').default;
+import gmailFetchService from './gmailFetchService';
+import outlookFetchService from './outlookFetchService';
+import transactionExtractorService from './transactionExtractorService';
+import databaseService from './databaseService';
 
 // ============================================
 // TYPES
@@ -533,4 +533,4 @@ class TransactionService {
   }
 }
 
-export = new TransactionService();
+export default new TransactionService();
