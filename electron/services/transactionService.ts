@@ -8,7 +8,7 @@ import type {
 const gmailFetchService = require('./gmailFetchService');
 const outlookFetchService = require('./outlookFetchService');
 const transactionExtractorService = require('./transactionExtractorService');
-const databaseService = require('./databaseService');
+const databaseService = require('./databaseService').default;
 
 // ============================================
 // TYPES
