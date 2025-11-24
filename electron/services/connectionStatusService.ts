@@ -166,6 +166,14 @@ class ConnectionStatusService {
       // Get Microsoft auth token from database
       const token: OAuthToken | null = await databaseService.getOAuthToken(userId, 'microsoft', 'mailbox');
 
+      console.log('[ConnectionStatus] Microsoft token check:', {
+        userId,
+        tokenExists: !!token,
+        hasAccessToken: !!token?.access_token,
+        expiresAt: token?.token_expires_at,
+        email: token?.connected_email_address
+      });
+
       if (!token || !token.access_token) {
         this.connectionStatus.microsoft = {
           connected: false,
@@ -183,6 +191,13 @@ class ConnectionStatusService {
       // Check if token is expired
       const tokenExpiry = new Date(token.token_expires_at || 0);
       const now = new Date();
+
+      console.log('[ConnectionStatus] Token expiry check:', {
+        tokenExpiry: tokenExpiry.toISOString(),
+        now: now.toISOString(),
+        isExpired: tokenExpiry < now,
+        minutesUntilExpiry: (tokenExpiry.getTime() - now.getTime()) / 1000 / 60
+      });
 
       if (tokenExpiry < now) {
         this.connectionStatus.microsoft = {
