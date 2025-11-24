@@ -246,6 +246,7 @@ class TransactionService {
     const addressParts = this._parseAddress(summary.propertyAddress);
 
     const transactionData = {
+      user_id: userId,
       property_address: summary.propertyAddress,
       property_street: addressParts.street,
       property_city: addressParts.city,
@@ -262,7 +263,8 @@ class TransactionService {
       sale_price: summary.salePrice,
     };
 
-    return await databaseService.createTransaction(userId, transactionData);
+    const transaction = await databaseService.createTransaction(transactionData);
+    return transaction.id;
   }
 
   /**
@@ -284,6 +286,7 @@ class TransactionService {
       if (!originalEmail) continue;
 
       const commData = {
+        user_id: userId,
         transaction_id: transactionId,
         communication_type: 'email' as const,
         source: analyzed.from.includes('@gmail') ? 'gmail' : 'outlook',
@@ -306,7 +309,7 @@ class TransactionService {
         is_compliance_related: analyzed.isRealEstateRelated,
       };
 
-      await databaseService.saveCommunication(userId, commData);
+      await databaseService.createCommunication(commData);
     }
   }
 
@@ -330,7 +333,7 @@ class TransactionService {
    * Get all transactions for a user
    */
   async getTransactions(userId: string): Promise<Transaction[]> {
-    return await databaseService.getTransactionsByUserId(userId);
+    return await databaseService.getTransactions({ user_id: userId });
   }
 
   /**
@@ -343,7 +346,7 @@ class TransactionService {
       return null;
     }
 
-    const communications = await databaseService.getCommunicationsByTransactionId(transactionId);
+    const communications = await databaseService.getCommunicationsByTransaction(transactionId);
     const contact_assignments = await databaseService.getTransactionContacts(transactionId);
 
     return {
@@ -360,7 +363,8 @@ class TransactionService {
     userId: string,
     transactionData: Partial<NewTransaction>
   ): Promise<Transaction> {
-    const transactionId = await databaseService.createTransaction(userId, {
+    const transaction = await databaseService.createTransaction({
+      user_id: userId,
       property_address: transactionData.property_address,
       transaction_type: transactionData.transaction_type || null,
       status: transactionData.status || 'active',
@@ -371,7 +375,7 @@ class TransactionService {
       closing_date_confidence: null,
     });
 
-    return await databaseService.getTransactionById(transactionId);
+    return transaction;
   }
 
   /**
@@ -395,7 +399,8 @@ class TransactionService {
       } = data;
 
       // Create the transaction
-      const transactionId = await databaseService.createTransaction(userId, {
+      const transaction = await databaseService.createTransaction({
+        user_id: userId,
         property_address,
         property_street,
         property_city,
@@ -406,6 +411,7 @@ class TransactionService {
         status: 'active',
         closing_date_verified: property_coordinates ? 1 : 0, // Mark as verified if coordinates exist
       });
+      const transactionId = transaction.id;
 
       // Assign all contacts
       if (contact_assignments && contact_assignments.length > 0) {
@@ -473,7 +479,7 @@ class TransactionService {
    * Remove contact from transaction
    */
   async removeContactFromTransaction(transactionId: string, contactId: string): Promise<void> {
-    return await databaseService.removeContactFromTransaction(transactionId, contactId);
+    return await databaseService.unlinkContactFromTransaction(transactionId, contactId);
   }
 
   /**
