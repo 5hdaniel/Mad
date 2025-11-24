@@ -8,6 +8,8 @@ import { google, Auth } from 'googleapis';
 import http from 'http';
 import url from 'url';
 import dotenv from 'dotenv';
+import databaseService from './databaseService';
+import tokenEncryptionService from './tokenEncryptionService';
 
 dotenv.config({ path: '.env.development' });
 
@@ -420,6 +422,55 @@ class GoogleAuthService {
     } catch (error) {
       console.error('[GoogleAuth] Token refresh failed:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Refresh access token for a user (high-level method with database integration)
+   * @param userId - User ID to refresh token for
+   * @returns Success status with new token data
+   */
+  async refreshAccessToken(userId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      console.log('[GoogleAuth] Refreshing access token for user:', userId);
+
+      // Get current token from database
+      const tokenRecord = await databaseService.getOAuthToken(userId, 'google', 'mailbox');
+
+      if (!tokenRecord || !tokenRecord.refresh_token) {
+        console.error('[GoogleAuth] No refresh token found for user');
+        return { success: false, error: 'No refresh token available' };
+      }
+
+      // Decrypt refresh token
+      const decryptedRefreshToken = tokenEncryptionService.decrypt(tokenRecord.refresh_token);
+
+      // Call Google to refresh the token
+      const newTokens = await this.refreshToken(decryptedRefreshToken);
+
+      // Encrypt new access token
+      const encryptedAccessToken = tokenEncryptionService.encrypt(newTokens.access_token);
+
+      // Update database with new tokens
+      // Note: Google typically doesn't return a new refresh token, so we keep the old one
+      await databaseService.saveOAuthToken(userId, 'google', 'mailbox', {
+        access_token: encryptedAccessToken,
+        refresh_token: tokenRecord.refresh_token, // Keep existing refresh token
+        token_expires_at: newTokens.expires_at ?? undefined,
+        scopes_granted: tokenRecord.scopes_granted, // Keep existing scopes
+        connected_email_address: tokenRecord.connected_email_address,
+        mailbox_connected: true,
+      });
+
+      console.log('[GoogleAuth] Token refreshed successfully. New expiry:', newTokens.expires_at);
+
+      return { success: true };
+    } catch (error) {
+      console.error('[GoogleAuth] Failed to refresh access token:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
     }
   }
 
