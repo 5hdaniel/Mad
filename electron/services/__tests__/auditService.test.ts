@@ -254,9 +254,9 @@ describe('AuditService', () => {
       expect(auditService.getPendingSyncCount()).toBe(0);
     });
 
-    // SKIPPED: This test has timing issues with the async sync behavior
-    it.skip('should queue logs when offline (sync fails)', async () => {
-      // Set up failed sync BEFORE logging (so the immediate sync in log() also fails)
+    it('should queue logs when offline (sync fails)', async () => {
+      // Clear any previous mock implementations and set up rejection
+      mockSupabaseService.batchInsertAuditLogs.mockReset();
       mockSupabaseService.batchInsertAuditLogs.mockRejectedValue(new Error('Network error'));
 
       const entry = {
@@ -268,14 +268,25 @@ describe('AuditService', () => {
 
       await auditService.log(entry);
 
-      // Allow async sync attempt to complete
-      await new Promise(resolve => setTimeout(resolve, 10));
+      // The log() method calls syncToCloud() non-blocking via .catch()
+      // We need to let the event loop process the async sync attempt
+      // Use multiple setTimeout(0) calls to ensure all microtasks are processed
+      await new Promise(resolve => setTimeout(resolve, 0));
+      await new Promise(resolve => setTimeout(resolve, 0));
+      await new Promise(resolve => setTimeout(resolve, 0));
 
-      // Manually trigger sync again
+      // Entry should still be queued after failed sync
+      expect(auditService.getPendingSyncCount()).toBe(1);
+
+      // Verify the sync was actually attempted
+      expect(mockSupabaseService.batchInsertAuditLogs).toHaveBeenCalledTimes(1);
+
+      // Manually trigger sync again to verify it still fails
       await auditService.syncToCloud();
 
-      // Entry should still be queued
+      // Entry should still be queued after second failed attempt
       expect(auditService.getPendingSyncCount()).toBe(1);
+      expect(mockSupabaseService.batchInsertAuditLogs).toHaveBeenCalledTimes(2);
     });
 
     it('should not sync if no pending logs', async () => {

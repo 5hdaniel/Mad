@@ -135,9 +135,13 @@ describe('App', () => {
     });
   });
 
-  // SKIPPED: These logout tests have complex UI interaction issues
-  // The profile modal/logout flow isn't triggering properly in tests
-  describe.skip('Logout', () => {
+  describe('Logout', () => {
+    beforeEach(() => {
+      // Mock system API calls used by Profile component
+      window.api.system.checkGoogleConnection.mockResolvedValue({ connected: false, email: null });
+      window.api.system.checkMicrosoftConnection.mockResolvedValue({ connected: false, email: null });
+    });
+
     it('should clear all auth state on logout', async () => {
       window.api.auth.getCurrentUser.mockResolvedValue({
         success: true,
@@ -157,13 +161,18 @@ describe('App', () => {
         expect(screen.getByText(/dashboard/i)).toBeInTheDocument();
       });
 
-      // Click profile button (uses user initial)
+      // Click profile button (uses user initial) - title includes full text
       const profileButton = screen.getByTitle(/Test User/i);
       await userEvent.click(profileButton);
 
-      // Find and click logout button in profile modal
-      const logoutButton = await screen.findByRole('button', { name: /log out|sign out/i });
-      await userEvent.click(logoutButton);
+      // Wait for profile modal to appear and find "Sign Out" button
+      const signOutButton = await screen.findByRole('button', { name: /Sign Out/i });
+      await userEvent.click(signOutButton);
+
+      // Profile has a two-step logout: first click shows confirmation dialog
+      // Now click "Sign Out" again in the confirmation dialog
+      const confirmSignOutButton = await screen.findByRole('button', { name: /Sign Out/i });
+      await userEvent.click(confirmSignOutButton);
 
       // Should call logout API
       expect(window.api.auth.logout).toHaveBeenCalledWith('test-token');
@@ -195,8 +204,13 @@ describe('App', () => {
       const profileButton = screen.getByTitle(/Test User/i);
       await userEvent.click(profileButton);
 
-      const logoutButton = await screen.findByRole('button', { name: /log out|sign out/i });
-      await userEvent.click(logoutButton);
+      // Wait for profile modal and click Sign Out
+      const signOutButton = await screen.findByRole('button', { name: /Sign Out/i });
+      await userEvent.click(signOutButton);
+
+      // Click Sign Out again in confirmation dialog
+      const confirmSignOutButton = await screen.findByRole('button', { name: /Sign Out/i });
+      await userEvent.click(confirmSignOutButton);
 
       // Should still return to login even if API fails
       await waitFor(() => {
