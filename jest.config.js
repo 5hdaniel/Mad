@@ -52,6 +52,25 @@ module.exports = {
       lines: 45,
       statements: 45,
     },
+    // Per-path thresholds - enforce higher coverage where it matters most
+    './src/utils/': {
+      branches: 80,
+      functions: 80,
+      lines: 80,
+      statements: 80,
+    },
+    './src/hooks/': {
+      branches: 60,
+      functions: 80,
+      lines: 80,
+      statements: 80,
+    },
+    './electron/utils/': {
+      branches: 50,
+      functions: 60,
+      lines: 55,
+      statements: 55,
+    },
   },
 
   // Test match patterns
