@@ -5,37 +5,65 @@ import '@testing-library/jest-dom';
 if (typeof window !== 'undefined') {
   global.window = global.window || {};
   global.window.api = {
-  auth: {
-    loginWithGoogle: jest.fn(),
-    loginWithMicrosoft: jest.fn(),
-    logout: jest.fn(),
-    getCurrentUser: jest.fn(),
-  },
-  transactions: {
-    getAll: jest.fn(),
-    create: jest.fn(),
-    createAudited: jest.fn(),
-    update: jest.fn(),
-    delete: jest.fn(),
-  },
-  contacts: {
-    getAll: jest.fn(),
-    getSortedByActivity: jest.fn(),
-    create: jest.fn(),
-    update: jest.fn(),
-    checkCanDelete: jest.fn(),
-    delete: jest.fn(),
-    remove: jest.fn(),
-  },
-  system: {
-    checkFullDiskAccess: jest.fn(),
-    checkContactsPermission: jest.fn(),
-    checkAllPermissions: jest.fn(),
-    checkGoogleConnection: jest.fn(),
-    checkMicrosoftConnection: jest.fn(),
-    checkAllConnections: jest.fn(),
-    healthCheck: jest.fn(),
-  },
+    auth: {
+      loginWithGoogle: jest.fn(),
+      loginWithMicrosoft: jest.fn(),
+      logout: jest.fn(),
+      getCurrentUser: jest.fn(),
+      acceptTerms: jest.fn(),
+      googleLogin: jest.fn(),
+      googleCompleteLogin: jest.fn(),
+      microsoftLogin: jest.fn(),
+      microsoftCompleteLogin: jest.fn(),
+      googleConnectMailbox: jest.fn(),
+      microsoftConnectMailbox: jest.fn(),
+    },
+    transactions: {
+      getAll: jest.fn(),
+      create: jest.fn(),
+      createAudited: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn(),
+      scan: jest.fn(),
+      getDetails: jest.fn(),
+      assignContact: jest.fn(),
+      removeContact: jest.fn(),
+    },
+    contacts: {
+      getAll: jest.fn(),
+      getSortedByActivity: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+      checkCanDelete: jest.fn(),
+      delete: jest.fn(),
+      remove: jest.fn(),
+    },
+    system: {
+      checkFullDiskAccess: jest.fn(),
+      checkContactsPermission: jest.fn(),
+      checkAllPermissions: jest.fn(),
+      checkGoogleConnection: jest.fn(),
+      checkMicrosoftConnection: jest.fn(),
+      checkAllConnections: jest.fn(),
+      healthCheck: jest.fn(),
+      openPrivacyPane: jest.fn(),
+    },
+    address: {
+      initialize: jest.fn(),
+      getSuggestions: jest.fn(),
+      getDetails: jest.fn(),
+    },
+    preferences: {
+      get: jest.fn(),
+      update: jest.fn(),
+    },
+    shell: {
+      openExternal: jest.fn(),
+    },
+    onTransactionScanProgress: jest.fn(() => jest.fn()),
+    onGoogleMailboxConnected: jest.fn(() => jest.fn()),
+    onMicrosoftMailboxConnected: jest.fn(() => jest.fn()),
+    onMicrosoftLoginComplete: jest.fn(() => jest.fn()),
   };
 
   // Mock electron for tests
@@ -44,6 +72,15 @@ if (typeof window !== 'undefined') {
     getMacOSVersion: jest.fn(),
     checkPermissions: jest.fn(),
     openSystemSettings: jest.fn(),
+    checkAppLocation: jest.fn(),
+    getConversations: jest.fn(),
+    outlookInitialize: jest.fn(),
+    outlookIsAuthenticated: jest.fn(),
+    outlookAuthenticate: jest.fn(),
+    outlookGetUserEmail: jest.fn(),
+    outlookExportEmails: jest.fn(),
+    openFolder: jest.fn(),
+    onExportProgress: jest.fn(() => jest.fn()),
   };
 }
 

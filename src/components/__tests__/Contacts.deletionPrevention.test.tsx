@@ -12,12 +12,40 @@
 
 import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import Contacts from '../Contacts';
 
 describe('Contacts - Deletion Prevention', () => {
   const mockUserId = 'user-123';
   const mockOnClose = jest.fn();
+
+  const mockContacts = [
+    {
+      id: 'contact-1',
+      name: 'John Doe',
+      email: 'john@example.com',
+      phone: '555-1234',
+      company: 'ABC Real Estate',
+      source: 'manual',
+    },
+    {
+      id: 'contact-2',
+      name: 'Jane Smith',
+      email: 'jane@example.com',
+      phone: '555-5678',
+      company: 'XYZ Realty',
+      source: 'email',
+    },
+    {
+      id: 'contact-3',
+      name: 'Bob Wilson',
+      email: 'bob@example.com',
+      phone: null,
+      company: 'Wilson & Co',
+      source: 'contacts_app',
+    },
+  ];
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -31,20 +59,9 @@ describe('Contacts - Deletion Prevention', () => {
 
   describe('Component rendering and API integration', () => {
     it('should render contacts list when loaded', async () => {
-      const mockContacts = [
-        {
-          id: 'contact-1',
-          name: 'John Doe',
-          email: 'john@example.com',
-          phone: '555-1234',
-          company: 'ABC Real Estate',
-          source: 'manual',
-        },
-      ];
-
       window.api.contacts.getAll.mockResolvedValue({
         success: true,
-        contacts: mockContacts,
+        contacts: [mockContacts[0]],
       });
 
       render(<Contacts userId={mockUserId} onClose={mockOnClose} />);
@@ -62,6 +79,102 @@ describe('Contacts - Deletion Prevention', () => {
       // Verify the API endpoint exists (set up in tests/setup.js)
       expect(window.api.contacts.checkCanDelete).toBeDefined();
       expect(typeof window.api.contacts.checkCanDelete).toBe('function');
+    });
+
+    it('should show loading state initially', () => {
+      window.api.contacts.getAll.mockImplementation(
+        () => new Promise((resolve) => setTimeout(resolve, 1000))
+      );
+
+      render(<Contacts userId={mockUserId} onClose={mockOnClose} />);
+
+      // Loading indicator should be present
+      expect(document.querySelector('.animate-spin')).toBeInTheDocument();
+    });
+
+    it('should show error when contacts fail to load', async () => {
+      window.api.contacts.getAll.mockResolvedValue({
+        success: false,
+        error: 'Failed to load contacts',
+      });
+
+      render(<Contacts userId={mockUserId} onClose={mockOnClose} />);
+
+      await waitFor(() => {
+        expect(screen.getByText(/failed to load contacts/i)).toBeInTheDocument();
+      });
+    });
+
+    it('should display contact count in header', async () => {
+      window.api.contacts.getAll.mockResolvedValue({
+        success: true,
+        contacts: mockContacts,
+      });
+
+      render(<Contacts userId={mockUserId} onClose={mockOnClose} />);
+
+      await waitFor(() => {
+        expect(screen.getByText(/3 contacts total/i)).toBeInTheDocument();
+      });
+    });
+
+    it('should filter contacts by search query', async () => {
+      window.api.contacts.getAll.mockResolvedValue({
+        success: true,
+        contacts: mockContacts,
+      });
+
+      render(<Contacts userId={mockUserId} onClose={mockOnClose} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('John Doe')).toBeInTheDocument();
+      });
+
+      const searchInput = screen.getByPlaceholderText(/search contacts/i);
+      await userEvent.type(searchInput, 'Jane');
+
+      // Only Jane should be visible
+      expect(screen.getByText('Jane Smith')).toBeInTheDocument();
+      expect(screen.queryByText('John Doe')).not.toBeInTheDocument();
+      expect(screen.queryByText('Bob Wilson')).not.toBeInTheDocument();
+    });
+
+    it('should filter contacts by email', async () => {
+      window.api.contacts.getAll.mockResolvedValue({
+        success: true,
+        contacts: mockContacts,
+      });
+
+      render(<Contacts userId={mockUserId} onClose={mockOnClose} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('John Doe')).toBeInTheDocument();
+      });
+
+      const searchInput = screen.getByPlaceholderText(/search contacts/i);
+      await userEvent.type(searchInput, 'bob@example');
+
+      expect(screen.getByText('Bob Wilson')).toBeInTheDocument();
+      expect(screen.queryByText('John Doe')).not.toBeInTheDocument();
+    });
+
+    it('should filter contacts by company', async () => {
+      window.api.contacts.getAll.mockResolvedValue({
+        success: true,
+        contacts: mockContacts,
+      });
+
+      render(<Contacts userId={mockUserId} onClose={mockOnClose} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('John Doe')).toBeInTheDocument();
+      });
+
+      const searchInput = screen.getByPlaceholderText(/search contacts/i);
+      await userEvent.type(searchInput, 'Realty');
+
+      expect(screen.getByText('Jane Smith')).toBeInTheDocument();
+      expect(screen.queryByText('John Doe')).not.toBeInTheDocument();
     });
   });
 
@@ -204,6 +317,105 @@ describe('Contacts - Deletion Prevention', () => {
 
       expect(result.success).toBe(false);
       expect(result.canDelete).toBe(false);
+    });
+
+    it('should allow deletion via delete API when contact has no transactions', async () => {
+      window.api.contacts.delete.mockResolvedValue({
+        success: true,
+      });
+
+      const result = await window.api.contacts.delete('contact-1');
+
+      expect(result.success).toBe(true);
+    });
+
+    it('should allow removal via remove API when contact has no transactions', async () => {
+      window.api.contacts.remove.mockResolvedValue({
+        success: true,
+      });
+
+      const result = await window.api.contacts.remove('contact-1');
+
+      expect(result.success).toBe(true);
+    });
+  });
+
+  describe('Navigation', () => {
+    it('should call onClose when back button is clicked', async () => {
+      window.api.contacts.getAll.mockResolvedValue({
+        success: true,
+        contacts: mockContacts,
+      });
+
+      render(<Contacts userId={mockUserId} onClose={mockOnClose} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('John Doe')).toBeInTheDocument();
+      });
+
+      const backButton = screen.getByRole('button', { name: /back to dashboard/i });
+      await userEvent.click(backButton);
+
+      expect(mockOnClose).toHaveBeenCalled();
+    });
+  });
+
+  describe('Contact Source Badges', () => {
+    it('should display Manual badge for manual contacts', async () => {
+      window.api.contacts.getAll.mockResolvedValue({
+        success: true,
+        contacts: [mockContacts[0]], // source: 'manual'
+      });
+
+      render(<Contacts userId={mockUserId} onClose={mockOnClose} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('John Doe')).toBeInTheDocument();
+      });
+
+      expect(screen.getByText('Manual')).toBeInTheDocument();
+    });
+
+    it('should display From Email badge for email contacts', async () => {
+      window.api.contacts.getAll.mockResolvedValue({
+        success: true,
+        contacts: [mockContacts[1]], // source: 'email'
+      });
+
+      render(<Contacts userId={mockUserId} onClose={mockOnClose} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Jane Smith')).toBeInTheDocument();
+      });
+
+      expect(screen.getByText('From Email')).toBeInTheDocument();
+    });
+
+    it('should display Contacts App badge for contacts_app contacts', async () => {
+      window.api.contacts.getAll.mockResolvedValue({
+        success: true,
+        contacts: [mockContacts[2]], // source: 'contacts_app'
+      });
+
+      render(<Contacts userId={mockUserId} onClose={mockOnClose} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Bob Wilson')).toBeInTheDocument();
+      });
+
+      expect(screen.getByText('Contacts App')).toBeInTheDocument();
+    });
+  });
+
+  describe('API availability', () => {
+    it('should have all required contact APIs available', () => {
+      expect(window.api.contacts.getAll).toBeDefined();
+      expect(window.api.contacts.create).toBeDefined();
+      expect(window.api.contacts.update).toBeDefined();
+      expect(window.api.contacts.delete).toBeDefined();
+      expect(window.api.contacts.remove).toBeDefined();
+      expect(window.api.contacts.checkCanDelete).toBeDefined();
+      expect(window.api.contacts.getSortedByActivity).toBeDefined();
     });
   });
 });
