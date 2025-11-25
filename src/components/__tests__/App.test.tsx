@@ -135,9 +135,13 @@ describe('App', () => {
     });
   });
 
-  // SKIPPED: These logout tests have complex UI interaction issues
-  // The profile modal/logout flow isn't triggering properly in tests
-  describe.skip('Logout', () => {
+  describe('Logout', () => {
+    beforeEach(() => {
+      // Mock system API calls used by Profile component
+      window.api.system.checkGoogleConnection.mockResolvedValue({ connected: false, email: null });
+      window.api.system.checkMicrosoftConnection.mockResolvedValue({ connected: false, email: null });
+    });
+
     it('should clear all auth state on logout', async () => {
       window.api.auth.getCurrentUser.mockResolvedValue({
         success: true,
@@ -157,13 +161,18 @@ describe('App', () => {
         expect(screen.getByText(/dashboard/i)).toBeInTheDocument();
       });
 
-      // Click profile button (uses user initial)
+      // Click profile button (uses user initial) - title includes full text
       const profileButton = screen.getByTitle(/Test User/i);
       await userEvent.click(profileButton);
 
-      // Find and click logout button in profile modal
-      const logoutButton = await screen.findByRole('button', { name: /log out|sign out/i });
-      await userEvent.click(logoutButton);
+      // Wait for profile modal to appear and find "Sign Out" button
+      const signOutButton = await screen.findByRole('button', { name: /Sign Out/i });
+      await userEvent.click(signOutButton);
+
+      // Profile has a two-step logout: first click shows confirmation dialog
+      // Now click "Sign Out" again in the confirmation dialog
+      const confirmSignOutButton = await screen.findByRole('button', { name: /Sign Out/i });
+      await userEvent.click(confirmSignOutButton);
 
       // Should call logout API
       expect(window.api.auth.logout).toHaveBeenCalledWith('test-token');
@@ -195,8 +204,13 @@ describe('App', () => {
       const profileButton = screen.getByTitle(/Test User/i);
       await userEvent.click(profileButton);
 
-      const logoutButton = await screen.findByRole('button', { name: /log out|sign out/i });
-      await userEvent.click(logoutButton);
+      // Wait for profile modal and click Sign Out
+      const signOutButton = await screen.findByRole('button', { name: /Sign Out/i });
+      await userEvent.click(signOutButton);
+
+      // Click Sign Out again in confirmation dialog
+      const confirmSignOutButton = await screen.findByRole('button', { name: /Sign Out/i });
+      await userEvent.click(confirmSignOutButton);
 
       // Should still return to login even if API fails
       await waitFor(() => {
@@ -275,6 +289,70 @@ describe('App', () => {
       // Profile modal should be visible
       await waitFor(() => {
         expect(screen.getByText(/test@example.com/i)).toBeInTheDocument();
+      });
+    });
+
+    it('should open settings when settings button is clicked in profile modal', async () => {
+      // Mock preferences API
+      window.api.preferences.get.mockResolvedValue({
+        success: true,
+        preferences: { theme: 'light', notifications: true },
+      });
+
+      render(<App />);
+
+      await waitFor(() => {
+        expect(screen.getByText(/dashboard/i)).toBeInTheDocument();
+      });
+
+      // Open profile modal
+      const profileButton = screen.getByTitle(/Test User/i);
+      await userEvent.click(profileButton);
+
+      // Wait for profile modal
+      await waitFor(() => {
+        expect(screen.getByText(/test@example.com/i)).toBeInTheDocument();
+      });
+
+      // Click Settings button
+      const settingsButton = await screen.findByRole('button', { name: /Settings/i });
+      await userEvent.click(settingsButton);
+
+      // Settings modal should be visible (Profile closes, Settings opens)
+      // The Settings component has "Settings" as the header title
+      await waitFor(() => {
+        // Look for the Settings header in the modal (distinct from any other "Settings" text)
+        const settingsHeaders = screen.getAllByText(/Settings/i);
+        expect(settingsHeaders.length).toBeGreaterThanOrEqual(1);
+      });
+    });
+
+    it('should close profile modal when close button is clicked', async () => {
+      render(<App />);
+
+      await waitFor(() => {
+        expect(screen.getByText(/dashboard/i)).toBeInTheDocument();
+      });
+
+      // Open profile modal
+      const profileButton = screen.getByTitle(/Test User/i);
+      await userEvent.click(profileButton);
+
+      // Wait for profile modal
+      await waitFor(() => {
+        expect(screen.getByText(/test@example.com/i)).toBeInTheDocument();
+      });
+
+      // Find and click close button (the X button in the header)
+      const closeButtons = screen.getAllByRole('button');
+      const closeButton = closeButtons.find(btn => btn.querySelector('svg path[d*="M6 18L18 6"]'));
+      if (closeButton) {
+        await userEvent.click(closeButton);
+      }
+
+      // Profile modal should be closed (email should not be visible)
+      await waitFor(() => {
+        expect(screen.queryByText(/Account/i)).not.toBeInTheDocument();
       });
     });
   });

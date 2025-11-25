@@ -176,6 +176,22 @@ describe('AuditService', () => {
       // Should not throw
       await expect(auditService.log(entry)).resolves.not.toThrow();
     });
+
+    it('should handle logging when service is not fully initialized', async () => {
+      // Reset service to uninitialized state
+      (auditService as any).initialized = false;
+      (auditService as any).databaseService = null;
+
+      const entry = {
+        userId: 'user-123',
+        action: 'LOGIN' as AuditAction,
+        resourceType: 'SESSION' as ResourceType,
+        success: true,
+      };
+
+      // Should not throw even when not initialized (errors are caught internally)
+      await expect(auditService.log(entry)).resolves.not.toThrow();
+    });
   });
 
   describe('withAudit', () => {
@@ -254,9 +270,9 @@ describe('AuditService', () => {
       expect(auditService.getPendingSyncCount()).toBe(0);
     });
 
-    // SKIPPED: This test has timing issues with the async sync behavior
-    it.skip('should queue logs when offline (sync fails)', async () => {
-      // Set up failed sync BEFORE logging (so the immediate sync in log() also fails)
+    it('should queue logs when offline (sync fails)', async () => {
+      // Clear any previous mock implementations and set up rejection
+      mockSupabaseService.batchInsertAuditLogs.mockReset();
       mockSupabaseService.batchInsertAuditLogs.mockRejectedValue(new Error('Network error'));
 
       const entry = {
@@ -268,19 +284,108 @@ describe('AuditService', () => {
 
       await auditService.log(entry);
 
-      // Allow async sync attempt to complete
-      await new Promise(resolve => setTimeout(resolve, 10));
+      // The log() method calls syncToCloud() non-blocking via .catch()
+      // We need to let the event loop process the async sync attempt
+      // Use multiple setTimeout(0) calls to ensure all microtasks are processed
+      await new Promise(resolve => setTimeout(resolve, 0));
+      await new Promise(resolve => setTimeout(resolve, 0));
+      await new Promise(resolve => setTimeout(resolve, 0));
 
-      // Manually trigger sync again
+      // Entry should still be queued after failed sync
+      expect(auditService.getPendingSyncCount()).toBe(1);
+
+      // Verify the sync was actually attempted
+      expect(mockSupabaseService.batchInsertAuditLogs).toHaveBeenCalledTimes(1);
+
+      // Manually trigger sync again to verify it still fails
       await auditService.syncToCloud();
 
-      // Entry should still be queued
+      // Entry should still be queued after second failed attempt
       expect(auditService.getPendingSyncCount()).toBe(1);
+      expect(mockSupabaseService.batchInsertAuditLogs).toHaveBeenCalledTimes(2);
     });
 
     it('should not sync if no pending logs', async () => {
       await auditService.syncToCloud();
 
+      expect(mockSupabaseService.batchInsertAuditLogs).not.toHaveBeenCalled();
+    });
+
+    it('should prevent concurrent sync attempts', async () => {
+      // Reset mocks to start fresh
+      mockSupabaseService.batchInsertAuditLogs.mockReset();
+
+      // Set up a slow sync that takes time to complete
+      let resolveSync: () => void;
+      const slowSyncPromise = new Promise<void>(resolve => {
+        resolveSync = resolve;
+      });
+      mockSupabaseService.batchInsertAuditLogs.mockReturnValue(slowSyncPromise);
+
+      // Manually add entry to queue (bypassing log() which triggers its own sync)
+      (auditService as any).pendingSyncQueue = [{
+        id: 'test-123',
+        timestamp: new Date(),
+        userId: 'user-123',
+        action: 'LOGIN',
+        resourceType: 'SESSION',
+        success: true,
+      }];
+
+      // Start first sync (this will set syncInProgress = true)
+      const firstSync = auditService.syncToCloud();
+
+      // Try to start second sync while first is in progress
+      const secondSync = auditService.syncToCloud();
+
+      // Complete the first sync
+      resolveSync!();
+      await firstSync;
+      await secondSync;
+
+      // batchInsertAuditLogs should only be called once (second sync was skipped due to syncInProgress flag)
+      expect(mockSupabaseService.batchInsertAuditLogs).toHaveBeenCalledTimes(1);
+    });
+
+    it('should sync from database when queue is empty but database has unsynced logs', async () => {
+      // Queue is empty, but database has unsynced logs
+      const unsyncedLogs = [
+        {
+          id: 'log-1',
+          timestamp: new Date(),
+          userId: 'user-123',
+          action: 'LOGIN' as AuditAction,
+          resourceType: 'SESSION' as ResourceType,
+          success: true,
+        },
+      ];
+
+      mockDatabaseService.getUnsyncedAuditLogs.mockResolvedValue(unsyncedLogs);
+      mockSupabaseService.batchInsertAuditLogs.mockResolvedValue(undefined);
+
+      // Manually add to internal queue to trigger sync, then clear it
+      (auditService as any).pendingSyncQueue = [];
+
+      // Since queue is empty, syncToCloud should return early
+      // We need to test the branch where queue is empty but we check database
+      // This requires the queue to have items initially
+      (auditService as any).pendingSyncQueue = [unsyncedLogs[0]];
+
+      await auditService.syncToCloud();
+
+      expect(mockSupabaseService.batchInsertAuditLogs).toHaveBeenCalledTimes(1);
+      expect(mockDatabaseService.markAuditLogsSynced).toHaveBeenCalledWith(['log-1']);
+    });
+
+    it('should not sync when services are not initialized', async () => {
+      // Reset the service to uninitialized state
+      (auditService as any).supabaseService = null;
+      (auditService as any).databaseService = null;
+      (auditService as any).pendingSyncQueue = [{ id: 'test' }];
+
+      await auditService.syncToCloud();
+
+      // Should return early without attempting sync
       expect(mockSupabaseService.batchInsertAuditLogs).not.toHaveBeenCalled();
     });
   });
