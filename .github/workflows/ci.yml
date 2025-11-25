@@ -126,10 +126,44 @@ jobs:
 
       - name: Package for macOS
         if: matrix.os == 'macos-latest'
-        run: npm run package
+        run: |
+          echo "::group::Package Configuration"
+          echo "Checking code signing configuration..."
+          if [ -n "$MACOS_CERT" ]; then
+            echo "✓ Code signing certificate: configured"
+            echo "✓ Certificate password: $([ -n "$MACOS_CERT_PASSWORD" ] && echo 'configured' || echo 'not set')"
+            echo "✓ Apple ID: $([ -n "$APPLE_ID" ] && echo 'configured' || echo 'not set')"
+            echo "✓ Apple Team ID: $([ -n "$APPLE_TEAM_ID" ] && echo 'configured' || echo 'not set')"
+            echo "::endgroup::"
+            echo ""
+            echo "Building signed package..."
+            export CSC_LINK="$MACOS_CERT"
+            export CSC_KEY_PASSWORD="$MACOS_CERT_PASSWORD"
+            if ! npm run package 2>&1 | tee package.log; then
+              echo "::error::Package build failed. Check package.log for details."
+              cat package.log
+              exit 1
+            fi
+          else
+            echo "✗ Code signing certificate: not configured"
+            echo "::warning::Building unsigned package - code signing secrets not configured"
+            echo "::endgroup::"
+            echo ""
+            echo "Building unsigned package..."
+            export CSC_IDENTITY_AUTO_DISCOVERY=false
+            if ! npm run package:unsigned 2>&1 | tee package.log; then
+              echo "::error::Unsigned package build failed. Check package.log for details."
+              cat package.log
+              exit 1
+            fi
+          fi
+          echo ""
+          echo "::group::Build Artifacts"
+          ls -la dist/*.dmg dist/*.zip 2>/dev/null || echo "No package artifacts found"
+          echo "::endgroup::"
         env:
-          CSC_LINK: ${{ secrets.MACOS_CERTIFICATE }}
-          CSC_KEY_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_CERT: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
