@@ -61,7 +61,7 @@ interface AuthProviderProps {
  * AuthProvider component
  * Wraps the application and provides authentication state and actions
  */
-export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
+export function AuthProvider({ children }: AuthProviderProps): React.ReactElement {
   const [state, setState] = useState<AuthState>(defaultAuthState);
 
   /**
@@ -72,10 +72,20 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
       try {
         const result = await window.api.auth.getCurrentUser();
         if (result.success && result.user) {
+          // Convert user to ensure terms_accepted_at is string or undefined
+          const user: User = {
+            id: result.user.id,
+            email: result.user.email,
+            display_name: result.user.display_name,
+            avatar_url: result.user.avatar_url,
+            terms_accepted_at: result.user.terms_accepted_at instanceof Date
+              ? result.user.terms_accepted_at.toISOString()
+              : result.user.terms_accepted_at,
+          };
           setState({
             isAuthenticated: true,
             isLoading: false,
-            currentUser: result.user,
+            currentUser: user,
             sessionToken: result.sessionToken ?? null,
             authProvider: (result.provider ?? null) as OAuthProvider | null,
             subscription: result.subscription ?? undefined,
