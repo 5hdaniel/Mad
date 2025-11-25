@@ -17,6 +17,7 @@ import tokenEncryptionService from './services/tokenEncryptionService';
 import sessionService from './services/sessionService';
 import rateLimitService from './services/rateLimitService';
 import sessionSecurityService from './services/sessionSecurityService';
+import auditService from './services/auditService';
 import logService from './services/logService';
 
 // Import types
@@ -106,12 +107,17 @@ export const initializeDatabase = async (): Promise<void> => {
   try {
     await databaseService.initialize();
     await logService.info('Database initialized', 'AuthHandlers');
+
+    // Initialize audit service with dependencies
+    auditService.initialize(databaseService, supabaseService);
+    await logService.info('Audit service initialized', 'AuthHandlers');
   } catch (error) {
     await logService.error(
       'Failed to initialize database',
       'AuthHandlers',
       { error: error instanceof Error ? error.message : 'Unknown error' }
     );
+    throw error;
   }
 };
 
@@ -241,7 +247,10 @@ const handleGoogleCompleteLogin = async (event: IpcMainInvokeEvent, authCode: st
       app.getVersion()
     );
 
-    await logService.info('Google login completed successfully', 'AuthHandlers');
+    await logService.info('Google login completed successfully', 'AuthHandlers', {
+      userId: localUser.id,
+      provider: 'google',
+    });
 
     // Check if user needs to accept terms (new user or outdated versions)
     const isNewUser = needsToAcceptTerms(localUser);
@@ -260,6 +269,17 @@ const handleGoogleCompleteLogin = async (event: IpcMainInvokeEvent, authCode: st
     // Record successful login for rate limiting
     await rateLimitService.recordAttempt(localUser.email, true);
 
+    // Audit log successful login
+    await auditService.log({
+      userId: localUser.id,
+      sessionId: sessionToken,
+      action: 'LOGIN',
+      resourceType: 'SESSION',
+      resourceId: sessionToken,
+      metadata: { provider: 'google', isNewUser },
+      success: true,
+    });
+
     return {
       success: true,
       user: localUser,
@@ -273,6 +293,17 @@ const handleGoogleCompleteLogin = async (event: IpcMainInvokeEvent, authCode: st
       'AuthHandlers',
       { error: error instanceof Error ? error.message : 'Unknown error' }
     );
+
+    // Audit log failed login
+    await auditService.log({
+      userId: 'unknown',
+      action: 'LOGIN_FAILED',
+      resourceType: 'SESSION',
+      metadata: { provider: 'google', error: error instanceof Error ? error.message : 'Unknown error' },
+      success: false,
+      errorMessage: error instanceof Error ? error.message : 'Unknown error',
+    });
+
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -366,7 +397,19 @@ const handleGoogleConnectMailbox = async (mainWindow: BrowserWindow | null, user
           mailbox_connected: true,
         });
 
-        await logService.info('Google mailbox connection completed successfully', 'AuthHandlers');
+        await logService.info('Google mailbox connection completed successfully', 'AuthHandlers', {
+          userId,
+          email: userInfo.email,
+        });
+
+        // Audit log mailbox connection
+        await auditService.log({
+          userId,
+          action: 'MAILBOX_CONNECT',
+          resourceType: 'MAILBOX',
+          metadata: { provider: 'google', email: userInfo.email },
+          success: true,
+        });
 
         // Notify renderer of successful connection
         if (mainWindow) {
@@ -379,8 +422,19 @@ const handleGoogleConnectMailbox = async (mainWindow: BrowserWindow | null, user
         await logService.error(
           'Google mailbox connection background processing failed',
           'AuthHandlers',
-          { error: error instanceof Error ? error.message : 'Unknown error' }
+          { userId, error: error instanceof Error ? error.message : 'Unknown error' }
         );
+
+        // Audit log failed mailbox connection
+        await auditService.log({
+          userId,
+          action: 'MAILBOX_CONNECT',
+          resourceType: 'MAILBOX',
+          metadata: { provider: 'google' },
+          success: false,
+          errorMessage: error instanceof Error ? error.message : 'Unknown error',
+        });
+
         if (mainWindow) {
           mainWindow.webContents.send('google:mailbox-connected', {
             success: false,
@@ -563,7 +617,10 @@ const handleMicrosoftLogin = async (mainWindow: BrowserWindow | null): Promise<L
           app.getVersion()
         );
 
-        await logService.info('Microsoft login completed successfully', 'AuthHandlers');
+        await logService.info('Microsoft login completed successfully', 'AuthHandlers', {
+          userId: localUser.id,
+          provider: 'microsoft',
+        });
 
         // Check if user needs to accept terms (new user or outdated versions)
         const isNewUser = needsToAcceptTerms(localUser);
@@ -582,6 +639,17 @@ const handleMicrosoftLogin = async (mainWindow: BrowserWindow | null): Promise<L
         // Record successful login for rate limiting
         await rateLimitService.recordAttempt(localUser.email, true);
 
+        // Audit log successful login
+        await auditService.log({
+          userId: localUser.id,
+          sessionId: sessionToken,
+          action: 'LOGIN',
+          resourceType: 'SESSION',
+          resourceId: sessionToken,
+          metadata: { provider: 'microsoft', isNewUser },
+          success: true,
+        });
+
         // Notify renderer of successful login
         if (mainWindow) {
           mainWindow.webContents.send('microsoft:login-complete', {
@@ -598,6 +666,17 @@ const handleMicrosoftLogin = async (mainWindow: BrowserWindow | null): Promise<L
           'AuthHandlers',
           { error: error instanceof Error ? error.message : 'Unknown error' }
         );
+
+        // Audit log failed login
+        await auditService.log({
+          userId: 'unknown',
+          action: 'LOGIN_FAILED',
+          resourceType: 'SESSION',
+          metadata: { provider: 'microsoft', error: error instanceof Error ? error.message : 'Unknown error' },
+          success: false,
+          errorMessage: error instanceof Error ? error.message : 'Unknown error',
+        });
+
         if (mainWindow) {
           mainWindow.webContents.send('microsoft:login-complete', {
             success: false,
@@ -716,7 +795,19 @@ const handleMicrosoftConnectMailbox = async (mainWindow: BrowserWindow | null, u
           mailbox_connected: true,
         });
 
-        await logService.info('Microsoft mailbox connection completed successfully', 'AuthHandlers');
+        await logService.info('Microsoft mailbox connection completed successfully', 'AuthHandlers', {
+          userId,
+          email: userInfo.email,
+        });
+
+        // Audit log mailbox connection
+        await auditService.log({
+          userId,
+          action: 'MAILBOX_CONNECT',
+          resourceType: 'MAILBOX',
+          metadata: { provider: 'microsoft', email: userInfo.email },
+          success: true,
+        });
 
         // Notify renderer of successful connection
         if (mainWindow) {
@@ -729,8 +820,19 @@ const handleMicrosoftConnectMailbox = async (mainWindow: BrowserWindow | null, u
         await logService.error(
           'Microsoft mailbox connection background processing failed',
           'AuthHandlers',
-          { error: error instanceof Error ? error.message : 'Unknown error' }
+          { userId, error: error instanceof Error ? error.message : 'Unknown error' }
         );
+
+        // Audit log failed mailbox connection
+        await auditService.log({
+          userId,
+          action: 'MAILBOX_CONNECT',
+          resourceType: 'MAILBOX',
+          metadata: { provider: 'microsoft' },
+          success: false,
+          errorMessage: error instanceof Error ? error.message : 'Unknown error',
+        });
+
         if (mainWindow) {
           mainWindow.webContents.send('microsoft:mailbox-connected', {
             success: false,
@@ -781,10 +883,26 @@ export const registerAuthHandlers = (mainWindow: BrowserWindow | null): void => 
       // Validate input
       const validatedSessionToken = validateSessionToken(sessionToken);
 
+      // Get session info before deleting for audit purposes
+      const session = await databaseService.validateSession(validatedSessionToken);
+      const userId = session?.user_id || 'unknown';
+
       await databaseService.deleteSession(validatedSessionToken);
       await sessionService.clearSession();
       sessionSecurityService.cleanupSession(validatedSessionToken);
-      await logService.info('User logged out successfully', 'AuthHandlers');
+
+      // Audit log logout
+      await auditService.log({
+        userId,
+        sessionId: validatedSessionToken,
+        action: 'LOGOUT',
+        resourceType: 'SESSION',
+        resourceId: validatedSessionToken,
+        success: true,
+      });
+
+      await logService.info('User logged out successfully', 'AuthHandlers', { userId });
+
       return { success: true };
     } catch (error) {
       await logService.error(

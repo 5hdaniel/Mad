@@ -7,6 +7,7 @@
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { User, SubscriptionTier, Subscription } from '../types/models';
+import type { AuditLogEntry } from './auditService';
 import * as dotenv from 'dotenv';
 
 dotenv.config({ path: '.env.development' });
@@ -606,6 +607,129 @@ class SupabaseService {
       return data;
     } catch (error) {
       console.error(`[Supabase] Edge function '${functionName}' failed:`, error);
+      throw error;
+    }
+  }
+
+  // ============================================
+  // AUDIT LOG OPERATIONS
+  // ============================================
+
+  /**
+   * Batch insert audit logs to cloud
+   * @param entries - Array of audit log entries to sync
+   */
+  async batchInsertAuditLogs(entries: AuditLogEntry[]): Promise<void> {
+    const client = this._ensureClient();
+
+    if (entries.length === 0) {
+      return;
+    }
+
+    try {
+      // Map entries to database format
+      const rows = entries.map(entry => ({
+        id: entry.id,
+        timestamp: entry.timestamp.toISOString(),
+        user_id: entry.userId,
+        session_id: entry.sessionId || null,
+        action: entry.action,
+        resource_type: entry.resourceType,
+        resource_id: entry.resourceId || null,
+        metadata: entry.metadata || null,
+        ip_address: entry.ipAddress || null,
+        user_agent: entry.userAgent || null,
+        success: entry.success,
+        error_message: entry.errorMessage || null,
+      }));
+
+      const { error } = await client
+        .from('audit_logs')
+        .upsert(rows, {
+          onConflict: 'id',
+          ignoreDuplicates: true,
+        });
+
+      if (error) throw error;
+
+      console.log(`[Supabase] Synced ${entries.length} audit logs to cloud`);
+    } catch (error) {
+      console.error('[Supabase] Failed to sync audit logs:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get audit logs from cloud for a user
+   * @param userId - User UUID
+   * @param options - Query options
+   * @returns Array of audit log entries
+   */
+  async getAuditLogs(
+    userId: string,
+    options?: {
+      action?: string;
+      resourceType?: string;
+      startDate?: Date;
+      endDate?: Date;
+      limit?: number;
+      offset?: number;
+    }
+  ): Promise<AuditLogEntry[]> {
+    const client = this._ensureClient();
+
+    try {
+      let query = client
+        .from('audit_logs')
+        .select('*')
+        .eq('user_id', userId)
+        .order('timestamp', { ascending: false });
+
+      if (options?.action) {
+        query = query.eq('action', options.action);
+      }
+
+      if (options?.resourceType) {
+        query = query.eq('resource_type', options.resourceType);
+      }
+
+      if (options?.startDate) {
+        query = query.gte('timestamp', options.startDate.toISOString());
+      }
+
+      if (options?.endDate) {
+        query = query.lte('timestamp', options.endDate.toISOString());
+      }
+
+      if (options?.limit) {
+        query = query.limit(options.limit);
+      }
+
+      if (options?.offset) {
+        query = query.range(options.offset, options.offset + (options.limit || 50) - 1);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      // Map database rows to AuditLogEntry
+      return (data || []).map((row: Record<string, unknown>) => ({
+        id: row.id as string,
+        timestamp: new Date(row.timestamp as string),
+        userId: row.user_id as string,
+        sessionId: row.session_id as string | undefined,
+        action: row.action as AuditLogEntry['action'],
+        resourceType: row.resource_type as AuditLogEntry['resourceType'],
+        resourceId: row.resource_id as string | undefined,
+        metadata: row.metadata as Record<string, unknown> | undefined,
+        ipAddress: row.ip_address as string | undefined,
+        userAgent: row.user_agent as string | undefined,
+        success: row.success as boolean,
+        errorMessage: row.error_message as string | undefined,
+      }));
+    } catch (error) {
+      console.error('[Supabase] Failed to get audit logs:', error);
       throw error;
     }
   }

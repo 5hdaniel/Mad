@@ -38,6 +38,7 @@ import type {
 import { DatabaseError, NotFoundError } from '../types';
 import { databaseEncryptionService } from './databaseEncryptionService';
 import logService from './logService';
+import type { AuditLogEntry, AuditLogDbRow } from './auditService';
 
 // Contact with activity metadata
 interface ContactWithActivity extends Contact {
@@ -545,6 +546,71 @@ class DatabaseService implements IDatabaseService {
         await logService.debug('Created indexes for is_imported', 'DatabaseService');
       } else {
         await logService.debug('is_imported column already exists', 'DatabaseService');
+      }
+
+      // Migration 7: Audit logs table (immutable)
+      const auditTableExists = this._get<{ name: string }>(`SELECT name FROM sqlite_master WHERE type='table' AND name='audit_logs'`);
+      if (!auditTableExists) {
+        await logService.info('Running Migration 7: Creating audit_logs table', 'DatabaseService');
+
+        // Create the audit_logs table
+        this._run(`
+          CREATE TABLE audit_logs (
+            id TEXT PRIMARY KEY,
+            timestamp DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            user_id TEXT NOT NULL,
+            session_id TEXT,
+            action TEXT NOT NULL,
+            resource_type TEXT NOT NULL,
+            resource_id TEXT,
+            metadata TEXT,
+            ip_address TEXT,
+            user_agent TEXT,
+            success INTEGER NOT NULL DEFAULT 1,
+            error_message TEXT,
+            synced_at DATETIME,
+
+            CHECK (action IN (
+              'LOGIN', 'LOGOUT', 'LOGIN_FAILED',
+              'DATA_ACCESS', 'DATA_EXPORT', 'DATA_DELETE',
+              'TRANSACTION_CREATE', 'TRANSACTION_UPDATE', 'TRANSACTION_DELETE',
+              'CONTACT_CREATE', 'CONTACT_UPDATE', 'CONTACT_DELETE',
+              'SETTINGS_CHANGE', 'MAILBOX_CONNECT', 'MAILBOX_DISCONNECT'
+            )),
+
+            CHECK (resource_type IN (
+              'USER', 'SESSION', 'TRANSACTION', 'CONTACT',
+              'COMMUNICATION', 'EXPORT', 'MAILBOX', 'SETTINGS'
+            ))
+          )
+        `);
+
+        // Create indexes
+        this._run(`CREATE INDEX idx_audit_logs_user_id ON audit_logs(user_id)`);
+        this._run(`CREATE INDEX idx_audit_logs_timestamp ON audit_logs(timestamp)`);
+        this._run(`CREATE INDEX idx_audit_logs_action ON audit_logs(action)`);
+        this._run(`CREATE INDEX idx_audit_logs_synced ON audit_logs(synced_at)`);
+        this._run(`CREATE INDEX idx_audit_logs_resource_type ON audit_logs(resource_type)`);
+        this._run(`CREATE INDEX idx_audit_logs_session_id ON audit_logs(session_id)`);
+
+        // Create immutability triggers
+        this._run(`
+          CREATE TRIGGER prevent_audit_update
+          BEFORE UPDATE ON audit_logs
+          BEGIN
+            SELECT RAISE(ABORT, 'Audit logs cannot be modified');
+          END
+        `);
+
+        this._run(`
+          CREATE TRIGGER prevent_audit_delete
+          BEFORE DELETE ON audit_logs
+          BEGIN
+            SELECT RAISE(ABORT, 'Audit logs cannot be deleted');
+          END
+        `);
+
+        await logService.info('Audit logs table created with immutability constraints', 'DatabaseService');
       }
 
       await logService.info('All database migrations completed successfully', 'DatabaseService');
@@ -2013,6 +2079,185 @@ class DatabaseService implements IDatabaseService {
     `;
 
     return this._all<UserFeedback>(sql, [userId, fieldName, limit]);
+  }
+
+  // ============================================
+  // AUDIT LOG OPERATIONS
+  // ============================================
+
+  /**
+   * Insert an audit log entry (append-only)
+   * Note: The audit_logs table has triggers that prevent UPDATE and DELETE
+   */
+  async insertAuditLog(entry: AuditLogEntry): Promise<void> {
+    const sql = `
+      INSERT INTO audit_logs (
+        id, timestamp, user_id, session_id, action, resource_type,
+        resource_id, metadata, ip_address, user_agent, success, error_message
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+
+    const params = [
+      entry.id,
+      entry.timestamp.toISOString(),
+      entry.userId,
+      entry.sessionId || null,
+      entry.action,
+      entry.resourceType,
+      entry.resourceId || null,
+      entry.metadata ? JSON.stringify(entry.metadata) : null,
+      entry.ipAddress || null,
+      entry.userAgent || null,
+      entry.success ? 1 : 0,
+      entry.errorMessage || null,
+    ];
+
+    await this._run(sql, params);
+  }
+
+  /**
+   * Get audit logs that haven't been synced to cloud
+   */
+  async getUnsyncedAuditLogs(limit: number = 100): Promise<AuditLogEntry[]> {
+    const sql = `
+      SELECT * FROM audit_logs
+      WHERE synced_at IS NULL
+      ORDER BY timestamp ASC
+      LIMIT ?
+    `;
+
+    const rows = await this._all<AuditLogDbRow>(sql, [limit]);
+    return rows.map(this._mapAuditLogRowToEntry);
+  }
+
+  /**
+   * Mark audit logs as synced (only updates synced_at field)
+   * This is the ONLY allowed update to audit_logs - we need a special approach
+   * because the table has triggers preventing normal updates
+   */
+  async markAuditLogsSynced(ids: string[]): Promise<void> {
+    if (ids.length === 0) {
+      return;
+    }
+
+    // We need to temporarily disable the trigger for this specific update
+    // This is safe because we're only updating the synced_at timestamp
+    const db = this._ensureDb();
+    const syncedAt = new Date().toISOString();
+
+    // Use a transaction with trigger disable/enable
+    return new Promise((resolve, reject) => {
+      db.serialize(() => {
+        // Disable the update trigger temporarily
+        db.run('DROP TRIGGER IF EXISTS prevent_audit_update', (err) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+
+          // Update synced_at for the specified IDs
+          const placeholders = ids.map(() => '?').join(',');
+          const sql = `UPDATE audit_logs SET synced_at = ? WHERE id IN (${placeholders})`;
+
+          db.run(sql, [syncedAt, ...ids], (updateErr) => {
+            // Recreate the trigger (even if update fails)
+            db.run(`
+              CREATE TRIGGER prevent_audit_update
+              BEFORE UPDATE ON audit_logs
+              WHEN NEW.synced_at IS NULL OR OLD.synced_at IS NOT NULL
+              BEGIN
+                SELECT RAISE(ABORT, 'Audit logs cannot be modified');
+              END
+            `, (triggerErr) => {
+              if (updateErr) {
+                reject(updateErr);
+              } else if (triggerErr) {
+                reject(triggerErr);
+              } else {
+                resolve();
+              }
+            });
+          });
+        });
+      });
+    });
+  }
+
+  /**
+   * Get audit logs for a user with optional filters
+   */
+  async getAuditLogs(filters: {
+    userId?: string;
+    action?: string;
+    resourceType?: string;
+    startDate?: Date;
+    endDate?: Date;
+    limit?: number;
+    offset?: number;
+  }): Promise<AuditLogEntry[]> {
+    let sql = 'SELECT * FROM audit_logs WHERE 1=1';
+    const params: (string | number)[] = [];
+
+    if (filters.userId) {
+      sql += ' AND user_id = ?';
+      params.push(filters.userId);
+    }
+
+    if (filters.action) {
+      sql += ' AND action = ?';
+      params.push(filters.action);
+    }
+
+    if (filters.resourceType) {
+      sql += ' AND resource_type = ?';
+      params.push(filters.resourceType);
+    }
+
+    if (filters.startDate) {
+      sql += ' AND timestamp >= ?';
+      params.push(filters.startDate.toISOString());
+    }
+
+    if (filters.endDate) {
+      sql += ' AND timestamp <= ?';
+      params.push(filters.endDate.toISOString());
+    }
+
+    sql += ' ORDER BY timestamp DESC';
+
+    if (filters.limit) {
+      sql += ' LIMIT ?';
+      params.push(filters.limit);
+    }
+
+    if (filters.offset) {
+      sql += ' OFFSET ?';
+      params.push(filters.offset);
+    }
+
+    const rows = await this._all<AuditLogDbRow>(sql, params);
+    return rows.map(this._mapAuditLogRowToEntry);
+  }
+
+  /**
+   * Map database row to AuditLogEntry
+   */
+  private _mapAuditLogRowToEntry(row: AuditLogDbRow): AuditLogEntry {
+    return {
+      id: row.id,
+      timestamp: new Date(row.timestamp),
+      userId: row.user_id,
+      sessionId: row.session_id || undefined,
+      action: row.action as AuditLogEntry['action'],
+      resourceType: row.resource_type as AuditLogEntry['resourceType'],
+      resourceId: row.resource_id || undefined,
+      metadata: row.metadata ? JSON.parse(row.metadata) : undefined,
+      ipAddress: row.ip_address || undefined,
+      userAgent: row.user_agent || undefined,
+      success: row.success === 1,
+      errorMessage: row.error_message || undefined,
+      syncedAt: row.synced_at ? new Date(row.synced_at) : undefined,
+    };
   }
 
   // ============================================
