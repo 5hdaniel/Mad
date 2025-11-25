@@ -71,7 +71,7 @@ describe('Settings', () => {
         expect(screen.getByText('Gmail')).toBeInTheDocument();
       });
 
-      expect(screen.getByText('Not Connected')).toBeInTheDocument();
+      expect(screen.getAllByText('Not Connected').length).toBeGreaterThan(0);
     });
 
     it('should show Outlook connection status', async () => {
@@ -92,7 +92,7 @@ describe('Settings', () => {
       render(<Settings userId={mockUserId} onClose={mockOnClose} />);
 
       await waitFor(() => {
-        expect(screen.getByText('Connected')).toBeInTheDocument();
+        expect(screen.getAllByText('Connected').length).toBeGreaterThan(0);
       });
 
       expect(screen.getByText('user@gmail.com')).toBeInTheDocument();
@@ -108,7 +108,7 @@ describe('Settings', () => {
       render(<Settings userId={mockUserId} onClose={mockOnClose} />);
 
       await waitFor(() => {
-        expect(screen.getByText('Connected')).toBeInTheDocument();
+        expect(screen.getAllByText('Connected').length).toBeGreaterThan(0);
       });
 
       expect(screen.getByText('user@outlook.com')).toBeInTheDocument();

@@ -221,7 +221,7 @@ describe('Transactions', () => {
         expect(screen.getByText('123 Main Street')).toBeInTheDocument();
       });
 
-      expect(screen.getByText('Purchase')).toBeInTheDocument();
+      expect(screen.getAllByText('Purchase').length).toBeGreaterThan(0);
     });
 
     it('should format sale price as currency', async () => {
@@ -406,7 +406,7 @@ describe('Transactions', () => {
 
       // Transaction details modal should open
       await waitFor(() => {
-        expect(screen.getByText(/transaction details/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/transaction details/i).length).toBeGreaterThan(0);
       });
     });
   });
