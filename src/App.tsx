@@ -15,18 +15,12 @@ import Contacts from './components/Contacts';
 import WelcomeTerms from './components/WelcomeTerms';
 import Dashboard from './components/Dashboard';
 import AuditTransactionModal from './components/AuditTransactionModal';
+import { useAuth } from './contexts';
 import type { Conversation } from './hooks/useConversations';
-import type { OAuthProvider, Subscription } from '../electron/types/models';
+import type { Subscription } from '../electron/types/models';
 
 // Type definitions
 type AppStep = 'login' | 'microsoft-login' | 'permissions' | 'dashboard' | 'outlook' | 'complete' | 'contacts';
-
-interface User {
-  id: string;
-  email: string;
-  display_name?: string;
-  avatar_url?: string;
-}
 
 interface AppExportResult {
   exportPath?: string;
@@ -52,10 +46,24 @@ interface OutlookExportResults {
 }
 
 function App() {
+  // Auth state from context
+  const {
+    isAuthenticated,
+    isLoading: isAuthLoading,
+    currentUser,
+    sessionToken,
+    authProvider,
+    subscription,
+    needsTermsAcceptance,
+    login,
+    logout,
+    acceptTerms,
+    declineTerms,
+    clearTermsRequirement,
+  } = useAuth();
+
+  // Local UI state
   const [currentStep, setCurrentStep] = useState<AppStep>('login');
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [sessionToken, setSessionToken] = useState<string | null>(null);
   const [hasPermissions, setHasPermissions] = useState<boolean>(false);
   const [outlookConnected, setOutlookConnected] = useState<boolean>(false);
   const [exportResult, setExportResult] = useState<AppExportResult | null>(null);
@@ -68,82 +76,41 @@ function App() {
   const [showSettings, setShowSettings] = useState<boolean>(false);
   const [showTransactions, setShowTransactions] = useState<boolean>(false);
   const [showContacts, setShowContacts] = useState<boolean>(false);
-  const [showWelcomeTerms, setShowWelcomeTerms] = useState<boolean>(false);
   const [showAuditTransaction, setShowAuditTransaction] = useState<boolean>(false);
-  const [authProvider, setAuthProvider] = useState<OAuthProvider | null>(null);
-  const [subscription, setSubscription] = useState<Subscription | undefined>(undefined);
 
+  // Handle auth state changes to update navigation
   useEffect(() => {
-    checkSession();
-    checkPermissions();
-    checkAppLocation();
-  }, []);
-
-  const checkSession = async (): Promise<void> => {
-    // Check if user has an existing session (now using persistent session service)
-    if (window.api?.auth?.getCurrentUser) {
-      try {
-        const result = await window.api.auth.getCurrentUser();
-        if (result.success) {
-          setIsAuthenticated(true);
-          setCurrentUser(result.user ?? null);
-          setSessionToken(result.sessionToken ?? null);
-          setAuthProvider((result.provider ?? null) as OAuthProvider | null);
-          setSubscription(result.subscription ?? undefined);
-          // Session token is stored securely in memory only - no localStorage
-
-          // Check if user needs to accept terms (for new users or version updates)
-          if (result.isNewUser) {
-            setShowWelcomeTerms(true);
-          } else {
-            // Skip to permissions or dashboard based on permission status
-            if (hasPermissions) {
-              setCurrentStep('dashboard');
-            } else {
-              setCurrentStep('permissions');
-            }
-          }
-        }
-        // No localStorage cleanup needed - session is managed server-side
-      } catch {
-        // Session check failed silently - user will need to log in
-      }
-    }
-  };
-
-  const handleLoginSuccess = (user: User, token: string, provider: string, subscription: Subscription | undefined, isNewUser: boolean): void => {
-    setIsAuthenticated(true);
-    setCurrentUser(user);
-    setSessionToken(token);
-    setAuthProvider(provider as OAuthProvider);
-    setSubscription(subscription ?? undefined);
-    // Session token is stored securely in memory only - no localStorage
-
-    // Show welcome modal for new users
-    if (isNewUser) {
-      setShowWelcomeTerms(true);
-    } else {
-      // Proceed to permissions check for existing users
-      if (hasPermissions) {
-        setCurrentStep('dashboard');
-      } else {
-        setCurrentStep('permissions');
-      }
-    }
-  };
-
-  const handleAcceptTerms = async (): Promise<void> => {
-    try {
-      if (currentUser && window.api?.auth?.acceptTerms) {
-        await window.api.auth.acceptTerms(currentUser.id);
-        setShowWelcomeTerms(false);
-
-        // Proceed to app after accepting terms
+    if (!isAuthLoading) {
+      if (isAuthenticated && !needsTermsAcceptance) {
+        // User is authenticated and has accepted terms
         if (hasPermissions) {
           setCurrentStep('dashboard');
         } else {
           setCurrentStep('permissions');
         }
+      } else if (!isAuthenticated) {
+        setCurrentStep('login');
+      }
+    }
+  }, [isAuthenticated, isAuthLoading, needsTermsAcceptance, hasPermissions]);
+
+  useEffect(() => {
+    checkPermissions();
+    checkAppLocation();
+  }, []);
+
+  const handleLoginSuccess = (user: { id: string; email: string; display_name?: string; avatar_url?: string }, token: string, provider: string, subscriptionData: Subscription | undefined, isNewUser: boolean): void => {
+    login(user, token, provider, subscriptionData, isNewUser);
+  };
+
+  const handleAcceptTerms = async (): Promise<void> => {
+    try {
+      await acceptTerms();
+      // Navigate after accepting
+      if (hasPermissions) {
+        setCurrentStep('dashboard');
+      } else {
+        setCurrentStep('permissions');
       }
     } catch (error) {
       console.error('Failed to accept terms:', error);
@@ -151,27 +118,12 @@ function App() {
   };
 
   const handleDeclineTerms = async (): Promise<void> => {
-    // User declined terms, log them out
-    await handleLogout();
+    await declineTerms();
   };
 
   const handleLogout = async (): Promise<void> => {
-    if (sessionToken && window.api?.auth?.logout) {
-      try {
-        await window.api.auth.logout(sessionToken);
-      } catch {
-        // Logout error is handled server-side, continue with local cleanup
-      }
-    }
-
-    // Clear all in-memory state - no localStorage to clean
-    setIsAuthenticated(false);
-    setCurrentUser(null);
-    setSessionToken(null);
-    setAuthProvider(null);
-    setSubscription(undefined);
+    await logout();
     setShowProfile(false);
-    setShowWelcomeTerms(false);
     setCurrentStep('login');
   };
 
@@ -478,7 +430,7 @@ function App() {
       )}
 
       {/* Welcome Terms Modal (New Users Only) - casting user to component's User type */}
-      {showWelcomeTerms && currentUser && (
+      {needsTermsAcceptance && currentUser && (
         <WelcomeTerms
           user={currentUser as any}
           onAccept={handleAcceptTerms}
