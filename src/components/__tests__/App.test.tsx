@@ -8,6 +8,16 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import App from '../../App';
+import { AuthProvider } from '../../contexts';
+
+// Helper to render App with AuthProvider
+const renderApp = () => {
+  return render(
+    <AuthProvider>
+      <App />
+    </AuthProvider>
+  );
+};
 
 describe('App', () => {
   const mockUser = {
@@ -40,7 +50,7 @@ describe('App', () => {
     it('should show login screen when not authenticated', async () => {
       window.api.auth.getCurrentUser.mockResolvedValue({ success: false });
 
-      render(<App />);
+      renderApp();
 
       await waitFor(() => {
         expect(screen.getByText(/magic audit/i)).toBeInTheDocument();
@@ -62,7 +72,7 @@ describe('App', () => {
       });
       window.electron.checkPermissions.mockResolvedValue({ hasPermission: false });
 
-      render(<App />);
+      renderApp();
 
       await waitFor(() => {
         expect(screen.getByText(/setup permissions/i)).toBeInTheDocument();
@@ -80,7 +90,7 @@ describe('App', () => {
       });
       window.electron.checkPermissions.mockResolvedValue({ hasPermission: true });
 
-      render(<App />);
+      renderApp();
 
       await waitFor(() => {
         expect(screen.getByText(/dashboard/i)).toBeInTheDocument();
@@ -98,7 +108,7 @@ describe('App', () => {
       });
       window.electron.checkPermissions.mockResolvedValue({ hasPermission: true });
 
-      render(<App />);
+      renderApp();
 
       await waitFor(() => {
         // Component should show the WelcomeTerms modal for new users
@@ -120,7 +130,7 @@ describe('App', () => {
       });
       window.electron.checkPermissions.mockResolvedValue({ hasPermission: true });
 
-      render(<App />);
+      renderApp();
 
       await waitFor(() => {
         expect(screen.getByText(/dashboard/i)).toBeInTheDocument();
@@ -154,7 +164,7 @@ describe('App', () => {
       window.electron.checkPermissions.mockResolvedValue({ hasPermission: true });
       window.api.auth.logout.mockResolvedValue({ success: true });
 
-      render(<App />);
+      renderApp();
 
       // Wait for dashboard
       await waitFor(() => {
@@ -195,7 +205,7 @@ describe('App', () => {
       window.electron.checkPermissions.mockResolvedValue({ hasPermission: true });
       window.api.auth.logout.mockRejectedValue(new Error('Network error'));
 
-      render(<App />);
+      renderApp();
 
       await waitFor(() => {
         expect(screen.getByText(/dashboard/i)).toBeInTheDocument();
@@ -223,7 +233,7 @@ describe('App', () => {
     it('should check session on mount', async () => {
       window.api.auth.getCurrentUser.mockResolvedValue({ success: false });
 
-      render(<App />);
+      renderApp();
 
       await waitFor(() => {
         expect(window.api.auth.getCurrentUser).toHaveBeenCalled();
@@ -233,7 +243,7 @@ describe('App', () => {
     it('should check permissions on mount', async () => {
       window.api.auth.getCurrentUser.mockResolvedValue({ success: false });
 
-      render(<App />);
+      renderApp();
 
       await waitFor(() => {
         expect(window.electron.checkPermissions).toHaveBeenCalled();
@@ -243,7 +253,7 @@ describe('App', () => {
     it('should check app location on mount', async () => {
       window.api.auth.getCurrentUser.mockResolvedValue({ success: false });
 
-      render(<App />);
+      renderApp();
 
       await waitFor(() => {
         expect(window.electron.checkAppLocation).toHaveBeenCalled();
@@ -265,7 +275,7 @@ describe('App', () => {
     });
 
     it('should show profile button when authenticated', async () => {
-      render(<App />);
+      renderApp();
 
       await waitFor(() => {
         expect(screen.getByText(/dashboard/i)).toBeInTheDocument();
@@ -277,7 +287,7 @@ describe('App', () => {
     });
 
     it('should open profile modal when profile button is clicked', async () => {
-      render(<App />);
+      renderApp();
 
       await waitFor(() => {
         expect(screen.getByText(/dashboard/i)).toBeInTheDocument();
@@ -299,7 +309,7 @@ describe('App', () => {
         preferences: { theme: 'light', notifications: true },
       });
 
-      render(<App />);
+      renderApp();
 
       await waitFor(() => {
         expect(screen.getByText(/dashboard/i)).toBeInTheDocument();
@@ -328,7 +338,7 @@ describe('App', () => {
     });
 
     it('should close profile modal when close button is clicked', async () => {
-      render(<App />);
+      renderApp();
 
       await waitFor(() => {
         expect(screen.getByText(/dashboard/i)).toBeInTheDocument();
@@ -361,7 +371,7 @@ describe('App', () => {
     it('should show version info popup when info button is clicked', async () => {
       window.api.auth.getCurrentUser.mockResolvedValue({ success: false });
 
-      render(<App />);
+      renderApp();
 
       // Find and click the version info button
       const infoButton = screen.getByTitle(/version info/i);
@@ -383,7 +393,7 @@ describe('App', () => {
         appPath: '/Users/test/Downloads/MagicAudit.app',
       });
 
-      render(<App />);
+      renderApp();
 
       await waitFor(() => {
         // MoveAppPrompt component should be rendered
@@ -399,7 +409,7 @@ describe('App', () => {
         appPath: '/Users/test/Downloads/MagicAudit.app',
       });
 
-      render(<App />);
+      renderApp();
 
       await waitFor(() => {
         expect(screen.getByText(/sign in with google/i)).toBeInTheDocument();
@@ -422,7 +432,7 @@ describe('App', () => {
       });
       window.electron.checkPermissions.mockResolvedValue({ hasPermission: true });
 
-      render(<App />);
+      renderApp();
 
       await waitFor(() => {
         expect(screen.getByText(/dashboard/i)).toBeInTheDocument();
@@ -443,7 +453,7 @@ describe('App', () => {
       });
       window.electron.checkPermissions.mockResolvedValue({ hasPermission: true });
 
-      render(<App />);
+      renderApp();
 
       await waitFor(() => {
         expect(screen.getByText(/dashboard/i)).toBeInTheDocument();
