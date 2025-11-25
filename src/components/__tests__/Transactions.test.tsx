@@ -231,8 +231,8 @@ describe('Transactions', () => {
         expect(screen.getByText('123 Main Street')).toBeInTheDocument();
       });
 
-      // Check for formatted currency
-      expect(screen.getByText('$450,000')).toBeInTheDocument();
+      // Check for formatted currency (may appear multiple times in list view)
+      expect(screen.getAllByText('$450,000').length).toBeGreaterThan(0);
     });
 
     it('should display email count', async () => {
