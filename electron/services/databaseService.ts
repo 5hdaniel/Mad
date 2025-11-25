@@ -201,6 +201,7 @@ class DatabaseService implements IDatabaseService {
 
   /**
    * Migrate existing unencrypted database to encrypted format
+   * Uses table-by-table copy approach for compatibility
    */
   private async _migrateToEncryptedDatabase(): Promise<void> {
     if (!this.dbPath || !this.encryptionKey) {
@@ -218,14 +219,75 @@ class DatabaseService implements IDatabaseService {
       fs.copyFileSync(unencryptedPath, backupPath);
       await logService.debug('Created backup of unencrypted database', 'DatabaseService');
 
-      // Open the unencrypted database
-      const oldDb = new Database(unencryptedPath);
+      // Open the unencrypted database (read-only)
+      const oldDb = new Database(unencryptedPath, { readonly: true });
 
-      // Create new encrypted database and export data
-      oldDb.exec(`ATTACH DATABASE '${encryptedPath}' AS encrypted KEY "x'${this.encryptionKey}'"`);
-      oldDb.exec('SELECT sqlcipher_export(\'encrypted\')');
-      oldDb.exec('DETACH DATABASE encrypted');
+      // Get all table names from the old database
+      const tables = oldDb.prepare(`
+        SELECT name FROM sqlite_master
+        WHERE type='table' AND name NOT LIKE 'sqlite_%'
+      `).all() as { name: string }[];
+
+      // Get all index definitions
+      const indexes = oldDb.prepare(`
+        SELECT sql FROM sqlite_master
+        WHERE type='index' AND sql IS NOT NULL
+      `).all() as { sql: string }[];
+
+      // Get all trigger definitions
+      const triggers = oldDb.prepare(`
+        SELECT sql FROM sqlite_master
+        WHERE type='trigger' AND sql IS NOT NULL
+      `).all() as { sql: string }[];
+
+      // Create new encrypted database
+      const newDb = new Database(encryptedPath);
+      newDb.pragma(`key = "x'${this.encryptionKey}'"`);
+
+      // Copy schema and data for each table
+      for (const { name: tableName } of tables) {
+        // Get table schema
+        const tableInfo = oldDb.prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name=?`).get(tableName) as { sql: string } | undefined;
+        if (tableInfo?.sql) {
+          newDb.exec(tableInfo.sql);
+
+          // Copy data
+          const rows = oldDb.prepare(`SELECT * FROM "${tableName}"`).all();
+          if (rows.length > 0) {
+            const columns = Object.keys(rows[0] as object);
+            const placeholders = columns.map(() => '?').join(', ');
+            const insertStmt = newDb.prepare(`INSERT INTO "${tableName}" (${columns.map(c => `"${c}"`).join(', ')}) VALUES (${placeholders})`);
+
+            const insertMany = newDb.transaction((data: unknown[]) => {
+              for (const row of data) {
+                insertStmt.run(...columns.map(col => (row as Record<string, unknown>)[col]));
+              }
+            });
+            insertMany(rows);
+          }
+        }
+      }
+
+      // Recreate indexes
+      for (const { sql } of indexes) {
+        try {
+          newDb.exec(sql);
+        } catch {
+          // Index may already exist from table creation
+        }
+      }
+
+      // Recreate triggers
+      for (const { sql } of triggers) {
+        try {
+          newDb.exec(sql);
+        } catch {
+          // Trigger may already exist
+        }
+      }
+
       oldDb.close();
+      newDb.close();
 
       await logService.debug('Exported data to encrypted database', 'DatabaseService');
 
