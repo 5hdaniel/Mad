@@ -2,9 +2,13 @@
  * Database Service
  * Manages local SQLite database operations for Mad application
  * Handles user data, transactions, communications, and sessions
+ *
+ * SECURITY: Database is encrypted at rest using SQLCipher (AES-256)
+ * Encryption key is stored in OS keychain via Electron safeStorage
  */
 
-import sqlite3 from 'sqlite3';
+import Database from 'better-sqlite3-multiple-ciphers';
+import type { Database as DatabaseType } from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
@@ -32,6 +36,8 @@ import type {
 } from '../types';
 
 import { DatabaseError, NotFoundError } from '../types';
+import { databaseEncryptionService } from './databaseEncryptionService';
+import logService from './logService';
 
 // Contact with activity metadata
 interface ContactWithActivity extends Contact {
@@ -86,11 +92,13 @@ interface _FeedbackData {
 }
 
 class DatabaseService implements IDatabaseService {
-  private db: sqlite3.Database | null = null;
+  private db: DatabaseType | null = null;
   private dbPath: string | null = null;
+  private encryptionKey: string | null = null;
 
   /**
    * Initialize database - creates DB file and tables if needed
+   * Handles encryption and migration from unencrypted databases
    */
   async initialize(): Promise<boolean> {
     try {
@@ -98,7 +106,7 @@ class DatabaseService implements IDatabaseService {
       const userDataPath = app.getPath('userData');
       this.dbPath = path.join(userDataPath, 'mad.db');
 
-      console.log('[DatabaseService] Initializing database at:', this.dbPath);
+      await logService.info('Initializing database', 'DatabaseService', { path: this.dbPath });
 
       // Ensure directory exists
       const dbDir = path.dirname(this.dbPath);
@@ -106,16 +114,32 @@ class DatabaseService implements IDatabaseService {
         fs.mkdirSync(dbDir, { recursive: true });
       }
 
-      // Open database connection
-      this.db = await this._openDatabase();
+      // Initialize encryption service and get key
+      await databaseEncryptionService.initialize();
+      this.encryptionKey = await databaseEncryptionService.getEncryptionKey();
+
+      // Check if migration from unencrypted database is needed
+      const needsMigration = await this._checkMigrationNeeded();
+
+      if (needsMigration) {
+        await logService.info('Migrating existing database to encrypted storage', 'DatabaseService');
+        await this._migrateToEncryptedDatabase();
+      }
+
+      // Open database connection with encryption
+      this.db = this._openDatabase();
 
       // Run schema migrations
       await this.runMigrations();
 
-      console.log('[DatabaseService] Database initialized successfully');
+      await logService.info('Database initialized successfully with encryption', 'DatabaseService');
       return true;
     } catch (error) {
-      console.error('[DatabaseService] Failed to initialize database:', error);
+      await logService.error(
+        'Failed to initialize database',
+        'DatabaseService',
+        { error: error instanceof Error ? error.message : String(error) }
+      );
       throw error;
     }
   }
@@ -125,7 +149,7 @@ class DatabaseService implements IDatabaseService {
    * @private
    * @throws {DatabaseError} If database is not initialized
    */
-  private _ensureDb(): sqlite3.Database {
+  private _ensureDb(): DatabaseType {
     if (!this.db) {
       throw new DatabaseError('Database is not initialized. Call initialize() first.');
     }
@@ -133,29 +157,144 @@ class DatabaseService implements IDatabaseService {
   }
 
   /**
-   * Open database connection
+   * Open database connection with encryption
    */
-  private _openDatabase(): Promise<sqlite3.Database> {
+  private _openDatabase(): DatabaseType {
     if (!this.dbPath) {
       throw new DatabaseError('Database path is not set');
     }
+    if (!this.encryptionKey) {
+      throw new DatabaseError('Encryption key is not set');
+    }
 
-    return new Promise((resolve, reject) => {
-      const db = new sqlite3.Database(this.dbPath as string, (err) => {
-        if (err) {
-          reject(err);
-        } else {
-          // Enable foreign keys
-          db.run('PRAGMA foreign_keys = ON;', (err) => {
-            if (err) {
-              reject(err);
-            } else {
-              resolve(db);
-            }
-          });
+    const db = new Database(this.dbPath);
+
+    // Configure SQLCipher encryption
+    db.pragma(`key = "x'${this.encryptionKey}'"`);
+    db.pragma('cipher_compatibility = 4');
+
+    // Enable foreign keys
+    db.pragma('foreign_keys = ON');
+
+    // Verify database is accessible (will throw if key is wrong)
+    try {
+      db.pragma('cipher_integrity_check');
+    } catch (error) {
+      throw new DatabaseError('Failed to decrypt database. Encryption key may be invalid.');
+    }
+
+    return db;
+  }
+
+  /**
+   * Check if migration from unencrypted to encrypted database is needed
+   */
+  private async _checkMigrationNeeded(): Promise<boolean> {
+    if (!this.dbPath || !fs.existsSync(this.dbPath)) {
+      return false; // New database, will be created encrypted
+    }
+
+    const isEncrypted = await databaseEncryptionService.isDatabaseEncrypted(this.dbPath);
+    return !isEncrypted;
+  }
+
+  /**
+   * Migrate existing unencrypted database to encrypted format
+   */
+  private async _migrateToEncryptedDatabase(): Promise<void> {
+    if (!this.dbPath || !this.encryptionKey) {
+      throw new DatabaseError('Database path or encryption key not set');
+    }
+
+    const unencryptedPath = this.dbPath;
+    const backupPath = `${this.dbPath}.backup`;
+    const encryptedPath = `${this.dbPath}.encrypted`;
+
+    try {
+      await logService.info('Starting database encryption migration', 'DatabaseService');
+
+      // Create backup of original database
+      fs.copyFileSync(unencryptedPath, backupPath);
+      await logService.debug('Created backup of unencrypted database', 'DatabaseService');
+
+      // Open the unencrypted database
+      const oldDb = new Database(unencryptedPath);
+
+      // Create new encrypted database and export data
+      oldDb.exec(`ATTACH DATABASE '${encryptedPath}' AS encrypted KEY "x'${this.encryptionKey}'"`);
+      oldDb.exec('SELECT sqlcipher_export(\'encrypted\')');
+      oldDb.exec('DETACH DATABASE encrypted');
+      oldDb.close();
+
+      await logService.debug('Exported data to encrypted database', 'DatabaseService');
+
+      // Securely delete the unencrypted database
+      await this._secureDelete(unencryptedPath);
+
+      // Rename encrypted to original name
+      fs.renameSync(encryptedPath, unencryptedPath);
+
+      // Remove backup after successful migration
+      if (fs.existsSync(backupPath)) {
+        fs.unlinkSync(backupPath);
+      }
+
+      await logService.info('Database encryption migration completed successfully', 'DatabaseService');
+    } catch (error) {
+      await logService.error(
+        'Database encryption migration failed',
+        'DatabaseService',
+        { error: error instanceof Error ? error.message : String(error) }
+      );
+
+      // Restore from backup if migration failed
+      if (fs.existsSync(backupPath)) {
+        await logService.warn('Restoring database from backup', 'DatabaseService');
+        if (fs.existsSync(unencryptedPath)) {
+          fs.unlinkSync(unencryptedPath);
         }
-      });
-    });
+        fs.renameSync(backupPath, unencryptedPath);
+      }
+
+      // Clean up encrypted file if it exists
+      if (fs.existsSync(encryptedPath)) {
+        fs.unlinkSync(encryptedPath);
+      }
+
+      throw error;
+    }
+  }
+
+  /**
+   * Securely delete a file by overwriting with random data before unlinking
+   */
+  private async _secureDelete(filePath: string): Promise<void> {
+    try {
+      const stats = fs.statSync(filePath);
+      const fd = fs.openSync(filePath, 'r+');
+
+      // Overwrite with random data (3 passes)
+      for (let pass = 0; pass < 3; pass++) {
+        const randomData = crypto.randomBytes(stats.size);
+        fs.writeSync(fd, randomData, 0, randomData.length, 0);
+        fs.fsyncSync(fd);
+      }
+
+      fs.closeSync(fd);
+      fs.unlinkSync(filePath);
+
+      await logService.debug('Securely deleted file', 'DatabaseService', { filePath });
+    } catch (error) {
+      await logService.warn(
+        'Secure delete failed, using standard delete',
+        'DatabaseService',
+        { filePath, error: error instanceof Error ? error.message : String(error) }
+      );
+      // Fall back to standard delete
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    }
   }
 
   /**
@@ -166,52 +305,49 @@ class DatabaseService implements IDatabaseService {
     const schemaPath = path.join(__dirname, '../database/schema.sql');
     const schemaSql = fs.readFileSync(schemaPath, 'utf8');
 
-    return new Promise((resolve, reject) => {
-      db.exec(schemaSql, async (err) => {
-        if (err) {
-          reject(err);
-        } else {
-          // Run additional migrations for existing databases
-          try {
-            await this._runAdditionalMigrations();
-            resolve();
-          } catch (migrationErr) {
-            reject(migrationErr);
-          }
-        }
-      });
-    });
+    try {
+      db.exec(schemaSql);
+      // Run additional migrations for existing databases
+      await this._runAdditionalMigrations();
+    } catch (error) {
+      await logService.error(
+        'Failed to run migrations',
+        'DatabaseService',
+        { error: error instanceof Error ? error.message : String(error) }
+      );
+      throw error;
+    }
   }
 
   /**
    * Run additional migrations for schema changes
    */
   private async _runAdditionalMigrations(): Promise<void> {
-    console.log('[DatabaseService] 🔄 Starting database migrations...');
+    await logService.info('Starting database migrations', 'DatabaseService');
     try {
       // Migration 1: Add legal compliance columns to users_local
-      console.log('[DatabaseService] Running Migration 1: User compliance columns');
-      const userColumns = await this._all<{ name: string }>(`PRAGMA table_info(users_local)`);
+      await logService.debug('Running Migration 1: User compliance columns', 'DatabaseService');
+      const userColumns = this._all<{ name: string }>(`PRAGMA table_info(users_local)`);
       if (!userColumns.some(col => col.name === 'terms_accepted_at')) {
-        console.log('[DatabaseService] Adding terms_accepted_at column to users_local');
-        await this._run(`ALTER TABLE users_local ADD COLUMN terms_accepted_at DATETIME`);
+        await logService.debug('Adding terms_accepted_at column to users_local', 'DatabaseService');
+        this._run(`ALTER TABLE users_local ADD COLUMN terms_accepted_at DATETIME`);
       }
       if (!userColumns.some(col => col.name === 'terms_version_accepted')) {
-        console.log('[DatabaseService] Adding terms_version_accepted column to users_local');
-        await this._run(`ALTER TABLE users_local ADD COLUMN terms_version_accepted TEXT`);
+        await logService.debug('Adding terms_version_accepted column to users_local', 'DatabaseService');
+        this._run(`ALTER TABLE users_local ADD COLUMN terms_version_accepted TEXT`);
       }
       if (!userColumns.some(col => col.name === 'privacy_policy_accepted_at')) {
-        console.log('[DatabaseService] Adding privacy_policy_accepted_at column to users_local');
-        await this._run(`ALTER TABLE users_local ADD COLUMN privacy_policy_accepted_at DATETIME`);
+        await logService.debug('Adding privacy_policy_accepted_at column to users_local', 'DatabaseService');
+        this._run(`ALTER TABLE users_local ADD COLUMN privacy_policy_accepted_at DATETIME`);
       }
       if (!userColumns.some(col => col.name === 'privacy_policy_version_accepted')) {
-        console.log('[DatabaseService] Adding privacy_policy_version_accepted column to users_local');
-        await this._run(`ALTER TABLE users_local ADD COLUMN privacy_policy_version_accepted TEXT`);
+        await logService.debug('Adding privacy_policy_version_accepted column to users_local', 'DatabaseService');
+        this._run(`ALTER TABLE users_local ADD COLUMN privacy_policy_version_accepted TEXT`);
       }
 
       // Migration 2: Add new transaction columns
-      console.log('[DatabaseService] Running Migration 2: Transaction columns');
-      const transactionColumns = await this._all<{ name: string }>(`PRAGMA table_info(transactions)`);
+      await logService.debug('Running Migration 2: Transaction columns', 'DatabaseService');
+      const transactionColumns = this._all<{ name: string }>(`PRAGMA table_info(transactions)`);
       const transactionMigrations = [
         { name: 'status', sql: `ALTER TABLE transactions ADD COLUMN status TEXT DEFAULT 'active'` },
         { name: 'representation_start_date', sql: `ALTER TABLE transactions ADD COLUMN representation_start_date DATE` },
@@ -227,13 +363,13 @@ class DatabaseService implements IDatabaseService {
 
       for (const migration of transactionMigrations) {
         if (!transactionColumns.some(col => col.name === migration.name)) {
-          console.log(`[DatabaseService] Adding ${migration.name} column to transactions`);
-          await this._run(migration.sql);
+          await logService.debug(`Adding ${migration.name} column to transactions`, 'DatabaseService');
+          this._run(migration.sql);
         }
       }
 
       // Create trigger for transactions timestamp (after ensuring updated_at column exists)
-      await this._run(`
+      this._run(`
         CREATE TRIGGER IF NOT EXISTS update_transactions_timestamp
         AFTER UPDATE ON transactions
         BEGIN
@@ -242,12 +378,16 @@ class DatabaseService implements IDatabaseService {
       `);
 
       // Create index for status column (added by migration)
-      await this._run(`CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions(status)`);
+      this._run(`CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions(status)`);
 
       // Migration 3: Enhanced contact roles for transaction_contacts
-      console.log('[DatabaseService] Running Migration 3: Transaction contacts enhanced roles');
-      const tcColumns = await this._all<{ name: string }>(`PRAGMA table_info(transaction_contacts)`);
-      console.log('[DatabaseService] Current transaction_contacts columns:', tcColumns.map(c => c.name).join(', '));
+      await logService.debug('Running Migration 3: Transaction contacts enhanced roles', 'DatabaseService');
+      const tcColumns = this._all<{ name: string }>(`PRAGMA table_info(transaction_contacts)`);
+      await logService.debug(
+        'Current transaction_contacts columns',
+        'DatabaseService',
+        { columns: tcColumns.map(c => c.name).join(', ') }
+      );
       const tcMigrations = [
         {
           name: 'role_category',
@@ -264,24 +404,28 @@ class DatabaseService implements IDatabaseService {
 
       for (const migration of tcMigrations) {
         if (!tcColumns.some(col => col.name === migration.name)) {
-          console.log(`[DatabaseService] Adding ${migration.name} column to transaction_contacts`);
+          await logService.debug(`Adding ${migration.name} column to transaction_contacts`, 'DatabaseService');
           try {
-            await this._run(migration.sql);
-            console.log(`[DatabaseService] Successfully added ${migration.name} column`);
+            this._run(migration.sql);
+            await logService.debug(`Successfully added ${migration.name} column`, 'DatabaseService');
           } catch (err) {
-            console.error(`[DatabaseService] Failed to add ${migration.name} column:`, (err as Error).message);
+            await logService.error(
+              `Failed to add ${migration.name} column`,
+              'DatabaseService',
+              { error: (err as Error).message }
+            );
             throw err;
           }
         }
       }
 
       // Create index for better performance
-      await this._run(`CREATE INDEX IF NOT EXISTS idx_transaction_contacts_specific_role ON transaction_contacts(specific_role)`);
-      await this._run(`CREATE INDEX IF NOT EXISTS idx_transaction_contacts_category ON transaction_contacts(role_category)`);
-      await this._run(`CREATE INDEX IF NOT EXISTS idx_transaction_contacts_primary ON transaction_contacts(is_primary)`);
+      this._run(`CREATE INDEX IF NOT EXISTS idx_transaction_contacts_specific_role ON transaction_contacts(specific_role)`);
+      this._run(`CREATE INDEX IF NOT EXISTS idx_transaction_contacts_category ON transaction_contacts(role_category)`);
+      this._run(`CREATE INDEX IF NOT EXISTS idx_transaction_contacts_primary ON transaction_contacts(is_primary)`);
 
       // Create trigger for transaction_contacts timestamp updates
-      await this._run(`
+      this._run(`
         CREATE TRIGGER IF NOT EXISTS update_transaction_contacts_timestamp
         AFTER UPDATE ON transaction_contacts
         BEGIN
@@ -290,39 +434,43 @@ class DatabaseService implements IDatabaseService {
       `);
 
       // Verify all columns were added successfully
-      const verifyTcColumns = await this._all<{ name: string }>(`PRAGMA table_info(transaction_contacts)`);
+      const verifyTcColumns = this._all<{ name: string }>(`PRAGMA table_info(transaction_contacts)`);
       const columnNames = verifyTcColumns.map(c => c.name);
-      console.log('[DatabaseService] ✅ Migration 3 complete. Final transaction_contacts columns:', columnNames.join(', '));
+      await logService.debug(
+        'Migration 3 complete. Final transaction_contacts columns',
+        'DatabaseService',
+        { columns: columnNames.join(', ') }
+      );
 
       const requiredColumns = ['role_category', 'specific_role', 'is_primary', 'notes', 'updated_at'];
       const missingColumns = requiredColumns.filter(col => !columnNames.includes(col));
       if (missingColumns.length > 0) {
-        console.error('[DatabaseService] ❌ ERROR: Missing required columns:', missingColumns.join(', '));
+        await logService.error('Missing required columns after migration', 'DatabaseService', { missingColumns });
       } else {
-        console.log('[DatabaseService] ✅ All required columns present');
+        await logService.debug('All required columns present', 'DatabaseService');
       }
 
       // Migration 4: Add export tracking columns to transactions
       const exportStatusExists = transactionColumns.some(col => col.name === 'export_status');
       if (!exportStatusExists) {
-        console.log('[DatabaseService] Adding export tracking columns to transactions');
-        await this._run(`ALTER TABLE transactions ADD COLUMN export_status TEXT DEFAULT 'not_exported' CHECK (export_status IN ('not_exported', 'exported', 're_export_needed'))`);
-        await this._run(`ALTER TABLE transactions ADD COLUMN export_format TEXT CHECK (export_format IN ('pdf', 'csv', 'json', 'txt_eml', 'excel'))`);
-        await this._run(`ALTER TABLE transactions ADD COLUMN export_count INTEGER DEFAULT 0`);
-        await this._run(`ALTER TABLE transactions ADD COLUMN last_exported_on DATETIME`);
+        await logService.debug('Adding export tracking columns to transactions', 'DatabaseService');
+        this._run(`ALTER TABLE transactions ADD COLUMN export_status TEXT DEFAULT 'not_exported' CHECK (export_status IN ('not_exported', 'exported', 're_export_needed'))`);
+        this._run(`ALTER TABLE transactions ADD COLUMN export_format TEXT CHECK (export_format IN ('pdf', 'csv', 'json', 'txt_eml', 'excel'))`);
+        this._run(`ALTER TABLE transactions ADD COLUMN export_count INTEGER DEFAULT 0`);
+        this._run(`ALTER TABLE transactions ADD COLUMN last_exported_on DATETIME`);
 
         // Create indexes for better query performance
-        await this._run(`CREATE INDEX IF NOT EXISTS idx_transactions_export_status ON transactions(export_status)`);
-        await this._run(`CREATE INDEX IF NOT EXISTS idx_transactions_last_exported_on ON transactions(last_exported_on)`);
+        this._run(`CREATE INDEX IF NOT EXISTS idx_transactions_export_status ON transactions(export_status)`);
+        this._run(`CREATE INDEX IF NOT EXISTS idx_transactions_last_exported_on ON transactions(last_exported_on)`);
       }
 
       // Migration 5: User feedback and extraction metrics
-      const feedbackTableExists = await this._get<{ name: string }>(`SELECT name FROM sqlite_master WHERE type='table' AND name='user_feedback'`);
+      const feedbackTableExists = this._get<{ name: string }>(`SELECT name FROM sqlite_master WHERE type='table' AND name='user_feedback'`);
       if (!feedbackTableExists) {
-        console.log('[DatabaseService] Creating user feedback tables');
+        await logService.debug('Creating user feedback tables', 'DatabaseService');
 
         // User feedback table
-        await this._run(`
+        this._run(`
           CREATE TABLE user_feedback (
             id TEXT PRIMARY KEY,
             user_id TEXT NOT NULL,
@@ -342,7 +490,7 @@ class DatabaseService implements IDatabaseService {
         `);
 
         // Extraction metrics table
-        await this._run(`
+        this._run(`
           CREATE TABLE extraction_metrics (
             id TEXT PRIMARY KEY,
             user_id TEXT NOT NULL,
@@ -365,15 +513,15 @@ class DatabaseService implements IDatabaseService {
         `);
 
         // Indexes
-        await this._run(`CREATE INDEX idx_user_feedback_user_id ON user_feedback(user_id)`);
-        await this._run(`CREATE INDEX idx_user_feedback_transaction_id ON user_feedback(transaction_id)`);
-        await this._run(`CREATE INDEX idx_user_feedback_field_name ON user_feedback(field_name)`);
-        await this._run(`CREATE INDEX idx_user_feedback_type ON user_feedback(feedback_type)`);
-        await this._run(`CREATE INDEX idx_extraction_metrics_user_id ON extraction_metrics(user_id)`);
-        await this._run(`CREATE INDEX idx_extraction_metrics_field ON extraction_metrics(field_name)`);
+        this._run(`CREATE INDEX idx_user_feedback_user_id ON user_feedback(user_id)`);
+        this._run(`CREATE INDEX idx_user_feedback_transaction_id ON user_feedback(transaction_id)`);
+        this._run(`CREATE INDEX idx_user_feedback_field_name ON user_feedback(field_name)`);
+        this._run(`CREATE INDEX idx_user_feedback_type ON user_feedback(feedback_type)`);
+        this._run(`CREATE INDEX idx_extraction_metrics_user_id ON extraction_metrics(user_id)`);
+        this._run(`CREATE INDEX idx_extraction_metrics_field ON extraction_metrics(field_name)`);
 
         // Trigger
-        await this._run(`
+        this._run(`
           CREATE TRIGGER update_extraction_metrics_timestamp
           AFTER UPDATE ON extraction_metrics
           BEGIN
@@ -383,77 +531,68 @@ class DatabaseService implements IDatabaseService {
       }
 
       // Migration 6: Contact import tracking
-      const contactColumns = await this._all<{ name: string }>(`PRAGMA table_info(contacts)`);
+      const contactColumns = this._all<{ name: string }>(`PRAGMA table_info(contacts)`);
       if (!contactColumns.some(col => col.name === 'is_imported')) {
-        console.log('[DatabaseService] Adding is_imported column to contacts');
-        await this._run(`ALTER TABLE contacts ADD COLUMN is_imported INTEGER DEFAULT 1`);
-        console.log('[DatabaseService] Successfully added is_imported column');
+        await logService.debug('Adding is_imported column to contacts', 'DatabaseService');
+        this._run(`ALTER TABLE contacts ADD COLUMN is_imported INTEGER DEFAULT 1`);
+        await logService.debug('Successfully added is_imported column', 'DatabaseService');
         // Mark all existing manual and email contacts as imported
-        await this._run(`UPDATE contacts SET is_imported = 1 WHERE source IN ('manual', 'email')`);
-        console.log('[DatabaseService] Marked existing contacts as imported');
+        this._run(`UPDATE contacts SET is_imported = 1 WHERE source IN ('manual', 'email')`);
+        await logService.debug('Marked existing contacts as imported', 'DatabaseService');
         // Create index for better performance
-        await this._run(`CREATE INDEX IF NOT EXISTS idx_contacts_is_imported ON contacts(is_imported)`);
-        await this._run(`CREATE INDEX IF NOT EXISTS idx_contacts_user_imported ON contacts(user_id, is_imported)`);
-        console.log('[DatabaseService] Created indexes for is_imported');
+        this._run(`CREATE INDEX IF NOT EXISTS idx_contacts_is_imported ON contacts(is_imported)`);
+        this._run(`CREATE INDEX IF NOT EXISTS idx_contacts_user_imported ON contacts(user_id, is_imported)`);
+        await logService.debug('Created indexes for is_imported', 'DatabaseService');
       } else {
-        console.log('[DatabaseService] is_imported column already exists');
+        await logService.debug('is_imported column already exists', 'DatabaseService');
       }
 
-      console.log('[DatabaseService] ✅ All database migrations completed successfully');
+      await logService.info('All database migrations completed successfully', 'DatabaseService');
 
     } catch (error) {
-      // Log full error details for debugging
-      console.error('[DatabaseService] Migration failed:', error);
-      console.error('[DatabaseService] Error stack:', (error as Error).stack);
+      await logService.error(
+        'Migration failed',
+        'DatabaseService',
+        {
+          error: (error as Error).message,
+          stack: (error as Error).stack
+        }
+      );
     }
   }
 
   /**
    * Helper: Run a query that returns a single row
+   * Uses better-sqlite3's synchronous API
    */
-  private _get<T = any>(sql: string, params: any[] = []): Promise<T | undefined> {
+  private _get<T = any>(sql: string, params: any[] = []): T | undefined {
     const db = this._ensureDb();
-    return new Promise((resolve, reject) => {
-      db.get(sql, params, (err, row) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(row as T | undefined);
-        }
-      });
-    });
+    const stmt = db.prepare(sql);
+    return stmt.get(...params) as T | undefined;
   }
 
   /**
    * Helper: Run a query that returns multiple rows
+   * Uses better-sqlite3's synchronous API
    */
-  private _all<T = any>(sql: string, params: any[] = []): Promise<T[]> {
+  private _all<T = any>(sql: string, params: any[] = []): T[] {
     const db = this._ensureDb();
-    return new Promise((resolve, reject) => {
-      db.all(sql, params, (err, rows) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(rows as T[]);
-        }
-      });
-    });
+    const stmt = db.prepare(sql);
+    return stmt.all(...params) as T[];
   }
 
   /**
    * Helper: Run a query that modifies data (INSERT, UPDATE, DELETE)
+   * Uses better-sqlite3's synchronous API
    */
-  private _run(sql: string, params: any[] = []): Promise<QueryResult> {
+  private _run(sql: string, params: any[] = []): QueryResult {
     const db = this._ensureDb();
-    return new Promise((resolve, reject) => {
-      db.run(sql, params, function (err) {
-        if (err) {
-          reject(err);
-        } else {
-          resolve({ lastInsertRowid: this.lastID, changes: this.changes });
-        }
-      });
-    });
+    const stmt = db.prepare(sql);
+    const result = stmt.run(...params);
+    return {
+      lastInsertRowid: result.lastInsertRowid as number,
+      changes: result.changes
+    };
   }
 
   // ============================================
@@ -491,7 +630,7 @@ class DatabaseService implements IDatabaseService {
       userData.job_title || null,
     ];
 
-    await this._run(sql, params);
+    this._run(sql, params);
     const user = await this.getUserById(id);
     if (!user) {
       throw new DatabaseError('Failed to create user');
@@ -504,7 +643,7 @@ class DatabaseService implements IDatabaseService {
    */
   async getUserById(userId: string): Promise<User | null> {
     const sql = 'SELECT * FROM users_local WHERE id = ?';
-    const user = await this._get<User>(sql, [userId]);
+    const user = this._get<User>(sql, [userId]);
     return user || null;
   }
 
@@ -513,7 +652,7 @@ class DatabaseService implements IDatabaseService {
    */
   async getUserByEmail(email: string): Promise<User | null> {
     const sql = 'SELECT * FROM users_local WHERE email = ?';
-    const user = await this._get<User>(sql, [email]);
+    const user = this._get<User>(sql, [email]);
     return user || null;
   }
 
@@ -522,7 +661,7 @@ class DatabaseService implements IDatabaseService {
    */
   async getUserByOAuthId(provider: OAuthProvider, oauthId: string): Promise<User | null> {
     const sql = 'SELECT * FROM users_local WHERE oauth_provider = ? AND oauth_id = ?';
-    const user = await this._get<User>(sql, [provider, oauthId]);
+    const user = this._get<User>(sql, [provider, oauthId]);
     return user || null;
   }
 
@@ -565,7 +704,7 @@ class DatabaseService implements IDatabaseService {
     values.push(userId);
 
     const sql = `UPDATE users_local SET ${fields.join(', ')} WHERE id = ?`;
-    await this._run(sql, values);
+    this._run(sql, values);
   }
 
   /**
@@ -573,7 +712,7 @@ class DatabaseService implements IDatabaseService {
    */
   async deleteUser(userId: string): Promise<void> {
     const sql = 'DELETE FROM users_local WHERE id = ?';
-    await this._run(sql, [userId]);
+    this._run(sql, [userId]);
   }
 
   /**
@@ -585,7 +724,7 @@ class DatabaseService implements IDatabaseService {
       SET last_login_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `;
-    await this._run(sql, [userId]);
+    this._run(sql, [userId]);
   }
 
   /**
@@ -600,7 +739,7 @@ class DatabaseService implements IDatabaseService {
           privacy_policy_version_accepted = ?
       WHERE id = ?
     `;
-    await this._run(sql, [termsVersion, privacyVersion, userId]);
+    this._run(sql, [termsVersion, privacyVersion, userId]);
     const user = await this.getUserById(userId);
     if (!user) {
       throw new NotFoundError('User not found after accepting terms', 'User', userId);
@@ -628,7 +767,7 @@ class DatabaseService implements IDatabaseService {
       VALUES (?, ?, ?, ?)
     `;
 
-    await this._run(sql, [id, userId, sessionToken, expiresAt.toISOString()]);
+    this._run(sql, [id, userId, sessionToken, expiresAt.toISOString()]);
     return sessionToken;
   }
 
@@ -643,7 +782,7 @@ class DatabaseService implements IDatabaseService {
       WHERE s.session_token = ?
     `;
 
-    const session = await this._get<Session & User>(sql, [sessionToken]);
+    const session = this._get<Session & User>(sql, [sessionToken]);
 
     if (!session) {
       return null;
@@ -657,7 +796,7 @@ class DatabaseService implements IDatabaseService {
     }
 
     // Update last accessed time
-    await this._run(
+    this._run(
       'UPDATE sessions SET last_accessed_at = CURRENT_TIMESTAMP WHERE session_token = ?',
       [sessionToken]
     );
@@ -670,7 +809,7 @@ class DatabaseService implements IDatabaseService {
    */
   async deleteSession(sessionToken: string): Promise<void> {
     const sql = 'DELETE FROM sessions WHERE session_token = ?';
-    await this._run(sql, [sessionToken]);
+    this._run(sql, [sessionToken]);
   }
 
   /**
@@ -678,7 +817,7 @@ class DatabaseService implements IDatabaseService {
    */
   async deleteAllUserSessions(userId: string): Promise<void> {
     const sql = 'DELETE FROM sessions WHERE user_id = ?';
-    await this._run(sql, [userId]);
+    this._run(sql, [userId]);
   }
 
   // ============================================
@@ -708,7 +847,7 @@ class DatabaseService implements IDatabaseService {
       contactData.is_imported !== undefined ? (contactData.is_imported ? 1 : 0) : 1,
     ];
 
-    await this._run(sql, params);
+    this._run(sql, params);
     const contact = await this.getContactById(id);
     if (!contact) {
       throw new DatabaseError('Failed to create contact');
@@ -721,7 +860,7 @@ class DatabaseService implements IDatabaseService {
    */
   async getContactById(contactId: string): Promise<Contact | null> {
     const sql = 'SELECT * FROM contacts WHERE id = ?';
-    const contact = await this._get<Contact>(sql, [contactId]);
+    const contact = this._get<Contact>(sql, [contactId]);
     return contact || null;
   }
 
@@ -749,7 +888,7 @@ class DatabaseService implements IDatabaseService {
 
     sql += ' ORDER BY name ASC';
 
-    return await this._all<Contact>(sql, params);
+    return this._all<Contact>(sql, params);
   }
 
   /**
@@ -757,7 +896,7 @@ class DatabaseService implements IDatabaseService {
    */
   async getImportedContactsByUserId(userId: string): Promise<Contact[]> {
     const sql = 'SELECT * FROM contacts WHERE user_id = ? AND is_imported = 1 ORDER BY name ASC';
-    return await this._all<Contact>(sql, [userId]);
+    return this._all<Contact>(sql, [userId]);
   }
 
   /**
@@ -795,11 +934,13 @@ class DatabaseService implements IDatabaseService {
       : [userId];
 
     try {
-      return await this._all<ContactWithActivity>(sql, params);
+      return this._all<ContactWithActivity>(sql, params);
     } catch (error) {
-      console.error('[DatabaseService] Error getting sorted contacts:', error);
-      console.error('[DatabaseService] SQL:', sql);
-      console.error('[DatabaseService] Params:', params);
+      logService.error(
+        'Error getting sorted contacts',
+        'DatabaseService',
+        { error: (error as Error).message, sql, params }
+      );
       throw error;
     }
   }
@@ -814,7 +955,7 @@ class DatabaseService implements IDatabaseService {
       ORDER BY name ASC
     `;
     const searchPattern = `%${query}%`;
-    return await this._all<Contact>(sql, [userId, searchPattern, searchPattern]);
+    return this._all<Contact>(sql, [userId, searchPattern, searchPattern]);
   }
 
   /**
@@ -838,7 +979,7 @@ class DatabaseService implements IDatabaseService {
 
     values.push(contactId);
     const sql = `UPDATE contacts SET ${fields.join(', ')} WHERE id = ?`;
-    await this._run(sql, values);
+    this._run(sql, values);
   }
 
   /**
@@ -868,7 +1009,7 @@ class DatabaseService implements IDatabaseService {
          OR inspector_id = ?
     `;
 
-    const directResults = await this._all<{ id: string; property_address: string; closing_date?: string | null; transaction_type?: string | null; status: string; role: string }>(directQuery, [
+    const directResults = this._all<{ id: string; property_address: string; closing_date?: string | null; transaction_type?: string | null; status: string; role: string }>(directQuery, [
       contactId, contactId, contactId, contactId,
       contactId, contactId, contactId, contactId
     ]);
@@ -903,7 +1044,7 @@ class DatabaseService implements IDatabaseService {
       WHERE tc.contact_id = ?
     `;
 
-    const junctionResults = await this._all<{ id: string; property_address: string; closing_date?: string | null; transaction_type?: string | null; status: string; specific_role?: string; role_category?: string }>(junctionQuery, [contactId]);
+    const junctionResults = this._all<{ id: string; property_address: string; closing_date?: string | null; transaction_type?: string | null; status: string; specific_role?: string; role_category?: string }>(junctionQuery, [contactId]);
 
     junctionResults.forEach(txn => {
       const role = txn.specific_role || txn.role_category || 'Associated Contact';
@@ -934,7 +1075,7 @@ class DatabaseService implements IDatabaseService {
         WHERE j.value = ?
       `;
 
-      const jsonResults = await this._all<{ id: string; property_address: string; closing_date?: string | null; transaction_type?: string | null; status: string }>(jsonQuery, [contactId]);
+      const jsonResults = this._all<{ id: string; property_address: string; closing_date?: string | null; transaction_type?: string | null; status: string }>(jsonQuery, [contactId]);
 
       jsonResults.forEach(txn => {
         if (!transactionMap.has(txn.id)) {
@@ -951,7 +1092,11 @@ class DatabaseService implements IDatabaseService {
         }
       });
     } catch (error) {
-      console.warn('[DatabaseService] json_each not supported, using LIKE fallback:', (error as Error).message);
+      logService.warn(
+        'json_each not supported, using LIKE fallback',
+        'DatabaseService',
+        { error: (error as Error).message }
+      );
       // Fallback implementation using LIKE
       const fallbackQuery = `
         SELECT id, property_address, closing_date, transaction_type, status, other_contacts
@@ -959,7 +1104,7 @@ class DatabaseService implements IDatabaseService {
         WHERE other_contacts LIKE ?
       `;
 
-      const fallbackResults = await this._all<{ id: string; property_address: string; closing_date?: string | null; transaction_type?: string | null; status: string; other_contacts?: string }>(fallbackQuery, [`%"${contactId}"%`]);
+      const fallbackResults = this._all<{ id: string; property_address: string; closing_date?: string | null; transaction_type?: string | null; status: string; other_contacts?: string }>(fallbackQuery, [`%"${contactId}"%`]);
 
       fallbackResults.forEach(txn => {
         try {
@@ -979,7 +1124,11 @@ class DatabaseService implements IDatabaseService {
             }
           }
         } catch (parseError) {
-          console.error('[DatabaseService] Error parsing other_contacts JSON:', parseError);
+          logService.error(
+            'Error parsing other_contacts JSON',
+            'DatabaseService',
+            { error: (parseError as Error).message }
+          );
         }
       });
     }
@@ -996,7 +1145,7 @@ class DatabaseService implements IDatabaseService {
    */
   async deleteContact(contactId: string): Promise<void> {
     const sql = 'DELETE FROM contacts WHERE id = ?';
-    await this._run(sql, [contactId]);
+    this._run(sql, [contactId]);
   }
 
   /**
@@ -1004,7 +1153,7 @@ class DatabaseService implements IDatabaseService {
    */
   async removeContact(contactId: string): Promise<void> {
     const sql = 'UPDATE contacts SET is_imported = 0 WHERE id = ?';
-    await this._run(sql, [contactId]);
+    this._run(sql, [contactId]);
   }
 
   /**
@@ -1012,7 +1161,7 @@ class DatabaseService implements IDatabaseService {
    */
   async getOrCreateContactFromEmail(userId: string, email: string, name?: string): Promise<Contact> {
     // Try to find existing contact
-    let contact = await this._get<Contact>(
+    let contact = this._get<Contact>(
       'SELECT * FROM contacts WHERE user_id = ? AND email = ?',
       [userId, email]
     );
@@ -1073,7 +1222,7 @@ class DatabaseService implements IDatabaseService {
       tokenData.permissions_granted_at || new Date().toISOString(),
     ];
 
-    await this._run(sql, params);
+    this._run(sql, params);
     return id;
   }
 
@@ -1085,7 +1234,7 @@ class DatabaseService implements IDatabaseService {
       SELECT * FROM oauth_tokens
       WHERE user_id = ? AND provider = ? AND purpose = ? AND is_active = 1
     `;
-    const token = await this._get<OAuthToken & { scopes_granted?: string }>(sql, [userId, provider, purpose]);
+    const token = this._get<OAuthToken & { scopes_granted?: string }>(sql, [userId, provider, purpose]);
 
     if (token && token.scopes_granted && typeof token.scopes_granted === 'string') {
       (token as any).scopes_granted = JSON.parse(token.scopes_granted);
@@ -1133,7 +1282,7 @@ class DatabaseService implements IDatabaseService {
     values.push(tokenId);
 
     const sql = `UPDATE oauth_tokens SET ${fields.join(', ')} WHERE id = ?`;
-    await this._run(sql, values);
+    this._run(sql, values);
   }
 
   /**
@@ -1141,7 +1290,7 @@ class DatabaseService implements IDatabaseService {
    */
   async deleteOAuthToken(userId: string, provider: OAuthProvider, purpose: OAuthPurpose): Promise<void> {
     const sql = 'DELETE FROM oauth_tokens WHERE user_id = ? AND provider = ? AND purpose = ?';
-    await this._run(sql, [userId, provider, purpose]);
+    this._run(sql, [userId, provider, purpose]);
   }
 
   // ============================================
@@ -1178,7 +1327,7 @@ class DatabaseService implements IDatabaseService {
       transactionData.closing_date || null,
     ];
 
-    await this._run(sql, params);
+    this._run(sql, params);
     const transaction = await this.getTransactionById(id);
     if (!transaction) {
       throw new DatabaseError('Failed to create transaction');
@@ -1235,7 +1384,7 @@ class DatabaseService implements IDatabaseService {
 
     sql += ' ORDER BY created_at DESC';
 
-    return await this._all<Transaction>(sql, params);
+    return this._all<Transaction>(sql, params);
   }
 
   /**
@@ -1243,7 +1392,7 @@ class DatabaseService implements IDatabaseService {
    */
   async getTransactionById(transactionId: string): Promise<Transaction | null> {
     const sql = 'SELECT * FROM transactions WHERE id = ?';
-    const transaction = await this._get<Transaction>(sql, [transactionId]);
+    const transaction = this._get<Transaction>(sql, [transactionId]);
     return transaction || null;
   }
 
@@ -1414,7 +1563,7 @@ class DatabaseService implements IDatabaseService {
     values.push(transactionId);
 
     const sql = `UPDATE transactions SET ${fields.join(', ')} WHERE id = ?`;
-    await this._run(sql, values);
+    this._run(sql, values);
   }
 
   /**
@@ -1422,7 +1571,7 @@ class DatabaseService implements IDatabaseService {
    */
   async deleteTransaction(transactionId: string): Promise<void> {
     const sql = 'DELETE FROM transactions WHERE id = ?';
-    await this._run(sql, [transactionId]);
+    this._run(sql, [transactionId]);
   }
 
   // ============================================
@@ -1472,7 +1621,7 @@ class DatabaseService implements IDatabaseService {
       communicationData.is_compliance_related ? 1 : 0,
     ];
 
-    await this._run(sql, params);
+    this._run(sql, params);
     const communication = await this.getCommunicationById(id);
     if (!communication) {
       throw new DatabaseError('Failed to create communication');
@@ -1485,7 +1634,7 @@ class DatabaseService implements IDatabaseService {
    */
   async getCommunicationById(communicationId: string): Promise<Communication | null> {
     const sql = 'SELECT * FROM communications WHERE id = ?';
-    const communication = await this._get<Communication>(sql, [communicationId]);
+    const communication = this._get<Communication>(sql, [communicationId]);
     return communication || null;
   }
 
@@ -1528,7 +1677,7 @@ class DatabaseService implements IDatabaseService {
 
     sql += ' ORDER BY sent_at DESC';
 
-    return await this._all<Communication>(sql, params);
+    return this._all<Communication>(sql, params);
   }
 
   /**
@@ -1540,7 +1689,7 @@ class DatabaseService implements IDatabaseService {
       WHERE transaction_id = ?
       ORDER BY sent_at DESC
     `;
-    return await this._all<Communication>(sql, [transactionId]);
+    return this._all<Communication>(sql, [transactionId]);
   }
 
   /**
@@ -1593,7 +1742,7 @@ class DatabaseService implements IDatabaseService {
     values.push(communicationId);
 
     const sql = `UPDATE communications SET ${fields.join(', ')} WHERE id = ?`;
-    await this._run(sql, values);
+    this._run(sql, values);
   }
 
   /**
@@ -1601,7 +1750,7 @@ class DatabaseService implements IDatabaseService {
    */
   async deleteCommunication(communicationId: string): Promise<void> {
     const sql = 'DELETE FROM communications WHERE id = ?';
-    await this._run(sql, [communicationId]);
+    this._run(sql, [communicationId]);
   }
 
   /**
@@ -1609,7 +1758,7 @@ class DatabaseService implements IDatabaseService {
    */
   async linkCommunicationToTransaction(communicationId: string, transactionId: string): Promise<void> {
     const sql = 'UPDATE communications SET transaction_id = ? WHERE id = ?';
-    await this._run(sql, [transactionId, communicationId]);
+    this._run(sql, [transactionId, communicationId]);
   }
 
   /**
@@ -1625,7 +1774,7 @@ class DatabaseService implements IDatabaseService {
       ) VALUES (?, ?, ?, ?, ?, ?, ?)
     `;
 
-    await this._run(sql, [
+    this._run(sql, [
       id,
       transactionId,
       fieldName,
@@ -1665,7 +1814,7 @@ class DatabaseService implements IDatabaseService {
       null,
     ];
 
-    await this._run(sql, params);
+    this._run(sql, params);
   }
 
   /**
@@ -1691,7 +1840,7 @@ class DatabaseService implements IDatabaseService {
       data.notes || null,
     ];
 
-    await this._run(sql, params);
+    this._run(sql, params);
     return id;
   }
 
@@ -1708,7 +1857,7 @@ class DatabaseService implements IDatabaseService {
       ORDER BY tc.is_primary DESC, tc.created_at ASC
     `;
 
-    return await this._all<Contact>(sql, [transactionId]);
+    return this._all<Contact>(sql, [transactionId]);
   }
 
   /**
@@ -1729,7 +1878,7 @@ class DatabaseService implements IDatabaseService {
       ORDER BY tc.is_primary DESC, tc.created_at ASC
     `;
 
-    return await this._all<TransactionContactResult>(sql, [transactionId]);
+    return this._all<TransactionContactResult>(sql, [transactionId]);
   }
 
   /**
@@ -1750,7 +1899,7 @@ class DatabaseService implements IDatabaseService {
       ORDER BY tc.is_primary DESC
     `;
 
-    return await this._all<TransactionContactResult>(sql, [transactionId, role]);
+    return this._all<TransactionContactResult>(sql, [transactionId, role]);
   }
 
   /**
@@ -1780,7 +1929,7 @@ class DatabaseService implements IDatabaseService {
       WHERE transaction_id = ? AND contact_id = ?
     `;
 
-    await this._run(sql, values);
+    this._run(sql, values);
   }
 
   /**
@@ -1788,7 +1937,7 @@ class DatabaseService implements IDatabaseService {
    */
   async unlinkContactFromTransaction(transactionId: string, contactId: string): Promise<void> {
     const sql = 'DELETE FROM transaction_contacts WHERE transaction_id = ? AND contact_id = ?';
-    await this._run(sql, [transactionId, contactId]);
+    this._run(sql, [transactionId, contactId]);
   }
 
   /**
@@ -1796,7 +1945,7 @@ class DatabaseService implements IDatabaseService {
    */
   async isContactAssignedToTransaction(transactionId: string, contactId: string): Promise<boolean> {
     const sql = 'SELECT id FROM transaction_contacts WHERE transaction_id = ? AND contact_id = ? LIMIT 1';
-    const result = await this._get(sql, [transactionId, contactId]);
+    const result = this._get(sql, [transactionId, contactId]);
     return !!result;
   }
 
@@ -1829,9 +1978,9 @@ class DatabaseService implements IDatabaseService {
       feedbackData.feedback_text || null,
     ];
 
-    await this._run(sql, params);
+    this._run(sql, params);
 
-    const feedback = await this._get<UserFeedback>('SELECT * FROM user_feedback WHERE id = ?', [id]);
+    const feedback = this._get<UserFeedback>('SELECT * FROM user_feedback WHERE id = ?', [id]);
     if (!feedback) {
       throw new DatabaseError('Failed to save feedback');
     }
@@ -1849,7 +1998,7 @@ class DatabaseService implements IDatabaseService {
       ORDER BY created_at DESC
     `;
 
-    return await this._all<UserFeedback>(sql, [transactionId]);
+    return this._all<UserFeedback>(sql, [transactionId]);
   }
 
   /**
@@ -1863,7 +2012,7 @@ class DatabaseService implements IDatabaseService {
       LIMIT ?
     `;
 
-    return await this._all<UserFeedback>(sql, [userId, fieldName, limit]);
+    return this._all<UserFeedback>(sql, [userId, fieldName, limit]);
   }
 
   // ============================================
@@ -1874,27 +2023,60 @@ class DatabaseService implements IDatabaseService {
    * Vacuum the database to reclaim space
    */
   async vacuum(): Promise<void> {
-    await this._run('VACUUM');
+    this._run('VACUUM');
   }
 
   /**
    * Close database connection
    */
   async close(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      if (this.db) {
-        this.db.close((err) => {
-          if (err) {
-            reject(err);
-          } else {
-            console.log('[DatabaseService] Database connection closed');
-            resolve();
-          }
-        });
-      } else {
-        resolve();
-      }
-    });
+    if (this.db) {
+      this.db.close();
+      await logService.info('Database connection closed', 'DatabaseService');
+    }
+    this.db = null;
+    this.encryptionKey = null;
+  }
+
+  /**
+   * Re-key the database with a new encryption key (for key rotation)
+   * @param newKey - The new encryption key to use
+   */
+  async rekeyDatabase(newKey: string): Promise<void> {
+    const db = this._ensureDb();
+
+    try {
+      // Use SQLCipher's rekey pragma to change the encryption key
+      db.pragma(`rekey = "x'${newKey}'"`);
+      this.encryptionKey = newKey;
+      await logService.info('Database re-keyed successfully', 'DatabaseService');
+    } catch (error) {
+      await logService.error(
+        'Failed to re-key database',
+        'DatabaseService',
+        { error: error instanceof Error ? error.message : String(error) }
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Get database encryption status
+   * @returns Object containing encryption status information
+   */
+  async getEncryptionStatus(): Promise<{
+    isEncrypted: boolean;
+    keyMetadata: { keyId: string; createdAt: string; version: number } | null;
+  }> {
+    const keyMetadata = await databaseEncryptionService.getKeyMetadata();
+    const isEncrypted = this.dbPath
+      ? await databaseEncryptionService.isDatabaseEncrypted(this.dbPath)
+      : false;
+
+    return {
+      isEncrypted,
+      keyMetadata,
+    };
   }
 }
 
