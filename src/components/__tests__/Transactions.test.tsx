@@ -457,7 +457,7 @@ describe('Transactions', () => {
       }
 
       await waitFor(() => {
-        expect(screen.getByText(/\$450,000/)).toBeInTheDocument();
+        expect(screen.getAllByText(/\$450,000/).length).toBeGreaterThan(0);
       });
     });
   });

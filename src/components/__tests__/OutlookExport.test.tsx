@@ -180,7 +180,7 @@ describe('OutlookExport', () => {
       );
 
       await waitFor(() => {
-        expect(screen.queryByText(/full audit export/i) || screen.queryByText(/export/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/full audit export/i).length).toBeGreaterThan(0);
       }, { timeout: 3000 });
     });
 
@@ -252,7 +252,7 @@ describe('OutlookExport', () => {
       );
 
       await waitFor(() => {
-        expect(screen.queryByText(/full audit export/i) || screen.queryByText(/export/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/full audit export/i).length).toBeGreaterThan(0);
       }, { timeout: 3000 });
 
       // Check for contacts
@@ -274,7 +274,7 @@ describe('OutlookExport', () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByText(/full audit export/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/full audit export/i).length).toBeGreaterThan(0);
       });
 
       expect(screen.getByText('Bob Buyer')).toBeInTheDocument();
@@ -292,7 +292,7 @@ describe('OutlookExport', () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByText(/full audit export/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/full audit export/i).length).toBeGreaterThan(0);
       });
 
       expect(screen.getByRole('button', { name: /export 2 audits/i })).toBeInTheDocument();
@@ -309,7 +309,7 @@ describe('OutlookExport', () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByText(/full audit export/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/full audit export/i).length).toBeGreaterThan(0);
       });
 
       expect(screen.getByRole('button', { name: /back/i })).toBeInTheDocument();
