@@ -3,13 +3,15 @@ import {
   getTransactionTypeContext,
   validateRoleAssignments,
   getRoleDisplayName,
+  type RoleConfig,
+  type ContactAssignments,
 } from './transactionRoleUtils';
 import { SPECIFIC_ROLES } from '../constants/contactRoles';
 
 describe('transactionRoleUtils', () => {
   describe('filterRolesByTransactionType', () => {
     it('should not filter professional services roles', () => {
-      const roles = [
+      const roles: RoleConfig[] = [
         { role: 'inspector', required: false, multiple: true },
         { role: 'appraiser', required: false, multiple: false },
         { role: 'title_company', required: false, multiple: false },
@@ -22,7 +24,7 @@ describe('transactionRoleUtils', () => {
     });
 
     it('should filter roles for purchase transaction', () => {
-      const roles = [
+      const roles: RoleConfig[] = [
         { role: SPECIFIC_ROLES.CLIENT, required: true, multiple: false },
         { role: SPECIFIC_ROLES.BUYER_AGENT, required: false, multiple: false },
         { role: SPECIFIC_ROLES.SELLER_AGENT, required: false, multiple: false },
@@ -39,7 +41,7 @@ describe('transactionRoleUtils', () => {
     });
 
     it('should filter roles for sale transaction', () => {
-      const roles = [
+      const roles: RoleConfig[] = [
         { role: SPECIFIC_ROLES.CLIENT, required: true, multiple: false },
         { role: SPECIFIC_ROLES.BUYER_AGENT, required: false, multiple: false },
         { role: SPECIFIC_ROLES.SELLER_AGENT, required: false, multiple: false },
@@ -56,7 +58,7 @@ describe('transactionRoleUtils', () => {
     });
 
     it('should always include client role', () => {
-      const roles = [{ role: SPECIFIC_ROLES.CLIENT, required: true, multiple: false }];
+      const roles: RoleConfig[] = [{ role: SPECIFIC_ROLES.CLIENT, required: true, multiple: false }];
 
       const purchaseResult = filterRolesByTransactionType(roles, 'purchase', 'Client & Agents');
       const saleResult = filterRolesByTransactionType(roles, 'sale', 'Client & Agents');
@@ -91,12 +93,12 @@ describe('transactionRoleUtils', () => {
 
   describe('validateRoleAssignments', () => {
     it('should pass when all required roles are assigned', () => {
-      const contactAssignments = {
-        client: [{ contactId: 'contact-1', isPrimary: true }],
-        seller_agent: [{ contactId: 'contact-2', isPrimary: false }],
+      const contactAssignments: ContactAssignments = {
+        client: ['contact-1'],
+        seller_agent: ['contact-2'],
       };
 
-      const roles = [
+      const roles: RoleConfig[] = [
         { role: 'client', required: true, multiple: false },
         { role: 'seller_agent', required: false, multiple: false },
       ];
@@ -108,11 +110,11 @@ describe('transactionRoleUtils', () => {
     });
 
     it('should fail when required role is missing', () => {
-      const contactAssignments = {
-        seller_agent: [{ contactId: 'contact-2', isPrimary: false }],
+      const contactAssignments: ContactAssignments = {
+        seller_agent: ['contact-2'],
       };
 
-      const roles = [
+      const roles: RoleConfig[] = [
         { role: 'client', required: true, multiple: false },
         { role: 'seller_agent', required: false, multiple: false },
       ];
@@ -125,11 +127,11 @@ describe('transactionRoleUtils', () => {
     });
 
     it('should fail when assignment array is empty', () => {
-      const contactAssignments = {
+      const contactAssignments: ContactAssignments = {
         client: [],
       };
 
-      const roles = [{ role: 'client', required: true, multiple: false }];
+      const roles: RoleConfig[] = [{ role: 'client', required: true, multiple: false }];
 
       const result = validateRoleAssignments(contactAssignments, roles);
 
@@ -138,11 +140,11 @@ describe('transactionRoleUtils', () => {
     });
 
     it('should pass when optional roles are missing', () => {
-      const contactAssignments = {
-        client: [{ contactId: 'contact-1', isPrimary: true }],
+      const contactAssignments: ContactAssignments = {
+        client: ['contact-1'],
       };
 
-      const roles = [
+      const roles: RoleConfig[] = [
         { role: 'client', required: true, multiple: false },
         { role: 'inspector', required: false, multiple: true },
         { role: 'appraiser', required: false, multiple: false },
