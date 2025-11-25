@@ -355,9 +355,21 @@ const handleGoogleConnectMailbox = async (mainWindow: BrowserWindow | null, user
     // Load the auth URL
     authWindow.loadURL(authUrl);
 
+    // Track if auth completed successfully
+    let authCompleted = false;
+
+    // Clean up server if window is closed before auth completes
+    authWindow.on('closed', () => {
+      if (!authCompleted) {
+        googleAuthService.stopLocalServer();
+        logService.info('Google mailbox auth window closed by user, cleaned up server', 'AuthHandlers');
+      }
+    });
+
     // Close the window when redirected to callback
     authWindow.webContents.on('will-redirect', (event, url) => {
       if (url.startsWith('http://localhost:3001/callback')) {
+        authCompleted = true;
         // Let the success page load, then close after 3 seconds
         setTimeout(() => {
           if (authWindow && !authWindow.isDestroyed()) {
@@ -373,6 +385,7 @@ const handleGoogleConnectMailbox = async (mainWindow: BrowserWindow | null, user
       try {
         // Wait for code from local server (in background)
         const code = await codePromise;
+        authCompleted = true;
         await logService.info('Received Gmail authorization code from redirect', 'AuthHandlers');
 
         // Exchange code for tokens
@@ -500,9 +513,21 @@ const handleMicrosoftLogin = async (mainWindow: BrowserWindow | null): Promise<L
     // Load the auth URL
     authWindow.loadURL(authUrl);
 
+    // Track if auth completed successfully
+    let authCompleted = false;
+
+    // Clean up server if window is closed before auth completes
+    authWindow.on('closed', () => {
+      if (!authCompleted) {
+        microsoftAuthService.stopLocalServer();
+        logService.info('Microsoft login auth window closed by user, cleaned up server', 'AuthHandlers');
+      }
+    });
+
     // Close the window when redirected to callback
     authWindow.webContents.on('will-redirect', (event, url) => {
       if (url.startsWith('http://localhost:3000/callback')) {
+        authCompleted = true;
         // Let the success page load, then close after 3 seconds
         setTimeout(() => {
           if (authWindow && !authWindow.isDestroyed()) {
@@ -518,6 +543,7 @@ const handleMicrosoftLogin = async (mainWindow: BrowserWindow | null): Promise<L
       try {
         // Wait for code from local server (in background)
         const code = await codePromise;
+        authCompleted = true;
         await logService.info('Received authorization code from redirect', 'AuthHandlers');
 
         // Exchange code for tokens
@@ -749,9 +775,21 @@ const handleMicrosoftConnectMailbox = async (mainWindow: BrowserWindow | null, u
     // Load the auth URL
     authWindow.loadURL(authUrl);
 
+    // Track if auth completed successfully
+    let authCompleted = false;
+
+    // Clean up server if window is closed before auth completes
+    authWindow.on('closed', () => {
+      if (!authCompleted) {
+        microsoftAuthService.stopLocalServer();
+        logService.info('Microsoft mailbox auth window closed by user, cleaned up server', 'AuthHandlers');
+      }
+    });
+
     // Close the window when redirected to callback
     authWindow.webContents.on('will-redirect', (event, url) => {
       if (url.startsWith('http://localhost:3000/callback')) {
+        authCompleted = true;
         // Let the success page load, then close after 3 seconds
         setTimeout(() => {
           if (authWindow && !authWindow.isDestroyed()) {
@@ -767,6 +805,7 @@ const handleMicrosoftConnectMailbox = async (mainWindow: BrowserWindow | null, u
       try {
         // Wait for code from local server (in background)
         const code = await codePromise;
+        authCompleted = true;
         await logService.info('Received mailbox authorization code from redirect', 'AuthHandlers');
 
         // Exchange code for tokens
