@@ -3,12 +3,12 @@
  * Ensures transaction data validation works correctly, especially for dates and prices
  */
 
-const {
+import {
   ValidationError,
   validateContactId,
   validateTransactionId,
   validateTransactionData,
-} = require('../validation');
+} from '../validation';
 
 describe('Contact Validation', () => {
   describe('validateContactId', () => {

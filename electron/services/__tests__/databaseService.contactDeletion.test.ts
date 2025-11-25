@@ -3,21 +3,41 @@
  * Tests the getTransactionsByContact method in databaseService
  */
 
+import type { Database, Statement } from 'better-sqlite3';
+
+interface MockStatement {
+  get: jest.Mock;
+  all: jest.Mock;
+  run: jest.Mock;
+}
+
+interface TransactionResult {
+  id: string;
+  property_address: string;
+  closing_date: string;
+  transaction_type: string;
+  status: string;
+  role?: string;
+  specific_role?: string | null;
+  role_category?: string | null;
+  roles?: string;
+}
+
 // Mock statement that returns results
-const createMockStatement = (returnValue) => ({
+const createMockStatement = <T>(returnValue: T): MockStatement => ({
   get: jest.fn(() => returnValue),
   all: jest.fn(() => returnValue),
   run: jest.fn(() => ({ lastInsertRowid: 1, changes: 1 })),
 });
 
 // Track mock statement calls
-let mockStatementCalls = [];
-let mockStatementReturnValues = [];
+let mockStatementCalls: string[] = [];
+let mockStatementReturnValues: TransactionResult[][] = [];
 let callIndex = 0;
 
 // Mock database with better-sqlite3 synchronous API
 const mockDatabase = {
-  prepare: jest.fn((sql) => {
+  prepare: jest.fn((sql: string) => {
     const returnValue = mockStatementReturnValues[callIndex] || [];
     callIndex++;
     mockStatementCalls.push(sql);
@@ -68,6 +88,7 @@ jest.mock('fs', () => ({
   renameSync: jest.fn(),
 }));
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const databaseService = require('../databaseService').default;
 
 describe('DatabaseService - Contact Deletion Prevention', () => {
@@ -96,7 +117,7 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
     });
 
     it('should find transactions via direct FK references (buyer_agent_id)', async () => {
-      const mockTransaction = {
+      const mockTransaction: TransactionResult = {
         id: 'txn-1',
         property_address: '123 Main St',
         closing_date: '2024-01-15',
@@ -119,7 +140,7 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
     });
 
     it('should find transactions via junction table (transaction_contacts)', async () => {
-      const mockTransaction = {
+      const mockTransaction: TransactionResult = {
         id: 'txn-2',
         property_address: '456 Oak Ave',
         closing_date: '2024-02-20',
@@ -143,7 +164,7 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
     });
 
     it('should find transactions via JSON array (other_contacts)', async () => {
-      const mockTransaction = {
+      const mockTransaction: TransactionResult = {
         id: 'txn-3',
         property_address: '789 Elm St',
         closing_date: '2024-03-10',
@@ -165,7 +186,7 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
     });
 
     it('should deduplicate transactions found in multiple sources', async () => {
-      const directTxn = {
+      const directTxn: TransactionResult = {
         id: 'txn-1',
         property_address: '123 Main St',
         closing_date: '2024-01-15',
@@ -174,7 +195,7 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
         role: 'Buyer Agent',
       };
 
-      const junctionTxn = {
+      const junctionTxn: TransactionResult = {
         id: 'txn-1',
         property_address: '123 Main St',
         closing_date: '2024-01-15',
@@ -196,7 +217,7 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
     });
 
     it('should combine multiple roles from the same transaction', async () => {
-      const transactions = [
+      const transactions: TransactionResult[] = [
         {
           id: 'txn-1',
           property_address: '123 Main St',
@@ -212,7 +233,7 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
           transaction_type: 'purchase',
           status: 'active',
           role: 'Seller Agent',
-        }
+        },
       ];
 
       mockStatementReturnValues = [transactions, [], []];
@@ -224,7 +245,7 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
     });
 
     it('should handle multiple transactions across different sources', async () => {
-      const directTxn = {
+      const directTxn: TransactionResult = {
         id: 'txn-1',
         property_address: '123 Main St',
         closing_date: '2024-01-15',
@@ -233,7 +254,7 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
         role: 'Buyer Agent',
       };
 
-      const junctionTxn = {
+      const junctionTxn: TransactionResult = {
         id: 'txn-2',
         property_address: '456 Oak Ave',
         closing_date: '2024-02-20',
@@ -242,7 +263,7 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
         specific_role: 'inspector',
       };
 
-      const jsonTxn = {
+      const jsonTxn: TransactionResult = {
         id: 'txn-3',
         property_address: '789 Elm St',
         closing_date: '2024-03-10',
@@ -255,11 +276,11 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
       const result = await databaseService.getTransactionsByContact(contactId);
 
       expect(result).toHaveLength(3);
-      expect(result.map((t) => t.id)).toEqual(['txn-1', 'txn-2', 'txn-3']);
+      expect(result.map((t: TransactionResult) => t.id)).toEqual(['txn-1', 'txn-2', 'txn-3']);
     });
 
     it('should use role_category when specific_role is not available', async () => {
-      const mockTransaction = {
+      const mockTransaction: TransactionResult = {
         id: 'txn-1',
         property_address: '123 Main St',
         closing_date: '2024-01-15',
@@ -277,7 +298,7 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
     });
 
     it('should use "Associated Contact" as fallback when no role is specified', async () => {
-      const mockTransaction = {
+      const mockTransaction: TransactionResult = {
         id: 'txn-1',
         property_address: '123 Main St',
         closing_date: '2024-01-15',
@@ -295,7 +316,7 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
     });
 
     it('should handle all transaction types and statuses', async () => {
-      const transactions = [
+      const transactions: TransactionResult[] = [
         {
           id: 'txn-1',
           property_address: '123 Main St',
@@ -311,7 +332,7 @@ describe('DatabaseService - Contact Deletion Prevention', () => {
           transaction_type: 'sale',
           status: 'closed',
           role: 'Seller Agent',
-        }
+        },
       ];
 
       mockStatementReturnValues = [transactions, [], []];

@@ -3,8 +3,14 @@
  * Tests encryption/decryption and fail-safe behavior when encryption is unavailable
  */
 
+interface MockSafeStorage {
+  isEncryptionAvailable: jest.Mock;
+  encryptString: jest.Mock;
+  decryptString: jest.Mock;
+}
+
 // Mock Electron's safeStorage before requiring the service
-const mockSafeStorage = {
+const mockSafeStorage: MockSafeStorage = {
   isEncryptionAvailable: jest.fn(),
   encryptString: jest.fn(),
   decryptString: jest.fn(),
@@ -14,6 +20,7 @@ jest.mock('electron', () => ({
   safeStorage: mockSafeStorage,
 }));
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const tokenEncryptionService = require('../tokenEncryptionService').default;
 
 describe('TokenEncryptionService', () => {
@@ -24,11 +31,11 @@ describe('TokenEncryptionService', () => {
     // Setup default mock implementations
     mockSafeStorage.isEncryptionAvailable.mockReturnValue(true);
 
-    mockSafeStorage.encryptString.mockImplementation((text) => {
+    mockSafeStorage.encryptString.mockImplementation((text: string) => {
       return Buffer.from(`encrypted:${text}`);
     });
 
-    mockSafeStorage.decryptString.mockImplementation((buffer) => {
+    mockSafeStorage.decryptString.mockImplementation((buffer: Buffer) => {
       const str = buffer.toString();
       return str.replace('encrypted:', '');
     });
