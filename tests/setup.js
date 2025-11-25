@@ -1,5 +1,18 @@
 // Jest setup file
 import '@testing-library/jest-dom';
+import { configure } from '@testing-library/dom';
+
+// Configure testing-library to limit DOM output on errors
+configure({
+  getElementError: (message) => {
+    const error = new Error(message);
+    error.name = 'TestingLibraryElementError';
+    return error;
+  },
+});
+
+// Set DEBUG_PRINT_LIMIT to reduce DOM output
+process.env.DEBUG_PRINT_LIMIT = '500';
 
 // Mock window.api for tests (only in jsdom environment)
 if (typeof window !== 'undefined') {
@@ -84,9 +97,12 @@ if (typeof window !== 'undefined') {
   };
 }
 
-// Suppress console errors in tests
+// Suppress console output in tests to reduce noise
 global.console = {
   ...console,
+  log: jest.fn(),
+  debug: jest.fn(),
+  info: jest.fn(),
   error: jest.fn(),
   warn: jest.fn(),
 };
