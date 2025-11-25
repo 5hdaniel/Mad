@@ -126,10 +126,20 @@ jobs:
 
       - name: Package for macOS
         if: matrix.os == 'macos-latest'
-        run: npm run package
+        run: |
+          if [ -n "$MACOS_CERT" ]; then
+            echo "Code signing certificate found, building signed package..."
+            export CSC_LINK="$MACOS_CERT"
+            export CSC_KEY_PASSWORD="$MACOS_CERT_PASSWORD"
+            npm run package
+          else
+            echo "No code signing certificate, building unsigned package..."
+            export CSC_IDENTITY_AUTO_DISCOVERY=false
+            npm run package:unsigned
+          fi
         env:
-          CSC_LINK: ${{ secrets.MACOS_CERTIFICATE }}
-          CSC_KEY_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_CERT: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
