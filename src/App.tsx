@@ -85,16 +85,12 @@ function App() {
       try {
         const result = await window.api.auth.getCurrentUser();
         if (result.success) {
-          console.log('Auto-login: Session found, logging in user');
           setIsAuthenticated(true);
           setCurrentUser(result.user ?? null);
           setSessionToken(result.sessionToken ?? null);
           setAuthProvider((result.provider ?? null) as OAuthProvider | null);
           setSubscription(result.subscription ?? undefined);
-          // Also store in localStorage for backward compatibility
-          if (result.sessionToken) {
-            localStorage.setItem('sessionToken', result.sessionToken);
-          }
+          // Session token is stored securely in memory only - no localStorage
 
           // Check if user needs to accept terms (for new users or version updates)
           if (result.isNewUser) {
@@ -107,14 +103,10 @@ function App() {
               setCurrentStep('permissions');
             }
           }
-        } else {
-          console.log('Auto-login: No active session found');
-          // Clear any stale localStorage data
-          localStorage.removeItem('sessionToken');
         }
-      } catch (error) {
-        console.error('Session check failed:', error);
-        localStorage.removeItem('sessionToken');
+        // No localStorage cleanup needed - session is managed server-side
+      } catch {
+        // Session check failed silently - user will need to log in
       }
     }
   };
@@ -125,7 +117,7 @@ function App() {
     setSessionToken(token);
     setAuthProvider(provider as OAuthProvider);
     setSubscription(subscription ?? undefined);
-    localStorage.setItem('sessionToken', token);
+    // Session token is stored securely in memory only - no localStorage
 
     // Show welcome modal for new users
     if (isNewUser) {
@@ -167,12 +159,12 @@ function App() {
     if (sessionToken && window.api?.auth?.logout) {
       try {
         await window.api.auth.logout(sessionToken);
-      } catch (error) {
-        console.error('Logout failed:', error);
+      } catch {
+        // Logout error is handled server-side, continue with local cleanup
       }
     }
 
-    // Clear all state
+    // Clear all in-memory state - no localStorage to clean
     setIsAuthenticated(false);
     setCurrentUser(null);
     setSessionToken(null);
@@ -180,7 +172,6 @@ function App() {
     setSubscription(undefined);
     setShowProfile(false);
     setShowWelcomeTerms(false);
-    localStorage.removeItem('sessionToken');
     setCurrentStep('login');
   };
 
