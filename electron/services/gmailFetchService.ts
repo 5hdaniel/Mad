@@ -1,5 +1,4 @@
-import { google, gmail_v1 } from 'googleapis';
-import { OAuth2Client } from 'google-auth-library';
+import { google, gmail_v1, Auth } from 'googleapis';
 import tokenEncryptionService from './tokenEncryptionService';
 import databaseService from './databaseService';
 import { OAuthToken } from '../types/models';
@@ -52,7 +51,7 @@ interface EmailSearchOptions {
  */
 class GmailFetchService {
   private gmail: gmail_v1.Gmail | null = null;
-  private oauth2Client: OAuth2Client | null = null;
+  private oauth2Client: Auth.OAuth2Client | null = null;
 
   /**
    * Initialize Gmail API with user's OAuth tokens
@@ -74,20 +73,20 @@ class GmailFetchService {
         : null;
 
       // Initialize OAuth2 client
-      this.oauth2Client = new google.auth.OAuth2(
+      const oauth2Client = new google.auth.OAuth2(
         process.env.GOOGLE_CLIENT_ID,
         process.env.GOOGLE_CLIENT_SECRET,
         process.env.GOOGLE_REDIRECT_URI
       );
 
       // Set credentials
-      this.oauth2Client.setCredentials({
+      oauth2Client.setCredentials({
         access_token: accessToken,
         refresh_token: refreshToken,
       });
 
       // Handle token refresh
-      this.oauth2Client.on('tokens', async (tokens) => {
+      oauth2Client.on('tokens', async (tokens) => {
         console.log('[GmailFetch] Tokens refreshed');
         if (tokens.refresh_token) {
           // Update refresh token in database
@@ -106,8 +105,9 @@ class GmailFetchService {
         }
       });
 
-      // Initialize Gmail API
-      this.gmail = google.gmail({ version: 'v1', auth: this.oauth2Client });
+      // Store client and initialize Gmail API
+      this.oauth2Client = oauth2Client;
+      this.gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
       console.log('[GmailFetch] Initialized successfully');
       return true;
