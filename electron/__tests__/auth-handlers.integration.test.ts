@@ -532,8 +532,8 @@ describe('Auth Handlers Integration Tests', () => {
       expect(result1.success).toBe(false);
       expect(result1.error).toContain('Authorization code');
 
-      // Malformed auth code
-      const result2 = await handler(mockEvent, 'a<script>');
+      // Malformed auth code (must be long enough to pass length check)
+      const result2 = await handler(mockEvent, 'abcdefghijklmnop<script>alert(1)</script>');
       expect(result2.success).toBe(false);
       expect(result2.error).toContain('invalid characters');
     });

@@ -50,6 +50,9 @@ describe('TokenEncryptionService', () => {
     // Clear all mock calls and implementations
     jest.clearAllMocks();
 
+    // Reset the service's internal state between tests
+    tokenEncryptionService._resetState();
+
     // Setup default mock implementations
     mockSafeStorage.isEncryptionAvailable.mockReturnValue(true);
 

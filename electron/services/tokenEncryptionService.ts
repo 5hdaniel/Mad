@@ -51,6 +51,15 @@ class TokenEncryptionService {
   private _encryptionAvailable = false;
 
   /**
+   * Reset internal state (for testing purposes only)
+   * @internal
+   */
+  _resetState(): void {
+    this._encryptionChecked = false;
+    this._encryptionAvailable = false;
+  }
+
+  /**
    * Get platform-specific guidance for encryption issues
    */
   private getPlatformGuidance(): string {
