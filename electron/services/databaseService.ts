@@ -619,9 +619,9 @@ class DatabaseService implements IDatabaseService {
     const id = crypto.randomUUID();
     const sessionToken = crypto.randomUUID();
 
-    // Sessions expire after 7 days
+    // Sessions expire after 24 hours (security hardened)
     const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7);
+    expiresAt.setTime(expiresAt.getTime() + 24 * 60 * 60 * 1000);
 
     const sql = `
       INSERT INTO sessions (id, user_id, session_token, expires_at)

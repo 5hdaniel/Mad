@@ -2,6 +2,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { app } from 'electron';
 import type { User, OAuthProvider, Subscription } from '../types/models';
+import logService from './logService';
 
 // ============================================
 // TYPES & INTERFACES
@@ -13,6 +14,7 @@ interface SessionData {
   provider: OAuthProvider;
   subscription?: Subscription;
   expiresAt: number;
+  createdAt: number;
   savedAt?: number;
 }
 
@@ -38,15 +40,21 @@ class SessionService {
    */
   async saveSession(sessionData: SessionData): Promise<boolean> {
     try {
+      const now = Date.now();
       const data: SessionData = {
         ...sessionData,
-        savedAt: Date.now()
+        createdAt: sessionData.createdAt || now,
+        savedAt: now
       };
       await fs.writeFile(this.sessionFilePath, JSON.stringify(data, null, 2), 'utf8');
-      console.log('Session saved successfully');
+      await logService.info('Session saved successfully', 'SessionService');
       return true;
     } catch (error) {
-      console.error('Error saving session:', error);
+      await logService.error(
+        'Error saving session',
+        'SessionService',
+        { error: error instanceof Error ? error.message : 'Unknown error' }
+      );
       return false;
     }
   }
@@ -60,21 +68,25 @@ class SessionService {
       const data = await fs.readFile(this.sessionFilePath, 'utf8');
       const session: SessionData = JSON.parse(data);
 
-      // Check if session is expired
+      // Check if session is expired (absolute timeout)
       if (session.expiresAt && Date.now() > session.expiresAt) {
-        console.log('Session expired, clearing...');
+        await logService.info('Session expired, clearing...', 'SessionService');
         await this.clearSession();
         return null;
       }
 
-      console.log('Session loaded successfully');
+      await logService.info('Session loaded successfully', 'SessionService');
       return session;
     } catch (error: any) {
       if (error.code === 'ENOENT') {
-        console.log('No existing session found');
+        await logService.info('No existing session found', 'SessionService');
         return null;
       }
-      console.error('Error loading session:', error);
+      await logService.error(
+        'Error loading session',
+        'SessionService',
+        { error: error instanceof Error ? error.message : 'Unknown error' }
+      );
       return null;
     }
   }
@@ -85,14 +97,18 @@ class SessionService {
   async clearSession(): Promise<boolean> {
     try {
       await fs.unlink(this.sessionFilePath);
-      console.log('Session cleared successfully');
+      await logService.info('Session cleared successfully', 'SessionService');
       return true;
     } catch (error: any) {
       if (error.code === 'ENOENT') {
         // File doesn't exist, that's fine
         return true;
       }
-      console.error('Error clearing session:', error);
+      await logService.error(
+        'Error clearing session',
+        'SessionService',
+        { error: error instanceof Error ? error.message : 'Unknown error' }
+      );
       return false;
     }
   }
@@ -113,7 +129,7 @@ class SessionService {
     try {
       const currentSession = await this.loadSession();
       if (!currentSession) {
-        console.error('No session to update');
+        await logService.error('No session to update', 'SessionService');
         return false;
       }
 
@@ -126,9 +142,20 @@ class SessionService {
       await this.saveSession(updatedSession);
       return true;
     } catch (error) {
-      console.error('Error updating session:', error);
+      await logService.error(
+        'Error updating session',
+        'SessionService',
+        { error: error instanceof Error ? error.message : 'Unknown error' }
+      );
       return false;
     }
+  }
+
+  /**
+   * Get the session expiration time in milliseconds (24 hours)
+   */
+  getSessionExpirationMs(): number {
+    return 24 * 60 * 60 * 1000; // 24 hours
   }
 }
 
