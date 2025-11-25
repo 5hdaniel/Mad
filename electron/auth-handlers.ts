@@ -15,6 +15,10 @@ import microsoftAuthService from './services/microsoftAuthService';
 import supabaseService from './services/supabaseService';
 import tokenEncryptionService from './services/tokenEncryptionService';
 import sessionService from './services/sessionService';
+import rateLimitService from './services/rateLimitService';
+import sessionSecurityService from './services/sessionSecurityService';
+import auditService from './services/auditService';
+import logService from './services/logService';
 
 // Import types
 import type { User, Subscription } from './types/models';
@@ -47,6 +51,9 @@ interface LoginCompleteResponse extends AuthResponse {
   sessionToken?: string;
   subscription?: Subscription;
   isNewUser?: boolean;
+  rateLimited?: boolean;
+  lockedUntil?: string;
+  remainingAttempts?: number;
 }
 
 interface SessionValidationResponse extends AuthResponse {
@@ -85,12 +92,10 @@ function needsToAcceptTerms(user: User): boolean {
 
   // Check if versions have been updated since user last accepted
   if (user.terms_version_accepted && user.terms_version_accepted !== CURRENT_TERMS_VERSION) {
-    console.log('[Auth] User needs to re-accept terms: Terms version updated');
     return true;
   }
 
   if (user.privacy_policy_version_accepted && user.privacy_policy_version_accepted !== CURRENT_PRIVACY_POLICY_VERSION) {
-    console.log('[Auth] User needs to re-accept terms: Privacy Policy version updated');
     return true;
   }
 
@@ -101,16 +106,25 @@ function needsToAcceptTerms(user: User): boolean {
 export const initializeDatabase = async (): Promise<void> => {
   try {
     await databaseService.initialize();
-    console.log('[Main] Database initialized');
+    await logService.info('Database initialized', 'AuthHandlers');
+
+    // Initialize audit service with dependencies
+    auditService.initialize(databaseService, supabaseService);
+    await logService.info('Audit service initialized', 'AuthHandlers');
   } catch (error) {
-    console.error('[Main] Failed to initialize database:', error);
+    await logService.error(
+      'Failed to initialize database',
+      'AuthHandlers',
+      { error: error instanceof Error ? error.message : 'Unknown error' }
+    );
+    throw error;
   }
 };
 
 // Google Auth: Start login flow
 const handleGoogleLogin = async (_mainWindow: BrowserWindow | null): Promise<LoginStartResponse> => {
   try {
-    console.log('[Main] Starting Google login flow');
+    await logService.info('Starting Google login flow', 'AuthHandlers');
 
     const result = await googleAuthService.authenticateForLogin();
 
@@ -120,7 +134,11 @@ const handleGoogleLogin = async (_mainWindow: BrowserWindow | null): Promise<Log
       scopes: result.scopes,
     };
   } catch (error) {
-    console.error('[Main] Google login failed:', error);
+    await logService.error(
+      'Google login failed',
+      'AuthHandlers',
+      { error: error instanceof Error ? error.message : 'Unknown error' }
+    );
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -131,7 +149,7 @@ const handleGoogleLogin = async (_mainWindow: BrowserWindow | null): Promise<Log
 // Google Auth: Complete login with authorization code
 const handleGoogleCompleteLogin = async (event: IpcMainInvokeEvent, authCode: string): Promise<LoginCompleteResponse> => {
   try {
-    console.log('[Main] Completing Google login');
+    await logService.info('Completing Google login', 'AuthHandlers');
 
     // Validate input
     const validatedAuthCode = validateAuthCode(authCode);
@@ -229,19 +247,37 @@ const handleGoogleCompleteLogin = async (event: IpcMainInvokeEvent, authCode: st
       app.getVersion()
     );
 
-    console.log('[Main] Google login completed successfully');
+    await logService.info('Google login completed successfully', 'AuthHandlers', {
+      userId: localUser.id,
+      provider: 'google',
+    });
 
     // Check if user needs to accept terms (new user or outdated versions)
     const isNewUser = needsToAcceptTerms(localUser);
 
-    // Save session for persistence (30 days expiration)
-    const sessionExpiresAt = Date.now() + (30 * 24 * 60 * 60 * 1000);
+    // Save session for persistence (24 hours expiration - security hardened)
+    const sessionExpiresAt = Date.now() + sessionService.getSessionExpirationMs();
     await sessionService.saveSession({
       user: localUser,
       sessionToken,
       provider: 'google',
       subscription,
       expiresAt: sessionExpiresAt,
+      createdAt: Date.now(),
+    });
+
+    // Record successful login for rate limiting
+    await rateLimitService.recordAttempt(localUser.email, true);
+
+    // Audit log successful login
+    await auditService.log({
+      userId: localUser.id,
+      sessionId: sessionToken,
+      action: 'LOGIN',
+      resourceType: 'SESSION',
+      resourceId: sessionToken,
+      metadata: { provider: 'google', isNewUser },
+      success: true,
     });
 
     return {
@@ -252,7 +288,22 @@ const handleGoogleCompleteLogin = async (event: IpcMainInvokeEvent, authCode: st
       isNewUser,
     };
   } catch (error) {
-    console.error('[Main] Google login completion failed:', error);
+    await logService.error(
+      'Google login completion failed',
+      'AuthHandlers',
+      { error: error instanceof Error ? error.message : 'Unknown error' }
+    );
+
+    // Audit log failed login
+    await auditService.log({
+      userId: 'unknown',
+      action: 'LOGIN_FAILED',
+      resourceType: 'SESSION',
+      metadata: { provider: 'google', error: error instanceof Error ? error.message : 'Unknown error' },
+      success: false,
+      errorMessage: error instanceof Error ? error.message : 'Unknown error',
+    });
+
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -263,7 +314,7 @@ const handleGoogleCompleteLogin = async (event: IpcMainInvokeEvent, authCode: st
 // Google Auth: Connect mailbox (Gmail access)
 const handleGoogleConnectMailbox = async (mainWindow: BrowserWindow | null, userId: string): Promise<LoginStartResponse> => {
   try {
-    console.log('[Main] Starting Google mailbox connection with redirect');
+    await logService.info('Starting Google mailbox connection with redirect', 'AuthHandlers');
 
     // Validate input
     const validatedUserId = validateUserId(userId)!; // Will throw if invalid, never null
@@ -275,7 +326,7 @@ const handleGoogleConnectMailbox = async (mainWindow: BrowserWindow | null, user
     // Start auth flow - returns authUrl and a promise for the code
     const { authUrl, codePromise, scopes } = await googleAuthService.authenticateForMailbox(loginHint);
 
-    console.log('[Main] Opening Google mailbox auth URL in popup window');
+    await logService.info('Opening Google mailbox auth URL in popup window', 'AuthHandlers');
 
     // Create a popup window for auth with webSecurity disabled to allow Google's scripts
     const authWindow = new BrowserWindow({
@@ -304,9 +355,21 @@ const handleGoogleConnectMailbox = async (mainWindow: BrowserWindow | null, user
     // Load the auth URL
     authWindow.loadURL(authUrl);
 
+    // Track if auth completed successfully
+    let authCompleted = false;
+
+    // Clean up server if window is closed before auth completes
+    authWindow.on('closed', () => {
+      if (!authCompleted) {
+        googleAuthService.stopLocalServer();
+        logService.info('Google mailbox auth window closed by user, cleaned up server', 'AuthHandlers');
+      }
+    });
+
     // Close the window when redirected to callback
     authWindow.webContents.on('will-redirect', (event, url) => {
       if (url.startsWith('http://localhost:3001/callback')) {
+        authCompleted = true;
         // Let the success page load, then close after 3 seconds
         setTimeout(() => {
           if (authWindow && !authWindow.isDestroyed()) {
@@ -322,7 +385,8 @@ const handleGoogleConnectMailbox = async (mainWindow: BrowserWindow | null, user
       try {
         // Wait for code from local server (in background)
         const code = await codePromise;
-        console.log('[Main] Received Gmail authorization code from redirect');
+        authCompleted = true;
+        await logService.info('Received Gmail authorization code from redirect', 'AuthHandlers');
 
         // Exchange code for tokens
         const { tokens } = await googleAuthService.exchangeCodeForTokens(code);
@@ -346,7 +410,19 @@ const handleGoogleConnectMailbox = async (mainWindow: BrowserWindow | null, user
           mailbox_connected: true,
         });
 
-        console.log('[Main] Google mailbox connection completed successfully');
+        await logService.info('Google mailbox connection completed successfully', 'AuthHandlers', {
+          userId,
+          email: userInfo.email,
+        });
+
+        // Audit log mailbox connection
+        await auditService.log({
+          userId,
+          action: 'MAILBOX_CONNECT',
+          resourceType: 'MAILBOX',
+          metadata: { provider: 'google', email: userInfo.email },
+          success: true,
+        });
 
         // Notify renderer of successful connection
         if (mainWindow) {
@@ -356,7 +432,22 @@ const handleGoogleConnectMailbox = async (mainWindow: BrowserWindow | null, user
           });
         }
       } catch (error) {
-        console.error('[Main] Google mailbox connection background processing failed:', error);
+        await logService.error(
+          'Google mailbox connection background processing failed',
+          'AuthHandlers',
+          { userId, error: error instanceof Error ? error.message : 'Unknown error' }
+        );
+
+        // Audit log failed mailbox connection
+        await auditService.log({
+          userId,
+          action: 'MAILBOX_CONNECT',
+          resourceType: 'MAILBOX',
+          metadata: { provider: 'google' },
+          success: false,
+          errorMessage: error instanceof Error ? error.message : 'Unknown error',
+        });
+
         if (mainWindow) {
           mainWindow.webContents.send('google:mailbox-connected', {
             success: false,
@@ -373,7 +464,11 @@ const handleGoogleConnectMailbox = async (mainWindow: BrowserWindow | null, user
       scopes,
     };
   } catch (error) {
-    console.error('[Main] Google mailbox connection failed:', error);
+    await logService.error(
+      'Google mailbox connection failed',
+      'AuthHandlers',
+      { error: error instanceof Error ? error.message : 'Unknown error' }
+    );
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -384,12 +479,12 @@ const handleGoogleConnectMailbox = async (mainWindow: BrowserWindow | null, user
 // Microsoft Auth: Start login flow with local server redirect
 const handleMicrosoftLogin = async (mainWindow: BrowserWindow | null): Promise<LoginStartResponse> => {
   try {
-    console.log('[Main] Starting Microsoft login flow with redirect');
+    await logService.info('Starting Microsoft login flow with redirect', 'AuthHandlers');
 
     // Start auth flow - returns authUrl and a promise for the code
     const { authUrl, codePromise, codeVerifier, scopes } = await microsoftAuthService.authenticateForLogin();
 
-    console.log('[Main] Opening auth URL in popup window');
+    await logService.info('Opening auth URL in popup window', 'AuthHandlers');
 
     // Create a popup window for auth with webSecurity disabled to allow Microsoft's scripts
     const authWindow = new BrowserWindow({
@@ -418,9 +513,21 @@ const handleMicrosoftLogin = async (mainWindow: BrowserWindow | null): Promise<L
     // Load the auth URL
     authWindow.loadURL(authUrl);
 
+    // Track if auth completed successfully
+    let authCompleted = false;
+
+    // Clean up server if window is closed before auth completes
+    authWindow.on('closed', () => {
+      if (!authCompleted) {
+        microsoftAuthService.stopLocalServer();
+        logService.info('Microsoft login auth window closed by user, cleaned up server', 'AuthHandlers');
+      }
+    });
+
     // Close the window when redirected to callback
     authWindow.webContents.on('will-redirect', (event, url) => {
       if (url.startsWith('http://localhost:3000/callback')) {
+        authCompleted = true;
         // Let the success page load, then close after 3 seconds
         setTimeout(() => {
           if (authWindow && !authWindow.isDestroyed()) {
@@ -436,7 +543,8 @@ const handleMicrosoftLogin = async (mainWindow: BrowserWindow | null): Promise<L
       try {
         // Wait for code from local server (in background)
         const code = await codePromise;
-        console.log('[Main] Received authorization code from redirect');
+        authCompleted = true;
+        await logService.info('Received authorization code from redirect', 'AuthHandlers');
 
         // Exchange code for tokens
         const tokens = await microsoftAuthService.exchangeCodeForTokens(code, codeVerifier);
@@ -535,19 +643,37 @@ const handleMicrosoftLogin = async (mainWindow: BrowserWindow | null): Promise<L
           app.getVersion()
         );
 
-        console.log('[Main] Microsoft login completed successfully');
+        await logService.info('Microsoft login completed successfully', 'AuthHandlers', {
+          userId: localUser.id,
+          provider: 'microsoft',
+        });
 
         // Check if user needs to accept terms (new user or outdated versions)
         const isNewUser = needsToAcceptTerms(localUser);
 
-        // Save session for persistence (30 days expiration)
-        const sessionExpiresAt = Date.now() + (30 * 24 * 60 * 60 * 1000);
+        // Save session for persistence (24 hours expiration - security hardened)
+        const sessionExpiresAt = Date.now() + sessionService.getSessionExpirationMs();
         await sessionService.saveSession({
           user: localUser,
           sessionToken,
           provider: 'microsoft',
           subscription,
           expiresAt: sessionExpiresAt,
+          createdAt: Date.now(),
+        });
+
+        // Record successful login for rate limiting
+        await rateLimitService.recordAttempt(localUser.email, true);
+
+        // Audit log successful login
+        await auditService.log({
+          userId: localUser.id,
+          sessionId: sessionToken,
+          action: 'LOGIN',
+          resourceType: 'SESSION',
+          resourceId: sessionToken,
+          metadata: { provider: 'microsoft', isNewUser },
+          success: true,
         });
 
         // Notify renderer of successful login
@@ -561,7 +687,22 @@ const handleMicrosoftLogin = async (mainWindow: BrowserWindow | null): Promise<L
           });
         }
       } catch (error) {
-        console.error('[Main] Microsoft login background processing failed:', error);
+        await logService.error(
+          'Microsoft login background processing failed',
+          'AuthHandlers',
+          { error: error instanceof Error ? error.message : 'Unknown error' }
+        );
+
+        // Audit log failed login
+        await auditService.log({
+          userId: 'unknown',
+          action: 'LOGIN_FAILED',
+          resourceType: 'SESSION',
+          metadata: { provider: 'microsoft', error: error instanceof Error ? error.message : 'Unknown error' },
+          success: false,
+          errorMessage: error instanceof Error ? error.message : 'Unknown error',
+        });
+
         if (mainWindow) {
           mainWindow.webContents.send('microsoft:login-complete', {
             success: false,
@@ -578,7 +719,11 @@ const handleMicrosoftLogin = async (mainWindow: BrowserWindow | null): Promise<L
       scopes,
     };
   } catch (error) {
-    console.error('[Main] Microsoft login failed:', error);
+    await logService.error(
+      'Microsoft login failed',
+      'AuthHandlers',
+      { error: error instanceof Error ? error.message : 'Unknown error' }
+    );
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -589,7 +734,7 @@ const handleMicrosoftLogin = async (mainWindow: BrowserWindow | null): Promise<L
 // Microsoft Auth: Connect mailbox (Outlook/Mail access)
 const handleMicrosoftConnectMailbox = async (mainWindow: BrowserWindow | null, userId: string): Promise<LoginStartResponse> => {
   try {
-    console.log('[Main] Starting Microsoft mailbox connection with redirect');
+    await logService.info('Starting Microsoft mailbox connection with redirect', 'AuthHandlers');
 
     // Validate input
     const validatedUserId = validateUserId(userId)!; // Will throw if invalid, never null
@@ -601,7 +746,7 @@ const handleMicrosoftConnectMailbox = async (mainWindow: BrowserWindow | null, u
     // Start auth flow - returns authUrl and a promise for the code
     const { authUrl, codePromise, codeVerifier, scopes} = await microsoftAuthService.authenticateForMailbox(loginHint);
 
-    console.log('[Main] Opening mailbox auth URL in popup window');
+    await logService.info('Opening mailbox auth URL in popup window', 'AuthHandlers');
 
     // Create a popup window for auth with webSecurity disabled to allow Microsoft's scripts
     const authWindow = new BrowserWindow({
@@ -630,9 +775,21 @@ const handleMicrosoftConnectMailbox = async (mainWindow: BrowserWindow | null, u
     // Load the auth URL
     authWindow.loadURL(authUrl);
 
+    // Track if auth completed successfully
+    let authCompleted = false;
+
+    // Clean up server if window is closed before auth completes
+    authWindow.on('closed', () => {
+      if (!authCompleted) {
+        microsoftAuthService.stopLocalServer();
+        logService.info('Microsoft mailbox auth window closed by user, cleaned up server', 'AuthHandlers');
+      }
+    });
+
     // Close the window when redirected to callback
     authWindow.webContents.on('will-redirect', (event, url) => {
       if (url.startsWith('http://localhost:3000/callback')) {
+        authCompleted = true;
         // Let the success page load, then close after 3 seconds
         setTimeout(() => {
           if (authWindow && !authWindow.isDestroyed()) {
@@ -648,7 +805,8 @@ const handleMicrosoftConnectMailbox = async (mainWindow: BrowserWindow | null, u
       try {
         // Wait for code from local server (in background)
         const code = await codePromise;
-        console.log('[Main] Received mailbox authorization code from redirect');
+        authCompleted = true;
+        await logService.info('Received mailbox authorization code from redirect', 'AuthHandlers');
 
         // Exchange code for tokens
         const tokens = await microsoftAuthService.exchangeCodeForTokens(code, codeVerifier);
@@ -665,7 +823,7 @@ const handleMicrosoftConnectMailbox = async (mainWindow: BrowserWindow | null, u
         // Save mailbox token
         const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
 
-        console.log('[Main] Saving Microsoft mailbox token for user:', userId);
+        await logService.info('Saving Microsoft mailbox token for user', 'AuthHandlers');
 
         await databaseService.saveOAuthToken(userId, 'microsoft', 'mailbox', {
           access_token: encryptedAccessToken,
@@ -676,7 +834,19 @@ const handleMicrosoftConnectMailbox = async (mainWindow: BrowserWindow | null, u
           mailbox_connected: true,
         });
 
-        console.log('[Main] Microsoft mailbox connection completed successfully');
+        await logService.info('Microsoft mailbox connection completed successfully', 'AuthHandlers', {
+          userId,
+          email: userInfo.email,
+        });
+
+        // Audit log mailbox connection
+        await auditService.log({
+          userId,
+          action: 'MAILBOX_CONNECT',
+          resourceType: 'MAILBOX',
+          metadata: { provider: 'microsoft', email: userInfo.email },
+          success: true,
+        });
 
         // Notify renderer of successful connection
         if (mainWindow) {
@@ -686,7 +856,22 @@ const handleMicrosoftConnectMailbox = async (mainWindow: BrowserWindow | null, u
           });
         }
       } catch (error) {
-        console.error('[Main] Microsoft mailbox connection background processing failed:', error);
+        await logService.error(
+          'Microsoft mailbox connection background processing failed',
+          'AuthHandlers',
+          { userId, error: error instanceof Error ? error.message : 'Unknown error' }
+        );
+
+        // Audit log failed mailbox connection
+        await auditService.log({
+          userId,
+          action: 'MAILBOX_CONNECT',
+          resourceType: 'MAILBOX',
+          metadata: { provider: 'microsoft' },
+          success: false,
+          errorMessage: error instanceof Error ? error.message : 'Unknown error',
+        });
+
         if (mainWindow) {
           mainWindow.webContents.send('microsoft:mailbox-connected', {
             success: false,
@@ -703,7 +888,11 @@ const handleMicrosoftConnectMailbox = async (mainWindow: BrowserWindow | null, u
       scopes,
     };
   } catch (error) {
-    console.error('[Main] Microsoft mailbox connection failed:', error);
+    await logService.error(
+      'Microsoft mailbox connection failed',
+      'AuthHandlers',
+      { error: error instanceof Error ? error.message : 'Unknown error' }
+    );
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -733,11 +922,33 @@ export const registerAuthHandlers = (mainWindow: BrowserWindow | null): void => 
       // Validate input
       const validatedSessionToken = validateSessionToken(sessionToken);
 
+      // Get session info before deleting for audit purposes
+      const session = await databaseService.validateSession(validatedSessionToken);
+      const userId = session?.user_id || 'unknown';
+
       await databaseService.deleteSession(validatedSessionToken);
       await sessionService.clearSession();
+      sessionSecurityService.cleanupSession(validatedSessionToken);
+
+      // Audit log logout
+      await auditService.log({
+        userId,
+        sessionId: validatedSessionToken,
+        action: 'LOGOUT',
+        resourceType: 'SESSION',
+        resourceId: validatedSessionToken,
+        success: true,
+      });
+
+      await logService.info('User logged out successfully', 'AuthHandlers', { userId });
+
       return { success: true };
     } catch (error) {
-      console.error('[Main] Logout failed:', error);
+      await logService.error(
+        'Logout failed',
+        'AuthHandlers',
+        { error: error instanceof Error ? error.message : 'Unknown error' }
+      );
       if (error instanceof ValidationError) {
         return { success: false, error: `Validation error: ${error.message}` };
       }
@@ -758,7 +969,7 @@ export const registerAuthHandlers = (mainWindow: BrowserWindow | null): void => 
         CURRENT_PRIVACY_POLICY_VERSION
       );
 
-      console.log('[Auth] Terms accepted:', userId, `v${CURRENT_TERMS_VERSION}`);
+      await logService.info('Terms accepted', 'AuthHandlers', { version: CURRENT_TERMS_VERSION });
 
       // Sync to Supabase (cloud backup for legal compliance)
       try {
@@ -769,12 +980,20 @@ export const registerAuthHandlers = (mainWindow: BrowserWindow | null): void => 
         );
       } catch (syncError) {
         // Don't fail the acceptance if sync fails - user already accepted locally
-        console.error('[Auth] Failed to sync terms to Supabase:', syncError instanceof Error ? syncError.message : 'Unknown error');
+        await logService.warn(
+          'Failed to sync terms to Supabase',
+          'AuthHandlers',
+          { error: syncError instanceof Error ? syncError.message : 'Unknown error' }
+        );
       }
 
       return { success: true, user: updatedUser };
     } catch (error) {
-      console.error('[Auth] Accept terms failed:', error);
+      await logService.error(
+        'Accept terms failed',
+        'AuthHandlers',
+        { error: error instanceof Error ? error.message : 'Unknown error' }
+      );
       if (error instanceof ValidationError) {
         return { success: false, error: `Validation error: ${error.message}` };
       }
@@ -794,9 +1013,35 @@ export const registerAuthHandlers = (mainWindow: BrowserWindow | null): void => 
         return { success: false, valid: false };
       }
 
+      // Check session security (idle and absolute timeout)
+      const createdAt = session.created_at instanceof Date
+        ? session.created_at.toISOString()
+        : session.created_at;
+      const lastAccessedAt = session.last_accessed_at instanceof Date
+        ? session.last_accessed_at.toISOString()
+        : session.last_accessed_at;
+      const securityCheck = await sessionSecurityService.checkSessionValidity(
+        { created_at: createdAt, last_accessed_at: lastAccessedAt },
+        validatedSessionToken
+      );
+
+      if (!securityCheck.valid) {
+        // Session expired, clean up
+        await databaseService.deleteSession(validatedSessionToken);
+        sessionSecurityService.cleanupSession(validatedSessionToken);
+        return { success: false, valid: false, error: `Session ${securityCheck.reason}` };
+      }
+
+      // Record activity for idle timeout tracking
+      sessionSecurityService.recordActivity(validatedSessionToken);
+
       return { success: true, valid: true, user: session };
     } catch (error) {
-      console.error('[Main] Session validation failed:', error);
+      await logService.error(
+        'Session validation failed',
+        'AuthHandlers',
+        { error: error instanceof Error ? error.message : 'Unknown error' }
+      );
       if (error instanceof ValidationError) {
         return { success: false, valid: false, error: `Validation error: ${error.message}` };
       }
@@ -819,8 +1064,32 @@ export const registerAuthHandlers = (mainWindow: BrowserWindow | null): void => 
       if (!dbSession) {
         // Session invalid, clear it
         await sessionService.clearSession();
+        sessionSecurityService.cleanupSession(session.sessionToken);
         return { success: false, error: 'Session expired or invalid' };
       }
+
+      // Check session security (idle and absolute timeout)
+      const dbCreatedAt = dbSession.created_at instanceof Date
+        ? dbSession.created_at.toISOString()
+        : dbSession.created_at;
+      const dbLastAccessedAt = dbSession.last_accessed_at instanceof Date
+        ? dbSession.last_accessed_at.toISOString()
+        : dbSession.last_accessed_at;
+      const securityCheck = await sessionSecurityService.checkSessionValidity(
+        { created_at: dbCreatedAt, last_accessed_at: dbLastAccessedAt },
+        session.sessionToken
+      );
+
+      if (!securityCheck.valid) {
+        // Session expired, clean up
+        await databaseService.deleteSession(session.sessionToken);
+        await sessionService.clearSession();
+        sessionSecurityService.cleanupSession(session.sessionToken);
+        return { success: false, error: `Session ${securityCheck.reason}` };
+      }
+
+      // Record activity for idle timeout tracking
+      sessionSecurityService.recordActivity(session.sessionToken);
 
       // Load fresh user data from database to ensure we have latest terms acceptance status
       const freshUser = await databaseService.getUserById(session.user.id);
@@ -835,7 +1104,11 @@ export const registerAuthHandlers = (mainWindow: BrowserWindow | null): void => 
         isNewUser: needsToAcceptTerms(user), // Flag if user needs to accept/re-accept terms
       };
     } catch (error) {
-      console.error('[Main] Get current user failed:', error);
+      await logService.error(
+        'Get current user failed',
+        'AuthHandlers',
+        { error: error instanceof Error ? error.message : 'Unknown error' }
+      );
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
   });
@@ -849,7 +1122,11 @@ export const registerAuthHandlers = (mainWindow: BrowserWindow | null): void => 
       await shell.openExternal(validatedUrl);
       return { success: true };
     } catch (error) {
-      console.error('[Main] Failed to open external URL:', error);
+      await logService.error(
+        'Failed to open external URL',
+        'AuthHandlers',
+        { error: error instanceof Error ? error.message : 'Unknown error' }
+      );
       if (error instanceof ValidationError) {
         return { success: false, error: `Validation error: ${error.message}` };
       }

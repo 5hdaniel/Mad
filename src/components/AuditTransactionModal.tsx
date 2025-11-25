@@ -52,10 +52,20 @@ interface ErrorState {
   action: string;
 }
 
+interface AddressDetails {
+  formatted_address?: string;
+  street?: string;
+  city?: string;
+  state_short?: string;
+  state?: string;
+  zip?: string;
+  coordinates?: Coordinates | null;
+}
+
 interface AddressDetailsResult {
   success: boolean;
   formatted_address?: string;
-  address?: string;
+  address?: AddressDetails;
   street?: string;
   city?: string;
   state_short?: string;
@@ -167,14 +177,16 @@ function AuditTransactionModal({ userId, provider: _provider, onClose, onSuccess
       const placeId = suggestion.place_id || suggestion.placeId || '';
       const result: AddressDetailsResult = await window.api.address.getDetails(placeId);
       if (result.success) {
+        // API returns { success, address: {...} } - extract from address object
+        const addr: AddressDetails = result.address || {};
         setAddressData({
           ...addressData,
-          property_address: result.formatted_address || result.address || suggestion.formatted_address || suggestion.description || '',
-          property_street: result.street || '',
-          property_city: result.city || '',
-          property_state: result.state_short || result.state || '',
-          property_zip: result.zip || '',
-          property_coordinates: result.coordinates || null,
+          property_address: addr.formatted_address || result.formatted_address || suggestion.formatted_address || suggestion.description || '',
+          property_street: addr.street || result.street || '',
+          property_city: addr.city || result.city || '',
+          property_state: addr.state_short || addr.state || result.state_short || result.state || '',
+          property_zip: addr.zip || result.zip || '',
+          property_coordinates: addr.coordinates || result.coordinates || null,
         });
       } else {
         // Fallback

@@ -7,6 +7,8 @@ import { ipcMain } from 'electron';
 import type { IpcMainInvokeEvent } from 'electron';
 import databaseService from './services/databaseService';
 import { getContactNames } from './services/contactsService';
+import auditService from './services/auditService';
+import logService from './services/logService';
 import type { Contact, Transaction } from './types/models';
 
 // Import validation utilities
@@ -39,7 +41,7 @@ export function registerContactHandlers(): void {
   // Get all imported contacts for a user (local database only)
   ipcMain.handle('contacts:get-all', async (event: IpcMainInvokeEvent, userId: string): Promise<ContactResponse> => {
     try {
-      console.log('[Main] Getting all imported contacts for user:', userId);
+      logService.info('Getting all imported contacts', 'Contacts', { userId });
 
       // Validate input
       const validatedUserId = validateUserId(userId); // Validated, will throw if invalid
@@ -50,14 +52,17 @@ export function registerContactHandlers(): void {
       // Get only imported contacts from database
       const importedContacts = await databaseService.getImportedContactsByUserId(validatedUserId);
 
-      console.log(`[Main] Found ${importedContacts.length} imported contacts`);
+      logService.info(`Found ${importedContacts.length} imported contacts`, 'Contacts', { userId });
 
       return {
         success: true,
         contacts: importedContacts,
       };
     } catch (error) {
-      console.error('[Main] Get contacts failed:', error);
+      logService.error('Get contacts failed', 'Contacts', {
+        userId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
       if (error instanceof ValidationError) {
         return {
           success: false,
@@ -252,8 +257,6 @@ export function registerContactHandlers(): void {
   // Create new contact
   ipcMain.handle('contacts:create', async (event: IpcMainInvokeEvent, userId: string, contactData: unknown): Promise<ContactResponse> => {
     try {
-      console.log('[Main] Creating contact:', contactData);
-
       // Validate inputs
       const validatedUserId = validateUserId(userId); // Validated, will throw if invalid
       if (!validatedUserId) {
@@ -272,12 +275,29 @@ export function registerContactHandlers(): void {
         is_imported: false,
       });
 
+      // Audit log contact creation
+      await auditService.log({
+        userId: validatedUserId,
+        action: 'CONTACT_CREATE',
+        resourceType: 'CONTACT',
+        resourceId: contact.id,
+        metadata: { name: contact.name },
+        success: true,
+      });
+
+      logService.info('Contact created', 'Contacts', {
+        userId: validatedUserId,
+        contactId: contact.id,
+      });
+
       return {
         success: true,
         contact,
       };
     } catch (error) {
-      console.error('[Main] Create contact failed:', error);
+      logService.error('Create contact failed', 'Contacts', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
       if (error instanceof ValidationError) {
         return {
           success: false,
@@ -294,14 +314,16 @@ export function registerContactHandlers(): void {
   // Update contact
   ipcMain.handle('contacts:update', async (event: IpcMainInvokeEvent, contactId: string, updates: unknown): Promise<ContactResponse> => {
     try {
-      console.log('[Main] Updating contact:', contactId, updates);
-
       // Validate inputs
       const validatedContactId = validateContactId(contactId); // Validated, will throw if invalid
       if (!validatedContactId) {
         throw new ValidationError('Contact ID validation failed', 'contactId');
       }
       const validatedUpdates = validateContactData(sanitizeObject(updates || {}), true);
+
+      // Get contact before update for audit logging
+      const existingContact = await databaseService.getContactById(validatedContactId);
+      const userId = existingContact?.user_id || 'unknown';
 
       // Convert null to undefined for TypeScript strict mode
       const updatesData = {
@@ -316,12 +338,30 @@ export function registerContactHandlers(): void {
       await databaseService.updateContact(validatedContactId, updatesData);
       const contact = await databaseService.getContactById(validatedContactId);
 
+      // Audit log contact update
+      await auditService.log({
+        userId,
+        action: 'CONTACT_UPDATE',
+        resourceType: 'CONTACT',
+        resourceId: validatedContactId,
+        metadata: { updatedFields: Object.keys(validatedUpdates) },
+        success: true,
+      });
+
+      logService.info('Contact updated', 'Contacts', {
+        userId,
+        contactId: validatedContactId,
+      });
+
       return {
         success: true,
         contact: contact || undefined,
       };
     } catch (error) {
-      console.error('[Main] Update contact failed:', error);
+      logService.error('Update contact failed', 'Contacts', {
+        contactId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
       if (error instanceof ValidationError) {
         return {
           success: false,
@@ -372,13 +412,16 @@ export function registerContactHandlers(): void {
   // Delete contact
   ipcMain.handle('contacts:delete', async (event: IpcMainInvokeEvent, contactId: string): Promise<ContactResponse> => {
     try {
-      console.log('[Main] Deleting contact:', contactId);
-
       // Validate input
       const validatedContactId = validateContactId(contactId); // Validated, will throw if invalid
       if (!validatedContactId) {
         throw new ValidationError('Contact ID validation failed', 'contactId');
       }
+
+      // Get contact before delete for audit logging
+      const existingContact = await databaseService.getContactById(validatedContactId);
+      const userId = existingContact?.user_id || 'unknown';
+      const contactName = existingContact?.name || 'unknown';
 
       // Check if contact has associated transactions
       const check = await databaseService.getTransactionsByContact(validatedContactId);
@@ -394,11 +437,29 @@ export function registerContactHandlers(): void {
 
       await databaseService.deleteContact(validatedContactId);
 
+      // Audit log contact deletion
+      await auditService.log({
+        userId,
+        action: 'CONTACT_DELETE',
+        resourceType: 'CONTACT',
+        resourceId: validatedContactId,
+        metadata: { name: contactName },
+        success: true,
+      });
+
+      logService.info('Contact deleted', 'Contacts', {
+        userId,
+        contactId: validatedContactId,
+      });
+
       return {
         success: true,
       };
     } catch (error) {
-      console.error('[Main] Delete contact failed:', error);
+      logService.error('Delete contact failed', 'Contacts', {
+        contactId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
       if (error instanceof ValidationError) {
         return {
           success: false,

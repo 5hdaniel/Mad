@@ -443,7 +443,7 @@ export interface WindowApi {
   address: {
     initialize: (apiKey: string) => Promise<{ success: boolean; error?: string }>;
     getSuggestions: (input: string, sessionToken?: string) => Promise<{ success: boolean; suggestions?: Array<{ description: string; placeId: string }>; error?: string }>;
-    getDetails: (placeId: string) => Promise<{ success: boolean; address?: string; formatted_address?: string; street?: string; city?: string; state?: string; state_short?: string; zip?: string; coordinates?: { lat: number; lng: number }; error?: string }>;
+    getDetails: (placeId: string) => Promise<{ success: boolean; address?: { formatted_address?: string; street?: string; city?: string; state?: string; state_short?: string; zip?: string; coordinates?: { lat: number; lng: number }; }; formatted_address?: string; street?: string; city?: string; state?: string; state_short?: string; zip?: string; coordinates?: { lat: number; lng: number }; error?: string }>;
     geocode: (address: string) => Promise<{ lat: number; lng: number; formattedAddress: string }>;
   };
 

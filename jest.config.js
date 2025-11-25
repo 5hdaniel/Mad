@@ -61,6 +61,9 @@ module.exports = {
   // Ignore patterns
   testPathIgnorePatterns: ['/node_modules/', '/dist/', '/build/'],
 
-  // Verbose output
-  verbose: true,
+  // Reduce output noise
+  verbose: false,
+
+  // Limit error output
+  errorOnDeprecated: false,
 };
