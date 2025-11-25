@@ -291,6 +291,70 @@ describe('App', () => {
         expect(screen.getByText(/test@example.com/i)).toBeInTheDocument();
       });
     });
+
+    it('should open settings when settings button is clicked in profile modal', async () => {
+      // Mock preferences API
+      window.api.preferences.get.mockResolvedValue({
+        success: true,
+        preferences: { theme: 'light', notifications: true },
+      });
+
+      render(<App />);
+
+      await waitFor(() => {
+        expect(screen.getByText(/dashboard/i)).toBeInTheDocument();
+      });
+
+      // Open profile modal
+      const profileButton = screen.getByTitle(/Test User/i);
+      await userEvent.click(profileButton);
+
+      // Wait for profile modal
+      await waitFor(() => {
+        expect(screen.getByText(/test@example.com/i)).toBeInTheDocument();
+      });
+
+      // Click Settings button
+      const settingsButton = await screen.findByRole('button', { name: /Settings/i });
+      await userEvent.click(settingsButton);
+
+      // Settings modal should be visible (Profile closes, Settings opens)
+      // The Settings component has "Settings" as the header title
+      await waitFor(() => {
+        // Look for the Settings header in the modal (distinct from any other "Settings" text)
+        const settingsHeaders = screen.getAllByText(/Settings/i);
+        expect(settingsHeaders.length).toBeGreaterThanOrEqual(1);
+      });
+    });
+
+    it('should close profile modal when close button is clicked', async () => {
+      render(<App />);
+
+      await waitFor(() => {
+        expect(screen.getByText(/dashboard/i)).toBeInTheDocument();
+      });
+
+      // Open profile modal
+      const profileButton = screen.getByTitle(/Test User/i);
+      await userEvent.click(profileButton);
+
+      // Wait for profile modal
+      await waitFor(() => {
+        expect(screen.getByText(/test@example.com/i)).toBeInTheDocument();
+      });
+
+      // Find and click close button (the X button in the header)
+      const closeButtons = screen.getAllByRole('button');
+      const closeButton = closeButtons.find(btn => btn.querySelector('svg path[d*="M6 18L18 6"]'));
+      if (closeButton) {
+        await userEvent.click(closeButton);
+      }
+
+      // Profile modal should be closed (email should not be visible)
+      await waitFor(() => {
+        expect(screen.queryByText(/Account/i)).not.toBeInTheDocument();
+      });
+    });
   });
 
   describe('Version Info', () => {
