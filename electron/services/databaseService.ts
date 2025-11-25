@@ -2207,42 +2207,40 @@ class DatabaseService implements IDatabaseService {
     const db = this._ensureDb();
     const syncedAt = new Date().toISOString();
 
-    // Use a transaction with trigger disable/enable
-    return new Promise((resolve, reject) => {
-      db.serialize(() => {
-        // Disable the update trigger temporarily
-        db.run('DROP TRIGGER IF EXISTS prevent_audit_update', (err) => {
-          if (err) {
-            reject(err);
-            return;
-          }
+    try {
+      // Disable the update trigger temporarily
+      db.exec('DROP TRIGGER IF EXISTS prevent_audit_update');
 
-          // Update synced_at for the specified IDs
-          const placeholders = ids.map(() => '?').join(',');
-          const sql = `UPDATE audit_logs SET synced_at = ? WHERE id IN (${placeholders})`;
+      // Update synced_at for the specified IDs
+      const placeholders = ids.map(() => '?').join(',');
+      const sql = `UPDATE audit_logs SET synced_at = ? WHERE id IN (${placeholders})`;
+      db.prepare(sql).run(syncedAt, ...ids);
 
-          db.run(sql, [syncedAt, ...ids], (updateErr) => {
-            // Recreate the trigger (even if update fails)
-            db.run(`
-              CREATE TRIGGER prevent_audit_update
-              BEFORE UPDATE ON audit_logs
-              WHEN NEW.synced_at IS NULL OR OLD.synced_at IS NOT NULL
-              BEGIN
-                SELECT RAISE(ABORT, 'Audit logs cannot be modified');
-              END
-            `, (triggerErr) => {
-              if (updateErr) {
-                reject(updateErr);
-              } else if (triggerErr) {
-                reject(triggerErr);
-              } else {
-                resolve();
-              }
-            });
-          });
-        });
-      });
-    });
+      // Recreate the trigger
+      db.exec(`
+        CREATE TRIGGER IF NOT EXISTS prevent_audit_update
+        BEFORE UPDATE ON audit_logs
+        WHEN NEW.synced_at IS NULL OR OLD.synced_at IS NOT NULL
+        BEGIN
+          SELECT RAISE(ABORT, 'Audit logs cannot be modified');
+        END
+      `);
+    } catch (error) {
+      // Ensure trigger is recreated even on error
+      try {
+        db.exec(`
+          CREATE TRIGGER IF NOT EXISTS prevent_audit_update
+          BEFORE UPDATE ON audit_logs
+          WHEN NEW.synced_at IS NULL OR OLD.synced_at IS NOT NULL
+          BEGIN
+            SELECT RAISE(ABORT, 'Audit logs cannot be modified');
+          END
+        `);
+      } catch {
+        // Ignore trigger recreation errors
+      }
+      throw error;
+    }
   }
 
   /**

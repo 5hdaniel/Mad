@@ -52,10 +52,20 @@ interface ErrorState {
   action: string;
 }
 
+interface AddressDetails {
+  formatted_address?: string;
+  street?: string;
+  city?: string;
+  state_short?: string;
+  state?: string;
+  zip?: string;
+  coordinates?: Coordinates | null;
+}
+
 interface AddressDetailsResult {
   success: boolean;
   formatted_address?: string;
-  address?: string;
+  address?: AddressDetails;
   street?: string;
   city?: string;
   state_short?: string;
@@ -168,7 +178,7 @@ function AuditTransactionModal({ userId, provider: _provider, onClose, onSuccess
       const result: AddressDetailsResult = await window.api.address.getDetails(placeId);
       if (result.success) {
         // API returns { success, address: {...} } - extract from address object
-        const addr = result.address || {};
+        const addr: AddressDetails = result.address || {};
         setAddressData({
           ...addressData,
           property_address: addr.formatted_address || result.formatted_address || suggestion.formatted_address || suggestion.description || '',
