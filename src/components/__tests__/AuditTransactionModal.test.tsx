@@ -88,7 +88,7 @@ describe('AuditTransactionModal', () => {
       );
 
       expect(screen.getByText(/step 1/i)).toBeInTheDocument();
-      expect(screen.getByText(/property address/i)).toBeInTheDocument();
+      expect(screen.getAllByText(/property address/i).length).toBeGreaterThan(0);
     });
 
     it('should show transaction type options', () => {
@@ -548,7 +548,7 @@ describe('AuditTransactionModal', () => {
       );
 
       // Address input should have a label text
-      expect(screen.getByText(/property address/i)).toBeInTheDocument();
+      expect(screen.getAllByText(/property address/i).length).toBeGreaterThan(0);
 
       // Transaction type should have a label
       expect(screen.getByText(/transaction type/i)).toBeInTheDocument();

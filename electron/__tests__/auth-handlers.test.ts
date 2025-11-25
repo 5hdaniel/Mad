@@ -26,6 +26,7 @@ jest.mock('electron', () => ({
   BrowserWindow: jest.fn().mockImplementation(() => ({
     loadURL: jest.fn(),
     close: jest.fn(),
+    on: jest.fn(), // For 'closed' event listener
     isDestroyed: jest.fn().mockReturnValue(false),
     webContents: {
       on: jest.fn(),
@@ -76,6 +77,7 @@ jest.mock('../services/googleAuthService', () => ({
     authenticateForMailbox: jest.fn(),
     exchangeCodeForTokens: jest.fn(),
     getUserInfo: jest.fn(),
+    stopLocalServer: jest.fn(),
   },
 }));
 
@@ -86,6 +88,7 @@ jest.mock('../services/microsoftAuthService', () => ({
     authenticateForMailbox: jest.fn(),
     exchangeCodeForTokens: jest.fn(),
     getUserInfo: jest.fn(),
+    stopLocalServer: jest.fn(),
   },
 }));
 

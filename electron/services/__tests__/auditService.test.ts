@@ -255,6 +255,9 @@ describe('AuditService', () => {
     });
 
     it('should queue logs when offline (sync fails)', async () => {
+      // Set up failed sync BEFORE logging (so the immediate sync in log() also fails)
+      mockSupabaseService.batchInsertAuditLogs.mockRejectedValue(new Error('Network error'));
+
       const entry = {
         userId: 'user-123',
         action: 'LOGIN' as AuditAction,
@@ -264,10 +267,10 @@ describe('AuditService', () => {
 
       await auditService.log(entry);
 
-      // Set up failed sync
-      mockSupabaseService.batchInsertAuditLogs.mockRejectedValueOnce(new Error('Network error'));
+      // Allow async sync attempt to complete
+      await new Promise(resolve => setTimeout(resolve, 10));
 
-      // Manually trigger sync
+      // Manually trigger sync again
       await auditService.syncToCloud();
 
       // Entry should still be queued
