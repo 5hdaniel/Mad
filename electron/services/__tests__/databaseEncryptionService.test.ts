@@ -5,81 +5,91 @@
 /**
  * Unit tests for DatabaseEncryptionService
  * Tests encryption key generation, storage, and retrieval
- *
- * SKIPPED: These tests have mock isolation issues with the logService
- * that need to be resolved. The service itself works correctly.
  */
 
-import { jest } from '@jest/globals';
+import { jest, describe, it, expect, beforeEach } from '@jest/globals';
+
+// Create mock functions first
+const mockIsEncryptionAvailable = jest.fn();
+const mockEncryptString = jest.fn();
+const mockDecryptString = jest.fn();
+const mockGetPath = jest.fn(() => '/mock/user/data');
+
+const mockExistsSync = jest.fn();
+const mockReadFileSync = jest.fn();
+const mockWriteFileSync = jest.fn();
+const mockMkdirSync = jest.fn();
+const mockOpenSync = jest.fn();
+const mockReadSync = jest.fn();
+const mockCloseSync = jest.fn();
+
+const mockLogInfo = jest.fn().mockResolvedValue(undefined);
+const mockLogDebug = jest.fn().mockResolvedValue(undefined);
+const mockLogWarn = jest.fn().mockResolvedValue(undefined);
+const mockLogError = jest.fn().mockResolvedValue(undefined);
 
 // Mock Electron modules before importing the service
 jest.mock('electron', () => ({
   safeStorage: {
-    isEncryptionAvailable: jest.fn(),
-    encryptString: jest.fn(),
-    decryptString: jest.fn(),
+    isEncryptionAvailable: mockIsEncryptionAvailable,
+    encryptString: mockEncryptString,
+    decryptString: mockDecryptString,
   },
   app: {
-    getPath: jest.fn(() => '/mock/user/data'),
+    getPath: mockGetPath,
   },
 }));
 
 // Mock fs module
 jest.mock('fs', () => ({
-  existsSync: jest.fn(),
-  readFileSync: jest.fn(),
-  writeFileSync: jest.fn(),
-  mkdirSync: jest.fn(),
-  openSync: jest.fn(),
-  readSync: jest.fn(),
-  closeSync: jest.fn(),
+  existsSync: mockExistsSync,
+  readFileSync: mockReadFileSync,
+  writeFileSync: mockWriteFileSync,
+  mkdirSync: mockMkdirSync,
+  openSync: mockOpenSync,
+  readSync: mockReadSync,
+  closeSync: mockCloseSync,
 }));
 
-// Mock logService
+// Mock logService with proper default export structure
 jest.mock('../logService', () => ({
+  __esModule: true,
   default: {
-    info: jest.fn(),
-    debug: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-  },
-  logService: {
-    info: jest.fn(),
-    debug: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
+    info: mockLogInfo,
+    debug: mockLogDebug,
+    warn: mockLogWarn,
+    error: mockLogError,
   },
 }));
 
-import { safeStorage, app } from 'electron';
-import fs from 'fs';
+// Import the service after mocks are set up
+import { databaseEncryptionService } from '../databaseEncryptionService';
 
-describe.skip('DatabaseEncryptionService', () => {
-  let databaseEncryptionService: typeof import('../databaseEncryptionService').databaseEncryptionService;
-
-  beforeEach(async () => {
+describe('DatabaseEncryptionService', () => {
+  beforeEach(() => {
+    // Clear all mock calls
     jest.clearAllMocks();
 
-    // Reset module cache to get fresh instance
-    jest.resetModules();
+    // Reset the service state by clearing cache
+    databaseEncryptionService.clearCache();
 
-    // Re-import after mocks are set up
-    const module = await import('../databaseEncryptionService');
-    databaseEncryptionService = module.databaseEncryptionService;
+    // Reset default mock behaviors
+    mockGetPath.mockReturnValue('/mock/user/data');
+    mockIsEncryptionAvailable.mockReturnValue(true);
   });
 
   describe('isEncryptionAvailable', () => {
     it('should return true when encryption is available', () => {
-      (safeStorage.isEncryptionAvailable as jest.Mock).mockReturnValue(true);
+      mockIsEncryptionAvailable.mockReturnValue(true);
 
       const result = databaseEncryptionService.isEncryptionAvailable();
 
       expect(result).toBe(true);
-      expect(safeStorage.isEncryptionAvailable).toHaveBeenCalled();
+      expect(mockIsEncryptionAvailable).toHaveBeenCalled();
     });
 
     it('should return false when encryption is not available', () => {
-      (safeStorage.isEncryptionAvailable as jest.Mock).mockReturnValue(false);
+      mockIsEncryptionAvailable.mockReturnValue(false);
 
       const result = databaseEncryptionService.isEncryptionAvailable();
 
@@ -87,7 +97,7 @@ describe.skip('DatabaseEncryptionService', () => {
     });
 
     it('should return false when checking availability throws error', () => {
-      (safeStorage.isEncryptionAvailable as jest.Mock).mockImplementation(() => {
+      mockIsEncryptionAvailable.mockImplementation(() => {
         throw new Error('Not available');
       });
 
@@ -99,29 +109,29 @@ describe.skip('DatabaseEncryptionService', () => {
 
   describe('initialize', () => {
     it('should set keyStorePath correctly', async () => {
-      (app.getPath as jest.Mock).mockReturnValue('/mock/user/data');
+      mockGetPath.mockReturnValue('/mock/user/data');
 
       await databaseEncryptionService.initialize();
 
-      expect(app.getPath).toHaveBeenCalledWith('userData');
+      expect(mockGetPath).toHaveBeenCalledWith('userData');
     });
   });
 
   describe('getEncryptionKey', () => {
     beforeEach(async () => {
-      (safeStorage.isEncryptionAvailable as jest.Mock).mockReturnValue(true);
-      (app.getPath as jest.Mock).mockReturnValue('/mock/user/data');
+      mockIsEncryptionAvailable.mockReturnValue(true);
+      mockGetPath.mockReturnValue('/mock/user/data');
       await databaseEncryptionService.initialize();
       databaseEncryptionService.clearCache();
     });
 
     it('should generate and store a new key when no key exists', async () => {
       // No existing key store file
-      (fs.existsSync as jest.Mock).mockReturnValue(false);
+      mockExistsSync.mockReturnValue(false);
 
       // Mock encryption
       const mockEncryptedBuffer = Buffer.from('encrypted-key-data');
-      (safeStorage.encryptString as jest.Mock).mockReturnValue(mockEncryptedBuffer);
+      mockEncryptString.mockReturnValue(mockEncryptedBuffer);
 
       const key = await databaseEncryptionService.getEncryptionKey();
 
@@ -129,8 +139,8 @@ describe.skip('DatabaseEncryptionService', () => {
       expect(key).toMatch(/^[0-9a-f]{64}$/);
 
       // Should have saved the key
-      expect(fs.writeFileSync).toHaveBeenCalled();
-      expect(safeStorage.encryptString).toHaveBeenCalled();
+      expect(mockWriteFileSync).toHaveBeenCalled();
+      expect(mockEncryptString).toHaveBeenCalled();
     });
 
     it('should retrieve existing key from store', async () => {
@@ -144,14 +154,14 @@ describe.skip('DatabaseEncryptionService', () => {
         },
       };
 
-      (fs.existsSync as jest.Mock).mockReturnValue(true);
-      (fs.readFileSync as jest.Mock).mockReturnValue(JSON.stringify(keyStore));
-      (safeStorage.decryptString as jest.Mock).mockReturnValue(storedKey);
+      mockExistsSync.mockReturnValue(true);
+      mockReadFileSync.mockReturnValue(JSON.stringify(keyStore));
+      mockDecryptString.mockReturnValue(storedKey);
 
       const key = await databaseEncryptionService.getEncryptionKey();
 
       expect(key).toBe(storedKey);
-      expect(safeStorage.decryptString).toHaveBeenCalled();
+      expect(mockDecryptString).toHaveBeenCalled();
     });
 
     it('should cache the key after first retrieval', async () => {
@@ -161,9 +171,9 @@ describe.skip('DatabaseEncryptionService', () => {
         metadata: { keyId: 'id', createdAt: new Date().toISOString(), version: 1 },
       };
 
-      (fs.existsSync as jest.Mock).mockReturnValue(true);
-      (fs.readFileSync as jest.Mock).mockReturnValue(JSON.stringify(keyStore));
-      (safeStorage.decryptString as jest.Mock).mockReturnValue(storedKey);
+      mockExistsSync.mockReturnValue(true);
+      mockReadFileSync.mockReturnValue(JSON.stringify(keyStore));
+      mockDecryptString.mockReturnValue(storedKey);
 
       // First call
       const key1 = await databaseEncryptionService.getEncryptionKey();
@@ -172,11 +182,11 @@ describe.skip('DatabaseEncryptionService', () => {
 
       expect(key1).toBe(key2);
       // decryptString should only be called once due to caching
-      expect(safeStorage.decryptString).toHaveBeenCalledTimes(1);
+      expect(mockDecryptString).toHaveBeenCalledTimes(1);
     });
 
     it('should throw error when encryption is not available', async () => {
-      (safeStorage.isEncryptionAvailable as jest.Mock).mockReturnValue(false);
+      mockIsEncryptionAvailable.mockReturnValue(false);
       databaseEncryptionService.clearCache();
 
       await expect(databaseEncryptionService.getEncryptionKey()).rejects.toThrow(
@@ -187,12 +197,12 @@ describe.skip('DatabaseEncryptionService', () => {
 
   describe('isDatabaseEncrypted', () => {
     beforeEach(async () => {
-      (app.getPath as jest.Mock).mockReturnValue('/mock/user/data');
+      mockGetPath.mockReturnValue('/mock/user/data');
       await databaseEncryptionService.initialize();
     });
 
     it('should return false for non-existent database', async () => {
-      (fs.existsSync as jest.Mock).mockReturnValue(false);
+      mockExistsSync.mockReturnValue(false);
 
       const result = await databaseEncryptionService.isDatabaseEncrypted('/path/to/db');
 
@@ -202,13 +212,13 @@ describe.skip('DatabaseEncryptionService', () => {
     it('should return false for unencrypted SQLite database', async () => {
       const sqliteHeader = 'SQLite format 3\0';
 
-      (fs.existsSync as jest.Mock).mockReturnValue(true);
-      (fs.openSync as jest.Mock).mockReturnValue(1);
-      (fs.readSync as jest.Mock).mockImplementation((_fd, buffer: Buffer) => {
+      mockExistsSync.mockReturnValue(true);
+      mockOpenSync.mockReturnValue(1);
+      mockReadSync.mockImplementation((_fd: number, buffer: Buffer) => {
         buffer.write(sqliteHeader);
         return 16;
       });
-      (fs.closeSync as jest.Mock).mockReturnValue(undefined);
+      mockCloseSync.mockReturnValue(undefined);
 
       const result = await databaseEncryptionService.isDatabaseEncrypted('/path/to/db');
 
@@ -218,13 +228,13 @@ describe.skip('DatabaseEncryptionService', () => {
     it('should return true for encrypted database (no SQLite header)', async () => {
       const encryptedHeader = Buffer.alloc(16).fill(0xff); // Random encrypted bytes
 
-      (fs.existsSync as jest.Mock).mockReturnValue(true);
-      (fs.openSync as jest.Mock).mockReturnValue(1);
-      (fs.readSync as jest.Mock).mockImplementation((_fd, buffer: Buffer) => {
+      mockExistsSync.mockReturnValue(true);
+      mockOpenSync.mockReturnValue(1);
+      mockReadSync.mockImplementation((_fd: number, buffer: Buffer) => {
         encryptedHeader.copy(buffer);
         return 16;
       });
-      (fs.closeSync as jest.Mock).mockReturnValue(undefined);
+      mockCloseSync.mockReturnValue(undefined);
 
       const result = await databaseEncryptionService.isDatabaseEncrypted('/path/to/db');
 
@@ -234,8 +244,8 @@ describe.skip('DatabaseEncryptionService', () => {
 
   describe('rotateKey', () => {
     beforeEach(async () => {
-      (safeStorage.isEncryptionAvailable as jest.Mock).mockReturnValue(true);
-      (app.getPath as jest.Mock).mockReturnValue('/mock/user/data');
+      mockIsEncryptionAvailable.mockReturnValue(true);
+      mockGetPath.mockReturnValue('/mock/user/data');
       await databaseEncryptionService.initialize();
     });
 
@@ -246,10 +256,10 @@ describe.skip('DatabaseEncryptionService', () => {
         metadata: { keyId: 'id', createdAt: new Date().toISOString(), version: 1 },
       };
 
-      (fs.existsSync as jest.Mock).mockReturnValue(true);
-      (fs.readFileSync as jest.Mock).mockReturnValue(JSON.stringify(keyStore));
-      (safeStorage.decryptString as jest.Mock).mockReturnValue(oldKey);
-      (safeStorage.encryptString as jest.Mock).mockReturnValue(Buffer.from('new-encrypted'));
+      mockExistsSync.mockReturnValue(true);
+      mockReadFileSync.mockReturnValue(JSON.stringify(keyStore));
+      mockDecryptString.mockReturnValue(oldKey);
+      mockEncryptString.mockReturnValue(Buffer.from('new-encrypted'));
 
       databaseEncryptionService.clearCache();
 
@@ -258,18 +268,18 @@ describe.skip('DatabaseEncryptionService', () => {
       expect(result.oldKey).toBe(oldKey);
       expect(result.newKey).toMatch(/^[0-9a-f]{64}$/);
       expect(result.oldKey).not.toBe(result.newKey);
-      expect(fs.writeFileSync).toHaveBeenCalled();
+      expect(mockWriteFileSync).toHaveBeenCalled();
     });
   });
 
   describe('getKeyMetadata', () => {
     beforeEach(async () => {
-      (app.getPath as jest.Mock).mockReturnValue('/mock/user/data');
+      mockGetPath.mockReturnValue('/mock/user/data');
       await databaseEncryptionService.initialize();
     });
 
     it('should return null when no key store exists', async () => {
-      (fs.existsSync as jest.Mock).mockReturnValue(false);
+      mockExistsSync.mockReturnValue(false);
 
       const result = await databaseEncryptionService.getKeyMetadata();
 
@@ -287,8 +297,8 @@ describe.skip('DatabaseEncryptionService', () => {
         metadata,
       };
 
-      (fs.existsSync as jest.Mock).mockReturnValue(true);
-      (fs.readFileSync as jest.Mock).mockReturnValue(JSON.stringify(keyStore));
+      mockExistsSync.mockReturnValue(true);
+      mockReadFileSync.mockReturnValue(JSON.stringify(keyStore));
 
       const result = await databaseEncryptionService.getKeyMetadata();
 
@@ -298,8 +308,8 @@ describe.skip('DatabaseEncryptionService', () => {
 
   describe('clearCache', () => {
     it('should clear the cached key', async () => {
-      (safeStorage.isEncryptionAvailable as jest.Mock).mockReturnValue(true);
-      (app.getPath as jest.Mock).mockReturnValue('/mock/user/data');
+      mockIsEncryptionAvailable.mockReturnValue(true);
+      mockGetPath.mockReturnValue('/mock/user/data');
       await databaseEncryptionService.initialize();
 
       const keyStore = {
@@ -307,20 +317,20 @@ describe.skip('DatabaseEncryptionService', () => {
         metadata: { keyId: 'id', createdAt: new Date().toISOString(), version: 1 },
       };
 
-      (fs.existsSync as jest.Mock).mockReturnValue(true);
-      (fs.readFileSync as jest.Mock).mockReturnValue(JSON.stringify(keyStore));
-      (safeStorage.decryptString as jest.Mock).mockReturnValue('cached-key');
+      mockExistsSync.mockReturnValue(true);
+      mockReadFileSync.mockReturnValue(JSON.stringify(keyStore));
+      mockDecryptString.mockReturnValue('cached-key');
 
       // First call to populate cache
       await databaseEncryptionService.getEncryptionKey();
-      expect(safeStorage.decryptString).toHaveBeenCalledTimes(1);
+      expect(mockDecryptString).toHaveBeenCalledTimes(1);
 
       // Clear cache
       databaseEncryptionService.clearCache();
 
       // Should need to decrypt again
       await databaseEncryptionService.getEncryptionKey();
-      expect(safeStorage.decryptString).toHaveBeenCalledTimes(2);
+      expect(mockDecryptString).toHaveBeenCalledTimes(2);
     });
   });
 });
