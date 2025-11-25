@@ -25,12 +25,25 @@ jest.mock('os', () => ({
   platform: jest.fn().mockReturnValue('linux'),
 }));
 
+// Mock logService
+jest.mock('../logService', () => ({
+  __esModule: true,
+  default: {
+    error: jest.fn(),
+    warn: jest.fn(),
+    info: jest.fn(),
+    debug: jest.fn(),
+  },
+}));
+
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const tokenEncryptionService = require('../tokenEncryptionService').default;
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { EncryptionError } = require('../tokenEncryptionService');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const os = require('os');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const logService = require('../logService').default;
 
 describe('TokenEncryptionService', () => {
   beforeEach(() => {
@@ -291,6 +304,105 @@ describe('TokenEncryptionService', () => {
       expect(status.platform).toBe('linux');
       expect(status.guidance).toContain('gnome-keyring');
       expect(status.checked).toBe(true);
+    });
+  });
+
+  describe('error logging', () => {
+    it('should log error when encryption is not available', () => {
+      mockSafeStorage.isEncryptionAvailable.mockReturnValue(false);
+      os.platform.mockReturnValue('linux');
+
+      try {
+        tokenEncryptionService.encrypt('test');
+      } catch {
+        // Expected to throw
+      }
+
+      expect(logService.error).toHaveBeenCalledWith(
+        'Encryption not available',
+        'TokenEncryption',
+        expect.objectContaining({
+          message: expect.stringContaining('Cannot encrypt token'),
+          platform: 'linux',
+        })
+      );
+    });
+
+    it('should log error when decryption is not available', () => {
+      mockSafeStorage.isEncryptionAvailable.mockReturnValue(false);
+      os.platform.mockReturnValue('darwin');
+
+      try {
+        tokenEncryptionService.decrypt('test');
+      } catch {
+        // Expected to throw
+      }
+
+      expect(logService.error).toHaveBeenCalledWith(
+        'Decryption not available',
+        'TokenEncryption',
+        expect.objectContaining({
+          message: expect.stringContaining('Cannot decrypt token'),
+        })
+      );
+    });
+
+    it('should log error when encryption operation fails', () => {
+      mockSafeStorage.encryptString.mockImplementation(() => {
+        throw new Error('Internal encryption error');
+      });
+
+      try {
+        tokenEncryptionService.encrypt('test');
+      } catch {
+        // Expected to throw
+      }
+
+      expect(logService.error).toHaveBeenCalledWith(
+        'Encryption operation failed',
+        'TokenEncryption',
+        expect.objectContaining({
+          error: 'Internal encryption error',
+        })
+      );
+    });
+
+    it('should log error when decryption operation fails', () => {
+      mockSafeStorage.decryptString.mockImplementation(() => {
+        throw new Error('Internal decryption error');
+      });
+
+      const encrypted = Buffer.from('test').toString('base64');
+
+      try {
+        tokenEncryptionService.decrypt(encrypted);
+      } catch {
+        // Expected to throw
+      }
+
+      expect(logService.error).toHaveBeenCalledWith(
+        'Decryption operation failed',
+        'TokenEncryption',
+        expect.objectContaining({
+          error: 'Internal decryption error',
+        })
+      );
+    });
+
+    it('should log error when checking encryption availability fails', () => {
+      mockSafeStorage.isEncryptionAvailable.mockImplementation(() => {
+        throw new Error('safeStorage check failed');
+      });
+
+      tokenEncryptionService.isEncryptionAvailable();
+
+      expect(logService.error).toHaveBeenCalledWith(
+        'Error checking encryption availability',
+        'TokenEncryption',
+        expect.objectContaining({
+          error: 'safeStorage check failed',
+        })
+      );
     });
   });
 });

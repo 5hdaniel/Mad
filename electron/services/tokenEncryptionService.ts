@@ -6,6 +6,7 @@
 
 import { safeStorage } from 'electron';
 import * as os from 'os';
+import logService from './logService';
 
 /**
  * Error class for encryption-related failures with platform-specific guidance
@@ -67,7 +68,9 @@ class TokenEncryptionService {
       this._encryptionChecked = true;
       return this._encryptionAvailable;
     } catch (error) {
-      console.error('[TokenEncryption] Error checking encryption availability:', error);
+      logService.error('Error checking encryption availability', 'TokenEncryption', {
+        error: error instanceof Error ? error.message : String(error),
+      });
       this._encryptionChecked = true;
       this._encryptionAvailable = false;
       return false;
@@ -127,8 +130,11 @@ class TokenEncryptionService {
   encrypt(plaintext: string): string {
     if (!this.isEncryptionAvailable()) {
       const error = this.createUnavailableError('encrypt');
-      console.error(`[TokenEncryption] ${error.message}`);
-      console.error(`[TokenEncryption] ${error.guidance}`);
+      logService.error('Encryption not available', 'TokenEncryption', {
+        message: error.message,
+        platform: error.platform,
+        guidance: error.guidance,
+      });
       throw error;
     }
 
@@ -136,7 +142,9 @@ class TokenEncryptionService {
       const buffer = safeStorage.encryptString(plaintext);
       return buffer.toString('base64');
     } catch (error) {
-      console.error('[TokenEncryption] Encryption failed:', error);
+      logService.error('Encryption operation failed', 'TokenEncryption', {
+        error: error instanceof Error ? error.message : String(error),
+      });
       throw new EncryptionError(
         'Failed to encrypt token',
         'The encryption operation failed unexpectedly. Please try again or restart the application.'
@@ -153,8 +161,11 @@ class TokenEncryptionService {
   decrypt(encryptedBase64: string): string {
     if (!this.isEncryptionAvailable()) {
       const error = this.createUnavailableError('decrypt');
-      console.error(`[TokenEncryption] ${error.message}`);
-      console.error(`[TokenEncryption] ${error.guidance}`);
+      logService.error('Decryption not available', 'TokenEncryption', {
+        message: error.message,
+        platform: error.platform,
+        guidance: error.guidance,
+      });
       throw error;
     }
 
@@ -162,7 +173,9 @@ class TokenEncryptionService {
       const buffer = Buffer.from(encryptedBase64, 'base64');
       return safeStorage.decryptString(buffer);
     } catch (error) {
-      console.error('[TokenEncryption] Decryption failed:', error);
+      logService.error('Decryption operation failed', 'TokenEncryption', {
+        error: error instanceof Error ? error.message : String(error),
+      });
       throw new EncryptionError(
         'Failed to decrypt token',
         'The decryption operation failed. The token may be corrupted or the encryption key has changed.'
