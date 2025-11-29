@@ -524,16 +524,44 @@ const handleMicrosoftLogin = async (mainWindow: BrowserWindow | null): Promise<L
       }
     });
 
-    // Close the window when redirected to callback
+    // Intercept navigation to callback URL to extract code directly (faster than HTTP round-trip)
+    const handleCallbackUrl = (callbackUrl: string) => {
+      const parsedUrl = new URL(callbackUrl);
+      const code = parsedUrl.searchParams.get('code');
+      const error = parsedUrl.searchParams.get('error');
+      const errorDescription = parsedUrl.searchParams.get('error_description');
+
+      if (error) {
+        logService.info(`Microsoft auth error from navigation: ${error}`, 'AuthHandlers');
+        microsoftAuthService.rejectCodeDirectly(errorDescription || error);
+        authCompleted = true;
+        if (authWindow && !authWindow.isDestroyed()) {
+          authWindow.close();
+        }
+      } else if (code) {
+        logService.info('Extracted auth code directly from navigation (bypassing HTTP server)', 'AuthHandlers');
+        microsoftAuthService.resolveCodeDirectly(code);
+        authCompleted = true;
+        // Close window immediately since we don't need to show the success page
+        if (authWindow && !authWindow.isDestroyed()) {
+          authWindow.close();
+        }
+      }
+    };
+
+    // Use will-navigate to intercept the callback before it hits the HTTP server
+    authWindow.webContents.on('will-navigate', (event, url) => {
+      if (url.startsWith('http://localhost:3000/callback')) {
+        event.preventDefault(); // Prevent the navigation to avoid HTTP round-trip
+        handleCallbackUrl(url);
+      }
+    });
+
+    // Also handle will-redirect as a fallback for server-side redirects
     authWindow.webContents.on('will-redirect', (event, url) => {
       if (url.startsWith('http://localhost:3000/callback')) {
-        authCompleted = true;
-        // Let the success page load, then close after 3 seconds
-        setTimeout(() => {
-          if (authWindow && !authWindow.isDestroyed()) {
-            authWindow.close();
-          }
-        }, 3000);
+        event.preventDefault(); // Prevent the redirect to avoid HTTP round-trip
+        handleCallbackUrl(url);
       }
     });
 
@@ -828,16 +856,44 @@ const handleMicrosoftConnectMailbox = async (mainWindow: BrowserWindow | null, u
       }
     });
 
-    // Close the window when redirected to callback
+    // Intercept navigation to callback URL to extract code directly (faster than HTTP round-trip)
+    const handleMailboxCallbackUrl = (callbackUrl: string) => {
+      const parsedUrl = new URL(callbackUrl);
+      const code = parsedUrl.searchParams.get('code');
+      const error = parsedUrl.searchParams.get('error');
+      const errorDescription = parsedUrl.searchParams.get('error_description');
+
+      if (error) {
+        logService.info(`Microsoft mailbox auth error from navigation: ${error}`, 'AuthHandlers');
+        microsoftAuthService.rejectCodeDirectly(errorDescription || error);
+        authCompleted = true;
+        if (authWindow && !authWindow.isDestroyed()) {
+          authWindow.close();
+        }
+      } else if (code) {
+        logService.info('Extracted mailbox auth code directly from navigation (bypassing HTTP server)', 'AuthHandlers');
+        microsoftAuthService.resolveCodeDirectly(code);
+        authCompleted = true;
+        // Close window immediately since we don't need to show the success page
+        if (authWindow && !authWindow.isDestroyed()) {
+          authWindow.close();
+        }
+      }
+    };
+
+    // Use will-navigate to intercept the callback before it hits the HTTP server
+    authWindow.webContents.on('will-navigate', (event, url) => {
+      if (url.startsWith('http://localhost:3000/callback')) {
+        event.preventDefault(); // Prevent the navigation to avoid HTTP round-trip
+        handleMailboxCallbackUrl(url);
+      }
+    });
+
+    // Also handle will-redirect as a fallback for server-side redirects
     authWindow.webContents.on('will-redirect', (event, url) => {
       if (url.startsWith('http://localhost:3000/callback')) {
-        authCompleted = true;
-        // Let the success page load, then close after 3 seconds
-        setTimeout(() => {
-          if (authWindow && !authWindow.isDestroyed()) {
-            authWindow.close();
-          }
-        }, 3000);
+        event.preventDefault(); // Prevent the redirect to avoid HTTP round-trip
+        handleMailboxCallbackUrl(url);
       }
     });
 
