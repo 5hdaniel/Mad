@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import log from 'electron-log/renderer';
 
 import type { OAuthProvider } from '../../electron/types/models';
 
 interface SystemHealthMonitorProps {
   userId: string;
   provider: OAuthProvider;
+  hidden?: boolean;
 }
 
 interface SystemIssue {
@@ -28,7 +30,7 @@ interface SystemIssue {
  * - Shows dismissible notifications
  * - Provides action buttons to fix issues
  */
-function SystemHealthMonitor({ userId, provider }: SystemHealthMonitorProps) {
+function SystemHealthMonitor({ userId, provider, hidden = false }: SystemHealthMonitorProps) {
   const [issues, setIssues] = useState<SystemIssue[]>([]);
   const [dismissed, setDismissed] = useState(new Set<number>());
   const checkingRef = useRef(false);
@@ -40,15 +42,15 @@ function SystemHealthMonitor({ userId, provider }: SystemHealthMonitorProps) {
 
     try {
       // Pass provider so we only check the relevant OAuth connection
-      console.log('[SystemHealthMonitor] Checking health with provider:', provider);
+      log.debug('[SystemHealthMonitor] Checking health with provider:', provider);
       const result = await window.api.system.healthCheck(userId, provider);
 
-      console.log('[SystemHealthMonitor] Health check result:', result);
+      log.debug('[SystemHealthMonitor] Health check result:', result);
       if (!result.healthy && result.issues && Array.isArray(result.issues)) {
         setIssues(result.issues as SystemIssue[]);
       }
     } catch (error) {
-      console.error('System health check failed:', error);
+      log.error('[SystemHealthMonitor] System health check failed:', error);
     } finally {
       checkingRef.current = false;
     }
@@ -99,7 +101,7 @@ function SystemHealthMonitor({ userId, provider }: SystemHealthMonitorProps) {
             });
           }
         } catch (error) {
-          console.error('Google mailbox connection failed:', error);
+          log.error('[SystemHealthMonitor] Google mailbox connection failed:', error);
         }
         break;
 
@@ -120,7 +122,7 @@ function SystemHealthMonitor({ userId, provider }: SystemHealthMonitorProps) {
             });
           }
         } catch (error) {
-          console.error('Microsoft mailbox connection failed:', error);
+          log.error('[SystemHealthMonitor] Microsoft mailbox connection failed:', error);
         }
         break;
 
@@ -130,13 +132,14 @@ function SystemHealthMonitor({ userId, provider }: SystemHealthMonitorProps) {
         break;
 
       default:
-        console.warn('Unknown action handler:', issue.actionHandler);
+        log.warn('[SystemHealthMonitor] Unknown action handler:', issue.actionHandler);
     }
   };
 
   const visibleIssues = issues.filter((_, index) => !dismissed.has(index));
 
-  if (visibleIssues.length === 0) {
+  // Hide during onboarding tour or when no issues
+  if (hidden || visibleIssues.length === 0) {
     return null;
   }
 

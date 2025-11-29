@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import log from 'electron-log/renderer';
 import Login from './components/Login';
 import MicrosoftLogin from './components/MicrosoftLogin';
+import EmailOnboardingScreen from './components/EmailOnboardingScreen';
 import PermissionsScreen from './components/PermissionsScreen';
 import ConversationList from './components/ConversationList';
 import ExportComplete from './components/ExportComplete';
@@ -20,7 +22,7 @@ import type { Conversation } from './hooks/useConversations';
 import type { Subscription } from '../electron/types/models';
 
 // Type definitions
-type AppStep = 'login' | 'microsoft-login' | 'permissions' | 'dashboard' | 'outlook' | 'complete' | 'contacts';
+type AppStep = 'login' | 'email-onboarding' | 'microsoft-login' | 'permissions' | 'dashboard' | 'outlook' | 'complete' | 'contacts';
 
 interface AppExportResult {
   exportPath?: string;
@@ -77,13 +79,26 @@ function App() {
   const [showTransactions, setShowTransactions] = useState<boolean>(false);
   const [showContacts, setShowContacts] = useState<boolean>(false);
   const [showAuditTransaction, setShowAuditTransaction] = useState<boolean>(false);
+  const [isTourActive, setIsTourActive] = useState<boolean>(false);
+  const [hasCompletedEmailOnboarding, setHasCompletedEmailOnboarding] = useState<boolean>(false);
+
+  // Check if email onboarding was completed in a previous session
+  useEffect(() => {
+    const emailOnboardingCompleted = localStorage.getItem('hasCompletedEmailOnboarding');
+    if (emailOnboardingCompleted === 'true') {
+      setHasCompletedEmailOnboarding(true);
+    }
+  }, []);
 
   // Handle auth state changes to update navigation
   useEffect(() => {
     if (!isAuthLoading) {
       if (isAuthenticated && !needsTermsAcceptance) {
         // User is authenticated and has accepted terms
-        if (hasPermissions) {
+        // Check if user needs email onboarding (new user who hasn't completed it)
+        if (!hasCompletedEmailOnboarding) {
+          setCurrentStep('email-onboarding');
+        } else if (hasPermissions) {
           setCurrentStep('dashboard');
         } else {
           setCurrentStep('permissions');
@@ -92,7 +107,7 @@ function App() {
         setCurrentStep('login');
       }
     }
-  }, [isAuthenticated, isAuthLoading, needsTermsAcceptance, hasPermissions]);
+  }, [isAuthenticated, isAuthLoading, needsTermsAcceptance, hasPermissions, hasCompletedEmailOnboarding]);
 
   useEffect(() => {
     checkPermissions();
@@ -113,7 +128,7 @@ function App() {
         setCurrentStep('permissions');
       }
     } catch (error) {
-      console.error('Failed to accept terms:', error);
+      log.error('[App] Failed to accept terms:', error);
     }
   };
 
@@ -148,7 +163,7 @@ function App() {
         setShowMoveAppPrompt(true);
       }
     } catch (error) {
-      console.error('Error checking app location:', error);
+      log.error('[App] Error checking app location:', error);
     }
   };
 
@@ -158,6 +173,30 @@ function App() {
 
   const handleNotNowMovePrompt = () => {
     setShowMoveAppPrompt(false);
+  };
+
+  const handleEmailOnboardingComplete = () => {
+    // Mark email onboarding as completed
+    setHasCompletedEmailOnboarding(true);
+    localStorage.setItem('hasCompletedEmailOnboarding', 'true');
+    // Navigate to permissions or dashboard
+    if (hasPermissions) {
+      setCurrentStep('dashboard');
+    } else {
+      setCurrentStep('permissions');
+    }
+  };
+
+  const handleEmailOnboardingSkip = () => {
+    // Mark email onboarding as completed even if skipped
+    setHasCompletedEmailOnboarding(true);
+    localStorage.setItem('hasCompletedEmailOnboarding', 'true');
+    // Navigate to permissions or dashboard
+    if (hasPermissions) {
+      setCurrentStep('dashboard');
+    } else {
+      setCurrentStep('permissions');
+    }
   };
 
   const handleMicrosoftLogin = (_userInfo: unknown) => {
@@ -222,6 +261,8 @@ function App() {
     switch (currentStep) {
       case 'login':
         return 'Welcome';
+      case 'email-onboarding':
+        return 'Connect Email';
       case 'microsoft-login':
         return 'Login';
       case 'permissions':
@@ -270,6 +311,14 @@ function App() {
           <Login onLoginSuccess={handleLoginSuccess} />
         )}
 
+        {currentStep === 'email-onboarding' && currentUser && (
+          <EmailOnboardingScreen
+            userId={currentUser.id}
+            onComplete={handleEmailOnboardingComplete}
+            onSkip={handleEmailOnboardingSkip}
+          />
+        )}
+
         {currentStep === 'microsoft-login' && (
           <MicrosoftLogin
             onLoginComplete={handleMicrosoftLogin}
@@ -289,6 +338,7 @@ function App() {
             onAuditNew={() => setShowAuditTransaction(true)}
             onViewTransactions={() => setShowTransactions(true)}
             onManageContacts={() => setShowContacts(true)}
+            onTourStateChange={setIsTourActive}
           />
         )}
 
@@ -377,9 +427,9 @@ function App() {
       {/* Update Notification */}
       <UpdateNotification />
 
-      {/* System Health Monitor - Show permission/connection errors */}
+      {/* System Health Monitor - Show permission/connection errors (hidden during onboarding tour) */}
       {isAuthenticated && currentUser && authProvider && (
-        <SystemHealthMonitor userId={currentUser.id} provider={authProvider} />
+        <SystemHealthMonitor userId={currentUser.id} provider={authProvider} hidden={isTourActive} />
       )}
 
       {/* Move App Prompt */}

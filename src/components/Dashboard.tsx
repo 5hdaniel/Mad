@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import Joyride from 'react-joyride';
 import { useTour } from '../hooks/useTour';
 import { getDashboardTourSteps, JOYRIDE_STYLES, JOYRIDE_LOCALE } from '../config/tourSteps';
@@ -7,6 +7,7 @@ interface DashboardActionProps {
   onAuditNew: () => void;
   onViewTransactions: () => void;
   onManageContacts: () => void;
+  onTourStateChange?: (isActive: boolean) => void;
 }
 
 /**
@@ -14,9 +15,16 @@ interface DashboardActionProps {
  * Main landing screen after login
  * Provides three primary actions: Start New Audit, Browse Transactions, and Manage Contacts
  */
-function Dashboard({ onAuditNew, onViewTransactions, onManageContacts }: DashboardActionProps) {
+function Dashboard({ onAuditNew, onViewTransactions, onManageContacts, onTourStateChange }: DashboardActionProps) {
   // Initialize the onboarding tour for first-time users
   const { runTour, handleJoyrideCallback } = useTour(true, 'hasSeenDashboardTour');
+
+  // Notify parent component when tour state changes
+  useEffect(() => {
+    if (onTourStateChange) {
+      onTourStateChange(runTour);
+    }
+  }, [runTour, onTourStateChange]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-8">
