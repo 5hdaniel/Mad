@@ -67,6 +67,7 @@ function setupContentSecurityPolicy(): void {
           "base-uri 'self'",
           "form-action 'self'",
           "frame-ancestors 'none'",
+          "worker-src 'self' blob:",
           "upgrade-insecure-requests"
         ]
       : [
@@ -80,7 +81,8 @@ function setupContentSecurityPolicy(): void {
           "object-src 'none'",
           "base-uri 'self'",
           "form-action 'self'",
-          "frame-ancestors 'none'"
+          "frame-ancestors 'none'",
+          "worker-src 'self' blob:"
         ];
 
     callback({
