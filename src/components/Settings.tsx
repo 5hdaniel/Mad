@@ -267,8 +267,11 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
               <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <svg className="w-5 h-5 text-blue-500" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M7.88 12.04q0 .45-.11.87-.1.41-.33.74-.22.33-.58.52-.37.2-.87.2t-.85-.2q-.35-.21-.57-.55-.22-.33-.33-.75-.1-.42-.1-.86t.1-.87q.1-.43.34-.76.22-.34.59-.54.36-.2.87-.2t.86.2q.35.21.57.55.22.34.31.77.1.43.1.88zM24 12v9.38q0 .46-.33.8-.33.32-.8.32H7.13q-.46 0-.8-.33-.32-.33-.32-.8V18H1q-.41 0-.7-.3-.3-.29-.3-.7V7q0-.41.3-.7Q.58 6 1 6h6.5V2.88q0-.46.33-.8.33-.33.8-.33h14.5q.46 0 .8.33.32.34.32.8V12zM7.13 18H2V7.38l5.13 4.36zM14.75 7.88q0 .47-.12.89-.12.41-.36.76-.23.35-.61.57-.37.22-.94.22h-.86v3.63h-.87V6.13h1.73q.59 0 .98.22.38.22.63.57.24.36.36.78.11.41.11.88zm-1.25 0q0-.61-.34-.92-.33-.3-.93-.3h-.86v2.45h.86q.6 0 .93-.3.34-.32.34-.93zM24 7.07v10.76L11.5 12zm-1-1.1L12.63 12L23 17.9V5.97z"/>
+                    <svg className="w-5 h-5" viewBox="0 0 21 21" fill="none">
+                      <rect x="1" y="1" width="9" height="9" fill="#F25022"/>
+                      <rect x="11" y="1" width="9" height="9" fill="#7FBA00"/>
+                      <rect x="1" y="11" width="9" height="9" fill="#00A4EF"/>
+                      <rect x="11" y="11" width="9" height="9" fill="#FFB900"/>
                     </svg>
                     <h4 className="text-sm font-medium text-gray-900">Outlook</h4>
                   </div>
