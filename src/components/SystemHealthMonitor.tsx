@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import log from 'electron-log/renderer';
 
 import type { OAuthProvider } from '../../electron/types/models';
 
@@ -42,15 +41,15 @@ function SystemHealthMonitor({ userId, provider, hidden = false }: SystemHealthM
 
     try {
       // Pass provider so we only check the relevant OAuth connection
-      log.debug('[SystemHealthMonitor] Checking health with provider:', provider);
+      console.log('[SystemHealthMonitor] Checking health with provider:', provider);
       const result = await window.api.system.healthCheck(userId, provider);
 
-      log.debug('[SystemHealthMonitor] Health check result:', result);
+      console.log('[SystemHealthMonitor] Health check result:', result);
       if (!result.healthy && result.issues && Array.isArray(result.issues)) {
         setIssues(result.issues as SystemIssue[]);
       }
     } catch (error) {
-      log.error('[SystemHealthMonitor] System health check failed:', error);
+      console.error('[SystemHealthMonitor] System health check failed:', error);
     } finally {
       checkingRef.current = false;
     }
@@ -101,7 +100,7 @@ function SystemHealthMonitor({ userId, provider, hidden = false }: SystemHealthM
             });
           }
         } catch (error) {
-          log.error('[SystemHealthMonitor] Google mailbox connection failed:', error);
+          console.error('[SystemHealthMonitor] Google mailbox connection failed:', error);
         }
         break;
 
@@ -122,7 +121,7 @@ function SystemHealthMonitor({ userId, provider, hidden = false }: SystemHealthM
             });
           }
         } catch (error) {
-          log.error('[SystemHealthMonitor] Microsoft mailbox connection failed:', error);
+          console.error('[SystemHealthMonitor] Microsoft mailbox connection failed:', error);
         }
         break;
 
@@ -132,7 +131,7 @@ function SystemHealthMonitor({ userId, provider, hidden = false }: SystemHealthM
         break;
 
       default:
-        log.warn('[SystemHealthMonitor] Unknown action handler:', issue.actionHandler);
+        console.warn('[SystemHealthMonitor] Unknown action handler:', issue.actionHandler);
     }
   };
 

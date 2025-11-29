@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import log from 'electron-log/renderer';
 import Login from './components/Login';
 import MicrosoftLogin from './components/MicrosoftLogin';
 import EmailOnboardingScreen from './components/EmailOnboardingScreen';
@@ -128,7 +127,7 @@ function App() {
         setCurrentStep('permissions');
       }
     } catch (error) {
-      log.error('[App] Failed to accept terms:', error);
+      console.error('[App] Failed to accept terms:', error);
     }
   };
 
@@ -163,7 +162,7 @@ function App() {
         setShowMoveAppPrompt(true);
       }
     } catch (error) {
-      log.error('[App] Error checking app location:', error);
+      console.error('[App] Error checking app location:', error);
     }
   };
 

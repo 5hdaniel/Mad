@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import log from 'electron-log/renderer';
 
 interface ConnectionStatus {
   connected: boolean;
@@ -41,20 +40,20 @@ function EmailOnboardingScreen({ userId, onComplete, onSkip }: EmailOnboardingSc
   const checkConnections = async (): Promise<void> => {
     setLoadingConnections(true);
     try {
-      log.info('[EmailOnboarding] Checking email connection status');
+      console.log('[EmailOnboarding] Checking email connection status');
       const result = await window.api.system.checkAllConnections(userId);
       if (result.success) {
         setConnections({
           google: result.google || null,
           microsoft: result.microsoft || null,
         });
-        log.info('[EmailOnboarding] Connection status retrieved', {
+        console.log('[EmailOnboarding] Connection status retrieved', {
           googleConnected: result.google?.connected || false,
           microsoftConnected: result.microsoft?.connected || false
         });
       }
     } catch (error) {
-      log.error('[EmailOnboarding] Failed to check connections:', error);
+      console.error('[EmailOnboarding] Failed to check connections:', error);
     } finally {
       setLoadingConnections(false);
     }
@@ -64,22 +63,22 @@ function EmailOnboardingScreen({ userId, onComplete, onSkip }: EmailOnboardingSc
     setConnectingProvider('google');
     let cleanup: (() => void) | undefined;
     try {
-      log.info('[EmailOnboarding] Initiating Google mailbox connection');
+      console.log('[EmailOnboarding] Initiating Google mailbox connection');
       const result = await window.api.auth.googleConnectMailbox(userId);
       if (result.success) {
         cleanup = window.api.onGoogleMailboxConnected(async (connectionResult: ConnectionResult) => {
           if (connectionResult.success) {
-            log.info('[EmailOnboarding] Google mailbox connected successfully');
+            console.log('[EmailOnboarding] Google mailbox connected successfully');
             await checkConnections();
           } else {
-            log.warn('[EmailOnboarding] Google mailbox connection failed');
+            console.warn('[EmailOnboarding] Google mailbox connection failed');
           }
           setConnectingProvider(null);
           if (cleanup) cleanup();
         });
       }
     } catch (error) {
-      log.error('[EmailOnboarding] Failed to connect Google:', error);
+      console.error('[EmailOnboarding] Failed to connect Google:', error);
       setConnectingProvider(null);
       if (cleanup) cleanup();
     }
@@ -89,22 +88,22 @@ function EmailOnboardingScreen({ userId, onComplete, onSkip }: EmailOnboardingSc
     setConnectingProvider('microsoft');
     let cleanup: (() => void) | undefined;
     try {
-      log.info('[EmailOnboarding] Initiating Microsoft mailbox connection');
+      console.log('[EmailOnboarding] Initiating Microsoft mailbox connection');
       const result = await window.api.auth.microsoftConnectMailbox(userId);
       if (result.success) {
         cleanup = window.api.onMicrosoftMailboxConnected(async (connectionResult: ConnectionResult) => {
           if (connectionResult.success) {
-            log.info('[EmailOnboarding] Microsoft mailbox connected successfully');
+            console.log('[EmailOnboarding] Microsoft mailbox connected successfully');
             await checkConnections();
           } else {
-            log.warn('[EmailOnboarding] Microsoft mailbox connection failed');
+            console.warn('[EmailOnboarding] Microsoft mailbox connection failed');
           }
           setConnectingProvider(null);
           if (cleanup) cleanup();
         });
       }
     } catch (error) {
-      log.error('[EmailOnboarding] Failed to connect Microsoft:', error);
+      console.error('[EmailOnboarding] Failed to connect Microsoft:', error);
       setConnectingProvider(null);
       if (cleanup) cleanup();
     }
@@ -112,12 +111,12 @@ function EmailOnboardingScreen({ userId, onComplete, onSkip }: EmailOnboardingSc
 
   const handleContinue = (): void => {
     const hasConnection = connections.google?.connected || connections.microsoft?.connected;
-    log.info('[EmailOnboarding] User continuing with email connection status', { hasConnection });
+    console.log('[EmailOnboarding] User continuing with email connection status', { hasConnection });
     onComplete();
   };
 
   const handleSkip = (): void => {
-    log.info('[EmailOnboarding] User skipped email connection');
+    console.log('[EmailOnboarding] User skipped email connection');
     onSkip();
   };
 
