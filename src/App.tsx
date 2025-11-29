@@ -79,39 +79,46 @@ function App() {
   const [showContacts, setShowContacts] = useState<boolean>(false);
   const [showAuditTransaction, setShowAuditTransaction] = useState<boolean>(false);
   const [isTourActive, setIsTourActive] = useState<boolean>(false);
-  const [hasCompletedEmailOnboarding, setHasCompletedEmailOnboarding] = useState<boolean>(false);
-  const [needsEmailOnboarding, setNeedsEmailOnboarding] = useState<boolean>(false);
-  const [hasSkippedEmailOnboarding, setHasSkippedEmailOnboarding] = useState<boolean>(false);
+  const [hasCompletedEmailOnboarding, setHasCompletedEmailOnboarding] = useState<boolean>(true); // Default true to avoid flicker
+  const [isCheckingEmailOnboarding, setIsCheckingEmailOnboarding] = useState<boolean>(true);
+  const [hasEmailConnected, setHasEmailConnected] = useState<boolean>(true); // Default true to avoid flicker
+  const [showSetupPromptDismissed, setShowSetupPromptDismissed] = useState<boolean>(false);
 
-  // Check if user needs email onboarding (persisted flag for dropped-off users)
+  // Check if user has completed email onboarding and has email connected
   useEffect(() => {
-    if (currentUser?.id) {
-      const emailOnboardingCompleted = localStorage.getItem(`hasCompletedEmailOnboarding_${currentUser.id}`);
-      const needsOnboarding = localStorage.getItem(`needsEmailOnboarding_${currentUser.id}`);
-      const skippedOnboarding = localStorage.getItem(`hasSkippedEmailOnboarding_${currentUser.id}`);
+    const checkEmailStatus = async () => {
+      if (currentUser?.id) {
+        setIsCheckingEmailOnboarding(true);
+        try {
+          // Check onboarding status
+          const onboardingResult = await window.api.auth.checkEmailOnboarding(currentUser.id);
+          if (onboardingResult.success) {
+            setHasCompletedEmailOnboarding(onboardingResult.completed);
+          }
 
-      if (emailOnboardingCompleted === 'true') {
-        setHasCompletedEmailOnboarding(true);
-        setNeedsEmailOnboarding(false);
-        setHasSkippedEmailOnboarding(false);
-      } else if (skippedOnboarding === 'true') {
-        // User skipped email onboarding - show prompt on dashboard instead
-        setHasSkippedEmailOnboarding(true);
-        setNeedsEmailOnboarding(true);
-      } else if (needsOnboarding === 'true') {
-        // User started onboarding but dropped off - redirect them to complete it
-        setNeedsEmailOnboarding(true);
+          // Check if any email is connected
+          const connectionResult = await window.api.system.checkAllConnections(currentUser.id);
+          if (connectionResult.success) {
+            const hasConnection = connectionResult.google?.connected || connectionResult.microsoft?.connected;
+            setHasEmailConnected(hasConnection);
+          }
+        } catch (error) {
+          console.error('[App] Failed to check email status:', error);
+        } finally {
+          setIsCheckingEmailOnboarding(false);
+        }
       }
-    }
+    };
+    checkEmailStatus();
   }, [currentUser?.id]);
 
   // Handle auth state changes to update navigation
   useEffect(() => {
-    if (!isAuthLoading) {
+    if (!isAuthLoading && !isCheckingEmailOnboarding) {
       if (isAuthenticated && !needsTermsAcceptance) {
         // User is authenticated and has accepted terms
-        // Check if user needs email onboarding (new user or dropped-off user who hasn't skipped)
-        if (needsEmailOnboarding && !hasCompletedEmailOnboarding && !hasSkippedEmailOnboarding) {
+        // Check if user needs email onboarding (hasn't completed it yet)
+        if (!hasCompletedEmailOnboarding) {
           setCurrentStep('email-onboarding');
         } else if (hasPermissions) {
           setCurrentStep('dashboard');
@@ -122,7 +129,7 @@ function App() {
         setCurrentStep('login');
       }
     }
-  }, [isAuthenticated, isAuthLoading, needsTermsAcceptance, hasPermissions, hasCompletedEmailOnboarding, needsEmailOnboarding, hasSkippedEmailOnboarding]);
+  }, [isAuthenticated, isAuthLoading, needsTermsAcceptance, hasPermissions, hasCompletedEmailOnboarding, isCheckingEmailOnboarding]);
 
   useEffect(() => {
     checkPermissions();
@@ -136,12 +143,8 @@ function App() {
   const handleAcceptTerms = async (): Promise<void> => {
     try {
       await acceptTerms();
-      // Mark this user as needing email onboarding (persisted for dropped-off users)
-      if (currentUser?.id) {
-        localStorage.setItem(`needsEmailOnboarding_${currentUser.id}`, 'true');
-      }
-      setNeedsEmailOnboarding(true);
-      // Navigation will be handled by the useEffect that watches needsEmailOnboarding
+      // New user needs email onboarding - hasCompletedEmailOnboarding is already false
+      // Navigation will be handled by the useEffect
     } catch (error) {
       console.error('[App] Failed to accept terms:', error);
     }
@@ -190,16 +193,20 @@ function App() {
     setShowMoveAppPrompt(false);
   };
 
-  const handleEmailOnboardingComplete = () => {
-    // Mark email onboarding as completed for this user
-    setHasCompletedEmailOnboarding(true);
-    setNeedsEmailOnboarding(false);
-    setHasSkippedEmailOnboarding(false);
+  const completeEmailOnboarding = async () => {
+    // Mark email onboarding as completed in database
     if (currentUser?.id) {
-      localStorage.setItem(`hasCompletedEmailOnboarding_${currentUser.id}`, 'true');
-      localStorage.removeItem(`needsEmailOnboarding_${currentUser.id}`);
-      localStorage.removeItem(`hasSkippedEmailOnboarding_${currentUser.id}`);
+      try {
+        await window.api.auth.completeEmailOnboarding(currentUser.id);
+        setHasCompletedEmailOnboarding(true);
+      } catch (error) {
+        console.error('[App] Failed to complete email onboarding:', error);
+      }
     }
+  };
+
+  const handleEmailOnboardingComplete = async () => {
+    await completeEmailOnboarding();
     // Navigate to permissions or dashboard
     if (hasPermissions) {
       setCurrentStep('dashboard');
@@ -208,13 +215,10 @@ function App() {
     }
   };
 
-  const handleEmailOnboardingSkip = () => {
-    // Skipping doesn't fully complete onboarding - user will see prompt on dashboard
-    // But we allow them to proceed to the app
-    setHasSkippedEmailOnboarding(true);
-    if (currentUser?.id) {
-      localStorage.setItem(`hasSkippedEmailOnboarding_${currentUser.id}`, 'true');
-    }
+  const handleEmailOnboardingSkip = async () => {
+    // Skipping also marks onboarding as complete so user doesn't see full screen again
+    // Dashboard will show prompt based on whether email is actually connected
+    await completeEmailOnboarding();
     // Navigate to permissions or dashboard
     if (hasPermissions) {
       setCurrentStep('dashboard');
@@ -224,15 +228,8 @@ function App() {
   };
 
   const handleDismissSetupPrompt = () => {
-    // User dismissed the setup prompt from dashboard - mark as fully completed
-    setHasCompletedEmailOnboarding(true);
-    setNeedsEmailOnboarding(false);
-    setHasSkippedEmailOnboarding(false);
-    if (currentUser?.id) {
-      localStorage.setItem(`hasCompletedEmailOnboarding_${currentUser.id}`, 'true');
-      localStorage.removeItem(`needsEmailOnboarding_${currentUser.id}`);
-      localStorage.removeItem(`hasSkippedEmailOnboarding_${currentUser.id}`);
-    }
+    // User dismissed the setup prompt from dashboard - just hide it for this session
+    setShowSetupPromptDismissed(true);
   };
 
   const handleMicrosoftLogin = (_userInfo: unknown) => {
@@ -376,7 +373,7 @@ function App() {
             onViewTransactions={() => setShowTransactions(true)}
             onManageContacts={() => setShowContacts(true)}
             onTourStateChange={setIsTourActive}
-            showSetupPrompt={needsEmailOnboarding && !hasCompletedEmailOnboarding}
+            showSetupPrompt={!hasEmailConnected && !showSetupPromptDismissed}
             onContinueSetup={() => setCurrentStep('email-onboarding')}
             onDismissSetupPrompt={handleDismissSetupPrompt}
           />

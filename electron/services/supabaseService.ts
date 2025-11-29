@@ -274,6 +274,30 @@ class SupabaseService {
   }
 
   /**
+   * Sync email onboarding completion to cloud
+   * @param userId - User UUID
+   */
+  async completeEmailOnboarding(userId: string): Promise<void> {
+    const client = this._ensureClient();
+
+    try {
+      const { error } = await client
+        .from('users')
+        .update({
+          email_onboarding_completed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', userId);
+
+      if (error) throw error;
+      console.log('[Supabase] Email onboarding completion synced for user:', userId);
+    } catch (error) {
+      console.error('[Supabase] Failed to sync email onboarding completion:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Validate user's subscription status
    * @param userId - User UUID
    * @returns Subscription status
