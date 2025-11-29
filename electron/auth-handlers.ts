@@ -366,16 +366,44 @@ const handleGoogleConnectMailbox = async (mainWindow: BrowserWindow | null, user
       }
     });
 
-    // Close the window when redirected to callback
+    // Intercept navigation to callback URL to extract code directly (faster than HTTP round-trip)
+    const handleGoogleCallbackUrl = (callbackUrl: string) => {
+      const parsedUrl = new URL(callbackUrl);
+      const code = parsedUrl.searchParams.get('code');
+      const error = parsedUrl.searchParams.get('error');
+      const errorDescription = parsedUrl.searchParams.get('error_description');
+
+      if (error) {
+        logService.info(`Google auth error from navigation: ${error}`, 'AuthHandlers');
+        googleAuthService.rejectCodeDirectly(errorDescription || error);
+        authCompleted = true;
+        if (authWindow && !authWindow.isDestroyed()) {
+          authWindow.close();
+        }
+      } else if (code) {
+        logService.info('Extracted Google auth code directly from navigation (bypassing HTTP server)', 'AuthHandlers');
+        googleAuthService.resolveCodeDirectly(code);
+        authCompleted = true;
+        // Close window immediately since we don't need to show the success page
+        if (authWindow && !authWindow.isDestroyed()) {
+          authWindow.close();
+        }
+      }
+    };
+
+    // Use will-navigate to intercept the callback before it hits the HTTP server
+    authWindow.webContents.on('will-navigate', (event, url) => {
+      if (url.startsWith('http://localhost:3001/callback')) {
+        event.preventDefault(); // Prevent the navigation to avoid HTTP round-trip
+        handleGoogleCallbackUrl(url);
+      }
+    });
+
+    // Also handle will-redirect as a fallback for server-side redirects
     authWindow.webContents.on('will-redirect', (event, url) => {
       if (url.startsWith('http://localhost:3001/callback')) {
-        authCompleted = true;
-        // Let the success page load, then close after 3 seconds
-        setTimeout(() => {
-          if (authWindow && !authWindow.isDestroyed()) {
-            authWindow.close();
-          }
-        }, 3000);
+        event.preventDefault(); // Prevent the redirect to avoid HTTP round-trip
+        handleGoogleCallbackUrl(url);
       }
     });
 
