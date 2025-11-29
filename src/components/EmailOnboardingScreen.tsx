@@ -294,30 +294,24 @@ function EmailOnboardingScreen({ userId, authProvider, onComplete, onSkip }: Ema
 
         {/* Action Buttons */}
         <div className="space-y-3">
-          {hasAnyConnection ? (
-            <button
-              onClick={handleContinue}
-              className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white py-3 px-6 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all"
-            >
-              Continue
-            </button>
-          ) : (
-            <button
-              onClick={handleSkip}
-              className="w-full bg-gray-200 hover:bg-gray-300 text-gray-700 py-3 px-6 rounded-xl font-semibold transition-all"
-            >
-              Skip for Now
-            </button>
-          )}
+          <button
+            onClick={handleContinue}
+            disabled={!hasAnyConnection}
+            className={`w-full py-3 px-6 rounded-xl font-semibold transition-all ${
+              hasAnyConnection
+                ? 'bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white shadow-lg hover:shadow-xl'
+                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+            }`}
+          >
+            Continue
+          </button>
 
-          {hasAnyConnection && (
-            <button
-              onClick={handleSkip}
-              className="w-full text-gray-500 hover:text-gray-700 py-2 text-sm font-medium transition-colors"
-            >
-              Skip additional connections
-            </button>
-          )}
+          <button
+            onClick={handleSkip}
+            className="w-full text-gray-500 hover:text-gray-700 py-2 text-sm font-medium transition-colors"
+          >
+            {hasAnyConnection ? 'Skip additional connections' : 'Skip for Now'}
+          </button>
 
           {!hasAnyConnection && (
             <p className="text-xs text-gray-500 text-center">
