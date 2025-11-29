@@ -231,10 +231,17 @@ describe('AuthContext', () => {
       // Suppress console.error for this test
       const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
+      // Suppress jsdom's VirtualConsole error logging for expected errors
+      const errorHandler = (event: ErrorEvent) => {
+        event.preventDefault();
+      };
+      window.addEventListener('error', errorHandler);
+
       expect(() => {
         render(<TestAuthConsumer />);
       }).toThrow('useAuth must be used within an AuthProvider');
 
+      window.removeEventListener('error', errorHandler);
       consoleSpy.mockRestore();
     });
   });
