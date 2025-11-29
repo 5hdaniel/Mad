@@ -426,9 +426,9 @@ function App() {
       {/* Update Notification */}
       <UpdateNotification />
 
-      {/* System Health Monitor - Show permission/connection errors (hidden during onboarding tour) */}
+      {/* System Health Monitor - Show permission/connection errors (hidden during onboarding tour and email onboarding) */}
       {isAuthenticated && currentUser && authProvider && (
-        <SystemHealthMonitor userId={currentUser.id} provider={authProvider} hidden={isTourActive} />
+        <SystemHealthMonitor userId={currentUser.id} provider={authProvider} hidden={isTourActive || currentStep === 'email-onboarding'} />
       )}
 
       {/* Move App Prompt */}
