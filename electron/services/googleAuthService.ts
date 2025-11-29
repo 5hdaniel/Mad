@@ -360,6 +360,9 @@ class GoogleAuthService {
     const client = this._ensureClient();
 
     const scopes = [
+      'openid',
+      'https://www.googleapis.com/auth/userinfo.email',
+      'https://www.googleapis.com/auth/userinfo.profile',
       'https://www.googleapis.com/auth/gmail.readonly',
     ];
 
