@@ -541,24 +541,42 @@ const handleMicrosoftLogin = async (mainWindow: BrowserWindow | null): Promise<L
     // Don't wait for user - return early
     setTimeout(async () => {
       try {
-        // Wait for code from local server (in background)
-        const code = await codePromise;
+        // Wait for code from local server (in background) with timeout
+        await logService.info('Waiting for authorization code from local server...', 'AuthHandlers');
+
+        // Add timeout to prevent infinite waiting
+        const timeoutMs = 120000; // 2 minutes
+        const codeWithTimeout = Promise.race([
+          codePromise,
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Authentication timed out - no response from Microsoft')), timeoutMs)
+          )
+        ]);
+
+        const code = await codeWithTimeout;
         authCompleted = true;
         await logService.info('Received authorization code from redirect', 'AuthHandlers');
 
         // Exchange code for tokens
+        await logService.info('Exchanging authorization code for tokens...', 'AuthHandlers');
         const tokens = await microsoftAuthService.exchangeCodeForTokens(code, codeVerifier);
+        await logService.info('Token exchange successful', 'AuthHandlers');
 
         // Get user info
+        await logService.info('Fetching user info from Microsoft Graph...', 'AuthHandlers');
         const userInfo = await microsoftAuthService.getUserInfo(tokens.access_token);
+        await logService.info('User info retrieved successfully', 'AuthHandlers', { email: userInfo.email });
 
         // Encrypt tokens
+        await logService.info('Encrypting tokens...', 'AuthHandlers');
         const encryptedAccessToken = tokenEncryptionService.encrypt(tokens.access_token);
         const encryptedRefreshToken = tokens.refresh_token
           ? tokenEncryptionService.encrypt(tokens.refresh_token)
           : null;
+        await logService.info('Tokens encrypted successfully', 'AuthHandlers');
 
         // Sync user to Supabase
+        await logService.info('Syncing user to Supabase...', 'AuthHandlers');
         const cloudUser = await supabaseService.syncUser({
           email: userInfo.email,
           first_name: userInfo.given_name,
@@ -568,8 +586,10 @@ const handleMicrosoftLogin = async (mainWindow: BrowserWindow | null): Promise<L
           oauth_provider: 'microsoft',
           oauth_id: userInfo.id,
         });
+        await logService.info('User synced to Supabase successfully', 'AuthHandlers', { cloudUserId: cloudUser.id });
 
         // Create user in local database
+        await logService.info('Looking up or creating local user...', 'AuthHandlers');
         let localUser = await databaseService.getUserByOAuthId('microsoft', userInfo.id);
 
         if (!localUser) {
@@ -601,6 +621,7 @@ const handleMicrosoftLogin = async (mainWindow: BrowserWindow | null): Promise<L
           throw new Error('Local user is unexpectedly null after creation/update');
         }
 
+        await logService.info('Updating last login timestamp...', 'AuthHandlers');
         await databaseService.updateLastLogin(localUser.id);
         // Re-fetch user to get updated last_login_at timestamp
         const refreshedUser = await databaseService.getUserById(localUser.id);
@@ -608,8 +629,10 @@ const handleMicrosoftLogin = async (mainWindow: BrowserWindow | null): Promise<L
           throw new Error('Failed to retrieve user after update');
         }
         localUser = refreshedUser;
+        await logService.info('Local user record updated', 'AuthHandlers', { userId: localUser.id });
 
         // Save auth token
+        await logService.info('Saving OAuth token...', 'AuthHandlers');
         const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
 
         await databaseService.saveOAuthToken(localUser.id, 'microsoft', 'authentication', {
@@ -618,12 +641,17 @@ const handleMicrosoftLogin = async (mainWindow: BrowserWindow | null): Promise<L
           token_expires_at: expiresAt,
           scopes_granted: tokens.scope,
         });
+        await logService.info('OAuth token saved', 'AuthHandlers');
 
         // Create session
+        await logService.info('Creating session...', 'AuthHandlers');
         const sessionToken = await databaseService.createSession(localUser.id);
+        await logService.info('Session created', 'AuthHandlers');
 
         // Validate subscription
+        await logService.info('Validating subscription...', 'AuthHandlers');
         const subscription = await supabaseService.validateSubscription(cloudUser.id);
+        await logService.info('Subscription validated', 'AuthHandlers', { tier: subscription?.tier });
 
         // Register device
         const deviceInfo = {
@@ -677,7 +705,9 @@ const handleMicrosoftLogin = async (mainWindow: BrowserWindow | null): Promise<L
         });
 
         // Notify renderer of successful login
-        if (mainWindow) {
+        await logService.info('Preparing to notify renderer of successful login...', 'AuthHandlers');
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          await logService.info('Sending microsoft:login-complete IPC message to renderer', 'AuthHandlers');
           mainWindow.webContents.send('microsoft:login-complete', {
             success: true,
             user: localUser,
@@ -685,12 +715,21 @@ const handleMicrosoftLogin = async (mainWindow: BrowserWindow | null): Promise<L
             subscription,
             isNewUser,
           });
+          await logService.info('IPC message sent successfully', 'AuthHandlers');
+        } else {
+          await logService.error('Cannot send IPC message - mainWindow is null or destroyed', 'AuthHandlers', {
+            mainWindowExists: !!mainWindow,
+            isDestroyed: mainWindow?.isDestroyed() ?? 'N/A',
+          });
         }
       } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        const errorStack = error instanceof Error ? error.stack : undefined;
+
         await logService.error(
           'Microsoft login background processing failed',
           'AuthHandlers',
-          { error: error instanceof Error ? error.message : 'Unknown error' }
+          { error: errorMessage, stack: errorStack }
         );
 
         // Audit log failed login
@@ -698,16 +737,19 @@ const handleMicrosoftLogin = async (mainWindow: BrowserWindow | null): Promise<L
           userId: 'unknown',
           action: 'LOGIN_FAILED',
           resourceType: 'SESSION',
-          metadata: { provider: 'microsoft', error: error instanceof Error ? error.message : 'Unknown error' },
+          metadata: { provider: 'microsoft', error: errorMessage },
           success: false,
-          errorMessage: error instanceof Error ? error.message : 'Unknown error',
+          errorMessage: errorMessage,
         });
 
-        if (mainWindow) {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          await logService.info('Sending microsoft:login-complete error IPC message to renderer', 'AuthHandlers');
           mainWindow.webContents.send('microsoft:login-complete', {
             success: false,
-            error: error instanceof Error ? error.message : 'Unknown error',
+            error: errorMessage,
           });
+        } else {
+          await logService.error('Cannot send error IPC message - mainWindow is null or destroyed', 'AuthHandlers');
         }
       }
     }, 0);

@@ -417,6 +417,28 @@ describe('Auth Handlers', () => {
       expect(result.success).toBe(false);
       expect(result.error).toContain('Auth initialization failed');
     });
+
+    it('should log each step of the authentication flow', async () => {
+      mockMicrosoftAuthService.authenticateForLogin.mockResolvedValue({
+        authUrl: 'https://login.microsoftonline.com/oauth',
+        codePromise: new Promise(() => {}),
+        codeVerifier: 'verifier-123',
+        scopes: ['User.Read'],
+      });
+
+      const handler = registeredHandlers.get('auth:microsoft:login');
+      await handler(mockEvent);
+
+      // Verify initial logging happens
+      expect(mockLogService.info).toHaveBeenCalledWith(
+        'Starting Microsoft login flow with redirect',
+        'AuthHandlers'
+      );
+      expect(mockLogService.info).toHaveBeenCalledWith(
+        'Opening auth URL in popup window',
+        'AuthHandlers'
+      );
+    });
   });
 
   describe('auth:microsoft:connect-mailbox', () => {
