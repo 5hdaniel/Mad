@@ -44,9 +44,11 @@ if (typeof window !== 'undefined') {
     },
     contacts: {
       getAll: jest.fn(),
+      getAvailable: jest.fn(),
       getSortedByActivity: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      import: jest.fn(),
       checkCanDelete: jest.fn(),
       delete: jest.fn(),
       remove: jest.fn(),

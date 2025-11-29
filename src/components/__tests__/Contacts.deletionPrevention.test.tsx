@@ -418,4 +418,235 @@ describe('Contacts - Deletion Prevention', () => {
       expect(window.api.contacts.getSortedByActivity).toBeDefined();
     });
   });
+
+  describe('Remove Confirmation Modal', () => {
+    it('should show custom confirmation modal when removing a contact', async () => {
+      window.api.contacts.getAll.mockResolvedValue({
+        success: true,
+        contacts: [mockContacts[2]], // source: 'contacts_app'
+      });
+
+      window.api.contacts.checkCanDelete.mockResolvedValue({
+        success: true,
+        canDelete: true,
+        transactions: [],
+        count: 0,
+      });
+
+      render(<Contacts userId={mockUserId} onClose={mockOnClose} />);
+
+      // Wait for contacts to load
+      await waitFor(() => {
+        expect(screen.getByText('Bob Wilson')).toBeInTheDocument();
+      });
+
+      // Click on the contact to open details modal
+      await userEvent.click(screen.getByText('Bob Wilson'));
+
+      // Wait for details modal to appear
+      await waitFor(() => {
+        expect(screen.getByText('Contact Details')).toBeInTheDocument();
+      });
+
+      // Click the Remove button in details modal
+      const removeButton = screen.getByRole('button', { name: /remove/i });
+      await userEvent.click(removeButton);
+
+      // The custom confirmation modal should appear
+      await waitFor(() => {
+        expect(screen.getByText('Remove Contact')).toBeInTheDocument();
+        expect(screen.getByText(/Remove this contact from your local database/i)).toBeInTheDocument();
+      });
+
+      // Both Cancel and Remove buttons should be present
+      expect(screen.getByRole('button', { name: /cancel/i })).toBeInTheDocument();
+      expect(screen.getAllByRole('button', { name: /remove/i })).toHaveLength(1); // Only the modal remove button
+    });
+
+    it('should close confirmation modal when Cancel is clicked', async () => {
+      window.api.contacts.getAll.mockResolvedValue({
+        success: true,
+        contacts: [mockContacts[2]], // source: 'contacts_app'
+      });
+
+      window.api.contacts.checkCanDelete.mockResolvedValue({
+        success: true,
+        canDelete: true,
+        transactions: [],
+        count: 0,
+      });
+
+      render(<Contacts userId={mockUserId} onClose={mockOnClose} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Bob Wilson')).toBeInTheDocument();
+      });
+
+      // Open contact details
+      await userEvent.click(screen.getByText('Bob Wilson'));
+
+      await waitFor(() => {
+        expect(screen.getByText('Contact Details')).toBeInTheDocument();
+      });
+
+      // Click Remove to open confirmation modal
+      await userEvent.click(screen.getByRole('button', { name: /remove/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText('Remove Contact')).toBeInTheDocument();
+      });
+
+      // Click Cancel
+      await userEvent.click(screen.getByRole('button', { name: /cancel/i }));
+
+      // Confirmation modal should close
+      await waitFor(() => {
+        expect(screen.queryByText('Remove Contact')).not.toBeInTheDocument();
+      });
+    });
+
+    it('should call remove API when confirmation is accepted', async () => {
+      window.api.contacts.getAll.mockResolvedValue({
+        success: true,
+        contacts: [mockContacts[2]], // source: 'contacts_app'
+      });
+
+      window.api.contacts.checkCanDelete.mockResolvedValue({
+        success: true,
+        canDelete: true,
+        transactions: [],
+        count: 0,
+      });
+
+      window.api.contacts.remove.mockResolvedValue({
+        success: true,
+      });
+
+      render(<Contacts userId={mockUserId} onClose={mockOnClose} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Bob Wilson')).toBeInTheDocument();
+      });
+
+      // Open contact details
+      await userEvent.click(screen.getByText('Bob Wilson'));
+
+      await waitFor(() => {
+        expect(screen.getByText('Contact Details')).toBeInTheDocument();
+      });
+
+      // Click Remove to open confirmation modal
+      await userEvent.click(screen.getByRole('button', { name: /remove/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText('Remove Contact')).toBeInTheDocument();
+      });
+
+      // Click Remove in confirmation modal to confirm
+      const confirmButtons = screen.getAllByRole('button', { name: /remove/i });
+      await userEvent.click(confirmButtons[0]); // Click the confirm button
+
+      // Verify remove API was called
+      await waitFor(() => {
+        expect(window.api.contacts.remove).toHaveBeenCalledWith('contact-3');
+      });
+    });
+
+    it('should not show confirmation modal if contact has transactions', async () => {
+      const alertMock = jest.spyOn(window, 'alert').mockImplementation(() => {});
+
+      window.api.contacts.getAll.mockResolvedValue({
+        success: true,
+        contacts: [mockContacts[2]], // source: 'contacts_app'
+      });
+
+      window.api.contacts.checkCanDelete.mockResolvedValue({
+        success: true,
+        canDelete: false,
+        transactions: [{ id: 'txn-1', property_address: '123 Main St' }],
+        transactionCount: 1,
+      });
+
+      render(<Contacts userId={mockUserId} onClose={mockOnClose} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Bob Wilson')).toBeInTheDocument();
+      });
+
+      // Open contact details
+      await userEvent.click(screen.getByText('Bob Wilson'));
+
+      await waitFor(() => {
+        expect(screen.getByText('Contact Details')).toBeInTheDocument();
+      });
+
+      // Click Remove
+      await userEvent.click(screen.getByRole('button', { name: /remove/i }));
+
+      // Wait for checkCanDelete to be called
+      await waitFor(() => {
+        expect(window.api.contacts.checkCanDelete).toHaveBeenCalled();
+      });
+
+      // Alert should be shown instead of custom modal
+      expect(alertMock).toHaveBeenCalledWith(expect.stringContaining('Cannot delete contact'));
+
+      // Custom confirmation modal should NOT appear
+      expect(screen.queryByText('Remove Contact')).not.toBeInTheDocument();
+
+      alertMock.mockRestore();
+    });
+
+    it('should reload contacts after successful removal', async () => {
+      window.api.contacts.getAll
+        .mockResolvedValueOnce({
+          success: true,
+          contacts: [mockContacts[2]],
+        })
+        .mockResolvedValueOnce({
+          success: true,
+          contacts: [], // Empty after removal
+        });
+
+      window.api.contacts.checkCanDelete.mockResolvedValue({
+        success: true,
+        canDelete: true,
+        transactions: [],
+        count: 0,
+      });
+
+      window.api.contacts.remove.mockResolvedValue({
+        success: true,
+      });
+
+      render(<Contacts userId={mockUserId} onClose={mockOnClose} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Bob Wilson')).toBeInTheDocument();
+      });
+
+      // Open contact details
+      await userEvent.click(screen.getByText('Bob Wilson'));
+
+      await waitFor(() => {
+        expect(screen.getByText('Contact Details')).toBeInTheDocument();
+      });
+
+      // Click Remove to open confirmation modal
+      await userEvent.click(screen.getByRole('button', { name: /remove/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText('Remove Contact')).toBeInTheDocument();
+      });
+
+      // Confirm removal
+      const confirmButtons = screen.getAllByRole('button', { name: /remove/i });
+      await userEvent.click(confirmButtons[0]);
+
+      // Verify contacts were reloaded (getAll called twice)
+      await waitFor(() => {
+        expect(window.api.contacts.getAll).toHaveBeenCalledTimes(2);
+      });
+    });
+  });
 });
