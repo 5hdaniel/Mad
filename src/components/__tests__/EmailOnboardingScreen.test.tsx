@@ -31,29 +31,44 @@ describe('EmailOnboardingScreen', () => {
   });
 
   describe('Rendering', () => {
-    it('should render the email onboarding screen with title', async () => {
+    it('should render the email onboarding screen with title for Microsoft user', async () => {
       render(
         <EmailOnboardingScreen
           userId={mockUserId}
+          authProvider="microsoft"
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
         />
       );
 
-      expect(screen.getByText('Connect Your Email')).toBeInTheDocument();
+      expect(screen.getByText('Connect Your Outlook')).toBeInTheDocument();
+    });
+
+    it('should render the email onboarding screen with title for Google user', async () => {
+      render(
+        <EmailOnboardingScreen
+          userId={mockUserId}
+          authProvider="google"
+          onComplete={mockOnComplete}
+          onSkip={mockOnSkip}
+        />
+      );
+
+      expect(screen.getByText('Connect Your Gmail')).toBeInTheDocument();
     });
 
     it('should show explanation text', async () => {
       render(
         <EmailOnboardingScreen
           userId={mockUserId}
+          authProvider="microsoft"
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
         />
       );
 
       expect(
-        screen.getByText(/connect your email account to export email communications/i)
+        screen.getByText(/connect your outlook account to export email communications/i)
       ).toBeInTheDocument();
     });
 
@@ -61,6 +76,7 @@ describe('EmailOnboardingScreen', () => {
       render(
         <EmailOnboardingScreen
           userId={mockUserId}
+          authProvider="microsoft"
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
         />
@@ -71,15 +87,34 @@ describe('EmailOnboardingScreen', () => {
         screen.getByText(/export complete communication history with clients/i)
       ).toBeInTheDocument();
       expect(screen.getByText(/include emails in your audit documentation/i)).toBeInTheDocument();
-      expect(
-        screen.getByText(/seamless integration with gmail and outlook/i)
-      ).toBeInTheDocument();
     });
 
-    it('should show Gmail and Outlook connection cards', async () => {
+    it('should show primary provider (Outlook) prominently for Microsoft user', async () => {
       render(
         <EmailOnboardingScreen
           userId={mockUserId}
+          authProvider="microsoft"
+          onComplete={mockOnComplete}
+          onSkip={mockOnSkip}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Outlook')).toBeInTheDocument();
+      });
+
+      // Primary provider should show "Recommended - matches your login"
+      expect(screen.getByText(/recommended - matches your login/i)).toBeInTheDocument();
+      // Secondary provider should show "Optional"
+      expect(screen.getByText('Gmail')).toBeInTheDocument();
+      expect(screen.getByText('Optional')).toBeInTheDocument();
+    });
+
+    it('should show primary provider (Gmail) prominently for Google user', async () => {
+      render(
+        <EmailOnboardingScreen
+          userId={mockUserId}
+          authProvider="google"
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
         />
@@ -89,13 +124,18 @@ describe('EmailOnboardingScreen', () => {
         expect(screen.getByText('Gmail')).toBeInTheDocument();
       });
 
+      // Primary provider should show "Recommended - matches your login"
+      expect(screen.getByText(/recommended - matches your login/i)).toBeInTheDocument();
+      // Secondary provider should show "Optional"
       expect(screen.getByText('Outlook')).toBeInTheDocument();
+      expect(screen.getByText('Optional')).toBeInTheDocument();
     });
 
     it('should show skip button when no connections', async () => {
       render(
         <EmailOnboardingScreen
           userId={mockUserId}
+          authProvider="microsoft"
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
         />
@@ -110,6 +150,7 @@ describe('EmailOnboardingScreen', () => {
       render(
         <EmailOnboardingScreen
           userId={mockUserId}
+          authProvider="microsoft"
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
         />
@@ -132,6 +173,7 @@ describe('EmailOnboardingScreen', () => {
       render(
         <EmailOnboardingScreen
           userId={mockUserId}
+          authProvider="microsoft"
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
         />
@@ -144,6 +186,7 @@ describe('EmailOnboardingScreen', () => {
       render(
         <EmailOnboardingScreen
           userId={mockUserId}
+          authProvider="microsoft"
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
         />
@@ -164,6 +207,7 @@ describe('EmailOnboardingScreen', () => {
       render(
         <EmailOnboardingScreen
           userId={mockUserId}
+          authProvider="microsoft"
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
         />
@@ -184,6 +228,7 @@ describe('EmailOnboardingScreen', () => {
       render(
         <EmailOnboardingScreen
           userId={mockUserId}
+          authProvider="microsoft"
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
         />
@@ -204,6 +249,7 @@ describe('EmailOnboardingScreen', () => {
       render(
         <EmailOnboardingScreen
           userId={mockUserId}
+          authProvider="microsoft"
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
         />
@@ -224,6 +270,7 @@ describe('EmailOnboardingScreen', () => {
       render(
         <EmailOnboardingScreen
           userId={mockUserId}
+          authProvider="microsoft"
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
         />
@@ -244,6 +291,7 @@ describe('EmailOnboardingScreen', () => {
       render(
         <EmailOnboardingScreen
           userId={mockUserId}
+          authProvider="microsoft"
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
         />
@@ -260,6 +308,7 @@ describe('EmailOnboardingScreen', () => {
       render(
         <EmailOnboardingScreen
           userId={mockUserId}
+          authProvider="microsoft"
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
         />
@@ -283,6 +332,7 @@ describe('EmailOnboardingScreen', () => {
       render(
         <EmailOnboardingScreen
           userId={mockUserId}
+          authProvider="microsoft"
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
         />
@@ -306,6 +356,7 @@ describe('EmailOnboardingScreen', () => {
       render(
         <EmailOnboardingScreen
           userId={mockUserId}
+          authProvider="microsoft"
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
         />
@@ -326,6 +377,7 @@ describe('EmailOnboardingScreen', () => {
       render(
         <EmailOnboardingScreen
           userId={mockUserId}
+          authProvider="microsoft"
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
         />
@@ -347,6 +399,7 @@ describe('EmailOnboardingScreen', () => {
       render(
         <EmailOnboardingScreen
           userId={mockUserId}
+          authProvider="microsoft"
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
         />
@@ -370,6 +423,7 @@ describe('EmailOnboardingScreen', () => {
       render(
         <EmailOnboardingScreen
           userId={mockUserId}
+          authProvider="microsoft"
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
         />
@@ -389,6 +443,7 @@ describe('EmailOnboardingScreen', () => {
       render(
         <EmailOnboardingScreen
           userId={mockUserId}
+          authProvider="microsoft"
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
         />
@@ -410,6 +465,7 @@ describe('EmailOnboardingScreen', () => {
       render(
         <EmailOnboardingScreen
           userId={mockUserId}
+          authProvider="microsoft"
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
         />
@@ -435,6 +491,7 @@ describe('EmailOnboardingScreen', () => {
       render(
         <EmailOnboardingScreen
           userId={mockUserId}
+          authProvider="microsoft"
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
         />
@@ -460,6 +517,7 @@ describe('EmailOnboardingScreen', () => {
       render(
         <EmailOnboardingScreen
           userId={mockUserId}
+          authProvider="microsoft"
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
         />
@@ -482,6 +540,7 @@ describe('EmailOnboardingScreen', () => {
       render(
         <EmailOnboardingScreen
           userId={mockUserId}
+          authProvider="microsoft"
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
         />
@@ -505,6 +564,7 @@ describe('EmailOnboardingScreen', () => {
       render(
         <EmailOnboardingScreen
           userId={mockUserId}
+          authProvider="microsoft"
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
         />
@@ -534,6 +594,7 @@ describe('EmailOnboardingScreen', () => {
       render(
         <EmailOnboardingScreen
           userId={mockUserId}
+          authProvider="microsoft"
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
         />
@@ -551,6 +612,7 @@ describe('EmailOnboardingScreen', () => {
       render(
         <EmailOnboardingScreen
           userId={mockUserId}
+          authProvider="microsoft"
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
         />
@@ -575,6 +637,7 @@ describe('EmailOnboardingScreen', () => {
       render(
         <EmailOnboardingScreen
           userId={mockUserId}
+          authProvider="microsoft"
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
         />
@@ -599,6 +662,7 @@ describe('EmailOnboardingScreen', () => {
       render(
         <EmailOnboardingScreen
           userId={mockUserId}
+          authProvider="microsoft"
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
         />
@@ -620,6 +684,7 @@ describe('EmailOnboardingScreen', () => {
       render(
         <EmailOnboardingScreen
           userId={mockUserId}
+          authProvider="microsoft"
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
         />

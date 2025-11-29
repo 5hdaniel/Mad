@@ -310,9 +310,10 @@ function App() {
           <Login onLoginSuccess={handleLoginSuccess} />
         )}
 
-        {currentStep === 'email-onboarding' && currentUser && (
+        {currentStep === 'email-onboarding' && currentUser && authProvider && (
           <EmailOnboardingScreen
             userId={currentUser.id}
+            authProvider={authProvider}
             onComplete={handleEmailOnboardingComplete}
             onSkip={handleEmailOnboardingSkip}
           />
