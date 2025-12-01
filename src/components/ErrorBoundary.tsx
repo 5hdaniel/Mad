@@ -7,6 +7,7 @@
  * - Displays user-friendly error message
  * - Provides retry and contact support options
  * - Includes diagnostic data for support
+ * - View and copy error report functionality
  * - Logs errors for debugging
  */
 
@@ -24,6 +25,7 @@ interface State {
   errorInfo: ErrorInfo | null;
   diagnostics: string | null;
   copiedToClipboard: boolean;
+  showFullReport: boolean;
 }
 
 const SUPPORT_EMAIL = 'magicauditwa@gmail.com';
@@ -37,6 +39,7 @@ class ErrorBoundary extends Component<Props, State> {
       errorInfo: null,
       diagnostics: null,
       copiedToClipboard: false,
+      showFullReport: false,
     };
   }
 
@@ -75,6 +78,7 @@ class ErrorBoundary extends Component<Props, State> {
       errorInfo: null,
       diagnostics: null,
       copiedToClipboard: false,
+      showFullReport: false,
     });
   };
 
@@ -82,6 +86,7 @@ class ErrorBoundary extends Component<Props, State> {
     const { error, errorInfo, diagnostics } = this.state;
 
     let report = `=== MAGIC AUDIT ERROR REPORT ===\n\n`;
+    report += `TIMESTAMP: ${new Date().toISOString()}\n\n`;
     report += `ERROR:\n${error?.message || 'Unknown error'}\n\n`;
 
     if (error?.stack) {
@@ -108,6 +113,10 @@ class ErrorBoundary extends Component<Props, State> {
     } catch (err) {
       console.error('[ErrorBoundary] Failed to copy error report:', err);
     }
+  };
+
+  handleToggleFullReport = (): void => {
+    this.setState(prev => ({ showFullReport: !prev.showFullReport }));
   };
 
   handleContactSupport = async (): Promise<void> => {
@@ -138,6 +147,73 @@ class ErrorBoundary extends Component<Props, State> {
       console.error('[ErrorBoundary] Failed to open support email:', err);
     }
   };
+
+  renderFullReportModal(): ReactNode {
+    const { showFullReport, copiedToClipboard } = this.state;
+
+    if (!showFullReport) return null;
+
+    const report = this.getErrorReport();
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[80vh] flex flex-col">
+          {/* Header */}
+          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-900">Error Report</h2>
+            <button
+              onClick={this.handleToggleFullReport}
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 overflow-auto p-6">
+            <pre className="text-xs font-mono text-gray-700 whitespace-pre-wrap bg-gray-50 rounded-lg p-4 overflow-auto">
+              {report}
+            </pre>
+          </div>
+
+          {/* Footer */}
+          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-xl">
+            <button
+              onClick={this.handleCopyErrorReport}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg transition-colors flex items-center gap-2"
+            >
+              {copiedToClipboard ? (
+                <>
+                  <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Copied!
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                  Copy to Clipboard
+                </>
+              )}
+            </button>
+            <button
+              onClick={this.handleContactSupport}
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors flex items-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+              Send to Support
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   render(): ReactNode {
     if (this.state.hasError) {
@@ -186,39 +262,48 @@ class ErrorBoundary extends Component<Props, State> {
                 <summary className="text-sm font-medium text-gray-700 cursor-pointer">
                   Technical Details
                 </summary>
-                <div className="mt-2 text-xs font-mono text-gray-600 overflow-auto max-h-48">
+                <div className="mt-2 text-xs font-mono text-gray-600 overflow-auto max-h-32">
                   <p className="font-semibold text-red-600 mb-2">{this.state.error.message}</p>
-                  {this.state.error.stack && (
-                    <pre className="whitespace-pre-wrap text-gray-500 mb-4">{this.state.error.stack}</pre>
-                  )}
                   {this.state.diagnostics && (
                     <>
-                      <p className="font-semibold text-gray-700 mt-4 mb-2">System Info:</p>
-                      <pre className="whitespace-pre-wrap text-gray-500">{this.state.diagnostics}</pre>
+                      <p className="font-semibold text-gray-700 mt-3 mb-1">System Info:</p>
+                      <pre className="whitespace-pre-wrap text-gray-500 text-[10px]">{this.state.diagnostics}</pre>
                     </>
                   )}
                 </div>
-                {/* Copy Error Report Button */}
-                <button
-                  onClick={this.handleCopyErrorReport}
-                  className="mt-3 w-full px-3 py-2 text-xs font-medium text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-md transition-colors flex items-center justify-center gap-2"
-                >
-                  {copiedToClipboard ? (
-                    <>
-                      <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                      Copied to Clipboard!
-                    </>
-                  ) : (
-                    <>
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                      </svg>
-                      Copy Error Report
-                    </>
-                  )}
-                </button>
+                {/* View/Copy Buttons */}
+                <div className="mt-3 flex gap-2">
+                  <button
+                    onClick={this.handleToggleFullReport}
+                    className="flex-1 px-3 py-2 text-xs font-medium text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-md transition-colors flex items-center justify-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                    View Full Report
+                  </button>
+                  <button
+                    onClick={this.handleCopyErrorReport}
+                    className="flex-1 px-3 py-2 text-xs font-medium text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-md transition-colors flex items-center justify-center gap-2"
+                  >
+                    {copiedToClipboard ? (
+                      <>
+                        <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        Copied!
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                        Copy
+                      </>
+                    )}
+                  </button>
+                </div>
               </details>
             )}
 
@@ -252,6 +337,9 @@ class ErrorBoundary extends Component<Props, State> {
               </a>
             </p>
           </div>
+
+          {/* Full Report Modal */}
+          {this.renderFullReportModal()}
         </div>
       );
     }
