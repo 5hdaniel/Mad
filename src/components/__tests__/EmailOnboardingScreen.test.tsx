@@ -182,7 +182,7 @@ describe('EmailOnboardingScreen', () => {
       expect(screen.getAllByText('Checking...').length).toBeGreaterThan(0);
     });
 
-    it('should show "Not connected" for Gmail when not connected', async () => {
+    it('should show "Optional" for secondary provider when not connected', async () => {
       render(
         <EmailOnboardingScreen
           userId={mockUserId}
@@ -193,7 +193,8 @@ describe('EmailOnboardingScreen', () => {
       );
 
       await waitFor(() => {
-        expect(screen.getAllByText('Not connected').length).toBeGreaterThan(0);
+        // Primary shows "Recommended - matches your login", secondary shows "Optional"
+        expect(screen.getByText('Optional')).toBeInTheDocument();
       });
     });
 
@@ -257,6 +258,50 @@ describe('EmailOnboardingScreen', () => {
 
       await waitFor(() => {
         expect(screen.getByRole('button', { name: /continue/i })).toBeInTheDocument();
+      });
+    });
+
+    it('should disable Continue button when no email is connected', async () => {
+      window.api.system.checkAllConnections.mockResolvedValue({
+        success: true,
+        google: { connected: false },
+        microsoft: { connected: false },
+      });
+
+      render(
+        <EmailOnboardingScreen
+          userId={mockUserId}
+          authProvider="microsoft"
+          onComplete={mockOnComplete}
+          onSkip={mockOnSkip}
+        />
+      );
+
+      await waitFor(() => {
+        const continueButton = screen.getByRole('button', { name: /continue/i });
+        expect(continueButton).toBeDisabled();
+      });
+    });
+
+    it('should enable Continue button when email is connected', async () => {
+      window.api.system.checkAllConnections.mockResolvedValue({
+        success: true,
+        google: { connected: true, email: 'user@gmail.com' },
+        microsoft: { connected: false },
+      });
+
+      render(
+        <EmailOnboardingScreen
+          userId={mockUserId}
+          authProvider="microsoft"
+          onComplete={mockOnComplete}
+          onSkip={mockOnSkip}
+        />
+      );
+
+      await waitFor(() => {
+        const continueButton = screen.getByRole('button', { name: /continue/i });
+        expect(continueButton).not.toBeDisabled();
       });
     });
 
@@ -600,9 +645,9 @@ describe('EmailOnboardingScreen', () => {
         />
       );
 
-      // Should still render without crashing
+      // Should still render without crashing (shows provider-specific title)
       await waitFor(() => {
-        expect(screen.getByText('Connect Your Email')).toBeInTheDocument();
+        expect(screen.getByText('Connect Your Outlook')).toBeInTheDocument();
       });
     });
 
@@ -627,7 +672,7 @@ describe('EmailOnboardingScreen', () => {
 
       // Should not crash, screen should still be functional
       await waitFor(() => {
-        expect(screen.getByText('Connect Your Email')).toBeInTheDocument();
+        expect(screen.getByText('Connect Your Outlook')).toBeInTheDocument();
       });
     });
 
@@ -652,7 +697,7 @@ describe('EmailOnboardingScreen', () => {
 
       // Should not crash, screen should still be functional
       await waitFor(() => {
-        expect(screen.getByText('Connect Your Email')).toBeInTheDocument();
+        expect(screen.getByText('Connect Your Outlook')).toBeInTheDocument();
       });
     });
   });

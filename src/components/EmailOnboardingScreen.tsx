@@ -47,16 +47,11 @@ function EmailOnboardingScreen({ userId, authProvider, onComplete, onSkip }: Ema
   const checkConnections = async (): Promise<void> => {
     setLoadingConnections(true);
     try {
-      console.log('[EmailOnboarding] Checking email connection status');
       const result = await window.api.system.checkAllConnections(userId);
       if (result.success) {
         setConnections({
           google: result.google || null,
           microsoft: result.microsoft || null,
-        });
-        console.log('[EmailOnboarding] Connection status retrieved', {
-          googleConnected: result.google?.connected || false,
-          microsoftConnected: result.microsoft?.connected || false
         });
       }
     } catch (error) {
@@ -70,15 +65,11 @@ function EmailOnboardingScreen({ userId, authProvider, onComplete, onSkip }: Ema
     setConnectingProvider('google');
     let cleanup: (() => void) | undefined;
     try {
-      console.log('[EmailOnboarding] Initiating Google mailbox connection');
       const result = await window.api.auth.googleConnectMailbox(userId);
       if (result.success) {
         cleanup = window.api.onGoogleMailboxConnected(async (connectionResult: ConnectionResult) => {
           if (connectionResult.success) {
-            console.log('[EmailOnboarding] Google mailbox connected successfully');
             await checkConnections();
-          } else {
-            console.warn('[EmailOnboarding] Google mailbox connection failed');
           }
           setConnectingProvider(null);
           if (cleanup) cleanup();
@@ -95,15 +86,11 @@ function EmailOnboardingScreen({ userId, authProvider, onComplete, onSkip }: Ema
     setConnectingProvider('microsoft');
     let cleanup: (() => void) | undefined;
     try {
-      console.log('[EmailOnboarding] Initiating Microsoft mailbox connection');
       const result = await window.api.auth.microsoftConnectMailbox(userId);
       if (result.success) {
         cleanup = window.api.onMicrosoftMailboxConnected(async (connectionResult: ConnectionResult) => {
           if (connectionResult.success) {
-            console.log('[EmailOnboarding] Microsoft mailbox connected successfully');
             await checkConnections();
-          } else {
-            console.warn('[EmailOnboarding] Microsoft mailbox connection failed');
           }
           setConnectingProvider(null);
           if (cleanup) cleanup();
@@ -117,13 +104,10 @@ function EmailOnboardingScreen({ userId, authProvider, onComplete, onSkip }: Ema
   };
 
   const handleContinue = (): void => {
-    const hasConnection = connections.google?.connected || connections.microsoft?.connected;
-    console.log('[EmailOnboarding] User continuing with email connection status', { hasConnection });
     onComplete();
   };
 
   const handleSkip = (): void => {
-    console.log('[EmailOnboarding] User skipped email connection');
     onSkip();
   };
 

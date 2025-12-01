@@ -99,7 +99,7 @@ function App() {
           // Check if any email is connected
           const connectionResult = await window.api.system.checkAllConnections(currentUser.id);
           if (connectionResult.success) {
-            const hasConnection = connectionResult.google?.connected || connectionResult.microsoft?.connected;
+            const hasConnection = connectionResult.google?.connected === true || connectionResult.microsoft?.connected === true;
             setHasEmailConnected(hasConnection);
           }
         } catch (error) {

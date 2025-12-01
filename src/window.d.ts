@@ -72,8 +72,59 @@ interface ElectronAPI {
  * Exposed via contextBridge in preload.js
  */
 interface MainAPI {
-  // Add main API types here if needed
-  // (Currently most code uses window.electron, not window.api)
+  auth: {
+    googleLogin: () => Promise<{ success: boolean; authUrl?: string; error?: string }>;
+    googleCompleteLogin: (code: string) => Promise<{
+      success: boolean;
+      user?: unknown;
+      sessionToken?: string;
+      subscription?: unknown;
+      isNewUser?: boolean;
+      error?: string;
+    }>;
+    googleConnectMailbox: (userId: string) => Promise<{ success: boolean; error?: string }>;
+    microsoftLogin: () => Promise<{ success: boolean; authUrl?: string; scopes?: string[]; error?: string }>;
+    microsoftConnectMailbox: (userId: string) => Promise<{ success: boolean; error?: string }>;
+    logout: (sessionToken: string) => Promise<{ success: boolean; error?: string }>;
+    validateSession: (sessionToken: string) => Promise<{ valid: boolean; user?: unknown; error?: string }>;
+    getCurrentUser: () => Promise<{
+      success: boolean;
+      user?: unknown;
+      sessionToken?: string;
+      provider?: string;
+      subscription?: unknown;
+      isNewUser?: boolean;
+      error?: string;
+    }>;
+    acceptTerms: (userId: string) => Promise<{ success: boolean; user?: unknown; error?: string }>;
+    completeEmailOnboarding: (userId: string) => Promise<{ success: boolean; error?: string }>;
+    checkEmailOnboarding: (userId: string) => Promise<{ success: boolean; completed: boolean; error?: string }>;
+  };
+  system: {
+    checkAllConnections: (userId: string) => Promise<{
+      success: boolean;
+      google?: { connected: boolean; email?: string };
+      microsoft?: { connected: boolean; email?: string };
+      error?: string;
+    }>;
+    healthCheck: (userId: string, provider: string) => Promise<{
+      healthy: boolean;
+      issues?: Array<{
+        severity?: string;
+        title?: string;
+        message?: string;
+        userMessage?: string;
+        details?: string;
+        action?: string;
+        actionHandler?: string;
+      }>;
+    }>;
+    openPrivacyPane: (pane: string) => Promise<void>;
+  };
+  onGoogleMailboxConnected: (callback: (result: { success: boolean }) => void) => () => void;
+  onMicrosoftMailboxConnected: (callback: (result: { success: boolean }) => void) => () => void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  [key: string]: any; // Allow other properties for backwards compatibility
 }
 
 // Augment the global Window interface

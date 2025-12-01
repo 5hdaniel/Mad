@@ -41,10 +41,8 @@ function SystemHealthMonitor({ userId, provider, hidden = false }: SystemHealthM
 
     try {
       // Pass provider so we only check the relevant OAuth connection
-      console.log('[SystemHealthMonitor] Checking health with provider:', provider);
       const result = await window.api.system.healthCheck(userId, provider);
 
-      console.log('[SystemHealthMonitor] Health check result:', result);
       if (!result.healthy && result.issues && Array.isArray(result.issues)) {
         setIssues(result.issues as SystemIssue[]);
       }

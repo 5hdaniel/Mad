@@ -55,6 +55,9 @@ export interface User {
   privacy_policy_accepted_at?: Date | string;
   privacy_policy_version_accepted?: string;
 
+  // Onboarding
+  email_onboarding_completed_at?: Date | string;
+
   // Preferences
   timezone?: string;
   theme?: Theme;
