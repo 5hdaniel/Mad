@@ -110,7 +110,6 @@ export function NetworkProvider({ children }: NetworkProviderProps) {
 
   // DEV ONLY: Force offline state for testing
   const forceOffline = useCallback((offline: boolean) => {
-    console.log(`[NetworkContext] Force offline: ${offline}`);
     setState(prev => ({
       ...prev,
       isOnline: !offline,
@@ -124,19 +123,15 @@ export function NetworkProvider({ children }: NetworkProviderProps) {
 
   // Expose forceOffline in dev mode for console testing
   useEffect(() => {
-    if (process.env.NODE_ENV === 'development' || !(window as any).isPackaged) {
-      (window as any).__testOffline = forceOffline;
-      (window as any).__testCrash = () => {
-        console.log('[NetworkContext] Triggering test crash...');
-        setShouldCrash(true);
-      };
-      console.log('[NetworkContext] Dev mode testing helpers:');
-      console.log('  - window.__testOffline(true/false) - simulate offline state');
-      console.log('  - window.__testCrash() - trigger error boundary screen');
+    const win = window as Window & { isPackaged?: boolean; __testOffline?: (offline: boolean) => void; __testCrash?: () => void };
+    if (process.env.NODE_ENV === 'development' || !win.isPackaged) {
+      win.__testOffline = forceOffline;
+      win.__testCrash = () => setShouldCrash(true);
+      // Dev helpers available: window.__testOffline(true/false), window.__testCrash()
     }
     return () => {
-      delete (window as any).__testOffline;
-      delete (window as any).__testCrash;
+      delete win.__testOffline;
+      delete win.__testCrash;
     };
   }, [forceOffline]);
 

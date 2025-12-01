@@ -19,6 +19,9 @@ import {
   validateProvider,
 } from './utils/validation';
 
+// Import logging service
+import logService from './services/logService';
+
 // Type definitions
 interface SystemResponse {
   success: boolean;
@@ -346,8 +349,6 @@ export function registerSystemHandlers(): void {
       const validatedUserId = userId ? validateUserId(userId) : null;
       const validatedProvider = provider ? validateProvider(provider) : null;
 
-      console.log('[Main] Health check called with userId:', validatedUserId, 'provider:', validatedProvider);
-
       const [permissions, connection, contactsLoading] = await Promise.all([
         permissionService.checkAllPermissions(),
         validatedUserId && validatedProvider ? (
@@ -358,9 +359,6 @@ export function registerSystemHandlers(): void {
         permissionService.checkContactsLoading(),
       ]);
 
-      console.log('[Main] Connection check result:', connection);
-      console.log('[Main] Contacts loading check result:', contactsLoading);
-
       const issues: unknown[] = [];
 
       // Add permission issues
@@ -370,13 +368,11 @@ export function registerSystemHandlers(): void {
 
       // Add contacts loading issue
       if (!contactsLoading.canLoadContacts && contactsLoading.error) {
-        console.log('[Main] Adding contacts loading issue');
         issues.push(contactsLoading.error);
       }
 
       // Add connection issue (only for the provider the user logged in with)
       if (connection && connection.error) {
-        console.log('[Main] Adding connection issue for provider:', validatedProvider);
         issues.push({
           type: 'OAUTH_CONNECTION',
           provider: validatedProvider,
@@ -393,12 +389,13 @@ export function registerSystemHandlers(): void {
         issues,
         summary: {
           totalIssues: issues.length,
-          criticalIssues: issues.filter((i: any) => i.severity === 'error').length,
-          warnings: issues.filter((i: any) => i.severity === 'warning').length,
+          criticalIssues: issues.filter((i) => (i as { severity?: string }).severity === 'error').length,
+          warnings: issues.filter((i) => (i as { severity?: string }).severity === 'warning').length,
         },
       };
     } catch (error) {
-      console.error('[Main] System health check failed:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logService.error('System health check failed', 'SystemHandlers', { error: errorMessage });
       if (error instanceof ValidationError) {
         return {
           success: false,
@@ -416,7 +413,7 @@ export function registerSystemHandlers(): void {
         error: {
           type: 'HEALTH_CHECK_FAILED',
           userMessage: 'Could not check system status',
-          details: error instanceof Error ? error.message : 'Unknown error',
+          details: errorMessage,
         },
       };
     }
@@ -464,7 +461,8 @@ export function registerSystemHandlers(): void {
       await shell.openExternal(validatedUrl);
       return { success: true };
     } catch (error) {
-      console.error('[Main] Failed to open external URL:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logService.error('Failed to open external URL', 'SystemHandlers', { error: errorMessage });
       if (error instanceof ValidationError) {
         return {
           success: false,
@@ -473,7 +471,7 @@ export function registerSystemHandlers(): void {
       }
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: errorMessage,
       };
     }
   });
@@ -496,10 +494,11 @@ export function registerSystemHandlers(): void {
       await shell.openExternal(mailtoUrl);
       return { success: true };
     } catch (error) {
-      console.error('[Main] Failed to open support email:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logService.error('Failed to open support email', 'SystemHandlers', { error: errorMessage });
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: errorMessage,
       };
     }
   });
@@ -547,10 +546,11 @@ export function registerSystemHandlers(): void {
 
       return { success: true, diagnostics: diagnosticString };
     } catch (error) {
-      console.error('[Main] Failed to get diagnostics:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logService.error('Failed to get diagnostics', 'SystemHandlers', { error: errorMessage });
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: errorMessage,
       };
     }
   });
