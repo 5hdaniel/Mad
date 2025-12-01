@@ -119,16 +119,31 @@ export function NetworkProvider({ children }: NetworkProviderProps) {
     }));
   }, []);
 
+  // State for triggering test crash (dev only)
+  const [shouldCrash, setShouldCrash] = useState(false);
+
   // Expose forceOffline in dev mode for console testing
   useEffect(() => {
     if (process.env.NODE_ENV === 'development' || !(window as any).isPackaged) {
       (window as any).__testOffline = forceOffline;
-      console.log('[NetworkContext] Dev mode: Use window.__testOffline(true/false) to simulate offline state');
+      (window as any).__testCrash = () => {
+        console.log('[NetworkContext] Triggering test crash...');
+        setShouldCrash(true);
+      };
+      console.log('[NetworkContext] Dev mode testing helpers:');
+      console.log('  - window.__testOffline(true/false) - simulate offline state');
+      console.log('  - window.__testCrash() - trigger error boundary screen');
     }
     return () => {
       delete (window as any).__testOffline;
+      delete (window as any).__testCrash;
     };
   }, [forceOffline]);
+
+  // Throw error during render to trigger ErrorBoundary
+  if (shouldCrash) {
+    throw new Error('Test crash triggered via window.__testCrash() - This is a simulated error for testing the error boundary UI');
+  }
 
   const value: NetworkContextValue = {
     ...state,
