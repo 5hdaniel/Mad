@@ -3,7 +3,7 @@
 // Permission checks, connection status, system health
 // ============================================
 
-import { ipcMain } from 'electron';
+import { ipcMain, shell } from 'electron';
 import type { IpcMainInvokeEvent } from 'electron';
 
 // Import services (TypeScript with default exports)
@@ -418,6 +418,88 @@ export function registerSystemHandlers(): void {
           userMessage: 'Could not check system status',
           details: error instanceof Error ? error.message : 'Unknown error',
         },
+      };
+    }
+  });
+
+  // ===== SUPPORT & EXTERNAL LINKS =====
+
+  /**
+   * Open external URL in default browser
+   */
+  ipcMain.handle('shell:open-external', async (event: IpcMainInvokeEvent, url: string): Promise<SystemResponse> => {
+    try {
+      // Validate URL
+      const validatedUrl = validateString(url, 'url', {
+        required: true,
+        maxLength: 2000,
+      });
+
+      if (!validatedUrl) {
+        return {
+          success: false,
+          error: 'URL is required',
+        };
+      }
+
+      // Only allow safe protocols
+      const allowedProtocols = ['https:', 'http:', 'mailto:'];
+      let parsedUrl: URL;
+      try {
+        parsedUrl = new URL(validatedUrl);
+      } catch {
+        return {
+          success: false,
+          error: 'Invalid URL format',
+        };
+      }
+
+      if (!allowedProtocols.includes(parsedUrl.protocol)) {
+        return {
+          success: false,
+          error: `Protocol not allowed: ${parsedUrl.protocol}`,
+        };
+      }
+
+      await shell.openExternal(validatedUrl);
+      return { success: true };
+    } catch (error) {
+      console.error('[Main] Failed to open external URL:', error);
+      if (error instanceof ValidationError) {
+        return {
+          success: false,
+          error: `Validation error: ${error.message}`,
+        };
+      }
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  });
+
+  /**
+   * Open support email with pre-filled content
+   */
+  ipcMain.handle('system:contact-support', async (event: IpcMainInvokeEvent, errorDetails?: string): Promise<SystemResponse> => {
+    try {
+      const supportEmail = 'support@magicaudit.com';
+      const subject = encodeURIComponent('Magic Audit Support Request');
+      const body = encodeURIComponent(
+        `Hi Magic Audit Support,\n\n` +
+        `I need help with:\n\n` +
+        `${errorDetails ? `Error details: ${errorDetails}\n\n` : ''}` +
+        `Thank you for your assistance.\n`
+      );
+
+      const mailtoUrl = `mailto:${supportEmail}?subject=${subject}&body=${body}`;
+      await shell.openExternal(mailtoUrl);
+      return { success: true };
+    } catch (error) {
+      console.error('[Main] Failed to open support email:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
   });
