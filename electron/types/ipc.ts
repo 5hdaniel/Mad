@@ -403,6 +403,8 @@ export interface WindowApi {
     checkMicrosoftConnection: (userId: string) => Promise<{ connected: boolean; email?: string; error?: string }>;
     checkAllConnections: (userId: string) => Promise<{ success: boolean; google?: { connected: boolean; email?: string }; microsoft?: { connected: boolean; email?: string } }>;
     healthCheck: (userId: string, provider: OAuthProvider) => Promise<{ healthy: boolean; provider?: OAuthProvider; issues?: string[] }>;
+    contactSupport: (errorDetails?: string) => Promise<{ success: boolean; error?: string }>;
+    getDiagnostics: () => Promise<{ success: boolean; diagnostics?: string; error?: string }>;
   };
 
   // Preferences methods

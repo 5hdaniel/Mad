@@ -3,7 +3,7 @@
 // Permission checks, connection status, system health
 // ============================================
 
-import { ipcMain } from 'electron';
+import { ipcMain, shell } from 'electron';
 import type { IpcMainInvokeEvent } from 'electron';
 
 // Import services (TypeScript with default exports)
@@ -18,6 +18,9 @@ import {
   validateString,
   validateProvider,
 } from './utils/validation';
+
+// Import logging service
+import logService from './services/logService';
 
 // Type definitions
 interface SystemResponse {
@@ -346,8 +349,6 @@ export function registerSystemHandlers(): void {
       const validatedUserId = userId ? validateUserId(userId) : null;
       const validatedProvider = provider ? validateProvider(provider) : null;
 
-      console.log('[Main] Health check called with userId:', validatedUserId, 'provider:', validatedProvider);
-
       const [permissions, connection, contactsLoading] = await Promise.all([
         permissionService.checkAllPermissions(),
         validatedUserId && validatedProvider ? (
@@ -358,9 +359,6 @@ export function registerSystemHandlers(): void {
         permissionService.checkContactsLoading(),
       ]);
 
-      console.log('[Main] Connection check result:', connection);
-      console.log('[Main] Contacts loading check result:', contactsLoading);
-
       const issues: unknown[] = [];
 
       // Add permission issues
@@ -370,13 +368,11 @@ export function registerSystemHandlers(): void {
 
       // Add contacts loading issue
       if (!contactsLoading.canLoadContacts && contactsLoading.error) {
-        console.log('[Main] Adding contacts loading issue');
         issues.push(contactsLoading.error);
       }
 
       // Add connection issue (only for the provider the user logged in with)
       if (connection && connection.error) {
-        console.log('[Main] Adding connection issue for provider:', validatedProvider);
         issues.push({
           type: 'OAUTH_CONNECTION',
           provider: validatedProvider,
@@ -393,12 +389,13 @@ export function registerSystemHandlers(): void {
         issues,
         summary: {
           totalIssues: issues.length,
-          criticalIssues: issues.filter((i: any) => i.severity === 'error').length,
-          warnings: issues.filter((i: any) => i.severity === 'warning').length,
+          criticalIssues: issues.filter((i) => (i as { severity?: string }).severity === 'error').length,
+          warnings: issues.filter((i) => (i as { severity?: string }).severity === 'warning').length,
         },
       };
     } catch (error) {
-      console.error('[Main] System health check failed:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logService.error('System health check failed', 'SystemHandlers', { error: errorMessage });
       if (error instanceof ValidationError) {
         return {
           success: false,
@@ -416,8 +413,144 @@ export function registerSystemHandlers(): void {
         error: {
           type: 'HEALTH_CHECK_FAILED',
           userMessage: 'Could not check system status',
-          details: error instanceof Error ? error.message : 'Unknown error',
+          details: errorMessage,
         },
+      };
+    }
+  });
+
+  // ===== SUPPORT & EXTERNAL LINKS =====
+
+  /**
+   * Open external URL in default browser
+   */
+  ipcMain.handle('shell:open-external', async (event: IpcMainInvokeEvent, url: string): Promise<SystemResponse> => {
+    try {
+      // Validate URL
+      const validatedUrl = validateString(url, 'url', {
+        required: true,
+        maxLength: 2000,
+      });
+
+      if (!validatedUrl) {
+        return {
+          success: false,
+          error: 'URL is required',
+        };
+      }
+
+      // Only allow safe protocols
+      const allowedProtocols = ['https:', 'http:', 'mailto:'];
+      let parsedUrl: URL;
+      try {
+        parsedUrl = new URL(validatedUrl);
+      } catch {
+        return {
+          success: false,
+          error: 'Invalid URL format',
+        };
+      }
+
+      if (!allowedProtocols.includes(parsedUrl.protocol)) {
+        return {
+          success: false,
+          error: `Protocol not allowed: ${parsedUrl.protocol}`,
+        };
+      }
+
+      await shell.openExternal(validatedUrl);
+      return { success: true };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logService.error('Failed to open external URL', 'SystemHandlers', { error: errorMessage });
+      if (error instanceof ValidationError) {
+        return {
+          success: false,
+          error: `Validation error: ${error.message}`,
+        };
+      }
+      return {
+        success: false,
+        error: errorMessage,
+      };
+    }
+  });
+
+  /**
+   * Open support email with pre-filled content
+   */
+  ipcMain.handle('system:contact-support', async (event: IpcMainInvokeEvent, errorDetails?: string): Promise<SystemResponse> => {
+    try {
+      const supportEmail = 'magicauditwa@gmail.com';
+      const subject = encodeURIComponent('Magic Audit Support Request');
+      const body = encodeURIComponent(
+        `Hi Magic Audit Support,\n\n` +
+        `I need help with:\n\n` +
+        `${errorDetails ? `Error details: ${errorDetails}\n\n` : ''}` +
+        `Thank you for your assistance.\n`
+      );
+
+      const mailtoUrl = `mailto:${supportEmail}?subject=${subject}&body=${body}`;
+      await shell.openExternal(mailtoUrl);
+      return { success: true };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logService.error('Failed to open support email', 'SystemHandlers', { error: errorMessage });
+      return {
+        success: false,
+        error: errorMessage,
+      };
+    }
+  });
+
+  /**
+   * Get diagnostic information for support requests
+   */
+  ipcMain.handle('system:get-diagnostics', async (): Promise<{ success: boolean; diagnostics?: string; error?: string }> => {
+    try {
+      const { app } = require('electron');
+      const os = require('os');
+
+      const diagnostics = {
+        app: {
+          version: app.getVersion(),
+          name: app.getName(),
+          locale: app.getLocale(),
+        },
+        system: {
+          platform: process.platform,
+          arch: process.arch,
+          osVersion: os.release(),
+          osType: os.type(),
+          nodeVersion: process.version,
+          electronVersion: process.versions.electron,
+        },
+        memory: {
+          total: `${Math.round(os.totalmem() / 1024 / 1024 / 1024)}GB`,
+          free: `${Math.round(os.freemem() / 1024 / 1024 / 1024)}GB`,
+        },
+        timestamp: new Date().toISOString(),
+      };
+
+      const diagnosticString = Object.entries(diagnostics)
+        .map(([category, values]) => {
+          if (typeof values === 'object') {
+            const items = Object.entries(values as Record<string, unknown>)
+              .map(([key, val]) => `  ${key}: ${val}`)
+              .join('\n');
+            return `${category.toUpperCase()}:\n${items}`;
+          }
+          return `${category}: ${values}`;
+        })
+        .join('\n\n');
+
+      return { success: true, diagnostics: diagnosticString };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logService.error('Failed to get diagnostics', 'SystemHandlers', { error: errorMessage });
+      return {
+        success: false,
+        error: errorMessage,
       };
     }
   });

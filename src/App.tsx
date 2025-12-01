@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Login from './components/Login';
 import MicrosoftLogin from './components/MicrosoftLogin';
 import EmailOnboardingScreen from './components/EmailOnboardingScreen';
@@ -16,7 +16,8 @@ import Contacts from './components/Contacts';
 import WelcomeTerms from './components/WelcomeTerms';
 import Dashboard from './components/Dashboard';
 import AuditTransactionModal from './components/AuditTransactionModal';
-import { useAuth } from './contexts';
+import OfflineFallback from './components/OfflineFallback';
+import { useAuth, useNetwork } from './contexts';
 import type { Conversation } from './hooks/useConversations';
 import type { Subscription } from '../electron/types/models';
 
@@ -62,6 +63,9 @@ function App() {
     declineTerms,
     clearTermsRequirement,
   } = useAuth();
+
+  // Network state from context
+  const { isOnline, isChecking, connectionError, checkConnection, setConnectionError } = useNetwork();
 
   // Local UI state
   const [currentStep, setCurrentStep] = useState<AppStep>('login');
@@ -242,6 +246,14 @@ function App() {
     setShowSetupPromptDismissed(true);
   };
 
+  // Handle retry when offline
+  const handleRetryConnection = useCallback(async () => {
+    const online = await checkConnection();
+    if (!online) {
+      setConnectionError('Unable to connect. Please check your internet connection.');
+    }
+  }, [checkConnection, setConnectionError]);
+
   const handleMicrosoftLogin = (_userInfo: unknown) => {
     setOutlookConnected(true);
     // Check if we already have permissions
@@ -348,11 +360,68 @@ function App() {
         </div>
       )}
 
+      {/* Offline Banner - Show when network is unavailable */}
+      {!isOnline && currentStep !== 'login' && (
+        <div className="flex-shrink-0 bg-yellow-50 border-b border-yellow-200 px-4 py-3">
+          <div className="flex items-center justify-between max-w-4xl mx-auto">
+            <div className="flex items-center gap-3">
+              <div className="flex-shrink-0">
+                <svg
+                  className="w-5 h-5 text-yellow-600"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 2.829a4.978 4.978 0 01-1.414-2.83m-1.414 5.658a9 9 0 01-2.167-9.238m7.824 2.167a1 1 0 111.414 1.414m-1.414-1.414L3 3m8.293 8.293l1.414 1.414"
+                  />
+                </svg>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-yellow-800">
+                  You're offline
+                </p>
+                <p className="text-xs text-yellow-700">
+                  Some features may be limited. Your local data is still accessible.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleRetryConnection}
+                disabled={isChecking}
+                className="px-3 py-1.5 text-xs font-medium text-yellow-800 bg-yellow-200 hover:bg-yellow-300 rounded-md transition-colors disabled:opacity-50"
+              >
+                {isChecking ? 'Checking...' : 'Retry'}
+              </button>
+              <button
+                onClick={() => window.api?.system?.contactSupport?.('Network connection issue')}
+                className="px-3 py-1.5 text-xs font-medium text-yellow-800 hover:text-yellow-900 transition-colors"
+              >
+                Get Help
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Scrollable Content Area */}
       <div className="flex-1 overflow-y-auto relative">
-        {currentStep === 'login' && (
+        {/* Show full offline screen during login when network is unavailable */}
+        {currentStep === 'login' && !isOnline ? (
+          <OfflineFallback
+            isOffline={true}
+            isRetrying={isChecking}
+            error={connectionError}
+            onRetry={handleRetryConnection}
+            mode="fullscreen"
+          />
+        ) : currentStep === 'login' ? (
           <Login onLoginSuccess={handleLoginSuccess} />
-        )}
+        ) : null}
 
         {currentStep === 'email-onboarding' && currentUser && authProvider && (
           <EmailOnboardingScreen
