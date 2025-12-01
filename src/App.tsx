@@ -207,6 +207,8 @@ function App() {
 
   const handleEmailOnboardingComplete = async () => {
     await completeEmailOnboarding();
+    // User connected email (Continue button only enabled when connected)
+    setHasEmailConnected(true);
     // Navigate to permissions or dashboard
     if (hasPermissions) {
       setCurrentStep('dashboard');
@@ -465,8 +467,14 @@ function App() {
       <UpdateNotification />
 
       {/* System Health Monitor - Show permission/connection errors (hidden during onboarding tour and email onboarding) */}
+      {/* Key forces re-mount when email connection status changes, triggering fresh health check */}
       {isAuthenticated && currentUser && authProvider && (
-        <SystemHealthMonitor userId={currentUser.id} provider={authProvider} hidden={isTourActive || currentStep === 'email-onboarding'} />
+        <SystemHealthMonitor
+          key={`health-monitor-${hasEmailConnected}`}
+          userId={currentUser.id}
+          provider={authProvider}
+          hidden={isTourActive || currentStep === 'email-onboarding'}
+        />
       )}
 
       {/* Move App Prompt */}
