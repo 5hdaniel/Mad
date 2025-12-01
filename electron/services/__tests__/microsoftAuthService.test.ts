@@ -277,13 +277,15 @@ describe('MicrosoftAuthService - Direct Code Resolution', () => {
       await expect(codePromise).rejects.toThrow('Auth error');
     });
 
-    it('should stop local server after rejecting', () => {
+    it('should stop local server after rejecting', async () => {
       const stopSpy = jest.spyOn(microsoftAuthService, 'stopLocalServer');
 
-      // Start and then reject
-      microsoftAuthService.startLocalServer();
+      // Start and then reject - must catch the rejected promise
+      const codePromise = microsoftAuthService.startLocalServer();
       microsoftAuthService.rejectCodeDirectly('error');
 
+      // Await the rejection to prevent unhandled promise rejection
+      await expect(codePromise).rejects.toThrow('error');
       expect(stopSpy).toHaveBeenCalled();
       stopSpy.mockRestore();
     });

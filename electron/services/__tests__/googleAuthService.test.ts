@@ -272,13 +272,15 @@ describe('GoogleAuthService - Direct Code Resolution', () => {
       await expect(codePromise).rejects.toThrow('Auth error');
     });
 
-    it('should stop local server after rejecting', () => {
+    it('should stop local server after rejecting', async () => {
       const stopSpy = jest.spyOn(googleAuthService, 'stopLocalServer');
 
-      // Start and then reject
-      googleAuthService.startLocalServer();
+      // Start and then reject - must catch the rejected promise
+      const codePromise = googleAuthService.startLocalServer();
       googleAuthService.rejectCodeDirectly('error');
 
+      // Await the rejection to prevent unhandled promise rejection
+      await expect(codePromise).rejects.toThrow('error');
       expect(stopSpy).toHaveBeenCalled();
       stopSpy.mockRestore();
     });
