@@ -259,6 +259,7 @@ const handleGoogleLogin = async (mainWindow: BrowserWindow | null): Promise<Logi
         // Create user in local database
         await logService.info('Looking up or creating local user...', 'AuthHandlers');
         let localUser = await databaseService.getUserByOAuthId('google', userInfo.id);
+        const isNewUser = !localUser;
 
         if (!localUser) {
           localUser = await databaseService.createUser({
@@ -345,17 +346,13 @@ const handleGoogleLogin = async (mainWindow: BrowserWindow | null): Promise<Logi
           provider: 'google',
         });
 
-        // Check if user needs to accept terms (new user or outdated versions)
-        const termsStatus = await supabaseService.checkTermsAcceptance(cloudUser.id);
-        const needsTermsAcceptance = !termsStatus.hasAcceptedTerms || !termsStatus.hasAcceptedPrivacy;
-
         // Audit log
         await auditService.log({
           userId: localUser.id,
           action: 'USER_LOGIN',
           resourceType: 'USER',
           resourceId: localUser.id,
-          metadata: { provider: 'google' },
+          metadata: { provider: 'google', isNewUser },
         });
 
         // Close the auth window if still open
@@ -370,8 +367,7 @@ const handleGoogleLogin = async (mainWindow: BrowserWindow | null): Promise<Logi
             user: localUser,
             sessionToken,
             subscription: subscription ?? undefined,
-            needsTermsAcceptance,
-            termsVersions: termsStatus,
+            isNewUser,
           });
         }
       } catch (error) {
