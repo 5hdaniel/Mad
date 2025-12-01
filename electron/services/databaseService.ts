@@ -407,6 +407,10 @@ class DatabaseService implements IDatabaseService {
         await logService.debug('Adding privacy_policy_version_accepted column to users_local', 'DatabaseService');
         this._run(`ALTER TABLE users_local ADD COLUMN privacy_policy_version_accepted TEXT`);
       }
+      if (!userColumns.some(col => col.name === 'email_onboarding_completed_at')) {
+        await logService.debug('Adding email_onboarding_completed_at column to users_local', 'DatabaseService');
+        this._run(`ALTER TABLE users_local ADD COLUMN email_onboarding_completed_at DATETIME`);
+      }
 
       // Migration 2: Add new transaction columns
       await logService.debug('Running Migration 2: Transaction columns', 'DatabaseService');
@@ -813,6 +817,10 @@ class DatabaseService implements IDatabaseService {
       'job_title',
       'last_cloud_sync_at',
       'terms_accepted_at',
+      'privacy_policy_accepted_at',
+      'terms_version_accepted',
+      'privacy_policy_version_accepted',
+      'email_onboarding_completed_at',
     ];
 
     const fields: string[] = [];
@@ -873,6 +881,31 @@ class DatabaseService implements IDatabaseService {
       throw new NotFoundError('User not found after accepting terms', 'User', userId);
     }
     return user;
+  }
+
+  /**
+   * Mark email onboarding as completed for a user
+   */
+  async completeEmailOnboarding(userId: string): Promise<void> {
+    const sql = `
+      UPDATE users_local
+      SET email_onboarding_completed_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `;
+    this._run(sql, [userId]);
+  }
+
+  /**
+   * Check if user has completed email onboarding
+   */
+  async hasCompletedEmailOnboarding(userId: string): Promise<boolean> {
+    const sql = `
+      SELECT email_onboarding_completed_at
+      FROM users_local
+      WHERE id = ?
+    `;
+    const result = this._get<{ email_onboarding_completed_at: string | null }>(sql, [userId]);
+    return result?.email_onboarding_completed_at !== null && result?.email_onboarding_completed_at !== undefined;
   }
 
   // ============================================

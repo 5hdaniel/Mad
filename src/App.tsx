@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Login from './components/Login';
 import MicrosoftLogin from './components/MicrosoftLogin';
+import EmailOnboardingScreen from './components/EmailOnboardingScreen';
 import PermissionsScreen from './components/PermissionsScreen';
 import ConversationList from './components/ConversationList';
 import ExportComplete from './components/ExportComplete';
@@ -20,7 +21,7 @@ import type { Conversation } from './hooks/useConversations';
 import type { Subscription } from '../electron/types/models';
 
 // Type definitions
-type AppStep = 'login' | 'microsoft-login' | 'permissions' | 'dashboard' | 'outlook' | 'complete' | 'contacts';
+type AppStep = 'login' | 'email-onboarding' | 'microsoft-login' | 'permissions' | 'dashboard' | 'outlook' | 'complete' | 'contacts';
 
 interface AppExportResult {
   exportPath?: string;
@@ -77,13 +78,53 @@ function App() {
   const [showTransactions, setShowTransactions] = useState<boolean>(false);
   const [showContacts, setShowContacts] = useState<boolean>(false);
   const [showAuditTransaction, setShowAuditTransaction] = useState<boolean>(false);
+  const [isTourActive, setIsTourActive] = useState<boolean>(false);
+  const [hasCompletedEmailOnboarding, setHasCompletedEmailOnboarding] = useState<boolean>(true); // Default true to avoid flicker
+  const [isCheckingEmailOnboarding, setIsCheckingEmailOnboarding] = useState<boolean>(true);
+  const [hasEmailConnected, setHasEmailConnected] = useState<boolean>(true); // Default true to avoid flicker
+  const [showSetupPromptDismissed, setShowSetupPromptDismissed] = useState<boolean>(false);
+
+  // Check if user has completed email onboarding and has email connected
+  useEffect(() => {
+    const checkEmailStatus = async () => {
+      if (currentUser?.id) {
+        setIsCheckingEmailOnboarding(true);
+        try {
+          // Check onboarding status
+          // Type assertion needed as preload API types are inferred from electron
+          const authApi = window.api.auth as typeof window.api.auth & {
+            checkEmailOnboarding: (userId: string) => Promise<{ success: boolean; completed: boolean; error?: string }>;
+          };
+          const onboardingResult = await authApi.checkEmailOnboarding(currentUser.id);
+          if (onboardingResult.success) {
+            setHasCompletedEmailOnboarding(onboardingResult.completed);
+          }
+
+          // Check if any email is connected
+          const connectionResult = await window.api.system.checkAllConnections(currentUser.id);
+          if (connectionResult.success) {
+            const hasConnection = connectionResult.google?.connected === true || connectionResult.microsoft?.connected === true;
+            setHasEmailConnected(hasConnection);
+          }
+        } catch (error) {
+          console.error('[App] Failed to check email status:', error);
+        } finally {
+          setIsCheckingEmailOnboarding(false);
+        }
+      }
+    };
+    checkEmailStatus();
+  }, [currentUser?.id]);
 
   // Handle auth state changes to update navigation
   useEffect(() => {
-    if (!isAuthLoading) {
+    if (!isAuthLoading && !isCheckingEmailOnboarding) {
       if (isAuthenticated && !needsTermsAcceptance) {
         // User is authenticated and has accepted terms
-        if (hasPermissions) {
+        // Check if user needs email onboarding (hasn't completed it yet)
+        if (!hasCompletedEmailOnboarding) {
+          setCurrentStep('email-onboarding');
+        } else if (hasPermissions) {
           setCurrentStep('dashboard');
         } else {
           setCurrentStep('permissions');
@@ -92,7 +133,7 @@ function App() {
         setCurrentStep('login');
       }
     }
-  }, [isAuthenticated, isAuthLoading, needsTermsAcceptance, hasPermissions]);
+  }, [isAuthenticated, isAuthLoading, needsTermsAcceptance, hasPermissions, hasCompletedEmailOnboarding, isCheckingEmailOnboarding]);
 
   useEffect(() => {
     checkPermissions();
@@ -106,14 +147,10 @@ function App() {
   const handleAcceptTerms = async (): Promise<void> => {
     try {
       await acceptTerms();
-      // Navigate after accepting
-      if (hasPermissions) {
-        setCurrentStep('dashboard');
-      } else {
-        setCurrentStep('permissions');
-      }
+      // New user needs email onboarding - hasCompletedEmailOnboarding is already false
+      // Navigation will be handled by the useEffect
     } catch (error) {
-      console.error('Failed to accept terms:', error);
+      console.error('[App] Failed to accept terms:', error);
     }
   };
 
@@ -148,7 +185,7 @@ function App() {
         setShowMoveAppPrompt(true);
       }
     } catch (error) {
-      console.error('Error checking app location:', error);
+      console.error('[App] Error checking app location:', error);
     }
   };
 
@@ -158,6 +195,51 @@ function App() {
 
   const handleNotNowMovePrompt = () => {
     setShowMoveAppPrompt(false);
+  };
+
+  const completeEmailOnboarding = async () => {
+    // Mark email onboarding as completed in database
+    if (currentUser?.id) {
+      try {
+        // Type assertion needed as preload API types are inferred from electron
+        const authApi = window.api.auth as typeof window.api.auth & {
+          completeEmailOnboarding: (userId: string) => Promise<{ success: boolean; error?: string }>;
+        };
+        await authApi.completeEmailOnboarding(currentUser.id);
+        setHasCompletedEmailOnboarding(true);
+      } catch (error) {
+        console.error('[App] Failed to complete email onboarding:', error);
+      }
+    }
+  };
+
+  const handleEmailOnboardingComplete = async () => {
+    await completeEmailOnboarding();
+    // User connected email (Continue button only enabled when connected)
+    setHasEmailConnected(true);
+    // Navigate to permissions or dashboard
+    if (hasPermissions) {
+      setCurrentStep('dashboard');
+    } else {
+      setCurrentStep('permissions');
+    }
+  };
+
+  const handleEmailOnboardingSkip = async () => {
+    // Skipping also marks onboarding as complete so user doesn't see full screen again
+    // Dashboard will show prompt based on whether email is actually connected
+    await completeEmailOnboarding();
+    // Navigate to permissions or dashboard
+    if (hasPermissions) {
+      setCurrentStep('dashboard');
+    } else {
+      setCurrentStep('permissions');
+    }
+  };
+
+  const handleDismissSetupPrompt = () => {
+    // User dismissed the setup prompt from dashboard - just hide it for this session
+    setShowSetupPromptDismissed(true);
   };
 
   const handleMicrosoftLogin = (_userInfo: unknown) => {
@@ -222,6 +304,8 @@ function App() {
     switch (currentStep) {
       case 'login':
         return 'Welcome';
+      case 'email-onboarding':
+        return 'Connect Email';
       case 'microsoft-login':
         return 'Login';
       case 'permissions':
@@ -270,6 +354,15 @@ function App() {
           <Login onLoginSuccess={handleLoginSuccess} />
         )}
 
+        {currentStep === 'email-onboarding' && currentUser && authProvider && (
+          <EmailOnboardingScreen
+            userId={currentUser.id}
+            authProvider={authProvider}
+            onComplete={handleEmailOnboardingComplete}
+            onSkip={handleEmailOnboardingSkip}
+          />
+        )}
+
         {currentStep === 'microsoft-login' && (
           <MicrosoftLogin
             onLoginComplete={handleMicrosoftLogin}
@@ -289,6 +382,10 @@ function App() {
             onAuditNew={() => setShowAuditTransaction(true)}
             onViewTransactions={() => setShowTransactions(true)}
             onManageContacts={() => setShowContacts(true)}
+            onTourStateChange={setIsTourActive}
+            showSetupPrompt={!hasEmailConnected && !showSetupPromptDismissed}
+            onContinueSetup={() => setCurrentStep('email-onboarding')}
+            onDismissSetupPrompt={handleDismissSetupPrompt}
           />
         )}
 
@@ -377,9 +474,15 @@ function App() {
       {/* Update Notification */}
       <UpdateNotification />
 
-      {/* System Health Monitor - Show permission/connection errors */}
+      {/* System Health Monitor - Show permission/connection errors (hidden during onboarding tour and email onboarding) */}
+      {/* Key forces re-mount when email connection status changes, triggering fresh health check */}
       {isAuthenticated && currentUser && authProvider && (
-        <SystemHealthMonitor userId={currentUser.id} provider={authProvider} />
+        <SystemHealthMonitor
+          key={`health-monitor-${hasEmailConnected}`}
+          userId={currentUser.id}
+          provider={authProvider}
+          hidden={isTourActive || currentStep === 'email-onboarding'}
+        />
       )}
 
       {/* Move App Prompt */}

@@ -455,13 +455,22 @@ const handleGoogleCompleteLogin = async (event: IpcMainInvokeEvent, authCode: st
         is_active: true,
       });
     } else {
-      // Update existing user
+      // Update existing user - sync profile AND user state from cloud (source of truth)
       await databaseService.updateUser(localUser.id, {
+        // Profile fields from OAuth
         email: userInfo.email,
         first_name: userInfo.given_name,
         last_name: userInfo.family_name,
         display_name: userInfo.name,
         avatar_url: userInfo.picture,
+        // User state from Supabase (cloud is source of truth)
+        terms_accepted_at: cloudUser.terms_accepted_at,
+        privacy_policy_accepted_at: cloudUser.privacy_policy_accepted_at,
+        terms_version_accepted: cloudUser.terms_version_accepted,
+        privacy_policy_version_accepted: cloudUser.privacy_policy_version_accepted,
+        email_onboarding_completed_at: cloudUser.email_onboarding_completed_at,
+        subscription_tier: cloudUser.subscription_tier,
+        subscription_status: cloudUser.subscription_status,
       });
     }
 
@@ -926,12 +935,21 @@ const handleMicrosoftLogin = async (mainWindow: BrowserWindow | null): Promise<L
             is_active: true,
           });
         } else {
-          // Update existing user
+          // Update existing user - sync profile AND user state from cloud (source of truth)
           await databaseService.updateUser(localUser.id, {
+            // Profile fields from OAuth
             email: userInfo.email,
             first_name: userInfo.given_name,
             last_name: userInfo.family_name,
             display_name: userInfo.name,
+            // User state from Supabase (cloud is source of truth)
+            terms_accepted_at: cloudUser.terms_accepted_at,
+            privacy_policy_accepted_at: cloudUser.privacy_policy_accepted_at,
+            terms_version_accepted: cloudUser.terms_version_accepted,
+            privacy_policy_version_accepted: cloudUser.privacy_policy_version_accepted,
+            email_onboarding_completed_at: cloudUser.email_onboarding_completed_at,
+            subscription_tier: cloudUser.subscription_tier,
+            subscription_status: cloudUser.subscription_status,
           });
         }
 
@@ -1387,6 +1405,66 @@ export const registerAuthHandlers = (mainWindow: BrowserWindow | null): void => 
         return { success: false, error: `Validation error: ${error.message}` };
       }
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  });
+
+  // Complete email onboarding
+  ipcMain.handle('auth:complete-email-onboarding', async (event, userId: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      // Validate input
+      const validatedUserId = validateUserId(userId)!;
+
+      // Save to local database
+      await databaseService.completeEmailOnboarding(validatedUserId);
+
+      await logService.info('Email onboarding completed', 'AuthHandlers', { userId: validatedUserId });
+
+      // Sync to Supabase
+      try {
+        await supabaseService.completeEmailOnboarding(userId);
+      } catch (syncError) {
+        // Don't fail if sync fails - user already completed locally
+        await logService.warn(
+          'Failed to sync email onboarding to Supabase',
+          'AuthHandlers',
+          { error: syncError instanceof Error ? syncError.message : 'Unknown error' }
+        );
+      }
+
+      return { success: true };
+    } catch (error) {
+      await logService.error(
+        'Complete email onboarding failed',
+        'AuthHandlers',
+        { error: error instanceof Error ? error.message : 'Unknown error' }
+      );
+      if (error instanceof ValidationError) {
+        return { success: false, error: `Validation error: ${error.message}` };
+      }
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  });
+
+  // Check email onboarding status
+  ipcMain.handle('auth:check-email-onboarding', async (event, userId: string): Promise<{ success: boolean; completed: boolean; error?: string }> => {
+    try {
+      // Validate input
+      const validatedUserId = validateUserId(userId)!;
+
+      // Check local database
+      const completed = await databaseService.hasCompletedEmailOnboarding(validatedUserId);
+
+      return { success: true, completed };
+    } catch (error) {
+      await logService.error(
+        'Check email onboarding status failed',
+        'AuthHandlers',
+        { error: error instanceof Error ? error.message : 'Unknown error' }
+      );
+      if (error instanceof ValidationError) {
+        return { success: false, completed: false, error: `Validation error: ${error.message}` };
+      }
+      return { success: false, completed: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
   });
 
