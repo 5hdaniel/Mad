@@ -101,6 +101,20 @@ interface MainAPI {
     checkEmailOnboarding: (userId: string) => Promise<{ success: boolean; completed: boolean; error?: string }>;
   };
   system: {
+    getSecureStorageStatus: () => Promise<{
+      success: boolean;
+      available: boolean;
+      platform?: string;
+      guidance?: string;
+      error?: string;
+    }>;
+    initializeSecureStorage: () => Promise<{
+      success: boolean;
+      available: boolean;
+      platform?: string;
+      guidance?: string;
+      error?: string;
+    }>;
     checkAllConnections: (userId: string) => Promise<{
       success: boolean;
       google?: { connected: boolean; email?: string };

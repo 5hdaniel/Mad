@@ -14,6 +14,7 @@ import Settings from './components/Settings';
 import Transactions from './components/Transactions';
 import Contacts from './components/Contacts';
 import WelcomeTerms from './components/WelcomeTerms';
+import SecureStorageSetup from './components/SecureStorageSetup';
 import Dashboard from './components/Dashboard';
 import AuditTransactionModal from './components/AuditTransactionModal';
 import { useAuth } from './contexts';
@@ -21,7 +22,7 @@ import type { Conversation } from './hooks/useConversations';
 import type { Subscription } from '../electron/types/models';
 
 // Type definitions
-type AppStep = 'login' | 'email-onboarding' | 'microsoft-login' | 'permissions' | 'dashboard' | 'outlook' | 'complete' | 'contacts';
+type AppStep = 'login' | 'secure-storage-setup' | 'email-onboarding' | 'microsoft-login' | 'permissions' | 'dashboard' | 'outlook' | 'complete' | 'contacts';
 
 interface AppExportResult {
   exportPath?: string;
@@ -83,6 +84,27 @@ function App() {
   const [isCheckingEmailOnboarding, setIsCheckingEmailOnboarding] = useState<boolean>(true);
   const [hasEmailConnected, setHasEmailConnected] = useState<boolean>(true); // Default true to avoid flicker
   const [showSetupPromptDismissed, setShowSetupPromptDismissed] = useState<boolean>(false);
+  const [hasSecureStorageSetup, setHasSecureStorageSetup] = useState<boolean>(true); // Default true for returning users
+  const [isCheckingSecureStorage, setIsCheckingSecureStorage] = useState<boolean>(true);
+  const [isNewUserFlow, setIsNewUserFlow] = useState<boolean>(false); // Track if this is a new user flow
+
+  // Check secure storage status on app load (for returning users)
+  useEffect(() => {
+    const checkSecureStorageStatus = async () => {
+      setIsCheckingSecureStorage(true);
+      try {
+        const result = await window.api.system.getSecureStorageStatus();
+        setHasSecureStorageSetup(result.available);
+      } catch (error) {
+        console.error('[App] Failed to check secure storage status:', error);
+        // Assume not set up if check fails
+        setHasSecureStorageSetup(false);
+      } finally {
+        setIsCheckingSecureStorage(false);
+      }
+    };
+    checkSecureStorageStatus();
+  }, []);
 
   // Check if user has completed email onboarding and has email connected
   useEffect(() => {
@@ -118,11 +140,14 @@ function App() {
 
   // Handle auth state changes to update navigation
   useEffect(() => {
-    if (!isAuthLoading && !isCheckingEmailOnboarding) {
+    if (!isAuthLoading && !isCheckingEmailOnboarding && !isCheckingSecureStorage) {
       if (isAuthenticated && !needsTermsAcceptance) {
         // User is authenticated and has accepted terms
-        // Check if user needs email onboarding (hasn't completed it yet)
-        if (!hasCompletedEmailOnboarding) {
+        // For NEW users: Check if secure storage needs to be set up (after terms acceptance)
+        // This flow: Login -> Terms -> Secure Storage -> Email Onboarding -> Permissions -> Dashboard
+        if (isNewUserFlow && !hasSecureStorageSetup) {
+          setCurrentStep('secure-storage-setup');
+        } else if (!hasCompletedEmailOnboarding) {
           setCurrentStep('email-onboarding');
         } else if (hasPermissions) {
           setCurrentStep('dashboard');
@@ -133,7 +158,7 @@ function App() {
         setCurrentStep('login');
       }
     }
-  }, [isAuthenticated, isAuthLoading, needsTermsAcceptance, hasPermissions, hasCompletedEmailOnboarding, isCheckingEmailOnboarding]);
+  }, [isAuthenticated, isAuthLoading, needsTermsAcceptance, hasPermissions, hasCompletedEmailOnboarding, isCheckingEmailOnboarding, hasSecureStorageSetup, isCheckingSecureStorage, isNewUserFlow]);
 
   useEffect(() => {
     checkPermissions();
@@ -141,6 +166,8 @@ function App() {
   }, []);
 
   const handleLoginSuccess = (user: { id: string; email: string; display_name?: string; avatar_url?: string }, token: string, provider: string, subscriptionData: Subscription | undefined, isNewUser: boolean): void => {
+    // Track if this is a new user flow for secure storage setup
+    setIsNewUserFlow(isNewUser);
     login(user, token, provider, subscriptionData, isNewUser);
   };
 
@@ -161,7 +188,30 @@ function App() {
   const handleLogout = async (): Promise<void> => {
     await logout();
     setShowProfile(false);
+    setIsNewUserFlow(false);
     setCurrentStep('login');
+  };
+
+  const handleSecureStorageComplete = () => {
+    // Mark secure storage as set up
+    setHasSecureStorageSetup(true);
+    // Navigation will be handled by useEffect - it will go to email-onboarding next
+  };
+
+  const handleSecureStorageRetry = () => {
+    // Re-check secure storage status
+    setIsCheckingSecureStorage(true);
+    window.api.system.getSecureStorageStatus()
+      .then((result) => {
+        setHasSecureStorageSetup(result.available);
+      })
+      .catch((error) => {
+        console.error('[App] Failed to re-check secure storage status:', error);
+        setHasSecureStorageSetup(false);
+      })
+      .finally(() => {
+        setIsCheckingSecureStorage(false);
+      });
   };
 
   const checkPermissions = async (): Promise<void> => {
@@ -304,6 +354,8 @@ function App() {
     switch (currentStep) {
       case 'login':
         return 'Welcome';
+      case 'secure-storage-setup':
+        return 'Secure Storage';
       case 'email-onboarding':
         return 'Connect Email';
       case 'microsoft-login':
@@ -352,6 +404,13 @@ function App() {
       <div className="flex-1 overflow-y-auto relative">
         {currentStep === 'login' && (
           <Login onLoginSuccess={handleLoginSuccess} />
+        )}
+
+        {currentStep === 'secure-storage-setup' && (
+          <SecureStorageSetup
+            onComplete={handleSecureStorageComplete}
+            onRetry={handleSecureStorageRetry}
+          />
         )}
 
         {currentStep === 'email-onboarding' && currentUser && authProvider && (

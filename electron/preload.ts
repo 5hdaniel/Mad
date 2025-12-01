@@ -429,6 +429,20 @@ contextBridge.exposeInMainWorld('api', {
    */
   system: {
     /**
+     * Gets secure storage status without triggering keychain prompt
+     * Used to check if encryption is already available (user already authorized)
+     * @returns {Promise<{success: boolean, available: boolean, platform?: string, guidance?: string, error?: string}>} Status result
+     */
+    getSecureStorageStatus: () => ipcRenderer.invoke('system:get-secure-storage-status'),
+
+    /**
+     * Initializes secure storage (triggers keychain prompt on macOS)
+     * Should be called after user login and terms acceptance
+     * @returns {Promise<{success: boolean, available: boolean, platform?: string, guidance?: string, error?: string}>} Initialization result
+     */
+    initializeSecureStorage: () => ipcRenderer.invoke('system:initialize-secure-storage'),
+
+    /**
      * Runs the complete permission setup flow for onboarding
      * @returns {Promise<{success: boolean, error?: string}>} Setup result
      */
