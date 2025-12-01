@@ -32,27 +32,35 @@ function SecureStorageSetup({ onComplete, onRetry }: SecureStorageSetupProps) {
   const [guidance, setGuidance] = useState<string | null>(null);
   const [platform, setPlatform] = useState<string>('');
 
-  // Check platform on mount
+  // Check if key store already exists on mount (file check, does NOT trigger keychain)
   useEffect(() => {
-    const checkPlatform = async () => {
+    const checkExistingSetup = async () => {
       try {
-        const result = await window.api.system.getSecureStorageStatus();
-        setPlatform(result.platform || 'unknown');
+        // Detect platform from navigator (no IPC call that might trigger keychain)
+        const userAgent = navigator.userAgent.toLowerCase();
+        if (userAgent.includes('mac')) {
+          setPlatform('darwin');
+        } else if (userAgent.includes('win')) {
+          setPlatform('win32');
+        } else {
+          setPlatform('linux');
+        }
 
-        // If already available (user already authorized), skip setup
-        if (result.available) {
+        // Check if key store exists (file check only, no keychain prompt)
+        const result = await window.api.system.hasEncryptionKeyStore();
+        if (result.hasKeyStore) {
+          // Already set up - skip to success
           setStatus('success');
-          // Auto-proceed after brief success message
           setTimeout(() => {
             onComplete();
-          }, 1000);
+          }, 500);
         }
       } catch (err) {
-        console.error('Failed to check secure storage status:', err);
+        console.error('Failed to check existing setup:', err);
       }
     };
 
-    checkPlatform();
+    checkExistingSetup();
   }, [onComplete]);
 
   const handleSetup = async () => {
@@ -81,10 +89,10 @@ function SecureStorageSetup({ onComplete, onRetry }: SecureStorageSetupProps) {
   };
 
   const handleRetry = () => {
+    // Reset to explanation state so user can try again
     setStatus('explanation');
     setError(null);
     setGuidance(null);
-    onRetry();
   };
 
   // Platform-specific messaging

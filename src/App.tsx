@@ -144,13 +144,16 @@ function App() {
   // Handle auth state changes to update navigation
   useEffect(() => {
     if (!isAuthLoading && !isCheckingEmailOnboarding && !isCheckingSecureStorage) {
+      // IMPORTANT: For NEW users (no key store), show SecureStorageSetup BEFORE login
+      // This is because login requires database and encryption to be ready
+      if (!hasSecureStorageSetup && !isAuthenticated) {
+        setCurrentStep('secure-storage-setup');
+        return;
+      }
+
       if (isAuthenticated && !needsTermsAcceptance) {
         // User is authenticated and has accepted terms
-        // For NEW users: Check if secure storage needs to be set up (after terms acceptance)
-        // This flow: Login -> Terms -> Secure Storage -> Email Onboarding -> Permissions -> Dashboard
-        if (isNewUserFlow && !hasSecureStorageSetup) {
-          setCurrentStep('secure-storage-setup');
-        } else if (!hasCompletedEmailOnboarding) {
+        if (!hasCompletedEmailOnboarding) {
           setCurrentStep('email-onboarding');
         } else if (hasPermissions) {
           setCurrentStep('dashboard');
@@ -161,7 +164,7 @@ function App() {
         setCurrentStep('login');
       }
     }
-  }, [isAuthenticated, isAuthLoading, needsTermsAcceptance, hasPermissions, hasCompletedEmailOnboarding, isCheckingEmailOnboarding, hasSecureStorageSetup, isCheckingSecureStorage, isNewUserFlow]);
+  }, [isAuthenticated, isAuthLoading, needsTermsAcceptance, hasPermissions, hasCompletedEmailOnboarding, isCheckingEmailOnboarding, hasSecureStorageSetup, isCheckingSecureStorage]);
 
   useEffect(() => {
     checkPermissions();
@@ -195,22 +198,12 @@ function App() {
     setCurrentStep('login');
   };
 
-  const handleSecureStorageComplete = async () => {
-    // Initialize the database now that secure storage is available
-    // This is only needed for new users - returning users already have the database initialized
-    try {
-      const result = await window.api.system.initializeDatabase();
-      if (!result.success) {
-        console.error('[App] Failed to initialize database after secure storage setup:', result.error);
-        // Still continue - the error will be handled elsewhere
-      }
-    } catch (error) {
-      console.error('[App] Error initializing database:', error);
-    }
-
+  const handleSecureStorageComplete = () => {
     // Mark secure storage as set up
+    // Note: Database is now initialized inside initializeSecureStorage handler
+    // to consolidate keychain prompts into a single operation
     setHasSecureStorageSetup(true);
-    // Navigation will be handled by useEffect - it will go to email-onboarding next
+    // Navigation will be handled by useEffect - will go to login (new flow) or email-onboarding
   };
 
   const handleSecureStorageRetry = () => {

@@ -143,13 +143,17 @@ export function registerSystemHandlers(): void {
   });
 
   /**
-   * Initialize secure storage (triggers keychain prompt on macOS)
-   * This should be called after user login and terms acceptance,
-   * when the user has seen an explanation of why we need keychain access.
+   * Initialize secure storage AND database (triggers keychain prompt on macOS)
+   * This consolidates both secure storage verification and database initialization
+   * into a single operation to avoid multiple keychain prompts.
+   *
+   * Flow:
+   * 1. Test tokenEncryptionService (triggers keychain prompt)
+   * 2. Initialize database (uses databaseEncryptionService, same keychain session)
    */
   ipcMain.handle('system:initialize-secure-storage', async (): Promise<SecureStorageResponse> => {
     try {
-      // This call triggers the keychain prompt on macOS
+      // Step 1: This call triggers the keychain prompt on macOS
       const isAvailable = tokenEncryptionService.isEncryptionAvailable();
 
       if (!isAvailable) {
@@ -163,7 +167,7 @@ export function registerSystemHandlers(): void {
         };
       }
 
-      // Try a test encryption/decryption to ensure keychain access is working
+      // Step 2: Test encryption to verify keychain access is working
       try {
         const testValue = 'magic-audit-test-' + Date.now();
         const encrypted = tokenEncryptionService.encrypt(testValue);
@@ -172,12 +176,6 @@ export function registerSystemHandlers(): void {
         if (decrypted !== testValue) {
           throw new Error('Encryption verification failed');
         }
-
-        return {
-          success: true,
-          available: true,
-          platform: os.platform(),
-        };
       } catch (encryptError) {
         console.error('[Main] Secure storage test failed:', encryptError);
         const platform = os.platform();
@@ -189,6 +187,29 @@ export function registerSystemHandlers(): void {
           error: 'Failed to verify secure storage. Please try again or check your system keychain settings.',
         };
       }
+
+      // Step 3: Initialize database immediately after keychain is authorized
+      // This uses the same keychain session, so should not prompt again
+      try {
+        await initializeDatabase();
+        console.log('[Main] Database initialized after secure storage setup');
+      } catch (dbError) {
+        console.error('[Main] Database initialization failed:', dbError);
+        // Still return success for secure storage - database error will be handled separately
+        // But we should inform the user
+        return {
+          success: false,
+          available: true,
+          platform: os.platform(),
+          error: `Secure storage is ready, but database initialization failed: ${dbError instanceof Error ? dbError.message : 'Unknown error'}`,
+        };
+      }
+
+      return {
+        success: true,
+        available: true,
+        platform: os.platform(),
+      };
     } catch (error) {
       console.error('[Main] Secure storage initialization failed:', error);
       const platform = os.platform();
