@@ -5,6 +5,7 @@ import type { OAuthProvider } from '../../electron/types/models';
 interface SystemHealthMonitorProps {
   userId: string;
   provider: OAuthProvider;
+  hidden?: boolean;
 }
 
 interface SystemIssue {
@@ -28,7 +29,7 @@ interface SystemIssue {
  * - Shows dismissible notifications
  * - Provides action buttons to fix issues
  */
-function SystemHealthMonitor({ userId, provider }: SystemHealthMonitorProps) {
+function SystemHealthMonitor({ userId, provider, hidden = false }: SystemHealthMonitorProps) {
   const [issues, setIssues] = useState<SystemIssue[]>([]);
   const [dismissed, setDismissed] = useState(new Set<number>());
   const checkingRef = useRef(false);
@@ -48,7 +49,7 @@ function SystemHealthMonitor({ userId, provider }: SystemHealthMonitorProps) {
         setIssues(result.issues as SystemIssue[]);
       }
     } catch (error) {
-      console.error('System health check failed:', error);
+      console.error('[SystemHealthMonitor] System health check failed:', error);
     } finally {
       checkingRef.current = false;
     }
@@ -99,7 +100,7 @@ function SystemHealthMonitor({ userId, provider }: SystemHealthMonitorProps) {
             });
           }
         } catch (error) {
-          console.error('Google mailbox connection failed:', error);
+          console.error('[SystemHealthMonitor] Google mailbox connection failed:', error);
         }
         break;
 
@@ -120,7 +121,7 @@ function SystemHealthMonitor({ userId, provider }: SystemHealthMonitorProps) {
             });
           }
         } catch (error) {
-          console.error('Microsoft mailbox connection failed:', error);
+          console.error('[SystemHealthMonitor] Microsoft mailbox connection failed:', error);
         }
         break;
 
@@ -130,13 +131,14 @@ function SystemHealthMonitor({ userId, provider }: SystemHealthMonitorProps) {
         break;
 
       default:
-        console.warn('Unknown action handler:', issue.actionHandler);
+        console.warn('[SystemHealthMonitor] Unknown action handler:', issue.actionHandler);
     }
   };
 
   const visibleIssues = issues.filter((_, index) => !dismissed.has(index));
 
-  if (visibleIssues.length === 0) {
+  // Hide during onboarding tour or when no issues
+  if (hidden || visibleIssues.length === 0) {
     return null;
   }
 

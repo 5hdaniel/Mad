@@ -1043,6 +1043,66 @@ export const registerAuthHandlers = (mainWindow: BrowserWindow | null): void => 
     }
   });
 
+  // Complete email onboarding
+  ipcMain.handle('auth:complete-email-onboarding', async (event, userId: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      // Validate input
+      const validatedUserId = validateUserId(userId)!;
+
+      // Save to local database
+      await databaseService.completeEmailOnboarding(validatedUserId);
+
+      await logService.info('Email onboarding completed', 'AuthHandlers', { userId: validatedUserId });
+
+      // Sync to Supabase
+      try {
+        await supabaseService.completeEmailOnboarding(userId);
+      } catch (syncError) {
+        // Don't fail if sync fails - user already completed locally
+        await logService.warn(
+          'Failed to sync email onboarding to Supabase',
+          'AuthHandlers',
+          { error: syncError instanceof Error ? syncError.message : 'Unknown error' }
+        );
+      }
+
+      return { success: true };
+    } catch (error) {
+      await logService.error(
+        'Complete email onboarding failed',
+        'AuthHandlers',
+        { error: error instanceof Error ? error.message : 'Unknown error' }
+      );
+      if (error instanceof ValidationError) {
+        return { success: false, error: `Validation error: ${error.message}` };
+      }
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  });
+
+  // Check email onboarding status
+  ipcMain.handle('auth:check-email-onboarding', async (event, userId: string): Promise<{ success: boolean; completed: boolean; error?: string }> => {
+    try {
+      // Validate input
+      const validatedUserId = validateUserId(userId)!;
+
+      // Check local database
+      const completed = await databaseService.hasCompletedEmailOnboarding(validatedUserId);
+
+      return { success: true, completed };
+    } catch (error) {
+      await logService.error(
+        'Check email onboarding status failed',
+        'AuthHandlers',
+        { error: error instanceof Error ? error.message : 'Unknown error' }
+      );
+      if (error instanceof ValidationError) {
+        return { success: false, completed: false, error: `Validation error: ${error.message}` };
+      }
+      return { success: false, completed: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  });
+
   // Validate session
   ipcMain.handle('auth:validate-session', async (event, sessionToken: string): Promise<SessionValidationResponse> => {
     try {

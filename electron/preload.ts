@@ -89,6 +89,20 @@ contextBridge.exposeInMainWorld('api', {
      * @returns {Promise<{success: boolean, error?: string}>} Acceptance result
      */
     acceptTerms: (userId: string) => ipcRenderer.invoke('auth:accept-terms', userId),
+
+    /**
+     * Marks email onboarding as completed for a user
+     * @param {string} userId - User ID completing email onboarding
+     * @returns {Promise<{success: boolean, error?: string}>} Completion result
+     */
+    completeEmailOnboarding: (userId: string) => ipcRenderer.invoke('auth:complete-email-onboarding', userId),
+
+    /**
+     * Checks if user has completed email onboarding
+     * @param {string} userId - User ID to check
+     * @returns {Promise<{success: boolean, completed: boolean, error?: string}>} Onboarding status
+     */
+    checkEmailOnboarding: (userId: string) => ipcRenderer.invoke('auth:check-email-onboarding', userId),
   },
 
   /**
