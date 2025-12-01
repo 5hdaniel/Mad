@@ -108,6 +108,28 @@ export function NetworkProvider({ children }: NetworkProviderProps) {
     setState(prev => ({ ...prev, connectionError: error }));
   }, []);
 
+  // DEV ONLY: Force offline state for testing
+  const forceOffline = useCallback((offline: boolean) => {
+    console.log(`[NetworkContext] Force offline: ${offline}`);
+    setState(prev => ({
+      ...prev,
+      isOnline: !offline,
+      lastOfflineAt: offline ? new Date() : prev.lastOfflineAt,
+      lastOnlineAt: !offline ? new Date() : prev.lastOnlineAt,
+    }));
+  }, []);
+
+  // Expose forceOffline in dev mode for console testing
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development' || !(window as any).isPackaged) {
+      (window as any).__testOffline = forceOffline;
+      console.log('[NetworkContext] Dev mode: Use window.__testOffline(true/false) to simulate offline state');
+    }
+    return () => {
+      delete (window as any).__testOffline;
+    };
+  }, [forceOffline]);
+
   const value: NetworkContextValue = {
     ...state,
     checkConnection,
