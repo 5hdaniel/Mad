@@ -25,25 +25,43 @@ const Login = ({ onLoginSuccess }: LoginProps) => {
   const [error, setError] = useState<string | null>(null);
 
   /**
-   * Handle Google Sign In
+   * Handle Google Sign In (Redirect Flow)
+   * Popup window opens, user logs in, redirects to local server, app handles automatically
    */
   const handleGoogleLogin = async () => {
     setLoading(true);
     setError(null);
     setProvider('google');
 
+    // Listen for login completion from main process
+    let cleanup: (() => void) | undefined;
+    if (window.api.onGoogleLoginComplete) {
+      cleanup = window.api.onGoogleLoginComplete((result) => {
+        if (result.success && result.user && result.sessionToken && result.subscription && onLoginSuccess) {
+          onLoginSuccess(result.user, result.sessionToken, 'google', result.subscription, result.isNewUser || false);
+        } else {
+          setError(result.error || 'Failed to complete Google login');
+          setLoading(false);
+          setProvider(null);
+        }
+
+        // Clean up listener after handling the event
+        if (cleanup) cleanup();
+      });
+    }
+
     try {
+      // Start login - auth popup window will open automatically
       const result = await window.api.auth.googleLogin();
 
-      if (result.success && result.authUrl) {
-        setAuthUrl(result.authUrl);
-        // Open browser
-        window.api.shell.openExternal(result.authUrl);
-        setLoading(false); // Reset loading so code input field appears
+      if (result.success) {
+        // Auth popup is already open - keep loading=true while waiting for redirect
+        // The popup will close automatically after successful authentication
       } else {
         setError(result.error || 'Failed to start Google login');
         setLoading(false);
         setProvider(null);
+        if (cleanup) cleanup();
       }
     } catch (err) {
       console.error('Google login error:', err);
@@ -51,6 +69,7 @@ const Login = ({ onLoginSuccess }: LoginProps) => {
       setError(errorMessage);
       setLoading(false);
       setProvider(null);
+      if (cleanup) cleanup();
     }
   };
 
@@ -67,8 +86,6 @@ const Login = ({ onLoginSuccess }: LoginProps) => {
     let cleanup: (() => void) | undefined;
     if (window.api.onMicrosoftLoginComplete) {
       cleanup = window.api.onMicrosoftLoginComplete((result) => {
-        console.log('Microsoft login complete:', result);
-
         if (result.success && result.user && result.sessionToken && result.subscription && onLoginSuccess) {
           onLoginSuccess(result.user, result.sessionToken, 'microsoft', result.subscription, result.isNewUser || false);
         } else {
@@ -171,6 +188,23 @@ const Login = ({ onLoginSuccess }: LoginProps) => {
           </div>
         )}
 
+        {/* Google Authentication in Progress */}
+        {provider === 'google' && loading && (
+          <div className="mb-6">
+            <div className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg text-center">
+              <div className="flex flex-col items-center">
+                <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+                <p className="text-sm text-blue-900 font-semibold mb-2">
+                  Authenticating with Google...
+                </p>
+                <p className="text-xs text-blue-700">
+                  A popup window will open. Complete sign-in there and it will close automatically.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Microsoft Authentication in Progress */}
         {provider === 'microsoft' && loading && (
           <div className="mb-6">
@@ -247,7 +281,7 @@ const Login = ({ onLoginSuccess }: LoginProps) => {
         )}
 
         {/* Initial Login Buttons */}
-        {!authUrl && !(provider === 'microsoft' && loading) && (
+        {!authUrl && !((provider === 'microsoft' || provider === 'google') && loading) && (
           <div>
             {/* Google Sign In */}
             <button

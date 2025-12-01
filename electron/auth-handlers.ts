@@ -3,10 +3,10 @@
 // This file contains auth handlers to be added to main.js
 // ============================================
 
-import { ipcMain, app, shell, BrowserWindow } from 'electron';
+import { ipcMain, app, shell, BrowserWindow, Event as ElectronEvent } from 'electron';
 import os from 'os';
 import crypto from 'crypto';
-import type { IpcMainInvokeEvent } from 'electron';
+import type { IpcMainInvokeEvent, OnHeadersReceivedListenerDetails, HeadersReceivedResponse } from 'electron';
 
 // Import services
 import databaseService from './services/databaseService';
@@ -121,17 +121,280 @@ export const initializeDatabase = async (): Promise<void> => {
   }
 };
 
-// Google Auth: Start login flow
-const handleGoogleLogin = async (_mainWindow: BrowserWindow | null): Promise<LoginStartResponse> => {
+// Google Auth: Start login flow (uses popup window like Microsoft)
+const handleGoogleLogin = async (mainWindow: BrowserWindow | null): Promise<LoginStartResponse> => {
   try {
-    await logService.info('Starting Google login flow', 'AuthHandlers');
+    await logService.info('Starting Google login flow with redirect', 'AuthHandlers');
 
-    const result = await googleAuthService.authenticateForLogin();
+    // Start auth flow - returns authUrl and a promise for the code
+    const { authUrl, codePromise, scopes } = await googleAuthService.authenticateForLogin();
+
+    await logService.info('Opening Google auth URL in popup window', 'AuthHandlers');
+
+    // Create a popup window for auth with webSecurity disabled to allow Google's scripts
+    const authWindow = new BrowserWindow({
+      width: 500,
+      height: 700,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        webSecurity: false, // Disable to allow Google's CDN scripts to load
+        allowRunningInsecureContent: true
+      },
+      autoHideMenuBar: true,
+      title: 'Sign in with Google'
+    });
+
+    // Strip CSP headers to allow Google's scripts to load
+    const filter = { urls: ['*://*.google.com/*', '*://*.googleapis.com/*', '*://*.gstatic.com/*', '*://*.googleusercontent.com/*'] };
+    authWindow.webContents.session.webRequest.onHeadersReceived(filter, (details: OnHeadersReceivedListenerDetails, callback: (response: HeadersReceivedResponse) => void) => {
+      const responseHeaders = details.responseHeaders || {};
+      delete responseHeaders['content-security-policy'];
+      delete responseHeaders['content-security-policy-report-only'];
+      delete responseHeaders['x-content-security-policy'];
+      callback({ responseHeaders });
+    });
+
+    // Load the auth URL
+    authWindow.loadURL(authUrl);
+
+    // Track if auth completed successfully
+    let authCompleted = false;
+
+    // Clean up server if window is closed before auth completes
+    authWindow.on('closed', () => {
+      if (!authCompleted) {
+        googleAuthService.stopLocalServer();
+        logService.info('Google login auth window closed by user, cleaned up server', 'AuthHandlers');
+      }
+    });
+
+    // Intercept navigation to callback URL to extract code directly (faster than HTTP round-trip)
+    const handleGoogleLoginCallbackUrl = (callbackUrl: string) => {
+      const parsedUrl = new URL(callbackUrl);
+      const code = parsedUrl.searchParams.get('code');
+      const error = parsedUrl.searchParams.get('error');
+      const errorDescription = parsedUrl.searchParams.get('error_description');
+
+      if (error) {
+        logService.error(`Google login error from navigation: ${error}`, 'AuthHandlers', { errorDescription });
+        googleAuthService.rejectCodeDirectly(errorDescription || error);
+        authCompleted = true;
+        if (authWindow && !authWindow.isDestroyed()) {
+          authWindow.close();
+        }
+      } else if (code) {
+        logService.info('Extracted Google login code directly from navigation (bypassing HTTP server)', 'AuthHandlers');
+        googleAuthService.resolveCodeDirectly(code);
+        authCompleted = true;
+        // Close window immediately since we don't need to show the success page
+        if (authWindow && !authWindow.isDestroyed()) {
+          authWindow.close();
+        }
+      }
+    };
+
+    // Use will-navigate to intercept the callback before it hits the HTTP server
+    authWindow.webContents.on('will-navigate', (event: ElectronEvent, url: string) => {
+      if (url.startsWith('http://localhost:3001/callback')) {
+        event.preventDefault(); // Prevent the navigation to avoid HTTP round-trip
+        handleGoogleLoginCallbackUrl(url);
+      }
+    });
+
+    // Also handle will-redirect as a fallback for server-side redirects
+    authWindow.webContents.on('will-redirect', (event: ElectronEvent, url: string) => {
+      if (url.startsWith('http://localhost:3001/callback')) {
+        event.preventDefault(); // Prevent the redirect to avoid HTTP round-trip
+        handleGoogleLoginCallbackUrl(url);
+      }
+    });
+
+    // Return authUrl immediately so frontend knows login started
+    // Process the actual login in the background
+    setTimeout(async () => {
+      try {
+        // Wait for code from local server (in background) with timeout
+        await logService.info('Waiting for Google authorization code...', 'AuthHandlers');
+
+        // Add timeout to prevent infinite waiting
+        const timeoutMs = 120000; // 2 minutes
+        const codeWithTimeout = Promise.race([
+          codePromise,
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Authentication timed out - no response from Google')), timeoutMs)
+          )
+        ]);
+
+        const code = await codeWithTimeout;
+        authCompleted = true;
+        await logService.info('Received Google authorization code from redirect', 'AuthHandlers');
+
+        // Exchange code for tokens
+        await logService.info('Exchanging Google authorization code for tokens...', 'AuthHandlers');
+        const { tokens, userInfo } = await googleAuthService.exchangeCodeForTokens(code);
+        await logService.info('Google token exchange successful', 'AuthHandlers');
+
+        // Encrypt tokens
+        await logService.info('Encrypting tokens...', 'AuthHandlers');
+        const encryptedAccessToken = tokenEncryptionService.encrypt(tokens.access_token);
+        const encryptedRefreshToken = tokens.refresh_token
+          ? tokenEncryptionService.encrypt(tokens.refresh_token)
+          : null;
+        await logService.info('Tokens encrypted successfully', 'AuthHandlers');
+
+        // Sync user to Supabase
+        await logService.info('Syncing user to Supabase...', 'AuthHandlers');
+        const cloudUser = await supabaseService.syncUser({
+          email: userInfo.email,
+          first_name: userInfo.given_name,
+          last_name: userInfo.family_name,
+          display_name: userInfo.name,
+          avatar_url: userInfo.picture,
+          oauth_provider: 'google',
+          oauth_id: userInfo.id,
+        });
+        await logService.info('User synced to Supabase successfully', 'AuthHandlers', { cloudUserId: cloudUser.id });
+
+        // Create user in local database
+        await logService.info('Looking up or creating local user...', 'AuthHandlers');
+        let localUser = await databaseService.getUserByOAuthId('google', userInfo.id);
+        const isNewUser = !localUser;
+
+        if (!localUser) {
+          localUser = await databaseService.createUser({
+            email: userInfo.email,
+            first_name: userInfo.given_name,
+            last_name: userInfo.family_name,
+            display_name: userInfo.name,
+            avatar_url: userInfo.picture,
+            oauth_provider: 'google',
+            oauth_id: userInfo.id,
+            subscription_tier: cloudUser.subscription_tier,
+            subscription_status: cloudUser.subscription_status,
+            trial_ends_at: cloudUser.trial_ends_at,
+            is_active: true,
+          });
+        } else {
+          // Update existing user
+          await databaseService.updateUser(localUser.id, {
+            email: userInfo.email,
+            first_name: userInfo.given_name,
+            last_name: userInfo.family_name,
+            display_name: userInfo.name,
+            avatar_url: userInfo.picture,
+          });
+        }
+
+        // Update last login
+        if (!localUser) {
+          throw new Error('Local user is unexpectedly null after creation/update');
+        }
+
+        await logService.info('Updating last login timestamp...', 'AuthHandlers');
+        await databaseService.updateLastLogin(localUser.id);
+        // Re-fetch user to get updated last_login_at timestamp
+        const refreshedUser = await databaseService.getUserById(localUser.id);
+        if (!refreshedUser) {
+          throw new Error('Failed to retrieve user after update');
+        }
+        localUser = refreshedUser;
+        await logService.info('Local user record updated', 'AuthHandlers', { userId: localUser.id });
+
+        // Save auth token
+        await logService.info('Saving OAuth token...', 'AuthHandlers');
+        const expiresAt = tokens.expires_at ?? new Date(Date.now() + 3600 * 1000).toISOString();
+
+        await databaseService.saveOAuthToken(localUser.id, 'google', 'authentication', {
+          access_token: encryptedAccessToken,
+          refresh_token: encryptedRefreshToken ?? undefined,
+          token_expires_at: expiresAt,
+          scopes_granted: Array.isArray(tokens.scopes) ? tokens.scopes.join(' ') : scopes.join(' '),
+        });
+        await logService.info('OAuth token saved', 'AuthHandlers');
+
+        // Create session
+        await logService.info('Creating session...', 'AuthHandlers');
+        const sessionToken = await databaseService.createSession(localUser.id);
+        await logService.info('Session created', 'AuthHandlers');
+
+        // Validate subscription
+        await logService.info('Validating subscription...', 'AuthHandlers');
+        const subscription = await supabaseService.validateSubscription(cloudUser.id);
+        await logService.info('Subscription validated', 'AuthHandlers', { tier: subscription?.tier });
+
+        // Register device
+        const deviceInfo = {
+          device_id: crypto.randomUUID(),
+          device_name: os.hostname(),
+          os: os.platform() + ' ' + os.release(),
+          app_version: app.getVersion(),
+        };
+        await supabaseService.registerDevice(cloudUser.id, deviceInfo);
+
+        // Track login event
+        await supabaseService.trackEvent(
+          cloudUser.id,
+          'user_login',
+          { provider: 'google' },
+          deviceInfo.device_id,
+          app.getVersion()
+        );
+
+        await logService.info('Google login completed successfully', 'AuthHandlers', {
+          userId: localUser.id,
+          provider: 'google',
+        });
+
+        // Audit log
+        await auditService.log({
+          userId: localUser.id,
+          action: 'LOGIN',
+          resourceType: 'SESSION',
+          resourceId: sessionToken,
+          metadata: { provider: 'google', isNewUser },
+          success: true,
+        });
+
+        // Close the auth window if still open
+        if (authWindow && !authWindow.isDestroyed()) {
+          authWindow.close();
+        }
+
+        // Notify renderer of successful login
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('google:login-complete', {
+            success: true,
+            user: localUser,
+            sessionToken,
+            subscription: subscription ?? undefined,
+            isNewUser,
+          });
+        }
+      } catch (error) {
+        await logService.error('Google login background processing failed', 'AuthHandlers', {
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
+
+        // Close the auth window if still open
+        if (authWindow && !authWindow.isDestroyed()) {
+          authWindow.close();
+        }
+
+        // Notify renderer of failure
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('google:login-complete', {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          });
+        }
+      }
+    }, 0);
 
     return {
       success: true,
-      authUrl: result.authUrl,
-      scopes: result.scopes,
+      authUrl,
+      scopes,
     };
   } catch (error) {
     await logService.error(
@@ -353,7 +616,7 @@ const handleGoogleConnectMailbox = async (mainWindow: BrowserWindow | null, user
 
     // Strip CSP headers to allow Google's scripts to load
     const filter = { urls: ['*://*.google.com/*', '*://*.googleapis.com/*', '*://*.gstatic.com/*', '*://*.googleusercontent.com/*'] };
-    authWindow.webContents.session.webRequest.onHeadersReceived(filter, (details, callback) => {
+    authWindow.webContents.session.webRequest.onHeadersReceived(filter, (details: OnHeadersReceivedListenerDetails, callback: (response: HeadersReceivedResponse) => void) => {
       const responseHeaders = details.responseHeaders || {};
       delete responseHeaders['content-security-policy'];
       delete responseHeaders['content-security-policy-report-only'];
@@ -375,16 +638,44 @@ const handleGoogleConnectMailbox = async (mainWindow: BrowserWindow | null, user
       }
     });
 
-    // Close the window when redirected to callback
-    authWindow.webContents.on('will-redirect', (event, url) => {
-      if (url.startsWith('http://localhost:3001/callback')) {
+    // Intercept navigation to callback URL to extract code directly (faster than HTTP round-trip)
+    const handleGoogleCallbackUrl = (callbackUrl: string) => {
+      const parsedUrl = new URL(callbackUrl);
+      const code = parsedUrl.searchParams.get('code');
+      const error = parsedUrl.searchParams.get('error');
+      const errorDescription = parsedUrl.searchParams.get('error_description');
+
+      if (error) {
+        logService.error(`Google mailbox auth error from navigation: ${error}`, 'AuthHandlers', { errorDescription });
+        googleAuthService.rejectCodeDirectly(errorDescription || error);
         authCompleted = true;
-        // Let the success page load, then close after 3 seconds
-        setTimeout(() => {
-          if (authWindow && !authWindow.isDestroyed()) {
-            authWindow.close();
-          }
-        }, 3000);
+        if (authWindow && !authWindow.isDestroyed()) {
+          authWindow.close();
+        }
+      } else if (code) {
+        logService.info('Extracted Google auth code directly from navigation (bypassing HTTP server)', 'AuthHandlers');
+        googleAuthService.resolveCodeDirectly(code);
+        authCompleted = true;
+        // Close window immediately since we don't need to show the success page
+        if (authWindow && !authWindow.isDestroyed()) {
+          authWindow.close();
+        }
+      }
+    };
+
+    // Use will-navigate to intercept the callback before it hits the HTTP server
+    authWindow.webContents.on('will-navigate', (event: ElectronEvent, url: string) => {
+      if (url.startsWith('http://localhost:3001/callback')) {
+        event.preventDefault(); // Prevent the navigation to avoid HTTP round-trip
+        handleGoogleCallbackUrl(url);
+      }
+    });
+
+    // Also handle will-redirect as a fallback for server-side redirects
+    authWindow.webContents.on('will-redirect', (event: ElectronEvent, url: string) => {
+      if (url.startsWith('http://localhost:3001/callback')) {
+        event.preventDefault(); // Prevent the redirect to avoid HTTP round-trip
+        handleGoogleCallbackUrl(url);
       }
     });
 
@@ -511,7 +802,7 @@ const handleMicrosoftLogin = async (mainWindow: BrowserWindow | null): Promise<L
 
     // Strip CSP headers to allow Microsoft's scripts to load
     const filter = { urls: ['*://*.microsoftonline.com/*', '*://*.msauth.net/*', '*://*.msftauth.net/*'] };
-    authWindow.webContents.session.webRequest.onHeadersReceived(filter, (details, callback) => {
+    authWindow.webContents.session.webRequest.onHeadersReceived(filter, (details: OnHeadersReceivedListenerDetails, callback: (response: HeadersReceivedResponse) => void) => {
       const responseHeaders = details.responseHeaders || {};
       delete responseHeaders['content-security-policy'];
       delete responseHeaders['content-security-policy-report-only'];
@@ -533,16 +824,44 @@ const handleMicrosoftLogin = async (mainWindow: BrowserWindow | null): Promise<L
       }
     });
 
-    // Close the window when redirected to callback
-    authWindow.webContents.on('will-redirect', (event, url) => {
-      if (url.startsWith('http://localhost:3000/callback')) {
+    // Intercept navigation to callback URL to extract code directly (faster than HTTP round-trip)
+    const handleCallbackUrl = (callbackUrl: string) => {
+      const parsedUrl = new URL(callbackUrl);
+      const code = parsedUrl.searchParams.get('code');
+      const error = parsedUrl.searchParams.get('error');
+      const errorDescription = parsedUrl.searchParams.get('error_description');
+
+      if (error) {
+        logService.error(`Microsoft auth error from navigation: ${error}`, 'AuthHandlers', { errorDescription });
+        microsoftAuthService.rejectCodeDirectly(errorDescription || error);
         authCompleted = true;
-        // Let the success page load, then close after 3 seconds
-        setTimeout(() => {
-          if (authWindow && !authWindow.isDestroyed()) {
-            authWindow.close();
-          }
-        }, 3000);
+        if (authWindow && !authWindow.isDestroyed()) {
+          authWindow.close();
+        }
+      } else if (code) {
+        logService.info('Extracted auth code directly from navigation (bypassing HTTP server)', 'AuthHandlers');
+        microsoftAuthService.resolveCodeDirectly(code);
+        authCompleted = true;
+        // Close window immediately since we don't need to show the success page
+        if (authWindow && !authWindow.isDestroyed()) {
+          authWindow.close();
+        }
+      }
+    };
+
+    // Use will-navigate to intercept the callback before it hits the HTTP server
+    authWindow.webContents.on('will-navigate', (event: ElectronEvent, url: string) => {
+      if (url.startsWith('http://localhost:3000/callback')) {
+        event.preventDefault(); // Prevent the navigation to avoid HTTP round-trip
+        handleCallbackUrl(url);
+      }
+    });
+
+    // Also handle will-redirect as a fallback for server-side redirects
+    authWindow.webContents.on('will-redirect', (event: ElectronEvent, url: string) => {
+      if (url.startsWith('http://localhost:3000/callback')) {
+        event.preventDefault(); // Prevent the redirect to avoid HTTP round-trip
+        handleCallbackUrl(url);
       }
     });
 
@@ -824,7 +1143,7 @@ const handleMicrosoftConnectMailbox = async (mainWindow: BrowserWindow | null, u
 
     // Strip CSP headers to allow Microsoft's scripts to load
     const filter = { urls: ['*://*.microsoftonline.com/*', '*://*.msauth.net/*', '*://*.msftauth.net/*'] };
-    authWindow.webContents.session.webRequest.onHeadersReceived(filter, (details, callback) => {
+    authWindow.webContents.session.webRequest.onHeadersReceived(filter, (details: OnHeadersReceivedListenerDetails, callback: (response: HeadersReceivedResponse) => void) => {
       const responseHeaders = details.responseHeaders || {};
       delete responseHeaders['content-security-policy'];
       delete responseHeaders['content-security-policy-report-only'];
@@ -846,16 +1165,44 @@ const handleMicrosoftConnectMailbox = async (mainWindow: BrowserWindow | null, u
       }
     });
 
-    // Close the window when redirected to callback
-    authWindow.webContents.on('will-redirect', (event, url) => {
-      if (url.startsWith('http://localhost:3000/callback')) {
+    // Intercept navigation to callback URL to extract code directly (faster than HTTP round-trip)
+    const handleMailboxCallbackUrl = (callbackUrl: string) => {
+      const parsedUrl = new URL(callbackUrl);
+      const code = parsedUrl.searchParams.get('code');
+      const error = parsedUrl.searchParams.get('error');
+      const errorDescription = parsedUrl.searchParams.get('error_description');
+
+      if (error) {
+        logService.error(`Microsoft mailbox auth error from navigation: ${error}`, 'AuthHandlers', { errorDescription });
+        microsoftAuthService.rejectCodeDirectly(errorDescription || error);
         authCompleted = true;
-        // Let the success page load, then close after 3 seconds
-        setTimeout(() => {
-          if (authWindow && !authWindow.isDestroyed()) {
-            authWindow.close();
-          }
-        }, 3000);
+        if (authWindow && !authWindow.isDestroyed()) {
+          authWindow.close();
+        }
+      } else if (code) {
+        logService.info('Extracted mailbox auth code directly from navigation (bypassing HTTP server)', 'AuthHandlers');
+        microsoftAuthService.resolveCodeDirectly(code);
+        authCompleted = true;
+        // Close window immediately since we don't need to show the success page
+        if (authWindow && !authWindow.isDestroyed()) {
+          authWindow.close();
+        }
+      }
+    };
+
+    // Use will-navigate to intercept the callback before it hits the HTTP server
+    authWindow.webContents.on('will-navigate', (event: ElectronEvent, url: string) => {
+      if (url.startsWith('http://localhost:3000/callback')) {
+        event.preventDefault(); // Prevent the navigation to avoid HTTP round-trip
+        handleMailboxCallbackUrl(url);
+      }
+    });
+
+    // Also handle will-redirect as a fallback for server-side redirects
+    authWindow.webContents.on('will-redirect', (event: ElectronEvent, url: string) => {
+      if (url.startsWith('http://localhost:3000/callback')) {
+        event.preventDefault(); // Prevent the redirect to avoid HTTP round-trip
+        handleMailboxCallbackUrl(url);
       }
     });
 
