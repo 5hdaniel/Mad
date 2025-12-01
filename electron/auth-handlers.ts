@@ -638,6 +638,7 @@ const handleGoogleConnectMailbox = async (mainWindow: BrowserWindow | null, user
         // Notify renderer that auth was cancelled
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send('google:mailbox-cancelled');
+          logService.info('Sent google:mailbox-cancelled event to renderer', 'AuthHandlers');
         }
       }
     });
@@ -1169,6 +1170,7 @@ const handleMicrosoftConnectMailbox = async (mainWindow: BrowserWindow | null, u
         // Notify renderer that auth was cancelled
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send('microsoft:mailbox-cancelled');
+          logService.info('Sent microsoft:mailbox-cancelled event to renderer', 'AuthHandlers');
         }
       }
     });

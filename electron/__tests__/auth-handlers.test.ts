@@ -186,6 +186,7 @@ describe('Auth Handlers', () => {
   let registeredHandlers: Map<string, Function>;
   const mockEvent = {} as IpcMainInvokeEvent;
   const mockMainWindow = {
+    isDestroyed: jest.fn().mockReturnValue(false),
     webContents: {
       send: jest.fn(),
     },
@@ -747,6 +748,151 @@ describe('Auth Handlers', () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toContain('Shell error');
+    });
+  });
+
+  describe('Mailbox Connection Cancelled Events', () => {
+    const { BrowserWindow } = require('electron');
+
+    beforeEach(() => {
+      jest.clearAllMocks();
+      mockDatabaseService.getUserById.mockResolvedValue({
+        id: TEST_USER_ID,
+        email: 'test@example.com',
+      });
+    });
+
+    it('should send google:mailbox-cancelled when Google auth window is closed before completion', async () => {
+      // Track the 'closed' event handler
+      let closedHandler: (() => void) | null = null;
+      const mockAuthWindow = {
+        loadURL: jest.fn(),
+        close: jest.fn(),
+        on: jest.fn((event: string, handler: () => void) => {
+          if (event === 'closed') {
+            closedHandler = handler;
+          }
+        }),
+        isDestroyed: jest.fn().mockReturnValue(false),
+        webContents: {
+          on: jest.fn(),
+          send: jest.fn(),
+          session: {
+            webRequest: {
+              onHeadersReceived: jest.fn(),
+            },
+          },
+        },
+      };
+
+      BrowserWindow.mockImplementation(() => mockAuthWindow);
+
+      mockGoogleAuthService.authenticateForMailbox.mockResolvedValue({
+        authUrl: 'https://accounts.google.com/oauth/mailbox',
+        codePromise: new Promise(() => {}),
+        scopes: ['gmail.readonly'],
+      });
+
+      const handler = registeredHandlers.get('auth:google:connect-mailbox');
+      await handler(mockEvent, TEST_USER_ID);
+
+      // Verify the 'closed' event handler was registered
+      expect(mockAuthWindow.on).toHaveBeenCalledWith('closed', expect.any(Function));
+
+      // Simulate window being closed before auth completes
+      if (closedHandler) {
+        closedHandler();
+      }
+
+      // Verify the cancelled event was sent to the main window
+      expect(mockMainWindow.webContents.send).toHaveBeenCalledWith('google:mailbox-cancelled');
+      expect(mockLogService.info).toHaveBeenCalledWith(
+        'Sent google:mailbox-cancelled event to renderer',
+        'AuthHandlers'
+      );
+    });
+
+    it('should send microsoft:mailbox-cancelled when Microsoft auth window is closed before completion', async () => {
+      // Track the 'closed' event handler
+      let closedHandler: (() => void) | null = null;
+      const mockAuthWindow = {
+        loadURL: jest.fn(),
+        close: jest.fn(),
+        on: jest.fn((event: string, handler: () => void) => {
+          if (event === 'closed') {
+            closedHandler = handler;
+          }
+        }),
+        isDestroyed: jest.fn().mockReturnValue(false),
+        webContents: {
+          on: jest.fn(),
+          send: jest.fn(),
+          session: {
+            webRequest: {
+              onHeadersReceived: jest.fn(),
+            },
+          },
+        },
+      };
+
+      BrowserWindow.mockImplementation(() => mockAuthWindow);
+
+      mockMicrosoftAuthService.authenticateForMailbox.mockResolvedValue({
+        authUrl: 'https://login.microsoftonline.com/oauth/mailbox',
+        codePromise: new Promise(() => {}),
+        codeVerifier: 'verifier-123',
+        scopes: ['Mail.Read'],
+      });
+
+      const handler = registeredHandlers.get('auth:microsoft:connect-mailbox');
+      await handler(mockEvent, TEST_USER_ID);
+
+      // Verify the 'closed' event handler was registered
+      expect(mockAuthWindow.on).toHaveBeenCalledWith('closed', expect.any(Function));
+
+      // Simulate window being closed before auth completes
+      if (closedHandler) {
+        closedHandler();
+      }
+
+      // Verify the cancelled event was sent to the main window
+      expect(mockMainWindow.webContents.send).toHaveBeenCalledWith('microsoft:mailbox-cancelled');
+      expect(mockLogService.info).toHaveBeenCalledWith(
+        'Sent microsoft:mailbox-cancelled event to renderer',
+        'AuthHandlers'
+      );
+    });
+
+    it('should register closed event handler on auth window', async () => {
+      const mockAuthWindow = {
+        loadURL: jest.fn(),
+        close: jest.fn(),
+        on: jest.fn(),
+        isDestroyed: jest.fn().mockReturnValue(false),
+        webContents: {
+          on: jest.fn(),
+          send: jest.fn(),
+          session: {
+            webRequest: {
+              onHeadersReceived: jest.fn(),
+            },
+          },
+        },
+      };
+
+      BrowserWindow.mockImplementation(() => mockAuthWindow);
+
+      mockGoogleAuthService.authenticateForMailbox.mockResolvedValue({
+        authUrl: 'https://accounts.google.com/oauth/mailbox',
+        codePromise: new Promise(() => {}),
+        scopes: ['gmail.readonly'],
+      });
+
+      const handler = registeredHandlers.get('auth:google:connect-mailbox');
+      await handler(mockEvent, TEST_USER_ID);
+
+      // Verify the 'closed' event handler was registered on the auth window
+      expect(mockAuthWindow.on).toHaveBeenCalledWith('closed', expect.any(Function));
     });
   });
 });
