@@ -261,7 +261,7 @@ describe('EmailOnboardingScreen', () => {
       });
     });
 
-    it('should disable Continue button when no email is connected', async () => {
+    it('should not show Continue button when no email is connected', async () => {
       window.api.system.checkAllConnections.mockResolvedValue({
         success: true,
         google: { connected: false },
@@ -278,8 +278,9 @@ describe('EmailOnboardingScreen', () => {
       );
 
       await waitFor(() => {
-        const continueButton = screen.getByRole('button', { name: /continue/i });
-        expect(continueButton).toBeDisabled();
+        // Continue button should not exist when no email is connected
+        // (it only appears inside the card after connection)
+        expect(screen.queryByRole('button', { name: /continue/i })).not.toBeInTheDocument();
       });
     });
 
@@ -552,7 +553,7 @@ describe('EmailOnboardingScreen', () => {
       expect(mockOnComplete).toHaveBeenCalled();
     });
 
-    it('should show "Skip additional connections" when one provider is connected', async () => {
+    it('should show "Skip for Now" button', async () => {
       window.api.system.checkAllConnections.mockResolvedValue({
         success: true,
         google: { connected: true, email: 'user@gmail.com' },
@@ -570,12 +571,12 @@ describe('EmailOnboardingScreen', () => {
 
       await waitFor(() => {
         expect(
-          screen.getByRole('button', { name: /skip additional connections/i })
+          screen.getByRole('button', { name: /skip for now/i })
         ).toBeInTheDocument();
       });
     });
 
-    it('should call onSkip when "Skip additional connections" is clicked', async () => {
+    it('should call onSkip when "Skip for Now" is clicked', async () => {
       window.api.system.checkAllConnections.mockResolvedValue({
         success: true,
         google: { connected: true, email: 'user@gmail.com' },
@@ -593,11 +594,11 @@ describe('EmailOnboardingScreen', () => {
 
       await waitFor(() => {
         expect(
-          screen.getByRole('button', { name: /skip additional connections/i })
+          screen.getByRole('button', { name: /skip for now/i })
         ).toBeInTheDocument();
       });
 
-      const skipButton = screen.getByRole('button', { name: /skip additional connections/i });
+      const skipButton = screen.getByRole('button', { name: /skip for now/i });
       await userEvent.click(skipButton);
 
       expect(mockOnSkip).toHaveBeenCalled();

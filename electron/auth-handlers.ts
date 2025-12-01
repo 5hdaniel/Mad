@@ -635,6 +635,11 @@ const handleGoogleConnectMailbox = async (mainWindow: BrowserWindow | null, user
       if (!authCompleted) {
         googleAuthService.stopLocalServer();
         logService.info('Google mailbox auth window closed by user, cleaned up server', 'AuthHandlers');
+        // Notify renderer that auth was cancelled
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('google:mailbox-cancelled');
+          logService.info('Sent google:mailbox-cancelled event to renderer', 'AuthHandlers');
+        }
       }
     });
 
@@ -1162,6 +1167,11 @@ const handleMicrosoftConnectMailbox = async (mainWindow: BrowserWindow | null, u
       if (!authCompleted) {
         microsoftAuthService.stopLocalServer();
         logService.info('Microsoft mailbox auth window closed by user, cleaned up server', 'AuthHandlers');
+        // Notify renderer that auth was cancelled
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('microsoft:mailbox-cancelled');
+          logService.info('Sent microsoft:mailbox-cancelled event to renderer', 'AuthHandlers');
+        }
       }
     });
 
