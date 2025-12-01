@@ -88,22 +88,25 @@ function App() {
   const [isCheckingSecureStorage, setIsCheckingSecureStorage] = useState<boolean>(true);
   const [isNewUserFlow, setIsNewUserFlow] = useState<boolean>(false); // Track if this is a new user flow
 
-  // Check secure storage status on app load (for returning users)
+  // Check if encryption key store exists on app load
+  // This is a file existence check that does NOT trigger keychain prompts
+  // Used to determine if this is a new user (no key store) vs returning user (has key store)
   useEffect(() => {
-    const checkSecureStorageStatus = async () => {
+    const checkKeyStoreExists = async () => {
       setIsCheckingSecureStorage(true);
       try {
-        const result = await window.api.system.getSecureStorageStatus();
-        setHasSecureStorageSetup(result.available);
+        const result = await window.api.system.hasEncryptionKeyStore();
+        // If key store exists, user has already set up secure storage before
+        setHasSecureStorageSetup(result.hasKeyStore);
       } catch (error) {
-        console.error('[App] Failed to check secure storage status:', error);
-        // Assume not set up if check fails
+        console.error('[App] Failed to check key store existence:', error);
+        // Assume not set up if check fails (will show setup screen for safety)
         setHasSecureStorageSetup(false);
       } finally {
         setIsCheckingSecureStorage(false);
       }
     };
-    checkSecureStorageStatus();
+    checkKeyStoreExists();
   }, []);
 
   // Check if user has completed email onboarding and has email connected
@@ -192,21 +195,33 @@ function App() {
     setCurrentStep('login');
   };
 
-  const handleSecureStorageComplete = () => {
+  const handleSecureStorageComplete = async () => {
+    // Initialize the database now that secure storage is available
+    // This is only needed for new users - returning users already have the database initialized
+    try {
+      const result = await window.api.system.initializeDatabase();
+      if (!result.success) {
+        console.error('[App] Failed to initialize database after secure storage setup:', result.error);
+        // Still continue - the error will be handled elsewhere
+      }
+    } catch (error) {
+      console.error('[App] Error initializing database:', error);
+    }
+
     // Mark secure storage as set up
     setHasSecureStorageSetup(true);
     // Navigation will be handled by useEffect - it will go to email-onboarding next
   };
 
   const handleSecureStorageRetry = () => {
-    // Re-check secure storage status
+    // Re-check if key store exists (triggers a fresh check after user may have authorized keychain)
     setIsCheckingSecureStorage(true);
-    window.api.system.getSecureStorageStatus()
+    window.api.system.hasEncryptionKeyStore()
       .then((result) => {
-        setHasSecureStorageSetup(result.available);
+        setHasSecureStorageSetup(result.hasKeyStore);
       })
       .catch((error) => {
-        console.error('[App] Failed to re-check secure storage status:', error);
+        console.error('[App] Failed to re-check key store existence:', error);
         setHasSecureStorageSetup(false);
       })
       .finally(() => {

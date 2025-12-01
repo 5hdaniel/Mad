@@ -11,6 +11,8 @@ const permissionService = require('./services/permissionService').default;
 const connectionStatusService = require('./services/connectionStatusService').default;
 const macOSPermissionHelper = require('./services/macOSPermissionHelper').default;
 import tokenEncryptionService from './services/tokenEncryptionService';
+import { databaseEncryptionService } from './services/databaseEncryptionService';
+import { initializeDatabase } from './auth-handlers';
 import os from 'os';
 
 // Import validation utilities
@@ -195,6 +197,37 @@ export function registerSystemHandlers(): void {
         available: false,
         platform,
         guidance: getSecureStorageGuidance(platform),
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  });
+
+  /**
+   * Check if the database encryption key store exists
+   * Used to determine if this is a new user (needs secure storage setup) vs returning user
+   */
+  ipcMain.handle('system:has-encryption-key-store', async (): Promise<{ success: boolean; hasKeyStore: boolean }> => {
+    try {
+      const hasKeyStore = databaseEncryptionService.hasKeyStore();
+      return { success: true, hasKeyStore };
+    } catch (error) {
+      console.error('[Main] Key store check failed:', error);
+      return { success: false, hasKeyStore: false };
+    }
+  });
+
+  /**
+   * Initialize the database after secure storage setup
+   * This should be called after the user has authorized keychain access
+   */
+  ipcMain.handle('system:initialize-database', async (): Promise<SystemResponse> => {
+    try {
+      await initializeDatabase();
+      return { success: true };
+    } catch (error) {
+      console.error('[Main] Database initialization failed:', error);
+      return {
+        success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
       };
     }

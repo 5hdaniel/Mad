@@ -160,12 +160,20 @@ app.whenReady().then(async () => {
   // Set up Content Security Policy
   setupContentSecurityPolicy();
 
-  // NOTE: Encryption check is now DEFERRED until after user login and terms acceptance.
-  // This improves UX by not surprising new users with a system password prompt at app startup.
-  // The SecureStorageSetup screen will explain what's happening before triggering the prompt.
-  // See: registerSystemHandlers() for 'system:initialize-secure-storage' and 'system:get-secure-storage-status'
+  // Check if this is a returning user (has existing encryption key store)
+  // For returning users: initialize database normally (they've already granted keychain access)
+  // For new users: defer database initialization until after SecureStorageSetup screen
+  // This prevents surprising new users with a system password prompt at app startup
+  const { databaseEncryptionService } = await import('./services/databaseEncryptionService');
+  const isReturningUser = databaseEncryptionService.hasKeyStore();
 
-  await initializeDatabase();
+  if (isReturningUser) {
+    // Returning user - they've already set up keychain access
+    await initializeDatabase();
+  }
+  // For new users, database will be initialized via 'system:initialize-database' IPC call
+  // after they complete the SecureStorageSetup screen
+
   createWindow();
   registerAuthHandlers(mainWindow!);
   registerTransactionHandlers(mainWindow!);

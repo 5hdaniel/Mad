@@ -443,6 +443,20 @@ contextBridge.exposeInMainWorld('api', {
     initializeSecureStorage: () => ipcRenderer.invoke('system:initialize-secure-storage'),
 
     /**
+     * Checks if the database encryption key store file exists
+     * Used to determine if this is a new user (needs secure storage setup) vs returning user
+     * @returns {Promise<{success: boolean, hasKeyStore: boolean}>} Key store check result
+     */
+    hasEncryptionKeyStore: () => ipcRenderer.invoke('system:has-encryption-key-store'),
+
+    /**
+     * Initializes the database after secure storage setup
+     * Should be called after the user has authorized keychain access (new users only)
+     * @returns {Promise<{success: boolean, error?: string}>} Database initialization result
+     */
+    initializeDatabase: () => ipcRenderer.invoke('system:initialize-database'),
+
+    /**
      * Runs the complete permission setup flow for onboarding
      * @returns {Promise<{success: boolean, error?: string}>} Setup result
      */

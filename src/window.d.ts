@@ -115,6 +115,14 @@ interface MainAPI {
       guidance?: string;
       error?: string;
     }>;
+    hasEncryptionKeyStore: () => Promise<{
+      success: boolean;
+      hasKeyStore: boolean;
+    }>;
+    initializeDatabase: () => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
     checkAllConnections: (userId: string) => Promise<{
       success: boolean;
       google?: { connected: boolean; email?: string };
