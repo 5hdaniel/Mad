@@ -220,20 +220,29 @@ function EmailOnboardingScreen({ userId, authProvider, onComplete, onSkip }: Ema
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                 </svg>
               </button>
+            ) : connectingProvider === primaryProvider ? (
+              <div className="flex gap-2">
+                <div className="flex-1 px-4 py-3 bg-gray-100 text-gray-500 text-sm font-semibold rounded-lg flex items-center justify-center gap-2">
+                  <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                  <span>Connecting...</span>
+                </div>
+                <button
+                  onClick={primaryInfo.connectHandler}
+                  className="px-4 py-3 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white text-sm font-semibold rounded-lg transition-all flex items-center justify-center gap-2 shadow-md"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  <span>Retry</span>
+                </button>
+              </div>
             ) : (
               <button
                 onClick={primaryInfo.connectHandler}
-                disabled={connectingProvider === primaryProvider || loadingConnections}
-                className={`w-full px-4 py-3 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white text-sm font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md`}
+                disabled={loadingConnections}
+                className="w-full px-4 py-3 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white text-sm font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md"
               >
-                {connectingProvider === primaryProvider ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    <span>Connecting...</span>
-                  </>
-                ) : (
-                  <span>Connect {primaryInfo.name}</span>
-                )}
+                <span>Connect {primaryInfo.name}</span>
               </button>
             )}
           </div>
@@ -277,20 +286,29 @@ function EmailOnboardingScreen({ userId, authProvider, onComplete, onSkip }: Ema
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                 </svg>
               </button>
+            ) : connectingProvider === secondaryProvider ? (
+              <div className="flex gap-2">
+                <div className="flex-1 px-4 py-2 bg-gray-100 text-gray-500 text-sm font-semibold rounded-lg flex items-center justify-center gap-2">
+                  <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                  <span>Connecting...</span>
+                </div>
+                <button
+                  onClick={secondaryInfo.connectHandler}
+                  className="px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white text-sm font-semibold rounded-lg transition-all flex items-center justify-center gap-2 shadow-md"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  <span>Retry</span>
+                </button>
+              </div>
             ) : (
               <button
                 onClick={secondaryInfo.connectHandler}
-                disabled={connectingProvider === secondaryProvider || loadingConnections}
+                disabled={loadingConnections}
                 className="w-full px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white text-sm font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md"
               >
-                {connectingProvider === secondaryProvider ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    <span>Connecting...</span>
-                  </>
-                ) : (
-                  <span>Connect {secondaryInfo.name}</span>
-                )}
+                <span>Connect {secondaryInfo.name}</span>
               </button>
             )}
           </div>
