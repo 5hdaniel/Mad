@@ -177,7 +177,7 @@ const handleGoogleLogin = async (mainWindow: BrowserWindow | null): Promise<Logi
       const errorDescription = parsedUrl.searchParams.get('error_description');
 
       if (error) {
-        logService.info(`Google login error from navigation: ${error}`, 'AuthHandlers');
+        logService.error(`Google login error from navigation: ${error}`, 'AuthHandlers', { errorDescription });
         googleAuthService.rejectCodeDirectly(errorDescription || error);
         authCompleted = true;
         if (authWindow && !authWindow.isDestroyed()) {
@@ -349,9 +349,9 @@ const handleGoogleLogin = async (mainWindow: BrowserWindow | null): Promise<Logi
         // Audit log
         await auditService.log({
           userId: localUser.id,
-          action: 'USER_LOGIN',
-          resourceType: 'USER',
-          resourceId: localUser.id,
+          action: 'LOGIN',
+          resourceType: 'SESSION',
+          resourceId: sessionToken,
           metadata: { provider: 'google', isNewUser },
         });
 
@@ -636,7 +636,7 @@ const handleGoogleConnectMailbox = async (mainWindow: BrowserWindow | null, user
       const errorDescription = parsedUrl.searchParams.get('error_description');
 
       if (error) {
-        logService.info(`Google auth error from navigation: ${error}`, 'AuthHandlers');
+        logService.error(`Google mailbox auth error from navigation: ${error}`, 'AuthHandlers', { errorDescription });
         googleAuthService.rejectCodeDirectly(errorDescription || error);
         authCompleted = true;
         if (authWindow && !authWindow.isDestroyed()) {
@@ -822,7 +822,7 @@ const handleMicrosoftLogin = async (mainWindow: BrowserWindow | null): Promise<L
       const errorDescription = parsedUrl.searchParams.get('error_description');
 
       if (error) {
-        logService.info(`Microsoft auth error from navigation: ${error}`, 'AuthHandlers');
+        logService.error(`Microsoft auth error from navigation: ${error}`, 'AuthHandlers', { errorDescription });
         microsoftAuthService.rejectCodeDirectly(errorDescription || error);
         authCompleted = true;
         if (authWindow && !authWindow.isDestroyed()) {
@@ -1154,7 +1154,7 @@ const handleMicrosoftConnectMailbox = async (mainWindow: BrowserWindow | null, u
       const errorDescription = parsedUrl.searchParams.get('error_description');
 
       if (error) {
-        logService.info(`Microsoft mailbox auth error from navigation: ${error}`, 'AuthHandlers');
+        logService.error(`Microsoft mailbox auth error from navigation: ${error}`, 'AuthHandlers', { errorDescription });
         microsoftAuthService.rejectCodeDirectly(errorDescription || error);
         authCompleted = true;
         if (authWindow && !authWindow.isDestroyed()) {

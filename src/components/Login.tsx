@@ -37,8 +37,6 @@ const Login = ({ onLoginSuccess }: LoginProps) => {
     let cleanup: (() => void) | undefined;
     if (window.api.onGoogleLoginComplete) {
       cleanup = window.api.onGoogleLoginComplete((result) => {
-        console.log('Google login complete:', result);
-
         if (result.success && result.user && result.sessionToken && result.subscription && onLoginSuccess) {
           onLoginSuccess(result.user, result.sessionToken, 'google', result.subscription, result.isNewUser || false);
         } else {
@@ -88,8 +86,6 @@ const Login = ({ onLoginSuccess }: LoginProps) => {
     let cleanup: (() => void) | undefined;
     if (window.api.onMicrosoftLoginComplete) {
       cleanup = window.api.onMicrosoftLoginComplete((result) => {
-        console.log('Microsoft login complete:', result);
-
         if (result.success && result.user && result.sessionToken && result.subscription && onLoginSuccess) {
           onLoginSuccess(result.user, result.sessionToken, 'microsoft', result.subscription, result.isNewUser || false);
         } else {
