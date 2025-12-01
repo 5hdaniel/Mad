@@ -3,10 +3,10 @@
 // This file contains auth handlers to be added to main.js
 // ============================================
 
-import { ipcMain, app, shell, BrowserWindow } from 'electron';
+import { ipcMain, app, shell, BrowserWindow, Event as ElectronEvent } from 'electron';
 import os from 'os';
 import crypto from 'crypto';
-import type { IpcMainInvokeEvent } from 'electron';
+import type { IpcMainInvokeEvent, OnHeadersReceivedListenerDetails, HeadersReceivedResponse } from 'electron';
 
 // Import services
 import databaseService from './services/databaseService';
@@ -147,7 +147,7 @@ const handleGoogleLogin = async (mainWindow: BrowserWindow | null): Promise<Logi
 
     // Strip CSP headers to allow Google's scripts to load
     const filter = { urls: ['*://*.google.com/*', '*://*.googleapis.com/*', '*://*.gstatic.com/*', '*://*.googleusercontent.com/*'] };
-    authWindow.webContents.session.webRequest.onHeadersReceived(filter, (details, callback) => {
+    authWindow.webContents.session.webRequest.onHeadersReceived(filter, (details: OnHeadersReceivedListenerDetails, callback: (response: HeadersReceivedResponse) => void) => {
       const responseHeaders = details.responseHeaders || {};
       delete responseHeaders['content-security-policy'];
       delete responseHeaders['content-security-policy-report-only'];
@@ -195,7 +195,7 @@ const handleGoogleLogin = async (mainWindow: BrowserWindow | null): Promise<Logi
     };
 
     // Use will-navigate to intercept the callback before it hits the HTTP server
-    authWindow.webContents.on('will-navigate', (event, url) => {
+    authWindow.webContents.on('will-navigate', (event: ElectronEvent, url: string) => {
       if (url.startsWith('http://localhost:3001/callback')) {
         event.preventDefault(); // Prevent the navigation to avoid HTTP round-trip
         handleGoogleLoginCallbackUrl(url);
@@ -203,7 +203,7 @@ const handleGoogleLogin = async (mainWindow: BrowserWindow | null): Promise<Logi
     });
 
     // Also handle will-redirect as a fallback for server-side redirects
-    authWindow.webContents.on('will-redirect', (event, url) => {
+    authWindow.webContents.on('will-redirect', (event: ElectronEvent, url: string) => {
       if (url.startsWith('http://localhost:3001/callback')) {
         event.preventDefault(); // Prevent the redirect to avoid HTTP round-trip
         handleGoogleLoginCallbackUrl(url);
@@ -353,6 +353,7 @@ const handleGoogleLogin = async (mainWindow: BrowserWindow | null): Promise<Logi
           resourceType: 'SESSION',
           resourceId: sessionToken,
           metadata: { provider: 'google', isNewUser },
+          success: true,
         });
 
         // Close the auth window if still open
@@ -606,7 +607,7 @@ const handleGoogleConnectMailbox = async (mainWindow: BrowserWindow | null, user
 
     // Strip CSP headers to allow Google's scripts to load
     const filter = { urls: ['*://*.google.com/*', '*://*.googleapis.com/*', '*://*.gstatic.com/*', '*://*.googleusercontent.com/*'] };
-    authWindow.webContents.session.webRequest.onHeadersReceived(filter, (details, callback) => {
+    authWindow.webContents.session.webRequest.onHeadersReceived(filter, (details: OnHeadersReceivedListenerDetails, callback: (response: HeadersReceivedResponse) => void) => {
       const responseHeaders = details.responseHeaders || {};
       delete responseHeaders['content-security-policy'];
       delete responseHeaders['content-security-policy-report-only'];
@@ -654,7 +655,7 @@ const handleGoogleConnectMailbox = async (mainWindow: BrowserWindow | null, user
     };
 
     // Use will-navigate to intercept the callback before it hits the HTTP server
-    authWindow.webContents.on('will-navigate', (event, url) => {
+    authWindow.webContents.on('will-navigate', (event: ElectronEvent, url: string) => {
       if (url.startsWith('http://localhost:3001/callback')) {
         event.preventDefault(); // Prevent the navigation to avoid HTTP round-trip
         handleGoogleCallbackUrl(url);
@@ -662,7 +663,7 @@ const handleGoogleConnectMailbox = async (mainWindow: BrowserWindow | null, user
     });
 
     // Also handle will-redirect as a fallback for server-side redirects
-    authWindow.webContents.on('will-redirect', (event, url) => {
+    authWindow.webContents.on('will-redirect', (event: ElectronEvent, url: string) => {
       if (url.startsWith('http://localhost:3001/callback')) {
         event.preventDefault(); // Prevent the redirect to avoid HTTP round-trip
         handleGoogleCallbackUrl(url);
@@ -792,7 +793,7 @@ const handleMicrosoftLogin = async (mainWindow: BrowserWindow | null): Promise<L
 
     // Strip CSP headers to allow Microsoft's scripts to load
     const filter = { urls: ['*://*.microsoftonline.com/*', '*://*.msauth.net/*', '*://*.msftauth.net/*'] };
-    authWindow.webContents.session.webRequest.onHeadersReceived(filter, (details, callback) => {
+    authWindow.webContents.session.webRequest.onHeadersReceived(filter, (details: OnHeadersReceivedListenerDetails, callback: (response: HeadersReceivedResponse) => void) => {
       const responseHeaders = details.responseHeaders || {};
       delete responseHeaders['content-security-policy'];
       delete responseHeaders['content-security-policy-report-only'];
@@ -840,7 +841,7 @@ const handleMicrosoftLogin = async (mainWindow: BrowserWindow | null): Promise<L
     };
 
     // Use will-navigate to intercept the callback before it hits the HTTP server
-    authWindow.webContents.on('will-navigate', (event, url) => {
+    authWindow.webContents.on('will-navigate', (event: ElectronEvent, url: string) => {
       if (url.startsWith('http://localhost:3000/callback')) {
         event.preventDefault(); // Prevent the navigation to avoid HTTP round-trip
         handleCallbackUrl(url);
@@ -848,7 +849,7 @@ const handleMicrosoftLogin = async (mainWindow: BrowserWindow | null): Promise<L
     });
 
     // Also handle will-redirect as a fallback for server-side redirects
-    authWindow.webContents.on('will-redirect', (event, url) => {
+    authWindow.webContents.on('will-redirect', (event: ElectronEvent, url: string) => {
       if (url.startsWith('http://localhost:3000/callback')) {
         event.preventDefault(); // Prevent the redirect to avoid HTTP round-trip
         handleCallbackUrl(url);
@@ -1124,7 +1125,7 @@ const handleMicrosoftConnectMailbox = async (mainWindow: BrowserWindow | null, u
 
     // Strip CSP headers to allow Microsoft's scripts to load
     const filter = { urls: ['*://*.microsoftonline.com/*', '*://*.msauth.net/*', '*://*.msftauth.net/*'] };
-    authWindow.webContents.session.webRequest.onHeadersReceived(filter, (details, callback) => {
+    authWindow.webContents.session.webRequest.onHeadersReceived(filter, (details: OnHeadersReceivedListenerDetails, callback: (response: HeadersReceivedResponse) => void) => {
       const responseHeaders = details.responseHeaders || {};
       delete responseHeaders['content-security-policy'];
       delete responseHeaders['content-security-policy-report-only'];
@@ -1172,7 +1173,7 @@ const handleMicrosoftConnectMailbox = async (mainWindow: BrowserWindow | null, u
     };
 
     // Use will-navigate to intercept the callback before it hits the HTTP server
-    authWindow.webContents.on('will-navigate', (event, url) => {
+    authWindow.webContents.on('will-navigate', (event: ElectronEvent, url: string) => {
       if (url.startsWith('http://localhost:3000/callback')) {
         event.preventDefault(); // Prevent the navigation to avoid HTTP round-trip
         handleMailboxCallbackUrl(url);
@@ -1180,7 +1181,7 @@ const handleMicrosoftConnectMailbox = async (mainWindow: BrowserWindow | null, u
     });
 
     // Also handle will-redirect as a fallback for server-side redirects
-    authWindow.webContents.on('will-redirect', (event, url) => {
+    authWindow.webContents.on('will-redirect', (event: ElectronEvent, url: string) => {
       if (url.startsWith('http://localhost:3000/callback')) {
         event.preventDefault(); // Prevent the redirect to avoid HTTP round-trip
         handleMailboxCallbackUrl(url);
