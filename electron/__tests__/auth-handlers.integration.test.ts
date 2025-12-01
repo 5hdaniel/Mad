@@ -248,7 +248,7 @@ describe('Auth Handlers Integration Tests', () => {
       expect(loginResult.success).toBe(true);
       expect(loginResult.authUrl).toContain('google.com');
       expect(mockLogService.info).toHaveBeenCalledWith(
-        'Starting Google login flow',
+        'Starting Google login flow with redirect',
         'AuthHandlers'
       );
 

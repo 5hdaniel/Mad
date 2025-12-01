@@ -229,3 +229,60 @@ describe('GoogleAuthService - Token Refresh', () => {
     });
   });
 });
+
+describe('GoogleAuthService - Direct Code Resolution', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  describe('resolveCodeDirectly', () => {
+    it('should resolve the code promise when resolver is set', async () => {
+      // Start local server to set up the resolver
+      const codePromise = googleAuthService.startLocalServer();
+
+      // Resolve directly
+      googleAuthService.resolveCodeDirectly('test-auth-code');
+
+      // The promise should resolve with the code
+      const code = await codePromise;
+      expect(code).toBe('test-auth-code');
+    });
+
+    it('should stop local server after resolving', () => {
+      const stopSpy = jest.spyOn(googleAuthService, 'stopLocalServer');
+
+      // Start and then resolve
+      googleAuthService.startLocalServer();
+      googleAuthService.resolveCodeDirectly('test-code');
+
+      expect(stopSpy).toHaveBeenCalled();
+      stopSpy.mockRestore();
+    });
+  });
+
+  describe('rejectCodeDirectly', () => {
+    it('should reject the code promise when rejecter is set', async () => {
+      // Start local server to set up the rejecter
+      const codePromise = googleAuthService.startLocalServer();
+
+      // Reject directly
+      googleAuthService.rejectCodeDirectly('Auth error');
+
+      // The promise should reject with the error
+      await expect(codePromise).rejects.toThrow('Auth error');
+    });
+
+    it('should stop local server after rejecting', async () => {
+      const stopSpy = jest.spyOn(googleAuthService, 'stopLocalServer');
+
+      // Start and then reject - must catch the rejected promise
+      const codePromise = googleAuthService.startLocalServer();
+      googleAuthService.rejectCodeDirectly('error');
+
+      // Await the rejection to prevent unhandled promise rejection
+      await expect(codePromise).rejects.toThrow('error');
+      expect(stopSpy).toHaveBeenCalled();
+      stopSpy.mockRestore();
+    });
+  });
+});

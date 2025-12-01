@@ -58,6 +58,9 @@ class MicrosoftAuthService {
   private authorizeUrl: string;
   private tokenUrl: string;
   private server: http.Server | null = null;
+  // Store resolve/reject functions to allow direct code resolution from navigation interception
+  private codeResolver: ((code: string) => void) | null = null;
+  private codeRejecter: ((error: Error) => void) | null = null;
 
   constructor() {
     this.clientId = process.env.MICROSOFT_CLIENT_ID || '';
@@ -71,17 +74,52 @@ class MicrosoftAuthService {
   }
 
   /**
+   * Resolve the authorization code directly from navigation interception
+   * This bypasses the HTTP server round-trip for faster auth
+   * @param code - The authorization code from the callback URL
+   */
+  resolveCodeDirectly(code: string): void {
+    if (this.codeResolver) {
+      console.log('[MicrosoftAuth] Resolving code directly from navigation interception');
+      this.codeResolver(code);
+      this.codeResolver = null;
+      this.codeRejecter = null;
+      this.stopLocalServer();
+    }
+  }
+
+  /**
+   * Reject the authorization code directly (for errors from navigation)
+   * @param error - The error message
+   */
+  rejectCodeDirectly(error: string): void {
+    if (this.codeRejecter) {
+      console.log('[MicrosoftAuth] Rejecting code directly from navigation interception');
+      this.codeRejecter(new Error(error));
+      this.codeResolver = null;
+      this.codeRejecter = null;
+      this.stopLocalServer();
+    }
+  }
+
+  /**
    * Start a temporary local HTTP server to catch OAuth redirect
    * @returns {Promise<string>} Authorization code from redirect
    */
   startLocalServer(): Promise<string> {
     return new Promise((resolve, reject) => {
+      // Store resolve/reject for direct resolution from navigation interception
+      this.codeResolver = resolve;
+      this.codeRejecter = reject;
+
       this.server = http.createServer((req, res) => {
         const parsedUrl = url.parse(req.url || '', true);
+        console.log(`[MicrosoftAuth] HTTP server received request: ${parsedUrl.pathname}`);
 
         if (parsedUrl.pathname === '/callback') {
           const code = parsedUrl.query.code as string | undefined;
           const error = parsedUrl.query.error as string | undefined;
+          console.log(`[MicrosoftAuth] Callback received via HTTP server - code: ${code ? 'present' : 'missing'}, error: ${error || 'none'}`);
 
           if (error) {
             res.writeHead(200, { 'Content-Type': 'text/html' });

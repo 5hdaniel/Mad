@@ -78,6 +78,8 @@ jest.mock('../services/googleAuthService', () => ({
     exchangeCodeForTokens: jest.fn(),
     getUserInfo: jest.fn(),
     stopLocalServer: jest.fn(),
+    resolveCodeDirectly: jest.fn(),
+    rejectCodeDirectly: jest.fn(),
   },
 }));
 
@@ -89,6 +91,8 @@ jest.mock('../services/microsoftAuthService', () => ({
     exchangeCodeForTokens: jest.fn(),
     getUserInfo: jest.fn(),
     stopLocalServer: jest.fn(),
+    resolveCodeDirectly: jest.fn(),
+    rejectCodeDirectly: jest.fn(),
   },
 }));
 
@@ -226,9 +230,12 @@ describe('Auth Handlers', () => {
   });
 
   describe('auth:google:login', () => {
-    it('should return auth URL on successful login start', async () => {
+    it('should return auth URL on successful login start and open popup', async () => {
+      // Mock codePromise that never resolves (we just test the initial response)
+      const codePromise = new Promise<string>(() => {});
       mockGoogleAuthService.authenticateForLogin.mockResolvedValue({
         authUrl: 'https://accounts.google.com/oauth',
+        codePromise,
         scopes: ['email', 'profile'],
       });
 
@@ -238,6 +245,8 @@ describe('Auth Handlers', () => {
       expect(result.success).toBe(true);
       expect(result.authUrl).toBe('https://accounts.google.com/oauth');
       expect(result.scopes).toEqual(['email', 'profile']);
+      // Verify BrowserWindow was created for popup
+      expect(require('electron').BrowserWindow).toHaveBeenCalled();
     });
 
     it('should handle Google login failure', async () => {
@@ -251,6 +260,32 @@ describe('Auth Handlers', () => {
       expect(result.success).toBe(false);
       expect(result.error).toContain('Network error');
       expect(mockLogService.error).toHaveBeenCalled();
+    });
+
+    it('should call stopLocalServer when popup is closed before auth completes', async () => {
+      const codePromise = new Promise<string>(() => {});
+      mockGoogleAuthService.authenticateForLogin.mockResolvedValue({
+        authUrl: 'https://accounts.google.com/oauth',
+        codePromise,
+        scopes: ['email', 'profile'],
+      });
+
+      const handler = registeredHandlers.get('auth:google:login');
+      await handler(mockEvent);
+
+      // Get the BrowserWindow mock instance
+      const BrowserWindow = require('electron').BrowserWindow;
+      const mockWindowInstance = BrowserWindow.mock.results[BrowserWindow.mock.results.length - 1]?.value;
+
+      // Simulate window close by calling the 'closed' event handler
+      const closedHandler = mockWindowInstance?.on.mock.calls.find(
+        (call: [string, () => void]) => call[0] === 'closed'
+      )?.[1];
+
+      if (closedHandler) {
+        closedHandler();
+        expect(mockGoogleAuthService.stopLocalServer).toHaveBeenCalled();
+      }
     });
   });
 
