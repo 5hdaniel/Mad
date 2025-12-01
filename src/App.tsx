@@ -91,7 +91,11 @@ function App() {
         setIsCheckingEmailOnboarding(true);
         try {
           // Check onboarding status
-          const onboardingResult = await window.api.auth.checkEmailOnboarding(currentUser.id);
+          // Type assertion needed as preload API types are inferred from electron
+          const authApi = window.api.auth as typeof window.api.auth & {
+            checkEmailOnboarding: (userId: string) => Promise<{ success: boolean; completed: boolean; error?: string }>;
+          };
+          const onboardingResult = await authApi.checkEmailOnboarding(currentUser.id);
           if (onboardingResult.success) {
             setHasCompletedEmailOnboarding(onboardingResult.completed);
           }
@@ -197,7 +201,11 @@ function App() {
     // Mark email onboarding as completed in database
     if (currentUser?.id) {
       try {
-        await window.api.auth.completeEmailOnboarding(currentUser.id);
+        // Type assertion needed as preload API types are inferred from electron
+        const authApi = window.api.auth as typeof window.api.auth & {
+          completeEmailOnboarding: (userId: string) => Promise<{ success: boolean; error?: string }>;
+        };
+        await authApi.completeEmailOnboarding(currentUser.id);
         setHasCompletedEmailOnboarding(true);
       } catch (error) {
         console.error('[App] Failed to complete email onboarding:', error);
