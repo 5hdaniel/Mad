@@ -8,14 +8,16 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import App from '../../App';
-import { AuthProvider } from '../../contexts';
+import { AuthProvider, NetworkProvider } from '../../contexts';
 
-// Helper to render App with AuthProvider
+// Helper to render App with AuthProvider and NetworkProvider
 const renderApp = () => {
   return render(
-    <AuthProvider>
-      <App />
-    </AuthProvider>
+    <NetworkProvider>
+      <AuthProvider>
+        <App />
+      </AuthProvider>
+    </NetworkProvider>
   );
 };
 

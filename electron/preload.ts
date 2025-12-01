@@ -505,6 +505,19 @@ contextBridge.exposeInMainWorld('api', {
      * @returns {Promise<{healthy: boolean, issues?: Array, error?: string}>} Health check result
      */
     healthCheck: (userId: string, provider: string) => ipcRenderer.invoke('system:health-check', userId, provider),
+
+    /**
+     * Opens support email with pre-filled content
+     * @param {string} errorDetails - Optional error details to include
+     * @returns {Promise<{success: boolean, error?: string}>} Result
+     */
+    contactSupport: (errorDetails?: string) => ipcRenderer.invoke('system:contact-support', errorDetails),
+
+    /**
+     * Gets diagnostic information for support requests
+     * @returns {Promise<{success: boolean, diagnostics?: string, error?: string}>} Diagnostic data
+     */
+    getDiagnostics: () => ipcRenderer.invoke('system:get-diagnostics'),
   },
 
   /**
