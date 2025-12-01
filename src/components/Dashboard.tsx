@@ -27,6 +27,7 @@ function Dashboard({ onAuditNew, onViewTransactions, onManageContacts }: Dashboa
         continuous
         showProgress
         showSkipButton
+        hideCloseButton
         callback={handleJoyrideCallback}
         styles={JOYRIDE_STYLES}
         locale={JOYRIDE_LOCALE}

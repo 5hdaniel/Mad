@@ -3,7 +3,7 @@
  * Handles tour initialization and completion
  */
 import { useState, useEffect, Dispatch, SetStateAction } from 'react';
-import { CallBackProps, STATUS } from 'react-joyride';
+import { CallBackProps, STATUS, ACTIONS } from 'react-joyride';
 import confetti from 'canvas-confetti';
 
 /**
@@ -35,13 +35,17 @@ export function useTour(shouldStart: boolean, storageKey: string = 'hasSeenTour'
   }, [shouldStart, storageKey]);
 
   const handleJoyrideCallback = (data: CallBackProps): void => {
-    const { status } = data;
+    const { status, action } = data;
 
-    if (status === STATUS.FINISHED || status === STATUS.SKIPPED) {
+    // Handle tour completion, skip, or close (X button)
+    const isFinishedOrSkipped = status === STATUS.FINISHED || status === STATUS.SKIPPED;
+    const isClosed = action === ACTIONS.CLOSE;
+
+    if (isFinishedOrSkipped || isClosed) {
       setRunTour(false);
       localStorage.setItem(storageKey, 'true');
 
-      // Trigger confetti when tour is completed (not skipped)
+      // Trigger confetti when tour is completed (not skipped or closed)
       if (status === STATUS.FINISHED) {
         confetti({
           particleCount: 100,
