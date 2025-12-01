@@ -817,6 +817,10 @@ class DatabaseService implements IDatabaseService {
       'job_title',
       'last_cloud_sync_at',
       'terms_accepted_at',
+      'privacy_policy_accepted_at',
+      'terms_version_accepted',
+      'privacy_policy_version_accepted',
+      'email_onboarding_completed_at',
     ];
 
     const fields: string[] = [];

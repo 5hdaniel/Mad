@@ -192,13 +192,22 @@ const handleGoogleCompleteLogin = async (event: IpcMainInvokeEvent, authCode: st
         is_active: true,
       });
     } else {
-      // Update existing user
+      // Update existing user - sync profile AND user state from cloud (source of truth)
       await databaseService.updateUser(localUser.id, {
+        // Profile fields from OAuth
         email: userInfo.email,
         first_name: userInfo.given_name,
         last_name: userInfo.family_name,
         display_name: userInfo.name,
         avatar_url: userInfo.picture,
+        // User state from Supabase (cloud is source of truth)
+        terms_accepted_at: cloudUser.terms_accepted_at,
+        privacy_policy_accepted_at: cloudUser.privacy_policy_accepted_at,
+        terms_version_accepted: cloudUser.terms_version_accepted,
+        privacy_policy_version_accepted: cloudUser.privacy_policy_version_accepted,
+        email_onboarding_completed_at: cloudUser.email_onboarding_completed_at,
+        subscription_tier: cloudUser.subscription_tier,
+        subscription_status: cloudUser.subscription_status,
       });
     }
 
@@ -607,12 +616,21 @@ const handleMicrosoftLogin = async (mainWindow: BrowserWindow | null): Promise<L
             is_active: true,
           });
         } else {
-          // Update existing user
+          // Update existing user - sync profile AND user state from cloud (source of truth)
           await databaseService.updateUser(localUser.id, {
+            // Profile fields from OAuth
             email: userInfo.email,
             first_name: userInfo.given_name,
             last_name: userInfo.family_name,
             display_name: userInfo.name,
+            // User state from Supabase (cloud is source of truth)
+            terms_accepted_at: cloudUser.terms_accepted_at,
+            privacy_policy_accepted_at: cloudUser.privacy_policy_accepted_at,
+            terms_version_accepted: cloudUser.terms_version_accepted,
+            privacy_policy_version_accepted: cloudUser.privacy_policy_version_accepted,
+            email_onboarding_completed_at: cloudUser.email_onboarding_completed_at,
+            subscription_tier: cloudUser.subscription_tier,
+            subscription_status: cloudUser.subscription_status,
           });
         }
 
