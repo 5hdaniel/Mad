@@ -512,6 +512,12 @@ contextBridge.exposeInMainWorld('api', {
      * @returns {Promise<{success: boolean, error?: string}>} Result
      */
     contactSupport: (errorDetails?: string) => ipcRenderer.invoke('system:contact-support', errorDetails),
+
+    /**
+     * Gets diagnostic information for support requests
+     * @returns {Promise<{success: boolean, diagnostics?: string, error?: string}>} Diagnostic data
+     */
+    getDiagnostics: () => ipcRenderer.invoke('system:get-diagnostics'),
   },
 
   /**

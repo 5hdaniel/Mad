@@ -483,7 +483,7 @@ export function registerSystemHandlers(): void {
    */
   ipcMain.handle('system:contact-support', async (event: IpcMainInvokeEvent, errorDetails?: string): Promise<SystemResponse> => {
     try {
-      const supportEmail = 'support@magicaudit.com';
+      const supportEmail = 'magicauditwa@gmail.com';
       const subject = encodeURIComponent('Magic Audit Support Request');
       const body = encodeURIComponent(
         `Hi Magic Audit Support,\n\n` +
@@ -497,6 +497,57 @@ export function registerSystemHandlers(): void {
       return { success: true };
     } catch (error) {
       console.error('[Main] Failed to open support email:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  });
+
+  /**
+   * Get diagnostic information for support requests
+   */
+  ipcMain.handle('system:get-diagnostics', async (): Promise<{ success: boolean; diagnostics?: string; error?: string }> => {
+    try {
+      const { app } = require('electron');
+      const os = require('os');
+
+      const diagnostics = {
+        app: {
+          version: app.getVersion(),
+          name: app.getName(),
+          locale: app.getLocale(),
+        },
+        system: {
+          platform: process.platform,
+          arch: process.arch,
+          osVersion: os.release(),
+          osType: os.type(),
+          nodeVersion: process.version,
+          electronVersion: process.versions.electron,
+        },
+        memory: {
+          total: `${Math.round(os.totalmem() / 1024 / 1024 / 1024)}GB`,
+          free: `${Math.round(os.freemem() / 1024 / 1024 / 1024)}GB`,
+        },
+        timestamp: new Date().toISOString(),
+      };
+
+      const diagnosticString = Object.entries(diagnostics)
+        .map(([category, values]) => {
+          if (typeof values === 'object') {
+            const items = Object.entries(values as Record<string, unknown>)
+              .map(([key, val]) => `  ${key}: ${val}`)
+              .join('\n');
+            return `${category.toUpperCase()}:\n${items}`;
+          }
+          return `${category}: ${values}`;
+        })
+        .join('\n\n');
+
+      return { success: true, diagnostics: diagnosticString };
+    } catch (error) {
+      console.error('[Main] Failed to get diagnostics:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',

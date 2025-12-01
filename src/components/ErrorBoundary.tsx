@@ -6,6 +6,7 @@
  * - Catches JavaScript errors in child component tree
  * - Displays user-friendly error message
  * - Provides retry and contact support options
+ * - Includes diagnostic data for support
  * - Logs errors for debugging
  */
 
@@ -21,7 +22,11 @@ interface State {
   hasError: boolean;
   error: Error | null;
   errorInfo: ErrorInfo | null;
+  diagnostics: string | null;
+  copiedToClipboard: boolean;
 }
+
+const SUPPORT_EMAIL = 'magicauditwa@gmail.com';
 
 class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
@@ -30,6 +35,8 @@ class ErrorBoundary extends Component<Props, State> {
       hasError: false,
       error: null,
       errorInfo: null,
+      diagnostics: null,
+      copiedToClipboard: false,
     };
   }
 
@@ -37,11 +44,23 @@ class ErrorBoundary extends Component<Props, State> {
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
+  async componentDidCatch(error: Error, errorInfo: ErrorInfo): Promise<void> {
     console.error('[ErrorBoundary] Caught error:', error);
     console.error('[ErrorBoundary] Error info:', errorInfo);
 
     this.setState({ errorInfo });
+
+    // Fetch diagnostic information
+    try {
+      if (window.api?.system?.getDiagnostics) {
+        const result = await window.api.system.getDiagnostics();
+        if (result.success && result.diagnostics) {
+          this.setState({ diagnostics: result.diagnostics });
+        }
+      }
+    } catch (diagError) {
+      console.error('[ErrorBoundary] Failed to get diagnostics:', diagError);
+    }
 
     // Call optional error handler
     if (this.props.onError) {
@@ -54,27 +73,66 @@ class ErrorBoundary extends Component<Props, State> {
       hasError: false,
       error: null,
       errorInfo: null,
+      diagnostics: null,
+      copiedToClipboard: false,
     });
+  };
+
+  getErrorReport = (): string => {
+    const { error, errorInfo, diagnostics } = this.state;
+
+    let report = `=== MAGIC AUDIT ERROR REPORT ===\n\n`;
+    report += `ERROR:\n${error?.message || 'Unknown error'}\n\n`;
+
+    if (error?.stack) {
+      report += `STACK TRACE:\n${error.stack}\n\n`;
+    }
+
+    if (errorInfo?.componentStack) {
+      report += `COMPONENT STACK:\n${errorInfo.componentStack}\n\n`;
+    }
+
+    if (diagnostics) {
+      report += `SYSTEM DIAGNOSTICS:\n${diagnostics}\n`;
+    }
+
+    return report;
+  };
+
+  handleCopyErrorReport = async (): Promise<void> => {
+    try {
+      const report = this.getErrorReport();
+      await navigator.clipboard.writeText(report);
+      this.setState({ copiedToClipboard: true });
+      setTimeout(() => this.setState({ copiedToClipboard: false }), 3000);
+    } catch (err) {
+      console.error('[ErrorBoundary] Failed to copy error report:', err);
+    }
   };
 
   handleContactSupport = async (): Promise<void> => {
     try {
-      // Open support email
-      const supportEmail = 'support@magicaudit.com';
-      const subject = encodeURIComponent('App Error Report');
-      const body = encodeURIComponent(
-        `Hi,\n\nI encountered an error in the Magic Audit app.\n\n` +
-        `Error: ${this.state.error?.message || 'Unknown error'}\n\n` +
-        `Please help me resolve this issue.\n\n` +
-        `Thank you.`
-      );
+      const { error, diagnostics } = this.state;
 
-      if (window.api?.shell?.openExternal) {
-        await window.api.shell.openExternal(`mailto:${supportEmail}?subject=${subject}&body=${body}`);
+      // Build error details for email
+      let errorDetails = `Error: ${error?.message || 'Unknown error'}`;
+      if (diagnostics) {
+        // Include a shorter version in the email body
+        errorDetails += `\n\nSystem Info:\n${diagnostics}`;
+      }
+
+      if (window.api?.system?.contactSupport) {
+        await window.api.system.contactSupport(errorDetails);
+      } else if (window.api?.shell?.openExternal) {
+        const subject = encodeURIComponent('App Crash Report');
+        const body = encodeURIComponent(
+          `Hi,\n\nI encountered an error in the Magic Audit app.\n\n${errorDetails}\n\nPlease help me resolve this issue.\n\nThank you.`
+        );
+        await window.api.shell.openExternal(`mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`);
       } else {
         // Fallback: copy support email to clipboard
-        await navigator.clipboard.writeText(supportEmail);
-        alert(`Support email copied to clipboard: ${supportEmail}`);
+        await navigator.clipboard.writeText(SUPPORT_EMAIL);
+        alert(`Support email copied to clipboard: ${SUPPORT_EMAIL}`);
       }
     } catch (err) {
       console.error('[ErrorBoundary] Failed to open support email:', err);
@@ -88,10 +146,12 @@ class ErrorBoundary extends Component<Props, State> {
         return this.props.fallback;
       }
 
+      const { copiedToClipboard } = this.state;
+
       // Default error UI
       return (
         <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-          <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8 text-center">
+          <div className="max-w-lg w-full bg-white rounded-xl shadow-lg p-8 text-center">
             {/* Error Icon */}
             <div className="mx-auto w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-6">
               <svg
@@ -126,12 +186,39 @@ class ErrorBoundary extends Component<Props, State> {
                 <summary className="text-sm font-medium text-gray-700 cursor-pointer">
                   Technical Details
                 </summary>
-                <div className="mt-2 text-xs font-mono text-gray-600 overflow-auto max-h-32">
-                  <p className="font-semibold text-red-600">{this.state.error.message}</p>
+                <div className="mt-2 text-xs font-mono text-gray-600 overflow-auto max-h-48">
+                  <p className="font-semibold text-red-600 mb-2">{this.state.error.message}</p>
                   {this.state.error.stack && (
-                    <pre className="mt-2 whitespace-pre-wrap">{this.state.error.stack}</pre>
+                    <pre className="whitespace-pre-wrap text-gray-500 mb-4">{this.state.error.stack}</pre>
+                  )}
+                  {this.state.diagnostics && (
+                    <>
+                      <p className="font-semibold text-gray-700 mt-4 mb-2">System Info:</p>
+                      <pre className="whitespace-pre-wrap text-gray-500">{this.state.diagnostics}</pre>
+                    </>
                   )}
                 </div>
+                {/* Copy Error Report Button */}
+                <button
+                  onClick={this.handleCopyErrorReport}
+                  className="mt-3 w-full px-3 py-2 text-xs font-medium text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-md transition-colors flex items-center justify-center gap-2"
+                >
+                  {copiedToClipboard ? (
+                    <>
+                      <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      Copied to Clipboard!
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                      Copy Error Report
+                    </>
+                  )}
+                </button>
               </details>
             )}
 
@@ -145,8 +232,11 @@ class ErrorBoundary extends Component<Props, State> {
               </button>
               <button
                 onClick={this.handleContactSupport}
-                className="px-6 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium rounded-lg shadow-sm transition-colors"
+                className="px-6 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium rounded-lg shadow-sm transition-colors flex items-center justify-center gap-2"
               >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
                 Contact Support
               </button>
             </div>
@@ -155,10 +245,10 @@ class ErrorBoundary extends Component<Props, State> {
             <p className="mt-6 text-xs text-gray-500">
               Need help? Email us at{' '}
               <a
-                href="mailto:support@magicaudit.com"
+                href={`mailto:${SUPPORT_EMAIL}`}
                 className="text-blue-600 hover:underline"
               >
-                support@magicaudit.com
+                {SUPPORT_EMAIL}
               </a>
             </p>
           </div>

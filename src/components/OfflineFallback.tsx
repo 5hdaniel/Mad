@@ -11,6 +11,8 @@
 
 import React, { useState, useEffect } from 'react';
 
+const SUPPORT_EMAIL = 'magicauditwa@gmail.com';
+
 interface OfflineFallbackProps {
   /** Whether the app is currently offline */
   isOffline: boolean;
@@ -60,21 +62,33 @@ function OfflineFallback({
 
   const handleContactSupport = async () => {
     try {
-      const supportEmail = 'support@magicaudit.com';
-      const subject = encodeURIComponent('Connection Issue Report');
-      const body = encodeURIComponent(
-        `Hi,\n\nI'm experiencing connection issues with the Magic Audit app.\n\n` +
-        `Error: ${error || 'Network unavailable'}\n\n` +
-        `Please help me resolve this issue.\n\n` +
-        `Thank you.`
-      );
+      // Try to get diagnostic info
+      let diagnostics = '';
+      if (window.api?.system?.getDiagnostics) {
+        try {
+          const result = await window.api.system.getDiagnostics();
+          if (result.success && result.diagnostics) {
+            diagnostics = `\n\nSystem Info:\n${result.diagnostics}`;
+          }
+        } catch {
+          // Ignore diagnostics error
+        }
+      }
 
-      if (window.api?.shell?.openExternal) {
-        await window.api.shell.openExternal(`mailto:${supportEmail}?subject=${subject}&body=${body}`);
+      const errorDetails = `Connection Issue: ${error || 'Network unavailable'}${diagnostics}`;
+
+      if (window.api?.system?.contactSupport) {
+        await window.api.system.contactSupport(errorDetails);
+      } else if (window.api?.shell?.openExternal) {
+        const subject = encodeURIComponent('Connection Issue Report');
+        const body = encodeURIComponent(
+          `Hi,\n\nI'm experiencing connection issues with the Magic Audit app.\n\n${errorDetails}\n\nPlease help me resolve this issue.\n\nThank you.`
+        );
+        await window.api.shell.openExternal(`mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`);
       } else {
         // Fallback: copy support email to clipboard
-        await navigator.clipboard.writeText(supportEmail);
-        alert(`Support email copied to clipboard: ${supportEmail}`);
+        await navigator.clipboard.writeText(SUPPORT_EMAIL);
+        alert(`Support email copied to clipboard: ${SUPPORT_EMAIL}`);
       }
     } catch (err) {
       console.error('[OfflineFallback] Failed to open support email:', err);
@@ -266,7 +280,7 @@ function OfflineFallback({
           </p>
           <div className="flex flex-col items-center gap-2 text-sm">
             <a
-              href="mailto:support@magicaudit.com"
+              href={`mailto:${SUPPORT_EMAIL}`}
               className="text-blue-600 hover:underline flex items-center gap-1"
               onClick={(e) => {
                 e.preventDefault();
@@ -276,7 +290,7 @@ function OfflineFallback({
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
               </svg>
-              support@magicaudit.com
+              {SUPPORT_EMAIL}
             </a>
           </div>
         </div>
