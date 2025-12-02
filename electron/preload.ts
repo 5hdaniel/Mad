@@ -522,6 +522,69 @@ contextBridge.exposeInMainWorld('api', {
 
   /**
    * ============================================
+   * BACKUP METHODS
+   * ============================================
+   * Manages iPhone backup operations including encryption support
+   */
+  backup: {
+    /**
+     * Check if a device requires encrypted backup
+     * @param {string} udid - Device unique identifier
+     * @returns {Promise<{success: boolean, isEncrypted?: boolean, needsPassword?: boolean, error?: string}>}
+     */
+    checkEncryption: (udid: string) => ipcRenderer.invoke('backup:check-encryption', udid),
+
+    /**
+     * Start a backup without password
+     * Will fail with PASSWORD_REQUIRED if device has encryption enabled
+     * @param {Object} options - Backup options (udid, outputPath, etc.)
+     * @returns {Promise<{success: boolean, backupPath?: string, error?: string, errorCode?: string}>}
+     */
+    start: (options: { udid: string; outputPath?: string }) =>
+      ipcRenderer.invoke('backup:start', options),
+
+    /**
+     * Start a backup with password (for encrypted backups)
+     * @param {Object} options - Backup options including password
+     * @returns {Promise<{success: boolean, backupPath?: string, error?: string, errorCode?: string}>}
+     */
+    startWithPassword: (options: { udid: string; password: string; outputPath?: string }) =>
+      ipcRenderer.invoke('backup:start-with-password', options),
+
+    /**
+     * Cancel an in-progress backup
+     * @returns {Promise<{success: boolean}>}
+     */
+    cancel: () => ipcRenderer.invoke('backup:cancel'),
+
+    /**
+     * Verify a backup password without starting backup
+     * @param {string} backupPath - Path to the backup
+     * @param {string} password - Password to verify
+     * @returns {Promise<{success: boolean, valid?: boolean, error?: string}>}
+     */
+    verifyPassword: (backupPath: string, password: string) =>
+      ipcRenderer.invoke('backup:verify-password', backupPath, password),
+
+    /**
+     * Check if an existing backup is encrypted
+     * @param {string} backupPath - Path to the backup
+     * @returns {Promise<{success: boolean, isEncrypted?: boolean, error?: string}>}
+     */
+    isEncrypted: (backupPath: string) =>
+      ipcRenderer.invoke('backup:is-encrypted', backupPath),
+
+    /**
+     * Clean up backup files after extraction
+     * @param {string} backupPath - Path to the backup to clean up
+     * @returns {Promise<{success: boolean, error?: string}>}
+     */
+    cleanup: (backupPath: string) =>
+      ipcRenderer.invoke('backup:cleanup', backupPath),
+  },
+
+  /**
+   * ============================================
    * EVENT LISTENERS
    * ============================================
    * Subscribe to asynchronous events from the main process
@@ -602,6 +665,28 @@ contextBridge.exposeInMainWorld('api', {
     const listener = (_: IpcRendererEvent, progress: any) => callback(progress);
     ipcRenderer.on('transactions:scan-progress', listener);
     return () => ipcRenderer.removeListener('transactions:scan-progress', listener);
+  },
+
+  /**
+   * Listens for backup progress updates
+   * @param {Function} callback - Callback function to handle progress updates
+   * @returns {Function} Cleanup function to remove listener
+   */
+  onBackupProgress: (callback: (progress: { phase: string; percent: number }) => void) => {
+    const listener = (_: IpcRendererEvent, progress: { phase: string; percent: number }) => callback(progress);
+    ipcRenderer.on('backup:progress', listener);
+    return () => ipcRenderer.removeListener('backup:progress', listener);
+  },
+
+  /**
+   * Listens for backup password required events
+   * @param {Function} callback - Callback function when password is needed
+   * @returns {Function} Cleanup function to remove listener
+   */
+  onBackupPasswordRequired: (callback: (data: { udid: string }) => void) => {
+    const listener = (_: IpcRendererEvent, data: { udid: string }) => callback(data);
+    ipcRenderer.on('backup:password-required', listener);
+    return () => ipcRenderer.removeListener('backup:password-required', listener);
   },
 
   /**

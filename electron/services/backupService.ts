@@ -3,6 +3,7 @@
  *
  * Handles iPhone backup operations using idevicebackup2 CLI tool.
  * Extracts messages and contacts from iPhone backups.
+ * Supports encrypted backup decryption (TASK-007).
  *
  * IMPORTANT: Domain filtering is NOT supported by idevicebackup2.
  * See docs/BACKUP_RESEARCH.md for full research findings.
@@ -16,13 +17,16 @@ import { app } from 'electron';
 import { promises as fs } from 'fs';
 import log from 'electron-log';
 import { getCommand, isMockMode } from './libimobiledeviceService';
+import { backupDecryptionService } from './backupDecryptionService';
 import {
   BackupProgress,
   BackupResult,
   BackupOptions,
   BackupCapabilities,
   BackupInfo,
-  BackupStatus
+  BackupStatus,
+  BackupEncryptionInfo,
+  BackupErrorCode
 } from '../types/backup';
 
 /**
@@ -32,6 +36,7 @@ import {
  * - 'progress': BackupProgress - Progress updates during backup
  * - 'error': Error - Error events
  * - 'complete': BackupResult - When backup completes
+ * - 'password-required': { udid: string } - When encrypted backup needs password (TASK-007)
  */
 export class BackupService extends EventEmitter {
   private currentProcess: ChildProcess | null = null;
@@ -67,6 +72,61 @@ export class BackupService extends EventEmitter {
   }
 
   /**
+   * Check if a device requires encrypted backup (TASK-007)
+   * @param udid Device UDID
+   * @returns Encryption info
+   */
+  async checkEncryptionStatus(udid: string): Promise<BackupEncryptionInfo> {
+    try {
+      const ideviceinfo = getCommand('ideviceinfo');
+
+      return new Promise((resolve) => {
+        const proc = spawn(ideviceinfo, ['-u', udid, '-k', 'WillEncrypt']);
+        let output = '';
+        let errorOutput = '';
+
+        proc.stdout?.on('data', (data) => {
+          output += data.toString();
+        });
+
+        proc.stderr?.on('data', (data) => {
+          errorOutput += data.toString();
+        });
+
+        proc.on('close', (code) => {
+          if (code === 0) {
+            const willEncrypt = output.trim().toLowerCase() === 'true';
+            resolve({
+              isEncrypted: willEncrypt,
+              needsPassword: willEncrypt
+            });
+          } else {
+            log.warn('[BackupService] Could not determine encryption status:', errorOutput);
+            resolve({
+              isEncrypted: false,
+              needsPassword: false
+            });
+          }
+        });
+
+        proc.on('error', (error) => {
+          log.error('[BackupService] Error checking encryption status:', error);
+          resolve({
+            isEncrypted: false,
+            needsPassword: false
+          });
+        });
+      });
+    } catch (error) {
+      log.error('[BackupService] Exception checking encryption status:', error);
+      return {
+        isEncrypted: false,
+        needsPassword: false
+      };
+    }
+  }
+
+  /**
    * Get current backup status
    */
   getStatus(): BackupStatus {
@@ -89,6 +149,26 @@ export class BackupService extends EventEmitter {
   async startBackup(options: BackupOptions): Promise<BackupResult> {
     if (this.isRunning) {
       throw new Error('Backup already in progress');
+    }
+
+    // Check encryption status (TASK-007)
+    const encryptionInfo = await this.checkEncryptionStatus(options.udid);
+
+    if (encryptionInfo.isEncrypted && !options.password) {
+      // Emit event to signal UI should prompt for password
+      this.emit('password-required', { udid: options.udid });
+
+      return {
+        success: false,
+        backupPath: null,
+        error: 'Backup password required',
+        errorCode: 'PASSWORD_REQUIRED' as BackupErrorCode,
+        duration: 0,
+        deviceUdid: options.udid,
+        isIncremental: false,
+        backupSize: 0,
+        isEncrypted: true
+      };
     }
 
     // Use mock mode for development
@@ -166,10 +246,53 @@ export class BackupService extends EventEmitter {
 
         const success = code === 0;
         let backupSize = 0;
+        let finalBackupPath = deviceBackupPath;
 
         if (success) {
           backupSize = await this.calculateBackupSize(deviceBackupPath);
           log.info(`[BackupService] Backup completed successfully in ${duration}ms, size: ${backupSize} bytes`);
+
+          // Handle encrypted backup decryption (TASK-007)
+          if (encryptionInfo.isEncrypted && options.password) {
+            this.lastProgress = {
+              phase: 'decrypting',
+              percentComplete: 95,
+              currentFile: null,
+              filesTransferred: 0,
+              totalFiles: null,
+              bytesTransferred: backupSize,
+              totalBytes: backupSize,
+              estimatedTimeRemaining: 30
+            };
+            this.emit('progress', this.lastProgress);
+
+            const decryptionResult = await backupDecryptionService.decryptBackup(
+              deviceBackupPath,
+              options.password
+            );
+
+            if (!decryptionResult.success) {
+              const result: BackupResult = {
+                success: false,
+                backupPath: deviceBackupPath,
+                error: decryptionResult.error || 'Decryption failed',
+                errorCode: decryptionResult.error === 'Incorrect password'
+                  ? 'INCORRECT_PASSWORD' as BackupErrorCode
+                  : 'DECRYPTION_FAILED' as BackupErrorCode,
+                duration: Date.now() - this.startTime,
+                deviceUdid: options.udid,
+                isIncremental: previousBackupExists && !options.forceFullBackup,
+                backupSize,
+                isEncrypted: true
+              };
+              this.emit('complete', result);
+              resolve(result);
+              return;
+            }
+
+            // Update path to decrypted location
+            finalBackupPath = decryptionResult.decryptedPath!;
+          }
         } else {
           log.error(`[BackupService] Backup failed with code ${code}`);
           log.error('[BackupService] stderr:', stderrBuffer);
@@ -177,12 +300,13 @@ export class BackupService extends EventEmitter {
 
         const result: BackupResult = {
           success,
-          backupPath: success ? deviceBackupPath : null,
+          backupPath: success ? finalBackupPath : null,
           error: success ? null : `Backup failed with code ${code}: ${stderrBuffer}`,
-          duration,
+          duration: Date.now() - this.startTime,
           deviceUdid: options.udid,
           isIncremental: previousBackupExists && !options.forceFullBackup,
-          backupSize
+          backupSize,
+          isEncrypted: encryptionInfo.isEncrypted
         };
 
         this.lastProgress = {
@@ -506,6 +630,22 @@ export class BackupService extends EventEmitter {
         await this.deleteBackup(deviceBackups[i].path);
       }
     }
+  }
+
+  /**
+   * Clean up decrypted files after extraction (TASK-007)
+   * @param backupPath Path to the backup
+   */
+  async cleanupDecryptedFiles(backupPath: string): Promise<void> {
+    const decryptedPath = path.join(backupPath, 'decrypted');
+    await backupDecryptionService.cleanup(decryptedPath);
+  }
+
+  /**
+   * Verify a backup password without performing full backup (TASK-007)
+   */
+  async verifyBackupPassword(backupPath: string, password: string): Promise<boolean> {
+    return backupDecryptionService.verifyPassword(backupPath, password);
   }
 
   /**
