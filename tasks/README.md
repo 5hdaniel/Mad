@@ -76,10 +76,10 @@ All tasks should branch from: `claude/pc-release-planning-014DsWKZbyJf9JtN5kjer4
 |------|-------|--------|-----------------|
 | TASK-001 | Windows Build Configuration | ✅ Complete | claude/complete-task-001-01WBurUNhB9dfyLi3c5a4jrn |
 | TASK-002 | Bundle libimobiledevice | 🔴 Not Started | - |
-| TASK-003 | Device Detection Service | 🔴 Not Started | - |
-| TASK-004 | Messages Database Parser | 🔴 Not Started | - |
-| TASK-005 | Contacts Database Parser | 🔴 Not Started | - |
-| TASK-006 | Backup Service | 🔴 Blocked (needs 002, 003) | - |
+| TASK-003 | Device Detection Service | ✅ Complete | claude/complete-task-00-01PhsgWpuf2fzhxQkZtpAhuy |
+| TASK-004 | Messages Database Parser | ✅ Complete | claude/complete-task-xx-01AMrjeWWdUcKjnreM16zSPZ |
+| TASK-005 | Contacts Database Parser | ✅ Complete | claude/complete-task-005-01VC8mqRf2XeV5WmG2cYW6ZV |
+| TASK-006 | Backup Service | 🟡 Blocked (needs 002) | - |
 | TASK-007 | Encrypted Backup Handler | 🔴 Blocked (needs 006) | - |
 | TASK-008 | iPhone Connection UI | 🔴 Not Started | - |
 | TASK-009 | Sync Progress UI | 🔴 Not Started | - |
