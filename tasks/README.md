@@ -81,10 +81,10 @@ All tasks should branch from: `claude/pc-release-planning-014DsWKZbyJf9JtN5kjer4
 | TASK-005 | Contacts Database Parser | ✅ Complete | claude/complete-task-005-01VC8mqRf2XeV5WmG2cYW6ZV |
 | TASK-006 | Backup Service | 🟡 Blocked (needs 002) | - |
 | TASK-007 | Encrypted Backup Handler | 🔴 Blocked (needs 006) | - |
-| TASK-008 | iPhone Connection UI | 🔴 Not Started | - |
-| TASK-009 | Sync Progress UI | 🔴 Not Started | - |
-| TASK-010 | Platform Feature Toggle | 🔴 Not Started | - |
-| TASK-011 | Integration & E2E Testing | 🔴 Blocked (needs all) | - |
+| TASK-008 | iPhone Connection UI | ✅ Complete | claude/complete-task-008-012ExwSeenc5dhrNZ8fPv6N5 |
+| TASK-009 | Sync Progress UI | ✅ Complete | claude/complete-task-009-01Fj67U4CP1cmyXEpAnheXvz |
+| TASK-010 | Platform Feature Toggle | ✅ Complete | claude/complete-task-010-011ivUXXXCeZd47JvYE5JEiF |
+| TASK-011 | Integration & E2E Testing | 🔴 Blocked (needs 002, 006, 007) | - |
 
 ## Workflow for Each Claude Instance
 
