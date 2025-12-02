@@ -11,3 +11,6 @@ export * from './database';
 
 // Re-export IPC types
 export * from './ipc';
+
+// Re-export iOS message types
+export * from './iosMessages';
