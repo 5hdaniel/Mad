@@ -618,6 +618,60 @@ contextBridge.exposeInMainWorld('api', {
      */
     openExternal: (url: string) => ipcRenderer.invoke('shell:open-external', url),
   },
+
+  /**
+   * ============================================
+   * DEVICE DETECTION METHODS
+   * ============================================
+   * Handles iOS device detection via USB using libimobiledevice
+   */
+  device: {
+    /**
+     * Lists all currently connected iOS devices
+     * @returns {Promise<{success: boolean, devices?: Array, error?: string}>} List of connected devices
+     */
+    list: () => ipcRenderer.invoke('device:list'),
+
+    /**
+     * Starts device detection polling
+     * @returns {Promise<{success: boolean, error?: string}>} Start result
+     */
+    startDetection: () => ipcRenderer.invoke('device:start-detection'),
+
+    /**
+     * Stops device detection polling
+     * @returns {Promise<{success: boolean, error?: string}>} Stop result
+     */
+    stopDetection: () => ipcRenderer.invoke('device:stop-detection'),
+
+    /**
+     * Checks if libimobiledevice tools are available
+     * @returns {Promise<{success: boolean, available?: boolean, error?: string}>} Availability check result
+     */
+    checkAvailability: () => ipcRenderer.invoke('device:check-availability'),
+
+    /**
+     * Subscribes to device connected events
+     * @param {Function} callback - Callback function when device connects
+     * @returns {Function} Cleanup function to remove listener
+     */
+    onConnected: (callback: (device: any) => void) => {
+      const listener = (_: IpcRendererEvent, device: any) => callback(device);
+      ipcRenderer.on('device:connected', listener);
+      return () => ipcRenderer.removeListener('device:connected', listener);
+    },
+
+    /**
+     * Subscribes to device disconnected events
+     * @param {Function} callback - Callback function when device disconnects
+     * @returns {Function} Cleanup function to remove listener
+     */
+    onDisconnected: (callback: (device: any) => void) => {
+      const listener = (_: IpcRendererEvent, device: any) => callback(device);
+      ipcRenderer.on('device:disconnected', listener);
+      return () => ipcRenderer.removeListener('device:disconnected', listener);
+    },
+  },
 });
 
 /**

@@ -34,6 +34,7 @@ import { registerAddressHandlers } from './address-handlers';
 import { registerFeedbackHandlers } from './feedback-handlers';
 import { registerSystemHandlers } from './system-handlers';
 import { registerPreferenceHandlers } from './preference-handlers';
+import { registerDeviceHandlers, cleanupDeviceHandlers } from './device-handlers';
 import OutlookService from './outlookService';
 
 // Configure logging for auto-updater
@@ -198,12 +199,18 @@ app.whenReady().then(async () => {
   registerFeedbackHandlers();
   registerSystemHandlers();
   registerPreferenceHandlers();
+  registerDeviceHandlers(mainWindow!);
 });
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
+});
+
+app.on('before-quit', () => {
+  // Clean up device detection polling
+  cleanupDeviceHandlers();
 });
 
 app.on('activate', () => {
