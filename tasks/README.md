@@ -74,7 +74,7 @@ All tasks should branch from: `claude/pc-release-planning-014DsWKZbyJf9JtN5kjer4
 
 | Task | Title | Status | Assignee Branch |
 |------|-------|--------|-----------------|
-| TASK-001 | Windows Build Configuration | 🔴 Not Started | - |
+| TASK-001 | Windows Build Configuration | ✅ Complete | claude/complete-task-001-01WBurUNhB9dfyLi3c5a4jrn |
 | TASK-002 | Bundle libimobiledevice | 🔴 Not Started | - |
 | TASK-003 | Device Detection Service | 🔴 Not Started | - |
 | TASK-004 | Messages Database Parser | 🔴 Not Started | - |
