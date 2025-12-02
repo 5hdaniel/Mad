@@ -10,7 +10,6 @@ import type { IpcMainInvokeEvent } from 'electron';
 const permissionService = require('./services/permissionService').default;
 const connectionStatusService = require('./services/connectionStatusService').default;
 const macOSPermissionHelper = require('./services/macOSPermissionHelper').default;
-import tokenEncryptionService from './services/tokenEncryptionService';
 import { databaseEncryptionService } from './services/databaseEncryptionService';
 import { initializeDatabase } from './auth-handlers';
 import os from 'os';
@@ -120,16 +119,16 @@ export function registerSystemHandlers(): void {
 
   /**
    * Get secure storage status without triggering keychain prompt
-   * Used to check if encryption is already available (e.g., user already authorized)
+   * Now checks database encryption status (session-only OAuth, no token encryption)
    */
   ipcMain.handle('system:get-secure-storage-status', async (): Promise<SecureStorageResponse> => {
     try {
-      const status = tokenEncryptionService.getEncryptionStatus();
+      // Check if database encryption key store exists (file check, no keychain prompt)
+      const hasKeyStore = databaseEncryptionService.hasKeyStore();
       return {
         success: true,
-        available: status.available,
-        platform: status.platform,
-        guidance: status.guidance || undefined,
+        available: hasKeyStore,
+        platform: os.platform(),
       };
     } catch (error) {
       console.error('[Main] Secure storage status check failed:', error);
@@ -143,67 +142,20 @@ export function registerSystemHandlers(): void {
   });
 
   /**
-   * Initialize secure storage AND database (triggers keychain prompt on macOS)
-   * This consolidates both secure storage verification and database initialization
-   * into a single operation to avoid multiple keychain prompts.
+   * Initialize secure storage (database only)
    *
-   * Flow:
-   * 1. Test tokenEncryptionService (triggers keychain prompt)
-   * 2. Initialize database (uses databaseEncryptionService, same keychain session)
+   * Since we use session-only OAuth (tokens not persisted), we only need
+   * to initialize the database encryption. This triggers ONE keychain prompt
+   * for the database encryption key.
+   *
+   * OAuth tokens are kept in memory only - users login each session.
+   * This is more secure and avoids multiple keychain prompts.
    */
   ipcMain.handle('system:initialize-secure-storage', async (): Promise<SecureStorageResponse> => {
     try {
-      // Step 1: This call triggers the keychain prompt on macOS
-      const isAvailable = tokenEncryptionService.isEncryptionAvailable();
-
-      if (!isAvailable) {
-        const status = tokenEncryptionService.getEncryptionStatus();
-        return {
-          success: false,
-          available: false,
-          platform: status.platform,
-          guidance: status.guidance || undefined,
-          error: getSecureStorageErrorMessage(status.platform),
-        };
-      }
-
-      // Step 2: Test encryption to verify keychain access is working
-      try {
-        const testValue = 'magic-audit-test-' + Date.now();
-        const encrypted = tokenEncryptionService.encrypt(testValue);
-        const decrypted = tokenEncryptionService.decrypt(encrypted);
-
-        if (decrypted !== testValue) {
-          throw new Error('Encryption verification failed');
-        }
-      } catch (encryptError) {
-        console.error('[Main] Secure storage test failed:', encryptError);
-        const platform = os.platform();
-        return {
-          success: false,
-          available: false,
-          platform,
-          guidance: getSecureStorageGuidance(platform),
-          error: 'Failed to verify secure storage. Please try again or check your system keychain settings.',
-        };
-      }
-
-      // Step 3: Initialize database immediately after keychain is authorized
-      // This uses the same keychain session, so should not prompt again
-      try {
-        await initializeDatabase();
-        console.log('[Main] Database initialized after secure storage setup');
-      } catch (dbError) {
-        console.error('[Main] Database initialization failed:', dbError);
-        // Still return success for secure storage - database error will be handled separately
-        // But we should inform the user
-        return {
-          success: false,
-          available: true,
-          platform: os.platform(),
-          error: `Secure storage is ready, but database initialization failed: ${dbError instanceof Error ? dbError.message : 'Unknown error'}`,
-        };
-      }
+      // Initialize database - this triggers keychain prompt for db encryption key
+      await initializeDatabase();
+      console.log('[Main] Database initialized with encryption');
 
       return {
         success: true,
@@ -211,14 +163,14 @@ export function registerSystemHandlers(): void {
         platform: os.platform(),
       };
     } catch (error) {
-      console.error('[Main] Secure storage initialization failed:', error);
+      console.error('[Main] Database initialization failed:', error);
       const platform = os.platform();
       return {
         success: false,
         available: false,
         platform,
         guidance: getSecureStorageGuidance(platform),
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: error instanceof Error ? error.message : 'Database initialization failed. Please try again.',
       };
     }
   });

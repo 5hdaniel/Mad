@@ -13,7 +13,9 @@ import databaseService from './services/databaseService';
 import googleAuthService from './services/googleAuthService';
 import microsoftAuthService from './services/microsoftAuthService';
 import supabaseService from './services/supabaseService';
-import tokenEncryptionService from './services/tokenEncryptionService';
+// NOTE: tokenEncryptionService removed - using session-only OAuth
+// Tokens are kept in memory during session, users re-authenticate each app launch
+// Database encryption (databaseEncryptionService) still protects PII at rest for SOC 2 compliance
 import sessionService from './services/sessionService';
 import rateLimitService from './services/rateLimitService';
 import sessionSecurityService from './services/sessionSecurityService';
@@ -235,13 +237,10 @@ const handleGoogleLogin = async (mainWindow: BrowserWindow | null): Promise<Logi
         const { tokens, userInfo } = await googleAuthService.exchangeCodeForTokens(code);
         await logService.info('Google token exchange successful', 'AuthHandlers');
 
-        // Encrypt tokens
-        await logService.info('Encrypting tokens...', 'AuthHandlers');
-        const encryptedAccessToken = tokenEncryptionService.encrypt(tokens.access_token);
-        const encryptedRefreshToken = tokens.refresh_token
-          ? tokenEncryptionService.encrypt(tokens.refresh_token)
-          : null;
-        await logService.info('Tokens encrypted successfully', 'AuthHandlers');
+        // Session-only OAuth: tokens stored in database (encrypted at rest via databaseEncryptionService)
+        // No additional keychain encryption needed - tokens cleared on app restart
+        const accessToken = tokens.access_token;
+        const refreshToken = tokens.refresh_token || null;
 
         // Sync user to Supabase
         await logService.info('Syncing user to Supabase...', 'AuthHandlers');
@@ -301,17 +300,17 @@ const handleGoogleLogin = async (mainWindow: BrowserWindow | null): Promise<Logi
         localUser = refreshedUser;
         await logService.info('Local user record updated', 'AuthHandlers', { userId: localUser.id });
 
-        // Save auth token
-        await logService.info('Saving OAuth token...', 'AuthHandlers');
+        // Save auth token (session-only, no keychain encryption)
+        await logService.info('Saving OAuth token for session...', 'AuthHandlers');
         const expiresAt = tokens.expires_at ?? new Date(Date.now() + 3600 * 1000).toISOString();
 
         await databaseService.saveOAuthToken(localUser.id, 'google', 'authentication', {
-          access_token: encryptedAccessToken,
-          refresh_token: encryptedRefreshToken ?? undefined,
+          access_token: accessToken,
+          refresh_token: refreshToken ?? undefined,
           token_expires_at: expiresAt,
           scopes_granted: Array.isArray(tokens.scopes) ? tokens.scopes.join(' ') : scopes.join(' '),
         });
-        await logService.info('OAuth token saved', 'AuthHandlers');
+        await logService.info('OAuth token saved for session', 'AuthHandlers');
 
         // Create session
         await logService.info('Creating session...', 'AuthHandlers');
@@ -420,11 +419,9 @@ const handleGoogleCompleteLogin = async (event: IpcMainInvokeEvent, authCode: st
     // Exchange code for tokens
     const { tokens, userInfo } = await googleAuthService.exchangeCodeForTokens(validatedAuthCode);
 
-    // Encrypt tokens
-    const encryptedAccessToken = tokenEncryptionService.encrypt(tokens.access_token);
-    const encryptedRefreshToken = tokens.refresh_token
-      ? tokenEncryptionService.encrypt(tokens.refresh_token)
-      : null;
+    // Session-only OAuth: no keychain encryption needed
+    const accessToken = tokens.access_token;
+    const refreshToken = tokens.refresh_token || null;
 
     // Sync user to Supabase
     const cloudUser = await supabaseService.syncUser({
@@ -487,10 +484,10 @@ const handleGoogleCompleteLogin = async (event: IpcMainInvokeEvent, authCode: st
     }
     localUser = refreshedUser;
 
-    // Save auth token
+    // Save auth token (session-only, no keychain encryption)
     await databaseService.saveOAuthToken(localUser.id, 'google', 'authentication', {
-      access_token: encryptedAccessToken,
-      refresh_token: encryptedRefreshToken ?? undefined,
+      access_token: accessToken,
+      refresh_token: refreshToken ?? undefined,
       token_expires_at: tokens.expires_at ?? undefined,
       scopes_granted: Array.isArray(tokens.scopes) ? tokens.scopes.join(' ') : tokens.scopes,
     });
@@ -527,16 +524,9 @@ const handleGoogleCompleteLogin = async (event: IpcMainInvokeEvent, authCode: st
     // Check if user needs to accept terms (new user or outdated versions)
     const isNewUser = needsToAcceptTerms(localUser);
 
-    // Save session for persistence (24 hours expiration - security hardened)
-    const sessionExpiresAt = Date.now() + sessionService.getSessionExpirationMs();
-    await sessionService.saveSession({
-      user: localUser,
-      sessionToken,
-      provider: 'google',
-      subscription,
-      expiresAt: sessionExpiresAt,
-      createdAt: Date.now(),
-    });
+    // Session-only OAuth: NO session persistence
+    // Users must re-authenticate each app launch for better security
+    // This also means only ONE keychain prompt ever (for database encryption)
 
     // Record successful login for rate limiting
     await rateLimitService.recordAttempt(localUser.email, true);
@@ -691,19 +681,17 @@ const handleGoogleConnectMailbox = async (mainWindow: BrowserWindow | null, user
         // Exchange code for tokens
         const { tokens } = await googleAuthService.exchangeCodeForTokens(code);
 
-        // Encrypt tokens
-        const encryptedAccessToken = tokenEncryptionService.encrypt(tokens.access_token);
-        const encryptedRefreshToken = tokens.refresh_token
-          ? tokenEncryptionService.encrypt(tokens.refresh_token)
-          : null;
+        // Session-only OAuth: no keychain encryption needed
+        const accessToken = tokens.access_token;
+        const refreshToken = tokens.refresh_token || null;
 
         // Get user's email for the connected_email_address field
         const userInfo = await googleAuthService.getUserInfo(tokens.access_token);
 
-        // Save mailbox token
+        // Save mailbox token (session-only, no keychain encryption)
         await databaseService.saveOAuthToken(userId, 'google', 'mailbox', {
-          access_token: encryptedAccessToken,
-          refresh_token: encryptedRefreshToken ?? undefined,
+          access_token: accessToken,
+          refresh_token: refreshToken ?? undefined,
           token_expires_at: tokens.expires_at ?? undefined,
           scopes_granted: Array.isArray(tokens.scopes) ? tokens.scopes.join(' ') : tokens.scopes,
           connected_email_address: userInfo.email,
@@ -895,13 +883,9 @@ const handleMicrosoftLogin = async (mainWindow: BrowserWindow | null): Promise<L
         const userInfo = await microsoftAuthService.getUserInfo(tokens.access_token);
         await logService.info('User info retrieved successfully', 'AuthHandlers', { email: userInfo.email });
 
-        // Encrypt tokens
-        await logService.info('Encrypting tokens...', 'AuthHandlers');
-        const encryptedAccessToken = tokenEncryptionService.encrypt(tokens.access_token);
-        const encryptedRefreshToken = tokens.refresh_token
-          ? tokenEncryptionService.encrypt(tokens.refresh_token)
-          : null;
-        await logService.info('Tokens encrypted successfully', 'AuthHandlers');
+        // Session-only OAuth: no keychain encryption needed
+        const accessToken = tokens.access_token;
+        const refreshToken = tokens.refresh_token || null;
 
         // Sync user to Supabase
         await logService.info('Syncing user to Supabase...', 'AuthHandlers');
@@ -968,17 +952,17 @@ const handleMicrosoftLogin = async (mainWindow: BrowserWindow | null): Promise<L
         localUser = refreshedUser;
         await logService.info('Local user record updated', 'AuthHandlers', { userId: localUser.id });
 
-        // Save auth token
-        await logService.info('Saving OAuth token...', 'AuthHandlers');
+        // Save auth token (session-only, no keychain encryption)
+        await logService.info('Saving OAuth token for session...', 'AuthHandlers');
         const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
 
         await databaseService.saveOAuthToken(localUser.id, 'microsoft', 'authentication', {
-          access_token: encryptedAccessToken,
-          refresh_token: encryptedRefreshToken ?? undefined,
+          access_token: accessToken,
+          refresh_token: refreshToken ?? undefined,
           token_expires_at: expiresAt,
           scopes_granted: tokens.scope,
         });
-        await logService.info('OAuth token saved', 'AuthHandlers');
+        await logService.info('OAuth token saved for session', 'AuthHandlers');
 
         // Create session
         await logService.info('Creating session...', 'AuthHandlers');
@@ -1016,16 +1000,9 @@ const handleMicrosoftLogin = async (mainWindow: BrowserWindow | null): Promise<L
         // Check if user needs to accept terms (new user or outdated versions)
         const isNewUser = needsToAcceptTerms(localUser);
 
-        // Save session for persistence (24 hours expiration - security hardened)
-        const sessionExpiresAt = Date.now() + sessionService.getSessionExpirationMs();
-        await sessionService.saveSession({
-          user: localUser,
-          sessionToken,
-          provider: 'microsoft',
-          subscription,
-          expiresAt: sessionExpiresAt,
-          createdAt: Date.now(),
-        });
+        // Session-only OAuth: NO session persistence
+        // Users must re-authenticate each app launch for better security
+        // This also means only ONE keychain prompt ever (for database encryption)
 
         // Record successful login for rate limiting
         await rateLimitService.recordAttempt(localUser.email, true);
@@ -1221,20 +1198,18 @@ const handleMicrosoftConnectMailbox = async (mainWindow: BrowserWindow | null, u
         // Get user info
         const userInfo = await microsoftAuthService.getUserInfo(tokens.access_token);
 
-        // Encrypt tokens
-        const encryptedAccessToken = tokenEncryptionService.encrypt(tokens.access_token);
-        const encryptedRefreshToken = tokens.refresh_token
-          ? tokenEncryptionService.encrypt(tokens.refresh_token)
-          : null;
+        // Session-only OAuth: no keychain encryption needed
+        const accessToken = tokens.access_token;
+        const refreshToken = tokens.refresh_token || null;
 
-        // Save mailbox token
+        // Save mailbox token (session-only, no keychain encryption)
         const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
 
         await logService.info('Saving Microsoft mailbox token for user', 'AuthHandlers');
 
         await databaseService.saveOAuthToken(userId, 'microsoft', 'mailbox', {
-          access_token: encryptedAccessToken,
-          refresh_token: encryptedRefreshToken ?? undefined,
+          access_token: accessToken,
+          refresh_token: refreshToken ?? undefined,
           token_expires_at: expiresAt,
           scopes_granted: tokens.scope,
           connected_email_address: userInfo.email,

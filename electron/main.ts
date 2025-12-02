@@ -26,7 +26,8 @@ import {
 // Import new authentication services
 import databaseService from './services/databaseService';
 import microsoftAuthService from './services/microsoftAuthService';
-import tokenEncryptionService from './services/tokenEncryptionService';
+// NOTE: tokenEncryptionService removed - using session-only OAuth
+// Tokens stored in encrypted database, no additional keychain encryption needed
 import { initializeDatabase, registerAuthHandlers } from './auth-handlers';
 import { registerTransactionHandlers } from './transaction-handlers';
 import { registerContactHandlers } from './contact-handlers';
@@ -992,18 +993,16 @@ ipcMain.handle('outlook-authenticate', async (event: IpcMainInvokeEvent, userId:
     // Get user info
     const userInfo = await microsoftAuthService.getUserInfo(tokens.access_token);
 
-    // Encrypt tokens before saving
-    const encryptedAccessToken = tokenEncryptionService.encrypt(tokens.access_token);
-    const encryptedRefreshToken = tokens.refresh_token
-      ? tokenEncryptionService.encrypt(tokens.refresh_token)
-      : undefined;
+    // Session-only OAuth: no token encryption needed (database is already encrypted)
+    const accessToken = tokens.access_token;
+    const refreshToken = tokens.refresh_token || undefined;
 
     // Save mailbox token to database
     const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
 
     await databaseService.saveOAuthToken(userId, 'microsoft', 'mailbox', {
-      access_token: encryptedAccessToken,
-      refresh_token: encryptedRefreshToken ?? undefined,
+      access_token: accessToken,
+      refresh_token: refreshToken,
       token_expires_at: expiresAt,
       scopes_granted: tokens.scope,
       connected_email_address: userInfo.email
