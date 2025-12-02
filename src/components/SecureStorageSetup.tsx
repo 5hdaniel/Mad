@@ -101,7 +101,7 @@ function SecureStorageSetup({ onComplete, onRetry }: SecureStorageSetupProps) {
       return {
         title: 'macOS Keychain Access',
         description: 'Magic Audit uses your Mac\'s built-in Keychain to securely store your login credentials.',
-        promptInfo: 'You\'ll see a system dialog asking for permission to access "magic-audit Safe Storage" in your keychain.',
+        promptInfo: 'You\'ll see a system dialog asking for permission. Click "Always Allow" to grant permanent access and avoid repeated prompts.',
         touchIdNote: 'If you have Touch ID enabled for your Keychain, you can use your fingerprint instead of entering your password.',
         icon: (
           <svg className="w-12 h-12 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
