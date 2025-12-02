@@ -98,6 +98,20 @@ if (typeof window !== 'undefined') {
     outlookExportEmails: jest.fn(),
     openFolder: jest.fn(),
     onExportProgress: jest.fn(() => jest.fn()),
+    // iOS Device Detection (Windows only)
+    device: {
+      startDetection: jest.fn(),
+      stopDetection: jest.fn(),
+      onConnected: jest.fn(() => jest.fn()),
+      onDisconnected: jest.fn(() => jest.fn()),
+    },
+    // iOS Backup Management (Windows only)
+    backup: {
+      start: jest.fn(),
+      submitPassword: jest.fn(),
+      cancel: jest.fn(),
+      onProgress: jest.fn(() => jest.fn()),
+    },
   };
 }
 
