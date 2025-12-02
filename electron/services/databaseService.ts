@@ -102,6 +102,12 @@ class DatabaseService implements IDatabaseService {
    * Handles encryption and migration from unencrypted databases
    */
   async initialize(): Promise<boolean> {
+    // Prevent double initialization
+    if (this.db) {
+      await logService.debug('Database already initialized, skipping', 'DatabaseService');
+      return true;
+    }
+
     try {
       // Get user data path
       const userDataPath = app.getPath('userData');

@@ -559,14 +559,14 @@ function App() {
       {/* Update Notification */}
       <UpdateNotification />
 
-      {/* System Health Monitor - Show permission/connection errors (hidden during onboarding tour and email onboarding) */}
+      {/* System Health Monitor - Show permission/connection errors (hidden during onboarding) */}
       {/* Key forces re-mount when email connection status changes, triggering fresh health check */}
       {isAuthenticated && currentUser && authProvider && (
         <SystemHealthMonitor
           key={`health-monitor-${hasEmailConnected}`}
           userId={currentUser.id}
           provider={authProvider}
-          hidden={isTourActive || currentStep === 'email-onboarding'}
+          hidden={isTourActive || currentStep === 'email-onboarding' || needsTermsAcceptance}
         />
       )}
 
