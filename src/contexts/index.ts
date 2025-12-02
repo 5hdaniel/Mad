@@ -6,3 +6,5 @@ export { AuthProvider, useAuth, useIsAuthenticated, useCurrentUser } from './Aut
 export type { User } from './AuthContext';
 
 export { NetworkProvider, useNetwork } from './NetworkContext';
+
+export { PlatformProvider, usePlatform } from './PlatformContext';
