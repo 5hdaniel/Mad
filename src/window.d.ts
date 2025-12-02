@@ -6,6 +6,24 @@
 import type { GetConversationsResult } from './hooks/useConversations';
 
 /**
+ * iOS Device information from libimobiledevice
+ */
+interface iOSDeviceInfo {
+  /** Unique Device Identifier (40-character hex string) */
+  udid: string;
+  /** User-defined device name (e.g., "John's iPhone") */
+  name: string;
+  /** Device model identifier (e.g., "iPhone14,2") */
+  productType: string;
+  /** iOS version (e.g., "17.0") */
+  productVersion: string;
+  /** Device serial number */
+  serialNumber: string;
+  /** Whether the device is currently connected */
+  isConnected: boolean;
+}
+
+/**
  * Legacy electron namespace (maintained for backward compatibility)
  * Exposed via contextBridge in preload.js
  */
@@ -122,6 +140,20 @@ interface MainAPI {
     openPrivacyPane: (pane: string) => Promise<void>;
     contactSupport: (errorDetails?: string) => Promise<{ success: boolean; error?: string }>;
     getDiagnostics: () => Promise<{ success: boolean; diagnostics?: string; error?: string }>;
+  };
+  device: {
+    /** Lists all currently connected iOS devices */
+    list: () => Promise<{ success: boolean; devices?: iOSDeviceInfo[]; error?: string }>;
+    /** Starts device detection polling */
+    startDetection: () => Promise<{ success: boolean; error?: string }>;
+    /** Stops device detection polling */
+    stopDetection: () => Promise<{ success: boolean; error?: string }>;
+    /** Checks if libimobiledevice tools are available */
+    checkAvailability: () => Promise<{ success: boolean; available?: boolean; error?: string }>;
+    /** Subscribes to device connected events */
+    onConnected: (callback: (device: iOSDeviceInfo) => void) => () => void;
+    /** Subscribes to device disconnected events */
+    onDisconnected: (callback: (device: iOSDeviceInfo) => void) => () => void;
   };
   onGoogleMailboxConnected: (callback: (result: { success: boolean }) => void) => () => void;
   onMicrosoftMailboxConnected: (callback: (result: { success: boolean }) => void) => () => void;
