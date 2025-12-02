@@ -3,11 +3,13 @@
  *
  * Handles IPC communication between the renderer process and the backup service.
  * Provides backup operations for iPhone data extraction.
+ * Includes encrypted backup support (TASK-007).
  */
 
 import { ipcMain, BrowserWindow, app } from 'electron';
 import log from 'electron-log';
-import { backupService, BackupService } from './services/backupService';
+import { backupService } from './services/backupService';
+import { backupDecryptionService } from './services/backupDecryptionService';
 import { BackupOptions, BackupProgress } from './types/backup';
 
 /**
@@ -39,6 +41,14 @@ export function registerBackupHandlers(mainWindow: BrowserWindow): void {
     }
   });
 
+  // Forward password-required events to renderer (TASK-007)
+  backupService.on('password-required', (data: { udid: string }) => {
+    log.info('[BackupHandlers] Password required for device:', data.udid);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('backup:password-required', data);
+    }
+  });
+
   /**
    * Get backup capabilities
    * Returns information about what the backup system can do
@@ -66,6 +76,34 @@ export function registerBackupHandlers(mainWindow: BrowserWindow): void {
   });
 
   /**
+   * Check if a device requires encrypted backup (TASK-007)
+   * @param udid Device UDID
+   */
+  ipcMain.handle('backup:check-encryption', async (_, udid: string) => {
+    log.info('[BackupHandlers] Checking encryption status for device:', udid);
+
+    try {
+      if (!udid) {
+        throw new Error('Device UDID is required');
+      }
+
+      const encryptionInfo = await backupService.checkEncryptionStatus(udid);
+
+      return {
+        success: true,
+        isEncrypted: encryptionInfo.isEncrypted,
+        needsPassword: encryptionInfo.needsPassword
+      };
+    } catch (error) {
+      log.error('[BackupHandlers] Error checking encryption:', error);
+      return {
+        success: false,
+        error: (error as Error).message
+      };
+    }
+  });
+
+  /**
    * Start a backup operation
    * @param options BackupOptions with device UDID and optional settings
    */
@@ -84,7 +122,8 @@ export function registerBackupHandlers(mainWindow: BrowserWindow): void {
         success: result.success,
         duration: result.duration,
         size: result.backupSize,
-        isIncremental: result.isIncremental
+        isIncremental: result.isIncremental,
+        isEncrypted: result.isEncrypted
       });
 
       return result;
@@ -98,6 +137,105 @@ export function registerBackupHandlers(mainWindow: BrowserWindow): void {
         deviceUdid: options.udid,
         isIncremental: false,
         backupSize: 0
+      };
+    }
+  });
+
+  /**
+   * Start a backup with password (for encrypted backups) (TASK-007)
+   * @param options BackupOptions including password
+   */
+  ipcMain.handle('backup:start-with-password', async (_, options: BackupOptions) => {
+    log.info('[BackupHandlers] Starting encrypted backup for device:', options.udid);
+
+    try {
+      if (!options.udid) {
+        throw new Error('Device UDID is required');
+      }
+
+      if (!options.password) {
+        throw new Error('Password is required for encrypted backup');
+      }
+
+      const result = await backupService.startBackup(options);
+
+      // Clear password from options after use
+      options.password = '';
+
+      log.info('[BackupHandlers] Encrypted backup completed:', {
+        success: result.success,
+        duration: result.duration,
+        size: result.backupSize,
+        isEncrypted: result.isEncrypted
+      });
+
+      return result;
+    } catch (error) {
+      log.error('[BackupHandlers] Encrypted backup failed:', error);
+      return {
+        success: false,
+        backupPath: null,
+        error: (error as Error).message,
+        duration: 0,
+        deviceUdid: options.udid,
+        isIncremental: false,
+        backupSize: 0
+      };
+    }
+  });
+
+  /**
+   * Verify a backup password without starting backup (TASK-007)
+   */
+  ipcMain.handle('backup:verify-password', async (_, backupPath: string, password: string) => {
+    log.info('[BackupHandlers] Verifying password for backup:', backupPath);
+
+    try {
+      if (!backupPath) {
+        throw new Error('Backup path is required');
+      }
+
+      if (!password) {
+        throw new Error('Password is required');
+      }
+
+      const isValid = await backupDecryptionService.verifyPassword(backupPath, password);
+
+      return {
+        success: true,
+        valid: isValid
+      };
+    } catch (error) {
+      log.error('[BackupHandlers] Password verification failed:', error);
+      return {
+        success: false,
+        error: (error as Error).message
+      };
+    }
+  });
+
+  /**
+   * Check if an existing backup is encrypted (TASK-007)
+   */
+  ipcMain.handle('backup:is-encrypted', async (_, backupPath: string) => {
+    log.info('[BackupHandlers] Checking if backup is encrypted:', backupPath);
+
+    try {
+      if (!backupPath) {
+        throw new Error('Backup path is required');
+      }
+
+      const isEncrypted = await backupDecryptionService.isBackupEncrypted(backupPath);
+
+      return {
+        success: true,
+        isEncrypted
+      };
+    } catch (error) {
+      log.error('[BackupHandlers] Encryption check failed:', error);
+      return {
+        success: false,
+        error: (error as Error).message
       };
     }
   });
@@ -183,6 +321,21 @@ export function registerBackupHandlers(mainWindow: BrowserWindow): void {
         spaceFreed: 0,
         error: (error as Error).message
       };
+    }
+  });
+
+  /**
+   * Clean up decrypted files after extraction (TASK-007)
+   */
+  ipcMain.handle('backup:cleanup-decrypted', async (_, backupPath: string) => {
+    log.info('[BackupHandlers] Cleaning up decrypted files:', backupPath);
+
+    try {
+      await backupService.cleanupDecryptedFiles(backupPath);
+      return { success: true };
+    } catch (error) {
+      log.error('[BackupHandlers] Error cleaning up decrypted files:', error);
+      return { success: false, error: (error as Error).message };
     }
   });
 
