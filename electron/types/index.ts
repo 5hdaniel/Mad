@@ -17,3 +17,6 @@ export * from './device';
 
 // Re-export iOS message types
 export * from './iosMessages';
+
+// Re-export iOS contact types
+export * from './iosContacts';
