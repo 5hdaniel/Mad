@@ -136,6 +136,9 @@ function App() {
         } finally {
           setIsCheckingEmailOnboarding(false);
         }
+      } else {
+        // No user logged in, nothing to check
+        setIsCheckingEmailOnboarding(false);
       }
     };
     checkEmailStatus();
