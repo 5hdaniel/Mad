@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
-import { AuthProvider, NetworkProvider } from './contexts';
+import { AuthProvider, NetworkProvider, PlatformProvider } from './contexts';
 import ErrorBoundary from './components/ErrorBoundary';
 import './index.css';
 
@@ -14,11 +14,13 @@ if (!rootElement) {
 ReactDOM.createRoot(rootElement).render(
   <React.StrictMode>
     <ErrorBoundary>
-      <NetworkProvider>
-        <AuthProvider>
-          <App />
-        </AuthProvider>
-      </NetworkProvider>
+      <PlatformProvider>
+        <NetworkProvider>
+          <AuthProvider>
+            <App />
+          </AuthProvider>
+        </NetworkProvider>
+      </PlatformProvider>
     </ErrorBoundary>
   </React.StrictMode>
 );

@@ -683,6 +683,12 @@ contextBridge.exposeInMainWorld('api', {
  */
 contextBridge.exposeInMainWorld('electron', {
   /**
+   * Current platform identifier from Node.js process.platform
+   * @type {'darwin' | 'win32' | 'linux'}
+   */
+  platform: process.platform,
+
+  /**
    * Gets application info (version, name, etc.)
    * @returns {Promise<{version: string, name: string}>} App info
    */

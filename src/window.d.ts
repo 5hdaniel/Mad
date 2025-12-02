@@ -29,6 +29,9 @@ interface iOSDeviceInfo {
  * Exposed via contextBridge in preload.js
  */
 interface ElectronAPI {
+  // Platform detection
+  platform: 'darwin' | 'win32' | 'linux' | string;
+
   // App Info
   getAppInfo: () => Promise<{ version: string; name: string }>;
   getMacOSVersion: () => Promise<{ version: string }>;
