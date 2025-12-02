@@ -14,3 +14,6 @@ export * from './ipc';
 
 // Re-export device types
 export * from './device';
+
+// Re-export iOS message types
+export * from './iosMessages';
