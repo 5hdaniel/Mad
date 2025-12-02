@@ -389,12 +389,27 @@ backup: {
 
 If domain filtering is NOT possible with idevicebackup2:
 
-1. Document the limitation
-2. Implement full backup with clear UX messaging:
-   - "First sync may take 30-60 minutes"
-   - "Subsequent syncs will be much faster"
-3. Prioritize incremental backups to minimize pain after first sync
-4. Consider alternative tools (pymobiledevice3) as future enhancement
+### ⚠️ STOP AND ASK FOR INPUT
+
+**DO NOT proceed with a full backup implementation without approval.**
+
+1. Document your research findings in `docs/BACKUP_RESEARCH.md`
+2. Update your task file's "Work Summary" section with:
+   - What you tried
+   - Why domain filtering isn't possible
+   - Alternative options you found (if any)
+   - Estimated backup size/time without filtering
+3. **Push your branch and notify the reviewer**
+4. Wait for guidance on how to proceed
+
+### Possible Directions (Reviewer Will Decide)
+
+- **Option A:** Accept full backup with better UX messaging
+- **Option B:** Investigate alternative tools (pymobiledevice3, etc.)
+- **Option C:** Build custom solution (fork libimobiledevice)
+- **Option D:** Re-scope the feature
+
+**Do not make this decision autonomously** - it significantly impacts user experience.
 
 ## PR Preparation Checklist
 
