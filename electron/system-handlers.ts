@@ -11,6 +11,7 @@ const permissionService = require('./services/permissionService').default;
 const connectionStatusService = require('./services/connectionStatusService').default;
 const macOSPermissionHelper = require('./services/macOSPermissionHelper').default;
 import { databaseEncryptionService } from './services/databaseEncryptionService';
+import databaseService from './services/databaseService';
 import { initializeDatabase } from './auth-handlers';
 import os from 'os';
 
@@ -156,6 +157,12 @@ export function registerSystemHandlers(): void {
       // Initialize database - this triggers keychain prompt for db encryption key
       await initializeDatabase();
       console.log('[Main] Database initialized with encryption');
+
+      // Session-only OAuth: Clear all sessions and OAuth tokens
+      // This forces users to re-authenticate each app launch for better security
+      await databaseService.clearAllSessions();
+      await databaseService.clearAllOAuthTokens();
+      console.log('[Main] Cleared sessions and OAuth tokens for session-only OAuth');
 
       return {
         success: true,

@@ -161,25 +161,13 @@ app.whenReady().then(async () => {
   // Set up Content Security Policy
   setupContentSecurityPolicy();
 
-  // Check if this is a returning user (has existing encryption key store)
-  // For returning users: initialize database normally (they've already granted keychain access)
-  // For new users: defer database initialization until after SecureStorageSetup screen
-  // This prevents surprising new users with a system password prompt at app startup
-  const { databaseEncryptionService } = await import('./services/databaseEncryptionService');
-  const isReturningUser = databaseEncryptionService.hasKeyStore();
-
-  if (isReturningUser) {
-    // Returning user - they've already set up keychain access
-    await initializeDatabase();
-
-    // Session-only OAuth: Clear all sessions and OAuth tokens on app startup
-    // This forces users to re-authenticate each app launch for better security
-    // and ensures only ONE keychain prompt ever (for database encryption)
-    await databaseService.clearAllSessions();
-    await databaseService.clearAllOAuthTokens();
-  }
-  // For new users, database will be initialized via 'system:initialize-database' IPC call
-  // after they complete the SecureStorageSetup screen
+  // Database initialization is now ALWAYS deferred to the renderer process
+  // This allows us to show an explanation screen before the keychain prompt
+  // for both new users (SecureStorageSetup) and returning users (KeychainExplanation)
+  //
+  // The renderer will call 'system:initialize-secure-storage' which handles:
+  // 1. Database initialization (triggers keychain prompt)
+  // 2. Clearing sessions/tokens for session-only OAuth
 
   createWindow();
   registerAuthHandlers(mainWindow!);

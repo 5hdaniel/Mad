@@ -15,6 +15,7 @@ import Transactions from './components/Transactions';
 import Contacts from './components/Contacts';
 import WelcomeTerms from './components/WelcomeTerms';
 import SecureStorageSetup from './components/SecureStorageSetup';
+import KeychainExplanation from './components/KeychainExplanation';
 import Dashboard from './components/Dashboard';
 import AuditTransactionModal from './components/AuditTransactionModal';
 import { useAuth } from './contexts';
@@ -22,7 +23,7 @@ import type { Conversation } from './hooks/useConversations';
 import type { Subscription } from '../electron/types/models';
 
 // Type definitions
-type AppStep = 'loading' | 'login' | 'secure-storage-setup' | 'email-onboarding' | 'microsoft-login' | 'permissions' | 'dashboard' | 'outlook' | 'complete' | 'contacts';
+type AppStep = 'loading' | 'login' | 'secure-storage-setup' | 'keychain-explanation' | 'email-onboarding' | 'microsoft-login' | 'permissions' | 'dashboard' | 'outlook' | 'complete' | 'contacts';
 
 interface AppExportResult {
   exportPath?: string;
@@ -87,6 +88,12 @@ function App() {
   const [hasSecureStorageSetup, setHasSecureStorageSetup] = useState<boolean>(true); // Default true for returning users
   const [isCheckingSecureStorage, setIsCheckingSecureStorage] = useState<boolean>(true);
   const [isNewUserFlow, setIsNewUserFlow] = useState<boolean>(false); // Track if this is a new user flow
+  const [isDatabaseInitialized, setIsDatabaseInitialized] = useState<boolean>(false); // Track if database is ready
+  const [isInitializingDatabase, setIsInitializingDatabase] = useState<boolean>(false); // Track initialization in progress
+  const [skipKeychainExplanation, setSkipKeychainExplanation] = useState<boolean>(() => {
+    // Check localStorage for user preference
+    return localStorage.getItem('skipKeychainExplanation') === 'true';
+  });
 
   // Check if encryption key store exists on app load
   // This is a file existence check that does NOT trigger keychain prompts
@@ -108,6 +115,37 @@ function App() {
     };
     checkKeyStoreExists();
   }, []);
+
+  // Initialize database for returning users who have chosen to skip the keychain explanation
+  // This triggers the keychain prompt immediately for better UX (no extra click needed)
+  useEffect(() => {
+    const initializeForReturningUser = async () => {
+      // Only auto-initialize if:
+      // 1. We've checked secure storage state (not still checking)
+      // 2. User has existing key store (returning user)
+      // 3. User has chosen to skip the explanation
+      // 4. Database not already initialized or initializing
+      if (!isCheckingSecureStorage && hasSecureStorageSetup && skipKeychainExplanation && !isDatabaseInitialized && !isInitializingDatabase) {
+        setIsInitializingDatabase(true);
+        try {
+          const result = await window.api.system.initializeSecureStorage();
+          if (result.success) {
+            setIsDatabaseInitialized(true);
+          } else {
+            console.error('[App] Database initialization failed:', result.error);
+            // Reset skip preference so user sees explanation on retry
+            setSkipKeychainExplanation(false);
+          }
+        } catch (error) {
+          console.error('[App] Database initialization error:', error);
+          setSkipKeychainExplanation(false);
+        } finally {
+          setIsInitializingDatabase(false);
+        }
+      }
+    };
+    initializeForReturningUser();
+  }, [isCheckingSecureStorage, hasSecureStorageSetup, skipKeychainExplanation, isDatabaseInitialized, isInitializingDatabase]);
 
   // Check if user has completed email onboarding and has email connected
   useEffect(() => {
@@ -154,6 +192,23 @@ function App() {
         return;
       }
 
+      // For RETURNING users: check if database needs initialization
+      if (hasSecureStorageSetup && !isDatabaseInitialized && !isAuthenticated) {
+        if (isInitializingDatabase) {
+          // Database initialization in progress, show loading
+          setCurrentStep('loading');
+          return;
+        }
+        if (!skipKeychainExplanation) {
+          // User hasn't opted to skip explanation, show it
+          setCurrentStep('keychain-explanation');
+          return;
+        }
+        // skipKeychainExplanation is true but not initialized yet - will be handled by auto-init useEffect
+        setCurrentStep('loading');
+        return;
+      }
+
       if (isAuthenticated && !needsTermsAcceptance) {
         // User is authenticated and has accepted terms
         if (!hasCompletedEmailOnboarding) {
@@ -167,7 +222,7 @@ function App() {
         setCurrentStep('login');
       }
     }
-  }, [isAuthenticated, isAuthLoading, needsTermsAcceptance, hasPermissions, hasCompletedEmailOnboarding, isCheckingEmailOnboarding, hasSecureStorageSetup, isCheckingSecureStorage]);
+  }, [isAuthenticated, isAuthLoading, needsTermsAcceptance, hasPermissions, hasCompletedEmailOnboarding, isCheckingEmailOnboarding, hasSecureStorageSetup, isCheckingSecureStorage, isDatabaseInitialized, isInitializingDatabase, skipKeychainExplanation]);
 
   useEffect(() => {
     checkPermissions();
@@ -202,11 +257,37 @@ function App() {
   };
 
   const handleSecureStorageComplete = () => {
-    // Mark secure storage as set up
+    // Mark secure storage as set up and database as initialized
     // Note: Database is now initialized inside initializeSecureStorage handler
     // to consolidate keychain prompts into a single operation
     setHasSecureStorageSetup(true);
+    setIsDatabaseInitialized(true);
     // Navigation will be handled by useEffect - will go to login (new flow) or email-onboarding
+  };
+
+  // Handler for returning users' keychain explanation screen
+  const handleKeychainExplanationContinue = async (dontShowAgain: boolean) => {
+    // Save preference if user checked "don't show again"
+    if (dontShowAgain) {
+      localStorage.setItem('skipKeychainExplanation', 'true');
+      setSkipKeychainExplanation(true);
+    }
+
+    // Initialize database (triggers keychain prompt)
+    setIsInitializingDatabase(true);
+    try {
+      const result = await window.api.system.initializeSecureStorage();
+      if (result.success) {
+        setIsDatabaseInitialized(true);
+      } else {
+        console.error('[App] Database initialization failed:', result.error);
+        // Show error state - user can retry
+      }
+    } catch (error) {
+      console.error('[App] Database initialization error:', error);
+    } finally {
+      setIsInitializingDatabase(false);
+    }
   };
 
   const handleSecureStorageRetry = () => {
@@ -436,6 +517,13 @@ function App() {
           <SecureStorageSetup
             onComplete={handleSecureStorageComplete}
             onRetry={handleSecureStorageRetry}
+          />
+        )}
+
+        {currentStep === 'keychain-explanation' && (
+          <KeychainExplanation
+            onContinue={handleKeychainExplanationContinue}
+            isLoading={isInitializingDatabase}
           />
         )}
 
