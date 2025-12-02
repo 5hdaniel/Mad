@@ -22,7 +22,7 @@ import type { Conversation } from './hooks/useConversations';
 import type { Subscription } from '../electron/types/models';
 
 // Type definitions
-type AppStep = 'login' | 'secure-storage-setup' | 'email-onboarding' | 'microsoft-login' | 'permissions' | 'dashboard' | 'outlook' | 'complete' | 'contacts';
+type AppStep = 'loading' | 'login' | 'secure-storage-setup' | 'email-onboarding' | 'microsoft-login' | 'permissions' | 'dashboard' | 'outlook' | 'complete' | 'contacts';
 
 interface AppExportResult {
   exportPath?: string;
@@ -65,7 +65,7 @@ function App() {
   } = useAuth();
 
   // Local UI state
-  const [currentStep, setCurrentStep] = useState<AppStep>('login');
+  const [currentStep, setCurrentStep] = useState<AppStep>('loading');
   const [hasPermissions, setHasPermissions] = useState<boolean>(false);
   const [outlookConnected, setOutlookConnected] = useState<boolean>(false);
   const [exportResult, setExportResult] = useState<AppExportResult | null>(null);
@@ -410,8 +410,8 @@ function App() {
 
       {/* Scrollable Content Area */}
       <div className="flex-1 overflow-y-auto relative">
-        {/* Show loading state while checking secure storage */}
-        {isCheckingSecureStorage && (
+        {/* Loading state - shown while determining which screen to display */}
+        {currentStep === 'loading' && (
           <div className="h-full flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
             <div className="text-center">
               <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -425,7 +425,7 @@ function App() {
           </div>
         )}
 
-        {!isCheckingSecureStorage && currentStep === 'login' && (
+        {currentStep === 'login' && (
           <Login onLoginSuccess={handleLoginSuccess} />
         )}
 
