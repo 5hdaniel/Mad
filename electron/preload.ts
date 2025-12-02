@@ -606,6 +606,94 @@ contextBridge.exposeInMainWorld('api', {
 
   /**
    * ============================================
+   * BACKUP METHODS
+   * ============================================
+   * iPhone backup operations for extracting messages and contacts
+   */
+  backup: {
+    /**
+     * Gets backup system capabilities
+     * Note: Domain filtering is NOT supported - see docs/BACKUP_RESEARCH.md
+     * @returns {Promise<BackupCapabilities>} Available capabilities
+     */
+    getCapabilities: () => ipcRenderer.invoke('backup:capabilities'),
+
+    /**
+     * Gets current backup status
+     * @returns {Promise<BackupStatus>} Current status including progress
+     */
+    getStatus: () => ipcRenderer.invoke('backup:status'),
+
+    /**
+     * Starts a backup operation for the specified device
+     * @param {BackupOptions} options - Backup options including device UDID
+     * @returns {Promise<BackupResult>} Backup result
+     */
+    start: (options: { udid: string; outputDir?: string; forceFullBackup?: boolean; skipApps?: boolean }) =>
+      ipcRenderer.invoke('backup:start', options),
+
+    /**
+     * Cancels an in-progress backup
+     * @returns {Promise<{success: boolean}>} Cancellation result
+     */
+    cancel: () => ipcRenderer.invoke('backup:cancel'),
+
+    /**
+     * Lists all existing backups
+     * @returns {Promise<BackupInfo[]>} List of backup information
+     */
+    list: () => ipcRenderer.invoke('backup:list'),
+
+    /**
+     * Deletes a specific backup
+     * @param {string} backupPath - Path to the backup to delete
+     * @returns {Promise<{success: boolean, error?: string}>} Deletion result
+     */
+    delete: (backupPath: string) => ipcRenderer.invoke('backup:delete', backupPath),
+
+    /**
+     * Cleans up old backups, keeping only the most recent
+     * @param {number} keepCount - Number of backups to keep per device
+     * @returns {Promise<{success: boolean, error?: string}>} Cleanup result
+     */
+    cleanup: (keepCount?: number) => ipcRenderer.invoke('backup:cleanup', keepCount),
+
+    /**
+     * Subscribes to backup progress updates
+     * @param {Function} callback - Called with progress updates
+     * @returns {Function} Cleanup function to remove listener
+     */
+    onProgress: (callback: (progress: any) => void) => {
+      const listener = (_: IpcRendererEvent, progress: any) => callback(progress);
+      ipcRenderer.on('backup:progress', listener);
+      return () => ipcRenderer.removeListener('backup:progress', listener);
+    },
+
+    /**
+     * Subscribes to backup completion events
+     * @param {Function} callback - Called when backup completes
+     * @returns {Function} Cleanup function to remove listener
+     */
+    onComplete: (callback: (result: any) => void) => {
+      const listener = (_: IpcRendererEvent, result: any) => callback(result);
+      ipcRenderer.on('backup:complete', listener);
+      return () => ipcRenderer.removeListener('backup:complete', listener);
+    },
+
+    /**
+     * Subscribes to backup error events
+     * @param {Function} callback - Called when backup encounters an error
+     * @returns {Function} Cleanup function to remove listener
+     */
+    onError: (callback: (error: { message: string }) => void) => {
+      const listener = (_: IpcRendererEvent, error: any) => callback(error);
+      ipcRenderer.on('backup:error', listener);
+      return () => ipcRenderer.removeListener('backup:error', listener);
+    },
+  },
+
+  /**
+   * ============================================
    * SHELL METHODS
    * ============================================
    * Interaction with system shell and external applications

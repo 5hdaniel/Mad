@@ -1,0 +1,173 @@
+/**
+ * Backup IPC Handlers
+ *
+ * Handles IPC communication between the renderer process and the backup service.
+ * Provides backup operations for iPhone data extraction.
+ */
+
+import { ipcMain, BrowserWindow, app } from 'electron';
+import log from 'electron-log';
+import { backupService, BackupService } from './services/backupService';
+import { BackupOptions, BackupProgress } from './types/backup';
+
+/**
+ * Register all backup-related IPC handlers
+ * @param mainWindow The main BrowserWindow instance for sending events
+ */
+export function registerBackupHandlers(mainWindow: BrowserWindow): void {
+  log.info('[BackupHandlers] Registering backup handlers');
+
+  // Forward progress events to renderer
+  backupService.on('progress', (progress: BackupProgress) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('backup:progress', progress);
+    }
+  });
+
+  // Forward completion events to renderer
+  backupService.on('complete', (result) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('backup:complete', result);
+    }
+  });
+
+  // Forward error events to renderer
+  backupService.on('error', (error: Error) => {
+    log.error('[BackupHandlers] Backup error:', error);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('backup:error', { message: error.message });
+    }
+  });
+
+  /**
+   * Get backup capabilities
+   * Returns information about what the backup system can do
+   */
+  ipcMain.handle('backup:capabilities', async () => {
+    try {
+      return await backupService.checkCapabilities();
+    } catch (error) {
+      log.error('[BackupHandlers] Error getting capabilities:', error);
+      return {
+        supportsDomainFiltering: false,
+        supportsIncremental: true,
+        supportsSkipApps: true,
+        supportsEncryption: true,
+        availableDomains: []
+      };
+    }
+  });
+
+  /**
+   * Get current backup status
+   */
+  ipcMain.handle('backup:status', () => {
+    return backupService.getStatus();
+  });
+
+  /**
+   * Start a backup operation
+   * @param options BackupOptions with device UDID and optional settings
+   */
+  ipcMain.handle('backup:start', async (_, options: BackupOptions) => {
+    log.info('[BackupHandlers] Starting backup for device:', options.udid);
+
+    try {
+      // Validate options
+      if (!options.udid) {
+        throw new Error('Device UDID is required');
+      }
+
+      const result = await backupService.startBackup(options);
+
+      log.info('[BackupHandlers] Backup completed:', {
+        success: result.success,
+        duration: result.duration,
+        size: result.backupSize,
+        isIncremental: result.isIncremental
+      });
+
+      return result;
+    } catch (error) {
+      log.error('[BackupHandlers] Backup failed:', error);
+      return {
+        success: false,
+        backupPath: null,
+        error: (error as Error).message,
+        duration: 0,
+        deviceUdid: options.udid,
+        isIncremental: false,
+        backupSize: 0
+      };
+    }
+  });
+
+  /**
+   * Cancel an in-progress backup
+   */
+  ipcMain.handle('backup:cancel', () => {
+    log.info('[BackupHandlers] Cancelling backup');
+    backupService.cancelBackup();
+    return { success: true };
+  });
+
+  /**
+   * List all existing backups
+   */
+  ipcMain.handle('backup:list', async () => {
+    try {
+      return await backupService.listBackups();
+    } catch (error) {
+      log.error('[BackupHandlers] Error listing backups:', error);
+      return [];
+    }
+  });
+
+  /**
+   * Delete a specific backup
+   * @param backupPath Path to the backup to delete
+   */
+  ipcMain.handle('backup:delete', async (_, backupPath: string) => {
+    log.info('[BackupHandlers] Deleting backup:', backupPath);
+
+    try {
+      await backupService.deleteBackup(backupPath);
+      return { success: true };
+    } catch (error) {
+      log.error('[BackupHandlers] Error deleting backup:', error);
+      return { success: false, error: (error as Error).message };
+    }
+  });
+
+  /**
+   * Clean up old backups
+   * @param keepCount Number of backups to keep per device
+   */
+  ipcMain.handle('backup:cleanup', async (_, keepCount: number = 1) => {
+    log.info('[BackupHandlers] Cleaning up old backups, keeping:', keepCount);
+
+    try {
+      await backupService.cleanupOldBackups(keepCount);
+      return { success: true };
+    } catch (error) {
+      log.error('[BackupHandlers] Error cleaning up backups:', error);
+      return { success: false, error: (error as Error).message };
+    }
+  });
+
+  // Clean up running backup on app quit
+  app.on('before-quit', () => {
+    const status = backupService.getStatus();
+    if (status.isRunning) {
+      log.info('[BackupHandlers] App quitting, cancelling running backup');
+      backupService.cancelBackup();
+    }
+  });
+
+  log.info('[BackupHandlers] Backup handlers registered');
+}
+
+/**
+ * Export the backup service for direct access if needed
+ */
+export { backupService };
