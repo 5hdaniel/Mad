@@ -151,6 +151,13 @@
     ],
     "directories": {
       "buildResources": "build"
-    }
+    },
+    "extraResources": [
+      {
+        "from": "resources/win",
+        "to": "win",
+        "filter": ["**/*"]
+      }
+    ]
   }
 }
