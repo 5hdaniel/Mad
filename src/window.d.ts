@@ -192,6 +192,15 @@ interface MainAPI {
     /** Clean up old backups */
     cleanup: (keepCount?: number) => Promise<{ success: boolean; error?: string }>;
 
+    /** Extract only HomeDomain files and delete the rest (reduces 20-60 GB to ~1-2 GB) */
+    extractHomeDomain: (backupPath: string) => Promise<{
+      success: boolean;
+      filesKept: number;
+      filesDeleted: number;
+      spaceFreed: number;
+      error?: string;
+    }>;
+
     /** Subscribe to backup progress updates */
     onProgress: (callback: (progress: {
       phase: 'preparing' | 'transferring' | 'finishing' | 'extracting';

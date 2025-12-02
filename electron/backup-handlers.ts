@@ -155,6 +155,37 @@ export function registerBackupHandlers(mainWindow: BrowserWindow): void {
     }
   });
 
+  /**
+   * Extract only HomeDomain files from backup and delete the rest.
+   * This reduces storage from 20-60 GB to ~1-2 GB.
+   * @param backupPath Path to the backup to process
+   */
+  ipcMain.handle('backup:extractHomeDomain', async (_, backupPath: string) => {
+    log.info('[BackupHandlers] Extracting HomeDomain from backup:', backupPath);
+
+    try {
+      const result = await backupService.extractHomeDomainOnly(backupPath);
+
+      log.info('[BackupHandlers] Extraction complete:', {
+        success: result.success,
+        filesKept: result.filesKept,
+        filesDeleted: result.filesDeleted,
+        spaceFreed: result.spaceFreed
+      });
+
+      return result;
+    } catch (error) {
+      log.error('[BackupHandlers] Error extracting HomeDomain:', error);
+      return {
+        success: false,
+        filesKept: 0,
+        filesDeleted: 0,
+        spaceFreed: 0,
+        error: (error as Error).message
+      };
+    }
+  });
+
   // Clean up running backup on app quit
   app.on('before-quit', () => {
     const status = backupService.getStatus();

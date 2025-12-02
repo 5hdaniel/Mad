@@ -91,23 +91,61 @@ Users could create backups via iTunes/Finder and we parse the existing backup.
 
 ## Implementation Decision
 
-Given the research findings, the backup service will:
+Given the research findings, the backup service implements a **post-backup extraction** approach:
 
-1. **Use `--skip-apps` flag** to reduce backup size by ~40%
-2. **Support incremental backups** (idevicebackup2 automatically does this)
-3. **Extract only needed files** after backup completes
-4. **Clearly communicate to users** that first sync may take 15-45 minutes
+### Final Approach: Backup + Extract + Cleanup
+
+1. **Create backup with `--skip-apps`** - Reduces initial backup by ~40%
+2. **Parse Manifest.db** - SQLite database listing all files and their domains
+3. **Extract HomeDomain files only** - Keep only messages, contacts, etc.
+4. **Delete non-HomeDomain files** - Remove CameraRoll, Media, etc.
+5. **Final storage: ~1-2 GB** - Down from 20-60 GB
+
+### How Commercial Tools Do It
+
+Research confirmed that **iMazing** and **TouchCopy** use the same approach:
+- They create a full backup first (no way around this)
+- Then extract/display only the data user needs
+- "Data Access Only" mode = full backup + cleanup
+
+From iMazing documentation:
+> "iMazing leverages Apple's own backup protocol. It does not control the backup process itself, nor does it decide which files to backup."
+
+From TouchCopy documentation:
+> "TouchCopy requires a backup of your device to read from, in order to access certain content like Messages and Contacts"
+
+### Alternative Investigated: Microsoft Phone Link
+
+Phone Link for iPhone was investigated but rejected:
+- Only shows messages sent/received WHILE connected via Bluetooth
+- **No access to message history**
+- No pictures or group messages
+- Unreliable syncing
 
 ## Files of Interest in HomeDomain
 
-After backup completes, extract these files:
+After backup completes, keep these files (identified via Manifest.db):
 - `HomeDomain/Library/SMS/sms.db` - Messages database
 - `HomeDomain/Library/AddressBook/AddressBook.sqlitedb` - Contacts database
 - `HomeDomain/Library/AddressBook/AddressBookImages.sqlitedb` - Contact photos
+- `HomeDomain/Library/CallHistoryDB/CallHistory.storedata` - Call history
+- `HomeDomain/Library/Voicemail/` - Voicemail files
+
+## API Implementation
+
+The backup service provides:
+
+```typescript
+// Start backup (creates full backup with --skip-apps)
+await api.backup.start({ udid: 'device-udid' });
+
+// Extract only HomeDomain and delete rest (20-60 GB → 1-2 GB)
+await api.backup.extractHomeDomain(backupPath);
+```
 
 ## Conclusion
 
-**Domain filtering is NOT possible with current tools.** The backup service implementation uses `--skip-apps` for size reduction and implements proper progress feedback to keep users informed during longer backup operations.
+**Domain filtering is NOT possible at the protocol level.** All commercial tools (iMazing, TouchCopy) use the same workaround: full backup + post-processing extraction. Our implementation follows this proven approach, reducing final storage from 20-60 GB to ~1-2 GB.
 
 ## References
 

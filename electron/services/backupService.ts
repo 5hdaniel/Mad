@@ -512,6 +512,205 @@ export class BackupService extends EventEmitter {
   }
 
   /**
+   * Extract only HomeDomain files from a backup and delete the rest.
+   * This significantly reduces storage from 20-60 GB to ~1-2 GB.
+   *
+   * HomeDomain contains:
+   * - Messages (Library/SMS/sms.db)
+   * - Contacts (Library/AddressBook/AddressBook.sqlitedb)
+   * - Call history, voicemail, notes, etc.
+   *
+   * @param backupPath Path to the backup directory
+   * @returns Object with extraction results
+   */
+  async extractHomeDomainOnly(backupPath: string): Promise<{
+    success: boolean;
+    filesKept: number;
+    filesDeleted: number;
+    spaceFreed: number;
+    error: string | null;
+  }> {
+    log.info('[BackupService] Extracting HomeDomain files from backup:', backupPath);
+
+    this.lastProgress = {
+      phase: 'extracting',
+      percentComplete: 0,
+      currentFile: 'Parsing Manifest.db...',
+      filesTransferred: 0,
+      totalFiles: null,
+      bytesTransferred: 0,
+      totalBytes: null,
+      estimatedTimeRemaining: null
+    };
+    this.emit('progress', this.lastProgress);
+
+    try {
+      const manifestDbPath = path.join(backupPath, 'Manifest.db');
+      if (!await this.pathExists(manifestDbPath)) {
+        throw new Error('Manifest.db not found in backup');
+      }
+
+      // Get HomeDomain file IDs from Manifest.db
+      const homeDomainFileIds = await this.getHomeDomainFileIds(manifestDbPath);
+      log.info(`[BackupService] Found ${homeDomainFileIds.size} HomeDomain files`);
+
+      // Essential metadata files to keep (not in Manifest.db)
+      const essentialFiles = new Set([
+        'Manifest.db',
+        'Manifest.plist',
+        'Info.plist',
+        'Status.plist'
+      ]);
+
+      // Get all files in backup and delete non-HomeDomain ones
+      let filesKept = 0;
+      let filesDeleted = 0;
+      let spaceFreed = 0;
+
+      const entries = await fs.readdir(backupPath, { withFileTypes: true });
+
+      for (const entry of entries) {
+        const entryPath = path.join(backupPath, entry.name);
+
+        if (entry.isDirectory()) {
+          // This is a hash prefix directory (00-ff)
+          // Contains actual backup files named by their SHA1 hash
+          const subEntries = await fs.readdir(entryPath, { withFileTypes: true });
+
+          for (const subEntry of subEntries) {
+            if (subEntry.isFile()) {
+              const fileId = subEntry.name;
+              const filePath = path.join(entryPath, fileId);
+
+              if (homeDomainFileIds.has(fileId)) {
+                filesKept++;
+              } else {
+                // Delete non-HomeDomain file
+                const stats = await fs.stat(filePath);
+                spaceFreed += stats.size;
+                await fs.unlink(filePath);
+                filesDeleted++;
+              }
+            }
+          }
+
+          // Remove empty directories
+          const remainingFiles = await fs.readdir(entryPath);
+          if (remainingFiles.length === 0) {
+            await fs.rmdir(entryPath);
+          }
+        } else if (entry.isFile()) {
+          // Root-level file - keep if essential
+          if (!essentialFiles.has(entry.name)) {
+            const stats = await fs.stat(entryPath);
+            spaceFreed += stats.size;
+            await fs.unlink(entryPath);
+            filesDeleted++;
+          } else {
+            filesKept++;
+          }
+        }
+      }
+
+      log.info(`[BackupService] Extraction complete: kept ${filesKept} files, deleted ${filesDeleted} files, freed ${this.formatBytes(spaceFreed)}`);
+
+      this.lastProgress = {
+        phase: 'extracting',
+        percentComplete: 100,
+        currentFile: null,
+        filesTransferred: filesKept,
+        totalFiles: filesKept + filesDeleted,
+        bytesTransferred: 0,
+        totalBytes: null,
+        estimatedTimeRemaining: 0
+      };
+      this.emit('progress', this.lastProgress);
+
+      return {
+        success: true,
+        filesKept,
+        filesDeleted,
+        spaceFreed,
+        error: null
+      };
+    } catch (error) {
+      const errorMsg = (error as Error).message;
+      log.error('[BackupService] Extraction failed:', errorMsg);
+      return {
+        success: false,
+        filesKept: 0,
+        filesDeleted: 0,
+        spaceFreed: 0,
+        error: errorMsg
+      };
+    }
+  }
+
+  /**
+   * Get file IDs (SHA1 hashes) for HomeDomain files from Manifest.db
+   *
+   * Manifest.db schema:
+   * - Files table with columns: fileID, domain, relativePath, flags, file
+   * - fileID is the SHA1 hash used as the filename in backup
+   * - domain is like "HomeDomain", "CameraRollDomain", etc.
+   */
+  private async getHomeDomainFileIds(manifestDbPath: string): Promise<Set<string>> {
+    return new Promise((resolve, reject) => {
+      // Use sqlite3 module (already a dependency in the project)
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const sqlite3 = require('sqlite3').verbose();
+      const db = new sqlite3.Database(manifestDbPath, sqlite3.OPEN_READONLY, (err: Error | null) => {
+        if (err) {
+          reject(new Error(`Failed to open Manifest.db: ${err.message}`));
+          return;
+        }
+      });
+
+      const fileIds = new Set<string>();
+
+      // Query for HomeDomain files only
+      // Also include related domains that contain essential data
+      const query = `
+        SELECT fileID FROM Files
+        WHERE domain IN ('HomeDomain', 'WirelessDomain', 'SystemPreferencesDomain')
+      `;
+
+      db.each(
+        query,
+        (err: Error | null, row: { fileID: string }) => {
+          if (err) {
+            log.warn('[BackupService] Error reading row:', err);
+            return;
+          }
+          if (row.fileID) {
+            fileIds.add(row.fileID);
+          }
+        },
+        (err: Error | null, count: number) => {
+          db.close();
+          if (err) {
+            reject(new Error(`Failed to query Manifest.db: ${err.message}`));
+          } else {
+            log.debug(`[BackupService] Queried ${count} HomeDomain files from Manifest.db`);
+            resolve(fileIds);
+          }
+        }
+      );
+    });
+  }
+
+  /**
+   * Format bytes to human readable string
+   */
+  private formatBytes(bytes: number): string {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
+
+  /**
    * Mock backup for development without actual device
    */
   private async mockBackup(options: BackupOptions): Promise<BackupResult> {

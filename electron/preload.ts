@@ -659,6 +659,15 @@ contextBridge.exposeInMainWorld('api', {
     cleanup: (keepCount?: number) => ipcRenderer.invoke('backup:cleanup', keepCount),
 
     /**
+     * Extracts only HomeDomain files from backup and deletes the rest.
+     * This reduces storage from 20-60 GB to ~1-2 GB.
+     * HomeDomain contains messages, contacts, call history, etc.
+     * @param {string} backupPath - Path to the backup to process
+     * @returns {Promise<{success: boolean, filesKept: number, filesDeleted: number, spaceFreed: number, error?: string}>}
+     */
+    extractHomeDomain: (backupPath: string) => ipcRenderer.invoke('backup:extractHomeDomain', backupPath),
+
+    /**
      * Subscribes to backup progress updates
      * @param {Function} callback - Called with progress updates
      * @returns {Function} Cleanup function to remove listener
