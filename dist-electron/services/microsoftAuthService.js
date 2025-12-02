@@ -8,7 +8,6 @@ const http_1 = __importDefault(require("http"));
 const url_1 = __importDefault(require("url"));
 const crypto_1 = __importDefault(require("crypto"));
 const databaseService_1 = __importDefault(require("./databaseService"));
-const tokenEncryptionService_1 = __importDefault(require("./tokenEncryptionService"));
 // ============================================
 // SERVICE CLASS
 // ============================================
@@ -21,6 +20,9 @@ class MicrosoftAuthService {
     constructor() {
         this.redirectUri = 'http://localhost:3000/callback';
         this.server = null;
+        // Store resolve/reject functions to allow direct code resolution from navigation interception
+        this.codeResolver = null;
+        this.codeRejecter = null;
         this.clientId = process.env.MICROSOFT_CLIENT_ID || '';
         // Note: client_secret not needed for public clients (desktop apps)
         // We use PKCE (Proof Key for Code Exchange) for security instead
@@ -30,16 +32,48 @@ class MicrosoftAuthService {
         this.tokenUrl = `https://login.microsoftonline.com/${this.tenantId}/oauth2/v2.0/token`;
     }
     /**
+     * Resolve the authorization code directly from navigation interception
+     * This bypasses the HTTP server round-trip for faster auth
+     * @param code - The authorization code from the callback URL
+     */
+    resolveCodeDirectly(code) {
+        if (this.codeResolver) {
+            console.log('[MicrosoftAuth] Resolving code directly from navigation interception');
+            this.codeResolver(code);
+            this.codeResolver = null;
+            this.codeRejecter = null;
+            this.stopLocalServer();
+        }
+    }
+    /**
+     * Reject the authorization code directly (for errors from navigation)
+     * @param error - The error message
+     */
+    rejectCodeDirectly(error) {
+        if (this.codeRejecter) {
+            console.log('[MicrosoftAuth] Rejecting code directly from navigation interception');
+            this.codeRejecter(new Error(error));
+            this.codeResolver = null;
+            this.codeRejecter = null;
+            this.stopLocalServer();
+        }
+    }
+    /**
      * Start a temporary local HTTP server to catch OAuth redirect
      * @returns {Promise<string>} Authorization code from redirect
      */
     startLocalServer() {
         return new Promise((resolve, reject) => {
+            // Store resolve/reject for direct resolution from navigation interception
+            this.codeResolver = resolve;
+            this.codeRejecter = reject;
             this.server = http_1.default.createServer((req, res) => {
                 const parsedUrl = url_1.default.parse(req.url || '', true);
+                console.log(`[MicrosoftAuth] HTTP server received request: ${parsedUrl.pathname}`);
                 if (parsedUrl.pathname === '/callback') {
                     const code = parsedUrl.query.code;
                     const error = parsedUrl.query.error;
+                    console.log(`[MicrosoftAuth] Callback received via HTTP server - code: ${code ? 'present' : 'missing'}, error: ${error || 'none'}`);
                     if (error) {
                         res.writeHead(200, { 'Content-Type': 'text/html' });
                         res.end(`
@@ -322,21 +356,16 @@ class MicrosoftAuthService {
                 console.error('[MicrosoftAuth] No refresh token found for user');
                 return { success: false, error: 'No refresh token available' };
             }
-            // Decrypt refresh token
-            const decryptedRefreshToken = tokenEncryptionService_1.default.decrypt(tokenRecord.refresh_token);
+            // Session-only OAuth: tokens stored unencrypted in encrypted database
+            const refreshToken = tokenRecord.refresh_token;
             // Call Microsoft to refresh the token
-            const newTokens = await this.refreshToken(decryptedRefreshToken);
-            // Encrypt new tokens
-            const encryptedAccessToken = tokenEncryptionService_1.default.encrypt(newTokens.access_token);
-            const encryptedRefreshToken = newTokens.refresh_token
-                ? tokenEncryptionService_1.default.encrypt(newTokens.refresh_token)
-                : tokenRecord.refresh_token; // Keep old refresh token if new one not provided
+            const newTokens = await this.refreshToken(refreshToken);
             // Calculate new expiry time
             const expiresAt = new Date(Date.now() + newTokens.expires_in * 1000).toISOString();
-            // Update database with new tokens
+            // Update database with new tokens (no encryption needed)
             await databaseService_1.default.saveOAuthToken(userId, 'microsoft', 'mailbox', {
-                access_token: encryptedAccessToken,
-                refresh_token: encryptedRefreshToken,
+                access_token: newTokens.access_token,
+                refresh_token: newTokens.refresh_token || tokenRecord.refresh_token, // Keep old if new not provided
                 token_expires_at: expiresAt,
                 scopes_granted: newTokens.scope,
                 connected_email_address: tokenRecord.connected_email_address,

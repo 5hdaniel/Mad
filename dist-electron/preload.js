@@ -80,6 +80,18 @@ electron_1.contextBridge.exposeInMainWorld('api', {
          * @returns {Promise<{success: boolean, error?: string}>} Acceptance result
          */
         acceptTerms: (userId) => electron_1.ipcRenderer.invoke('auth:accept-terms', userId),
+        /**
+         * Marks email onboarding as completed for a user
+         * @param {string} userId - User ID completing email onboarding
+         * @returns {Promise<{success: boolean, error?: string}>} Completion result
+         */
+        completeEmailOnboarding: (userId) => electron_1.ipcRenderer.invoke('auth:complete-email-onboarding', userId),
+        /**
+         * Checks if user has completed email onboarding
+         * @param {string} userId - User ID to check
+         * @returns {Promise<{success: boolean, completed: boolean, error?: string}>} Onboarding status
+         */
+        checkEmailOnboarding: (userId) => electron_1.ipcRenderer.invoke('auth:check-email-onboarding', userId),
     },
     /**
      * ============================================
@@ -366,6 +378,30 @@ electron_1.contextBridge.exposeInMainWorld('api', {
      * System-level operations including permissions, connections, and health checks
      */
     system: {
+        /**
+         * Gets secure storage status without triggering keychain prompt
+         * Used to check if encryption is already available (user already authorized)
+         * @returns {Promise<{success: boolean, available: boolean, platform?: string, guidance?: string, error?: string}>} Status result
+         */
+        getSecureStorageStatus: () => electron_1.ipcRenderer.invoke('system:get-secure-storage-status'),
+        /**
+         * Initializes secure storage (triggers keychain prompt on macOS)
+         * Should be called after user login and terms acceptance
+         * @returns {Promise<{success: boolean, available: boolean, platform?: string, guidance?: string, error?: string}>} Initialization result
+         */
+        initializeSecureStorage: () => electron_1.ipcRenderer.invoke('system:initialize-secure-storage'),
+        /**
+         * Checks if the database encryption key store file exists
+         * Used to determine if this is a new user (needs secure storage setup) vs returning user
+         * @returns {Promise<{success: boolean, hasKeyStore: boolean}>} Key store check result
+         */
+        hasEncryptionKeyStore: () => electron_1.ipcRenderer.invoke('system:has-encryption-key-store'),
+        /**
+         * Initializes the database after secure storage setup
+         * Should be called after the user has authorized keychain access (new users only)
+         * @returns {Promise<{success: boolean, error?: string}>} Database initialization result
+         */
+        initializeDatabase: () => electron_1.ipcRenderer.invoke('system:initialize-database'),
         /**
          * Runs the complete permission setup flow for onboarding
          * @returns {Promise<{success: boolean, error?: string}>} Setup result
