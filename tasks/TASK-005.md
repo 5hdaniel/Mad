@@ -212,25 +212,49 @@ Before completing, ensure:
 
 ### Branch Name
 ```
-[FILL IN YOUR BRANCH NAME HERE]
+claude/complete-task-005-01VC8mqRf2XeV5WmG2cYW6ZV
 ```
 
 ### Changes Made
 ```
-[LIST THE FILES YOU MODIFIED AND WHAT YOU CHANGED]
+Created:
+- electron/types/iosContacts.ts - TypeScript types for iOS contacts (iOSContact, ContactPhone, ContactEmail, ContactLookupResult, etc.)
+- electron/utils/phoneNormalization.ts - Phone number normalization utilities (normalizePhoneNumber, phoneNumbersMatch, isPhoneNumber, extractDigits, getTrailingDigits)
+- electron/services/iosContactsParser.ts - Main iOS contacts parser service with:
+  - Database opening/closing with readonly mode
+  - In-memory phone/email lookup indexes for fast matching
+  - Contact parsing from ABPerson and ABMultiValue tables
+  - Phone/email/handle lookup methods
+  - iOS label format cleaning (e.g., "_$!<Mobile>!$_" -> "mobile")
+  - Display name computation (First Last > Organization > Unknown)
+- electron/services/__tests__/iosContactsParser.test.ts - Tests for parser service
+- electron/utils/__tests__/phoneNormalization.test.ts - Tests for phone normalization
 ```
 
 ### Testing Done
 ```
-[DESCRIBE WHAT TESTING YOU PERFORMED]
+- All 55 unit tests pass
+- ESLint passes with no errors or warnings
+- TypeScript type-checking passes on new files
+- Tested phone number normalization with various formats:
+  - (555) 123-4567
+  - 555-123-4567
+  - +1 555 123 4567
+  - 15551234567
+  - 5551234567
+- Tested contact lookup by phone, email, and handle
+- Tested edge cases: contacts with no name/org, organization-only contacts, multiple phones
 ```
 
 ### Notes/Issues Encountered
 ```
-[ANY ISSUES OR NOTES FOR THE REVIEWER]
+- Full project type-check/lint had issues due to incomplete npm install (electron binary download failed), but new files pass individual type-check and lint
+- Used existing better-sqlite3-multiple-ciphers package for database access
+- Implemented suffix-based phone matching (last 10 digits) to handle country code differences
+- The parser builds lookup indexes on open() for O(1) lookups
 ```
 
 ### PR Link
 ```
-[LINK TO YOUR PULL REQUEST]
+[PR will be created after push]
 ```
