@@ -65,6 +65,133 @@ interface ElectronAPI {
   outlookSignout: () => Promise<{ success: boolean }>;
   onDeviceCode: (callback: (info: unknown) => void) => () => void;
   onExportProgress: (callback: (progress: unknown) => void) => () => void;
+
+  // iPhone Integration
+  iphoneGetPlatform: () => Promise<{
+    platform: string;
+    isWindows: boolean;
+    isMac: boolean;
+    isLinux: boolean;
+    backupLocations: string[];
+  }>;
+  iphoneDiscoverBackups: () => Promise<{
+    success: boolean;
+    backups?: Array<{
+      id: string;
+      udid: string;
+      deviceName: string;
+      productVersion?: string;
+      lastBackupDate: string;
+      backupPath: string;
+      isEncrypted: boolean;
+      size?: number;
+    }>;
+    error?: string;
+  }>;
+  iphoneCheckBackupAvailable: () => Promise<{
+    success: boolean;
+    available: boolean;
+    hasUnencrypted?: boolean;
+    backupCount?: number;
+    message?: string;
+    error?: string;
+  }>;
+  iphoneGetContacts: (backupId: string) => Promise<{
+    success: boolean;
+    contacts?: Array<{
+      id: string;
+      firstName?: string;
+      lastName?: string;
+      organization?: string;
+      displayName: string;
+      phoneNumbers: Array<{ label?: string; value: string }>;
+      emailAddresses: Array<{ label?: string; value: string }>;
+    }>;
+    count?: number;
+    error?: string;
+  }>;
+  iphoneGetConversations: (backupId: string) => Promise<{
+    success: boolean;
+    conversations?: Array<{
+      id: string;
+      chatIdentifier: string;
+      displayName?: string;
+      participants: Array<{ id: string; identifier: string; displayName?: string }>;
+      isGroupChat: boolean;
+      messageCount: number;
+      lastMessageDate?: string;
+    }>;
+    count?: number;
+    error?: string;
+  }>;
+  iphoneGetMessages: (backupId: string, conversationId: string) => Promise<{
+    success: boolean;
+    messages?: Array<{
+      id: string;
+      conversationId: string;
+      text?: string;
+      date: string;
+      isFromMe: boolean;
+      sender?: string;
+      hasAttachments: boolean;
+      isRead: boolean;
+      messageType: 'sms' | 'imessage';
+    }>;
+    count?: number;
+    error?: string;
+  }>;
+  iphoneStreamContactMessages: (backupId: string, contactIds: string[]) => Promise<{
+    success: boolean;
+    contactCount?: number;
+    messageCount?: number;
+    error?: string;
+  }>;
+  iphoneExportData: (
+    backupId: string,
+    contactIds: string[],
+    options: { includeMessages: boolean; format: 'txt' | 'json' }
+  ) => Promise<{
+    success: boolean;
+    exportPath?: string;
+    contactCount?: number;
+    messageCount?: number;
+    filesCreated?: string[];
+    error?: string;
+    canceled?: boolean;
+  }>;
+  iphoneOpenBackupLocation: () => Promise<{
+    success: boolean;
+    path?: string;
+    error?: string;
+    expectedLocations?: string[];
+  }>;
+  iphoneGetBackupDetails: (backupId: string) => Promise<{
+    success: boolean;
+    backup?: {
+      id: string;
+      udid: string;
+      deviceName: string;
+      productVersion?: string;
+      lastBackupDate: string;
+      backupPath: string;
+      isEncrypted: boolean;
+      size?: number;
+    };
+    error?: string;
+  }>;
+  onIphoneSyncProgress: (callback: (progress: {
+    status: string;
+    stage?: string;
+    current?: number;
+    total?: number;
+    message?: string;
+    error?: string;
+  }) => void) => () => void;
+  onIphoneContactData: (callback: (data: {
+    contact: unknown;
+    messages: unknown[];
+    messageCount: number;
+  }) => void) => () => void;
 }
 
 /**

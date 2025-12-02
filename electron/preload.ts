@@ -811,5 +811,108 @@ contextBridge.exposeInMainWorld('electron', {
     const listener = (_: IpcRendererEvent, progress: any) => callback(progress);
     ipcRenderer.on('export-progress', listener);
     return () => ipcRenderer.removeListener('export-progress', listener);
+  },
+
+  /**
+   * ============================================
+   * IPHONE INTEGRATION METHODS
+   * ============================================
+   * Handles iPhone USB connection, backup reading, and data extraction
+   * Works on Windows by reading iTunes/Apple backup files
+   */
+
+  /**
+   * Gets current platform information
+   * @returns {Promise<{platform: string, isWindows: boolean, isMac: boolean, isLinux: boolean}>}
+   */
+  iphoneGetPlatform: () => ipcRenderer.invoke('iphone:get-platform'),
+
+  /**
+   * Discovers all available iPhone backups on the system
+   * @returns {Promise<{success: boolean, backups: Array}>} List of available backups
+   */
+  iphoneDiscoverBackups: () => ipcRenderer.invoke('iphone:discover-backups'),
+
+  /**
+   * Checks if iPhone backup is available and accessible
+   * @returns {Promise<{available: boolean, hasUnencrypted: boolean, message: string}>}
+   */
+  iphoneCheckBackupAvailable: () => ipcRenderer.invoke('iphone:check-backup-available'),
+
+  /**
+   * Gets contacts from a specific iPhone backup
+   * @param {string} backupId - The backup ID/UDID
+   * @returns {Promise<{success: boolean, contacts: Array, count: number}>}
+   */
+  iphoneGetContacts: (backupId: string) => ipcRenderer.invoke('iphone:get-contacts', backupId),
+
+  /**
+   * Gets conversations from a specific iPhone backup
+   * @param {string} backupId - The backup ID/UDID
+   * @returns {Promise<{success: boolean, conversations: Array, count: number}>}
+   */
+  iphoneGetConversations: (backupId: string) => ipcRenderer.invoke('iphone:get-conversations', backupId),
+
+  /**
+   * Gets messages for a specific conversation
+   * @param {string} backupId - The backup ID/UDID
+   * @param {string} conversationId - The conversation ID
+   * @returns {Promise<{success: boolean, messages: Array, count: number}>}
+   */
+  iphoneGetMessages: (backupId: string, conversationId: string) =>
+    ipcRenderer.invoke('iphone:get-messages', backupId, conversationId),
+
+  /**
+   * Streams messages for selected contacts
+   * @param {string} backupId - The backup ID/UDID
+   * @param {string[]} contactIds - Array of contact IDs to stream
+   * @returns {Promise<{success: boolean, contactCount: number, messageCount: number}>}
+   */
+  iphoneStreamContactMessages: (backupId: string, contactIds: string[]) =>
+    ipcRenderer.invoke('iphone:stream-contact-messages', backupId, contactIds),
+
+  /**
+   * Exports iPhone data to files
+   * @param {string} backupId - The backup ID/UDID
+   * @param {string[]} contactIds - Array of contact IDs to export
+   * @param {Object} options - Export options (includeMessages, format)
+   * @returns {Promise<{success: boolean, exportPath: string, contactCount: number, messageCount: number}>}
+   */
+  iphoneExportData: (backupId: string, contactIds: string[], options: { includeMessages: boolean; format: 'txt' | 'json' }) =>
+    ipcRenderer.invoke('iphone:export-data', backupId, contactIds, options),
+
+  /**
+   * Opens backup location in file explorer
+   * @returns {Promise<{success: boolean, path?: string}>}
+   */
+  iphoneOpenBackupLocation: () => ipcRenderer.invoke('iphone:open-backup-location'),
+
+  /**
+   * Gets detailed information about a specific backup
+   * @param {string} backupId - The backup ID/UDID
+   * @returns {Promise<{success: boolean, backup: object}>}
+   */
+  iphoneGetBackupDetails: (backupId: string) => ipcRenderer.invoke('iphone:get-backup-details', backupId),
+
+  /**
+   * Listens for iPhone sync progress updates
+   * @param {Function} callback - Callback with progress info
+   * @returns {Function} Cleanup function
+   */
+  onIphoneSyncProgress: (callback: (progress: any) => void) => {
+    const listener = (_: IpcRendererEvent, progress: any) => callback(progress);
+    ipcRenderer.on('iphone:sync-progress', listener);
+    return () => ipcRenderer.removeListener('iphone:sync-progress', listener);
+  },
+
+  /**
+   * Listens for iPhone contact data during streaming
+   * @param {Function} callback - Callback with contact data
+   * @returns {Function} Cleanup function
+   */
+  onIphoneContactData: (callback: (data: any) => void) => {
+    const listener = (_: IpcRendererEvent, data: any) => callback(data);
+    ipcRenderer.on('iphone:contact-data', listener);
+    return () => ipcRenderer.removeListener('iphone:contact-data', listener);
   }
 });

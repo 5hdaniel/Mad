@@ -17,12 +17,13 @@ import WelcomeTerms from './components/WelcomeTerms';
 import Dashboard from './components/Dashboard';
 import AuditTransactionModal from './components/AuditTransactionModal';
 import OfflineFallback from './components/OfflineFallback';
+import IPhoneConnect from './components/IPhoneConnect';
 import { useAuth, useNetwork } from './contexts';
 import type { Conversation } from './hooks/useConversations';
 import type { Subscription } from '../electron/types/models';
 
 // Type definitions
-type AppStep = 'login' | 'email-onboarding' | 'microsoft-login' | 'permissions' | 'dashboard' | 'outlook' | 'complete' | 'contacts';
+type AppStep = 'login' | 'email-onboarding' | 'microsoft-login' | 'permissions' | 'dashboard' | 'outlook' | 'complete' | 'contacts' | 'iphone-import';
 
 interface AppExportResult {
   exportPath?: string;
@@ -87,6 +88,8 @@ function App() {
   const [isCheckingEmailOnboarding, setIsCheckingEmailOnboarding] = useState<boolean>(true);
   const [hasEmailConnected, setHasEmailConnected] = useState<boolean>(true); // Default true to avoid flicker
   const [showSetupPromptDismissed, setShowSetupPromptDismissed] = useState<boolean>(false);
+  const [showIPhoneImport, setShowIPhoneImport] = useState<boolean>(false);
+  const [isWindows, setIsWindows] = useState<boolean>(false);
 
   // Check if user has completed email onboarding and has email connected
   useEffect(() => {
@@ -142,7 +145,20 @@ function App() {
   useEffect(() => {
     checkPermissions();
     checkAppLocation();
+    checkPlatform();
   }, []);
+
+  // Check platform for iPhone import feature
+  const checkPlatform = async (): Promise<void> => {
+    try {
+      const platformInfo = await window.electron.iphoneGetPlatform();
+      setIsWindows(platformInfo.isWindows);
+    } catch (error) {
+      console.error('[App] Error checking platform:', error);
+      // Default to false if platform check fails
+      setIsWindows(false);
+    }
+  };
 
   const handleLoginSuccess = (user: { id: string; email: string; display_name?: string; avatar_url?: string }, token: string, provider: string, subscriptionData: Subscription | undefined, isNewUser: boolean): void => {
     login(user, token, provider, subscriptionData, isNewUser);
@@ -312,6 +328,26 @@ function App() {
     setCurrentStep('dashboard');
   };
 
+  // Handle iPhone import
+  const handleIPhoneImport = () => {
+    setShowIPhoneImport(true);
+  };
+
+  const handleIPhoneImportComplete = (result: any) => {
+    setShowIPhoneImport(false);
+    if (result?.success) {
+      // Navigate to complete screen with export results
+      setExportResult({
+        exportPath: result.exportPath,
+      });
+      setCurrentStep('complete');
+    }
+  };
+
+  const handleIPhoneImportCancel = () => {
+    setShowIPhoneImport(false);
+  };
+
   const getPageTitle = (): string => {
     switch (currentStep) {
       case 'login':
@@ -328,6 +364,8 @@ function App() {
         return 'Select Contacts for Export';
       case 'outlook':
         return 'Export to Outlook';
+      case 'iphone-import':
+        return 'Import from iPhone';
       case 'complete':
         return 'Export Complete';
       default:
@@ -451,10 +489,12 @@ function App() {
             onAuditNew={() => setShowAuditTransaction(true)}
             onViewTransactions={() => setShowTransactions(true)}
             onManageContacts={() => setShowContacts(true)}
+            onImportFromiPhone={handleIPhoneImport}
             onTourStateChange={setIsTourActive}
             showSetupPrompt={!hasEmailConnected && !showSetupPromptDismissed}
             onContinueSetup={() => setCurrentStep('email-onboarding')}
             onDismissSetupPrompt={handleDismissSetupPrompt}
+            isWindows={isWindows}
           />
         )}
 
@@ -599,6 +639,18 @@ function App() {
           userId={currentUser.id}
           onClose={() => setShowContacts(false)}
         />
+      )}
+
+      {/* iPhone Import Modal */}
+      {showIPhoneImport && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
+            <IPhoneConnect
+              onComplete={handleIPhoneImportComplete}
+              onCancel={handleIPhoneImportCancel}
+            />
+          </div>
+        </div>
       )}
 
       {/* Welcome Terms Modal (New Users Only) - casting user to component's User type */}

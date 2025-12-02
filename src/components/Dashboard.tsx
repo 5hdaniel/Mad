@@ -7,10 +7,12 @@ interface DashboardActionProps {
   onAuditNew: () => void;
   onViewTransactions: () => void;
   onManageContacts: () => void;
+  onImportFromiPhone?: () => void;
   onTourStateChange?: (isActive: boolean) => void;
   showSetupPrompt?: boolean;
   onContinueSetup?: () => void;
   onDismissSetupPrompt?: () => void;
+  isWindows?: boolean;
 }
 
 /**
@@ -18,7 +20,7 @@ interface DashboardActionProps {
  * Main landing screen after login
  * Provides three primary actions: Start New Audit, Browse Transactions, and Manage Contacts
  */
-function Dashboard({ onAuditNew, onViewTransactions, onManageContacts, onTourStateChange, showSetupPrompt, onContinueSetup, onDismissSetupPrompt }: DashboardActionProps) {
+function Dashboard({ onAuditNew, onViewTransactions, onManageContacts, onImportFromiPhone, onTourStateChange, showSetupPrompt, onContinueSetup, onDismissSetupPrompt, isWindows }: DashboardActionProps) {
   // Initialize the onboarding tour for first-time users
   const { runTour, handleJoyrideCallback } = useTour(true, 'hasSeenDashboardTour');
 
@@ -173,6 +175,36 @@ function Dashboard({ onAuditNew, onViewTransactions, onManageContacts, onTourSta
             </div>
           </button>
         </div>
+
+        {/* iPhone Import Card - Shows on Windows or when feature is available */}
+        {onImportFromiPhone && (
+          <div className="mt-4">
+            <button
+              onClick={onImportFromiPhone}
+              className="group w-full relative bg-white bg-opacity-70 backdrop-blur rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 p-6 text-left border-2 border-transparent hover:border-orange-400 transform hover:scale-[1.02]"
+              data-tour="iphone-import-card"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-red-600 rounded-xl flex items-center justify-center shadow-lg">
+                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-bold text-gray-900 mb-1">Import from iPhone</h3>
+                  <p className="text-sm text-gray-600">
+                    {isWindows
+                      ? 'Import contacts and messages from your iPhone backup'
+                      : 'Import contacts and messages from iTunes backup'}
+                  </p>
+                </div>
+                <svg className="w-5 h-5 text-orange-600 group-hover:translate-x-2 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </div>
+            </button>
+          </div>
+        )}
 
         {/* Quick Stats (Optional - can be populated later) */}
         <div className="mt-12 grid grid-cols-3 gap-6">
