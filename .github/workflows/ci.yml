@@ -107,7 +107,7 @@ jobs:
 
     strategy:
       matrix:
-        os: [macos-latest]
+        os: [macos-latest, windows-latest]
 
     steps:
       - name: Checkout code
@@ -168,11 +168,30 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
-      - name: Upload package artifacts
+      - name: Package for Windows
+        if: matrix.os == 'windows-latest'
+        run: |
+          echo "Building Windows package..."
+          npm run package:unsigned
+          echo "Build complete. Checking artifacts..."
+          Get-ChildItem -Path dist -Filter "*.exe" | Format-Table Name, Length
+        shell: pwsh
+
+      - name: Upload macOS package artifacts
+        if: matrix.os == 'macos-latest'
         uses: actions/upload-artifact@v4
         with:
           name: packages-${{ matrix.os }}
           path: |
             dist/*.dmg
             dist/*.zip
+          retention-days: 30
+
+      - name: Upload Windows package artifacts
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages-${{ matrix.os }}
+          path: |
+            dist/*.exe
           retention-days: 30

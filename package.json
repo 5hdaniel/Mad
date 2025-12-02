@@ -106,6 +106,16 @@
       "repo": "Mad",
       "private": false
     },
+    "win": {
+      "target": ["nsis"],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
     "mac": {
       "category": "public.app-category.productivity",
       "hardenedRuntime": true,
