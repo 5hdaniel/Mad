@@ -981,6 +981,26 @@ class DatabaseService implements IDatabaseService {
     this._run(sql, [userId]);
   }
 
+  /**
+   * Clear all sessions (for session-only OAuth on app startup)
+   * This forces all users to re-authenticate each app launch
+   */
+  async clearAllSessions(): Promise<void> {
+    const sql = 'DELETE FROM sessions';
+    this._run(sql, []);
+    console.log('[DatabaseService] Cleared all sessions for session-only OAuth');
+  }
+
+  /**
+   * Clear all OAuth tokens (for session-only OAuth on app startup)
+   * This forces all users to re-authenticate each app launch
+   */
+  async clearAllOAuthTokens(): Promise<void> {
+    const sql = 'DELETE FROM oauth_tokens';
+    this._run(sql, []);
+    console.log('[DatabaseService] Cleared all OAuth tokens for session-only OAuth');
+  }
+
   // ============================================
   // CONTACT OPERATIONS
   // ============================================

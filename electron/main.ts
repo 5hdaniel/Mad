@@ -171,6 +171,12 @@ app.whenReady().then(async () => {
   if (isReturningUser) {
     // Returning user - they've already set up keychain access
     await initializeDatabase();
+
+    // Session-only OAuth: Clear all sessions and OAuth tokens on app startup
+    // This forces users to re-authenticate each app launch for better security
+    // and ensures only ONE keychain prompt ever (for database encryption)
+    await databaseService.clearAllSessions();
+    await databaseService.clearAllOAuthTokens();
   }
   // For new users, database will be initialized via 'system:initialize-database' IPC call
   // after they complete the SecureStorageSetup screen
