@@ -523,8 +523,12 @@ Reviewer needs to decide on approach (see Fallback Plan in task spec):
 - Option C: Build custom solution (fork libimobiledevice)
 - Option D: Re-scope the feature
 
-Also created libimobiledeviceService.ts (from TASK-002) as it was needed
-as a dependency for the backup service.
+Integration with dependent tasks:
+- TASK-002: Updated libimobiledeviceService.ts to match TASK-002 interface
+  (getLibimobiledevicePath, getExecutablePath, areBinariesAvailable,
+  REQUIRED_EXECUTABLES) while adding getCommand() for cross-platform support
+- TASK-003: BackupService follows same patterns as deviceDetectionService
+  (spawn with command name, mock mode support, event emitter pattern)
 ```
 
 ### PR Link

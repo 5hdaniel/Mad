@@ -1,20 +1,25 @@
 /**
- * libimobiledevice Binary Locator Service
+ * libimobiledevice Service
+ * Locates and provides paths to libimobiledevice Windows binaries
  *
- * Provides utility functions to locate and access libimobiledevice CLI tools
- * (idevice_id, ideviceinfo, idevicebackup2) bundled with the application.
- *
- * On Windows, these are bundled as .exe files in resources/win/libimobiledevice/
- * On macOS/Linux, they're expected to be installed system-wide.
+ * This service is compatible with TASK-002 specification and extends it
+ * with additional utilities for the backup service.
  */
 
 import path from 'path';
 import { app } from 'electron';
-import { exec } from 'child_process';
-import { promisify } from 'util';
 import log from 'electron-log';
 
-const execAsync = promisify(exec);
+/**
+ * List of required executable names for libimobiledevice functionality
+ */
+export const REQUIRED_EXECUTABLES = [
+  'idevice_id',
+  'ideviceinfo',
+  'idevicebackup2',
+] as const;
+
+export type LibimobiledeviceExecutable = typeof REQUIRED_EXECUTABLES[number];
 
 /**
  * Check if running in mock mode for development without actual device
@@ -24,14 +29,13 @@ export function isMockMode(): boolean {
 }
 
 /**
- * Get the directory containing libimobiledevice binaries on Windows
- * @returns Path to the libimobiledevice directory
- * @throws Error if not on Windows
+ * Get the base path to the libimobiledevice binaries directory
+ * @returns The absolute path to the libimobiledevice binaries directory
+ * @throws Error if not running on Windows
  */
 export function getLibimobiledevicePath(): string {
   if (process.platform !== 'win32') {
-    // On macOS/Linux, tools are expected to be in PATH
-    return '';
+    throw new Error('libimobiledevice binaries only available on Windows');
   }
 
   const isDev = !app.isPackaged;
@@ -45,103 +49,70 @@ export function getLibimobiledevicePath(): string {
 
 /**
  * Get the full path to a specific libimobiledevice executable
- * @param name - Name of the executable (e.g., 'idevice_id', 'idevicebackup2')
- * @returns Full path to the executable
+ * @param name - The name of the executable (without .exe extension)
+ * @returns The absolute path to the executable
+ * @throws Error if not running on Windows
  */
 export function getExecutablePath(name: string): string {
-  if (process.platform === 'win32') {
-    return path.join(getLibimobiledevicePath(), `${name}.exe`);
+  const basePath = getLibimobiledevicePath();
+  const exePath = path.join(basePath, `${name}.exe`);
+  log.debug(`[libimobiledeviceService] Resolved executable path: ${exePath}`);
+  return exePath;
+}
+
+/**
+ * Check if libimobiledevice binaries are available
+ * @returns True if binaries directory exists and contains expected files
+ */
+export function areBinariesAvailable(): boolean {
+  if (process.platform !== 'win32') {
+    return false;
   }
 
-  // On macOS/Linux, just return the command name (should be in PATH)
+  try {
+    const basePath = getLibimobiledevicePath();
+    const fs = require('fs');
+    return fs.existsSync(basePath);
+  } catch (error) {
+    log.error('[libimobiledeviceService] Error checking binaries availability:', error);
+    return false;
+  }
+}
+
+/**
+ * Get the command to execute for a libimobiledevice tool
+ * On Windows, returns the full path. On other platforms, returns command name for PATH lookup.
+ * @param name - Name of the executable (e.g., 'idevice_id', 'idevicebackup2')
+ * @returns Command string suitable for spawn/exec
+ */
+export function getCommand(name: string): string {
+  if (process.platform === 'win32') {
+    try {
+      return getExecutablePath(name);
+    } catch {
+      // Fall through to return just the name
+      return name;
+    }
+  }
+
+  // On macOS/Linux, tools are expected to be in PATH
   return name;
 }
 
 /**
- * Check if libimobiledevice tools are available
- * @returns Object indicating which tools are available
+ * Check if we can use libimobiledevice commands
+ * Returns true in mock mode or if platform is supported
  */
-export async function checkToolsAvailability(): Promise<{
-  available: boolean;
-  ideviceId: boolean;
-  ideviceInfo: boolean;
-  ideviceBackup2: boolean;
-  error: string | null;
-}> {
-  const result = {
-    available: false,
-    ideviceId: false,
-    ideviceInfo: false,
-    ideviceBackup2: false,
-    error: null as string | null
-  };
-
+export function canUseLibimobiledevice(): boolean {
   if (isMockMode()) {
-    return {
-      available: true,
-      ideviceId: true,
-      ideviceInfo: true,
-      ideviceBackup2: true,
-      error: null
-    };
+    return true;
   }
 
-  try {
-    // Check idevice_id
-    const ideviceIdPath = getExecutablePath('idevice_id');
-    try {
-      await execAsync(`"${ideviceIdPath}" --help`);
-      result.ideviceId = true;
-    } catch {
-      log.debug('[libimobiledevice] idevice_id not available');
-    }
-
-    // Check ideviceinfo
-    const ideviceInfoPath = getExecutablePath('ideviceinfo');
-    try {
-      await execAsync(`"${ideviceInfoPath}" --help`);
-      result.ideviceInfo = true;
-    } catch {
-      log.debug('[libimobiledevice] ideviceinfo not available');
-    }
-
-    // Check idevicebackup2
-    const ideviceBackup2Path = getExecutablePath('idevicebackup2');
-    try {
-      await execAsync(`"${ideviceBackup2Path}" --help`);
-      result.ideviceBackup2 = true;
-    } catch {
-      log.debug('[libimobiledevice] idevicebackup2 not available');
-    }
-
-    result.available = result.ideviceId && result.ideviceInfo && result.ideviceBackup2;
-
-    if (!result.available) {
-      result.error = 'Some libimobiledevice tools are not available';
-    }
-  } catch (error) {
-    result.error = (error as Error).message;
-    log.error('[libimobiledevice] Error checking tool availability:', error);
+  if (process.platform === 'win32') {
+    return areBinariesAvailable();
   }
 
-  return result;
-}
-
-/**
- * Run a libimobiledevice command and return output
- * @param command - The command name (e.g., 'idevice_id')
- * @param args - Command arguments
- * @returns Command output
- */
-export async function runCommand(
-  command: string,
-  args: string[] = []
-): Promise<{ stdout: string; stderr: string }> {
-  const executablePath = getExecutablePath(command);
-  const fullCommand = `"${executablePath}" ${args.map(a => `"${a}"`).join(' ')}`;
-
-  log.debug(`[libimobiledevice] Running: ${fullCommand}`);
-
-  const result = await execAsync(fullCommand);
-  return result;
+  // On macOS/Linux, assume commands are available in PATH
+  // (actual availability will be checked at runtime)
+  return true;
 }

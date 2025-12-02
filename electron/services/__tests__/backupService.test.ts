@@ -47,7 +47,7 @@ jest.mock('child_process', () => ({
 
 // Mock libimobiledeviceService
 jest.mock('../libimobiledeviceService', () => ({
-  getExecutablePath: jest.fn().mockReturnValue('/mock/idevicebackup2'),
+  getCommand: jest.fn().mockReturnValue('/mock/idevicebackup2'),
   isMockMode: jest.fn().mockReturnValue(true)
 }));
 

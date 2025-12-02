@@ -15,7 +15,7 @@ import path from 'path';
 import { app } from 'electron';
 import { promises as fs } from 'fs';
 import log from 'electron-log';
-import { getExecutablePath, isMockMode } from './libimobiledeviceService';
+import { getCommand, isMockMode } from './libimobiledeviceService';
 import {
   BackupProgress,
   BackupResult,
@@ -97,7 +97,7 @@ export class BackupService extends EventEmitter {
     }
 
     const backupPath = options.outputDir || this.getDefaultBackupPath();
-    const idevicebackup2 = getExecutablePath('idevicebackup2');
+    const idevicebackup2 = getCommand('idevicebackup2');
 
     // Ensure backup directory exists
     await fs.mkdir(backupPath, { recursive: true });
