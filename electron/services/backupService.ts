@@ -4,9 +4,12 @@
  * Handles iPhone backup operations using idevicebackup2 CLI tool.
  * Extracts messages and contacts from iPhone backups.
  *
- * IMPORTANT: Domain filtering is NOT supported by idevicebackup2.
+ * IMPORTANT: Domain filtering is NOT supported by idevicebackup2 at backup time.
  * See docs/BACKUP_RESEARCH.md for full research findings.
- * This service uses --skip-apps to reduce backup size by ~40%.
+ *
+ * OPTIMIZATION: After backup completes, we extract only HomeDomain files
+ * (messages, contacts) and delete the rest (CameraRoll, etc.) to save space.
+ * This reduces final storage from 20-60 GB to ~1-2 GB.
  */
 
 import { spawn, ChildProcess } from 'child_process';
