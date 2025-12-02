@@ -22,7 +22,11 @@ interface SecureStorageResult {
  * system password prompt. This improves UX by not surprising users with
  * an unexpected password dialog.
  *
- * On macOS, this will trigger the Keychain Access prompt.
+ * The keychain is used for DATABASE ENCRYPTION only - to protect local PII
+ * (contacts, messages, emails). OAuth tokens are kept in memory only and
+ * users re-authenticate each session for better security.
+ *
+ * On macOS, this will trigger the Keychain Access prompt (once ever).
  * If the user has Touch ID configured for their Keychain, macOS will
  * automatically use Touch ID instead of asking for a password.
  */
@@ -100,7 +104,7 @@ function SecureStorageSetup({ onComplete, onRetry }: SecureStorageSetupProps) {
     if (platform === 'darwin') {
       return {
         title: 'macOS Keychain Access',
-        description: 'Magic Audit uses your Mac\'s built-in Keychain to securely store your login credentials.',
+        description: 'Magic Audit uses your Mac\'s built-in Keychain to encrypt the local database where your contacts and messages are stored.',
         promptInfo: 'You\'ll see a system dialog asking for permission. Click "Always Allow" to grant permanent access and avoid repeated prompts.',
         touchIdNote: 'If you have Touch ID enabled for your Keychain, you can use your fingerprint instead of entering your password.',
         icon: (
@@ -111,8 +115,8 @@ function SecureStorageSetup({ onComplete, onRetry }: SecureStorageSetupProps) {
       };
     } else if (platform === 'win32') {
       return {
-        title: 'Windows Credential Storage',
-        description: 'Magic Audit uses Windows Data Protection API (DPAPI) to securely store your login credentials.',
+        title: 'Windows Data Protection',
+        description: 'Magic Audit uses Windows Data Protection API (DPAPI) to encrypt the local database where your contacts and messages are stored.',
         promptInfo: 'This process happens automatically on Windows.',
         touchIdNote: null,
         icon: (
@@ -123,8 +127,8 @@ function SecureStorageSetup({ onComplete, onRetry }: SecureStorageSetupProps) {
       };
     } else {
       return {
-        title: 'Secure Credential Storage',
-        description: 'Magic Audit uses your system\'s secure storage to protect your login credentials.',
+        title: 'Secure Data Protection',
+        description: 'Magic Audit uses your system\'s secure storage to encrypt the local database where your contacts and messages are stored.',
         promptInfo: 'You may be asked to authenticate to access the secure storage.',
         touchIdNote: null,
         icon: (
@@ -148,7 +152,7 @@ function SecureStorageSetup({ onComplete, onRetry }: SecureStorageSetupProps) {
               {platformText.icon}
             </div>
             <h2 className="text-2xl font-bold text-white mb-2">{platformText.title}</h2>
-            <p className="text-blue-100 text-sm">Secure storage for your credentials</p>
+            <p className="text-blue-100 text-sm">Secure local data protection</p>
           </div>
         </div>
 
@@ -195,19 +199,19 @@ function SecureStorageSetup({ onComplete, onRetry }: SecureStorageSetupProps) {
                       <svg className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                       </svg>
-                      <span>Securely stores your Google/Microsoft login tokens</span>
+                      <span>Encrypts your local database containing contacts and messages</span>
                     </li>
                     <li className="flex items-start gap-2">
                       <svg className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                       </svg>
-                      <span>Protects your credentials with OS-level encryption</span>
+                      <span>Protects your personal data with OS-level encryption</span>
                     </li>
                     <li className="flex items-start gap-2">
                       <svg className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                       </svg>
-                      <span>Keeps you logged in without storing passwords in plain text</span>
+                      <span>Ensures sensitive information stays private on your device</span>
                     </li>
                   </ul>
                 </div>
@@ -248,7 +252,7 @@ function SecureStorageSetup({ onComplete, onRetry }: SecureStorageSetupProps) {
               </div>
               <h3 className="text-lg font-semibold text-gray-900 mb-2">Secure storage enabled!</h3>
               <p className="text-sm text-gray-600">
-                Your credentials will be stored securely.
+                Your local data will be encrypted and protected.
               </p>
             </div>
           )}
@@ -280,8 +284,8 @@ function SecureStorageSetup({ onComplete, onRetry }: SecureStorageSetupProps) {
                   <div>
                     <p className="text-sm text-yellow-800 font-medium mb-1">Why is this needed?</p>
                     <p className="text-sm text-yellow-700">
-                      Magic Audit requires secure storage to protect your login credentials.
-                      Without it, we cannot safely store your authentication tokens.
+                      Magic Audit requires secure storage to protect your local data.
+                      Without it, we cannot safely encrypt your contacts and messages.
                     </p>
                   </div>
                 </div>
