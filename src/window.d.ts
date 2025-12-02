@@ -183,6 +183,100 @@ interface MainAPI {
   };
   onGoogleMailboxConnected: (callback: (result: { success: boolean }) => void) => () => void;
   onMicrosoftMailboxConnected: (callback: (result: { success: boolean }) => void) => () => void;
+
+  /**
+   * Backup API for iPhone data extraction
+   * Note: Domain filtering is NOT supported - see docs/BACKUP_RESEARCH.md
+   */
+  backup: {
+    /** Get backup system capabilities */
+    getCapabilities: () => Promise<{
+      supportsDomainFiltering: boolean;
+      supportsIncremental: boolean;
+      supportsSkipApps: boolean;
+      supportsEncryption: boolean;
+      availableDomains: string[];
+    }>;
+
+    /** Get current backup status */
+    getStatus: () => Promise<{
+      isRunning: boolean;
+      currentDeviceUdid: string | null;
+      progress: {
+        phase: 'preparing' | 'transferring' | 'finishing' | 'extracting';
+        percentComplete: number;
+        currentFile: string | null;
+        filesTransferred: number;
+        totalFiles: number | null;
+        bytesTransferred: number;
+        totalBytes: number | null;
+        estimatedTimeRemaining: number | null;
+      } | null;
+    }>;
+
+    /** Start a backup operation */
+    start: (options: {
+      udid: string;
+      outputDir?: string;
+      forceFullBackup?: boolean;
+      skipApps?: boolean;
+    }) => Promise<{
+      success: boolean;
+      backupPath: string | null;
+      error: string | null;
+      duration: number;
+      deviceUdid: string;
+      isIncremental: boolean;
+      backupSize: number;
+    }>;
+
+    /** Cancel an in-progress backup */
+    cancel: () => Promise<{ success: boolean }>;
+
+    /** List all existing backups */
+    list: () => Promise<Array<{
+      path: string;
+      deviceUdid: string;
+      createdAt: Date;
+      size: number;
+      isEncrypted: boolean;
+      iosVersion: string | null;
+      deviceName: string | null;
+    }>>;
+
+    /** Delete a specific backup */
+    delete: (backupPath: string) => Promise<{ success: boolean; error?: string }>;
+
+    /** Clean up old backups */
+    cleanup: (keepCount?: number) => Promise<{ success: boolean; error?: string }>;
+
+    /** Subscribe to backup progress updates */
+    onProgress: (callback: (progress: {
+      phase: 'preparing' | 'transferring' | 'finishing' | 'extracting';
+      percentComplete: number;
+      currentFile: string | null;
+      filesTransferred: number;
+      totalFiles: number | null;
+      bytesTransferred: number;
+      totalBytes: number | null;
+      estimatedTimeRemaining: number | null;
+    }) => void) => () => void;
+
+    /** Subscribe to backup completion events */
+    onComplete: (callback: (result: {
+      success: boolean;
+      backupPath: string | null;
+      error: string | null;
+      duration: number;
+      deviceUdid: string;
+      isIncremental: boolean;
+      backupSize: number;
+    }) => void) => () => void;
+
+    /** Subscribe to backup error events */
+    onError: (callback: (error: { message: string }) => void) => () => void;
+  };
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [key: string]: any; // Allow other properties for backwards compatibility
 }

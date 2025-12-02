@@ -20,3 +20,6 @@ export * from './iosMessages';
 
 // Re-export iOS contact types
 export * from './iosContacts';
+
+// Re-export backup types
+export * from './backup';
