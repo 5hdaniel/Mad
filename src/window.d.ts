@@ -4,6 +4,7 @@
  */
 
 import type { GetConversationsResult } from './hooks/useConversations';
+import type { iOSDevice, BackupProgress } from './types/iphone';
 
 /**
  * iOS Device information from libimobiledevice
@@ -83,6 +84,28 @@ interface ElectronAPI {
   outlookSignout: () => Promise<{ success: boolean }>;
   onDeviceCode: (callback: (info: unknown) => void) => () => void;
   onExportProgress: (callback: (progress: unknown) => void) => () => void;
+
+  // iOS Device Detection (Windows only)
+  device?: {
+    startDetection: () => void;
+    stopDetection: () => void;
+    onConnected: (callback: (device: iOSDevice) => void) => (() => void) | undefined;
+    onDisconnected: (callback: () => void) => (() => void) | undefined;
+  };
+
+  // iOS Backup Management (Windows only)
+  backup?: {
+    start: (options: { udid: string }) => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
+    submitPassword: (options: { udid: string; password: string }) => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
+    cancel: () => Promise<void>;
+    onProgress: (callback: (progress: BackupProgress) => void) => (() => void) | undefined;
+  };
 }
 
 /**
