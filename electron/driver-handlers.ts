@@ -50,7 +50,7 @@ export function registerDriverHandlers(): void {
       try {
         await shell.openExternal(getITunesWebUrl());
         return { success: true };
-      } catch (fallbackError) {
+      } catch (_fallbackError) {
         return {
           success: false,
           error: 'Failed to open iTunes download page',

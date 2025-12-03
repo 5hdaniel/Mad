@@ -27,24 +27,33 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
   // Set up device detection and event listeners
   useEffect(() => {
     // Check if the device API is available (Windows only)
-    if (!window.electron?.device) {
+    if (!window.api?.device) {
       return;
     }
 
     // Start device detection
-    window.electron.device.startDetection?.();
+    window.api.device.startDetection?.();
 
     // Subscribe to device connected events
-    const unsubscribeConnected = window.electron.device.onConnected?.(
-      (connectedDevice: iOSDevice) => {
+    const unsubscribeConnected = window.api.device.onConnected?.(
+      (connectedDevice) => {
+        // Map iOSDeviceInfo to iOSDevice
+        const mappedDevice: iOSDevice = {
+          udid: connectedDevice.udid,
+          name: connectedDevice.name,
+          productType: connectedDevice.productType,
+          productVersion: connectedDevice.productVersion,
+          serialNumber: connectedDevice.serialNumber,
+          isConnected: connectedDevice.isConnected,
+        };
         setIsConnected(true);
-        setDevice(connectedDevice);
+        setDevice(mappedDevice);
         setError(null);
       }
     );
 
     // Subscribe to device disconnected events
-    const unsubscribeDisconnected = window.electron.device.onDisconnected?.(
+    const unsubscribeDisconnected = window.api.device.onDisconnected?.(
       () => {
         setIsConnected(false);
         setDevice(null);
@@ -57,25 +66,52 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
     );
 
     // Subscribe to backup progress events
-    const unsubscribeProgress = window.electron.backup?.onProgress?.(
-      (backupProgress: BackupProgress) => {
-        setProgress(backupProgress);
-        if (backupProgress.phase === 'complete') {
+    const unsubscribeProgress = window.api.backup?.onProgress?.(
+      (backupProgress) => {
+        // Map API phase to hook phase format
+        let mappedPhase: BackupProgress['phase'];
+        switch (backupProgress.phase) {
+          case 'preparing':
+            mappedPhase = 'preparing';
+            break;
+          case 'transferring':
+          case 'finishing':
+            mappedPhase = 'backing_up';
+            break;
+          case 'extracting':
+            mappedPhase = 'extracting';
+            break;
+          default:
+            mappedPhase = 'backing_up';
+        }
+
+        const mappedProgress: BackupProgress = {
+          phase: mappedPhase,
+          percent: backupProgress.percentComplete,
+          message: backupProgress.currentFile || undefined,
+        };
+        setProgress(mappedProgress);
+
+        if (backupProgress.percentComplete >= 100) {
           setSyncStatus('complete');
           setNeedsPassword(false);
-        } else if (backupProgress.phase === 'error') {
-          setSyncStatus('error');
-          setError(backupProgress.message || 'Backup failed');
         }
       }
     );
 
+    // Subscribe to backup error events
+    const unsubscribeError = window.api.backup?.onError?.((err) => {
+      setSyncStatus('error');
+      setError(err.message);
+    });
+
     // Cleanup on unmount
     return () => {
-      window.electron.device.stopDetection?.();
+      window.api?.device?.stopDetection?.();
       unsubscribeConnected?.();
       unsubscribeDisconnected?.();
       unsubscribeProgress?.();
+      unsubscribeError?.();
     };
   }, [syncStatus]);
 
@@ -94,7 +130,10 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
     });
 
     try {
-      const result = await window.electron.backup?.start?.({ udid: device.udid });
+      const result = await window.api?.backup?.start?.({
+        udid: device.udid,
+        skipApps: true, // Always skip apps to reduce backup size
+      });
 
       if (!result) {
         setSyncStatus('error');
@@ -130,7 +169,8 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
       setError(null);
 
       try {
-        const result = await window.electron.backup?.submitPassword?.({
+        // Use startWithPassword for encrypted backups
+        const result = await window.api?.backup?.startWithPassword?.({
           udid: device.udid,
           password,
         });
@@ -143,7 +183,7 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
         if (result.success) {
           setNeedsPassword(false);
           // Progress updates will come through the onProgress callback
-        } else if (result.error === 'INVALID_PASSWORD') {
+        } else if (result.errorCode === 'INVALID_PASSWORD') {
           setError('Incorrect password. Please try again.');
         } else {
           setError(result.error || 'Failed to verify password');
@@ -158,7 +198,7 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
   // Cancel ongoing sync
   const cancelSync = useCallback(async () => {
     try {
-      await window.electron.backup?.cancel?.();
+      await window.api?.backup?.cancel?.();
     } catch {
       // Ignore cancel errors
     }

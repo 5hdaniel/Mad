@@ -275,6 +275,40 @@ interface MainAPI {
       backupSize: number;
     }>;
 
+    /** Start a backup with password (for encrypted backups) */
+    startWithPassword?: (options: {
+      udid: string;
+      password: string;
+      outputPath?: string;
+    }) => Promise<{
+      success: boolean;
+      backupPath?: string;
+      error?: string;
+      errorCode?: string;
+    }>;
+
+    /** Check if a device requires encrypted backup */
+    checkEncryption?: (udid: string) => Promise<{
+      success: boolean;
+      isEncrypted?: boolean;
+      needsPassword?: boolean;
+      error?: string;
+    }>;
+
+    /** Verify a backup password */
+    verifyPassword?: (backupPath: string, password: string) => Promise<{
+      success: boolean;
+      valid?: boolean;
+      error?: string;
+    }>;
+
+    /** Check if an existing backup is encrypted */
+    isEncrypted?: (backupPath: string) => Promise<{
+      success: boolean;
+      isEncrypted?: boolean;
+      error?: string;
+    }>;
+
     /** Cancel an in-progress backup */
     cancel: () => Promise<{ success: boolean }>;
 
