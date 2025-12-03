@@ -168,7 +168,7 @@ const handleGoogleLogin = async (mainWindow) => {
                 // No additional keychain encryption needed - tokens cleared on app restart
                 const accessToken = tokens.access_token;
                 const refreshToken = tokens.refresh_token || null;
-                // Sync user to Supabase
+                // Sync user to Supabase (cloud) - doesn't require local database
                 await logService_1.default.info('Syncing user to Supabase...', 'AuthHandlers');
                 const cloudUser = await supabaseService_1.default.syncUser({
                     email: userInfo.email,
@@ -180,7 +180,41 @@ const handleGoogleLogin = async (mainWindow) => {
                     oauth_id: userInfo.id,
                 });
                 await logService_1.default.info('User synced to Supabase successfully', 'AuthHandlers', { cloudUserId: cloudUser.id });
-                // Create user in local database
+                // Validate subscription (cloud) - doesn't require local database
+                await logService_1.default.info('Validating subscription...', 'AuthHandlers');
+                const subscription = await supabaseService_1.default.validateSubscription(cloudUser.id);
+                await logService_1.default.info('Subscription validated', 'AuthHandlers', { tier: subscription?.tier });
+                // Check if local database is initialized (keychain has been set up)
+                // If not, send pending login data so frontend can show keychain explanation first
+                if (!databaseService_1.default.isInitialized()) {
+                    await logService_1.default.info('Database not initialized - sending pending login for keychain setup', 'AuthHandlers');
+                    // Close the auth window
+                    if (authWindow && !authWindow.isDestroyed()) {
+                        authWindow.close();
+                    }
+                    // Send pending login data to frontend
+                    if (mainWindow && !mainWindow.isDestroyed()) {
+                        mainWindow.webContents.send('google:login-pending', {
+                            success: true,
+                            pendingLogin: true,
+                            // OAuth data needed to complete login after keychain setup
+                            oauthData: {
+                                provider: 'google',
+                                userInfo,
+                                tokens: {
+                                    access_token: accessToken,
+                                    refresh_token: refreshToken,
+                                    expires_at: tokens.expires_at ?? new Date(Date.now() + 3600 * 1000).toISOString(),
+                                    scopes: Array.isArray(tokens.scopes) ? tokens.scopes : scopes,
+                                },
+                                cloudUser,
+                                subscription: subscription ?? undefined,
+                            },
+                        });
+                    }
+                    return; // Exit - frontend will complete login after keychain setup
+                }
+                // Database is initialized - proceed with local user creation
                 await logService_1.default.info('Looking up or creating local user...', 'AuthHandlers');
                 let localUser = await databaseService_1.default.getUserByOAuthId('google', userInfo.id);
                 const isNewUser = !localUser;
@@ -236,10 +270,6 @@ const handleGoogleLogin = async (mainWindow) => {
                 await logService_1.default.info('Creating session...', 'AuthHandlers');
                 const sessionToken = await databaseService_1.default.createSession(localUser.id);
                 await logService_1.default.info('Session created', 'AuthHandlers');
-                // Validate subscription
-                await logService_1.default.info('Validating subscription...', 'AuthHandlers');
-                const subscription = await supabaseService_1.default.validateSubscription(cloudUser.id);
-                await logService_1.default.info('Subscription validated', 'AuthHandlers', { tier: subscription?.tier });
                 // Register device
                 const deviceInfo = {
                     device_id: crypto_1.default.randomUUID(),
@@ -487,6 +517,11 @@ const handleGoogleConnectMailbox = async (mainWindow, userId) => {
             if (!authCompleted) {
                 googleAuthService_1.default.stopLocalServer();
                 logService_1.default.info('Google mailbox auth window closed by user, cleaned up server', 'AuthHandlers');
+                // Notify renderer that auth was cancelled
+                if (mainWindow && !mainWindow.isDestroyed()) {
+                    mainWindow.webContents.send('google:mailbox-cancelled');
+                    logService_1.default.info('Sent google:mailbox-cancelled event to renderer', 'AuthHandlers');
+                }
             }
         });
         // Intercept navigation to callback URL to extract code directly (faster than HTTP round-trip)
@@ -709,7 +744,7 @@ const handleMicrosoftLogin = async (mainWindow) => {
                 // Session-only OAuth: no keychain encryption needed
                 const accessToken = tokens.access_token;
                 const refreshToken = tokens.refresh_token || null;
-                // Sync user to Supabase
+                // Sync user to Supabase (cloud) - doesn't require local database
                 await logService_1.default.info('Syncing user to Supabase...', 'AuthHandlers');
                 const cloudUser = await supabaseService_1.default.syncUser({
                     email: userInfo.email,
@@ -721,7 +756,41 @@ const handleMicrosoftLogin = async (mainWindow) => {
                     oauth_id: userInfo.id,
                 });
                 await logService_1.default.info('User synced to Supabase successfully', 'AuthHandlers', { cloudUserId: cloudUser.id });
-                // Create user in local database
+                // Validate subscription (cloud) - doesn't require local database
+                await logService_1.default.info('Validating subscription...', 'AuthHandlers');
+                const subscription = await supabaseService_1.default.validateSubscription(cloudUser.id);
+                await logService_1.default.info('Subscription validated', 'AuthHandlers', { tier: subscription?.tier });
+                // Check if local database is initialized (keychain has been set up)
+                // If not, send pending login data so frontend can show keychain explanation first
+                if (!databaseService_1.default.isInitialized()) {
+                    await logService_1.default.info('Database not initialized - sending pending login for keychain setup', 'AuthHandlers');
+                    // Close the auth window
+                    if (authWindow && !authWindow.isDestroyed()) {
+                        authWindow.close();
+                    }
+                    // Send pending login data to frontend
+                    if (mainWindow && !mainWindow.isDestroyed()) {
+                        mainWindow.webContents.send('microsoft:login-pending', {
+                            success: true,
+                            pendingLogin: true,
+                            // OAuth data needed to complete login after keychain setup
+                            oauthData: {
+                                provider: 'microsoft',
+                                userInfo,
+                                tokens: {
+                                    access_token: accessToken,
+                                    refresh_token: refreshToken,
+                                    expires_in: tokens.expires_in,
+                                    scope: tokens.scope,
+                                },
+                                cloudUser,
+                                subscription: subscription ?? undefined,
+                            },
+                        });
+                    }
+                    return; // Exit - frontend will complete login after keychain setup
+                }
+                // Database is initialized - proceed with local user creation
                 await logService_1.default.info('Looking up or creating local user...', 'AuthHandlers');
                 let localUser = await databaseService_1.default.getUserByOAuthId('microsoft', userInfo.id);
                 if (!localUser) {
@@ -784,10 +853,6 @@ const handleMicrosoftLogin = async (mainWindow) => {
                 await logService_1.default.info('Creating session...', 'AuthHandlers');
                 const sessionToken = await databaseService_1.default.createSession(localUser.id);
                 await logService_1.default.info('Session created', 'AuthHandlers');
-                // Validate subscription
-                await logService_1.default.info('Validating subscription...', 'AuthHandlers');
-                const subscription = await supabaseService_1.default.validateSubscription(cloudUser.id);
-                await logService_1.default.info('Subscription validated', 'AuthHandlers', { tier: subscription?.tier });
                 // Register device
                 const deviceInfo = {
                     device_id: crypto_1.default.randomUUID(),
@@ -922,6 +987,11 @@ const handleMicrosoftConnectMailbox = async (mainWindow, userId) => {
             if (!authCompleted) {
                 microsoftAuthService_1.default.stopLocalServer();
                 logService_1.default.info('Microsoft mailbox auth window closed by user, cleaned up server', 'AuthHandlers');
+                // Notify renderer that auth was cancelled
+                if (mainWindow && !mainWindow.isDestroyed()) {
+                    mainWindow.webContents.send('microsoft:mailbox-cancelled');
+                    logService_1.default.info('Sent microsoft:mailbox-cancelled event to renderer', 'AuthHandlers');
+                }
             }
         });
         // Intercept navigation to callback URL to extract code directly (faster than HTTP round-trip)
@@ -1042,6 +1112,116 @@ const handleMicrosoftConnectMailbox = async (mainWindow, userId) => {
         };
     }
 };
+/**
+ * Complete a pending login after keychain setup
+ * This is called when OAuth succeeded but database wasn't initialized yet.
+ * Now that the database is ready, we can save the user locally.
+ */
+const handleCompletePendingLogin = async (_event, oauthData) => {
+    try {
+        await logService_1.default.info(`Completing pending ${oauthData.provider} login after keychain setup`, 'AuthHandlers');
+        const { provider, userInfo, tokens, cloudUser, subscription } = oauthData;
+        // Create user in local database
+        await logService_1.default.info('Looking up or creating local user...', 'AuthHandlers');
+        let localUser = await databaseService_1.default.getUserByOAuthId(provider, userInfo.id);
+        const isNewUser = !localUser;
+        if (!localUser) {
+            localUser = await databaseService_1.default.createUser({
+                email: userInfo.email,
+                first_name: userInfo.given_name,
+                last_name: userInfo.family_name,
+                display_name: userInfo.name,
+                avatar_url: userInfo.picture,
+                oauth_provider: provider,
+                oauth_id: userInfo.id,
+                subscription_tier: cloudUser.subscription_tier ?? 'free',
+                subscription_status: cloudUser.subscription_status ?? 'trial',
+                trial_ends_at: cloudUser.trial_ends_at,
+                is_active: true,
+            });
+        }
+        else {
+            // Update existing user - sync profile AND user state from cloud (source of truth)
+            await databaseService_1.default.updateUser(localUser.id, {
+                email: userInfo.email,
+                first_name: userInfo.given_name,
+                last_name: userInfo.family_name,
+                display_name: userInfo.name,
+                avatar_url: userInfo.picture,
+                terms_accepted_at: cloudUser.terms_accepted_at,
+                privacy_policy_accepted_at: cloudUser.privacy_policy_accepted_at,
+                terms_version_accepted: cloudUser.terms_version_accepted,
+                privacy_policy_version_accepted: cloudUser.privacy_policy_version_accepted,
+                email_onboarding_completed_at: cloudUser.email_onboarding_completed_at,
+                subscription_tier: cloudUser.subscription_tier ?? 'free',
+                subscription_status: cloudUser.subscription_status ?? 'trial',
+            });
+        }
+        if (!localUser) {
+            throw new Error('Local user is unexpectedly null after creation/update');
+        }
+        // Update last login
+        await databaseService_1.default.updateLastLogin(localUser.id);
+        const refreshedUser = await databaseService_1.default.getUserById(localUser.id);
+        if (!refreshedUser) {
+            throw new Error('Failed to retrieve user after update');
+        }
+        localUser = refreshedUser;
+        // Calculate expiry time
+        const expiresAt = tokens.expires_at
+            ? tokens.expires_at
+            : tokens.expires_in
+                ? new Date(Date.now() + tokens.expires_in * 1000).toISOString()
+                : new Date(Date.now() + 3600 * 1000).toISOString();
+        // Save auth token
+        await databaseService_1.default.saveOAuthToken(localUser.id, provider, 'authentication', {
+            access_token: tokens.access_token,
+            refresh_token: tokens.refresh_token ?? undefined,
+            token_expires_at: expiresAt,
+            scopes_granted: tokens.scopes ? tokens.scopes.join(' ') : tokens.scope || '',
+        });
+        // Create session
+        const sessionToken = await databaseService_1.default.createSession(localUser.id);
+        // Register device
+        const deviceInfo = {
+            device_id: crypto_1.default.randomUUID(),
+            device_name: os_1.default.hostname(),
+            os: os_1.default.platform() + ' ' + os_1.default.release(),
+            app_version: electron_1.app.getVersion(),
+        };
+        await supabaseService_1.default.registerDevice(cloudUser.id, deviceInfo);
+        // Track login event
+        await supabaseService_1.default.trackEvent(cloudUser.id, 'user_login', { provider }, deviceInfo.device_id, electron_1.app.getVersion());
+        // Audit log
+        await auditService_1.default.log({
+            userId: localUser.id,
+            action: 'LOGIN',
+            resourceType: 'SESSION',
+            resourceId: sessionToken,
+            metadata: { provider, isNewUser, pendingLogin: true },
+            success: true,
+        });
+        await logService_1.default.info(`Pending ${provider} login completed successfully`, 'AuthHandlers', {
+            userId: localUser.id,
+        });
+        return {
+            success: true,
+            user: localUser,
+            sessionToken,
+            subscription,
+            isNewUser,
+        };
+    }
+    catch (error) {
+        await logService_1.default.error('Failed to complete pending login', 'AuthHandlers', {
+            error: error instanceof Error ? error.message : 'Unknown error',
+        });
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+        };
+    }
+};
 // Register all handlers (to be called in main.js)
 const registerAuthHandlers = (mainWindow) => {
     // Google Auth - Login
@@ -1053,6 +1233,9 @@ const registerAuthHandlers = (mainWindow) => {
     electron_1.ipcMain.handle('auth:microsoft:login', () => handleMicrosoftLogin(mainWindow));
     // Microsoft Auth - Mailbox Connection
     electron_1.ipcMain.handle('auth:microsoft:connect-mailbox', (event, userId) => handleMicrosoftConnectMailbox(mainWindow, userId));
+    // Complete pending login (after keychain setup)
+    // Used when OAuth succeeds but database wasn't initialized yet
+    electron_1.ipcMain.handle('auth:complete-pending-login', handleCompletePendingLogin);
     // Logout
     electron_1.ipcMain.handle('auth:logout', async (event, sessionToken) => {
         try {

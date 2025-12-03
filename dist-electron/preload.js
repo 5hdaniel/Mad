@@ -92,6 +92,13 @@ electron_1.contextBridge.exposeInMainWorld('api', {
          * @returns {Promise<{success: boolean, completed: boolean, error?: string}>} Onboarding status
          */
         checkEmailOnboarding: (userId) => electron_1.ipcRenderer.invoke('auth:check-email-onboarding', userId),
+        /**
+         * Completes a pending login after keychain/database setup
+         * Called when OAuth succeeded but database wasn't initialized yet
+         * @param {Object} oauthData - The pending OAuth data from login-pending event
+         * @returns {Promise<{success: boolean, user?: object, sessionToken?: string, subscription?: object, isNewUser?: boolean, error?: string}>} Login completion result
+         */
+        completePendingLogin: (oauthData) => electron_1.ipcRenderer.invoke('auth:complete-pending-login', oauthData),
     },
     /**
      * ============================================
@@ -403,6 +410,12 @@ electron_1.contextBridge.exposeInMainWorld('api', {
          */
         initializeDatabase: () => electron_1.ipcRenderer.invoke('system:initialize-database'),
         /**
+         * Checks if the database is initialized and ready for operations
+         * Used to determine if we can save user data after OAuth
+         * @returns {Promise<{success: boolean, initialized: boolean}>} Database initialization status
+         */
+        isDatabaseInitialized: () => electron_1.ipcRenderer.invoke('system:is-database-initialized'),
+        /**
          * Runs the complete permission setup flow for onboarding
          * @returns {Promise<{success: boolean, error?: string}>} Setup result
          */
@@ -468,6 +481,17 @@ electron_1.contextBridge.exposeInMainWorld('api', {
          * @returns {Promise<{healthy: boolean, issues?: Array, error?: string}>} Health check result
          */
         healthCheck: (userId, provider) => electron_1.ipcRenderer.invoke('system:health-check', userId, provider),
+        /**
+         * Opens support email with pre-filled content
+         * @param {string} errorDetails - Optional error details to include
+         * @returns {Promise<{success: boolean, error?: string}>} Result
+         */
+        contactSupport: (errorDetails) => electron_1.ipcRenderer.invoke('system:contact-support', errorDetails),
+        /**
+         * Gets diagnostic information for support requests
+         * @returns {Promise<{success: boolean, diagnostics?: string, error?: string}>} Diagnostic data
+         */
+        getDiagnostics: () => electron_1.ipcRenderer.invoke('system:get-diagnostics'),
     },
     /**
      * ============================================
@@ -486,6 +510,16 @@ electron_1.contextBridge.exposeInMainWorld('api', {
         return () => electron_1.ipcRenderer.removeListener('google:login-complete', listener);
     },
     /**
+     * Listens for Google login pending events (OAuth succeeded, needs keychain setup)
+     * @param {Function} callback - Callback function to handle pending login data
+     * @returns {Function} Cleanup function to remove listener
+     */
+    onGoogleLoginPending: (callback) => {
+        const listener = (_, result) => callback(result);
+        electron_1.ipcRenderer.on('google:login-pending', listener);
+        return () => electron_1.ipcRenderer.removeListener('google:login-pending', listener);
+    },
+    /**
      * Listens for Google mailbox connection events
      * @param {Function} callback - Callback function to handle connection result
      * @returns {Function} Cleanup function to remove listener
@@ -494,6 +528,16 @@ electron_1.contextBridge.exposeInMainWorld('api', {
         const listener = (_, result) => callback(result);
         electron_1.ipcRenderer.on('google:mailbox-connected', listener);
         return () => electron_1.ipcRenderer.removeListener('google:mailbox-connected', listener);
+    },
+    /**
+     * Listens for Google mailbox connection cancelled events (user closed popup)
+     * @param {Function} callback - Callback function to handle cancellation
+     * @returns {Function} Cleanup function to remove listener
+     */
+    onGoogleMailboxCancelled: (callback) => {
+        const listener = () => callback();
+        electron_1.ipcRenderer.on('google:mailbox-cancelled', listener);
+        return () => electron_1.ipcRenderer.removeListener('google:mailbox-cancelled', listener);
     },
     /**
      * Listens for Microsoft login completion events
@@ -506,6 +550,16 @@ electron_1.contextBridge.exposeInMainWorld('api', {
         return () => electron_1.ipcRenderer.removeListener('microsoft:login-complete', listener);
     },
     /**
+     * Listens for Microsoft login pending events (OAuth succeeded, needs keychain setup)
+     * @param {Function} callback - Callback function to handle pending login data
+     * @returns {Function} Cleanup function to remove listener
+     */
+    onMicrosoftLoginPending: (callback) => {
+        const listener = (_, result) => callback(result);
+        electron_1.ipcRenderer.on('microsoft:login-pending', listener);
+        return () => electron_1.ipcRenderer.removeListener('microsoft:login-pending', listener);
+    },
+    /**
      * Listens for Microsoft mailbox connection events
      * @param {Function} callback - Callback function to handle connection result
      * @returns {Function} Cleanup function to remove listener
@@ -514,6 +568,16 @@ electron_1.contextBridge.exposeInMainWorld('api', {
         const listener = (_, result) => callback(result);
         electron_1.ipcRenderer.on('microsoft:mailbox-connected', listener);
         return () => electron_1.ipcRenderer.removeListener('microsoft:mailbox-connected', listener);
+    },
+    /**
+     * Listens for Microsoft mailbox connection cancelled events (user closed popup)
+     * @param {Function} callback - Callback function to handle cancellation
+     * @returns {Function} Cleanup function to remove listener
+     */
+    onMicrosoftMailboxCancelled: (callback) => {
+        const listener = () => callback();
+        electron_1.ipcRenderer.on('microsoft:mailbox-cancelled', listener);
+        return () => electron_1.ipcRenderer.removeListener('microsoft:mailbox-cancelled', listener);
     },
     /**
      * Listens for transaction scan progress updates
@@ -538,6 +602,20 @@ electron_1.contextBridge.exposeInMainWorld('api', {
          * @returns {Promise<{success: boolean, error?: string}>} Open result
          */
         openExternal: (url) => electron_1.ipcRenderer.invoke('shell:open-external', url),
+    },
+    /**
+     * ============================================
+     * APPLICATION CONTROL METHODS
+     * ============================================
+     * Methods for controlling the application lifecycle
+     */
+    app: {
+        /**
+         * Quits the application
+         * Used when user declines terms or wants to exit
+         * @returns {Promise<void>}
+         */
+        quit: () => electron_1.ipcRenderer.invoke('app:quit'),
     },
 });
 /**

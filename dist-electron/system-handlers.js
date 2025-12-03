@@ -14,10 +14,13 @@ const permissionService = require('./services/permissionService').default;
 const connectionStatusService = require('./services/connectionStatusService').default;
 const macOSPermissionHelper = require('./services/macOSPermissionHelper').default;
 const databaseEncryptionService_1 = require("./services/databaseEncryptionService");
+const databaseService_1 = __importDefault(require("./services/databaseService"));
 const auth_handlers_1 = require("./auth-handlers");
 const os_1 = __importDefault(require("os"));
 // Import validation utilities
 const validation_1 = require("./utils/validation");
+// Import logging service
+const logService_1 = __importDefault(require("./services/logService"));
 /**
  * Get user-friendly error message for secure storage unavailability
  */
@@ -61,6 +64,9 @@ If you're seeing this error:
             return 'Please ensure your operating system\'s credential storage service is available and running.';
     }
 }
+// Guard to prevent multiple concurrent initializations
+let isInitializing = false;
+let initializationComplete = false;
 /**
  * Register all system and permission-related IPC handlers
  */
@@ -81,12 +87,13 @@ function registerSystemHandlers() {
             };
         }
         catch (error) {
-            console.error('[Main] Secure storage status check failed:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            logService_1.default.error('Secure storage status check failed', 'SystemHandlers', { error: errorMessage });
             return {
                 success: false,
                 available: false,
                 platform: os_1.default.platform(),
-                error: error instanceof Error ? error.message : 'Unknown error',
+                error: errorMessage,
             };
         }
     });
@@ -101,10 +108,42 @@ function registerSystemHandlers() {
      * This is more secure and avoids multiple keychain prompts.
      */
     electron_1.ipcMain.handle('system:initialize-secure-storage', async () => {
+        // If already initialized, return immediately
+        if (initializationComplete) {
+            logService_1.default.debug('Database already initialized, skipping', 'SystemHandlers');
+            return {
+                success: true,
+                available: true,
+                platform: os_1.default.platform(),
+            };
+        }
+        // If initialization is in progress, wait for it to complete
+        if (isInitializing) {
+            logService_1.default.debug('Database initialization already in progress, waiting...', 'SystemHandlers');
+            // Wait for current initialization to complete (poll every 100ms)
+            let waitCount = 0;
+            while (isInitializing && waitCount < 100) {
+                await new Promise(resolve => setTimeout(resolve, 100));
+                waitCount++;
+            }
+            return {
+                success: initializationComplete,
+                available: initializationComplete,
+                platform: os_1.default.platform(),
+                error: initializationComplete ? undefined : 'Initialization timeout',
+            };
+        }
+        isInitializing = true;
         try {
             // Initialize database - this triggers keychain prompt for db encryption key
             await (0, auth_handlers_1.initializeDatabase)();
-            console.log('[Main] Database initialized with encryption');
+            logService_1.default.info('Database initialized with encryption', 'SystemHandlers');
+            // Session-only OAuth: Clear all sessions and OAuth tokens
+            // This forces users to re-authenticate each app launch for better security
+            await databaseService_1.default.clearAllSessions();
+            await databaseService_1.default.clearAllOAuthTokens();
+            logService_1.default.info('Cleared sessions and OAuth tokens for session-only OAuth', 'SystemHandlers');
+            initializationComplete = true;
             return {
                 success: true,
                 available: true,
@@ -112,15 +151,19 @@ function registerSystemHandlers() {
             };
         }
         catch (error) {
-            console.error('[Main] Database initialization failed:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Database initialization failed. Please try again.';
+            logService_1.default.error('Database initialization failed', 'SystemHandlers', { error: errorMessage });
             const platform = os_1.default.platform();
             return {
                 success: false,
                 available: false,
                 platform,
                 guidance: getSecureStorageGuidance(platform),
-                error: error instanceof Error ? error.message : 'Database initialization failed. Please try again.',
+                error: errorMessage,
             };
+        }
+        finally {
+            isInitializing = false;
         }
     });
     /**
@@ -133,7 +176,8 @@ function registerSystemHandlers() {
             return { success: true, hasKeyStore };
         }
         catch (error) {
-            console.error('[Main] Key store check failed:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            logService_1.default.error('Key store check failed', 'SystemHandlers', { error: errorMessage });
             return { success: false, hasKeyStore: false };
         }
     });
@@ -142,16 +186,56 @@ function registerSystemHandlers() {
      * This should be called after the user has authorized keychain access
      */
     electron_1.ipcMain.handle('system:initialize-database', async () => {
+        // If already initialized, return immediately
+        if (initializationComplete) {
+            logService_1.default.debug('Database already initialized via secure storage, skipping', 'SystemHandlers');
+            return { success: true };
+        }
+        // If initialization is in progress, wait for it
+        if (isInitializing) {
+            logService_1.default.debug('Database initialization already in progress, waiting...', 'SystemHandlers');
+            let waitCount = 0;
+            while (isInitializing && waitCount < 100) {
+                await new Promise(resolve => setTimeout(resolve, 100));
+                waitCount++;
+            }
+            return {
+                success: initializationComplete,
+                error: initializationComplete ? undefined : 'Initialization timeout',
+            };
+        }
+        isInitializing = true;
         try {
             await (0, auth_handlers_1.initializeDatabase)();
+            initializationComplete = true;
+            logService_1.default.info('Database initialized successfully', 'SystemHandlers');
             return { success: true };
         }
         catch (error) {
-            console.error('[Main] Database initialization failed:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            logService_1.default.error('Database initialization failed', 'SystemHandlers', { error: errorMessage });
             return {
                 success: false,
-                error: error instanceof Error ? error.message : 'Unknown error',
+                error: errorMessage,
             };
+        }
+        finally {
+            isInitializing = false;
+        }
+    });
+    /**
+     * Check if the database is initialized
+     * Used to determine if we can perform database operations (e.g., save user after OAuth)
+     */
+    electron_1.ipcMain.handle('system:is-database-initialized', async () => {
+        try {
+            const initialized = databaseService_1.default.isInitialized();
+            return { success: true, initialized };
+        }
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            logService_1.default.error('Database initialization check failed', 'SystemHandlers', { error: errorMessage });
+            return { success: false, initialized: false };
         }
     });
     // ===== PERMISSION SETUP (ONBOARDING) =====
@@ -167,10 +251,11 @@ function registerSystemHandlers() {
             };
         }
         catch (error) {
-            console.error('[Main] Permission setup failed:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            logService_1.default.error('Permission setup failed', 'SystemHandlers', { error: errorMessage });
             return {
                 success: false,
-                error: error instanceof Error ? error.message : 'Unknown error',
+                error: errorMessage,
             };
         }
     });
@@ -183,10 +268,11 @@ function registerSystemHandlers() {
             return result;
         }
         catch (error) {
-            console.error('[Main] Contacts permission request failed:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            logService_1.default.error('Contacts permission request failed', 'SystemHandlers', { error: errorMessage });
             return {
                 success: false,
-                error: error instanceof Error ? error.message : 'Unknown error',
+                error: errorMessage,
             };
         }
     });
@@ -199,10 +285,11 @@ function registerSystemHandlers() {
             return result;
         }
         catch (error) {
-            console.error('[Main] Full Disk Access setup failed:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            logService_1.default.error('Full Disk Access setup failed', 'SystemHandlers', { error: errorMessage });
             return {
                 success: false,
-                error: error instanceof Error ? error.message : 'Unknown error',
+                error: errorMessage,
             };
         }
     });
@@ -220,7 +307,8 @@ function registerSystemHandlers() {
             return result;
         }
         catch (error) {
-            console.error('[Main] Failed to open privacy pane:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            logService_1.default.error('Failed to open privacy pane', 'SystemHandlers', { error: errorMessage });
             if (error instanceof validation_1.ValidationError) {
                 return {
                     success: false,
@@ -229,7 +317,7 @@ function registerSystemHandlers() {
             }
             return {
                 success: false,
-                error: error instanceof Error ? error.message : 'Unknown error',
+                error: errorMessage,
             };
         }
     });
@@ -245,11 +333,12 @@ function registerSystemHandlers() {
             };
         }
         catch (error) {
-            console.error('[Main] Full Disk Access status check failed:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            logService_1.default.error('Full Disk Access status check failed', 'SystemHandlers', { error: errorMessage });
             return {
                 success: false,
                 granted: false,
-                error: error instanceof Error ? error.message : 'Unknown error',
+                error: errorMessage,
             };
         }
     });
@@ -266,7 +355,8 @@ function registerSystemHandlers() {
             };
         }
         catch (error) {
-            console.error('[Main] Full Disk Access check failed:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            logService_1.default.error('Full Disk Access check failed', 'SystemHandlers', { error: errorMessage });
             return {
                 success: false,
                 hasPermission: false,
@@ -286,7 +376,8 @@ function registerSystemHandlers() {
             };
         }
         catch (error) {
-            console.error('[Main] Contacts permission check failed:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            logService_1.default.error('Contacts permission check failed', 'SystemHandlers', { error: errorMessage });
             return {
                 success: false,
                 hasPermission: false,
@@ -306,7 +397,8 @@ function registerSystemHandlers() {
             };
         }
         catch (error) {
-            console.error('[Main] All permissions check failed:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            logService_1.default.error('All permissions check failed', 'SystemHandlers', { error: errorMessage });
             return {
                 success: false,
                 error: permissionService.getPermissionError(error),
@@ -328,7 +420,8 @@ function registerSystemHandlers() {
             };
         }
         catch (error) {
-            console.error('[Main] Google connection check failed:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            logService_1.default.error('Google connection check failed', 'SystemHandlers', { error: errorMessage });
             if (error instanceof validation_1.ValidationError) {
                 return {
                     success: false,
@@ -365,7 +458,8 @@ function registerSystemHandlers() {
             };
         }
         catch (error) {
-            console.error('[Main] Microsoft connection check failed:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            logService_1.default.error('Microsoft connection check failed', 'SystemHandlers', { error: errorMessage });
             if (error instanceof validation_1.ValidationError) {
                 return {
                     success: false,
@@ -402,7 +496,8 @@ function registerSystemHandlers() {
             };
         }
         catch (error) {
-            console.error('[Main] All connections check failed:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            logService_1.default.error('All connections check failed', 'SystemHandlers', { error: errorMessage });
             if (error instanceof validation_1.ValidationError) {
                 return {
                     success: false,
@@ -431,7 +526,6 @@ function registerSystemHandlers() {
             // Validate inputs (both optional)
             const validatedUserId = userId ? (0, validation_1.validateUserId)(userId) : null;
             const validatedProvider = provider ? (0, validation_1.validateProvider)(provider) : null;
-            console.log('[Main] Health check called with userId:', validatedUserId, 'provider:', validatedProvider);
             const [permissions, connection, contactsLoading] = await Promise.all([
                 permissionService.checkAllPermissions(),
                 validatedUserId && validatedProvider ? (validatedProvider === 'google'
@@ -439,8 +533,6 @@ function registerSystemHandlers() {
                     : connectionStatusService.checkMicrosoftConnection(validatedUserId)) : null,
                 permissionService.checkContactsLoading(),
             ]);
-            console.log('[Main] Connection check result:', connection);
-            console.log('[Main] Contacts loading check result:', contactsLoading);
             const issues = [];
             // Add permission issues
             if (!permissions.allGranted) {
@@ -448,12 +540,10 @@ function registerSystemHandlers() {
             }
             // Add contacts loading issue
             if (!contactsLoading.canLoadContacts && contactsLoading.error) {
-                console.log('[Main] Adding contacts loading issue');
                 issues.push(contactsLoading.error);
             }
             // Add connection issue (only for the provider the user logged in with)
             if (connection && connection.error) {
-                console.log('[Main] Adding connection issue for provider:', validatedProvider);
                 issues.push({
                     type: 'OAUTH_CONNECTION',
                     provider: validatedProvider,
@@ -475,7 +565,8 @@ function registerSystemHandlers() {
             };
         }
         catch (error) {
-            console.error('[Main] System health check failed:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            logService_1.default.error('System health check failed', 'SystemHandlers', { error: errorMessage });
             if (error instanceof validation_1.ValidationError) {
                 return {
                     success: false,
@@ -493,9 +584,144 @@ function registerSystemHandlers() {
                 error: {
                     type: 'HEALTH_CHECK_FAILED',
                     userMessage: 'Could not check system status',
-                    details: error instanceof Error ? error.message : 'Unknown error',
+                    details: errorMessage,
                 },
             };
         }
+    });
+    // ===== SUPPORT & EXTERNAL LINKS =====
+    /**
+     * Open external URL in default browser
+     */
+    electron_1.ipcMain.handle('shell:open-external', async (event, url) => {
+        try {
+            // Validate URL
+            const validatedUrl = (0, validation_1.validateString)(url, 'url', {
+                required: true,
+                maxLength: 2000,
+            });
+            if (!validatedUrl) {
+                return {
+                    success: false,
+                    error: 'URL is required',
+                };
+            }
+            // Only allow safe protocols
+            const allowedProtocols = ['https:', 'http:', 'mailto:'];
+            let parsedUrl;
+            try {
+                parsedUrl = new URL(validatedUrl);
+            }
+            catch {
+                return {
+                    success: false,
+                    error: 'Invalid URL format',
+                };
+            }
+            if (!allowedProtocols.includes(parsedUrl.protocol)) {
+                return {
+                    success: false,
+                    error: `Protocol not allowed: ${parsedUrl.protocol}`,
+                };
+            }
+            await electron_1.shell.openExternal(validatedUrl);
+            return { success: true };
+        }
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            logService_1.default.error('Failed to open external URL', 'SystemHandlers', { error: errorMessage });
+            if (error instanceof validation_1.ValidationError) {
+                return {
+                    success: false,
+                    error: `Validation error: ${error.message}`,
+                };
+            }
+            return {
+                success: false,
+                error: errorMessage,
+            };
+        }
+    });
+    /**
+     * Open support email with pre-filled content
+     */
+    electron_1.ipcMain.handle('system:contact-support', async (event, errorDetails) => {
+        try {
+            const supportEmail = 'magicauditwa@gmail.com';
+            const subject = encodeURIComponent('Magic Audit Support Request');
+            const body = encodeURIComponent(`Hi Magic Audit Support,\n\n` +
+                `I need help with:\n\n` +
+                `${errorDetails ? `Error details: ${errorDetails}\n\n` : ''}` +
+                `Thank you for your assistance.\n`);
+            const mailtoUrl = `mailto:${supportEmail}?subject=${subject}&body=${body}`;
+            await electron_1.shell.openExternal(mailtoUrl);
+            return { success: true };
+        }
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            logService_1.default.error('Failed to open support email', 'SystemHandlers', { error: errorMessage });
+            return {
+                success: false,
+                error: errorMessage,
+            };
+        }
+    });
+    /**
+     * Get diagnostic information for support requests
+     */
+    electron_1.ipcMain.handle('system:get-diagnostics', async () => {
+        try {
+            const { app } = require('electron');
+            const os = require('os');
+            const diagnostics = {
+                app: {
+                    version: app.getVersion(),
+                    name: app.getName(),
+                    locale: app.getLocale(),
+                },
+                system: {
+                    platform: process.platform,
+                    arch: process.arch,
+                    osVersion: os.release(),
+                    osType: os.type(),
+                    nodeVersion: process.version,
+                    electronVersion: process.versions.electron,
+                },
+                memory: {
+                    total: `${Math.round(os.totalmem() / 1024 / 1024 / 1024)}GB`,
+                    free: `${Math.round(os.freemem() / 1024 / 1024 / 1024)}GB`,
+                },
+                timestamp: new Date().toISOString(),
+            };
+            const diagnosticString = Object.entries(diagnostics)
+                .map(([category, values]) => {
+                if (typeof values === 'object') {
+                    const items = Object.entries(values)
+                        .map(([key, val]) => `  ${key}: ${val}`)
+                        .join('\n');
+                    return `${category.toUpperCase()}:\n${items}`;
+                }
+                return `${category}: ${values}`;
+            })
+                .join('\n\n');
+            return { success: true, diagnostics: diagnosticString };
+        }
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            logService_1.default.error('Failed to get diagnostics', 'SystemHandlers', { error: errorMessage });
+            return {
+                success: false,
+                error: errorMessage,
+            };
+        }
+    });
+    // ===== APPLICATION CONTROL =====
+    /**
+     * Quit the application
+     * Used when user declines terms or wants to exit
+     */
+    electron_1.ipcMain.handle('app:quit', async () => {
+        logService_1.default.info('App quit requested by renderer', 'SystemHandlers');
+        electron_1.app.quit();
     });
 }
