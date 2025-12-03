@@ -845,6 +845,133 @@ contextBridge.exposeInMainWorld('api', {
       return () => ipcRenderer.removeListener('device:disconnected', listener);
     },
   },
+
+  /**
+   * ============================================
+   * SYNC METHODS (Windows iPhone Sync)
+   * ============================================
+   * Complete iPhone sync flow: backup -> decrypt -> parse -> resolve
+   */
+  sync: {
+    /**
+     * Starts a complete sync operation for an iPhone
+     * @param {Object} options - Sync options
+     * @param {string} options.udid - Device UDID to sync
+     * @param {string} [options.password] - Password for encrypted backups
+     * @param {boolean} [options.forceFullBackup] - Force full backup (no incremental)
+     * @returns {Promise<SyncResult>} Sync result with messages, contacts, conversations
+     */
+    start: (options: { udid: string; password?: string; forceFullBackup?: boolean }) =>
+      ipcRenderer.invoke('sync:start', options),
+
+    /**
+     * Cancels an in-progress sync operation
+     * @returns {Promise<{success: boolean}>} Cancellation result
+     */
+    cancel: () => ipcRenderer.invoke('sync:cancel'),
+
+    /**
+     * Gets current sync status
+     * @returns {Promise<{isRunning: boolean, phase: string}>} Current sync status
+     */
+    getStatus: () => ipcRenderer.invoke('sync:status'),
+
+    /**
+     * Gets all connected iOS devices
+     * @returns {Promise<Array>} List of connected devices
+     */
+    getDevices: () => ipcRenderer.invoke('sync:devices'),
+
+    /**
+     * Starts device detection polling
+     * @param {number} [intervalMs] - Polling interval in milliseconds
+     * @returns {Promise<{success: boolean}>} Start result
+     */
+    startDetection: (intervalMs?: number) => ipcRenderer.invoke('sync:start-detection', intervalMs),
+
+    /**
+     * Stops device detection polling
+     * @returns {Promise<{success: boolean}>} Stop result
+     */
+    stopDetection: () => ipcRenderer.invoke('sync:stop-detection'),
+
+    /**
+     * Subscribes to sync progress updates
+     * @param {Function} callback - Callback with progress info
+     * @returns {Function} Cleanup function to remove listener
+     */
+    onProgress: (callback: (progress: any) => void) => {
+      const listener = (_: IpcRendererEvent, progress: any) => callback(progress);
+      ipcRenderer.on('sync:progress', listener);
+      return () => ipcRenderer.removeListener('sync:progress', listener);
+    },
+
+    /**
+     * Subscribes to sync phase changes
+     * @param {Function} callback - Callback with phase name
+     * @returns {Function} Cleanup function to remove listener
+     */
+    onPhase: (callback: (phase: string) => void) => {
+      const listener = (_: IpcRendererEvent, phase: string) => callback(phase);
+      ipcRenderer.on('sync:phase', listener);
+      return () => ipcRenderer.removeListener('sync:phase', listener);
+    },
+
+    /**
+     * Subscribes to device connected events during sync
+     * @param {Function} callback - Callback with device info
+     * @returns {Function} Cleanup function to remove listener
+     */
+    onDeviceConnected: (callback: (device: any) => void) => {
+      const listener = (_: IpcRendererEvent, device: any) => callback(device);
+      ipcRenderer.on('sync:device-connected', listener);
+      return () => ipcRenderer.removeListener('sync:device-connected', listener);
+    },
+
+    /**
+     * Subscribes to device disconnected events during sync
+     * @param {Function} callback - Callback with device info
+     * @returns {Function} Cleanup function to remove listener
+     */
+    onDeviceDisconnected: (callback: (device: any) => void) => {
+      const listener = (_: IpcRendererEvent, device: any) => callback(device);
+      ipcRenderer.on('sync:device-disconnected', listener);
+      return () => ipcRenderer.removeListener('sync:device-disconnected', listener);
+    },
+
+    /**
+     * Subscribes to password required events (encrypted backup)
+     * @param {Function} callback - Callback when password is needed
+     * @returns {Function} Cleanup function to remove listener
+     */
+    onPasswordRequired: (callback: () => void) => {
+      const listener = () => callback();
+      ipcRenderer.on('sync:password-required', listener);
+      return () => ipcRenderer.removeListener('sync:password-required', listener);
+    },
+
+    /**
+     * Subscribes to sync error events
+     * @param {Function} callback - Callback with error info
+     * @returns {Function} Cleanup function to remove listener
+     */
+    onError: (callback: (error: { message: string }) => void) => {
+      const listener = (_: IpcRendererEvent, error: any) => callback(error);
+      ipcRenderer.on('sync:error', listener);
+      return () => ipcRenderer.removeListener('sync:error', listener);
+    },
+
+    /**
+     * Subscribes to sync completion events
+     * @param {Function} callback - Callback with sync result
+     * @returns {Function} Cleanup function to remove listener
+     */
+    onComplete: (callback: (result: any) => void) => {
+      const listener = (_: IpcRendererEvent, result: any) => callback(result);
+      ipcRenderer.on('sync:complete', listener);
+      return () => ipcRenderer.removeListener('sync:complete', listener);
+    },
+  },
 });
 
 /**

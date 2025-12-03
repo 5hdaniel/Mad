@@ -36,6 +36,7 @@ import { registerSystemHandlers } from './system-handlers';
 import { registerPreferenceHandlers } from './preference-handlers';
 import { registerDeviceHandlers, cleanupDeviceHandlers } from './device-handlers';
 import { registerBackupHandlers } from './backup-handlers';
+import { registerSyncHandlers, cleanupSyncHandlers } from './sync-handlers';
 import OutlookService from './outlookService';
 
 // Configure logging for auto-updater
@@ -202,6 +203,7 @@ app.whenReady().then(async () => {
   registerPreferenceHandlers();
   registerDeviceHandlers(mainWindow!);
   registerBackupHandlers(mainWindow!);
+  registerSyncHandlers(mainWindow!);
 });
 
 app.on('window-all-closed', () => {
@@ -213,6 +215,8 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   // Clean up device detection polling
   cleanupDeviceHandlers();
+  // Clean up sync handlers
+  cleanupSyncHandlers();
 });
 
 app.on('activate', () => {
