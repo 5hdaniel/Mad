@@ -77,7 +77,7 @@ const Login = ({ onLoginSuccess, onLoginPending }: LoginProps) => {
       cleanupPending = window.api.onGoogleLoginPending((result) => {
         if (result.success && result.pendingLogin && result.oauthData) {
           // OAuth succeeded but need keychain setup - pass data to parent
-          onLoginPending(result.oauthData);
+          onLoginPending(result.oauthData as PendingOAuthData);
         } else {
           setError(result.error || 'Failed to complete Google login');
           setLoading(false);
@@ -154,7 +154,7 @@ const Login = ({ onLoginSuccess, onLoginPending }: LoginProps) => {
       cleanupPending = window.api.onMicrosoftLoginPending((result) => {
         if (result.success && result.pendingLogin && result.oauthData) {
           // OAuth succeeded but need keychain setup - pass data to parent
-          onLoginPending(result.oauthData);
+          onLoginPending(result.oauthData as PendingOAuthData);
         } else {
           setError(result.error || 'Failed to complete Microsoft login');
           setLoading(false);

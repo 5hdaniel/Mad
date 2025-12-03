@@ -263,11 +263,13 @@ function App() {
             if (loginResult.success && loginResult.user && loginResult.sessionToken) {
               // The subscription is already a full Subscription object from supabaseService.validateSubscription()
               const subscriptionData = loginResult.subscription as Subscription | undefined;
+              // Convert User type (terms_accepted_at may be Date or string from API)
+              const user = loginResult.user as { id: string; email: string; display_name?: string; avatar_url?: string };
 
               // Call the auth context login
               setIsNewUserFlow(loginResult.isNewUser || false);
               setPendingOAuthData(null);
-              login(loginResult.user, loginResult.sessionToken, pendingOAuthData.provider, subscriptionData, loginResult.isNewUser || false);
+              login(user, loginResult.sessionToken, pendingOAuthData.provider, subscriptionData, loginResult.isNewUser || false);
             } else {
               console.error('[App] Failed to complete pending login:', loginResult.error);
               setPendingOAuthData(null);
