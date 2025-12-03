@@ -168,6 +168,11 @@ const handleGoogleLogin = async (mainWindow: BrowserWindow | null): Promise<Logi
       if (!authCompleted) {
         googleAuthService.stopLocalServer();
         logService.info('Google login auth window closed by user, cleaned up server', 'AuthHandlers');
+        // Notify renderer that auth was cancelled
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('google:login-cancelled');
+          logService.info('Sent google:login-cancelled event to renderer', 'AuthHandlers');
+        }
       }
     });
 
@@ -847,6 +852,11 @@ const handleMicrosoftLogin = async (mainWindow: BrowserWindow | null): Promise<L
       if (!authCompleted) {
         microsoftAuthService.stopLocalServer();
         logService.info('Microsoft login auth window closed by user, cleaned up server', 'AuthHandlers');
+        // Notify renderer that auth was cancelled
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('microsoft:login-cancelled');
+          logService.info('Sent microsoft:login-cancelled event to renderer', 'AuthHandlers');
+        }
       }
     });
 

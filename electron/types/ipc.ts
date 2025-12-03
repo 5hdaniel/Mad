@@ -477,6 +477,9 @@ export interface WindowApi {
   // Event listeners for pending login (OAuth succeeded but DB not initialized - login-first flow)
   onGoogleLoginPending: (callback: (result: { success: boolean; pendingLogin?: boolean; oauthData?: unknown; error?: string }) => void) => () => void;
   onMicrosoftLoginPending: (callback: (result: { success: boolean; pendingLogin?: boolean; oauthData?: unknown; error?: string }) => void) => () => void;
+  // Event listeners for login cancelled (user closed popup window)
+  onGoogleLoginCancelled: (callback: () => void) => () => void;
+  onMicrosoftLoginCancelled: (callback: () => void) => () => void;
   onTransactionScanProgress: (callback: (progress: unknown) => void) => () => void;
 }
 

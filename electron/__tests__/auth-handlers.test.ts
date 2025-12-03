@@ -885,6 +885,115 @@ describe('Auth Handlers', () => {
     });
   });
 
+  describe('Login Cancelled Events', () => {
+    const { BrowserWindow } = require('electron');
+
+    beforeEach(() => {
+      jest.clearAllMocks();
+    });
+
+    it('should send google:login-cancelled when Google login window is closed before completion', async () => {
+      // Track the 'closed' event handler
+      let closedHandler: (() => void) | null = null;
+      const mockAuthWindow = {
+        loadURL: jest.fn(),
+        close: jest.fn(),
+        on: jest.fn((event: string, handler: () => void) => {
+          if (event === 'closed') {
+            closedHandler = handler;
+          }
+        }),
+        isDestroyed: jest.fn().mockReturnValue(false),
+        webContents: {
+          on: jest.fn(),
+          send: jest.fn(),
+          session: {
+            webRequest: {
+              onHeadersReceived: jest.fn(),
+            },
+          },
+        },
+      };
+
+      BrowserWindow.mockImplementation(() => mockAuthWindow);
+
+      mockGoogleAuthService.authenticateForLogin.mockResolvedValue({
+        authUrl: 'https://accounts.google.com/oauth',
+        codePromise: new Promise(() => {}),
+        scopes: ['email', 'profile'],
+      });
+
+      const handler = registeredHandlers.get('auth:google:login');
+      await handler(mockEvent);
+
+      // Verify the 'closed' event handler was registered
+      expect(mockAuthWindow.on).toHaveBeenCalledWith('closed', expect.any(Function));
+
+      // Simulate window being closed before auth completes
+      if (closedHandler) {
+        closedHandler();
+      }
+
+      // Verify the cancelled event was sent to the main window
+      expect(mockMainWindow.webContents.send).toHaveBeenCalledWith('google:login-cancelled');
+      expect(mockLogService.info).toHaveBeenCalledWith(
+        'Sent google:login-cancelled event to renderer',
+        'AuthHandlers'
+      );
+    });
+
+    it('should send microsoft:login-cancelled when Microsoft login window is closed before completion', async () => {
+      // Track the 'closed' event handler
+      let closedHandler: (() => void) | null = null;
+      const mockAuthWindow = {
+        loadURL: jest.fn(),
+        close: jest.fn(),
+        on: jest.fn((event: string, handler: () => void) => {
+          if (event === 'closed') {
+            closedHandler = handler;
+          }
+        }),
+        isDestroyed: jest.fn().mockReturnValue(false),
+        webContents: {
+          on: jest.fn(),
+          send: jest.fn(),
+          session: {
+            webRequest: {
+              onHeadersReceived: jest.fn(),
+            },
+          },
+        },
+      };
+
+      BrowserWindow.mockImplementation(() => mockAuthWindow);
+
+      mockMicrosoftAuthService.authenticateForLogin.mockResolvedValue({
+        authUrl: 'https://login.microsoftonline.com/oauth',
+        codePromise: new Promise(() => {}),
+        codeVerifier: 'verifier-123',
+        scopes: ['User.Read'],
+      });
+
+      const handler = registeredHandlers.get('auth:microsoft:login');
+      await handler(mockEvent);
+
+      // Verify the 'closed' event handler was registered
+      expect(mockAuthWindow.on).toHaveBeenCalledWith('closed', expect.any(Function));
+
+      // Simulate window being closed before auth completes
+      if (closedHandler) {
+        closedHandler();
+      }
+
+      // Verify the cancelled event was sent to the main window
+      expect(mockMainWindow.webContents.send).toHaveBeenCalledWith('microsoft:login-cancelled');
+      expect(mockLogService.info).toHaveBeenCalledWith(
+        'Sent microsoft:login-cancelled event to renderer',
+        'AuthHandlers'
+      );
+    });
+  });
+
   describe('Mailbox Connection Cancelled Events', () => {
     const { BrowserWindow } = require('electron');
 
