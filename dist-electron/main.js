@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -23,7 +56,8 @@ const constants_1 = require("./constants");
 // Import new authentication services
 const databaseService_1 = __importDefault(require("./services/databaseService"));
 const microsoftAuthService_1 = __importDefault(require("./services/microsoftAuthService"));
-const tokenEncryptionService_1 = __importDefault(require("./services/tokenEncryptionService"));
+// NOTE: tokenEncryptionService removed - using session-only OAuth
+// Tokens stored in encrypted database, no additional keychain encryption needed
 const auth_handlers_1 = require("./auth-handlers");
 const transaction_handlers_1 = require("./transaction-handlers");
 const contact_handlers_1 = require("./contact-handlers");
@@ -60,6 +94,7 @@ function setupContentSecurityPolicy() {
                 "base-uri 'self'",
                 "form-action 'self'",
                 "frame-ancestors 'none'",
+                "worker-src 'self' blob:",
                 "upgrade-insecure-requests"
             ]
             : [
@@ -73,7 +108,8 @@ function setupContentSecurityPolicy() {
                 "object-src 'none'",
                 "base-uri 'self'",
                 "form-action 'self'",
-                "frame-ancestors 'none'"
+                "frame-ancestors 'none'",
+                "worker-src 'self' blob:"
             ];
         callback({
             responseHeaders: {
@@ -140,34 +176,18 @@ electron_updater_1.autoUpdater.on('update-downloaded', (info) => {
 electron_1.app.whenReady().then(async () => {
     // Set up Content Security Policy
     setupContentSecurityPolicy();
-    // Check if encryption is available (required for secure token storage)
-    if (!tokenEncryptionService_1.default.isEncryptionAvailable()) {
-        const platform = process.platform;
-        let errorMessage = 'Encryption is not available on your system. MagicAudit requires OS-level encryption to securely store OAuth tokens.';
-        if (platform === 'linux') {
-            errorMessage += '\n\nOn Linux, please install one of the following:\n- gnome-keyring\n- kwallet\n- libsecret\n\nThen restart the application.';
-        }
-        else if (platform === 'darwin') {
-            errorMessage += '\n\nThis is unexpected on macOS. Please ensure your system keychain is accessible.';
-        }
-        else if (platform === 'win32') {
-            errorMessage += '\n\nThis is unexpected on Windows. Please ensure DPAPI is available.';
-        }
-        electron_log_1.default.error('[Main] Encryption not available:', { platform });
-        console.error('[Main] Encryption not available. OAuth functionality will fail.');
-        // Show error dialog
-        await electron_1.dialog.showMessageBox({
-            type: 'error',
-            title: 'Encryption Not Available',
-            message: errorMessage,
-            buttons: ['Exit', 'Continue Anyway']
-        }).then(result => {
-            if (result.response === 0) {
-                electron_1.app.quit();
-            }
-        });
+    // Check if this is a returning user (has existing encryption key store)
+    // For returning users: initialize database normally (they've already granted keychain access)
+    // For new users: defer database initialization until after SecureStorageSetup screen
+    // This prevents surprising new users with a system password prompt at app startup
+    const { databaseEncryptionService } = await Promise.resolve().then(() => __importStar(require('./services/databaseEncryptionService')));
+    const isReturningUser = databaseEncryptionService.hasKeyStore();
+    if (isReturningUser) {
+        // Returning user - they've already set up keychain access
+        await (0, auth_handlers_1.initializeDatabase)();
     }
-    await (0, auth_handlers_1.initializeDatabase)();
+    // For new users, database will be initialized via 'system:initialize-database' IPC call
+    // after they complete the SecureStorageSetup screen
     createWindow();
     (0, auth_handlers_1.registerAuthHandlers)(mainWindow);
     (0, transaction_handlers_1.registerTransactionHandlers)(mainWindow);
@@ -883,16 +903,14 @@ electron_1.ipcMain.handle('outlook-authenticate', async (event, userId) => {
         const tokens = await microsoftAuthService_1.default.exchangeCodeForTokens(code, codeVerifier);
         // Get user info
         const userInfo = await microsoftAuthService_1.default.getUserInfo(tokens.access_token);
-        // Encrypt tokens before saving
-        const encryptedAccessToken = tokenEncryptionService_1.default.encrypt(tokens.access_token);
-        const encryptedRefreshToken = tokens.refresh_token
-            ? tokenEncryptionService_1.default.encrypt(tokens.refresh_token)
-            : undefined;
+        // Session-only OAuth: no token encryption needed (database is already encrypted)
+        const accessToken = tokens.access_token;
+        const refreshToken = tokens.refresh_token || undefined;
         // Save mailbox token to database
         const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
         await databaseService_1.default.saveOAuthToken(userId, 'microsoft', 'mailbox', {
-            access_token: encryptedAccessToken,
-            refresh_token: encryptedRefreshToken ?? undefined,
+            access_token: accessToken,
+            refresh_token: refreshToken,
             token_expires_at: expiresAt,
             scopes_granted: tokens.scope,
             connected_email_address: userInfo.email

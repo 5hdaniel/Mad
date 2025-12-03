@@ -383,10 +383,14 @@ export interface WindowApi {
     microsoftCompleteLogin: (code: string) => Promise<{ success: boolean; user?: User; sessionToken?: string; subscription?: Subscription; isNewUser?: boolean; error?: string }>;
     googleConnectMailbox: (userId: string) => Promise<{ success: boolean; error?: string }>;
     microsoftConnectMailbox: (userId: string) => Promise<{ success: boolean; error?: string }>;
+    googleDisconnectMailbox: (userId: string) => Promise<{ success: boolean; error?: string }>;
+    microsoftDisconnectMailbox: (userId: string) => Promise<{ success: boolean; error?: string }>;
     logout: (sessionToken: string) => Promise<{ success: boolean; error?: string }>;
     validateSession: (sessionToken: string) => Promise<{ valid: boolean; user?: User; error?: string }>;
     getCurrentUser: () => Promise<{ success: boolean; user?: User; sessionToken?: string; subscription?: Subscription; provider?: string; isNewUser?: boolean; error?: string }>;
     acceptTerms: (userId: string) => Promise<{ success: boolean; error?: string }>;
+    // Complete pending login after keychain setup (login-first flow)
+    completePendingLogin: (oauthData: unknown) => Promise<{ success: boolean; user?: User; sessionToken?: string; subscription?: Subscription; isNewUser?: boolean; error?: string }>;
   };
 
   // System methods
@@ -403,6 +407,13 @@ export interface WindowApi {
     checkMicrosoftConnection: (userId: string) => Promise<{ connected: boolean; email?: string; error?: string }>;
     checkAllConnections: (userId: string) => Promise<{ success: boolean; google?: { connected: boolean; email?: string }; microsoft?: { connected: boolean; email?: string } }>;
     healthCheck: (userId: string, provider: OAuthProvider) => Promise<{ healthy: boolean; provider?: OAuthProvider; issues?: string[] }>;
+    // Secure storage / keychain methods
+    getSecureStorageStatus: () => Promise<{ success: boolean; available: boolean; platform?: string; guidance?: string; error?: string }>;
+    initializeSecureStorage: () => Promise<{ success: boolean; available: boolean; platform?: string; guidance?: string; error?: string }>;
+    hasEncryptionKeyStore: () => Promise<{ success: boolean; hasKeyStore: boolean }>;
+    initializeDatabase: () => Promise<{ success: boolean; error?: string }>;
+    isDatabaseInitialized: () => Promise<{ success: boolean; initialized: boolean }>;
+    // Support methods
     contactSupport: (errorDetails?: string) => Promise<{ success: boolean; error?: string }>;
     getDiagnostics: () => Promise<{ success: boolean; diagnostics?: string; error?: string }>;
   };
@@ -459,8 +470,16 @@ export interface WindowApi {
   onGoogleMailboxCancelled: (callback: () => void) => () => void;
   onMicrosoftMailboxConnected: (callback: (result: { success: boolean }) => void) => () => void;
   onMicrosoftMailboxCancelled: (callback: () => void) => () => void;
-  onGoogleLoginComplete: (callback: (result: { success: boolean; user?: User; sessionToken?: string; subscription?: Subscription; isNewUser?: boolean; error?: string }) => void) => () => void;
-  onMicrosoftLoginComplete: (callback: (result: { success: boolean; user?: User; sessionToken?: string; subscription?: Subscription; isNewUser?: boolean; error?: string }) => void) => () => void;
+  onGoogleMailboxDisconnected: (callback: (result: { success: boolean }) => void) => () => void;
+  onMicrosoftMailboxDisconnected: (callback: (result: { success: boolean }) => void) => () => void;
+  onGoogleLoginComplete: (callback: (result: { success: boolean; user?: User; sessionToken?: string; subscription?: Subscription; isNewUser?: boolean; pendingLogin?: boolean; error?: string }) => void) => () => void;
+  onMicrosoftLoginComplete: (callback: (result: { success: boolean; user?: User; sessionToken?: string; subscription?: Subscription; isNewUser?: boolean; pendingLogin?: boolean; error?: string }) => void) => () => void;
+  // Event listeners for pending login (OAuth succeeded but DB not initialized - login-first flow)
+  onGoogleLoginPending: (callback: (result: { success: boolean; pendingLogin?: boolean; oauthData?: unknown; error?: string }) => void) => () => void;
+  onMicrosoftLoginPending: (callback: (result: { success: boolean; pendingLogin?: boolean; oauthData?: unknown; error?: string }) => void) => () => void;
+  // Event listeners for login cancelled (user closed popup window)
+  onGoogleLoginCancelled: (callback: () => void) => () => void;
+  onMicrosoftLoginCancelled: (callback: () => void) => () => void;
   onTransactionScanProgress: (callback: (progress: unknown) => void) => () => void;
 }
 

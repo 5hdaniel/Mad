@@ -95,10 +95,7 @@ const mockSupabaseService = {
   syncTermsAcceptance: jest.fn(),
 };
 
-const mockTokenEncryptionService = {
-  encrypt: jest.fn().mockReturnValue('encrypted-token'),
-  decrypt: jest.fn().mockReturnValue('decrypted-token'),
-};
+// Session-only OAuth: tokens stored directly in encrypted database, no separate tokenEncryptionService
 
 const mockSessionService = {
   saveSession: jest.fn().mockResolvedValue(undefined),
@@ -147,11 +144,6 @@ jest.mock('../services/microsoftAuthService', () => ({
 jest.mock('../services/supabaseService', () => ({
   __esModule: true,
   default: mockSupabaseService,
-}));
-
-jest.mock('../services/tokenEncryptionService', () => ({
-  __esModule: true,
-  default: mockTokenEncryptionService,
 }));
 
 jest.mock('../services/sessionService', () => ({
@@ -283,13 +275,12 @@ describe('Auth Handlers Integration Tests', () => {
       expect(completeResult.sessionToken).toBe(TEST_SESSION_TOKEN);
       expect(completeResult.isNewUser).toBe(true);
 
-      // Verify all steps were executed
-      expect(mockTokenEncryptionService.encrypt).toHaveBeenCalled();
+      // Verify all steps were executed (session-only OAuth: no token encryption, no session file persistence)
       expect(mockSupabaseService.syncUser).toHaveBeenCalled();
       expect(mockDatabaseService.createUser).toHaveBeenCalled();
       expect(mockDatabaseService.saveOAuthToken).toHaveBeenCalled();
       expect(mockDatabaseService.createSession).toHaveBeenCalled();
-      expect(mockSessionService.saveSession).toHaveBeenCalled();
+      // Note: sessionService.saveSession not called in session-only OAuth
       expect(mockRateLimitService.recordAttempt).toHaveBeenCalledWith(
         mockUserInfo.email,
         true

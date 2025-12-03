@@ -26,7 +26,8 @@ import {
 // Import new authentication services
 import databaseService from './services/databaseService';
 import microsoftAuthService from './services/microsoftAuthService';
-import tokenEncryptionService from './services/tokenEncryptionService';
+// NOTE: tokenEncryptionService removed - using session-only OAuth
+// Tokens stored in encrypted database, no additional keychain encryption needed
 import { initializeDatabase, registerAuthHandlers } from './auth-handlers';
 import { registerTransactionHandlers } from './transaction-handlers';
 import { registerContactHandlers } from './contact-handlers';
@@ -163,36 +164,14 @@ app.whenReady().then(async () => {
   // Set up Content Security Policy
   setupContentSecurityPolicy();
 
-  // Check if encryption is available (required for secure token storage)
-  if (!tokenEncryptionService.isEncryptionAvailable()) {
-    const platform = process.platform;
-    let errorMessage = 'Encryption is not available on your system. MagicAudit requires OS-level encryption to securely store OAuth tokens.';
+  // Database initialization is now ALWAYS deferred to the renderer process
+  // This allows us to show an explanation screen before the keychain prompt
+  // for both new users (SecureStorageSetup) and returning users (KeychainExplanation)
+  //
+  // The renderer will call 'system:initialize-secure-storage' which handles:
+  // 1. Database initialization (triggers keychain prompt)
+  // 2. Clearing sessions/tokens for session-only OAuth
 
-    if (platform === 'linux') {
-      errorMessage += '\n\nOn Linux, please install one of the following:\n- gnome-keyring\n- kwallet\n- libsecret\n\nThen restart the application.';
-    } else if (platform === 'darwin') {
-      errorMessage += '\n\nThis is unexpected on macOS. Please ensure your system keychain is accessible.';
-    } else if (platform === 'win32') {
-      errorMessage += '\n\nThis is unexpected on Windows. Please ensure DPAPI is available.';
-    }
-
-    log.error('[Main] Encryption not available:', { platform });
-    console.error('[Main] Encryption not available. OAuth functionality will fail.');
-
-    // Show error dialog
-    await dialog.showMessageBox({
-      type: 'error',
-      title: 'Encryption Not Available',
-      message: errorMessage,
-      buttons: ['Exit', 'Continue Anyway']
-    }).then(result => {
-      if (result.response === 0) {
-        app.quit();
-      }
-    });
-  }
-
-  await initializeDatabase();
   createWindow();
   registerAuthHandlers(mainWindow!);
   registerTransactionHandlers(mainWindow!);
@@ -1021,18 +1000,16 @@ ipcMain.handle('outlook-authenticate', async (event: IpcMainInvokeEvent, userId:
     // Get user info
     const userInfo = await microsoftAuthService.getUserInfo(tokens.access_token);
 
-    // Encrypt tokens before saving
-    const encryptedAccessToken = tokenEncryptionService.encrypt(tokens.access_token);
-    const encryptedRefreshToken = tokens.refresh_token
-      ? tokenEncryptionService.encrypt(tokens.refresh_token)
-      : undefined;
+    // Session-only OAuth: no token encryption needed (database is already encrypted)
+    const accessToken = tokens.access_token;
+    const refreshToken = tokens.refresh_token || undefined;
 
     // Save mailbox token to database
     const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
 
     await databaseService.saveOAuthToken(userId, 'microsoft', 'mailbox', {
-      access_token: encryptedAccessToken,
-      refresh_token: encryptedRefreshToken ?? undefined,
+      access_token: accessToken,
+      refresh_token: refreshToken,
       token_expires_at: expiresAt,
       scopes_granted: tokens.scope,
       connected_email_address: userInfo.email

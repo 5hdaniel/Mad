@@ -1,26 +1,25 @@
 /**
  * Unit tests for Google Auth Service Token Refresh
  * Tests automatic token refresh functionality
+ *
+ * NOTE: Session-only OAuth - tokens stored directly in encrypted database,
+ * no separate tokenEncryptionService encryption needed
  */
 
 import googleAuthService from '../googleAuthService';
 import databaseService from '../databaseService';
-import tokenEncryptionService from '../tokenEncryptionService';
 
 // Mock dependencies
 jest.mock('../databaseService');
-jest.mock('../tokenEncryptionService');
 jest.mock('googleapis');
 
 const mockDatabaseService = databaseService as jest.Mocked<typeof databaseService>;
-const mockTokenEncryptionService = tokenEncryptionService as jest.Mocked<typeof tokenEncryptionService>;
 
 describe('GoogleAuthService - Token Refresh', () => {
   const mockUserId = 'test-user-id';
-  const mockRefreshToken = 'encrypted-refresh-token';
-  const mockDecryptedRefreshToken = 'plain-refresh-token';
+  // Session-only OAuth: tokens stored directly, not encrypted
+  const mockRefreshToken = 'test-refresh-token';
   const mockAccessToken = 'new-access-token';
-  const mockEncryptedAccessToken = 'encrypted-new-access-token';
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -28,13 +27,13 @@ describe('GoogleAuthService - Token Refresh', () => {
 
   describe('refreshAccessToken', () => {
     it('should successfully refresh an expired token', async () => {
-      // Setup mocks
+      // Setup mocks - session-only OAuth uses unencrypted tokens
       const mockTokenRecord = {
         id: 'token-id',
         user_id: mockUserId,
         provider: 'google' as const,
         purpose: 'mailbox' as const,
-        access_token: 'old-encrypted-token',
+        access_token: 'old-access-token',
         refresh_token: mockRefreshToken,
         token_expires_at: '2025-01-01T00:00:00.000Z',
         connected_email_address: 'test@gmail.com',
@@ -46,8 +45,6 @@ describe('GoogleAuthService - Token Refresh', () => {
       };
 
       mockDatabaseService.getOAuthToken.mockResolvedValue(mockTokenRecord);
-      mockTokenEncryptionService.decrypt.mockReturnValue(mockDecryptedRefreshToken);
-      mockTokenEncryptionService.encrypt.mockReturnValue(mockEncryptedAccessToken);
 
       // Mock the refreshToken method
       const mockNewTokens = {
@@ -66,8 +63,7 @@ describe('GoogleAuthService - Token Refresh', () => {
         'google',
         'mailbox'
       );
-      expect(mockTokenEncryptionService.decrypt).toHaveBeenCalledWith(mockRefreshToken);
-      expect(mockTokenEncryptionService.encrypt).toHaveBeenCalledWith(mockAccessToken);
+      // Session-only OAuth: tokens used directly, no encryption/decryption
       expect(mockDatabaseService.saveOAuthToken).toHaveBeenCalled();
     });
 
@@ -81,7 +77,6 @@ describe('GoogleAuthService - Token Refresh', () => {
       // Verify
       expect(result.success).toBe(false);
       expect(result.error).toBe('No refresh token available');
-      expect(mockTokenEncryptionService.decrypt).not.toHaveBeenCalled();
     });
 
     it('should return error when token record has no refresh token', async () => {
@@ -91,7 +86,7 @@ describe('GoogleAuthService - Token Refresh', () => {
         user_id: mockUserId,
         provider: 'google' as const,
         purpose: 'mailbox' as const,
-        access_token: 'old-encrypted-token',
+        access_token: 'old-access-token',
         refresh_token: undefined,
         token_expires_at: '2025-01-01T00:00:00.000Z',
         connected_email_address: 'test@gmail.com',
@@ -117,7 +112,7 @@ describe('GoogleAuthService - Token Refresh', () => {
         user_id: mockUserId,
         provider: 'google' as const,
         purpose: 'mailbox' as const,
-        access_token: 'old-encrypted-token',
+        access_token: 'old-access-token',
         refresh_token: mockRefreshToken,
         token_expires_at: '2025-01-01T00:00:00.000Z',
         connected_email_address: 'test@gmail.com',
@@ -127,7 +122,6 @@ describe('GoogleAuthService - Token Refresh', () => {
       };
 
       mockDatabaseService.getOAuthToken.mockResolvedValue(mockTokenRecord);
-      mockTokenEncryptionService.decrypt.mockReturnValue(mockDecryptedRefreshToken);
 
       // Mock refreshToken to throw error
       jest.spyOn(googleAuthService, 'refreshToken').mockRejectedValue(
@@ -150,7 +144,7 @@ describe('GoogleAuthService - Token Refresh', () => {
         user_id: mockUserId,
         provider: 'google' as const,
         purpose: 'mailbox' as const,
-        access_token: 'old-encrypted-token',
+        access_token: 'old-access-token',
         refresh_token: mockRefreshToken,
         token_expires_at: '2025-01-01T00:00:00.000Z',
         connected_email_address: 'user@company.com',
@@ -162,8 +156,6 @@ describe('GoogleAuthService - Token Refresh', () => {
       };
 
       mockDatabaseService.getOAuthToken.mockResolvedValue(mockTokenRecord);
-      mockTokenEncryptionService.decrypt.mockReturnValue(mockDecryptedRefreshToken);
-      mockTokenEncryptionService.encrypt.mockReturnValue(mockEncryptedAccessToken);
 
       const mockNewTokens = {
         access_token: mockAccessToken,
@@ -188,14 +180,14 @@ describe('GoogleAuthService - Token Refresh', () => {
     });
 
     it('should keep existing refresh token when Google does not return a new one', async () => {
-      // Setup mocks
-      const existingRefreshToken = 'existing-encrypted-refresh-token';
+      // Setup mocks - session-only OAuth: refresh token stored directly
+      const existingRefreshToken = 'existing-refresh-token';
       const mockTokenRecord = {
         id: 'token-id',
         user_id: mockUserId,
         provider: 'google' as const,
         purpose: 'mailbox' as const,
-        access_token: 'old-encrypted-token',
+        access_token: 'old-access-token',
         refresh_token: existingRefreshToken,
         token_expires_at: '2025-01-01T00:00:00.000Z',
         connected_email_address: 'test@gmail.com',
@@ -205,8 +197,6 @@ describe('GoogleAuthService - Token Refresh', () => {
       };
 
       mockDatabaseService.getOAuthToken.mockResolvedValue(mockTokenRecord);
-      mockTokenEncryptionService.decrypt.mockReturnValue(mockDecryptedRefreshToken);
-      mockTokenEncryptionService.encrypt.mockReturnValue(mockEncryptedAccessToken);
 
       const mockNewTokens = {
         access_token: mockAccessToken,

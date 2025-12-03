@@ -13,7 +13,8 @@ const http_1 = __importDefault(require("http"));
 const url_1 = __importDefault(require("url"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const databaseService_1 = __importDefault(require("./databaseService"));
-const tokenEncryptionService_1 = __importDefault(require("./tokenEncryptionService"));
+// NOTE: tokenEncryptionService removed - using session-only OAuth
+// Tokens stored in encrypted database, no additional keychain encryption needed
 dotenv_1.default.config({ path: '.env.development' });
 // ============================================
 // SERVICE CLASS
@@ -24,6 +25,9 @@ class GoogleAuthService {
         this.initialized = false;
         this.redirectUri = 'http://localhost:3001/callback'; // Different port than Microsoft
         this.server = null;
+        // Store resolve/reject functions to allow direct code resolution from navigation interception
+        this.codeResolver = null;
+        this.codeRejecter = null;
     }
     /**
      * Initialize Google OAuth2 client
@@ -59,16 +63,48 @@ class GoogleAuthService {
         return this.oauth2Client;
     }
     /**
+     * Resolve the authorization code directly from navigation interception
+     * This bypasses the HTTP server round-trip for faster auth
+     * @param code - The authorization code from the callback URL
+     */
+    resolveCodeDirectly(code) {
+        if (this.codeResolver) {
+            console.log('[GoogleAuth] Resolving code directly from navigation interception');
+            this.codeResolver(code);
+            this.codeResolver = null;
+            this.codeRejecter = null;
+            this.stopLocalServer();
+        }
+    }
+    /**
+     * Reject the authorization code directly (for errors from navigation)
+     * @param error - The error message
+     */
+    rejectCodeDirectly(error) {
+        if (this.codeRejecter) {
+            console.log('[GoogleAuth] Rejecting code directly from navigation interception');
+            this.codeRejecter(new Error(error));
+            this.codeResolver = null;
+            this.codeRejecter = null;
+            this.stopLocalServer();
+        }
+    }
+    /**
      * Start a temporary local HTTP server to catch OAuth redirect
      * @returns {Promise<string>} Authorization code from redirect
      */
     startLocalServer() {
         return new Promise((resolve, reject) => {
+            // Store resolve/reject for direct resolution from navigation interception
+            this.codeResolver = resolve;
+            this.codeRejecter = reject;
             this.server = http_1.default.createServer((req, res) => {
                 const parsedUrl = url_1.default.parse(req.url || '', true);
+                console.log(`[GoogleAuth] HTTP server received request: ${parsedUrl.pathname}`);
                 if (parsedUrl.pathname === '/callback') {
                     const code = parsedUrl.query.code;
                     const error = parsedUrl.query.error;
+                    console.log(`[GoogleAuth] Callback received via HTTP server - code: ${code ? 'present' : 'missing'}, error: ${error || 'none'}`);
                     if (error) {
                         res.writeHead(200, { 'Content-Type': 'text/html' });
                         res.end(`
@@ -260,6 +296,9 @@ class GoogleAuthService {
     async authenticateForMailbox(loginHint) {
         const client = this._ensureClient();
         const scopes = [
+            'openid',
+            'https://www.googleapis.com/auth/userinfo.email',
+            'https://www.googleapis.com/auth/userinfo.profile',
             'https://www.googleapis.com/auth/gmail.readonly',
         ];
         try {
@@ -360,16 +399,14 @@ class GoogleAuthService {
                 console.error('[GoogleAuth] No refresh token found for user');
                 return { success: false, error: 'No refresh token available' };
             }
-            // Decrypt refresh token
-            const decryptedRefreshToken = tokenEncryptionService_1.default.decrypt(tokenRecord.refresh_token);
+            // Session-only OAuth: tokens stored unencrypted in encrypted database
+            const refreshToken = tokenRecord.refresh_token;
             // Call Google to refresh the token
-            const newTokens = await this.refreshToken(decryptedRefreshToken);
-            // Encrypt new access token
-            const encryptedAccessToken = tokenEncryptionService_1.default.encrypt(newTokens.access_token);
-            // Update database with new tokens
+            const newTokens = await this.refreshToken(refreshToken);
+            // Update database with new tokens (no encryption needed)
             // Note: Google typically doesn't return a new refresh token, so we keep the old one
             await databaseService_1.default.saveOAuthToken(userId, 'google', 'mailbox', {
-                access_token: encryptedAccessToken,
+                access_token: newTokens.access_token,
                 refresh_token: tokenRecord.refresh_token, // Keep existing refresh token
                 token_expires_at: newTokens.expires_at ?? undefined,
                 scopes_granted: tokenRecord.scopes_granted, // Keep existing scopes

@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const fs_1 = require("fs");
 const path_1 = __importDefault(require("path"));
 const electron_1 = require("electron");
+const logService_1 = __importDefault(require("./logService"));
 // ============================================
 // SERVICE CLASS
 // ============================================
@@ -24,16 +25,18 @@ class SessionService {
      */
     async saveSession(sessionData) {
         try {
+            const now = Date.now();
             const data = {
                 ...sessionData,
-                savedAt: Date.now()
+                createdAt: sessionData.createdAt || now,
+                savedAt: now
             };
             await fs_1.promises.writeFile(this.sessionFilePath, JSON.stringify(data, null, 2), 'utf8');
-            console.log('Session saved successfully');
+            await logService_1.default.info('Session saved successfully', 'SessionService');
             return true;
         }
         catch (error) {
-            console.error('Error saving session:', error);
+            await logService_1.default.error('Error saving session', 'SessionService', { error: error instanceof Error ? error.message : 'Unknown error' });
             return false;
         }
     }
@@ -45,21 +48,21 @@ class SessionService {
         try {
             const data = await fs_1.promises.readFile(this.sessionFilePath, 'utf8');
             const session = JSON.parse(data);
-            // Check if session is expired
+            // Check if session is expired (absolute timeout)
             if (session.expiresAt && Date.now() > session.expiresAt) {
-                console.log('Session expired, clearing...');
+                await logService_1.default.info('Session expired, clearing...', 'SessionService');
                 await this.clearSession();
                 return null;
             }
-            console.log('Session loaded successfully');
+            await logService_1.default.info('Session loaded successfully', 'SessionService');
             return session;
         }
         catch (error) {
             if (error.code === 'ENOENT') {
-                console.log('No existing session found');
+                await logService_1.default.info('No existing session found', 'SessionService');
                 return null;
             }
-            console.error('Error loading session:', error);
+            await logService_1.default.error('Error loading session', 'SessionService', { error: error instanceof Error ? error.message : 'Unknown error' });
             return null;
         }
     }
@@ -69,7 +72,7 @@ class SessionService {
     async clearSession() {
         try {
             await fs_1.promises.unlink(this.sessionFilePath);
-            console.log('Session cleared successfully');
+            await logService_1.default.info('Session cleared successfully', 'SessionService');
             return true;
         }
         catch (error) {
@@ -77,7 +80,7 @@ class SessionService {
                 // File doesn't exist, that's fine
                 return true;
             }
-            console.error('Error clearing session:', error);
+            await logService_1.default.error('Error clearing session', 'SessionService', { error: error instanceof Error ? error.message : 'Unknown error' });
             return false;
         }
     }
@@ -96,7 +99,7 @@ class SessionService {
         try {
             const currentSession = await this.loadSession();
             if (!currentSession) {
-                console.error('No session to update');
+                await logService_1.default.error('No session to update', 'SessionService');
                 return false;
             }
             const updatedSession = {
@@ -108,9 +111,15 @@ class SessionService {
             return true;
         }
         catch (error) {
-            console.error('Error updating session:', error);
+            await logService_1.default.error('Error updating session', 'SessionService', { error: error instanceof Error ? error.message : 'Unknown error' });
             return false;
         }
+    }
+    /**
+     * Get the session expiration time in milliseconds (24 hours)
+     */
+    getSessionExpirationMs() {
+        return 24 * 60 * 60 * 1000; // 24 hours
     }
 }
 exports.default = new SessionService();

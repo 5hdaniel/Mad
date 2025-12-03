@@ -9,7 +9,8 @@ import http from 'http';
 import url from 'url';
 import dotenv from 'dotenv';
 import databaseService from './databaseService';
-import tokenEncryptionService from './tokenEncryptionService';
+// NOTE: tokenEncryptionService removed - using session-only OAuth
+// Tokens stored in encrypted database, no additional keychain encryption needed
 
 dotenv.config({ path: '.env.development' });
 
@@ -483,19 +484,16 @@ class GoogleAuthService {
         return { success: false, error: 'No refresh token available' };
       }
 
-      // Decrypt refresh token
-      const decryptedRefreshToken = tokenEncryptionService.decrypt(tokenRecord.refresh_token);
+      // Session-only OAuth: tokens stored unencrypted in encrypted database
+      const refreshToken = tokenRecord.refresh_token;
 
       // Call Google to refresh the token
-      const newTokens = await this.refreshToken(decryptedRefreshToken);
+      const newTokens = await this.refreshToken(refreshToken);
 
-      // Encrypt new access token
-      const encryptedAccessToken = tokenEncryptionService.encrypt(newTokens.access_token);
-
-      // Update database with new tokens
+      // Update database with new tokens (no encryption needed)
       // Note: Google typically doesn't return a new refresh token, so we keep the old one
       await databaseService.saveOAuthToken(userId, 'google', 'mailbox', {
-        access_token: encryptedAccessToken,
+        access_token: newTokens.access_token,
         refresh_token: tokenRecord.refresh_token, // Keep existing refresh token
         token_expires_at: newTokens.expires_at ?? undefined,
         scopes_granted: tokenRecord.scopes_granted, // Keep existing scopes

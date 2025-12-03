@@ -10,6 +10,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerTransactionHandlers = void 0;
 const electron_1 = require("electron");
 const transactionService_1 = __importDefault(require("./services/transactionService"));
+const auditService_1 = __importDefault(require("./services/auditService"));
+const logService_1 = __importDefault(require("./services/logService"));
 // Services (still JS - to be migrated)
 const pdfExportService = require('./services/pdfExportService').default;
 const enhancedExportService = require('./services/enhancedExportService').default;
@@ -23,7 +25,7 @@ const registerTransactionHandlers = (mainWindow) => {
     // Scan and extract transactions from emails
     electron_1.ipcMain.handle('transactions:scan', async (event, userId, options) => {
         try {
-            console.log('[Main] Starting transaction scan for user:', userId);
+            logService_1.default.info('Starting transaction scan', 'Transactions', { userId });
             // Validate input
             const validatedUserId = (0, validation_1.validateUserId)(userId);
             if (!validatedUserId) {
@@ -39,13 +41,16 @@ const registerTransactionHandlers = (mainWindow) => {
                     }
                 },
             });
-            console.log('[Main] Transaction scan complete:', result);
+            logService_1.default.info('Transaction scan complete', 'Transactions', { userId: validatedUserId, result });
             return {
                 ...result,
             };
         }
         catch (error) {
-            console.error('[Main] Transaction scan failed:', error);
+            logService_1.default.error('Transaction scan failed', 'Transactions', {
+                userId,
+                error: error instanceof Error ? error.message : 'Unknown error',
+            });
             if (error instanceof validation_1.ValidationError) {
                 return {
                     success: false,
@@ -73,7 +78,10 @@ const registerTransactionHandlers = (mainWindow) => {
             };
         }
         catch (error) {
-            console.error('[Main] Get transactions failed:', error);
+            logService_1.default.error('Get transactions failed', 'Transactions', {
+                userId,
+                error: error instanceof Error ? error.message : 'Unknown error',
+            });
             if (error instanceof validation_1.ValidationError) {
                 return {
                     success: false,
@@ -96,13 +104,28 @@ const registerTransactionHandlers = (mainWindow) => {
             }
             const validatedData = (0, validation_1.validateTransactionData)(transactionData, false);
             const transaction = await transactionService_1.default.createManualTransaction(validatedUserId, validatedData);
+            // Audit log transaction creation
+            await auditService_1.default.log({
+                userId: validatedUserId,
+                action: 'TRANSACTION_CREATE',
+                resourceType: 'TRANSACTION',
+                resourceId: transaction.id,
+                metadata: { propertyAddress: transaction.property_address },
+                success: true,
+            });
+            logService_1.default.info('Transaction created', 'Transactions', {
+                userId: validatedUserId,
+                transactionId: transaction.id,
+            });
             return {
                 success: true,
                 transaction,
             };
         }
         catch (error) {
-            console.error('[Main] Create transaction failed:', error);
+            logService_1.default.error('Create transaction failed', 'Transactions', {
+                error: error instanceof Error ? error.message : 'Unknown error',
+            });
             if (error instanceof validation_1.ValidationError) {
                 return {
                     success: false,
@@ -136,7 +159,10 @@ const registerTransactionHandlers = (mainWindow) => {
             };
         }
         catch (error) {
-            console.error('[Main] Get transaction details failed:', error);
+            logService_1.default.error('Get transaction details failed', 'Transactions', {
+                transactionId,
+                error: error instanceof Error ? error.message : 'Unknown error',
+            });
             if (error instanceof validation_1.ValidationError) {
                 return {
                     success: false,
@@ -158,14 +184,33 @@ const registerTransactionHandlers = (mainWindow) => {
                 throw new validation_1.ValidationError('Transaction ID validation failed', 'transactionId');
             }
             const validatedUpdates = (0, validation_1.validateTransactionData)((0, validation_1.sanitizeObject)(updates || {}), true);
+            // Get transaction before update for audit logging (to get user_id)
+            const existingTransaction = await transactionService_1.default.getTransactionDetails(validatedTransactionId);
+            const userId = existingTransaction?.user_id || 'unknown';
             const updated = await transactionService_1.default.updateTransaction(validatedTransactionId, validatedUpdates);
+            // Audit log transaction update
+            await auditService_1.default.log({
+                userId,
+                action: 'TRANSACTION_UPDATE',
+                resourceType: 'TRANSACTION',
+                resourceId: validatedTransactionId,
+                metadata: { updatedFields: Object.keys(validatedUpdates) },
+                success: true,
+            });
+            logService_1.default.info('Transaction updated', 'Transactions', {
+                userId,
+                transactionId: validatedTransactionId,
+            });
             return {
                 success: true,
                 transaction: updated,
             };
         }
         catch (error) {
-            console.error('[Main] Update transaction failed:', error);
+            logService_1.default.error('Update transaction failed', 'Transactions', {
+                transactionId,
+                error: error instanceof Error ? error.message : 'Unknown error',
+            });
             if (error instanceof validation_1.ValidationError) {
                 return {
                     success: false,
@@ -186,13 +231,33 @@ const registerTransactionHandlers = (mainWindow) => {
             if (!validatedTransactionId) {
                 throw new validation_1.ValidationError('Transaction ID validation failed', 'transactionId');
             }
+            // Get transaction before delete for audit logging
+            const existingTransaction = await transactionService_1.default.getTransactionDetails(validatedTransactionId);
+            const userId = existingTransaction?.user_id || 'unknown';
+            const propertyAddress = existingTransaction?.property_address || 'unknown';
             await transactionService_1.default.deleteTransaction(validatedTransactionId);
+            // Audit log transaction deletion
+            await auditService_1.default.log({
+                userId,
+                action: 'TRANSACTION_DELETE',
+                resourceType: 'TRANSACTION',
+                resourceId: validatedTransactionId,
+                metadata: { propertyAddress },
+                success: true,
+            });
+            logService_1.default.info('Transaction deleted', 'Transactions', {
+                userId,
+                transactionId: validatedTransactionId,
+            });
             return {
                 success: true,
             };
         }
         catch (error) {
-            console.error('[Main] Delete transaction failed:', error);
+            logService_1.default.error('Delete transaction failed', 'Transactions', {
+                transactionId,
+                error: error instanceof Error ? error.message : 'Unknown error',
+            });
             if (error instanceof validation_1.ValidationError) {
                 return {
                     success: false,
@@ -208,7 +273,7 @@ const registerTransactionHandlers = (mainWindow) => {
     // Create audited transaction with contact assignments
     electron_1.ipcMain.handle('transactions:create-audited', async (event, userId, transactionData) => {
         try {
-            console.log('[Main] Creating audited transaction for user:', userId);
+            logService_1.default.info('Creating audited transaction', 'Transactions', { userId });
             // Validate inputs
             const validatedUserId = (0, validation_1.validateUserId)(userId);
             const validatedData = (0, validation_1.validateTransactionData)((0, validation_1.sanitizeObject)(transactionData || {}), false);
@@ -219,7 +284,10 @@ const registerTransactionHandlers = (mainWindow) => {
             };
         }
         catch (error) {
-            console.error('[Main] Create audited transaction failed:', error);
+            logService_1.default.error('Create audited transaction failed', 'Transactions', {
+                userId,
+                error: error instanceof Error ? error.message : 'Unknown error',
+            });
             if (error instanceof validation_1.ValidationError) {
                 return {
                     success: false,
@@ -253,7 +321,10 @@ const registerTransactionHandlers = (mainWindow) => {
             };
         }
         catch (error) {
-            console.error('[Main] Get transaction with contacts failed:', error);
+            logService_1.default.error('Get transaction with contacts failed', 'Transactions', {
+                transactionId,
+                error: error instanceof Error ? error.message : 'Unknown error',
+            });
             if (error instanceof validation_1.ValidationError) {
                 return {
                     success: false,
@@ -294,7 +365,11 @@ const registerTransactionHandlers = (mainWindow) => {
             };
         }
         catch (error) {
-            console.error('[Main] Assign contact to transaction failed:', error);
+            logService_1.default.error('Assign contact to transaction failed', 'Transactions', {
+                transactionId,
+                contactId,
+                error: error instanceof Error ? error.message : 'Unknown error',
+            });
             if (error instanceof validation_1.ValidationError) {
                 return {
                     success: false,
@@ -322,7 +397,11 @@ const registerTransactionHandlers = (mainWindow) => {
             };
         }
         catch (error) {
-            console.error('[Main] Remove contact from transaction failed:', error);
+            logService_1.default.error('Remove contact from transaction failed', 'Transactions', {
+                transactionId,
+                contactId,
+                error: error instanceof Error ? error.message : 'Unknown error',
+            });
             if (error instanceof validation_1.ValidationError) {
                 return {
                     success: false,
@@ -354,7 +433,11 @@ const registerTransactionHandlers = (mainWindow) => {
             };
         }
         catch (error) {
-            console.error('[Main] Reanalyze property failed:', error);
+            logService_1.default.error('Reanalyze property failed', 'Transactions', {
+                userId,
+                propertyAddress,
+                error: error instanceof Error ? error.message : 'Unknown error',
+            });
             if (error instanceof validation_1.ValidationError) {
                 return {
                     success: false,
@@ -370,7 +453,7 @@ const registerTransactionHandlers = (mainWindow) => {
     // Export transaction to PDF
     electron_1.ipcMain.handle('transactions:export-pdf', async (event, transactionId, outputPath) => {
         try {
-            console.log('[Main] Exporting transaction to PDF:', transactionId);
+            logService_1.default.info('Exporting transaction to PDF', 'Transactions', { transactionId });
             // Validate inputs
             const validatedTransactionId = (0, validation_1.validateTransactionId)(transactionId);
             if (!validatedTransactionId) {
@@ -389,14 +472,29 @@ const registerTransactionHandlers = (mainWindow) => {
             const pdfPath = validatedPath || pdfExportService.getDefaultExportPath(details);
             // Generate PDF
             const generatedPath = await pdfExportService.generateTransactionPDF(details, details.communications || [], pdfPath);
-            console.log('[Main] PDF exported successfully:', generatedPath);
+            // Audit log data export
+            await auditService_1.default.log({
+                userId: details.user_id,
+                action: 'DATA_EXPORT',
+                resourceType: 'EXPORT',
+                resourceId: validatedTransactionId,
+                metadata: { format: 'pdf', propertyAddress: details.property_address },
+                success: true,
+            });
+            logService_1.default.info('PDF exported successfully', 'Transactions', {
+                transactionId: validatedTransactionId,
+                path: generatedPath,
+            });
             return {
                 success: true,
                 path: generatedPath,
             };
         }
         catch (error) {
-            console.error('[Main] PDF export failed:', error);
+            logService_1.default.error('PDF export failed', 'Transactions', {
+                transactionId,
+                error: error instanceof Error ? error.message : 'Unknown error',
+            });
             if (error instanceof validation_1.ValidationError) {
                 return {
                     success: false,
@@ -412,7 +510,7 @@ const registerTransactionHandlers = (mainWindow) => {
     // Enhanced export with options
     electron_1.ipcMain.handle('transactions:export-enhanced', async (event, transactionId, options) => {
         try {
-            console.log('[Main] Enhanced export for transaction:', transactionId, options);
+            logService_1.default.info('Starting enhanced export', 'Transactions', { transactionId });
             // Validate inputs
             const validatedTransactionId = (0, validation_1.validateTransactionId)(transactionId);
             if (!validatedTransactionId) {
@@ -429,7 +527,6 @@ const registerTransactionHandlers = (mainWindow) => {
             }
             // Export with options
             const exportPath = await enhancedExportService.exportTransaction(details, details.communications || [], sanitizedOptions);
-            console.log('[Main] Enhanced export successful:', exportPath);
             // Update export tracking in database
             const { databaseService: db } = require('./services/databaseService').default;
             await db.updateTransaction(validatedTransactionId, {
@@ -438,13 +535,33 @@ const registerTransactionHandlers = (mainWindow) => {
                 last_exported_on: new Date().toISOString(),
                 export_count: (details.export_count || 0) + 1,
             });
+            // Audit log data export
+            await auditService_1.default.log({
+                userId: details.user_id,
+                action: 'DATA_EXPORT',
+                resourceType: 'EXPORT',
+                resourceId: validatedTransactionId,
+                metadata: {
+                    format: sanitizedOptions.exportFormat || 'pdf',
+                    propertyAddress: details.property_address,
+                },
+                success: true,
+            });
+            logService_1.default.info('Enhanced export successful', 'Transactions', {
+                transactionId: validatedTransactionId,
+                format: sanitizedOptions.exportFormat || 'pdf',
+                path: exportPath,
+            });
             return {
                 success: true,
                 path: exportPath,
             };
         }
         catch (error) {
-            console.error('[Main] Enhanced export failed:', error);
+            logService_1.default.error('Enhanced export failed', 'Transactions', {
+                transactionId,
+                error: error instanceof Error ? error.message : 'Unknown error',
+            });
             if (error instanceof validation_1.ValidationError) {
                 return {
                     success: false,

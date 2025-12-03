@@ -1,28 +1,27 @@
 /**
  * Unit tests for Gmail Fetch Service
  * Tests email fetching, parsing, and token handling
+ *
+ * NOTE: Session-only OAuth - tokens stored directly in encrypted database,
+ * no separate tokenEncryptionService encryption needed
  */
 
 import gmailFetchService from '../gmailFetchService';
 import databaseService from '../databaseService';
-import tokenEncryptionService from '../tokenEncryptionService';
 import { google } from 'googleapis';
 
 // Mock dependencies
 jest.mock('../databaseService');
-jest.mock('../tokenEncryptionService');
 jest.mock('googleapis');
 jest.mock('google-auth-library');
 
 const mockDatabaseService = databaseService as jest.Mocked<typeof databaseService>;
-const mockTokenEncryptionService = tokenEncryptionService as jest.Mocked<typeof tokenEncryptionService>;
 
 describe('GmailFetchService', () => {
   const mockUserId = 'test-user-id';
-  const mockAccessToken = 'decrypted-access-token';
-  const mockRefreshToken = 'decrypted-refresh-token';
-  const mockEncryptedAccessToken = 'encrypted-access-token';
-  const mockEncryptedRefreshToken = 'encrypted-refresh-token';
+  // Session-only OAuth: tokens stored directly, not encrypted
+  const mockAccessToken = 'test-access-token';
+  const mockRefreshToken = 'test-refresh-token';
 
   // Mock Gmail API methods
   const mockMessagesList = jest.fn();
@@ -34,14 +33,6 @@ describe('GmailFetchService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-
-    // Setup token encryption mocks
-    mockTokenEncryptionService.decrypt.mockImplementation((token: string) => {
-      if (token === mockEncryptedAccessToken) return mockAccessToken;
-      if (token === mockEncryptedRefreshToken) return mockRefreshToken;
-      return token.replace('encrypted-', 'decrypted-');
-    });
-    mockTokenEncryptionService.encrypt.mockImplementation((token: string) => `encrypted-${token}`);
 
     // Setup googleapis mock
     (google.auth.OAuth2 as unknown as jest.Mock).mockImplementation(() => ({
@@ -64,13 +55,14 @@ describe('GmailFetchService', () => {
   });
 
   describe('initialize', () => {
+    // Session-only OAuth: tokens stored directly in encrypted database
     const mockTokenRecord = {
       id: 'token-id',
       user_id: mockUserId,
       provider: 'google' as const,
       purpose: 'mailbox' as const,
-      access_token: mockEncryptedAccessToken,
-      refresh_token: mockEncryptedRefreshToken,
+      access_token: mockAccessToken,
+      refresh_token: mockRefreshToken,
       token_expires_at: new Date(Date.now() + 3600000).toISOString(),
       connected_email_address: 'test@gmail.com',
       is_active: true,
@@ -85,7 +77,7 @@ describe('GmailFetchService', () => {
 
       expect(result).toBe(true);
       expect(mockDatabaseService.getOAuthToken).toHaveBeenCalledWith(mockUserId, 'google', 'mailbox');
-      expect(mockTokenEncryptionService.decrypt).toHaveBeenCalledWith(mockEncryptedAccessToken);
+      // Session-only OAuth: tokens used directly, no decryption needed
       expect(mockSetCredentials).toHaveBeenCalledWith({
         access_token: mockAccessToken,
         refresh_token: mockRefreshToken,
@@ -106,6 +98,7 @@ describe('GmailFetchService', () => {
       const result = await gmailFetchService.initialize(mockUserId);
 
       expect(result).toBe(true);
+      // Session-only OAuth: tokens used directly
       expect(mockSetCredentials).toHaveBeenCalledWith({
         access_token: mockAccessToken,
         refresh_token: null,
@@ -129,13 +122,14 @@ describe('GmailFetchService', () => {
   });
 
   describe('searchEmails', () => {
+    // Session-only OAuth: tokens stored directly
     const mockTokenRecord = {
       id: 'token-id',
       user_id: mockUserId,
       provider: 'google' as const,
       purpose: 'mailbox' as const,
-      access_token: mockEncryptedAccessToken,
-      refresh_token: mockEncryptedRefreshToken,
+      access_token: mockAccessToken,
+      refresh_token: mockRefreshToken,
       token_expires_at: new Date(Date.now() + 3600000).toISOString(),
       connected_email_address: 'test@gmail.com',
       is_active: true,
@@ -264,8 +258,8 @@ describe('GmailFetchService', () => {
       user_id: mockUserId,
       provider: 'google' as const,
       purpose: 'mailbox' as const,
-      access_token: mockEncryptedAccessToken,
-      refresh_token: mockEncryptedRefreshToken,
+      access_token: mockAccessToken,
+      refresh_token: mockRefreshToken,
       token_expires_at: new Date(Date.now() + 3600000).toISOString(),
       connected_email_address: 'test@gmail.com',
       is_active: true,
@@ -322,8 +316,8 @@ describe('GmailFetchService', () => {
       user_id: mockUserId,
       provider: 'google' as const,
       purpose: 'mailbox' as const,
-      access_token: mockEncryptedAccessToken,
-      refresh_token: mockEncryptedRefreshToken,
+      access_token: mockAccessToken,
+      refresh_token: mockRefreshToken,
       token_expires_at: new Date(Date.now() + 3600000).toISOString(),
       connected_email_address: 'test@gmail.com',
       is_active: true,
@@ -452,8 +446,8 @@ describe('GmailFetchService', () => {
       user_id: mockUserId,
       provider: 'google' as const,
       purpose: 'mailbox' as const,
-      access_token: mockEncryptedAccessToken,
-      refresh_token: mockEncryptedRefreshToken,
+      access_token: mockAccessToken,
+      refresh_token: mockRefreshToken,
       token_expires_at: new Date(Date.now() + 3600000).toISOString(),
       connected_email_address: 'test@gmail.com',
       is_active: true,
@@ -496,8 +490,8 @@ describe('GmailFetchService', () => {
       user_id: mockUserId,
       provider: 'google' as const,
       purpose: 'mailbox' as const,
-      access_token: mockEncryptedAccessToken,
-      refresh_token: mockEncryptedRefreshToken,
+      access_token: mockAccessToken,
+      refresh_token: mockRefreshToken,
       token_expires_at: new Date(Date.now() + 3600000).toISOString(),
       connected_email_address: 'test@gmail.com',
       is_active: true,

@@ -2,10 +2,23 @@
  * Login Component
  * Handles user authentication via Google or Microsoft OAuth
  * Two-step flow: Login first, connect mailboxes later
+ *
+ * When database is not initialized (no keychain access yet), the login handlers
+ * will emit a "pending" event instead of "complete". This allows the parent
+ * to show the keychain explanation screen before completing the login.
  */
 
 import React, { useState } from 'react';
 import type { User, Subscription } from '../../electron/types/models';
+
+// Type for pending OAuth data
+export interface PendingOAuthData {
+  provider: 'google' | 'microsoft';
+  userInfo: { id: string; email: string; name?: string; picture?: string };
+  tokens: { access_token: string; refresh_token: string | null; expires_at: string; scopes: string[] };
+  cloudUser: { id: string; subscription_tier?: string; trial_ends_at?: string; email?: string };
+  subscription?: { tier?: string; status?: string; trial_ends_at?: string };
+}
 
 interface LoginProps {
   onLoginSuccess: (
@@ -15,38 +28,80 @@ interface LoginProps {
     subscription: Subscription,
     isNewUser: boolean
   ) => void;
+  onLoginPending?: (oauthData: PendingOAuthData) => void;
 }
 
-const Login = ({ onLoginSuccess }: LoginProps) => {
+const Login = ({ onLoginSuccess, onLoginPending }: LoginProps) => {
   const [loading, setLoading] = useState(false);
   const [authUrl, setAuthUrl] = useState<string | null>(null);
   const [authCode, setAuthCode] = useState('');
   const [provider, setProvider] = useState<'google' | 'microsoft' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [popupCancelled, setPopupCancelled] = useState(false);
 
   /**
    * Handle Google Sign In (Redirect Flow)
    * Popup window opens, user logs in, redirects to local server, app handles automatically
+   *
+   * Two possible outcomes:
+   * 1. login-complete: Database was initialized, user was saved locally
+   * 2. login-pending: Database not initialized, need keychain setup first
    */
   const handleGoogleLogin = async () => {
     setLoading(true);
     setError(null);
     setProvider('google');
+    setPopupCancelled(false);
 
     // Listen for login completion from main process
-    let cleanup: (() => void) | undefined;
+    let cleanupComplete: (() => void) | undefined;
+    let cleanupPending: (() => void) | undefined;
+    let cleanupCancelled: (() => void) | undefined;
+
+    const cleanup = () => {
+      if (cleanupComplete) cleanupComplete();
+      if (cleanupPending) cleanupPending();
+      if (cleanupCancelled) cleanupCancelled();
+    };
+
     if (window.api.onGoogleLoginComplete) {
-      cleanup = window.api.onGoogleLoginComplete((result) => {
+      cleanupComplete = window.api.onGoogleLoginComplete((result) => {
         if (result.success && result.user && result.sessionToken && result.subscription && onLoginSuccess) {
           onLoginSuccess(result.user, result.sessionToken, 'google', result.subscription, result.isNewUser || false);
+        } else if (!result.pendingLogin) {
+          // Only show error if this isn't a pending login (handled by pending listener)
+          setError(result.error || 'Failed to complete Google login');
+          setLoading(false);
+          setProvider(null);
+        }
+
+        // Clean up listeners after handling the event
+        cleanup();
+      });
+    }
+
+    // Listen for pending login (OAuth succeeded but database not initialized)
+    if (window.api.onGoogleLoginPending && onLoginPending) {
+      cleanupPending = window.api.onGoogleLoginPending((result) => {
+        if (result.success && result.pendingLogin && result.oauthData) {
+          // OAuth succeeded but need keychain setup - pass data to parent
+          onLoginPending(result.oauthData as PendingOAuthData);
         } else {
           setError(result.error || 'Failed to complete Google login');
           setLoading(false);
           setProvider(null);
         }
 
-        // Clean up listener after handling the event
-        if (cleanup) cleanup();
+        // Clean up listeners
+        cleanup();
+      });
+    }
+
+    // Listen for popup cancelled (user closed popup window)
+    if (window.api.onGoogleLoginCancelled) {
+      cleanupCancelled = window.api.onGoogleLoginCancelled(() => {
+        setPopupCancelled(true);
+        cleanup();
       });
     }
 
@@ -61,7 +116,7 @@ const Login = ({ onLoginSuccess }: LoginProps) => {
         setError(result.error || 'Failed to start Google login');
         setLoading(false);
         setProvider(null);
-        if (cleanup) cleanup();
+        cleanup();
       }
     } catch (err) {
       console.error('Google login error:', err);
@@ -69,33 +124,73 @@ const Login = ({ onLoginSuccess }: LoginProps) => {
       setError(errorMessage);
       setLoading(false);
       setProvider(null);
-      if (cleanup) cleanup();
+      cleanup();
     }
   };
 
   /**
    * Handle Microsoft Sign In (Redirect Flow)
    * Browser opens, user logs in, redirects to local server, app handles automatically
+   *
+   * Two possible outcomes:
+   * 1. login-complete: Database was initialized, user was saved locally
+   * 2. login-pending: Database not initialized, need keychain setup first
    */
   const handleMicrosoftLogin = async () => {
     setLoading(true);
     setError(null);
     setProvider('microsoft');
+    setPopupCancelled(false);
 
     // Listen for login completion from main process
-    let cleanup: (() => void) | undefined;
+    let cleanupComplete: (() => void) | undefined;
+    let cleanupPending: (() => void) | undefined;
+    let cleanupCancelled: (() => void) | undefined;
+
+    const cleanup = () => {
+      if (cleanupComplete) cleanupComplete();
+      if (cleanupPending) cleanupPending();
+      if (cleanupCancelled) cleanupCancelled();
+    };
+
     if (window.api.onMicrosoftLoginComplete) {
-      cleanup = window.api.onMicrosoftLoginComplete((result) => {
+      cleanupComplete = window.api.onMicrosoftLoginComplete((result) => {
         if (result.success && result.user && result.sessionToken && result.subscription && onLoginSuccess) {
           onLoginSuccess(result.user, result.sessionToken, 'microsoft', result.subscription, result.isNewUser || false);
+        } else if (!result.pendingLogin) {
+          // Only show error if this isn't a pending login (handled by pending listener)
+          setError(result.error || 'Failed to complete Microsoft login');
+          setLoading(false);
+          setProvider(null);
+        }
+
+        // Clean up listeners after handling the event
+        cleanup();
+      });
+    }
+
+    // Listen for pending login (OAuth succeeded but database not initialized)
+    if (window.api.onMicrosoftLoginPending && onLoginPending) {
+      cleanupPending = window.api.onMicrosoftLoginPending((result) => {
+        if (result.success && result.pendingLogin && result.oauthData) {
+          // OAuth succeeded but need keychain setup - pass data to parent
+          onLoginPending(result.oauthData as PendingOAuthData);
         } else {
           setError(result.error || 'Failed to complete Microsoft login');
           setLoading(false);
           setProvider(null);
         }
 
-        // Clean up listener after handling the event
-        if (cleanup) cleanup();
+        // Clean up listeners
+        cleanup();
+      });
+    }
+
+    // Listen for popup cancelled (user closed popup window)
+    if (window.api.onMicrosoftLoginCancelled) {
+      cleanupCancelled = window.api.onMicrosoftLoginCancelled(() => {
+        setPopupCancelled(true);
+        cleanup();
       });
     }
 
@@ -110,7 +205,7 @@ const Login = ({ onLoginSuccess }: LoginProps) => {
         setError(result.error || 'Failed to start Microsoft login');
         setLoading(false);
         setProvider(null);
-        if (cleanup) cleanup();
+        cleanup();
       }
     } catch (err) {
       console.error('Microsoft login error:', err);
@@ -118,7 +213,7 @@ const Login = ({ onLoginSuccess }: LoginProps) => {
       setError(errorMessage);
       setLoading(false);
       setProvider(null);
-      if (cleanup) cleanup();
+      cleanup();
     }
   };
 
@@ -168,6 +263,7 @@ const Login = ({ onLoginSuccess }: LoginProps) => {
     setAuthCode('');
     setProvider(null);
     setError(null);
+    setPopupCancelled(false);
   };
 
   return (
@@ -193,13 +289,37 @@ const Login = ({ onLoginSuccess }: LoginProps) => {
           <div className="mb-6">
             <div className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg text-center">
               <div className="flex flex-col items-center">
-                <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+                {!popupCancelled && (
+                  <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+                )}
                 <p className="text-sm text-blue-900 font-semibold mb-2">
-                  Authenticating with Google...
+                  {popupCancelled ? 'Sign-in window was closed' : 'Authenticating with Google...'}
                 </p>
-                <p className="text-xs text-blue-700">
-                  A popup window will open. Complete sign-in there and it will close automatically.
+                <p className="text-xs text-blue-700 mb-4">
+                  {popupCancelled
+                    ? 'Click Retry to open the sign-in window again, or choose a different account.'
+                    : 'A popup window will open. Complete sign-in there and it will close automatically.'}
                 </p>
+                {/* Retry and Back buttons - only shown when popup is cancelled */}
+                {popupCancelled && (
+                  <div className="flex gap-3 w-full max-w-xs">
+                    <button
+                      onClick={handleGoogleLogin}
+                      className="flex-1 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Retry
+                    </button>
+                    <button
+                      onClick={handleCancel}
+                      className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      Use different account
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -210,13 +330,37 @@ const Login = ({ onLoginSuccess }: LoginProps) => {
           <div className="mb-6">
             <div className="p-6 bg-gradient-to-br from-purple-50 to-indigo-50 border-2 border-purple-200 rounded-lg text-center">
               <div className="flex flex-col items-center">
-                <div className="w-12 h-12 border-4 border-purple-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+                {!popupCancelled && (
+                  <div className="w-12 h-12 border-4 border-purple-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+                )}
                 <p className="text-sm text-purple-900 font-semibold mb-2">
-                  Authenticating with Microsoft...
+                  {popupCancelled ? 'Sign-in window was closed' : 'Authenticating with Microsoft...'}
                 </p>
-                <p className="text-xs text-purple-700">
-                  A popup window will open. Complete sign-in there and it will close automatically.
+                <p className="text-xs text-purple-700 mb-4">
+                  {popupCancelled
+                    ? 'Click Retry to open the sign-in window again, or choose a different account.'
+                    : 'A popup window will open. Complete sign-in there and it will close automatically.'}
                 </p>
+                {/* Retry and Back buttons - only shown when popup is cancelled */}
+                {popupCancelled && (
+                  <div className="flex gap-3 w-full max-w-xs">
+                    <button
+                      onClick={handleMicrosoftLogin}
+                      className="flex-1 px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Retry
+                    </button>
+                    <button
+                      onClick={handleCancel}
+                      className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      Use different account
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>

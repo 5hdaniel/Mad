@@ -3,7 +3,8 @@ import http from 'http';
 import url from 'url';
 import crypto from 'crypto';
 import databaseService from './databaseService';
-import tokenEncryptionService from './tokenEncryptionService';
+// NOTE: tokenEncryptionService removed - using session-only OAuth
+// Tokens stored in encrypted database, no additional keychain encryption needed
 
 // ============================================
 // TYPES & INTERFACES
@@ -426,25 +427,19 @@ class MicrosoftAuthService {
         return { success: false, error: 'No refresh token available' };
       }
 
-      // Decrypt refresh token
-      const decryptedRefreshToken = tokenEncryptionService.decrypt(tokenRecord.refresh_token);
+      // Session-only OAuth: tokens stored unencrypted in encrypted database
+      const refreshToken = tokenRecord.refresh_token;
 
       // Call Microsoft to refresh the token
-      const newTokens = await this.refreshToken(decryptedRefreshToken);
-
-      // Encrypt new tokens
-      const encryptedAccessToken = tokenEncryptionService.encrypt(newTokens.access_token);
-      const encryptedRefreshToken = newTokens.refresh_token
-        ? tokenEncryptionService.encrypt(newTokens.refresh_token)
-        : tokenRecord.refresh_token; // Keep old refresh token if new one not provided
+      const newTokens = await this.refreshToken(refreshToken);
 
       // Calculate new expiry time
       const expiresAt = new Date(Date.now() + newTokens.expires_in * 1000).toISOString();
 
-      // Update database with new tokens
+      // Update database with new tokens (no encryption needed)
       await databaseService.saveOAuthToken(userId, 'microsoft', 'mailbox', {
-        access_token: encryptedAccessToken,
-        refresh_token: encryptedRefreshToken,
+        access_token: newTokens.access_token,
+        refresh_token: newTokens.refresh_token || tokenRecord.refresh_token, // Keep old if new not provided
         token_expires_at: expiresAt,
         scopes_granted: newTokens.scope,
         connected_email_address: tokenRecord.connected_email_address,

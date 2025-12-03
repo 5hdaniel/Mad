@@ -143,8 +143,43 @@ interface MainAPI {
     acceptTerms: (userId: string) => Promise<{ success: boolean; user?: unknown; error?: string }>;
     completeEmailOnboarding: (userId: string) => Promise<{ success: boolean; error?: string }>;
     checkEmailOnboarding: (userId: string) => Promise<{ success: boolean; completed: boolean; error?: string }>;
+    // Complete pending login after keychain setup
+    completePendingLogin: (oauthData: unknown) => Promise<{
+      success: boolean;
+      user?: unknown;
+      sessionToken?: string;
+      subscription?: unknown;
+      isNewUser?: boolean;
+      error?: string;
+    }>;
   };
   system: {
+    getSecureStorageStatus: () => Promise<{
+      success: boolean;
+      available: boolean;
+      platform?: string;
+      guidance?: string;
+      error?: string;
+    }>;
+    initializeSecureStorage: () => Promise<{
+      success: boolean;
+      available: boolean;
+      platform?: string;
+      guidance?: string;
+      error?: string;
+    }>;
+    hasEncryptionKeyStore: () => Promise<{
+      success: boolean;
+      hasKeyStore: boolean;
+    }>;
+    initializeDatabase: () => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
+    isDatabaseInitialized: () => Promise<{
+      success: boolean;
+      initialized: boolean;
+    }>;
     checkAllConnections: (userId: string) => Promise<{
       success: boolean;
       google?: { connected: boolean; email?: string };
@@ -181,8 +216,18 @@ interface MainAPI {
     /** Subscribes to device disconnected events */
     onDisconnected: (callback: (device: iOSDeviceInfo) => void) => () => void;
   };
+
+  // Event listeners for login completion
+  onGoogleLoginComplete: (callback: (result: { success: boolean; user?: unknown; sessionToken?: string; subscription?: unknown; isNewUser?: boolean; error?: string }) => void) => () => void;
+  onGoogleLoginPending: (callback: (result: { success: boolean; pendingLogin?: boolean; oauthData?: unknown; error?: string }) => void) => () => void;
+  onGoogleLoginCancelled: (callback: () => void) => () => void;
+  onMicrosoftLoginComplete: (callback: (result: { success: boolean; user?: unknown; sessionToken?: string; subscription?: unknown; isNewUser?: boolean; error?: string }) => void) => () => void;
+  onMicrosoftLoginPending: (callback: (result: { success: boolean; pendingLogin?: boolean; oauthData?: unknown; error?: string }) => void) => () => void;
+  onMicrosoftLoginCancelled: (callback: () => void) => () => void;
   onGoogleMailboxConnected: (callback: (result: { success: boolean }) => void) => () => void;
   onMicrosoftMailboxConnected: (callback: (result: { success: boolean }) => void) => () => void;
+  onGoogleMailboxCancelled: (callback: () => void) => () => void;
+  onMicrosoftMailboxCancelled: (callback: () => void) => () => void;
 
   /**
    * Backup API for iPhone data extraction
@@ -276,6 +321,7 @@ interface MainAPI {
     /** Subscribe to backup error events */
     onError: (callback: (error: { message: string }) => void) => () => void;
   };
+
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [key: string]: any; // Allow other properties for backwards compatibility
