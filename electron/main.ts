@@ -177,6 +177,13 @@ app.whenReady().then(async () => {
   registerFeedbackHandlers();
   registerSystemHandlers();
   registerPreferenceHandlers();
+
+  // Fallback app:quit handler - ensures quit works even if system-handlers registration fails
+  // This is safe to call even if already registered (will just overwrite)
+  ipcMain.handle('app:quit', async () => {
+    console.log('[Main] App quit requested by renderer');
+    app.quit();
+  });
 });
 
 app.on('window-all-closed', () => {

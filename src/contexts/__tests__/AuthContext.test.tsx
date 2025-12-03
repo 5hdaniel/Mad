@@ -368,6 +368,7 @@ describe('AuthContext', () => {
     it('should handle missing app.quit API gracefully', async () => {
       const user = userEvent.setup();
       const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      const windowCloseSpy = jest.spyOn(window, 'close').mockImplementation(() => {});
 
       // Temporarily remove app.quit
       const originalApp = mockApi.app;
@@ -386,16 +387,23 @@ describe('AuthContext', () => {
       // Click decline terms - should not throw
       await user.click(screen.getByText('Decline Terms'));
 
-      expect(consoleSpy).toHaveBeenCalledWith('App quit API not available');
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '[AuthContext] App quit API not available',
+        expect.objectContaining({ action: 'declineTerms' })
+      );
+      // Should try window.close() as fallback
+      expect(windowCloseSpy).toHaveBeenCalled();
 
       // Restore
       (window as any).api.app = originalApp;
       consoleSpy.mockRestore();
+      windowCloseSpy.mockRestore();
     });
 
     it('should handle app.quit failure gracefully', async () => {
       const user = userEvent.setup();
       const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      const windowCloseSpy = jest.spyOn(window, 'close').mockImplementation(() => {});
       mockApi.app.quit.mockRejectedValue(new Error('Quit failed'));
 
       render(
@@ -411,9 +419,15 @@ describe('AuthContext', () => {
       // Click decline terms - should not throw
       await user.click(screen.getByText('Decline Terms'));
 
-      expect(consoleSpy).toHaveBeenCalledWith('Failed to quit application:', expect.any(Error));
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '[AuthContext] Failed to quit application:',
+        expect.objectContaining({ action: 'declineTerms', error: 'Quit failed' })
+      );
+      // Should try window.close() as fallback
+      expect(windowCloseSpy).toHaveBeenCalled();
 
       consoleSpy.mockRestore();
+      windowCloseSpy.mockRestore();
     });
   });
 });

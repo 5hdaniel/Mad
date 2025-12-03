@@ -167,17 +167,39 @@ export function AuthProvider({ children }: AuthProviderProps): React.ReactElemen
    * Decline terms - quits the application
    */
   const declineTerms = useCallback(async () => {
+    const errorDetails = {
+      timestamp: new Date().toISOString(),
+      action: 'declineTerms',
+      userId: state.currentUser?.id,
+    };
+
     try {
       // Quit the application when user declines terms
       if (window.api?.app?.quit) {
         await window.api.app.quit();
       } else {
-        console.error('App quit API not available');
+        console.error('[AuthContext] App quit API not available', errorDetails);
+        // Fallback: try to close the window directly
+        window.close();
       }
     } catch (error) {
-      console.error('Failed to quit application:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('[AuthContext] Failed to quit application:', {
+        ...errorDetails,
+        error: errorMessage,
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+
+      // Fallback: try to close the window directly
+      try {
+        window.close();
+      } catch (closeError) {
+        console.error('[AuthContext] Fallback window.close() also failed:', closeError);
+        // Last resort: inform user
+        alert('Unable to close the application automatically. Please close the window manually.');
+      }
     }
-  }, []);
+  }, [state.currentUser?.id]);
 
   /**
    * Refresh session - re-check authentication status
