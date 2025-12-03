@@ -11,6 +11,8 @@ exports.registerContactHandlers = registerContactHandlers;
 const electron_1 = require("electron");
 const databaseService_1 = __importDefault(require("./services/databaseService"));
 const contactsService_1 = require("./services/contactsService");
+const auditService_1 = __importDefault(require("./services/auditService"));
+const logService_1 = __importDefault(require("./services/logService"));
 // Import validation utilities
 const validation_1 = require("./utils/validation");
 /**
@@ -20,7 +22,7 @@ function registerContactHandlers() {
     // Get all imported contacts for a user (local database only)
     electron_1.ipcMain.handle('contacts:get-all', async (event, userId) => {
         try {
-            console.log('[Main] Getting all imported contacts for user:', userId);
+            logService_1.default.info('Getting all imported contacts', 'Contacts', { userId });
             // Validate input
             const validatedUserId = (0, validation_1.validateUserId)(userId); // Validated, will throw if invalid
             if (!validatedUserId) {
@@ -28,14 +30,17 @@ function registerContactHandlers() {
             }
             // Get only imported contacts from database
             const importedContacts = await databaseService_1.default.getImportedContactsByUserId(validatedUserId);
-            console.log(`[Main] Found ${importedContacts.length} imported contacts`);
+            logService_1.default.info(`Found ${importedContacts.length} imported contacts`, 'Contacts', { userId });
             return {
                 success: true,
                 contacts: importedContacts,
             };
         }
         catch (error) {
-            console.error('[Main] Get contacts failed:', error);
+            logService_1.default.error('Get contacts failed', 'Contacts', {
+                userId,
+                error: error instanceof Error ? error.message : 'Unknown error',
+            });
             if (error instanceof validation_1.ValidationError) {
                 return {
                     success: false,
@@ -205,7 +210,6 @@ function registerContactHandlers() {
     // Create new contact
     electron_1.ipcMain.handle('contacts:create', async (event, userId, contactData) => {
         try {
-            console.log('[Main] Creating contact:', contactData);
             // Validate inputs
             const validatedUserId = (0, validation_1.validateUserId)(userId); // Validated, will throw if invalid
             if (!validatedUserId) {
@@ -222,13 +226,28 @@ function registerContactHandlers() {
                 source: 'manual',
                 is_imported: false,
             });
+            // Audit log contact creation
+            await auditService_1.default.log({
+                userId: validatedUserId,
+                action: 'CONTACT_CREATE',
+                resourceType: 'CONTACT',
+                resourceId: contact.id,
+                metadata: { name: contact.name },
+                success: true,
+            });
+            logService_1.default.info('Contact created', 'Contacts', {
+                userId: validatedUserId,
+                contactId: contact.id,
+            });
             return {
                 success: true,
                 contact,
             };
         }
         catch (error) {
-            console.error('[Main] Create contact failed:', error);
+            logService_1.default.error('Create contact failed', 'Contacts', {
+                error: error instanceof Error ? error.message : 'Unknown error',
+            });
             if (error instanceof validation_1.ValidationError) {
                 return {
                     success: false,
@@ -244,13 +263,15 @@ function registerContactHandlers() {
     // Update contact
     electron_1.ipcMain.handle('contacts:update', async (event, contactId, updates) => {
         try {
-            console.log('[Main] Updating contact:', contactId, updates);
             // Validate inputs
             const validatedContactId = (0, validation_1.validateContactId)(contactId); // Validated, will throw if invalid
             if (!validatedContactId) {
                 throw new validation_1.ValidationError('Contact ID validation failed', 'contactId');
             }
             const validatedUpdates = (0, validation_1.validateContactData)((0, validation_1.sanitizeObject)(updates || {}), true);
+            // Get contact before update for audit logging
+            const existingContact = await databaseService_1.default.getContactById(validatedContactId);
+            const userId = existingContact?.user_id || 'unknown';
             // Convert null to undefined for TypeScript strict mode
             const updatesData = {
                 ...validatedUpdates,
@@ -262,13 +283,29 @@ function registerContactHandlers() {
             };
             await databaseService_1.default.updateContact(validatedContactId, updatesData);
             const contact = await databaseService_1.default.getContactById(validatedContactId);
+            // Audit log contact update
+            await auditService_1.default.log({
+                userId,
+                action: 'CONTACT_UPDATE',
+                resourceType: 'CONTACT',
+                resourceId: validatedContactId,
+                metadata: { updatedFields: Object.keys(validatedUpdates) },
+                success: true,
+            });
+            logService_1.default.info('Contact updated', 'Contacts', {
+                userId,
+                contactId: validatedContactId,
+            });
             return {
                 success: true,
                 contact: contact || undefined,
             };
         }
         catch (error) {
-            console.error('[Main] Update contact failed:', error);
+            logService_1.default.error('Update contact failed', 'Contacts', {
+                contactId,
+                error: error instanceof Error ? error.message : 'Unknown error',
+            });
             if (error instanceof validation_1.ValidationError) {
                 return {
                     success: false,
@@ -315,12 +352,15 @@ function registerContactHandlers() {
     // Delete contact
     electron_1.ipcMain.handle('contacts:delete', async (event, contactId) => {
         try {
-            console.log('[Main] Deleting contact:', contactId);
             // Validate input
             const validatedContactId = (0, validation_1.validateContactId)(contactId); // Validated, will throw if invalid
             if (!validatedContactId) {
                 throw new validation_1.ValidationError('Contact ID validation failed', 'contactId');
             }
+            // Get contact before delete for audit logging
+            const existingContact = await databaseService_1.default.getContactById(validatedContactId);
+            const userId = existingContact?.user_id || 'unknown';
+            const contactName = existingContact?.name || 'unknown';
             // Check if contact has associated transactions
             const check = await databaseService_1.default.getTransactionsByContact(validatedContactId);
             if (check.length > 0) {
@@ -333,12 +373,28 @@ function registerContactHandlers() {
                 };
             }
             await databaseService_1.default.deleteContact(validatedContactId);
+            // Audit log contact deletion
+            await auditService_1.default.log({
+                userId,
+                action: 'CONTACT_DELETE',
+                resourceType: 'CONTACT',
+                resourceId: validatedContactId,
+                metadata: { name: contactName },
+                success: true,
+            });
+            logService_1.default.info('Contact deleted', 'Contacts', {
+                userId,
+                contactId: validatedContactId,
+            });
             return {
                 success: true,
             };
         }
         catch (error) {
-            console.error('[Main] Delete contact failed:', error);
+            logService_1.default.error('Delete contact failed', 'Contacts', {
+                contactId,
+                error: error instanceof Error ? error.message : 'Unknown error',
+            });
             if (error instanceof validation_1.ValidationError) {
                 return {
                     success: false,

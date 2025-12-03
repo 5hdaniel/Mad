@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import Login from './components/Login';
+import Login, { PendingOAuthData } from './components/Login';
 import MicrosoftLogin from './components/MicrosoftLogin';
 import EmailOnboardingScreen from './components/EmailOnboardingScreen';
 import PermissionsScreen from './components/PermissionsScreen';
@@ -14,6 +14,8 @@ import Settings from './components/Settings';
 import Transactions from './components/Transactions';
 import Contacts from './components/Contacts';
 import WelcomeTerms from './components/WelcomeTerms';
+import SecureStorageSetup from './components/SecureStorageSetup';
+import KeychainExplanation from './components/KeychainExplanation';
 import Dashboard from './components/Dashboard';
 import AuditTransactionModal from './components/AuditTransactionModal';
 import OfflineFallback from './components/OfflineFallback';
@@ -22,7 +24,7 @@ import type { Conversation } from './hooks/useConversations';
 import type { Subscription } from '../electron/types/models';
 
 // Type definitions
-type AppStep = 'login' | 'email-onboarding' | 'microsoft-login' | 'permissions' | 'dashboard' | 'outlook' | 'complete' | 'contacts';
+type AppStep = 'loading' | 'login' | 'secure-storage-setup' | 'keychain-explanation' | 'email-onboarding' | 'microsoft-login' | 'permissions' | 'dashboard' | 'outlook' | 'complete' | 'contacts';
 
 interface AppExportResult {
   exportPath?: string;
@@ -68,7 +70,7 @@ function App() {
   const { isOnline, isChecking, connectionError, checkConnection, setConnectionError } = useNetwork();
 
   // Local UI state
-  const [currentStep, setCurrentStep] = useState<AppStep>('login');
+  const [currentStep, setCurrentStep] = useState<AppStep>('loading');
   const [hasPermissions, setHasPermissions] = useState<boolean>(false);
   const [outlookConnected, setOutlookConnected] = useState<boolean>(false);
   const [exportResult, setExportResult] = useState<AppExportResult | null>(null);
@@ -87,6 +89,42 @@ function App() {
   const [isCheckingEmailOnboarding, setIsCheckingEmailOnboarding] = useState<boolean>(true);
   const [hasEmailConnected, setHasEmailConnected] = useState<boolean>(true); // Default true to avoid flicker
   const [showSetupPromptDismissed, setShowSetupPromptDismissed] = useState<boolean>(false);
+  const [hasSecureStorageSetup, setHasSecureStorageSetup] = useState<boolean>(true); // Default true for returning users
+  const [isCheckingSecureStorage, setIsCheckingSecureStorage] = useState<boolean>(true);
+  const [isNewUserFlow, setIsNewUserFlow] = useState<boolean>(false); // Track if this is a new user flow
+  const [isDatabaseInitialized, setIsDatabaseInitialized] = useState<boolean>(false); // Track if database is ready
+  const [isInitializingDatabase, setIsInitializingDatabase] = useState<boolean>(false); // Track initialization in progress
+  const [skipKeychainExplanation, setSkipKeychainExplanation] = useState<boolean>(() => {
+    // Check localStorage for user preference
+    return localStorage.getItem('skipKeychainExplanation') === 'true';
+  });
+  const [pendingOAuthData, setPendingOAuthData] = useState<PendingOAuthData | null>(null); // OAuth data waiting for keychain setup
+
+  // Check if encryption key store exists on app load
+  // This is a file existence check that does NOT trigger keychain prompts
+  // Used to determine if this is a new user (no key store) vs returning user (has key store)
+  useEffect(() => {
+    const checkKeyStoreExists = async () => {
+      setIsCheckingSecureStorage(true);
+      try {
+        const result = await window.api.system.hasEncryptionKeyStore();
+        // If key store exists, user has already set up secure storage before
+        setHasSecureStorageSetup(result.hasKeyStore);
+      } catch (error) {
+        console.error('[App] Failed to check key store existence:', error);
+        // Assume not set up if check fails (will show setup screen for safety)
+        setHasSecureStorageSetup(false);
+      } finally {
+        setIsCheckingSecureStorage(false);
+      }
+    };
+    checkKeyStoreExists();
+  }, []);
+
+  // NOTE: We removed the auto-initialization for returning users.
+  // The keychain prompt should NEVER appear before the user logs in.
+  // Flow: Login → Keychain explanation screen → User clicks Continue → Keychain prompt
+  // The "skip explanation" preference only skips the detailed explanation, not the screen itself.
 
   // Check if user has completed email onboarding and has email connected
   useEffect(() => {
@@ -115,17 +153,28 @@ function App() {
         } finally {
           setIsCheckingEmailOnboarding(false);
         }
+      } else {
+        // No user logged in, nothing to check
+        setIsCheckingEmailOnboarding(false);
       }
     };
     checkEmailStatus();
   }, [currentUser?.id]);
 
   // Handle auth state changes to update navigation
+  // FLOW: Login FIRST, then keychain setup if needed (for both new and returning users)
   useEffect(() => {
-    if (!isAuthLoading && !isCheckingEmailOnboarding) {
+    if (!isAuthLoading && !isCheckingEmailOnboarding && !isCheckingSecureStorage) {
+      // If we have pending OAuth data, we're in the middle of the login-first flow
+      // Show keychain explanation/setup screen (OAuth succeeded, need keychain to save data)
+      if (pendingOAuthData && !isAuthenticated) {
+        // Show keychain explanation screen - OAuth data is in memory waiting
+        setCurrentStep('keychain-explanation');
+        return;
+      }
+
       if (isAuthenticated && !needsTermsAcceptance) {
         // User is authenticated and has accepted terms
-        // Check if user needs email onboarding (hasn't completed it yet)
         if (!hasCompletedEmailOnboarding) {
           setCurrentStep('email-onboarding');
         } else if (hasPermissions) {
@@ -134,10 +183,13 @@ function App() {
           setCurrentStep('permissions');
         }
       } else if (!isAuthenticated) {
+        // Not authenticated - show login FIRST for both new and returning users
+        // After OAuth succeeds, if DB isn't initialized, auth-handlers will send
+        // login-pending event and we'll show keychain explanation with pendingOAuthData
         setCurrentStep('login');
       }
     }
-  }, [isAuthenticated, isAuthLoading, needsTermsAcceptance, hasPermissions, hasCompletedEmailOnboarding, isCheckingEmailOnboarding]);
+  }, [isAuthenticated, isAuthLoading, needsTermsAcceptance, hasPermissions, hasCompletedEmailOnboarding, isCheckingEmailOnboarding, isCheckingSecureStorage, pendingOAuthData]);
 
   useEffect(() => {
     checkPermissions();
@@ -145,7 +197,18 @@ function App() {
   }, []);
 
   const handleLoginSuccess = (user: { id: string; email: string; display_name?: string; avatar_url?: string }, token: string, provider: string, subscriptionData: Subscription | undefined, isNewUser: boolean): void => {
+    // Track if this is a new user flow for secure storage setup
+    setIsNewUserFlow(isNewUser);
+    // Clear any pending OAuth data since login completed successfully
+    setPendingOAuthData(null);
     login(user, token, provider, subscriptionData, isNewUser);
+  };
+
+  // Handle pending login - OAuth succeeded but database not initialized
+  // Store the OAuth data and show keychain explanation screen
+  const handleLoginPending = (oauthData: PendingOAuthData): void => {
+    setPendingOAuthData(oauthData);
+    // Navigation will be handled by useEffect - will show keychain-explanation
   };
 
   const handleAcceptTerms = async (): Promise<void> => {
@@ -165,7 +228,88 @@ function App() {
   const handleLogout = async (): Promise<void> => {
     await logout();
     setShowProfile(false);
+    setIsNewUserFlow(false);
     setCurrentStep('login');
+  };
+
+  const handleSecureStorageComplete = () => {
+    // Mark secure storage as set up and database as initialized
+    // Note: Database is now initialized inside initializeSecureStorage handler
+    // to consolidate keychain prompts into a single operation
+    setHasSecureStorageSetup(true);
+    setIsDatabaseInitialized(true);
+    // Navigation will be handled by useEffect - will go to login (new flow) or email-onboarding
+  };
+
+  // Handler for keychain explanation screen
+  // This is shown in two scenarios:
+  // 1. Returning user: Before login, to authorize keychain access
+  // 2. Login-first flow: After OAuth succeeded but before DB was initialized
+  const handleKeychainExplanationContinue = async (dontShowAgain: boolean) => {
+    // Save preference if user checked "don't show again"
+    if (dontShowAgain) {
+      localStorage.setItem('skipKeychainExplanation', 'true');
+      setSkipKeychainExplanation(true);
+    }
+
+    // Initialize database (triggers keychain prompt)
+    setIsInitializingDatabase(true);
+    try {
+      const result = await window.api.system.initializeSecureStorage();
+      if (result.success) {
+        setIsDatabaseInitialized(true);
+        setHasSecureStorageSetup(true);
+
+        // If we have pending OAuth data, complete the login now
+        if (pendingOAuthData) {
+          try {
+            const loginResult = await window.api.auth.completePendingLogin(pendingOAuthData);
+            if (loginResult.success && loginResult.user && loginResult.sessionToken) {
+              // The subscription is already a full Subscription object from supabaseService.validateSubscription()
+              const subscriptionData = loginResult.subscription as Subscription | undefined;
+              // Convert User type (terms_accepted_at may be Date or string from API)
+              const user = loginResult.user as { id: string; email: string; display_name?: string; avatar_url?: string };
+
+              // Call the auth context login
+              setIsNewUserFlow(loginResult.isNewUser || false);
+              setPendingOAuthData(null);
+              login(user, loginResult.sessionToken, pendingOAuthData.provider, subscriptionData, loginResult.isNewUser || false);
+            } else {
+              console.error('[App] Failed to complete pending login:', loginResult.error);
+              setPendingOAuthData(null);
+              // Navigation will show login screen again
+            }
+          } catch (error) {
+            console.error('[App] Error completing pending login:', error);
+            setPendingOAuthData(null);
+          }
+        }
+        // If no pending OAuth data, navigation will show login screen
+      } else {
+        console.error('[App] Database initialization failed:', result.error);
+        // Show error state - user can retry
+      }
+    } catch (error) {
+      console.error('[App] Database initialization error:', error);
+    } finally {
+      setIsInitializingDatabase(false);
+    }
+  };
+
+  const handleSecureStorageRetry = () => {
+    // Re-check if key store exists (triggers a fresh check after user may have authorized keychain)
+    setIsCheckingSecureStorage(true);
+    window.api.system.hasEncryptionKeyStore()
+      .then((result) => {
+        setHasSecureStorageSetup(result.hasKeyStore);
+      })
+      .catch((error) => {
+        console.error('[App] Failed to re-check key store existence:', error);
+        setHasSecureStorageSetup(false);
+      })
+      .finally(() => {
+        setIsCheckingSecureStorage(false);
+      });
   };
 
   const checkPermissions = async (): Promise<void> => {
@@ -316,6 +460,8 @@ function App() {
     switch (currentStep) {
       case 'login':
         return 'Welcome';
+      case 'secure-storage-setup':
+        return 'Secure Storage';
       case 'email-onboarding':
         return 'Connect Email';
       case 'microsoft-login':
@@ -410,6 +556,21 @@ function App() {
 
       {/* Scrollable Content Area */}
       <div className="flex-1 overflow-y-auto relative">
+        {/* Loading state - shown while determining which screen to display */}
+        {currentStep === 'loading' && (
+          <div className="h-full flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
+            <div className="text-center">
+              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-blue-600 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+              </div>
+              <p className="text-gray-600 text-sm">Starting Magic Audit...</p>
+            </div>
+          </div>
+        )}
+
         {/* Show full offline screen during login when network is unavailable */}
         {currentStep === 'login' && !isOnline ? (
           <OfflineFallback
@@ -420,8 +581,27 @@ function App() {
             mode="fullscreen"
           />
         ) : currentStep === 'login' ? (
-          <Login onLoginSuccess={handleLoginSuccess} />
+          <Login
+            onLoginSuccess={handleLoginSuccess}
+            onLoginPending={handleLoginPending}
+          />
         ) : null}
+
+        {currentStep === 'secure-storage-setup' && (
+          <SecureStorageSetup
+            onComplete={handleSecureStorageComplete}
+            onRetry={handleSecureStorageRetry}
+          />
+        )}
+
+        {currentStep === 'keychain-explanation' && (
+          <KeychainExplanation
+            onContinue={handleKeychainExplanationContinue}
+            isLoading={isInitializingDatabase}
+            hasPendingLogin={!!pendingOAuthData}
+            skipExplanation={skipKeychainExplanation}
+          />
+        )}
 
         {currentStep === 'email-onboarding' && currentUser && authProvider && (
           <EmailOnboardingScreen
@@ -543,14 +723,16 @@ function App() {
       {/* Update Notification */}
       <UpdateNotification />
 
-      {/* System Health Monitor - Show permission/connection errors (hidden during onboarding tour and email onboarding) */}
+      {/* System Health Monitor - Show permission/connection errors (only on dashboard after permissions granted) */}
       {/* Key forces re-mount when email connection status changes, triggering fresh health check */}
-      {isAuthenticated && currentUser && authProvider && (
+      {/* IMPORTANT: Don't run health checks until user has completed permissions setup, otherwise
+          it tries to access contacts database before Full Disk Access is granted */}
+      {isAuthenticated && currentUser && authProvider && hasPermissions && currentStep === 'dashboard' && (
         <SystemHealthMonitor
           key={`health-monitor-${hasEmailConnected}`}
           userId={currentUser.id}
           provider={authProvider}
-          hidden={isTourActive || currentStep === 'email-onboarding'}
+          hidden={isTourActive || needsTermsAcceptance}
         />
       )}
 

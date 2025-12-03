@@ -3,6 +3,9 @@
 // SYSTEM & PERMISSION IPC HANDLERS
 // Permission checks, connection status, system health
 // ============================================
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerSystemHandlers = registerSystemHandlers;
 const electron_1 = require("electron");
@@ -10,12 +13,147 @@ const electron_1 = require("electron");
 const permissionService = require('./services/permissionService').default;
 const connectionStatusService = require('./services/connectionStatusService').default;
 const macOSPermissionHelper = require('./services/macOSPermissionHelper').default;
+const databaseEncryptionService_1 = require("./services/databaseEncryptionService");
+const auth_handlers_1 = require("./auth-handlers");
+const os_1 = __importDefault(require("os"));
 // Import validation utilities
 const validation_1 = require("./utils/validation");
+/**
+ * Get user-friendly error message for secure storage unavailability
+ */
+function getSecureStorageErrorMessage(platform) {
+    switch (platform) {
+        case 'darwin':
+            return 'Could not access macOS Keychain. Please click "Allow" when prompted, or check your Keychain Access settings.';
+        case 'win32':
+            return 'Could not access Windows credential storage. Please try restarting the application.';
+        case 'linux':
+            return 'Could not access secure storage. Please ensure gnome-keyring or KWallet is installed and running.';
+        default:
+            return 'Secure storage is not available on your system.';
+    }
+}
+/**
+ * Get platform-specific guidance for resolving secure storage issues
+ */
+function getSecureStorageGuidance(platform) {
+    switch (platform) {
+        case 'darwin':
+            return `To enable secure storage on macOS:
+1. When the Keychain Access prompt appears, click "Allow" or "Always Allow"
+2. If you clicked "Deny", you may need to:
+   - Open Keychain Access (in Applications > Utilities)
+   - Find "magic-audit Safe Storage"
+   - Right-click and select "Delete"
+   - Then restart Magic Audit and click "Allow"`;
+        case 'win32':
+            return `Windows should automatically provide secure storage via DPAPI.
+If you're seeing this error:
+1. Try restarting the application
+2. Run as administrator if the issue persists
+3. Check Windows Event Viewer for credential-related errors`;
+        case 'linux':
+            return `Linux requires a secret service to be running:
+1. Install gnome-keyring: sudo apt install gnome-keyring
+2. Ensure it's running: eval $(gnome-keyring-daemon --start --components=secrets)
+3. Or install KWallet if using KDE: sudo apt install kwalletmanager`;
+        default:
+            return 'Please ensure your operating system\'s credential storage service is available and running.';
+    }
+}
 /**
  * Register all system and permission-related IPC handlers
  */
 function registerSystemHandlers() {
+    // ===== SECURE STORAGE (KEYCHAIN) SETUP =====
+    /**
+     * Get secure storage status without triggering keychain prompt
+     * Now checks database encryption status (session-only OAuth, no token encryption)
+     */
+    electron_1.ipcMain.handle('system:get-secure-storage-status', async () => {
+        try {
+            // Check if database encryption key store exists (file check, no keychain prompt)
+            const hasKeyStore = databaseEncryptionService_1.databaseEncryptionService.hasKeyStore();
+            return {
+                success: true,
+                available: hasKeyStore,
+                platform: os_1.default.platform(),
+            };
+        }
+        catch (error) {
+            console.error('[Main] Secure storage status check failed:', error);
+            return {
+                success: false,
+                available: false,
+                platform: os_1.default.platform(),
+                error: error instanceof Error ? error.message : 'Unknown error',
+            };
+        }
+    });
+    /**
+     * Initialize secure storage (database only)
+     *
+     * Since we use session-only OAuth (tokens not persisted), we only need
+     * to initialize the database encryption. This triggers ONE keychain prompt
+     * for the database encryption key.
+     *
+     * OAuth tokens are kept in memory only - users login each session.
+     * This is more secure and avoids multiple keychain prompts.
+     */
+    electron_1.ipcMain.handle('system:initialize-secure-storage', async () => {
+        try {
+            // Initialize database - this triggers keychain prompt for db encryption key
+            await (0, auth_handlers_1.initializeDatabase)();
+            console.log('[Main] Database initialized with encryption');
+            return {
+                success: true,
+                available: true,
+                platform: os_1.default.platform(),
+            };
+        }
+        catch (error) {
+            console.error('[Main] Database initialization failed:', error);
+            const platform = os_1.default.platform();
+            return {
+                success: false,
+                available: false,
+                platform,
+                guidance: getSecureStorageGuidance(platform),
+                error: error instanceof Error ? error.message : 'Database initialization failed. Please try again.',
+            };
+        }
+    });
+    /**
+     * Check if the database encryption key store exists
+     * Used to determine if this is a new user (needs secure storage setup) vs returning user
+     */
+    electron_1.ipcMain.handle('system:has-encryption-key-store', async () => {
+        try {
+            const hasKeyStore = databaseEncryptionService_1.databaseEncryptionService.hasKeyStore();
+            return { success: true, hasKeyStore };
+        }
+        catch (error) {
+            console.error('[Main] Key store check failed:', error);
+            return { success: false, hasKeyStore: false };
+        }
+    });
+    /**
+     * Initialize the database after secure storage setup
+     * This should be called after the user has authorized keychain access
+     */
+    electron_1.ipcMain.handle('system:initialize-database', async () => {
+        try {
+            await (0, auth_handlers_1.initializeDatabase)();
+            return { success: true };
+        }
+        catch (error) {
+            console.error('[Main] Database initialization failed:', error);
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : 'Unknown error',
+            };
+        }
+    });
     // ===== PERMISSION SETUP (ONBOARDING) =====
     /**
      * Run permission setup flow (contacts + full disk access)

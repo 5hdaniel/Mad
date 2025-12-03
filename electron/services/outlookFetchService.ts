@@ -1,5 +1,6 @@
 import axios, { AxiosRequestConfig } from 'axios';
-import tokenEncryptionService from './tokenEncryptionService';
+// NOTE: tokenEncryptionService removed - using session-only OAuth
+// Tokens stored in encrypted database, no additional keychain encryption needed
 import databaseService from './databaseService';
 import { OAuthToken } from '../types/models';
 
@@ -112,8 +113,8 @@ class OutlookFetchService {
         throw new Error('No Outlook OAuth token found. User needs to connect Outlook first.');
       }
 
-      // Decrypt access token
-      this.accessToken = tokenEncryptionService.decrypt(tokenRecord.access_token || '');
+      // Session-only OAuth: tokens stored unencrypted in encrypted database
+      this.accessToken = tokenRecord.access_token || '';
 
       console.log('[OutlookFetch] Initialized successfully');
       return true;
