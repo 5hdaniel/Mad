@@ -548,6 +548,19 @@ contextBridge.exposeInMainWorld('api', {
      * @returns {Promise<{healthy: boolean, issues?: Array, error?: string}>} Health check result
      */
     healthCheck: (userId: string, provider: string) => ipcRenderer.invoke('system:health-check', userId, provider),
+
+    /**
+     * Opens support email with pre-filled content
+     * @param {string} errorDetails - Optional error details to include
+     * @returns {Promise<{success: boolean, error?: string}>} Result
+     */
+    contactSupport: (errorDetails?: string) => ipcRenderer.invoke('system:contact-support', errorDetails),
+
+    /**
+     * Gets diagnostic information for support requests
+     * @returns {Promise<{success: boolean, diagnostics?: string, error?: string}>} Diagnostic data
+     */
+    getDiagnostics: () => ipcRenderer.invoke('system:get-diagnostics'),
   },
 
   /**
@@ -591,6 +604,17 @@ contextBridge.exposeInMainWorld('api', {
   },
 
   /**
+   * Listens for Google mailbox connection cancelled events (user closed popup)
+   * @param {Function} callback - Callback function to handle cancellation
+   * @returns {Function} Cleanup function to remove listener
+   */
+  onGoogleMailboxCancelled: (callback: () => void) => {
+    const listener = () => callback();
+    ipcRenderer.on('google:mailbox-cancelled', listener);
+    return () => ipcRenderer.removeListener('google:mailbox-cancelled', listener);
+  },
+
+  /**
    * Listens for Microsoft login completion events
    * @param {Function} callback - Callback function to handle login result
    * @returns {Function} Cleanup function to remove listener
@@ -621,6 +645,17 @@ contextBridge.exposeInMainWorld('api', {
     const listener = (_: IpcRendererEvent, result: any) => callback(result);
     ipcRenderer.on('microsoft:mailbox-connected', listener);
     return () => ipcRenderer.removeListener('microsoft:mailbox-connected', listener);
+  },
+
+  /**
+   * Listens for Microsoft mailbox connection cancelled events (user closed popup)
+   * @param {Function} callback - Callback function to handle cancellation
+   * @returns {Function} Cleanup function to remove listener
+   */
+  onMicrosoftMailboxCancelled: (callback: () => void) => {
+    const listener = () => callback();
+    ipcRenderer.on('microsoft:mailbox-cancelled', listener);
+    return () => ipcRenderer.removeListener('microsoft:mailbox-cancelled', listener);
   },
 
   /**

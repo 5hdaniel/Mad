@@ -411,6 +411,9 @@ export interface WindowApi {
     hasEncryptionKeyStore: () => Promise<{ success: boolean; hasKeyStore: boolean }>;
     initializeDatabase: () => Promise<{ success: boolean; error?: string }>;
     isDatabaseInitialized: () => Promise<{ success: boolean; initialized: boolean }>;
+    // Support methods
+    contactSupport: (errorDetails?: string) => Promise<{ success: boolean; error?: string }>;
+    getDiagnostics: () => Promise<{ success: boolean; diagnostics?: string; error?: string }>;
   };
 
   // Preferences methods
@@ -462,7 +465,9 @@ export interface WindowApi {
 
   // Event listeners for mailbox connections
   onGoogleMailboxConnected: (callback: (result: { success: boolean }) => void) => () => void;
+  onGoogleMailboxCancelled: (callback: () => void) => () => void;
   onMicrosoftMailboxConnected: (callback: (result: { success: boolean }) => void) => () => void;
+  onMicrosoftMailboxCancelled: (callback: () => void) => () => void;
   onGoogleLoginComplete: (callback: (result: { success: boolean; user?: User; sessionToken?: string; subscription?: Subscription; isNewUser?: boolean; pendingLogin?: boolean; error?: string }) => void) => () => void;
   onMicrosoftLoginComplete: (callback: (result: { success: boolean; user?: User; sessionToken?: string; subscription?: Subscription; isNewUser?: boolean; pendingLogin?: boolean; error?: string }) => void) => () => void;
   // Event listeners for pending login (OAuth succeeded but DB not initialized - login-first flow)

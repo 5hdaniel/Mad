@@ -155,6 +155,8 @@ interface MainAPI {
       }>;
     }>;
     openPrivacyPane: (pane: string) => Promise<void>;
+    contactSupport: (errorDetails?: string) => Promise<{ success: boolean; error?: string }>;
+    getDiagnostics: () => Promise<{ success: boolean; diagnostics?: string; error?: string }>;
   };
   // Event listeners for login completion
   onGoogleLoginComplete: (callback: (result: { success: boolean; user?: unknown; sessionToken?: string; subscription?: unknown; isNewUser?: boolean; error?: string }) => void) => () => void;
