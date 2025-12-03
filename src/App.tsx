@@ -723,14 +723,16 @@ function App() {
       {/* Update Notification */}
       <UpdateNotification />
 
-      {/* System Health Monitor - Show permission/connection errors (hidden during onboarding) */}
+      {/* System Health Monitor - Show permission/connection errors (only on dashboard after permissions granted) */}
       {/* Key forces re-mount when email connection status changes, triggering fresh health check */}
-      {isAuthenticated && currentUser && authProvider && (
+      {/* IMPORTANT: Don't run health checks until user has completed permissions setup, otherwise
+          it tries to access contacts database before Full Disk Access is granted */}
+      {isAuthenticated && currentUser && authProvider && hasPermissions && currentStep === 'dashboard' && (
         <SystemHealthMonitor
           key={`health-monitor-${hasEmailConnected}`}
           userId={currentUser.id}
           provider={authProvider}
-          hidden={isTourActive || currentStep === 'email-onboarding' || needsTermsAcceptance}
+          hidden={isTourActive || needsTermsAcceptance}
         />
       )}
 
