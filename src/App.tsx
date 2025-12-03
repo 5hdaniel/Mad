@@ -117,36 +117,10 @@ function App() {
     checkKeyStoreExists();
   }, []);
 
-  // Initialize database for returning users who have chosen to skip the keychain explanation
-  // This triggers the keychain prompt immediately for better UX (no extra click needed)
-  useEffect(() => {
-    const initializeForReturningUser = async () => {
-      // Only auto-initialize if:
-      // 1. We've checked secure storage state (not still checking)
-      // 2. User has existing key store (returning user)
-      // 3. User has chosen to skip the explanation
-      // 4. Database not already initialized or initializing
-      if (!isCheckingSecureStorage && hasSecureStorageSetup && skipKeychainExplanation && !isDatabaseInitialized && !isInitializingDatabase) {
-        setIsInitializingDatabase(true);
-        try {
-          const result = await window.api.system.initializeSecureStorage();
-          if (result.success) {
-            setIsDatabaseInitialized(true);
-          } else {
-            console.error('[App] Database initialization failed:', result.error);
-            // Reset skip preference so user sees explanation on retry
-            setSkipKeychainExplanation(false);
-          }
-        } catch (error) {
-          console.error('[App] Database initialization error:', error);
-          setSkipKeychainExplanation(false);
-        } finally {
-          setIsInitializingDatabase(false);
-        }
-      }
-    };
-    initializeForReturningUser();
-  }, [isCheckingSecureStorage, hasSecureStorageSetup, skipKeychainExplanation, isDatabaseInitialized, isInitializingDatabase]);
+  // NOTE: We removed the auto-initialization for returning users.
+  // The keychain prompt should NEVER appear before the user logs in.
+  // Flow: Login → Keychain explanation screen → User clicks Continue → Keychain prompt
+  // The "skip explanation" preference only skips the detailed explanation, not the screen itself.
 
   // Check if user has completed email onboarding and has email connected
   useEffect(() => {
@@ -229,7 +203,6 @@ function App() {
   // Handle pending login - OAuth succeeded but database not initialized
   // Store the OAuth data and show keychain explanation screen
   const handleLoginPending = (oauthData: PendingOAuthData): void => {
-    console.log('[App] Login pending - OAuth succeeded, need keychain setup');
     setPendingOAuthData(oauthData);
     // Navigation will be handled by useEffect - will show keychain-explanation
   };
@@ -285,7 +258,6 @@ function App() {
 
         // If we have pending OAuth data, complete the login now
         if (pendingOAuthData) {
-          console.log('[App] Database initialized, completing pending login...');
           try {
             const loginResult = await window.api.auth.completePendingLogin(pendingOAuthData);
             if (loginResult.success && loginResult.user && loginResult.sessionToken) {
