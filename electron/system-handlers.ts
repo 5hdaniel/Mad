@@ -3,7 +3,7 @@
 // Permission checks, connection status, system health
 // ============================================
 
-import { ipcMain, shell } from 'electron';
+import { ipcMain, shell, app } from 'electron';
 import type { IpcMainInvokeEvent } from 'electron';
 
 // Import services (TypeScript with default exports)
@@ -795,5 +795,16 @@ export function registerSystemHandlers(): void {
         error: errorMessage,
       };
     }
+  });
+
+  // ===== APPLICATION CONTROL =====
+
+  /**
+   * Quit the application
+   * Used when user declines terms or wants to exit
+   */
+  ipcMain.handle('app:quit', async (): Promise<void> => {
+    logService.info('App quit requested by renderer', 'SystemHandlers');
+    app.quit();
   });
 }

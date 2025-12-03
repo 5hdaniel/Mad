@@ -164,11 +164,14 @@ export function AuthProvider({ children }: AuthProviderProps): React.ReactElemen
   }, [state.currentUser]);
 
   /**
-   * Decline terms - triggers logout
+   * Decline terms - quits the application
    */
   const declineTerms = useCallback(async () => {
-    await logout();
-  }, [logout]);
+    // Quit the application when user declines terms
+    if (window.api?.app?.quit) {
+      await window.api.app.quit();
+    }
+  }, []);
 
   /**
    * Refresh session - re-check authentication status

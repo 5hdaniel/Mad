@@ -158,6 +158,9 @@ interface MainAPI {
     contactSupport: (errorDetails?: string) => Promise<{ success: boolean; error?: string }>;
     getDiagnostics: () => Promise<{ success: boolean; diagnostics?: string; error?: string }>;
   };
+  app: {
+    quit: () => Promise<void>;
+  };
   // Event listeners for login completion
   onGoogleLoginComplete: (callback: (result: { success: boolean; user?: unknown; sessionToken?: string; subscription?: unknown; isNewUser?: boolean; error?: string }) => void) => () => void;
   onGoogleLoginPending: (callback: (result: { success: boolean; pendingLogin?: boolean; oauthData?: unknown; error?: string }) => void) => () => void;

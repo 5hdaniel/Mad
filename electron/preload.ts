@@ -683,6 +683,21 @@ contextBridge.exposeInMainWorld('api', {
      */
     openExternal: (url: string) => ipcRenderer.invoke('shell:open-external', url),
   },
+
+  /**
+   * ============================================
+   * APPLICATION CONTROL METHODS
+   * ============================================
+   * Methods for controlling the application lifecycle
+   */
+  app: {
+    /**
+     * Quits the application
+     * Used when user declines terms or wants to exit
+     * @returns {Promise<void>}
+     */
+    quit: () => ipcRenderer.invoke('app:quit'),
+  },
 });
 
 /**
