@@ -36,6 +36,7 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
   const [connections, setConnections] = useState<Connections>({ google: null, microsoft: null });
   const [loadingConnections, setLoadingConnections] = useState<boolean>(true);
   const [connectingProvider, setConnectingProvider] = useState<string | null>(null);
+  const [disconnectingProvider, setDisconnectingProvider] = useState<string | null>(null);
   const [exportFormat, setExportFormat] = useState<string>('pdf'); // Default export format
   const [loadingPreferences, setLoadingPreferences] = useState<boolean>(true);
 
@@ -76,7 +77,9 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
         // TODO: Load other preferences when they are implemented
       }
     } catch (error) {
-      console.error('Failed to load preferences:', error);
+      // Silently handle preference loading errors - preferences are non-critical
+      // User will just get default values
+      console.debug('Preferences not available, using defaults');
     } finally {
       setLoadingPreferences(false);
     }
@@ -92,10 +95,11 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
         }
       });
       if (!result.success) {
-        console.error('Failed to save export format preference');
+        console.debug('Could not save export format preference');
       }
     } catch (error) {
-      console.error('Failed to save export format preference:', error);
+      // Silently handle - preference will still be applied locally for this session
+      console.debug('Could not save export format preference');
     }
   };
 
@@ -142,6 +146,34 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
       console.error('Failed to connect Microsoft:', error);
       setConnectingProvider(null);
       if (cleanup) cleanup();
+    }
+  };
+
+  const handleDisconnectGoogle = async (): Promise<void> => {
+    setDisconnectingProvider('google');
+    try {
+      const result = await window.api.auth.googleDisconnectMailbox(userId);
+      if (result.success) {
+        await checkConnections();
+      }
+    } catch (error) {
+      console.error('Failed to disconnect Google:', error);
+    } finally {
+      setDisconnectingProvider(null);
+    }
+  };
+
+  const handleDisconnectMicrosoft = async (): Promise<void> => {
+    setDisconnectingProvider('microsoft');
+    try {
+      const result = await window.api.auth.microsoftDisconnectMailbox(userId);
+      if (result.success) {
+        await checkConnections();
+      }
+    } catch (error) {
+      console.error('Failed to disconnect Microsoft:', error);
+    } finally {
+      setDisconnectingProvider(null);
     }
   };
 
@@ -254,13 +286,23 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
                 {connections.google?.email && (
                   <p className="text-xs text-gray-600 mb-3">{connections.google.email}</p>
                 )}
-                <button
-                  onClick={handleConnectGoogle}
-                  disabled={connectingProvider === 'google' || connections.google?.connected}
-                  className="w-full mt-2 px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {connectingProvider === 'google' ? 'Connecting...' : connections.google?.connected ? 'Connected' : 'Connect Gmail'}
-                </button>
+                {connections.google?.connected ? (
+                  <button
+                    onClick={handleDisconnectGoogle}
+                    disabled={disconnectingProvider === 'google'}
+                    className="w-full mt-2 px-3 py-2 bg-red-500 hover:bg-red-600 text-white text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {disconnectingProvider === 'google' ? 'Disconnecting...' : 'Disconnect Gmail'}
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleConnectGoogle}
+                    disabled={connectingProvider === 'google'}
+                    className="w-full mt-2 px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {connectingProvider === 'google' ? 'Connecting...' : 'Connect Gmail'}
+                  </button>
+                )}
               </div>
 
               {/* Outlook Connection */}
@@ -292,13 +334,23 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
                 {connections.microsoft?.email && (
                   <p className="text-xs text-gray-600 mb-3">{connections.microsoft.email}</p>
                 )}
-                <button
-                  onClick={handleConnectMicrosoft}
-                  disabled={connectingProvider === 'microsoft' || connections.microsoft?.connected}
-                  className="w-full mt-2 px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {connectingProvider === 'microsoft' ? 'Connecting...' : connections.microsoft?.connected ? 'Connected' : 'Connect Outlook'}
-                </button>
+                {connections.microsoft?.connected ? (
+                  <button
+                    onClick={handleDisconnectMicrosoft}
+                    disabled={disconnectingProvider === 'microsoft'}
+                    className="w-full mt-2 px-3 py-2 bg-red-500 hover:bg-red-600 text-white text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {disconnectingProvider === 'microsoft' ? 'Disconnecting...' : 'Disconnect Outlook'}
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleConnectMicrosoft}
+                    disabled={connectingProvider === 'microsoft'}
+                    className="w-full mt-2 px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {connectingProvider === 'microsoft' ? 'Connecting...' : 'Connect Outlook'}
+                  </button>
+                )}
               </div>
             </div>
           </div>

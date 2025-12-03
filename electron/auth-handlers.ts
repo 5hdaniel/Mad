@@ -1529,6 +1529,64 @@ const handleCompletePendingLogin = async (
   }
 };
 
+// Disconnect mailbox (remove OAuth token for mailbox purpose)
+const handleDisconnectMailbox = async (
+  mainWindow: BrowserWindow | null,
+  userId: string,
+  provider: 'google' | 'microsoft'
+): Promise<AuthResponse> => {
+  try {
+    await logService.info(`Starting ${provider} mailbox disconnect`, 'AuthHandlers', { userId });
+
+    // Validate input
+    const validatedUserId = validateUserId(userId)!;
+
+    // Delete the OAuth token for this mailbox
+    await databaseService.deleteOAuthToken(validatedUserId, provider, 'mailbox');
+
+    await logService.info(`${provider} mailbox disconnected successfully`, 'AuthHandlers', { userId });
+
+    // Audit log mailbox disconnect
+    await auditService.log({
+      userId: validatedUserId,
+      action: 'MAILBOX_DISCONNECT',
+      resourceType: 'MAILBOX',
+      metadata: { provider },
+      success: true,
+    });
+
+    // Notify renderer of successful disconnect
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(`${provider}:mailbox-disconnected`, {
+        success: true,
+      });
+    }
+
+    return { success: true };
+  } catch (error) {
+    await logService.error(
+      `${provider} mailbox disconnect failed`,
+      'AuthHandlers',
+      { userId, error: error instanceof Error ? error.message : 'Unknown error' }
+    );
+
+    // Audit log failed disconnect
+    await auditService.log({
+      userId,
+      action: 'MAILBOX_DISCONNECT',
+      resourceType: 'MAILBOX',
+      metadata: { provider },
+      success: false,
+      errorMessage: error instanceof Error ? error.message : 'Unknown error',
+    });
+
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+};
+
 // Register all handlers (to be called in main.js)
 export const registerAuthHandlers = (mainWindow: BrowserWindow | null): void => {
   // Google Auth - Login
@@ -1538,11 +1596,17 @@ export const registerAuthHandlers = (mainWindow: BrowserWindow | null): void => 
   // Google Auth - Mailbox Connection
   ipcMain.handle('auth:google:connect-mailbox', (event, userId: string) => handleGoogleConnectMailbox(mainWindow, userId));
 
+  // Google Auth - Mailbox Disconnect
+  ipcMain.handle('auth:google:disconnect-mailbox', (event, userId: string) => handleDisconnectMailbox(mainWindow, userId, 'google'));
+
   // Microsoft Auth - Login
   ipcMain.handle('auth:microsoft:login', () => handleMicrosoftLogin(mainWindow));
 
   // Microsoft Auth - Mailbox Connection
   ipcMain.handle('auth:microsoft:connect-mailbox', (event, userId: string) => handleMicrosoftConnectMailbox(mainWindow, userId));
+
+  // Microsoft Auth - Mailbox Disconnect
+  ipcMain.handle('auth:microsoft:disconnect-mailbox', (event, userId: string) => handleDisconnectMailbox(mainWindow, userId, 'microsoft'));
 
   // Complete pending login (after keychain setup)
   // Used when OAuth succeeds but database wasn't initialized yet
