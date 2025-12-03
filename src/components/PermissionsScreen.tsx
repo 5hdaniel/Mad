@@ -160,39 +160,50 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain: _onCheckAgain }
     }
   };
 
-  // Step 1: Welcome
+  // Step 1: Grant Full Disk Access prompt
   if (currentStep === 1) {
     return (
-      <div className="flex items-center justify-center min-h-full py-8">
-        <div className="max-w-2xl mx-auto p-8 bg-white rounded-lg shadow-lg">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-8">
+        <div className="max-w-lg w-full bg-white rounded-2xl shadow-xl p-8">
           {/* Setup Progress Indicator */}
           <SetupProgressIndicator currentStep={4} />
 
+          {/* Header */}
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-20 h-20 bg-primary/10 rounded-full mb-6">
-              <svg className="w-10 h-10 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full mb-6 shadow-lg">
+              <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
               </svg>
             </div>
-            <h1 className="text-4xl font-bold text-gray-900 mb-4">Welcome to Real Estate Archive</h1>
-            <p className="text-lg text-gray-600 mb-6">
-              Export your client conversations with just a few clicks
+            <h2 className="text-2xl font-bold text-gray-900 mb-3">Grant Full Disk Access</h2>
+            <p className="text-gray-600">
+              To read your Messages database, we need Full Disk Access permission.
             </p>
           </div>
 
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-8">
-            <h2 className="font-semibold text-gray-900 mb-3">To get started, we need one permission:</h2>
-            <div className="flex items-start text-sm text-gray-700">
-              <svg className="w-5 h-5 text-green-600 mr-2 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-              </svg>
-              <span><strong>Full Disk Access</strong> - To read your Messages database. This is a macOS security requirement for accessing iMessage data.</span>
-            </div>
+          {/* Permission Explanation */}
+          <div className="mb-6 bg-blue-50 rounded-xl p-4">
+            <h3 className="text-sm font-semibold text-blue-900 mb-3">Why do we need this?</h3>
+            <ul className="space-y-2">
+              <li className="flex items-start gap-2 text-sm text-blue-800">
+                <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                <span>Access your iMessage database stored on your Mac</span>
+              </li>
+              <li className="flex items-start gap-2 text-sm text-blue-800">
+                <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                <span>This is a macOS security requirement for all apps that read Messages</span>
+              </li>
+            </ul>
           </div>
 
-          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-8">
-            <div className="flex items-start">
-              <svg className="w-5 h-5 text-gray-500 mr-2 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+          {/* Privacy Note */}
+          <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-8">
+            <div className="flex items-start gap-2">
+              <svg className="w-5 h-5 text-gray-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
               </svg>
               <p className="text-sm text-gray-600">
@@ -207,7 +218,7 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain: _onCheckAgain }
               await window.electron.triggerFullDiskAccess();
               setCurrentStep(2);
             }}
-            className="w-full bg-primary text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors text-lg"
+            className="w-full px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all"
           >
             Grant Permission
           </button>
@@ -218,27 +229,27 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain: _onCheckAgain }
 
   // Step 2: Full Disk Access (must be done manually)
   return (
-    <div className="flex items-center justify-center min-h-full py-8">
-      <div className="max-w-2xl mx-auto p-8 bg-white rounded-lg shadow-lg">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-8">
+      <div className="max-w-lg w-full bg-white rounded-2xl shadow-xl p-8">
         {/* Setup Progress Indicator */}
         <SetupProgressIndicator currentStep={4} />
 
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-primary/10 rounded-full mb-4">
-            <svg className="w-8 h-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full mb-4 shadow-lg">
+            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
             </svg>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Grant Full Disk Access
-          </h1>
+          <h2 className="text-2xl font-bold text-gray-900 mb-3">
+            Follow These Steps
+          </h2>
           <p className="text-gray-600">
-            Grant access to read your Messages database
+            Complete the checklist below to grant Full Disk Access
           </p>
         </div>
 
         {/* Step 1: Open System Settings */}
-        <div className={`border-2 rounded-lg p-6 mb-6 transition-all ${
+        <div className={`border-2 rounded-xl p-5 mb-4 transition-all ${
           openSettingsComplete
             ? 'bg-green-50 border-green-300'
             : 'bg-yellow-50 border-yellow-300'
@@ -276,9 +287,9 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain: _onCheckAgain }
                   await window.electron.openSystemSettings();
                   setOpenSettingsComplete(true);
                 }}
-                className="w-full bg-primary text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors mb-3"
+                className="w-full px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all mb-3"
               >
-                🔓 Open System Settings
+                Open System Settings
               </button>
               <button
                 onClick={() => setOpenSettingsComplete(true)}
@@ -292,7 +303,7 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain: _onCheckAgain }
 
         {/* Step 2: Find Privacy & Security in Sidebar */}
         {openSettingsComplete && (
-          <div className={`border-2 rounded-lg p-6 mb-6 transition-all ${
+          <div className={`border-2 rounded-xl p-5 mb-4 transition-all ${
             findPrivacySecurityComplete
               ? 'bg-green-50 border-green-300'
               : 'bg-yellow-50 border-yellow-300'
@@ -336,9 +347,9 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain: _onCheckAgain }
                 </button>
                 <button
                   onClick={() => setFindPrivacySecurityComplete(true)}
-                  className="flex-1 bg-blue-500 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors"
+                  className="flex-1 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white py-3 px-6 rounded-lg font-semibold shadow-md hover:shadow-lg transition-all"
                 >
-                  ✅ Done - Found Privacy & Security
+                  Done - Found Privacy & Security
                 </button>
               </div>
             )}
@@ -347,7 +358,7 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain: _onCheckAgain }
 
         {/* Step 3: Find Full Disk Access */}
         {findPrivacySecurityComplete && (
-          <div className={`border-2 rounded-lg p-6 mb-6 transition-all ${
+          <div className={`border-2 rounded-xl p-5 mb-4 transition-all ${
             findFullDiskAccessComplete
               ? 'bg-green-50 border-green-300'
               : 'bg-yellow-50 border-yellow-300'
@@ -391,9 +402,9 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain: _onCheckAgain }
                 </button>
                 <button
                   onClick={() => setFindFullDiskAccessComplete(true)}
-                  className="flex-1 bg-blue-500 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors"
+                  className="flex-1 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white py-3 px-6 rounded-lg font-semibold shadow-md hover:shadow-lg transition-all"
                 >
-                  ✅ Done - Found Full Disk Access
+                  Done - Found Full Disk Access
                 </button>
               </div>
             )}
@@ -402,7 +413,7 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain: _onCheckAgain }
 
         {/* Step 4: Click Plus Button */}
         {findFullDiskAccessComplete && (
-          <div className={`border-2 rounded-lg p-6 mb-6 transition-all ${
+          <div className={`border-2 rounded-xl p-5 mb-4 transition-all ${
             clickPlusComplete
               ? 'bg-green-50 border-green-300'
               : 'bg-yellow-50 border-yellow-300'
@@ -446,9 +457,9 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain: _onCheckAgain }
                 </button>
                 <button
                   onClick={() => setClickPlusComplete(true)}
-                  className="flex-1 bg-blue-500 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors"
+                  className="flex-1 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white py-3 px-6 rounded-lg font-semibold shadow-md hover:shadow-lg transition-all"
                 >
-                  ✅ Done - Clicked Plus Button
+                  Done - Clicked Plus Button
                 </button>
               </div>
             )}
@@ -457,7 +468,7 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain: _onCheckAgain }
 
         {/* Step 5: Select Real Estate Archive App */}
         {clickPlusComplete && (
-          <div className={`border-2 rounded-lg p-6 mb-6 transition-all ${
+          <div className={`border-2 rounded-xl p-5 mb-4 transition-all ${
             selectAppComplete
               ? 'bg-green-50 border-green-300'
               : 'bg-yellow-50 border-yellow-300'
@@ -484,9 +495,9 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain: _onCheckAgain }
                       <p className="text-sm text-gray-700 mb-2">
                         In the file selector that opens, navigate to <strong>Applications</strong> and select <strong>Real Estate Archive.app</strong>
                       </p>
-                      <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-xl">
                         <p className="text-xs text-blue-800">
-                          <strong>💡 Tip:</strong> If you can't find Real Estate Archive in the Applications folder, you may not have copied it from the DMG file. Drag the app from the DMG to your Applications folder first.
+                          <strong>Tip:</strong> If you can't find Real Estate Archive in the Applications folder, you may not have copied it from the DMG file. Drag the app from the DMG to your Applications folder first.
                         </p>
                       </div>
                     </>
@@ -508,9 +519,9 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain: _onCheckAgain }
                 </button>
                 <button
                   onClick={() => setSelectAppComplete(true)}
-                  className="flex-1 bg-blue-500 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors"
+                  className="flex-1 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white py-3 px-6 rounded-lg font-semibold shadow-md hover:shadow-lg transition-all"
                 >
-                  ✅ Done - Selected the App
+                  Done - Selected the App
                 </button>
               </div>
             )}
@@ -519,7 +530,7 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain: _onCheckAgain }
 
         {/* Step 6: Handle Quit & Reopen Prompt */}
         {selectAppComplete && (
-          <div className={`border-2 rounded-lg p-6 mb-6 transition-all ${
+          <div className={`border-2 rounded-xl p-5 mb-4 transition-all ${
             quitReopenComplete
               ? 'bg-green-50 border-green-300'
               : 'bg-yellow-50 border-yellow-300'
@@ -549,7 +560,7 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain: _onCheckAgain }
                       <p className="text-sm text-gray-700 mb-2">
                         Click <strong>"Quit & Reopen"</strong> to restart the app with full disk access enabled
                       </p>
-                      <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                      <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-xl">
                         <p className="text-xs text-yellow-800">
                           <strong>Note:</strong> If you click "Later", you'll need to manually restart the app for the permissions to take effect
                         </p>
@@ -584,9 +595,9 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain: _onCheckAgain }
                     }, 2000);
                     setTimeout(() => clearInterval(interval), 60000);
                   }}
-                  className="flex-1 bg-blue-500 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors"
+                  className="flex-1 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white py-3 px-6 rounded-lg font-semibold shadow-md hover:shadow-lg transition-all"
                 >
-                  ✅ Done - App Restarted
+                  Done - App Restarted
                 </button>
               </div>
             )}
@@ -595,8 +606,8 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain: _onCheckAgain }
 
         {/* Final message after all steps */}
         {quitReopenComplete && (
-          <div className="bg-green-50 border-2 border-green-300 rounded-lg p-6 mb-6 text-center">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-green-500 rounded-full mb-4">
+          <div className="bg-green-50 border-2 border-green-300 rounded-xl p-6 mb-6 text-center">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-green-400 to-green-600 rounded-full mb-4 shadow-lg">
               <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
@@ -611,7 +622,7 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain: _onCheckAgain }
             <button
               onClick={handleCheckPermissions}
               disabled={isChecking}
-              className="bg-primary text-white py-2 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors disabled:opacity-50"
+              className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white py-2 px-6 rounded-lg font-semibold shadow-md hover:shadow-lg transition-all disabled:opacity-50"
             >
               {isChecking ? 'Checking...' : 'Check Again'}
             </button>
