@@ -593,6 +593,17 @@ contextBridge.exposeInMainWorld('api', {
   },
 
   /**
+   * Listens for Google login cancelled events (user closed popup)
+   * @param {Function} callback - Callback function to handle cancellation
+   * @returns {Function} Cleanup function to remove listener
+   */
+  onGoogleLoginCancelled: (callback: () => void) => {
+    const listener = () => callback();
+    ipcRenderer.on('google:login-cancelled', listener);
+    return () => ipcRenderer.removeListener('google:login-cancelled', listener);
+  },
+
+  /**
    * Listens for Google mailbox connection events
    * @param {Function} callback - Callback function to handle connection result
    * @returns {Function} Cleanup function to remove listener
@@ -634,6 +645,17 @@ contextBridge.exposeInMainWorld('api', {
     const listener = (_: IpcRendererEvent, result: any) => callback(result);
     ipcRenderer.on('microsoft:login-pending', listener);
     return () => ipcRenderer.removeListener('microsoft:login-pending', listener);
+  },
+
+  /**
+   * Listens for Microsoft login cancelled events (user closed popup)
+   * @param {Function} callback - Callback function to handle cancellation
+   * @returns {Function} Cleanup function to remove listener
+   */
+  onMicrosoftLoginCancelled: (callback: () => void) => {
+    const listener = () => callback();
+    ipcRenderer.on('microsoft:login-cancelled', listener);
+    return () => ipcRenderer.removeListener('microsoft:login-cancelled', listener);
   },
 
   /**
