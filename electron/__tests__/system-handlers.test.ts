@@ -10,6 +10,7 @@ import type { IpcMainInvokeEvent } from 'electron';
 
 // Mock electron module
 const mockIpcHandle = jest.fn();
+const mockAppQuit = jest.fn();
 
 jest.mock('electron', () => ({
   ipcMain: {
@@ -17,6 +18,10 @@ jest.mock('electron', () => ({
   },
   app: {
     getPath: jest.fn().mockReturnValue('/tmp/test-user-data'),
+    quit: mockAppQuit,
+  },
+  shell: {
+    openExternal: jest.fn().mockResolvedValue(undefined),
   },
 }));
 
@@ -618,6 +623,21 @@ describe('System Handlers', () => {
         expect(result.success).toBe(true);
         expect(result.summary).toBeDefined();
         expect(result.summary.totalIssues).toBeGreaterThanOrEqual(2);
+      });
+    });
+  });
+
+  describe('Application Control', () => {
+    describe('app:quit', () => {
+      it('should quit the application when called', async () => {
+        const handler = registeredHandlers.get('app:quit');
+        await handler(mockEvent);
+
+        expect(mockAppQuit).toHaveBeenCalled();
+      });
+
+      it('should be registered as a handler', () => {
+        expect(registeredHandlers.has('app:quit')).toBe(true);
       });
     });
   });

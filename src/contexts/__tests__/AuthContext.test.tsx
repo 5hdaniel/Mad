@@ -15,6 +15,9 @@ const mockApi = {
     logout: jest.fn(),
     acceptTerms: jest.fn(),
   },
+  app: {
+    quit: jest.fn(),
+  },
 };
 
 // Setup global window.api mock
@@ -45,6 +48,7 @@ function TestAuthConsumer() {
         Login
       </button>
       <button onClick={() => auth.logout()}>Logout</button>
+      <button onClick={() => auth.declineTerms()}>Decline Terms</button>
     </div>
   );
 }
@@ -336,6 +340,80 @@ describe('AuthContext', () => {
 
       // Restore
       (window as any).api = originalApi;
+    });
+  });
+
+  describe('declineTerms', () => {
+    it('should call app.quit when declining terms', async () => {
+      const user = userEvent.setup();
+      mockApi.app.quit.mockResolvedValue(undefined);
+
+      render(
+        <AuthProvider>
+          <TestAuthConsumer />
+        </AuthProvider>
+      );
+
+      // Wait for initial load
+      await waitFor(() => {
+        expect(screen.getByTestId('is-loading').textContent).toBe('false');
+      });
+
+      // Click decline terms button
+      await user.click(screen.getByText('Decline Terms'));
+
+      expect(mockApi.app.quit).toHaveBeenCalled();
+    });
+
+    it('should handle missing app.quit API gracefully', async () => {
+      const user = userEvent.setup();
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      // Temporarily remove app.quit
+      const originalApp = mockApi.app;
+      (window as any).api.app = undefined;
+
+      render(
+        <AuthProvider>
+          <TestAuthConsumer />
+        </AuthProvider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId('is-loading').textContent).toBe('false');
+      });
+
+      // Click decline terms - should not throw
+      await user.click(screen.getByText('Decline Terms'));
+
+      expect(consoleSpy).toHaveBeenCalledWith('App quit API not available');
+
+      // Restore
+      (window as any).api.app = originalApp;
+      consoleSpy.mockRestore();
+    });
+
+    it('should handle app.quit failure gracefully', async () => {
+      const user = userEvent.setup();
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      mockApi.app.quit.mockRejectedValue(new Error('Quit failed'));
+
+      render(
+        <AuthProvider>
+          <TestAuthConsumer />
+        </AuthProvider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId('is-loading').textContent).toBe('false');
+      });
+
+      // Click decline terms - should not throw
+      await user.click(screen.getByText('Decline Terms'));
+
+      expect(consoleSpy).toHaveBeenCalledWith('Failed to quit application:', expect.any(Error));
+
+      consoleSpy.mockRestore();
     });
   });
 });

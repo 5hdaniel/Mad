@@ -167,9 +167,15 @@ export function AuthProvider({ children }: AuthProviderProps): React.ReactElemen
    * Decline terms - quits the application
    */
   const declineTerms = useCallback(async () => {
-    // Quit the application when user declines terms
-    if (window.api?.app?.quit) {
-      await window.api.app.quit();
+    try {
+      // Quit the application when user declines terms
+      if (window.api?.app?.quit) {
+        await window.api.app.quit();
+      } else {
+        console.error('App quit API not available');
+      }
+    } catch (error) {
+      console.error('Failed to quit application:', error);
     }
   }, []);
 

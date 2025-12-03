@@ -463,6 +463,11 @@ export interface WindowApi {
     openExternal: (url: string) => Promise<void>;
   };
 
+  // App methods
+  app: {
+    quit: () => Promise<void>;
+  };
+
   // Event listeners for mailbox connections
   onGoogleMailboxConnected: (callback: (result: { success: boolean }) => void) => () => void;
   onGoogleMailboxCancelled: (callback: () => void) => () => void;
