@@ -170,7 +170,6 @@ app.whenReady().then(async () => {
   // 2. Clearing sessions/tokens for session-only OAuth
 
   createWindow();
-  console.log('[Main] Registering IPC handlers...');
   registerAuthHandlers(mainWindow!);
   registerTransactionHandlers(mainWindow!);
   registerContactHandlers();
@@ -178,7 +177,6 @@ app.whenReady().then(async () => {
   registerFeedbackHandlers();
   registerSystemHandlers();
   registerPreferenceHandlers();
-  console.log('[Main] All IPC handlers registered');
 });
 
 app.on('window-all-closed', () => {

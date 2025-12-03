@@ -57,12 +57,14 @@ jest.mock('../services/databaseService', () => ({
   __esModule: true,
   default: {
     initialize: jest.fn().mockResolvedValue(undefined),
+    isInitialized: jest.fn().mockReturnValue(true),
     getUserByOAuthId: jest.fn(),
     createUser: jest.fn(),
     updateUser: jest.fn(),
     updateLastLogin: jest.fn(),
     getUserById: jest.fn(),
     saveOAuthToken: jest.fn(),
+    deleteOAuthToken: jest.fn().mockResolvedValue(undefined),
     createSession: jest.fn(),
     validateSession: jest.fn(),
     deleteSession: jest.fn(),
@@ -748,6 +750,138 @@ describe('Auth Handlers', () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toContain('Shell error');
+    });
+  });
+
+  describe('auth:google:disconnect-mailbox', () => {
+    it('should disconnect Google mailbox successfully', async () => {
+      const handler = registeredHandlers.get('auth:google:disconnect-mailbox');
+      const result = await handler(mockEvent, TEST_USER_ID);
+
+      expect(result.success).toBe(true);
+      expect(mockDatabaseService.deleteOAuthToken).toHaveBeenCalledWith(
+        TEST_USER_ID,
+        'google',
+        'mailbox'
+      );
+      expect(mockAuditService.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'MAILBOX_DISCONNECT',
+          resourceType: 'MAILBOX',
+          metadata: { provider: 'google' },
+          success: true,
+        })
+      );
+      expect(mockMainWindow.webContents.send).toHaveBeenCalledWith(
+        'google:mailbox-disconnected',
+        { success: true }
+      );
+    });
+
+    it('should handle invalid user ID', async () => {
+      const handler = registeredHandlers.get('auth:google:disconnect-mailbox');
+      const result = await handler(mockEvent, '');
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBeDefined();
+    });
+
+    it('should handle database error during disconnect', async () => {
+      mockDatabaseService.deleteOAuthToken.mockRejectedValueOnce(
+        new Error('Database error')
+      );
+
+      const handler = registeredHandlers.get('auth:google:disconnect-mailbox');
+      const result = await handler(mockEvent, TEST_USER_ID);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Database error');
+      expect(mockLogService.error).toHaveBeenCalled();
+      expect(mockAuditService.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'MAILBOX_DISCONNECT',
+          success: false,
+        })
+      );
+    });
+
+    it('should log disconnect operation', async () => {
+      const handler = registeredHandlers.get('auth:google:disconnect-mailbox');
+      await handler(mockEvent, TEST_USER_ID);
+
+      expect(mockLogService.info).toHaveBeenCalledWith(
+        'Starting google mailbox disconnect',
+        'AuthHandlers',
+        { userId: TEST_USER_ID }
+      );
+      expect(mockLogService.info).toHaveBeenCalledWith(
+        'google mailbox disconnected successfully',
+        'AuthHandlers',
+        { userId: TEST_USER_ID }
+      );
+    });
+  });
+
+  describe('auth:microsoft:disconnect-mailbox', () => {
+    it('should disconnect Microsoft mailbox successfully', async () => {
+      const handler = registeredHandlers.get('auth:microsoft:disconnect-mailbox');
+      const result = await handler(mockEvent, TEST_USER_ID);
+
+      expect(result.success).toBe(true);
+      expect(mockDatabaseService.deleteOAuthToken).toHaveBeenCalledWith(
+        TEST_USER_ID,
+        'microsoft',
+        'mailbox'
+      );
+      expect(mockAuditService.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'MAILBOX_DISCONNECT',
+          resourceType: 'MAILBOX',
+          metadata: { provider: 'microsoft' },
+          success: true,
+        })
+      );
+      expect(mockMainWindow.webContents.send).toHaveBeenCalledWith(
+        'microsoft:mailbox-disconnected',
+        { success: true }
+      );
+    });
+
+    it('should handle invalid user ID', async () => {
+      const handler = registeredHandlers.get('auth:microsoft:disconnect-mailbox');
+      const result = await handler(mockEvent, '');
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBeDefined();
+    });
+
+    it('should handle database error during disconnect', async () => {
+      mockDatabaseService.deleteOAuthToken.mockRejectedValueOnce(
+        new Error('Database error')
+      );
+
+      const handler = registeredHandlers.get('auth:microsoft:disconnect-mailbox');
+      const result = await handler(mockEvent, TEST_USER_ID);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Database error');
+      expect(mockLogService.error).toHaveBeenCalled();
+    });
+
+    it('should log disconnect operation', async () => {
+      const handler = registeredHandlers.get('auth:microsoft:disconnect-mailbox');
+      await handler(mockEvent, TEST_USER_ID);
+
+      expect(mockLogService.info).toHaveBeenCalledWith(
+        'Starting microsoft mailbox disconnect',
+        'AuthHandlers',
+        { userId: TEST_USER_ID }
+      );
+      expect(mockLogService.info).toHaveBeenCalledWith(
+        'microsoft mailbox disconnected successfully',
+        'AuthHandlers',
+        { userId: TEST_USER_ID }
+      );
     });
   });
 
