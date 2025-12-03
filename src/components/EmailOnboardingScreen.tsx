@@ -21,6 +21,57 @@ interface EmailOnboardingScreenProps {
   onSkip: () => void;
 }
 
+// Setup steps for progress indicator
+const SETUP_STEPS = [
+  { id: 1, label: 'Sign In' },
+  { id: 2, label: 'Secure Storage' },
+  { id: 3, label: 'Connect Email' },
+  { id: 4, label: 'Permissions' },
+];
+
+/**
+ * Progress indicator component showing setup steps
+ */
+function SetupProgressIndicator({ currentStep }: { currentStep: number }) {
+  return (
+    <div className="flex items-center justify-center gap-1 mb-6">
+      {SETUP_STEPS.map((step, index) => (
+        <React.Fragment key={step.id}>
+          <div className="flex flex-col items-center">
+            <div
+              className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-all ${
+                step.id < currentStep
+                  ? 'bg-green-500 text-white'
+                  : step.id === currentStep
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-gray-200 text-gray-500'
+              }`}
+            >
+              {step.id < currentStep ? (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              ) : (
+                step.id
+              )}
+            </div>
+            <span className={`text-xs mt-1 ${step.id === currentStep ? 'text-blue-600 font-medium' : 'text-gray-500'}`}>
+              {step.label}
+            </span>
+          </div>
+          {index < SETUP_STEPS.length - 1 && (
+            <div
+              className={`w-8 h-0.5 mb-5 transition-all ${
+                step.id < currentStep ? 'bg-green-500' : 'bg-gray-200'
+              }`}
+            />
+          )}
+        </React.Fragment>
+      ))}
+    </div>
+  );
+}
+
 /**
  * EmailOnboardingScreen Component
  * Prompts new users to connect their email accounts (Gmail/Outlook) during onboarding.
@@ -173,6 +224,9 @@ function EmailOnboardingScreen({ userId, authProvider, onComplete, onSkip }: Ema
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-8">
       <div className="max-w-lg w-full bg-white rounded-2xl shadow-xl p-8">
+        {/* Progress Indicator */}
+        <SetupProgressIndicator currentStep={3} />
+
         {/* Header */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full mb-6 shadow-lg">

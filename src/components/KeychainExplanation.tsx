@@ -7,6 +7,57 @@ interface KeychainExplanationProps {
   skipExplanation?: boolean; // True when user previously checked "Don't show again"
 }
 
+// Setup steps for progress indicator
+const SETUP_STEPS = [
+  { id: 1, label: 'Sign In' },
+  { id: 2, label: 'Secure Storage' },
+  { id: 3, label: 'Connect Email' },
+  { id: 4, label: 'Permissions' },
+];
+
+/**
+ * Progress indicator component showing setup steps
+ */
+function SetupProgressIndicator({ currentStep }: { currentStep: number }) {
+  return (
+    <div className="flex items-center justify-center gap-1 mb-4">
+      {SETUP_STEPS.map((step, index) => (
+        <React.Fragment key={step.id}>
+          <div className="flex flex-col items-center">
+            <div
+              className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-all ${
+                step.id < currentStep
+                  ? 'bg-green-500 text-white'
+                  : step.id === currentStep
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-gray-200 text-gray-500'
+              }`}
+            >
+              {step.id < currentStep ? (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              ) : (
+                step.id
+              )}
+            </div>
+            <span className={`text-xs mt-1 ${step.id === currentStep ? 'text-blue-600 font-medium' : 'text-gray-500'}`}>
+              {step.label}
+            </span>
+          </div>
+          {index < SETUP_STEPS.length - 1 && (
+            <div
+              className={`w-8 h-0.5 mb-5 transition-all ${
+                step.id < currentStep ? 'bg-green-500' : 'bg-gray-200'
+              }`}
+            />
+          )}
+        </React.Fragment>
+      ))}
+    </div>
+  );
+}
+
 /**
  * KeychainExplanation Component
  *
@@ -29,11 +80,6 @@ function KeychainExplanation({
   const handleContinue = () => {
     onContinue(dontShowAgain);
   };
-
-  // Different messaging for new users vs returning users
-  const headerSubtitle = hasPendingLogin
-    ? 'One more step to complete setup'
-    : 'To access your data';
 
   const bodyText = hasPendingLogin
     ? 'Magic Audit needs to set up secure storage on your Mac to protect your data. This is a one-time setup that keeps your contacts and messages encrypted.'
@@ -83,6 +129,11 @@ function KeychainExplanation({
   return (
     <div className="fixed inset-0 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 z-50 flex items-center justify-center p-6">
       <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+        {/* Progress Indicator */}
+        <div className="bg-gray-50 px-6 pt-5 pb-3 border-b border-gray-100">
+          <SetupProgressIndicator currentStep={2} />
+        </div>
+
         {/* Header */}
         <div className="bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-5">
           <div className="text-center">
@@ -91,8 +142,8 @@ function KeychainExplanation({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
               </svg>
             </div>
-            <h2 className="text-xl font-bold text-white mb-1">Keychain Access Required</h2>
-            <p className="text-blue-100 text-sm">{headerSubtitle}</p>
+            <h2 className="text-xl font-bold text-white mb-1">Secure Storage Setup</h2>
+            <p className="text-blue-100 text-sm">Protect your data with Keychain</p>
           </div>
         </div>
 
