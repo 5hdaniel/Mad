@@ -15,6 +15,9 @@ jest.mock('electron', () => ({
   ipcMain: {
     handle: mockIpcHandle,
   },
+  app: {
+    getPath: jest.fn().mockReturnValue('/tmp/test-user-data'),
+  },
 }));
 
 // Mock services

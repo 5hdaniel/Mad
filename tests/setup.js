@@ -62,6 +62,8 @@ if (typeof window !== 'undefined') {
       checkAllConnections: jest.fn(),
       healthCheck: jest.fn(),
       openPrivacyPane: jest.fn(),
+      contactSupport: jest.fn(),
+      getDiagnostics: jest.fn(),
     },
     address: {
       initialize: jest.fn(),

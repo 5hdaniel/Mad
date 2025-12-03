@@ -1,5 +1,6 @@
 import { google, gmail_v1, Auth } from 'googleapis';
-import tokenEncryptionService from './tokenEncryptionService';
+// NOTE: tokenEncryptionService removed - using session-only OAuth
+// Tokens stored in encrypted database, no additional keychain encryption needed
 import databaseService from './databaseService';
 import { OAuthToken } from '../types/models';
 
@@ -66,11 +67,9 @@ class GmailFetchService {
         throw new Error('No Gmail OAuth token found. User needs to connect Gmail first.');
       }
 
-      // Decrypt tokens
-      const accessToken = tokenEncryptionService.decrypt(tokenRecord.access_token || '');
-      const refreshToken = tokenRecord.refresh_token
-        ? tokenEncryptionService.decrypt(tokenRecord.refresh_token)
-        : null;
+      // Session-only OAuth: tokens stored unencrypted in encrypted database
+      const accessToken = tokenRecord.access_token || '';
+      const refreshToken = tokenRecord.refresh_token || null;
 
       // Initialize OAuth2 client
       const oauth2Client = new google.auth.OAuth2(
@@ -85,21 +84,19 @@ class GmailFetchService {
         refresh_token: refreshToken,
       });
 
-      // Handle token refresh
+      // Handle token refresh (session-only, no encryption needed)
       oauth2Client.on('tokens', async (tokens) => {
         console.log('[GmailFetch] Tokens refreshed');
         if (tokens.refresh_token) {
-          // Update refresh token in database
-          const encryptedRefreshToken = tokenEncryptionService.encrypt(tokens.refresh_token);
+          // Update refresh token in database (no encryption)
           await databaseService.updateOAuthToken(tokenRecord.id, {
-            refresh_token: encryptedRefreshToken,
+            refresh_token: tokens.refresh_token,
           });
         }
         if (tokens.access_token) {
-          // Update access token
-          const encryptedAccessToken = tokenEncryptionService.encrypt(tokens.access_token);
+          // Update access token (no encryption)
           await databaseService.updateOAuthToken(tokenRecord.id, {
-            access_token: encryptedAccessToken,
+            access_token: tokens.access_token,
             token_expires_at: new Date(Date.now() + (tokens.expiry_date || 3600000)).toISOString(),
           });
         }

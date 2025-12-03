@@ -102,6 +102,12 @@ class DatabaseService implements IDatabaseService {
    * Handles encryption and migration from unencrypted databases
    */
   async initialize(): Promise<boolean> {
+    // Prevent double initialization
+    if (this.db) {
+      await logService.debug('Database already initialized, skipping', 'DatabaseService');
+      return true;
+    }
+
     try {
       // Get user data path
       const userDataPath = app.getPath('userData');
@@ -143,6 +149,14 @@ class DatabaseService implements IDatabaseService {
       );
       throw error;
     }
+  }
+
+  /**
+   * Check if database is initialized
+   * Used to determine if we can perform database operations
+   */
+  isInitialized(): boolean {
+    return this.db !== null;
   }
 
   /**
@@ -979,6 +993,26 @@ class DatabaseService implements IDatabaseService {
   async deleteAllUserSessions(userId: string): Promise<void> {
     const sql = 'DELETE FROM sessions WHERE user_id = ?';
     this._run(sql, [userId]);
+  }
+
+  /**
+   * Clear all sessions (for session-only OAuth on app startup)
+   * This forces all users to re-authenticate each app launch
+   */
+  async clearAllSessions(): Promise<void> {
+    const sql = 'DELETE FROM sessions';
+    this._run(sql, []);
+    console.log('[DatabaseService] Cleared all sessions for session-only OAuth');
+  }
+
+  /**
+   * Clear all OAuth tokens (for session-only OAuth on app startup)
+   * This forces all users to re-authenticate each app launch
+   */
+  async clearAllOAuthTokens(): Promise<void> {
+    const sql = 'DELETE FROM oauth_tokens';
+    this._run(sql, []);
+    console.log('[DatabaseService] Cleared all OAuth tokens for session-only OAuth');
   }
 
   // ============================================

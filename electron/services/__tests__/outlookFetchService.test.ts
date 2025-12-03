@@ -1,34 +1,34 @@
 /**
  * Unit tests for Outlook Fetch Service
  * Tests email fetching from Microsoft Graph API
+ *
+ * NOTE: Session-only OAuth - tokens stored directly in encrypted database,
+ * no separate tokenEncryptionService encryption needed
  */
 
 import outlookFetchService from '../outlookFetchService';
 import databaseService from '../databaseService';
-import tokenEncryptionService from '../tokenEncryptionService';
 import axios from 'axios';
 
 // Mock dependencies
 jest.mock('../databaseService');
-jest.mock('../tokenEncryptionService');
 jest.mock('axios');
 
 const mockDatabaseService = databaseService as jest.Mocked<typeof databaseService>;
-const mockTokenEncryptionService = tokenEncryptionService as jest.Mocked<typeof tokenEncryptionService>;
 const mockAxios = axios as jest.MockedFunction<typeof axios>;
 
 describe('OutlookFetchService', () => {
   const mockUserId = 'test-user-id';
-  const mockAccessToken = 'decrypted-access-token';
-  const mockEncryptedAccessToken = 'encrypted-access-token';
+  // Session-only OAuth: tokens stored directly, not encrypted
+  const mockAccessToken = 'test-access-token';
 
   const mockTokenRecord = {
     id: 'token-id',
     user_id: mockUserId,
     provider: 'microsoft' as const,
     purpose: 'mailbox' as const,
-    access_token: mockEncryptedAccessToken,
-    refresh_token: 'encrypted-refresh-token',
+    access_token: mockAccessToken,
+    refresh_token: 'test-refresh-token',
     token_expires_at: new Date(Date.now() + 3600000).toISOString(),
     connected_email_address: 'test@outlook.com',
     is_active: true,
@@ -38,12 +38,6 @@ describe('OutlookFetchService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-
-    // Setup token encryption mocks
-    mockTokenEncryptionService.decrypt.mockImplementation((token: string) => {
-      if (token === mockEncryptedAccessToken) return mockAccessToken;
-      return token.replace('encrypted-', 'decrypted-');
-    });
   });
 
   describe('initialize', () => {
@@ -54,7 +48,7 @@ describe('OutlookFetchService', () => {
 
       expect(result).toBe(true);
       expect(mockDatabaseService.getOAuthToken).toHaveBeenCalledWith(mockUserId, 'microsoft', 'mailbox');
-      expect(mockTokenEncryptionService.decrypt).toHaveBeenCalledWith(mockEncryptedAccessToken);
+      // Session-only OAuth: tokens used directly, no decryption needed
     });
 
     it('should throw error when no token found', async () => {

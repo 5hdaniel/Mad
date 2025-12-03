@@ -4,7 +4,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const googleapis_1 = require("googleapis");
-const tokenEncryptionService_1 = __importDefault(require("./tokenEncryptionService"));
+// NOTE: tokenEncryptionService removed - using session-only OAuth
+// Tokens stored in encrypted database, no additional keychain encryption needed
 const databaseService_1 = __importDefault(require("./databaseService"));
 /**
  * Gmail Fetch Service
@@ -26,39 +27,36 @@ class GmailFetchService {
             if (!tokenRecord) {
                 throw new Error('No Gmail OAuth token found. User needs to connect Gmail first.');
             }
-            // Decrypt tokens
-            const accessToken = tokenEncryptionService_1.default.decrypt(tokenRecord.access_token || '');
-            const refreshToken = tokenRecord.refresh_token
-                ? tokenEncryptionService_1.default.decrypt(tokenRecord.refresh_token)
-                : null;
+            // Session-only OAuth: tokens stored unencrypted in encrypted database
+            const accessToken = tokenRecord.access_token || '';
+            const refreshToken = tokenRecord.refresh_token || null;
             // Initialize OAuth2 client
-            this.oauth2Client = new googleapis_1.google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET, process.env.GOOGLE_REDIRECT_URI);
+            const oauth2Client = new googleapis_1.google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET, process.env.GOOGLE_REDIRECT_URI);
             // Set credentials
-            this.oauth2Client.setCredentials({
+            oauth2Client.setCredentials({
                 access_token: accessToken,
                 refresh_token: refreshToken,
             });
-            // Handle token refresh
-            this.oauth2Client.on('tokens', async (tokens) => {
+            // Handle token refresh (session-only, no encryption needed)
+            oauth2Client.on('tokens', async (tokens) => {
                 console.log('[GmailFetch] Tokens refreshed');
                 if (tokens.refresh_token) {
-                    // Update refresh token in database
-                    const encryptedRefreshToken = tokenEncryptionService_1.default.encrypt(tokens.refresh_token);
+                    // Update refresh token in database (no encryption)
                     await databaseService_1.default.updateOAuthToken(tokenRecord.id, {
-                        refresh_token: encryptedRefreshToken,
+                        refresh_token: tokens.refresh_token,
                     });
                 }
                 if (tokens.access_token) {
-                    // Update access token
-                    const encryptedAccessToken = tokenEncryptionService_1.default.encrypt(tokens.access_token);
+                    // Update access token (no encryption)
                     await databaseService_1.default.updateOAuthToken(tokenRecord.id, {
-                        access_token: encryptedAccessToken,
+                        access_token: tokens.access_token,
                         token_expires_at: new Date(Date.now() + (tokens.expiry_date || 3600000)).toISOString(),
                     });
                 }
             });
-            // Initialize Gmail API
-            this.gmail = googleapis_1.google.gmail({ version: 'v1', auth: this.oauth2Client });
+            // Store client and initialize Gmail API
+            this.oauth2Client = oauth2Client;
+            this.gmail = googleapis_1.google.gmail({ version: 'v1', auth: oauth2Client });
             console.log('[GmailFetch] Initialized successfully');
             return true;
         }
