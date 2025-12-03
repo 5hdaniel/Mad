@@ -38,6 +38,7 @@ import { registerPreferenceHandlers } from './preference-handlers';
 import { registerDeviceHandlers, cleanupDeviceHandlers } from './device-handlers';
 import { registerBackupHandlers } from './backup-handlers';
 import { registerSyncHandlers, cleanupSyncHandlers } from './sync-handlers';
+import { registerDriverHandlers } from './driver-handlers';
 import OutlookService from './outlookService';
 
 // Configure logging for auto-updater
@@ -183,6 +184,7 @@ app.whenReady().then(async () => {
   registerDeviceHandlers(mainWindow!);
   registerBackupHandlers(mainWindow!);
   registerSyncHandlers(mainWindow!);
+  registerDriverHandlers();
 });
 
 app.on('window-all-closed', () => {

@@ -971,6 +971,39 @@ contextBridge.exposeInMainWorld('api', {
 
   /**
    * ============================================
+   * APPLE DRIVER METHODS (Windows only)
+   * ============================================
+   * Detects and installs Apple Mobile Device Support drivers
+   */
+  drivers: {
+    /**
+     * Check if Apple Mobile Device Support drivers are installed
+     * @returns {Promise<{isInstalled: boolean, version: string|null, serviceRunning: boolean, error: string|null}>}
+     */
+    checkApple: () => ipcRenderer.invoke('drivers:check-apple'),
+
+    /**
+     * Check if bundled Apple drivers are available in the app
+     * @returns {Promise<{available: boolean}>}
+     */
+    hasBundled: () => ipcRenderer.invoke('drivers:has-bundled'),
+
+    /**
+     * Install Apple Mobile Device Support drivers
+     * IMPORTANT: Only call after user has given consent
+     * @returns {Promise<{success: boolean, error: string|null, rebootRequired: boolean}>}
+     */
+    installApple: () => ipcRenderer.invoke('drivers:install-apple'),
+
+    /**
+     * Open iTunes in Microsoft Store for manual installation
+     * @returns {Promise<{success: boolean, error?: string}>}
+     */
+    openITunesStore: () => ipcRenderer.invoke('drivers:open-itunes-store'),
+  },
+
+  /**
+   * ============================================
    * SYNC METHODS (Windows iPhone Sync)
    * ============================================
    * Complete iPhone sync flow: backup -> decrypt -> parse -> resolve
