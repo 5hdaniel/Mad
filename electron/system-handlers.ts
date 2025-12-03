@@ -139,12 +139,13 @@ export function registerSystemHandlers(): void {
         platform: os.platform(),
       };
     } catch (error) {
-      console.error('[Main] Secure storage status check failed:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logService.error('Secure storage status check failed', 'SystemHandlers', { error: errorMessage });
       return {
         success: false,
         available: false,
         platform: os.platform(),
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: errorMessage,
       };
     }
   });
@@ -162,7 +163,7 @@ export function registerSystemHandlers(): void {
   ipcMain.handle('system:initialize-secure-storage', async (): Promise<SecureStorageResponse> => {
     // If already initialized, return immediately
     if (initializationComplete) {
-      console.log('[Main] Database already initialized, skipping');
+      logService.debug('Database already initialized, skipping', 'SystemHandlers');
       return {
         success: true,
         available: true,
@@ -172,7 +173,7 @@ export function registerSystemHandlers(): void {
 
     // If initialization is in progress, wait for it to complete
     if (isInitializing) {
-      console.log('[Main] Database initialization already in progress, waiting...');
+      logService.debug('Database initialization already in progress, waiting...', 'SystemHandlers');
       // Wait for current initialization to complete (poll every 100ms)
       let waitCount = 0;
       while (isInitializing && waitCount < 100) {
@@ -191,13 +192,13 @@ export function registerSystemHandlers(): void {
     try {
       // Initialize database - this triggers keychain prompt for db encryption key
       await initializeDatabase();
-      console.log('[Main] Database initialized with encryption');
+      logService.info('Database initialized with encryption', 'SystemHandlers');
 
       // Session-only OAuth: Clear all sessions and OAuth tokens
       // This forces users to re-authenticate each app launch for better security
       await databaseService.clearAllSessions();
       await databaseService.clearAllOAuthTokens();
-      console.log('[Main] Cleared sessions and OAuth tokens for session-only OAuth');
+      logService.info('Cleared sessions and OAuth tokens for session-only OAuth', 'SystemHandlers');
 
       initializationComplete = true;
       return {
@@ -206,14 +207,15 @@ export function registerSystemHandlers(): void {
         platform: os.platform(),
       };
     } catch (error) {
-      console.error('[Main] Database initialization failed:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Database initialization failed. Please try again.';
+      logService.error('Database initialization failed', 'SystemHandlers', { error: errorMessage });
       const platform = os.platform();
       return {
         success: false,
         available: false,
         platform,
         guidance: getSecureStorageGuidance(platform),
-        error: error instanceof Error ? error.message : 'Database initialization failed. Please try again.',
+        error: errorMessage,
       };
     } finally {
       isInitializing = false;
@@ -229,7 +231,8 @@ export function registerSystemHandlers(): void {
       const hasKeyStore = databaseEncryptionService.hasKeyStore();
       return { success: true, hasKeyStore };
     } catch (error) {
-      console.error('[Main] Key store check failed:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logService.error('Key store check failed', 'SystemHandlers', { error: errorMessage });
       return { success: false, hasKeyStore: false };
     }
   });
@@ -241,13 +244,13 @@ export function registerSystemHandlers(): void {
   ipcMain.handle('system:initialize-database', async (): Promise<SystemResponse> => {
     // If already initialized, return immediately
     if (initializationComplete) {
-      console.log('[Main] Database already initialized via secure storage, skipping');
+      logService.debug('Database already initialized via secure storage, skipping', 'SystemHandlers');
       return { success: true };
     }
 
     // If initialization is in progress, wait for it
     if (isInitializing) {
-      console.log('[Main] Database initialization already in progress, waiting...');
+      logService.debug('Database initialization already in progress, waiting...', 'SystemHandlers');
       let waitCount = 0;
       while (isInitializing && waitCount < 100) {
         await new Promise(resolve => setTimeout(resolve, 100));
@@ -263,12 +266,14 @@ export function registerSystemHandlers(): void {
     try {
       await initializeDatabase();
       initializationComplete = true;
+      logService.info('Database initialized successfully', 'SystemHandlers');
       return { success: true };
     } catch (error) {
-      console.error('[Main] Database initialization failed:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logService.error('Database initialization failed', 'SystemHandlers', { error: errorMessage });
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: errorMessage,
       };
     } finally {
       isInitializing = false;
@@ -284,7 +289,8 @@ export function registerSystemHandlers(): void {
       const initialized = databaseService.isInitialized();
       return { success: true, initialized };
     } catch (error) {
-      console.error('[Main] Database initialization check failed:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logService.error('Database initialization check failed', 'SystemHandlers', { error: errorMessage });
       return { success: false, initialized: false };
     }
   });
@@ -302,10 +308,11 @@ export function registerSystemHandlers(): void {
         ...result,
       };
     } catch (error) {
-      console.error('[Main] Permission setup failed:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logService.error('Permission setup failed', 'SystemHandlers', { error: errorMessage });
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: errorMessage,
       };
     }
   });
@@ -318,10 +325,11 @@ export function registerSystemHandlers(): void {
       const result = await macOSPermissionHelper.requestContactsPermission();
       return result;
     } catch (error) {
-      console.error('[Main] Contacts permission request failed:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logService.error('Contacts permission request failed', 'SystemHandlers', { error: errorMessage });
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: errorMessage,
       };
     }
   });
@@ -334,10 +342,11 @@ export function registerSystemHandlers(): void {
       const result = await macOSPermissionHelper.setupFullDiskAccess();
       return result;
     } catch (error) {
-      console.error('[Main] Full Disk Access setup failed:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logService.error('Full Disk Access setup failed', 'SystemHandlers', { error: errorMessage });
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: errorMessage,
       };
     }
   });
@@ -356,7 +365,8 @@ export function registerSystemHandlers(): void {
       const result = await macOSPermissionHelper.openPrivacyPane(validatedPane);
       return result;
     } catch (error) {
-      console.error('[Main] Failed to open privacy pane:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logService.error('Failed to open privacy pane', 'SystemHandlers', { error: errorMessage });
       if (error instanceof ValidationError) {
         return {
           success: false,
@@ -365,7 +375,7 @@ export function registerSystemHandlers(): void {
       }
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: errorMessage,
       };
     }
   });
@@ -381,11 +391,12 @@ export function registerSystemHandlers(): void {
         ...result,
       };
     } catch (error) {
-      console.error('[Main] Full Disk Access status check failed:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logService.error('Full Disk Access status check failed', 'SystemHandlers', { error: errorMessage });
       return {
         success: false,
         granted: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: errorMessage,
       };
     }
   });
@@ -403,7 +414,8 @@ export function registerSystemHandlers(): void {
         ...result,
       };
     } catch (error) {
-      console.error('[Main] Full Disk Access check failed:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logService.error('Full Disk Access check failed', 'SystemHandlers', { error: errorMessage });
       return {
         success: false,
         hasPermission: false,
@@ -423,7 +435,8 @@ export function registerSystemHandlers(): void {
         ...result,
       };
     } catch (error) {
-      console.error('[Main] Contacts permission check failed:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logService.error('Contacts permission check failed', 'SystemHandlers', { error: errorMessage });
       return {
         success: false,
         hasPermission: false,
@@ -443,7 +456,8 @@ export function registerSystemHandlers(): void {
         ...result,
       };
     } catch (error) {
-      console.error('[Main] All permissions check failed:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logService.error('All permissions check failed', 'SystemHandlers', { error: errorMessage });
       return {
         success: false,
         error: permissionService.getPermissionError(error),
@@ -467,7 +481,8 @@ export function registerSystemHandlers(): void {
         ...result,
       };
     } catch (error) {
-      console.error('[Main] Google connection check failed:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logService.error('Google connection check failed', 'SystemHandlers', { error: errorMessage });
       if (error instanceof ValidationError) {
         return {
           success: false,
@@ -505,7 +520,8 @@ export function registerSystemHandlers(): void {
         ...result,
       };
     } catch (error) {
-      console.error('[Main] Microsoft connection check failed:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logService.error('Microsoft connection check failed', 'SystemHandlers', { error: errorMessage });
       if (error instanceof ValidationError) {
         return {
           success: false,
@@ -543,7 +559,8 @@ export function registerSystemHandlers(): void {
         ...result,
       };
     } catch (error) {
-      console.error('[Main] All connections check failed:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logService.error('All connections check failed', 'SystemHandlers', { error: errorMessage });
       if (error instanceof ValidationError) {
         return {
           success: false,
