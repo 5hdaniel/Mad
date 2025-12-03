@@ -420,6 +420,34 @@ describe('Settings', () => {
       });
     });
 
+    it('should handle preferences API throwing an error (e.g., handler not registered)', async () => {
+      // Simulate the "No handler registered" error
+      window.api.preferences.get.mockRejectedValue(
+        new Error('Error invoking remote method: No handler registered for preferences:get')
+      );
+
+      render(<Settings userId={mockUserId} onClose={mockOnClose} />);
+
+      // Should still render with default values
+      await waitFor(() => {
+        const select = screen.getByRole('combobox');
+        expect(select).toHaveValue('pdf'); // Default value
+      });
+    });
+
+    it('should handle connection check API throwing an error', async () => {
+      window.api.system.checkAllConnections.mockRejectedValue(
+        new Error('Network error')
+      );
+
+      render(<Settings userId={mockUserId} onClose={mockOnClose} />);
+
+      // Should still render without crashing
+      await waitFor(() => {
+        expect(screen.getByText('Settings')).toBeInTheDocument();
+      });
+    });
+
     it('should handle preferences update failure gracefully', async () => {
       window.api.preferences.update.mockResolvedValue({
         success: false,

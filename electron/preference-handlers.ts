@@ -14,6 +14,9 @@ import {
   sanitizeObject,
 } from './utils/validation';
 
+// Import logging service
+import logService from './services/logService';
+
 // Type definitions
 interface PreferenceResponse {
   success: boolean;
@@ -28,7 +31,7 @@ export function registerPreferenceHandlers(): void {
   // Get user preferences
   ipcMain.handle('preferences:get', async (event: IpcMainInvokeEvent, userId: string): Promise<PreferenceResponse> => {
     try {
-      console.log('[Preferences] Getting preferences for user:', userId);
+      logService.debug('Getting preferences for user', 'Preferences', { userId });
 
       // Validate input
       const validatedUserId = validateUserId(userId)!;
@@ -40,7 +43,8 @@ export function registerPreferenceHandlers(): void {
         preferences: preferences || {}
       };
     } catch (error) {
-      console.error('[Preferences] Failed to get preferences:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logService.error('Failed to get preferences', 'Preferences', { userId, error: errorMessage });
       if (error instanceof ValidationError) {
         return {
           success: false,
@@ -49,7 +53,7 @@ export function registerPreferenceHandlers(): void {
       }
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: errorMessage
       };
     }
   });
@@ -57,7 +61,7 @@ export function registerPreferenceHandlers(): void {
   // Save user preferences
   ipcMain.handle('preferences:save', async (event: IpcMainInvokeEvent, userId: string, preferences: unknown): Promise<PreferenceResponse> => {
     try {
-      console.log('[Preferences] Saving preferences for user:', userId);
+      logService.debug('Saving preferences for user', 'Preferences', { userId });
 
       // Validate inputs
       const validatedUserId = validateUserId(userId)!;
@@ -71,11 +75,13 @@ export function registerPreferenceHandlers(): void {
 
       await supabaseService.syncPreferences(validatedUserId, sanitizedPreferences);
 
+      logService.info('Preferences saved successfully', 'Preferences', { userId });
       return {
         success: true
       };
     } catch (error) {
-      console.error('[Preferences] Failed to save preferences:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logService.error('Failed to save preferences', 'Preferences', { userId, error: errorMessage });
       if (error instanceof ValidationError) {
         return {
           success: false,
@@ -84,7 +90,7 @@ export function registerPreferenceHandlers(): void {
       }
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: errorMessage
       };
     }
   });
@@ -92,7 +98,7 @@ export function registerPreferenceHandlers(): void {
   // Update specific preference (partial update)
   ipcMain.handle('preferences:update', async (event: IpcMainInvokeEvent, userId: string, partialPreferences: unknown): Promise<PreferenceResponse> => {
     try {
-      console.log('[Preferences] Updating preferences for user:', userId);
+      logService.debug('Updating preferences for user', 'Preferences', { userId });
 
       // Validate inputs
       const validatedUserId = validateUserId(userId)!;
@@ -113,12 +119,14 @@ export function registerPreferenceHandlers(): void {
       // Save merged preferences
       await supabaseService.syncPreferences(validatedUserId, updatedPreferences);
 
+      logService.info('Preferences updated successfully', 'Preferences', { userId });
       return {
         success: true,
         preferences: updatedPreferences
       };
     } catch (error) {
-      console.error('[Preferences] Failed to update preferences:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logService.error('Failed to update preferences', 'Preferences', { userId, error: errorMessage });
       if (error instanceof ValidationError) {
         return {
           success: false,
@@ -127,12 +135,12 @@ export function registerPreferenceHandlers(): void {
       }
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: errorMessage
       };
     }
   });
 
-  console.log('[Preferences] Handlers registered');
+  logService.info('Preference handlers registered', 'Preferences');
 }
 
 /**

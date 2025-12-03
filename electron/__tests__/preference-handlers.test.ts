@@ -26,12 +26,25 @@ jest.mock('../services/supabaseService', () => ({
   },
 }));
 
+// Mock logService
+jest.mock('../services/logService', () => ({
+  __esModule: true,
+  default: {
+    debug: jest.fn(),
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+  },
+}));
+
 // Import after mocks are set up
 import { registerPreferenceHandlers } from '../preference-handlers';
 import supabaseService from '../services/supabaseService';
+import logService from '../services/logService';
 
-// Get reference to mocked service
+// Get reference to mocked services
 const mockSupabaseService = supabaseService as jest.Mocked<typeof supabaseService>;
+const mockLogService = logService as jest.Mocked<typeof logService>;
 
 // Test UUIDs
 const TEST_USER_ID = '550e8400-e29b-41d4-a716-446655440000';
@@ -109,6 +122,24 @@ describe('Preference Handlers', () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toContain('Service error');
+    });
+
+    it('should log errors when service fails', async () => {
+      mockSupabaseService.getPreferences.mockRejectedValue(
+        new Error('Database connection failed')
+      );
+
+      const handler = registeredHandlers.get('preferences:get');
+      await handler(mockEvent, TEST_USER_ID);
+
+      expect(mockLogService.error).toHaveBeenCalledWith(
+        'Failed to get preferences',
+        'Preferences',
+        expect.objectContaining({
+          userId: TEST_USER_ID,
+          error: 'Database connection failed',
+        })
+      );
     });
   });
 
