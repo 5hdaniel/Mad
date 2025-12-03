@@ -5,6 +5,33 @@
  * Uses mock mode for testing without actual devices.
  */
 
+// Mock better-sqlite3-multiple-ciphers before any imports
+jest.mock('better-sqlite3-multiple-ciphers', () => {
+  return jest.fn().mockImplementation(() => ({
+    prepare: jest.fn().mockReturnValue({
+      all: jest.fn().mockReturnValue([]),
+      get: jest.fn().mockReturnValue(null),
+      run: jest.fn(),
+    }),
+    close: jest.fn(),
+  }));
+});
+
+// Mock electron modules
+jest.mock('electron', () => ({
+  app: {
+    isPackaged: false,
+    getPath: jest.fn().mockReturnValue('/tmp'),
+  },
+}));
+
+jest.mock('electron-log', () => ({
+  info: jest.fn(),
+  error: jest.fn(),
+  warn: jest.fn(),
+  debug: jest.fn(),
+}));
+
 import { SyncOrchestrator, SyncPhase, SyncProgress, SyncResult } from '../syncOrchestrator';
 
 // Enable mock mode for testing

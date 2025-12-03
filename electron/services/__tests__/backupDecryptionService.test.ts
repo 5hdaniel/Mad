@@ -42,7 +42,7 @@ const mockDbPrepare = jest.fn();
 const mockDbClose = jest.fn();
 const mockDbGet = jest.fn();
 
-jest.mock('better-sqlite3', () => {
+jest.mock('better-sqlite3-multiple-ciphers', () => {
   return jest.fn().mockImplementation(() => ({
     prepare: mockDbPrepare,
     close: mockDbClose,

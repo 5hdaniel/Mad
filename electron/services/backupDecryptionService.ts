@@ -21,9 +21,9 @@ import type {
   EncryptionKeys,
 } from '../types/backup';
 
-// Import better-sqlite3 for reading Manifest.db
+// Import better-sqlite3-multiple-ciphers for reading Manifest.db
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const Database = require('better-sqlite3');
+const Database = require('better-sqlite3-multiple-ciphers');
 
 /**
  * Backup Decryption Service Class

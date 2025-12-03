@@ -145,10 +145,13 @@ describe('libimobiledeviceService', () => {
         value: 'win32',
       });
 
-      const fs = require('fs');
-      (fs.existsSync as jest.Mock).mockReturnValue(true);
-
       jest.resetModules();
+
+      // Re-mock fs after resetModules
+      jest.doMock('fs', () => ({
+        existsSync: jest.fn().mockReturnValue(true),
+      }));
+
       const { areBinariesAvailable } = await import('../libimobiledeviceService');
       const result = areBinariesAvailable();
 
@@ -160,10 +163,13 @@ describe('libimobiledeviceService', () => {
         value: 'win32',
       });
 
-      const fs = require('fs');
-      (fs.existsSync as jest.Mock).mockReturnValue(false);
-
       jest.resetModules();
+
+      // Re-mock fs after resetModules
+      jest.doMock('fs', () => ({
+        existsSync: jest.fn().mockReturnValue(false),
+      }));
+
       const { areBinariesAvailable } = await import('../libimobiledeviceService');
       const result = areBinariesAvailable();
 

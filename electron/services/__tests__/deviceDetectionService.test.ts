@@ -285,7 +285,7 @@ SerialNumber: ABC123456789
       listProcess.emit('close', 0);
 
       // Wait for the info request
-      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setTimeout(resolve, 0));
 
       // Simulate device info response
       infoProcess.stdout.emit('data', `DeviceName: Test iPhone
@@ -296,7 +296,7 @@ SerialNumber: ABC123456789
       infoProcess.emit('close', 0);
 
       // Wait for event emission
-      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setTimeout(resolve, 0));
 
       expect(connectedCallback).toHaveBeenCalledWith(
         expect.objectContaining({
