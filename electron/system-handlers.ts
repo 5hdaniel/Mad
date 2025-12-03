@@ -115,6 +115,10 @@ If you're seeing this error:
   }
 }
 
+// Guard to prevent multiple concurrent initializations
+let isInitializing = false;
+let initializationComplete = false;
+
 /**
  * Register all system and permission-related IPC handlers
  */
@@ -156,6 +160,34 @@ export function registerSystemHandlers(): void {
    * This is more secure and avoids multiple keychain prompts.
    */
   ipcMain.handle('system:initialize-secure-storage', async (): Promise<SecureStorageResponse> => {
+    // If already initialized, return immediately
+    if (initializationComplete) {
+      console.log('[Main] Database already initialized, skipping');
+      return {
+        success: true,
+        available: true,
+        platform: os.platform(),
+      };
+    }
+
+    // If initialization is in progress, wait for it to complete
+    if (isInitializing) {
+      console.log('[Main] Database initialization already in progress, waiting...');
+      // Wait for current initialization to complete (poll every 100ms)
+      let waitCount = 0;
+      while (isInitializing && waitCount < 100) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        waitCount++;
+      }
+      return {
+        success: initializationComplete,
+        available: initializationComplete,
+        platform: os.platform(),
+        error: initializationComplete ? undefined : 'Initialization timeout',
+      };
+    }
+
+    isInitializing = true;
     try {
       // Initialize database - this triggers keychain prompt for db encryption key
       await initializeDatabase();
@@ -167,6 +199,7 @@ export function registerSystemHandlers(): void {
       await databaseService.clearAllOAuthTokens();
       console.log('[Main] Cleared sessions and OAuth tokens for session-only OAuth');
 
+      initializationComplete = true;
       return {
         success: true,
         available: true,
@@ -182,6 +215,8 @@ export function registerSystemHandlers(): void {
         guidance: getSecureStorageGuidance(platform),
         error: error instanceof Error ? error.message : 'Database initialization failed. Please try again.',
       };
+    } finally {
+      isInitializing = false;
     }
   });
 
@@ -204,8 +239,30 @@ export function registerSystemHandlers(): void {
    * This should be called after the user has authorized keychain access
    */
   ipcMain.handle('system:initialize-database', async (): Promise<SystemResponse> => {
+    // If already initialized, return immediately
+    if (initializationComplete) {
+      console.log('[Main] Database already initialized via secure storage, skipping');
+      return { success: true };
+    }
+
+    // If initialization is in progress, wait for it
+    if (isInitializing) {
+      console.log('[Main] Database initialization already in progress, waiting...');
+      let waitCount = 0;
+      while (isInitializing && waitCount < 100) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        waitCount++;
+      }
+      return {
+        success: initializationComplete,
+        error: initializationComplete ? undefined : 'Initialization timeout',
+      };
+    }
+
+    isInitializing = true;
     try {
       await initializeDatabase();
+      initializationComplete = true;
       return { success: true };
     } catch (error) {
       console.error('[Main] Database initialization failed:', error);
@@ -213,6 +270,8 @@ export function registerSystemHandlers(): void {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
       };
+    } finally {
+      isInitializing = false;
     }
   });
 
