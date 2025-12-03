@@ -184,38 +184,13 @@ function App() {
   }, [currentUser?.id]);
 
   // Handle auth state changes to update navigation
-  // NEW FLOW: Login FIRST, then keychain setup if needed
+  // FLOW: Login FIRST, then keychain setup if needed (for both new and returning users)
   useEffect(() => {
     if (!isAuthLoading && !isCheckingEmailOnboarding && !isCheckingSecureStorage) {
       // If we have pending OAuth data, we're in the middle of the login-first flow
-      // Show keychain explanation/setup screen
+      // Show keychain explanation/setup screen (OAuth succeeded, need keychain to save data)
       if (pendingOAuthData && !isAuthenticated) {
-        if (isInitializingDatabase) {
-          // Database initialization in progress (after user clicked continue)
-          setCurrentStep('keychain-explanation');
-          return;
-        }
-        // Show keychain explanation screen with pending OAuth data
-        setCurrentStep('keychain-explanation');
-        return;
-      }
-
-      // For RETURNING users with skip preference and existing key store:
-      // Auto-initialize database if needed (before showing login)
-      if (hasSecureStorageSetup && !isDatabaseInitialized && !isAuthenticated && !pendingOAuthData) {
-        if (isInitializingDatabase) {
-          // Database initialization in progress, show loading
-          setCurrentStep('loading');
-          return;
-        }
-        if (skipKeychainExplanation) {
-          // User has opted to skip explanation, but we need DB initialized
-          // The auto-init useEffect will handle this
-          setCurrentStep('loading');
-          return;
-        }
-        // Returning user without skip preference - show keychain explanation
-        // before login so they can authorize keychain upfront
+        // Show keychain explanation screen - OAuth data is in memory waiting
         setCurrentStep('keychain-explanation');
         return;
       }
@@ -230,12 +205,13 @@ function App() {
           setCurrentStep('permissions');
         }
       } else if (!isAuthenticated) {
-        // Not authenticated - show login
-        // This covers both new users (no key store) and returning users with initialized DB
+        // Not authenticated - show login FIRST for both new and returning users
+        // After OAuth succeeds, if DB isn't initialized, auth-handlers will send
+        // login-pending event and we'll show keychain explanation with pendingOAuthData
         setCurrentStep('login');
       }
     }
-  }, [isAuthenticated, isAuthLoading, needsTermsAcceptance, hasPermissions, hasCompletedEmailOnboarding, isCheckingEmailOnboarding, hasSecureStorageSetup, isCheckingSecureStorage, isDatabaseInitialized, isInitializingDatabase, skipKeychainExplanation, pendingOAuthData]);
+  }, [isAuthenticated, isAuthLoading, needsTermsAcceptance, hasPermissions, hasCompletedEmailOnboarding, isCheckingEmailOnboarding, isCheckingSecureStorage, pendingOAuthData]);
 
   useEffect(() => {
     checkPermissions();
