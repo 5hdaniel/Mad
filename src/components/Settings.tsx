@@ -77,7 +77,9 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
         // TODO: Load other preferences when they are implemented
       }
     } catch (error) {
-      console.error('Failed to load preferences:', error);
+      // Silently handle preference loading errors - preferences are non-critical
+      // User will just get default values
+      console.debug('Preferences not available, using defaults');
     } finally {
       setLoadingPreferences(false);
     }
@@ -93,10 +95,11 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
         }
       });
       if (!result.success) {
-        console.error('Failed to save export format preference');
+        console.debug('Could not save export format preference');
       }
     } catch (error) {
-      console.error('Failed to save export format preference:', error);
+      // Silently handle - preference will still be applied locally for this session
+      console.debug('Could not save export format preference');
     }
   };
 
