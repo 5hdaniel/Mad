@@ -580,6 +580,7 @@ function App() {
             onContinue={handleKeychainExplanationContinue}
             isLoading={isInitializingDatabase}
             hasPendingLogin={!!pendingOAuthData}
+            skipExplanation={skipKeychainExplanation}
           />
         )}
 
