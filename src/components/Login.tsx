@@ -37,6 +37,7 @@ const Login = ({ onLoginSuccess, onLoginPending }: LoginProps) => {
   const [authCode, setAuthCode] = useState('');
   const [provider, setProvider] = useState<'google' | 'microsoft' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [popupCancelled, setPopupCancelled] = useState(false);
 
   /**
    * Handle Google Sign In (Redirect Flow)
@@ -50,10 +51,18 @@ const Login = ({ onLoginSuccess, onLoginPending }: LoginProps) => {
     setLoading(true);
     setError(null);
     setProvider('google');
+    setPopupCancelled(false);
 
     // Listen for login completion from main process
     let cleanupComplete: (() => void) | undefined;
     let cleanupPending: (() => void) | undefined;
+    let cleanupCancelled: (() => void) | undefined;
+
+    const cleanup = () => {
+      if (cleanupComplete) cleanupComplete();
+      if (cleanupPending) cleanupPending();
+      if (cleanupCancelled) cleanupCancelled();
+    };
 
     if (window.api.onGoogleLoginComplete) {
       cleanupComplete = window.api.onGoogleLoginComplete((result) => {
@@ -67,8 +76,7 @@ const Login = ({ onLoginSuccess, onLoginPending }: LoginProps) => {
         }
 
         // Clean up listeners after handling the event
-        if (cleanupComplete) cleanupComplete();
-        if (cleanupPending) cleanupPending();
+        cleanup();
       });
     }
 
@@ -85,8 +93,15 @@ const Login = ({ onLoginSuccess, onLoginPending }: LoginProps) => {
         }
 
         // Clean up listeners
-        if (cleanupComplete) cleanupComplete();
-        if (cleanupPending) cleanupPending();
+        cleanup();
+      });
+    }
+
+    // Listen for popup cancelled (user closed popup window)
+    if (window.api.onGoogleLoginCancelled) {
+      cleanupCancelled = window.api.onGoogleLoginCancelled(() => {
+        setPopupCancelled(true);
+        cleanup();
       });
     }
 
@@ -101,8 +116,7 @@ const Login = ({ onLoginSuccess, onLoginPending }: LoginProps) => {
         setError(result.error || 'Failed to start Google login');
         setLoading(false);
         setProvider(null);
-        if (cleanupComplete) cleanupComplete();
-        if (cleanupPending) cleanupPending();
+        cleanup();
       }
     } catch (err) {
       console.error('Google login error:', err);
@@ -110,8 +124,7 @@ const Login = ({ onLoginSuccess, onLoginPending }: LoginProps) => {
       setError(errorMessage);
       setLoading(false);
       setProvider(null);
-      if (cleanupComplete) cleanupComplete();
-      if (cleanupPending) cleanupPending();
+      cleanup();
     }
   };
 
@@ -127,10 +140,18 @@ const Login = ({ onLoginSuccess, onLoginPending }: LoginProps) => {
     setLoading(true);
     setError(null);
     setProvider('microsoft');
+    setPopupCancelled(false);
 
     // Listen for login completion from main process
     let cleanupComplete: (() => void) | undefined;
     let cleanupPending: (() => void) | undefined;
+    let cleanupCancelled: (() => void) | undefined;
+
+    const cleanup = () => {
+      if (cleanupComplete) cleanupComplete();
+      if (cleanupPending) cleanupPending();
+      if (cleanupCancelled) cleanupCancelled();
+    };
 
     if (window.api.onMicrosoftLoginComplete) {
       cleanupComplete = window.api.onMicrosoftLoginComplete((result) => {
@@ -144,8 +165,7 @@ const Login = ({ onLoginSuccess, onLoginPending }: LoginProps) => {
         }
 
         // Clean up listeners after handling the event
-        if (cleanupComplete) cleanupComplete();
-        if (cleanupPending) cleanupPending();
+        cleanup();
       });
     }
 
@@ -162,8 +182,15 @@ const Login = ({ onLoginSuccess, onLoginPending }: LoginProps) => {
         }
 
         // Clean up listeners
-        if (cleanupComplete) cleanupComplete();
-        if (cleanupPending) cleanupPending();
+        cleanup();
+      });
+    }
+
+    // Listen for popup cancelled (user closed popup window)
+    if (window.api.onMicrosoftLoginCancelled) {
+      cleanupCancelled = window.api.onMicrosoftLoginCancelled(() => {
+        setPopupCancelled(true);
+        cleanup();
       });
     }
 
@@ -178,8 +205,7 @@ const Login = ({ onLoginSuccess, onLoginPending }: LoginProps) => {
         setError(result.error || 'Failed to start Microsoft login');
         setLoading(false);
         setProvider(null);
-        if (cleanupComplete) cleanupComplete();
-        if (cleanupPending) cleanupPending();
+        cleanup();
       }
     } catch (err) {
       console.error('Microsoft login error:', err);
@@ -187,8 +213,7 @@ const Login = ({ onLoginSuccess, onLoginPending }: LoginProps) => {
       setError(errorMessage);
       setLoading(false);
       setProvider(null);
-      if (cleanupComplete) cleanupComplete();
-      if (cleanupPending) cleanupPending();
+      cleanup();
     }
   };
 
@@ -238,6 +263,7 @@ const Login = ({ onLoginSuccess, onLoginPending }: LoginProps) => {
     setAuthCode('');
     setProvider(null);
     setError(null);
+    setPopupCancelled(false);
   };
 
   return (
@@ -263,31 +289,37 @@ const Login = ({ onLoginSuccess, onLoginPending }: LoginProps) => {
           <div className="mb-6">
             <div className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg text-center">
               <div className="flex flex-col items-center">
-                <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+                {!popupCancelled && (
+                  <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+                )}
                 <p className="text-sm text-blue-900 font-semibold mb-2">
-                  Authenticating with Google...
+                  {popupCancelled ? 'Sign-in window was closed' : 'Authenticating with Google...'}
                 </p>
                 <p className="text-xs text-blue-700 mb-4">
-                  A popup window will open. Complete sign-in there and it will close automatically.
+                  {popupCancelled
+                    ? 'Click Retry to open the sign-in window again, or choose a different account.'
+                    : 'A popup window will open. Complete sign-in there and it will close automatically.'}
                 </p>
-                {/* Retry and Back buttons */}
-                <div className="flex gap-3 w-full max-w-xs">
-                  <button
-                    onClick={handleGoogleLogin}
-                    className="flex-1 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                    Retry
-                  </button>
-                  <button
-                    onClick={handleCancel}
-                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    Use different account
-                  </button>
-                </div>
+                {/* Retry and Back buttons - only shown when popup is cancelled */}
+                {popupCancelled && (
+                  <div className="flex gap-3 w-full max-w-xs">
+                    <button
+                      onClick={handleGoogleLogin}
+                      className="flex-1 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Retry
+                    </button>
+                    <button
+                      onClick={handleCancel}
+                      className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      Use different account
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -298,31 +330,37 @@ const Login = ({ onLoginSuccess, onLoginPending }: LoginProps) => {
           <div className="mb-6">
             <div className="p-6 bg-gradient-to-br from-purple-50 to-indigo-50 border-2 border-purple-200 rounded-lg text-center">
               <div className="flex flex-col items-center">
-                <div className="w-12 h-12 border-4 border-purple-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+                {!popupCancelled && (
+                  <div className="w-12 h-12 border-4 border-purple-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+                )}
                 <p className="text-sm text-purple-900 font-semibold mb-2">
-                  Authenticating with Microsoft...
+                  {popupCancelled ? 'Sign-in window was closed' : 'Authenticating with Microsoft...'}
                 </p>
                 <p className="text-xs text-purple-700 mb-4">
-                  A popup window will open. Complete sign-in there and it will close automatically.
+                  {popupCancelled
+                    ? 'Click Retry to open the sign-in window again, or choose a different account.'
+                    : 'A popup window will open. Complete sign-in there and it will close automatically.'}
                 </p>
-                {/* Retry and Back buttons */}
-                <div className="flex gap-3 w-full max-w-xs">
-                  <button
-                    onClick={handleMicrosoftLogin}
-                    className="flex-1 px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 transition-colors flex items-center justify-center gap-2"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                    Retry
-                  </button>
-                  <button
-                    onClick={handleCancel}
-                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    Use different account
-                  </button>
-                </div>
+                {/* Retry and Back buttons - only shown when popup is cancelled */}
+                {popupCancelled && (
+                  <div className="flex gap-3 w-full max-w-xs">
+                    <button
+                      onClick={handleMicrosoftLogin}
+                      className="flex-1 px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Retry
+                    </button>
+                    <button
+                      onClick={handleCancel}
+                      className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      Use different account
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
