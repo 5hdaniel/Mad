@@ -292,7 +292,7 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
                     disabled={disconnectingProvider === 'google'}
                     className="w-full mt-2 px-3 py-2 bg-red-500 hover:bg-red-600 text-white text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {disconnectingProvider === 'google' ? 'Disconnecting...' : 'Disconnect'}
+                    {disconnectingProvider === 'google' ? 'Disconnecting...' : 'Disconnect Gmail'}
                   </button>
                 ) : (
                   <button
@@ -340,7 +340,7 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
                     disabled={disconnectingProvider === 'microsoft'}
                     className="w-full mt-2 px-3 py-2 bg-red-500 hover:bg-red-600 text-white text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {disconnectingProvider === 'microsoft' ? 'Disconnecting...' : 'Disconnect'}
+                    {disconnectingProvider === 'microsoft' ? 'Disconnecting...' : 'Disconnect Outlook'}
                   </button>
                 ) : (
                   <button
