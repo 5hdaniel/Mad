@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import Login from './components/Login';
+import Login, { PendingOAuthData } from './components/Login';
 import MicrosoftLogin from './components/MicrosoftLogin';
 import EmailOnboardingScreen from './components/EmailOnboardingScreen';
 import PermissionsScreen from './components/PermissionsScreen';
@@ -94,6 +94,7 @@ function App() {
     // Check localStorage for user preference
     return localStorage.getItem('skipKeychainExplanation') === 'true';
   });
+  const [pendingOAuthData, setPendingOAuthData] = useState<PendingOAuthData | null>(null); // OAuth data waiting for keychain setup
 
   // Check if encryption key store exists on app load
   // This is a file existence check that does NOT trigger keychain prompts
@@ -183,29 +184,39 @@ function App() {
   }, [currentUser?.id]);
 
   // Handle auth state changes to update navigation
+  // NEW FLOW: Login FIRST, then keychain setup if needed
   useEffect(() => {
     if (!isAuthLoading && !isCheckingEmailOnboarding && !isCheckingSecureStorage) {
-      // IMPORTANT: For NEW users (no key store), show SecureStorageSetup BEFORE login
-      // This is because login requires database and encryption to be ready
-      if (!hasSecureStorageSetup && !isAuthenticated) {
-        setCurrentStep('secure-storage-setup');
+      // If we have pending OAuth data, we're in the middle of the login-first flow
+      // Show keychain explanation/setup screen
+      if (pendingOAuthData && !isAuthenticated) {
+        if (isInitializingDatabase) {
+          // Database initialization in progress (after user clicked continue)
+          setCurrentStep('keychain-explanation');
+          return;
+        }
+        // Show keychain explanation screen with pending OAuth data
+        setCurrentStep('keychain-explanation');
         return;
       }
 
-      // For RETURNING users: check if database needs initialization
-      if (hasSecureStorageSetup && !isDatabaseInitialized && !isAuthenticated) {
+      // For RETURNING users with skip preference and existing key store:
+      // Auto-initialize database if needed (before showing login)
+      if (hasSecureStorageSetup && !isDatabaseInitialized && !isAuthenticated && !pendingOAuthData) {
         if (isInitializingDatabase) {
           // Database initialization in progress, show loading
           setCurrentStep('loading');
           return;
         }
-        if (!skipKeychainExplanation) {
-          // User hasn't opted to skip explanation, show it
-          setCurrentStep('keychain-explanation');
+        if (skipKeychainExplanation) {
+          // User has opted to skip explanation, but we need DB initialized
+          // The auto-init useEffect will handle this
+          setCurrentStep('loading');
           return;
         }
-        // skipKeychainExplanation is true but not initialized yet - will be handled by auto-init useEffect
-        setCurrentStep('loading');
+        // Returning user without skip preference - show keychain explanation
+        // before login so they can authorize keychain upfront
+        setCurrentStep('keychain-explanation');
         return;
       }
 
@@ -219,10 +230,12 @@ function App() {
           setCurrentStep('permissions');
         }
       } else if (!isAuthenticated) {
+        // Not authenticated - show login
+        // This covers both new users (no key store) and returning users with initialized DB
         setCurrentStep('login');
       }
     }
-  }, [isAuthenticated, isAuthLoading, needsTermsAcceptance, hasPermissions, hasCompletedEmailOnboarding, isCheckingEmailOnboarding, hasSecureStorageSetup, isCheckingSecureStorage, isDatabaseInitialized, isInitializingDatabase, skipKeychainExplanation]);
+  }, [isAuthenticated, isAuthLoading, needsTermsAcceptance, hasPermissions, hasCompletedEmailOnboarding, isCheckingEmailOnboarding, hasSecureStorageSetup, isCheckingSecureStorage, isDatabaseInitialized, isInitializingDatabase, skipKeychainExplanation, pendingOAuthData]);
 
   useEffect(() => {
     checkPermissions();
@@ -232,7 +245,17 @@ function App() {
   const handleLoginSuccess = (user: { id: string; email: string; display_name?: string; avatar_url?: string }, token: string, provider: string, subscriptionData: Subscription | undefined, isNewUser: boolean): void => {
     // Track if this is a new user flow for secure storage setup
     setIsNewUserFlow(isNewUser);
+    // Clear any pending OAuth data since login completed successfully
+    setPendingOAuthData(null);
     login(user, token, provider, subscriptionData, isNewUser);
+  };
+
+  // Handle pending login - OAuth succeeded but database not initialized
+  // Store the OAuth data and show keychain explanation screen
+  const handleLoginPending = (oauthData: PendingOAuthData): void => {
+    console.log('[App] Login pending - OAuth succeeded, need keychain setup');
+    setPendingOAuthData(oauthData);
+    // Navigation will be handled by useEffect - will show keychain-explanation
   };
 
   const handleAcceptTerms = async (): Promise<void> => {
@@ -265,7 +288,10 @@ function App() {
     // Navigation will be handled by useEffect - will go to login (new flow) or email-onboarding
   };
 
-  // Handler for returning users' keychain explanation screen
+  // Handler for keychain explanation screen
+  // This is shown in two scenarios:
+  // 1. Returning user: Before login, to authorize keychain access
+  // 2. Login-first flow: After OAuth succeeded but before DB was initialized
   const handleKeychainExplanationContinue = async (dontShowAgain: boolean) => {
     // Save preference if user checked "don't show again"
     if (dontShowAgain) {
@@ -279,6 +305,32 @@ function App() {
       const result = await window.api.system.initializeSecureStorage();
       if (result.success) {
         setIsDatabaseInitialized(true);
+        setHasSecureStorageSetup(true);
+
+        // If we have pending OAuth data, complete the login now
+        if (pendingOAuthData) {
+          console.log('[App] Database initialized, completing pending login...');
+          try {
+            const loginResult = await window.api.auth.completePendingLogin(pendingOAuthData);
+            if (loginResult.success && loginResult.user && loginResult.sessionToken) {
+              // The subscription is already a full Subscription object from supabaseService.validateSubscription()
+              const subscriptionData = loginResult.subscription as Subscription | undefined;
+
+              // Call the auth context login
+              setIsNewUserFlow(loginResult.isNewUser || false);
+              setPendingOAuthData(null);
+              login(loginResult.user, loginResult.sessionToken, pendingOAuthData.provider, subscriptionData, loginResult.isNewUser || false);
+            } else {
+              console.error('[App] Failed to complete pending login:', loginResult.error);
+              setPendingOAuthData(null);
+              // Navigation will show login screen again
+            }
+          } catch (error) {
+            console.error('[App] Error completing pending login:', error);
+            setPendingOAuthData(null);
+          }
+        }
+        // If no pending OAuth data, navigation will show login screen
       } else {
         console.error('[App] Database initialization failed:', result.error);
         // Show error state - user can retry
@@ -510,7 +562,10 @@ function App() {
         )}
 
         {currentStep === 'login' && (
-          <Login onLoginSuccess={handleLoginSuccess} />
+          <Login
+            onLoginSuccess={handleLoginSuccess}
+            onLoginPending={handleLoginPending}
+          />
         )}
 
         {currentStep === 'secure-storage-setup' && (
@@ -524,6 +579,7 @@ function App() {
           <KeychainExplanation
             onContinue={handleKeychainExplanationContinue}
             isLoading={isInitializingDatabase}
+            hasPendingLogin={!!pendingOAuthData}
           />
         )}
 

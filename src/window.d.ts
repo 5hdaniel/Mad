@@ -99,6 +99,15 @@ interface MainAPI {
     acceptTerms: (userId: string) => Promise<{ success: boolean; user?: unknown; error?: string }>;
     completeEmailOnboarding: (userId: string) => Promise<{ success: boolean; error?: string }>;
     checkEmailOnboarding: (userId: string) => Promise<{ success: boolean; completed: boolean; error?: string }>;
+    // Complete pending login after keychain setup
+    completePendingLogin: (oauthData: unknown) => Promise<{
+      success: boolean;
+      user?: unknown;
+      sessionToken?: string;
+      subscription?: unknown;
+      isNewUser?: boolean;
+      error?: string;
+    }>;
   };
   system: {
     getSecureStorageStatus: () => Promise<{
@@ -123,6 +132,10 @@ interface MainAPI {
       success: boolean;
       error?: string;
     }>;
+    isDatabaseInitialized: () => Promise<{
+      success: boolean;
+      initialized: boolean;
+    }>;
     checkAllConnections: (userId: string) => Promise<{
       success: boolean;
       google?: { connected: boolean; email?: string };
@@ -143,6 +156,11 @@ interface MainAPI {
     }>;
     openPrivacyPane: (pane: string) => Promise<void>;
   };
+  // Event listeners for login completion
+  onGoogleLoginComplete: (callback: (result: { success: boolean; user?: unknown; sessionToken?: string; subscription?: unknown; isNewUser?: boolean; error?: string }) => void) => () => void;
+  onGoogleLoginPending: (callback: (result: { success: boolean; pendingLogin?: boolean; oauthData?: unknown; error?: string }) => void) => () => void;
+  onMicrosoftLoginComplete: (callback: (result: { success: boolean; user?: unknown; sessionToken?: string; subscription?: unknown; isNewUser?: boolean; error?: string }) => void) => () => void;
+  onMicrosoftLoginPending: (callback: (result: { success: boolean; pendingLogin?: boolean; oauthData?: unknown; error?: string }) => void) => () => void;
   onGoogleMailboxConnected: (callback: (result: { success: boolean }) => void) => () => void;
   onMicrosoftMailboxConnected: (callback: (result: { success: boolean }) => void) => () => void;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

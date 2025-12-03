@@ -3,20 +3,34 @@ import React, { useState } from 'react';
 interface KeychainExplanationProps {
   onContinue: (dontShowAgain: boolean) => void;
   isLoading?: boolean;
+  hasPendingLogin?: boolean; // True when shown after OAuth (new user flow)
 }
 
 /**
  * KeychainExplanation Component
  *
- * Shows returning users an explanation before the keychain prompt appears.
+ * Shows users an explanation before the keychain prompt appears.
+ * Two scenarios:
+ * 1. Returning user (before login): Explains decrypting existing data
+ * 2. New user after OAuth (hasPendingLogin=true): Explains setting up secure storage
+ *
  * Includes a "Don't show this again" checkbox to skip this screen in the future.
  */
-function KeychainExplanation({ onContinue, isLoading = false }: KeychainExplanationProps) {
+function KeychainExplanation({ onContinue, isLoading = false, hasPendingLogin = false }: KeychainExplanationProps) {
   const [dontShowAgain, setDontShowAgain] = useState(false);
 
   const handleContinue = () => {
     onContinue(dontShowAgain);
   };
+
+  // Different messaging for new users vs returning users
+  const headerSubtitle = hasPendingLogin
+    ? 'One more step to complete setup'
+    : 'To decrypt your local data';
+
+  const bodyText = hasPendingLogin
+    ? 'Magic Audit needs to set up secure storage on your Mac to protect your data. This is a one-time setup that keeps your contacts and messages encrypted.'
+    : 'Magic Audit needs to access your Mac\'s Keychain to decrypt your local database. This keeps your contacts and messages secure.';
 
   return (
     <div className="fixed inset-0 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 z-50 flex items-center justify-center p-6">
@@ -30,7 +44,7 @@ function KeychainExplanation({ onContinue, isLoading = false }: KeychainExplanat
               </svg>
             </div>
             <h2 className="text-xl font-bold text-white mb-1">Keychain Access Required</h2>
-            <p className="text-blue-100 text-sm">To decrypt your local data</p>
+            <p className="text-blue-100 text-sm">{headerSubtitle}</p>
           </div>
         </div>
 
@@ -49,8 +63,7 @@ function KeychainExplanation({ onContinue, isLoading = false }: KeychainExplanat
           ) : (
             <>
               <p className="text-gray-700 text-sm mb-4">
-                Magic Audit needs to access your Mac's Keychain to decrypt your local database.
-                This keeps your contacts and messages secure.
+                {bodyText}
               </p>
 
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
@@ -64,20 +77,22 @@ function KeychainExplanation({ onContinue, isLoading = false }: KeychainExplanat
                 </div>
               </div>
 
-              {/* Don't show again checkbox */}
-              <label className="flex items-center gap-2 mb-5 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={dontShowAgain}
-                  onChange={(e) => setDontShowAgain(e.target.checked)}
-                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                />
-                <span className="text-sm text-gray-600">Don't show this explanation again</span>
-              </label>
+              {/* Don't show again checkbox - only show for returning users */}
+              {!hasPendingLogin && (
+                <label className="flex items-center gap-2 mb-5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={dontShowAgain}
+                    onChange={(e) => setDontShowAgain(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-gray-600">Don't show this explanation again</span>
+                </label>
+              )}
 
               <button
                 onClick={handleContinue}
-                className="w-full px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all hover:from-blue-600 hover:to-indigo-700"
+                className={`w-full px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all hover:from-blue-600 hover:to-indigo-700 ${hasPendingLogin ? 'mt-2' : ''}`}
               >
                 Continue
               </button>

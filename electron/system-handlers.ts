@@ -213,6 +213,20 @@ export function registerSystemHandlers(): void {
     }
   });
 
+  /**
+   * Check if the database is initialized
+   * Used to determine if we can perform database operations (e.g., save user after OAuth)
+   */
+  ipcMain.handle('system:is-database-initialized', async (): Promise<{ success: boolean; initialized: boolean }> => {
+    try {
+      const initialized = databaseService.isInitialized();
+      return { success: true, initialized };
+    } catch (error) {
+      console.error('[Main] Database initialization check failed:', error);
+      return { success: false, initialized: false };
+    }
+  });
+
   // ===== PERMISSION SETUP (ONBOARDING) =====
 
   /**

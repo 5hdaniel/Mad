@@ -152,6 +152,14 @@ class DatabaseService implements IDatabaseService {
   }
 
   /**
+   * Check if database is initialized
+   * Used to determine if we can perform database operations
+   */
+  isInitialized(): boolean {
+    return this.db !== null;
+  }
+
+  /**
    * Ensure database is initialized and return it
    * @private
    * @throws {DatabaseError} If database is not initialized

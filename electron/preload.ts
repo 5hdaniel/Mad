@@ -103,6 +103,14 @@ contextBridge.exposeInMainWorld('api', {
      * @returns {Promise<{success: boolean, completed: boolean, error?: string}>} Onboarding status
      */
     checkEmailOnboarding: (userId: string) => ipcRenderer.invoke('auth:check-email-onboarding', userId),
+
+    /**
+     * Completes a pending login after keychain/database setup
+     * Called when OAuth succeeded but database wasn't initialized yet
+     * @param {Object} oauthData - The pending OAuth data from login-pending event
+     * @returns {Promise<{success: boolean, user?: object, sessionToken?: string, subscription?: object, isNewUser?: boolean, error?: string}>} Login completion result
+     */
+    completePendingLogin: (oauthData: any) => ipcRenderer.invoke('auth:complete-pending-login', oauthData),
   },
 
   /**
@@ -457,6 +465,13 @@ contextBridge.exposeInMainWorld('api', {
     initializeDatabase: () => ipcRenderer.invoke('system:initialize-database'),
 
     /**
+     * Checks if the database is initialized and ready for operations
+     * Used to determine if we can save user data after OAuth
+     * @returns {Promise<{success: boolean, initialized: boolean}>} Database initialization status
+     */
+    isDatabaseInitialized: () => ipcRenderer.invoke('system:is-database-initialized'),
+
+    /**
      * Runs the complete permission setup flow for onboarding
      * @returns {Promise<{success: boolean, error?: string}>} Setup result
      */
@@ -554,6 +569,17 @@ contextBridge.exposeInMainWorld('api', {
   },
 
   /**
+   * Listens for Google login pending events (OAuth succeeded, needs keychain setup)
+   * @param {Function} callback - Callback function to handle pending login data
+   * @returns {Function} Cleanup function to remove listener
+   */
+  onGoogleLoginPending: (callback: (result: any) => void) => {
+    const listener = (_: IpcRendererEvent, result: any) => callback(result);
+    ipcRenderer.on('google:login-pending', listener);
+    return () => ipcRenderer.removeListener('google:login-pending', listener);
+  },
+
+  /**
    * Listens for Google mailbox connection events
    * @param {Function} callback - Callback function to handle connection result
    * @returns {Function} Cleanup function to remove listener
@@ -573,6 +599,17 @@ contextBridge.exposeInMainWorld('api', {
     const listener = (_: IpcRendererEvent, result: any) => callback(result);
     ipcRenderer.on('microsoft:login-complete', listener);
     return () => ipcRenderer.removeListener('microsoft:login-complete', listener);
+  },
+
+  /**
+   * Listens for Microsoft login pending events (OAuth succeeded, needs keychain setup)
+   * @param {Function} callback - Callback function to handle pending login data
+   * @returns {Function} Cleanup function to remove listener
+   */
+  onMicrosoftLoginPending: (callback: (result: any) => void) => {
+    const listener = (_: IpcRendererEvent, result: any) => callback(result);
+    ipcRenderer.on('microsoft:login-pending', listener);
+    return () => ipcRenderer.removeListener('microsoft:login-pending', listener);
   },
 
   /**
