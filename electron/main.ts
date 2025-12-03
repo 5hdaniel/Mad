@@ -169,14 +169,19 @@ app.whenReady().then(async () => {
   // 1. Database initialization (triggers keychain prompt)
   // 2. Clearing sessions/tokens for session-only OAuth
 
-  createWindow();
-  registerAuthHandlers(mainWindow!);
-  registerTransactionHandlers(mainWindow!);
+  // Register IPC handlers that don't need mainWindow BEFORE creating the window
+  // This ensures handlers are available when the renderer process loads
   registerContactHandlers();
   registerAddressHandlers();
   registerFeedbackHandlers();
   registerSystemHandlers();
   registerPreferenceHandlers();
+
+  createWindow();
+
+  // Register handlers that need mainWindow AFTER creating the window
+  registerAuthHandlers(mainWindow!);
+  registerTransactionHandlers(mainWindow!);
 });
 
 app.on('window-all-closed', () => {

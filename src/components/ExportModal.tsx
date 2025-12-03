@@ -46,8 +46,9 @@ function ExportModal({ transaction, userId, onClose, onExportComplete }: ExportM
             }
           }
         } catch (error) {
-          console.error('Failed to load export format preference:', error);
-          // If loading fails, keep the default 'pdf' format
+          // Silently handle preference loading errors - preferences are non-critical
+          // User will just get default 'pdf' format
+          console.debug('Preferences not available, using default export format');
         }
       }
     };
