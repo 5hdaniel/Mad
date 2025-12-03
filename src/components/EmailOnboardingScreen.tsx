@@ -21,6 +21,57 @@ interface EmailOnboardingScreenProps {
   onSkip: () => void;
 }
 
+// Setup steps for progress indicator
+const SETUP_STEPS = [
+  { id: 1, label: 'Sign In' },
+  { id: 2, label: 'Secure Storage' },
+  { id: 3, label: 'Connect Email' },
+  { id: 4, label: 'Permissions' },
+];
+
+/**
+ * Progress indicator component showing setup steps
+ */
+function SetupProgressIndicator({ currentStep }: { currentStep: number }) {
+  return (
+    <div className="flex items-center justify-center gap-1 mb-6">
+      {SETUP_STEPS.map((step, index) => (
+        <React.Fragment key={step.id}>
+          <div className="flex flex-col items-center">
+            <div
+              className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-all ${
+                step.id < currentStep
+                  ? 'bg-green-500 text-white'
+                  : step.id === currentStep
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-gray-200 text-gray-500'
+              }`}
+            >
+              {step.id < currentStep ? (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              ) : (
+                step.id
+              )}
+            </div>
+            <span className={`text-xs mt-1 ${step.id === currentStep ? 'text-blue-600 font-medium' : 'text-gray-500'}`}>
+              {step.label}
+            </span>
+          </div>
+          {index < SETUP_STEPS.length - 1 && (
+            <div
+              className={`w-8 h-0.5 mb-5 transition-all ${
+                step.id < currentStep ? 'bg-green-500' : 'bg-gray-200'
+              }`}
+            />
+          )}
+        </React.Fragment>
+      ))}
+    </div>
+  );
+}
+
 /**
  * EmailOnboardingScreen Component
  * Prompts new users to connect their email accounts (Gmail/Outlook) during onboarding.
@@ -63,43 +114,65 @@ function EmailOnboardingScreen({ userId, authProvider, onComplete, onSkip }: Ema
 
   const handleConnectGoogle = async (): Promise<void> => {
     setConnectingProvider('google');
-    let cleanup: (() => void) | undefined;
+    let cleanupConnected: (() => void) | undefined;
+    let cleanupCancelled: (() => void) | undefined;
+
+    const cleanup = () => {
+      if (cleanupConnected) cleanupConnected();
+      if (cleanupCancelled) cleanupCancelled();
+    };
+
     try {
       const result = await window.api.auth.googleConnectMailbox(userId);
       if (result.success) {
-        cleanup = window.api.onGoogleMailboxConnected(async (connectionResult: ConnectionResult) => {
+        cleanupConnected = window.api.onGoogleMailboxConnected(async (connectionResult: ConnectionResult) => {
           if (connectionResult.success) {
             await checkConnections();
           }
           setConnectingProvider(null);
-          if (cleanup) cleanup();
+          cleanup();
+        });
+        cleanupCancelled = window.api.onGoogleMailboxCancelled(() => {
+          setConnectingProvider(null);
+          cleanup();
         });
       }
     } catch (error) {
       console.error('[EmailOnboarding] Failed to connect Google:', error);
       setConnectingProvider(null);
-      if (cleanup) cleanup();
+      cleanup();
     }
   };
 
   const handleConnectMicrosoft = async (): Promise<void> => {
     setConnectingProvider('microsoft');
-    let cleanup: (() => void) | undefined;
+    let cleanupConnected: (() => void) | undefined;
+    let cleanupCancelled: (() => void) | undefined;
+
+    const cleanup = () => {
+      if (cleanupConnected) cleanupConnected();
+      if (cleanupCancelled) cleanupCancelled();
+    };
+
     try {
       const result = await window.api.auth.microsoftConnectMailbox(userId);
       if (result.success) {
-        cleanup = window.api.onMicrosoftMailboxConnected(async (connectionResult: ConnectionResult) => {
+        cleanupConnected = window.api.onMicrosoftMailboxConnected(async (connectionResult: ConnectionResult) => {
           if (connectionResult.success) {
             await checkConnections();
           }
           setConnectingProvider(null);
-          if (cleanup) cleanup();
+          cleanup();
+        });
+        cleanupCancelled = window.api.onMicrosoftMailboxCancelled(() => {
+          setConnectingProvider(null);
+          cleanup();
         });
       }
     } catch (error) {
       console.error('[EmailOnboarding] Failed to connect Microsoft:', error);
       setConnectingProvider(null);
-      if (cleanup) cleanup();
+      cleanup();
     }
   };
 
@@ -151,6 +224,9 @@ function EmailOnboardingScreen({ userId, authProvider, onComplete, onSkip }: Ema
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-8">
       <div className="max-w-lg w-full bg-white rounded-2xl shadow-xl p-8">
+        {/* Progress Indicator */}
+        <SetupProgressIndicator currentStep={3} />
+
         {/* Header */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full mb-6 shadow-lg">
@@ -210,11 +286,21 @@ function EmailOnboardingScreen({ userId, authProvider, onComplete, onSkip }: Ema
                 </div>
               )}
             </div>
-            {!primaryConnection?.connected && (
+            {primaryConnection?.connected ? (
+              <button
+                onClick={handleContinue}
+                className="w-full px-4 py-3 bg-green-500 hover:bg-green-600 text-white text-sm font-semibold rounded-lg transition-all flex items-center justify-center gap-2 shadow-md"
+              >
+                <span>Continue</span>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                </svg>
+              </button>
+            ) : (
               <button
                 onClick={primaryInfo.connectHandler}
                 disabled={connectingProvider === primaryProvider || loadingConnections}
-                className={`w-full px-4 py-3 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white text-sm font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md`}
+                className="w-full px-4 py-3 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white text-sm font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md"
               >
                 {connectingProvider === primaryProvider ? (
                   <>
@@ -257,15 +343,25 @@ function EmailOnboardingScreen({ userId, authProvider, onComplete, onSkip }: Ema
                 </div>
               )}
             </div>
-            {!secondaryConnection?.connected && (
+            {secondaryConnection?.connected ? (
+              <button
+                onClick={handleContinue}
+                className="w-full px-4 py-2 bg-green-500 hover:bg-green-600 text-white text-sm font-semibold rounded-lg transition-all flex items-center justify-center gap-2 shadow-md"
+              >
+                <span>Continue</span>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                </svg>
+              </button>
+            ) : (
               <button
                 onClick={secondaryInfo.connectHandler}
                 disabled={connectingProvider === secondaryProvider || loadingConnections}
-                className={`w-full px-4 py-2 bg-white border-2 border-gray-200 ${secondaryInfo.hoverBorder} ${secondaryInfo.hoverBg} text-gray-600 text-sm font-medium rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2`}
+                className="w-full px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white text-sm font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md"
               >
                 {connectingProvider === secondaryProvider ? (
                   <>
-                    <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                     <span>Connecting...</span>
                   </>
                 ) : (
@@ -276,32 +372,17 @@ function EmailOnboardingScreen({ userId, authProvider, onComplete, onSkip }: Ema
           </div>
         </div>
 
-        {/* Action Buttons */}
-        <div className="space-y-3">
-          <button
-            onClick={handleContinue}
-            disabled={!hasAnyConnection}
-            className={`w-full py-3 px-6 rounded-xl font-semibold transition-all ${
-              hasAnyConnection
-                ? 'bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white shadow-lg hover:shadow-xl'
-                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-            }`}
-          >
-            Continue
-          </button>
-
+        {/* Skip Button */}
+        <div className="text-center">
           <button
             onClick={handleSkip}
-            className="w-full text-gray-500 hover:text-gray-700 py-2 text-sm font-medium transition-colors"
+            className="text-gray-500 hover:text-gray-700 py-2 text-sm font-medium transition-colors"
           >
-            {hasAnyConnection ? 'Skip additional connections' : 'Skip for Now'}
+            Skip for Now
           </button>
-
-          {!hasAnyConnection && (
-            <p className="text-xs text-gray-500 text-center">
-              You can always connect your email later in Settings
-            </p>
-          )}
+          <p className="text-xs text-gray-500 mt-1">
+            You can always connect your email later in Settings
+          </p>
         </div>
       </div>
     </div>

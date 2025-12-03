@@ -103,6 +103,14 @@ contextBridge.exposeInMainWorld('api', {
      * @returns {Promise<{success: boolean, completed: boolean, error?: string}>} Onboarding status
      */
     checkEmailOnboarding: (userId: string) => ipcRenderer.invoke('auth:check-email-onboarding', userId),
+
+    /**
+     * Completes a pending login after keychain/database setup
+     * Called when OAuth succeeded but database wasn't initialized yet
+     * @param {Object} oauthData - The pending OAuth data from login-pending event
+     * @returns {Promise<{success: boolean, user?: object, sessionToken?: string, subscription?: object, isNewUser?: boolean, error?: string}>} Login completion result
+     */
+    completePendingLogin: (oauthData: any) => ipcRenderer.invoke('auth:complete-pending-login', oauthData),
   },
 
   /**
@@ -429,6 +437,41 @@ contextBridge.exposeInMainWorld('api', {
    */
   system: {
     /**
+     * Gets secure storage status without triggering keychain prompt
+     * Used to check if encryption is already available (user already authorized)
+     * @returns {Promise<{success: boolean, available: boolean, platform?: string, guidance?: string, error?: string}>} Status result
+     */
+    getSecureStorageStatus: () => ipcRenderer.invoke('system:get-secure-storage-status'),
+
+    /**
+     * Initializes secure storage (triggers keychain prompt on macOS)
+     * Should be called after user login and terms acceptance
+     * @returns {Promise<{success: boolean, available: boolean, platform?: string, guidance?: string, error?: string}>} Initialization result
+     */
+    initializeSecureStorage: () => ipcRenderer.invoke('system:initialize-secure-storage'),
+
+    /**
+     * Checks if the database encryption key store file exists
+     * Used to determine if this is a new user (needs secure storage setup) vs returning user
+     * @returns {Promise<{success: boolean, hasKeyStore: boolean}>} Key store check result
+     */
+    hasEncryptionKeyStore: () => ipcRenderer.invoke('system:has-encryption-key-store'),
+
+    /**
+     * Initializes the database after secure storage setup
+     * Should be called after the user has authorized keychain access (new users only)
+     * @returns {Promise<{success: boolean, error?: string}>} Database initialization result
+     */
+    initializeDatabase: () => ipcRenderer.invoke('system:initialize-database'),
+
+    /**
+     * Checks if the database is initialized and ready for operations
+     * Used to determine if we can save user data after OAuth
+     * @returns {Promise<{success: boolean, initialized: boolean}>} Database initialization status
+     */
+    isDatabaseInitialized: () => ipcRenderer.invoke('system:is-database-initialized'),
+
+    /**
      * Runs the complete permission setup flow for onboarding
      * @returns {Promise<{success: boolean, error?: string}>} Setup result
      */
@@ -539,6 +582,17 @@ contextBridge.exposeInMainWorld('api', {
   },
 
   /**
+   * Listens for Google login pending events (OAuth succeeded, needs keychain setup)
+   * @param {Function} callback - Callback function to handle pending login data
+   * @returns {Function} Cleanup function to remove listener
+   */
+  onGoogleLoginPending: (callback: (result: any) => void) => {
+    const listener = (_: IpcRendererEvent, result: any) => callback(result);
+    ipcRenderer.on('google:login-pending', listener);
+    return () => ipcRenderer.removeListener('google:login-pending', listener);
+  },
+
+  /**
    * Listens for Google mailbox connection events
    * @param {Function} callback - Callback function to handle connection result
    * @returns {Function} Cleanup function to remove listener
@@ -547,6 +601,17 @@ contextBridge.exposeInMainWorld('api', {
     const listener = (_: IpcRendererEvent, result: any) => callback(result);
     ipcRenderer.on('google:mailbox-connected', listener);
     return () => ipcRenderer.removeListener('google:mailbox-connected', listener);
+  },
+
+  /**
+   * Listens for Google mailbox connection cancelled events (user closed popup)
+   * @param {Function} callback - Callback function to handle cancellation
+   * @returns {Function} Cleanup function to remove listener
+   */
+  onGoogleMailboxCancelled: (callback: () => void) => {
+    const listener = () => callback();
+    ipcRenderer.on('google:mailbox-cancelled', listener);
+    return () => ipcRenderer.removeListener('google:mailbox-cancelled', listener);
   },
 
   /**
@@ -561,6 +626,17 @@ contextBridge.exposeInMainWorld('api', {
   },
 
   /**
+   * Listens for Microsoft login pending events (OAuth succeeded, needs keychain setup)
+   * @param {Function} callback - Callback function to handle pending login data
+   * @returns {Function} Cleanup function to remove listener
+   */
+  onMicrosoftLoginPending: (callback: (result: any) => void) => {
+    const listener = (_: IpcRendererEvent, result: any) => callback(result);
+    ipcRenderer.on('microsoft:login-pending', listener);
+    return () => ipcRenderer.removeListener('microsoft:login-pending', listener);
+  },
+
+  /**
    * Listens for Microsoft mailbox connection events
    * @param {Function} callback - Callback function to handle connection result
    * @returns {Function} Cleanup function to remove listener
@@ -569,6 +645,17 @@ contextBridge.exposeInMainWorld('api', {
     const listener = (_: IpcRendererEvent, result: any) => callback(result);
     ipcRenderer.on('microsoft:mailbox-connected', listener);
     return () => ipcRenderer.removeListener('microsoft:mailbox-connected', listener);
+  },
+
+  /**
+   * Listens for Microsoft mailbox connection cancelled events (user closed popup)
+   * @param {Function} callback - Callback function to handle cancellation
+   * @returns {Function} Cleanup function to remove listener
+   */
+  onMicrosoftMailboxCancelled: (callback: () => void) => {
+    const listener = () => callback();
+    ipcRenderer.on('microsoft:mailbox-cancelled', listener);
+    return () => ipcRenderer.removeListener('microsoft:mailbox-cancelled', listener);
   },
 
   /**

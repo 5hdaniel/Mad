@@ -323,6 +323,26 @@ class DatabaseEncryptionService {
   }
 
   /**
+   * Check if the encryption key store file exists
+   * This does NOT trigger any keychain prompts - it just checks file existence
+   * Useful for determining if this is a new user vs returning user
+   * @returns {boolean} True if key store file exists
+   */
+  hasKeyStore(): boolean {
+    if (!this.keyStorePath) {
+      // Service not initialized yet, check default path
+      try {
+        const userDataPath = app.getPath('userData');
+        const defaultKeyStorePath = path.join(userDataPath, this.KEY_STORE_FILENAME);
+        return fs.existsSync(defaultKeyStorePath);
+      } catch {
+        return false;
+      }
+    }
+    return fs.existsSync(this.keyStorePath);
+  }
+
+  /**
    * Get key metadata for diagnostics (does not expose key)
    * @returns {Promise<KeyMetadata | null>} Key metadata or null if not found
    */

@@ -4,7 +4,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const axios_1 = __importDefault(require("axios"));
-const tokenEncryptionService_1 = __importDefault(require("./tokenEncryptionService"));
+// NOTE: tokenEncryptionService removed - using session-only OAuth
+// Tokens stored in encrypted database, no additional keychain encryption needed
 const databaseService_1 = __importDefault(require("./databaseService"));
 /**
  * Outlook Fetch Service
@@ -28,8 +29,8 @@ class OutlookFetchService {
             if (!tokenRecord) {
                 throw new Error('No Outlook OAuth token found. User needs to connect Outlook first.');
             }
-            // Decrypt access token
-            this.accessToken = tokenEncryptionService_1.default.decrypt(tokenRecord.access_token || '');
+            // Session-only OAuth: tokens stored unencrypted in encrypted database
+            this.accessToken = tokenRecord.access_token || '';
             console.log('[OutlookFetch] Initialized successfully');
             return true;
         }
