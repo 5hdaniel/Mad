@@ -105,7 +105,7 @@ const Login = ({ onLoginSuccess, onLoginPending }: LoginProps) => {
         if (cleanupPending) cleanupPending();
       }
     } catch (err) {
-      console.error('Google login error:', err);
+      console.error('[Login] Google login error:', err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to start Google login';
       setError(errorMessage);
       setLoading(false);
@@ -182,7 +182,7 @@ const Login = ({ onLoginSuccess, onLoginPending }: LoginProps) => {
         if (cleanupPending) cleanupPending();
       }
     } catch (err) {
-      console.error('Microsoft login error:', err);
+      console.error('[Login] Microsoft login error:', err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to start Microsoft login';
       setError(errorMessage);
       setLoading(false);
@@ -222,7 +222,7 @@ const Login = ({ onLoginSuccess, onLoginPending }: LoginProps) => {
         setLoading(false);
       }
     } catch (err) {
-      console.error('Code exchange error:', err);
+      console.error('[Login] Code exchange error:', err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to complete login';
       setError(errorMessage);
       setLoading(false);

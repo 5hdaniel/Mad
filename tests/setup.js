@@ -81,6 +81,11 @@ if (typeof window !== 'undefined') {
     onGoogleMailboxConnected: jest.fn(() => jest.fn()),
     onMicrosoftMailboxConnected: jest.fn(() => jest.fn()),
     onMicrosoftLoginComplete: jest.fn(() => jest.fn()),
+    onGoogleLoginComplete: jest.fn(() => jest.fn()),
+    onGoogleLoginPending: jest.fn(() => jest.fn()),
+    onMicrosoftLoginPending: jest.fn(() => jest.fn()),
+    onGoogleMailboxCancelled: jest.fn(() => jest.fn()),
+    onMicrosoftMailboxCancelled: jest.fn(() => jest.fn()),
   };
 
   // Mock electron for tests
@@ -89,6 +94,7 @@ if (typeof window !== 'undefined') {
     getMacOSVersion: jest.fn(),
     checkPermissions: jest.fn(),
     openSystemSettings: jest.fn(),
+    triggerFullDiskAccess: jest.fn(),
     checkAppLocation: jest.fn(),
     getConversations: jest.fn(),
     outlookInitialize: jest.fn(),

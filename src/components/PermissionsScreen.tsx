@@ -93,7 +93,7 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain: _onCheckAgain }
       const info = await window.electron.getAppInfo();
       setAppInfo(info);
     } catch (error) {
-      console.error('Error detecting app info:', error);
+      console.error('[Permissions] Error detecting app info:', error);
     }
   };
 
@@ -110,7 +110,7 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain: _onCheckAgain }
         });
       }
     } catch (error) {
-      console.error('Error detecting macOS version:', error);
+      console.error('[Permissions] Error detecting macOS version:', error);
       // Default to modern style if detection fails
       setMacOSInfo({
         version: 15,
