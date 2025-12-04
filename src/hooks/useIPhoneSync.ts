@@ -59,6 +59,7 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
         setDevice(null);
         // Reset sync state on disconnect
         if (syncStatus === 'syncing') {
+          console.error('[useIPhoneSync] Device disconnected during sync');
           setSyncStatus('error');
           setError('Device disconnected during sync');
         }
@@ -101,6 +102,7 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
 
     // Subscribe to backup error events
     const unsubscribeError = window.api.backup?.onError?.((err) => {
+      console.error('[useIPhoneSync] Backup error:', err.message);
       setSyncStatus('error');
       setError(err.message);
     });
@@ -118,6 +120,7 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
   // Start backup sync
   const startSync = useCallback(async () => {
     if (!device) {
+      console.error('[useIPhoneSync] Cannot start sync: No device connected');
       setError('No device connected');
       return;
     }
@@ -136,6 +139,7 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
       });
 
       if (!result) {
+        console.error('[useIPhoneSync] Backup service not available');
         setSyncStatus('error');
         setError('Backup service not available');
         return;
@@ -149,12 +153,15 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
       if (result.success) {
         setSyncStatus('complete');
       } else {
+        console.error('[useIPhoneSync] Backup failed:', result.error);
         setSyncStatus('error');
         setError(result.error || 'Backup failed');
       }
     } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';
+      console.error('[useIPhoneSync] Unexpected error during backup:', errorMessage);
       setSyncStatus('error');
-      setError(err instanceof Error ? err.message : 'An unexpected error occurred');
+      setError(errorMessage);
     }
   }, [device]);
 
@@ -162,6 +169,7 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
   const submitPassword = useCallback(
     async (password: string) => {
       if (!device) {
+        console.error('[useIPhoneSync] Cannot submit password: No device connected');
         setError('No device connected');
         return;
       }
@@ -176,6 +184,7 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
         });
 
         if (!result) {
+          console.error('[useIPhoneSync] Backup service not available');
           setError('Backup service not available');
           return;
         }
@@ -184,12 +193,16 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
           setNeedsPassword(false);
           // Progress updates will come through the onProgress callback
         } else if (result.errorCode === 'INVALID_PASSWORD') {
+          console.warn('[useIPhoneSync] Invalid backup password provided');
           setError('Incorrect password. Please try again.');
         } else {
+          console.error('[useIPhoneSync] Password verification failed:', result.error);
           setError(result.error || 'Failed to verify password');
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'An unexpected error occurred');
+        const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';
+        console.error('[useIPhoneSync] Unexpected error during password verification:', errorMessage);
+        setError(errorMessage);
       }
     },
     [device]

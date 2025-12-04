@@ -62,6 +62,7 @@ describe('Platform Detection Utility', () => {
     });
 
     it('should default to "windows" when platform is unknown', () => {
+      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
       Object.defineProperty(window, 'electron', {
         value: { platform: 'unknown' },
         writable: true,
@@ -69,6 +70,11 @@ describe('Platform Detection Utility', () => {
       });
 
       expect(getPlatform()).toBe('windows');
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('[Platform] Unknown platform detected: "unknown"')
+      );
+
+      consoleWarnSpy.mockRestore();
     });
 
     it('should default to "windows" when window.electron is undefined', () => {

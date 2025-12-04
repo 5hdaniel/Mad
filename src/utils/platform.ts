@@ -26,6 +26,10 @@ export function getPlatform(): Platform {
     case 'linux':
       return 'linux';
     default:
+      console.warn(
+        `[Platform] Unknown platform detected: "${platform}". Defaulting to Windows. ` +
+        `This may cause unexpected behavior. Please report this issue.`
+      );
       return 'windows'; // Default to Windows for safety
   }
 }
