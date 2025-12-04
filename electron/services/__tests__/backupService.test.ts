@@ -69,8 +69,9 @@ jest.mock('child_process', () => ({
       stderr: mockStderr,
       on: jest.fn((event: string, callback: Function) => {
         if (event === 'close') {
-          // Simulate successful process completion after a short delay
-          setTimeout(() => callback(0), 50);
+          // Simulate successful process completion after a delay
+          // Longer delay (200ms) to allow testing concurrent backup scenarios
+          setTimeout(() => callback(0), 200);
         }
         return mockProcess;
       }),
@@ -84,7 +85,7 @@ jest.mock('child_process', () => ({
 // Mock libimobiledeviceService
 jest.mock('../libimobiledeviceService', () => ({
   getCommand: jest.fn().mockReturnValue('/mock/idevicebackup2'),
-  isMockMode: jest.fn().mockReturnValue(true)
+  isMockMode: jest.fn().mockReturnValue(false) // Use spawn mock, not mockBackup
 }));
 
 describe('BackupService', () => {
@@ -148,8 +149,8 @@ describe('BackupService', () => {
       // Start backup (in mock mode, it runs asynchronously)
       const backupPromise = backupService.startBackup(options);
 
-      // Give it a moment to start
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Wait for checkEncryptionStatus to complete (200ms) + Promise executor to run
+      await new Promise(resolve => setTimeout(resolve, 250));
 
       const status = backupService.getStatus();
       expect(status.isRunning).toBe(true);
@@ -166,10 +167,13 @@ describe('BackupService', () => {
         udid: 'test-device-udid'
       };
 
-      // Start first backup
+      // Start first backup (don't await it)
       const firstBackup = backupService.startBackup(options);
 
-      // Attempt to start second backup
+      // Wait for checkEncryptionStatus to complete (200ms) + Promise executor to set isRunning flag
+      await new Promise(resolve => setTimeout(resolve, 250));
+
+      // Attempt to start second backup while first is still running
       await expect(backupService.startBackup(options)).rejects.toThrow(
         'Backup already in progress'
       );
@@ -300,6 +304,10 @@ describe('BackupService', () => {
 
   describe('deleteBackup', () => {
     it('should throw error for paths outside backup directory', async () => {
+      // Mock fs.access to resolve (path exists) so we reach the validation check
+      const fs = require('fs');
+      fs.promises.access = jest.fn().mockResolvedValue(undefined);
+
       await expect(
         backupService.deleteBackup('/some/other/path')
       ).rejects.toThrow('Cannot delete backup outside of backup directory');
