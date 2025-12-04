@@ -6,6 +6,19 @@
 import { BackupService } from '../backupService';
 import { BackupOptions, BackupProgress, BackupResult } from '../../types/backup';
 
+// Mock better-sqlite3-multiple-ciphers native module
+jest.mock('better-sqlite3-multiple-ciphers', () => {
+  return jest.fn().mockImplementation(() => ({
+    prepare: jest.fn().mockReturnValue({
+      all: jest.fn().mockReturnValue([]),
+      get: jest.fn().mockReturnValue(null),
+      run: jest.fn()
+    }),
+    close: jest.fn(),
+    exec: jest.fn()
+  }));
+});
+
 // Mock electron modules
 jest.mock('electron', () => ({
   app: {
@@ -42,7 +55,30 @@ jest.mock('fs', () => ({
 
 // Mock child_process
 jest.mock('child_process', () => ({
-  spawn: jest.fn()
+  spawn: jest.fn().mockImplementation(() => {
+    const mockStdout = {
+      on: jest.fn()
+    };
+
+    const mockStderr = {
+      on: jest.fn()
+    };
+
+    const mockProcess = {
+      stdout: mockStdout,
+      stderr: mockStderr,
+      on: jest.fn((event: string, callback: Function) => {
+        if (event === 'close') {
+          // Simulate successful process completion after a short delay
+          setTimeout(() => callback(0), 50);
+        }
+        return mockProcess;
+      }),
+      kill: jest.fn()
+    };
+
+    return mockProcess;
+  })
 }));
 
 // Mock libimobiledeviceService

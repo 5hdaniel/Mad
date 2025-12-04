@@ -173,7 +173,7 @@ describe('iOSMessagesParser', () => {
   describe('convertAppleTimestamp', () => {
     it('should convert Apple timestamp to JavaScript Date', () => {
       // 2023-06-15 12:00:00 UTC in nanoseconds since 2001-01-01
-      const timestamp = 708696000000000000;
+      const timestamp = 708523200000000000;
       const date = convertAppleTimestamp(timestamp);
 
       expect(date).not.toBeNull();

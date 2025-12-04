@@ -155,15 +155,21 @@ describe('DeviceDetectionService', () => {
 
   describe('listDevices', () => {
     it('should return empty array when no devices are connected', async () => {
-      // Mock availability check
+      jest.useRealTimers(); // Use real timers for async operations
+      const realTimerService = new DeviceDetectionService(); // Create new service with real timers
+
+      // Mock availability check - call callback asynchronously
       mockExec.mockImplementation((cmd, callback) => {
-        callback(null, { stdout: '1.3.0', stderr: '' });
+        setTimeout(() => callback(null, { stdout: '1.3.0', stderr: '' }), 0);
       });
 
       const mockProcess = createMockProcess();
       mockSpawn.mockReturnValue(mockProcess);
 
-      const promise = service.listDevices();
+      const promise = realTimerService.listDevices();
+
+      // Wait for availability check to complete
+      await new Promise(resolve => setTimeout(resolve, 10));
 
       // Simulate empty output
       mockProcess.stdout.emit('data', '');
@@ -171,18 +177,26 @@ describe('DeviceDetectionService', () => {
 
       const devices = await promise;
       expect(devices).toEqual([]);
+
+      realTimerService.stop(); // Clean up
     });
 
     it('should return device UDIDs when devices are connected', async () => {
-      // Mock availability check
+      jest.useRealTimers(); // Use real timers for async operations
+      const realTimerService = new DeviceDetectionService(); // Create new service with real timers
+
+      // Mock availability check - call callback asynchronously
       mockExec.mockImplementation((cmd, callback) => {
-        callback(null, { stdout: '1.3.0', stderr: '' });
+        setTimeout(() => callback(null, { stdout: '1.3.0', stderr: '' }), 0);
       });
 
       const mockProcess = createMockProcess();
       mockSpawn.mockReturnValue(mockProcess);
 
-      const promise = service.listDevices();
+      const promise = realTimerService.listDevices();
+
+      // Wait for availability check to complete
+      await new Promise(resolve => setTimeout(resolve, 10));
 
       // Simulate device list output
       mockProcess.stdout.emit('data', '00000000-0000000000000001\n00000000-0000000000000002\n');
@@ -193,6 +207,8 @@ describe('DeviceDetectionService', () => {
         '00000000-0000000000000001',
         '00000000-0000000000000002',
       ]);
+
+      realTimerService.stop(); // Clean up
     });
 
     it('should return mock device in mock mode', async () => {
@@ -258,13 +274,16 @@ SerialNumber: ABC123456789
 
   describe('event emission', () => {
     it('should emit device-connected when new device is detected', async () => {
-      // Mock availability check
+      jest.useRealTimers(); // Use real timers for async operations
+      const realTimerService = new DeviceDetectionService(); // Create new service with real timers
+
+      // Mock availability check - call callback asynchronously
       mockExec.mockImplementation((cmd, callback) => {
-        callback(null, { stdout: '1.3.0', stderr: '' });
+        setTimeout(() => callback(null, { stdout: '1.3.0', stderr: '' }), 0);
       });
 
       const connectedCallback = jest.fn();
-      service.on('device-connected', connectedCallback);
+      realTimerService.on('device-connected', connectedCallback);
 
       // Mock list devices
       const listProcess = createMockProcess();
@@ -278,14 +297,17 @@ SerialNumber: ABC123456789
       });
 
       // Start service - this will trigger immediate poll
-      service.start(2000);
+      realTimerService.start(2000);
+
+      // Wait for availability check to complete
+      await new Promise(resolve => setTimeout(resolve, 10));
 
       // Simulate device being found
       listProcess.stdout.emit('data', 'test-udid\n');
       listProcess.emit('close', 0);
 
       // Wait for the info request
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve));
 
       // Simulate device info response
       infoProcess.stdout.emit('data', `DeviceName: Test iPhone
@@ -296,7 +318,7 @@ SerialNumber: ABC123456789
       infoProcess.emit('close', 0);
 
       // Wait for event emission
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve));
 
       expect(connectedCallback).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -304,6 +326,8 @@ SerialNumber: ABC123456789
           name: 'Test iPhone',
         })
       );
+
+      realTimerService.stop(); // Clean up
     });
   });
 

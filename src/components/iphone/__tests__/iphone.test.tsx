@@ -52,7 +52,7 @@ describe('ConnectionStatus', () => {
         />
       );
 
-      expect(screen.getByText(/connect your iphone/i)).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /connect your iphone/i })).toBeInTheDocument();
       expect(
         screen.getByText(/connect your iphone using a usb cable/i)
       ).toBeInTheDocument();
