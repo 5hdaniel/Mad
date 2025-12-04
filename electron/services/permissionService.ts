@@ -6,6 +6,7 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
+import logService from './logService';
 
 interface PermissionResult {
   hasPermission: boolean;
@@ -80,6 +81,10 @@ class PermissionService {
   async checkFullDiskAccess(): Promise<PermissionResult> {
     // Windows/Linux: Full Disk Access is macOS-only, skip this check
     if (os.platform() !== 'darwin') {
+      logService.info(
+        `Skipping Full Disk Access check on ${os.platform()} (macOS-only feature)`,
+        'PermissionService'
+      );
       return {
         hasPermission: true,
       };
@@ -116,6 +121,10 @@ class PermissionService {
   async checkContactsPermission(): Promise<PermissionResult> {
     // Windows/Linux: Contacts app is macOS-only, skip this check
     if (os.platform() !== 'darwin') {
+      logService.info(
+        `Skipping Contacts permission check on ${os.platform()} (macOS-only feature)`,
+        'PermissionService'
+      );
       return {
         hasPermission: true,
       };
@@ -157,6 +166,10 @@ class PermissionService {
   async checkContactsLoading(): Promise<ContactsLoadingResult> {
     // Windows/Linux: Contacts app is macOS-only, skip this check
     if (os.platform() !== 'darwin') {
+      logService.info(
+        `Skipping Contacts loading check on ${os.platform()} (macOS-only feature)`,
+        'PermissionService'
+      );
       return {
         canLoadContacts: true,
         contactCount: 0,
@@ -208,7 +221,8 @@ class PermissionService {
         contactCount,
       };
     } catch (error) {
-      console.error('[PermissionService] Contacts loading check failed:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logService.error('Contacts loading check failed', 'PermissionService', { error: errorMessage });
       return {
         canLoadContacts: false,
         contactCount: 0,
