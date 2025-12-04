@@ -8,12 +8,18 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import AuditTransactionModal from '../AuditTransactionModal';
+import { PlatformProvider } from '../../contexts/PlatformContext';
 
 describe('AuditTransactionModal', () => {
   const mockUserId = 123;
   const mockProvider = 'google';
   const mockOnClose = jest.fn();
   const mockOnSuccess = jest.fn();
+
+  // Helper to render component with PlatformProvider
+  const renderWithProvider = (ui: React.ReactElement) => {
+    return render(<PlatformProvider>{ui}</PlatformProvider>);
+  };
 
   const mockContacts = [
     {
@@ -65,7 +71,7 @@ describe('AuditTransactionModal', () => {
 
   describe('Rendering', () => {
     it('should render modal with correct title', () => {
-      render(
+      renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
           provider={mockProvider}
@@ -78,7 +84,7 @@ describe('AuditTransactionModal', () => {
     });
 
     it('should show step 1 - address verification by default', () => {
-      render(
+      renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
           provider={mockProvider}
@@ -92,7 +98,7 @@ describe('AuditTransactionModal', () => {
     });
 
     it('should show transaction type options', () => {
-      render(
+      renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
           provider={mockProvider}
@@ -106,7 +112,7 @@ describe('AuditTransactionModal', () => {
     });
 
     it('should show progress bar with 3 steps', () => {
-      render(
+      renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
           provider={mockProvider}
@@ -124,7 +130,7 @@ describe('AuditTransactionModal', () => {
 
   describe('Form Validation - Step 1', () => {
     it('should require property address', async () => {
-      render(
+      renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
           provider={mockProvider}
@@ -142,7 +148,7 @@ describe('AuditTransactionModal', () => {
     });
 
     it('should allow proceeding when address is entered', async () => {
-      render(
+      renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
           provider={mockProvider}
@@ -166,7 +172,7 @@ describe('AuditTransactionModal', () => {
     });
 
     it('should clear error when valid address is entered', async () => {
-      render(
+      renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
           provider={mockProvider}
@@ -195,7 +201,7 @@ describe('AuditTransactionModal', () => {
 
   describe('Transaction Type Selection', () => {
     it('should default to purchase type', () => {
-      render(
+      renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
           provider={mockProvider}
@@ -210,7 +216,7 @@ describe('AuditTransactionModal', () => {
     });
 
     it('should allow switching to sale type', async () => {
-      render(
+      renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
           provider={mockProvider}
@@ -240,7 +246,7 @@ describe('AuditTransactionModal', () => {
         ],
       });
 
-      render(
+      renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
           provider={mockProvider}
@@ -258,7 +264,7 @@ describe('AuditTransactionModal', () => {
     });
 
     it('should not fetch suggestions for short queries', async () => {
-      render(
+      renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
           provider={mockProvider}
@@ -277,7 +283,7 @@ describe('AuditTransactionModal', () => {
 
   describe('Multi-Step Navigation', () => {
     it('should navigate to step 2 after completing step 1', async () => {
-      render(
+      renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
           provider={mockProvider}
@@ -300,7 +306,7 @@ describe('AuditTransactionModal', () => {
     });
 
     it('should allow going back to step 1 from step 2', async () => {
-      render(
+      renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
           provider={mockProvider}
@@ -330,7 +336,7 @@ describe('AuditTransactionModal', () => {
     });
 
     it('should show back button only on steps 2 and 3', async () => {
-      render(
+      renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
           provider={mockProvider}
@@ -357,7 +363,7 @@ describe('AuditTransactionModal', () => {
 
   describe('Cancel and Close', () => {
     it('should call onClose when cancel button is clicked', async () => {
-      render(
+      renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
           provider={mockProvider}
@@ -373,7 +379,7 @@ describe('AuditTransactionModal', () => {
     });
 
     it('should call onClose when X button is clicked', async () => {
-      render(
+      renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
           provider={mockProvider}
@@ -400,7 +406,7 @@ describe('AuditTransactionModal', () => {
         contacts: mockContacts,
       });
 
-      render(
+      renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
           provider={mockProvider}
@@ -426,7 +432,7 @@ describe('AuditTransactionModal', () => {
         () => new Promise((resolve) => setTimeout(() => resolve({ success: true, transaction: {} }), 1000))
       );
 
-      render(
+      renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
           provider={mockProvider}
@@ -451,7 +457,7 @@ describe('AuditTransactionModal', () => {
         error: 'Database error: transaction creation failed',
       });
 
-      render(
+      renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
           provider={mockProvider}
@@ -473,7 +479,7 @@ describe('AuditTransactionModal', () => {
 
   describe('Input Sanitization', () => {
     it('should handle special characters in address input', async () => {
-      render(
+      renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
           provider={mockProvider}
@@ -489,7 +495,7 @@ describe('AuditTransactionModal', () => {
     });
 
     it('should trim whitespace from address', async () => {
-      render(
+      renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
           provider={mockProvider}
@@ -512,7 +518,7 @@ describe('AuditTransactionModal', () => {
 
   describe('API Integration', () => {
     it('should initialize address API on mount', async () => {
-      render(
+      renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
           provider={mockProvider}
@@ -538,7 +544,7 @@ describe('AuditTransactionModal', () => {
 
   describe('Accessibility', () => {
     it('should have accessible form labels', () => {
-      render(
+      renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
           provider={mockProvider}
@@ -555,7 +561,7 @@ describe('AuditTransactionModal', () => {
     });
 
     it('should have accessible buttons', () => {
-      render(
+      renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
           provider={mockProvider}
