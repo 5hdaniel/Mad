@@ -14,7 +14,13 @@
       "Bash(npm run lint:*)",
       "Bash(git fetch:*)",
       "Bash(git merge:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git config:*)",
+      "Bash(git push:*)",
+      "Bash(gh pr create:*)",
+      "Bash(git remote:*)",
+      "Bash(git commit:*)",
+      "Bash(npm test:*)"
     ],
     "deny": [],
     "ask": []

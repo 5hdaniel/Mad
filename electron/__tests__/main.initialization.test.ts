@@ -163,7 +163,7 @@ describe('Main Process - AutoUpdater Initialization Bug Fix', () => {
   });
 
   describe('Error Prevention', () => {
-    it('should not access autoUpdater properties before app is ready', () => {
+    it('should not access autoUpdater properties before app is ready', async () => {
       // This test demonstrates the bug that was fixed:
       // Accessing autoUpdater.logger before app.whenReady() would cause
       // "Cannot read properties of undefined (reading 'getVersion')" error
@@ -188,7 +188,7 @@ describe('Main Process - AutoUpdater Initialization Bug Fix', () => {
         }),
       };
 
-      mockApp.whenReady();
+      await mockApp.whenReady();
 
       // After whenReady, it's safe to access autoUpdater
       expect(autoUpdaterAccessed).toBe(true);
