@@ -161,10 +161,14 @@ interface MainAPI {
   // Event listeners for login completion
   onGoogleLoginComplete: (callback: (result: { success: boolean; user?: unknown; sessionToken?: string; subscription?: unknown; isNewUser?: boolean; error?: string }) => void) => () => void;
   onGoogleLoginPending: (callback: (result: { success: boolean; pendingLogin?: boolean; oauthData?: unknown; error?: string }) => void) => () => void;
+  onGoogleLoginCancelled: (callback: () => void) => () => void;
   onMicrosoftLoginComplete: (callback: (result: { success: boolean; user?: unknown; sessionToken?: string; subscription?: unknown; isNewUser?: boolean; error?: string }) => void) => () => void;
   onMicrosoftLoginPending: (callback: (result: { success: boolean; pendingLogin?: boolean; oauthData?: unknown; error?: string }) => void) => () => void;
+  onMicrosoftLoginCancelled: (callback: () => void) => () => void;
   onGoogleMailboxConnected: (callback: (result: { success: boolean }) => void) => () => void;
   onMicrosoftMailboxConnected: (callback: (result: { success: boolean }) => void) => () => void;
+  onGoogleMailboxCancelled: (callback: () => void) => () => void;
+  onMicrosoftMailboxCancelled: (callback: () => void) => () => void;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [key: string]: any; // Allow other properties for backwards compatibility
 }

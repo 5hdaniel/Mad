@@ -64,6 +64,20 @@ contextBridge.exposeInMainWorld('api', {
     microsoftConnectMailbox: (userId: string) => ipcRenderer.invoke('auth:microsoft:connect-mailbox', userId),
 
     /**
+     * Disconnects Google mailbox for a logged-in user
+     * @param {string} userId - User ID to disconnect mailbox for
+     * @returns {Promise<{success: boolean, error?: string}>} Disconnection result
+     */
+    googleDisconnectMailbox: (userId: string) => ipcRenderer.invoke('auth:google:disconnect-mailbox', userId),
+
+    /**
+     * Disconnects Microsoft mailbox for a logged-in user
+     * @param {string} userId - User ID to disconnect mailbox for
+     * @returns {Promise<{success: boolean, error?: string}>} Disconnection result
+     */
+    microsoftDisconnectMailbox: (userId: string) => ipcRenderer.invoke('auth:microsoft:disconnect-mailbox', userId),
+
+    /**
      * Logs out the current user and invalidates session
      * @param {string} sessionToken - Session token to invalidate
      * @returns {Promise<{success: boolean, error?: string}>} Logout result
@@ -593,6 +607,17 @@ contextBridge.exposeInMainWorld('api', {
   },
 
   /**
+   * Listens for Google login cancelled events (user closed popup)
+   * @param {Function} callback - Callback function to handle cancellation
+   * @returns {Function} Cleanup function to remove listener
+   */
+  onGoogleLoginCancelled: (callback: () => void) => {
+    const listener = () => callback();
+    ipcRenderer.on('google:login-cancelled', listener);
+    return () => ipcRenderer.removeListener('google:login-cancelled', listener);
+  },
+
+  /**
    * Listens for Google mailbox connection events
    * @param {Function} callback - Callback function to handle connection result
    * @returns {Function} Cleanup function to remove listener
@@ -637,6 +662,17 @@ contextBridge.exposeInMainWorld('api', {
   },
 
   /**
+   * Listens for Microsoft login cancelled events (user closed popup)
+   * @param {Function} callback - Callback function to handle cancellation
+   * @returns {Function} Cleanup function to remove listener
+   */
+  onMicrosoftLoginCancelled: (callback: () => void) => {
+    const listener = () => callback();
+    ipcRenderer.on('microsoft:login-cancelled', listener);
+    return () => ipcRenderer.removeListener('microsoft:login-cancelled', listener);
+  },
+
+  /**
    * Listens for Microsoft mailbox connection events
    * @param {Function} callback - Callback function to handle connection result
    * @returns {Function} Cleanup function to remove listener
@@ -656,6 +692,28 @@ contextBridge.exposeInMainWorld('api', {
     const listener = () => callback();
     ipcRenderer.on('microsoft:mailbox-cancelled', listener);
     return () => ipcRenderer.removeListener('microsoft:mailbox-cancelled', listener);
+  },
+
+  /**
+   * Listens for Google mailbox disconnection events
+   * @param {Function} callback - Callback function to handle disconnection result
+   * @returns {Function} Cleanup function to remove listener
+   */
+  onGoogleMailboxDisconnected: (callback: (result: any) => void) => {
+    const listener = (_: IpcRendererEvent, result: any) => callback(result);
+    ipcRenderer.on('google:mailbox-disconnected', listener);
+    return () => ipcRenderer.removeListener('google:mailbox-disconnected', listener);
+  },
+
+  /**
+   * Listens for Microsoft mailbox disconnection events
+   * @param {Function} callback - Callback function to handle disconnection result
+   * @returns {Function} Cleanup function to remove listener
+   */
+  onMicrosoftMailboxDisconnected: (callback: (result: any) => void) => {
+    const listener = (_: IpcRendererEvent, result: any) => callback(result);
+    ipcRenderer.on('microsoft:mailbox-disconnected', listener);
+    return () => ipcRenderer.removeListener('microsoft:mailbox-disconnected', listener);
   },
 
   /**

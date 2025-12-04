@@ -31,8 +31,12 @@ describe('Settings', () => {
     window.api.preferences.update.mockResolvedValue({ success: true });
     window.api.auth.googleConnectMailbox.mockResolvedValue({ success: true });
     window.api.auth.microsoftConnectMailbox.mockResolvedValue({ success: true });
+    window.api.auth.googleDisconnectMailbox.mockResolvedValue({ success: true });
+    window.api.auth.microsoftDisconnectMailbox.mockResolvedValue({ success: true });
     window.api.onGoogleMailboxConnected.mockReturnValue(jest.fn());
     window.api.onMicrosoftMailboxConnected.mockReturnValue(jest.fn());
+    window.api.onGoogleMailboxDisconnected.mockReturnValue(jest.fn());
+    window.api.onMicrosoftMailboxDisconnected.mockReturnValue(jest.fn());
   });
 
   describe('Rendering', () => {
@@ -150,7 +154,7 @@ describe('Settings', () => {
       expect(window.api.auth.microsoftConnectMailbox).toHaveBeenCalledWith(mockUserId);
     });
 
-    it('should disable connect button when already connected', async () => {
+    it('should show disconnect button when already connected', async () => {
       window.api.system.checkAllConnections.mockResolvedValue({
         success: true,
         google: { connected: true, email: 'user@gmail.com' },
@@ -160,10 +164,49 @@ describe('Settings', () => {
       render(<Settings userId={mockUserId} onClose={mockOnClose} />);
 
       await waitFor(() => {
-        const gmailSection = screen.getByText('Gmail').closest('div[class*="p-4"]');
-        const connectedButton = gmailSection?.querySelector('button');
-        expect(connectedButton).toBeDisabled();
+        expect(screen.getByRole('button', { name: /disconnect gmail/i })).toBeInTheDocument();
       });
+
+      const disconnectButton = screen.getByRole('button', { name: /disconnect gmail/i });
+      expect(disconnectButton).toBeEnabled();
+    });
+
+    it('should call disconnect Gmail when disconnect button is clicked', async () => {
+      window.api.system.checkAllConnections.mockResolvedValue({
+        success: true,
+        google: { connected: true, email: 'user@gmail.com' },
+        microsoft: { connected: false },
+      });
+
+      render(<Settings userId={mockUserId} onClose={mockOnClose} />);
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /disconnect gmail/i })).toBeInTheDocument();
+      });
+
+      const disconnectButton = screen.getByRole('button', { name: /disconnect gmail/i });
+      await userEvent.click(disconnectButton);
+
+      expect(window.api.auth.googleDisconnectMailbox).toHaveBeenCalledWith(mockUserId);
+    });
+
+    it('should call disconnect Outlook when disconnect button is clicked', async () => {
+      window.api.system.checkAllConnections.mockResolvedValue({
+        success: true,
+        google: { connected: false },
+        microsoft: { connected: true, email: 'user@outlook.com' },
+      });
+
+      render(<Settings userId={mockUserId} onClose={mockOnClose} />);
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /disconnect outlook/i })).toBeInTheDocument();
+      });
+
+      const disconnectButton = screen.getByRole('button', { name: /disconnect outlook/i });
+      await userEvent.click(disconnectButton);
+
+      expect(window.api.auth.microsoftDisconnectMailbox).toHaveBeenCalledWith(mockUserId);
     });
   });
 
@@ -342,6 +385,8 @@ describe('Settings', () => {
       expect(window.api.preferences.update).toBeDefined();
       expect(window.api.auth.googleConnectMailbox).toBeDefined();
       expect(window.api.auth.microsoftConnectMailbox).toBeDefined();
+      expect(window.api.auth.googleDisconnectMailbox).toBeDefined();
+      expect(window.api.auth.microsoftDisconnectMailbox).toBeDefined();
     });
   });
 

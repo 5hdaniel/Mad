@@ -30,6 +30,8 @@ if (typeof window !== 'undefined') {
       microsoftCompleteLogin: jest.fn(),
       googleConnectMailbox: jest.fn(),
       microsoftConnectMailbox: jest.fn(),
+      googleDisconnectMailbox: jest.fn(),
+      microsoftDisconnectMailbox: jest.fn(),
     },
     transactions: {
       getAll: jest.fn(),
@@ -80,6 +82,8 @@ if (typeof window !== 'undefined') {
     onTransactionScanProgress: jest.fn(() => jest.fn()),
     onGoogleMailboxConnected: jest.fn(() => jest.fn()),
     onMicrosoftMailboxConnected: jest.fn(() => jest.fn()),
+    onGoogleMailboxDisconnected: jest.fn(() => jest.fn()),
+    onMicrosoftMailboxDisconnected: jest.fn(() => jest.fn()),
     onMicrosoftLoginComplete: jest.fn(() => jest.fn()),
     onGoogleLoginComplete: jest.fn(() => jest.fn()),
     onGoogleLoginPending: jest.fn(() => jest.fn()),
