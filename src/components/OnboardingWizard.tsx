@@ -17,8 +17,8 @@ interface OnboardingWizardProps {
  * 5. Completion celebration - acknowledges iMessage access
  *
  * Windows Flow (3 steps):
- * 1. Welcome screen - shows Windows-specific features (iPhone Connection, Email)
- * 2. iPhone connection setup - instructions for USB connection and Trust
+ * 1. Welcome screen - shows Windows-specific features (iPhone Backup, Email)
+ * 2. iPhone backup setup - detailed instructions for USB connection, trust, and creating backups
  * 5. Completion celebration - acknowledges iPhone sync capability
  *
  * Note: Steps 3 and 4 are skipped on Windows as they are macOS-specific
@@ -268,7 +268,7 @@ function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
             </div>
           )}
 
-          {/* Step 2: Windows - iPhone Connection Setup */}
+          {/* Step 2: Windows - iPhone Backup Setup */}
           {step === 2 && isWindows && (
             <div className="text-center">
               <div className="mb-6">
@@ -279,13 +279,14 @@ function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                 </div>
               </div>
 
-              <h2 className="text-2xl font-bold text-gray-900 mb-3">iPhone Connection</h2>
+              <h2 className="text-2xl font-bold text-gray-900 mb-3">iPhone Backup Setup</h2>
               <p className="text-gray-600 mb-6">
-                Magic Audit needs to connect to your iPhone to sync messages.
+                To export messages on Windows, Magic Audit needs to create a backup of your iPhone.
+                This allows us to access your contacts and messages for transaction audits.
               </p>
 
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-8 text-left">
-                <h3 className="font-semibold text-gray-900 mb-3">Getting Started:</h3>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6 text-left">
+                <h3 className="font-semibold text-gray-900 mb-3">How to create a backup:</h3>
                 <ol className="space-y-3 text-sm text-gray-700">
                   <li className="flex items-start gap-3">
                     <span className="flex-shrink-0 w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold">1</span>
@@ -299,13 +300,21 @@ function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                     <span className="flex-shrink-0 w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold">3</span>
                     <span>Enter your iPhone passcode to authorize the connection</span>
                   </li>
+                  <li className="flex items-start gap-3">
+                    <span className="flex-shrink-0 w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold">4</span>
+                    <span>In Magic Audit, go to the <strong>iPhone Sync</strong> section from the main dashboard</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <span className="flex-shrink-0 w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold">5</span>
+                    <span>Click <strong>"Create Backup"</strong> to sync your iPhone messages and contacts</span>
+                  </li>
                 </ol>
               </div>
 
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-8">
-                <p className="text-sm text-gray-600">
-                  <strong className="text-gray-900">Note:</strong> The app will automatically detect your iPhone once it's connected and trusted.
-                  You'll be able to access the iPhone sync feature from the main dashboard.
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-8">
+                <p className="text-sm text-yellow-800">
+                  <strong className="text-yellow-900">Important:</strong> The first backup may take several minutes depending on your iPhone data size.
+                  Keep your iPhone connected and unlocked during the backup process.
                 </p>
               </div>
 
@@ -313,7 +322,7 @@ function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                 onClick={() => setStep(5)}
                 className="px-8 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all"
               >
-                Continue →
+                I Understand, Continue →
               </button>
             </div>
           )}
