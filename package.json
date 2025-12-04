@@ -4,10 +4,11 @@
   "description": "Magic Audit - Export and archive iMessage conversations and emails",
   "main": "electron/main.js",
   "scripts": {
-    "start": "npm run build:preload && concurrently \"npm run dev:react\" \"npm run dev:electron\" \"npm run watch:preload\"",
-    "dev": "npm run build:preload && concurrently \"npm run dev:react\" \"npm run dev:electron\" \"npm run watch:preload\"",
+    "start": "npm run build:preload && npm run build:electron && concurrently \"npm run dev:react\" \"npm run dev:electron\" \"npm run watch:electron\"",
+    "dev": "npm run build:preload && npm run build:electron && concurrently \"npm run dev:react\" \"npm run dev:electron\" \"npm run watch:electron\"",
     "dev:react": "vite",
     "dev:electron": "wait-on http://localhost:5173 && electron .",
+    "watch:electron": "tsc -p tsconfig.electron.json --watch",
     "build:preload": "esbuild electron/preload.ts --bundle --platform=node --outfile=electron/preload.js --external:electron",
     "watch:preload": "esbuild electron/preload.ts --bundle --platform=node --outfile=electron/preload.js --external:electron --watch",
     "build": "npm run build:preload && npm run build:react && npm run build:electron",

@@ -24,3 +24,11 @@ __exportStar(require("./models"), exports);
 __exportStar(require("./database"), exports);
 // Re-export IPC types
 __exportStar(require("./ipc"), exports);
+// Re-export device types
+__exportStar(require("./device"), exports);
+// Re-export iOS message types
+__exportStar(require("./iosMessages"), exports);
+// Re-export iOS contact types
+__exportStar(require("./iosContacts"), exports);
+// Re-export backup types
+__exportStar(require("./backup"), exports);

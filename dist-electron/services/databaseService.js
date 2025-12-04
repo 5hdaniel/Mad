@@ -30,6 +30,11 @@ class DatabaseService {
      * Handles encryption and migration from unencrypted databases
      */
     async initialize() {
+        // Prevent double initialization
+        if (this.db) {
+            await logService_1.default.debug('Database already initialized, skipping', 'DatabaseService');
+            return true;
+        }
         try {
             // Get user data path
             const userDataPath = electron_1.app.getPath('userData');
@@ -60,6 +65,13 @@ class DatabaseService {
             await logService_1.default.error('Failed to initialize database', 'DatabaseService', { error: error instanceof Error ? error.message : String(error) });
             throw error;
         }
+    }
+    /**
+     * Check if database is initialized
+     * Used to determine if we can perform database operations
+     */
+    isInitialized() {
+        return this.db !== null;
     }
     /**
      * Ensure database is initialized and return it
@@ -776,6 +788,24 @@ class DatabaseService {
     async deleteAllUserSessions(userId) {
         const sql = 'DELETE FROM sessions WHERE user_id = ?';
         this._run(sql, [userId]);
+    }
+    /**
+     * Clear all sessions (for session-only OAuth on app startup)
+     * This forces all users to re-authenticate each app launch
+     */
+    async clearAllSessions() {
+        const sql = 'DELETE FROM sessions';
+        this._run(sql, []);
+        console.log('[DatabaseService] Cleared all sessions for session-only OAuth');
+    }
+    /**
+     * Clear all OAuth tokens (for session-only OAuth on app startup)
+     * This forces all users to re-authenticate each app launch
+     */
+    async clearAllOAuthTokens() {
+        const sql = 'DELETE FROM oauth_tokens';
+        this._run(sql, []);
+        console.log('[DatabaseService] Cleared all OAuth tokens for session-only OAuth');
     }
     // ============================================
     // CONTACT OPERATIONS

@@ -534,9 +534,39 @@ describe('SessionService', () => {
   });
 
   describe('File Path Handling', () => {
-    it('should use correct path from electron app', () => {
-      // The session file path should be constructed from app.getPath('userData')
-      expect((sessionService as any).sessionFilePath).toBe('/mock/user/data/session.json');
+    it('should use lazy initialization for session file path', () => {
+      // With lazy initialization, sessionFilePath should be null until first use
+      // This prevents "Cannot read properties of undefined" error when module loads before app.ready
+      expect((sessionService as any).sessionFilePath).toBeNull();
+    });
+
+    it('should initialize path correctly when methods are called', async () => {
+      const sessionData = {
+        user: {
+          id: 'user-123',
+          email: 'test@example.com',
+          oauth_provider: 'google' as const,
+          oauth_id: 'google-123',
+          subscription_tier: 'free' as const,
+          subscription_status: 'trial' as const,
+          is_active: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+        sessionToken: 'token',
+        provider: 'google' as const,
+        expiresAt: Date.now() + 1000,
+        createdAt: Date.now(),
+      };
+
+      await sessionService.saveSession(sessionData);
+
+      // After calling a method, the path should be constructed from app.getPath('userData')
+      expect(mockFs.writeFile).toHaveBeenCalledWith(
+        '/mock/user/data/session.json',
+        expect.any(String),
+        'utf8'
+      );
     });
   });
 

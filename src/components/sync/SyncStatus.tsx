@@ -56,7 +56,7 @@ export const SyncStatus: React.FC<SyncStatusProps> = ({ progress, onCancel }) =>
         </p>
       )}
 
-      {progress.filesTransferred != null && progress.totalFiles != null && (
+      {progress.filesTransferred !== null && progress.totalFiles !== null && (
         <p className="text-sm text-gray-500">
           {progress.filesTransferred} of {progress.totalFiles} files
         </p>
