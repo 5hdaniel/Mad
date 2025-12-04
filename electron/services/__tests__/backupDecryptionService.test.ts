@@ -9,6 +9,7 @@
 
 import { jest, describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import crypto from 'crypto';
+import path from 'path';
 
 // Mock fs module
 const mockExistsSync = jest.fn();
@@ -85,7 +86,7 @@ describe('BackupDecryptionService', () => {
       const result = await backupDecryptionService.isBackupEncrypted('/path/to/backup');
 
       expect(result).toBe(false);
-      expect(mockExistsSync).toHaveBeenCalledWith('/path/to/backup/Manifest.plist');
+      expect(mockExistsSync).toHaveBeenCalledWith(path.join('/path/to/backup', 'Manifest.plist'));
     });
 
     it('should return true when backup is encrypted', async () => {
