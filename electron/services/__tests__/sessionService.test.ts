@@ -14,6 +14,7 @@
  */
 
 import { jest } from '@jest/globals';
+import path from 'path';
 
 // Mock Electron app module
 jest.mock('electron', () => ({
@@ -92,7 +93,7 @@ describe('SessionService', () => {
 
       expect(result).toBe(true);
       expect(mockFs.writeFile).toHaveBeenCalledWith(
-        '/mock/user/data/session.json',
+        path.join('/mock/user/data', 'session.json'),
         expect.any(String),
         'utf8'
       );
@@ -273,7 +274,7 @@ describe('SessionService', () => {
       const result = await sessionService.clearSession();
 
       expect(result).toBe(true);
-      expect(mockFs.unlink).toHaveBeenCalledWith('/mock/user/data/session.json');
+      expect(mockFs.unlink).toHaveBeenCalledWith(path.join('/mock/user/data', 'session.json'));
       // Info message about session cleared is logged
     });
 
@@ -563,7 +564,7 @@ describe('SessionService', () => {
 
       // After calling a method, the path should be constructed from app.getPath('userData')
       expect(mockFs.writeFile).toHaveBeenCalledWith(
-        '/mock/user/data/session.json',
+        path.join('/mock/user/data', 'session.json'),
         expect.any(String),
         'utf8'
       );

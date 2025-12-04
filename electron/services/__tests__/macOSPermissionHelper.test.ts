@@ -8,6 +8,7 @@
  */
 
 import { jest } from '@jest/globals';
+import path from 'path';
 
 // Set HOME environment variable before imports
 process.env.HOME = '/Users/testuser';
@@ -214,7 +215,7 @@ describe('MacOSPermissionHelper', () => {
       const result = await macOSPermissionHelper.checkFullDiskAccessStatus();
 
       expect(mockFsAccess).toHaveBeenCalledWith(
-        '/Users/testuser/Library/Messages/chat.db',
+        path.join('/Users/testuser/Library/Messages', 'chat.db'),
         4 // fs.constants.R_OK
       );
       expect(result.granted).toBe(true);

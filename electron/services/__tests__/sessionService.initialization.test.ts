@@ -13,6 +13,7 @@
  */
 
 import { jest } from '@jest/globals';
+import path from 'path';
 
 // Mock Electron app module
 const mockGetPath = jest.fn(() => '/mock/user/data');
@@ -110,7 +111,7 @@ describe('SessionService - Initialization Bug Fix', () => {
 
       // And the file should be written to the correct path
       expect(mockFs.writeFile).toHaveBeenCalledWith(
-        '/mock/user/data/session.json',
+        path.join('/mock/user/data', 'session.json'),
         expect.any(String),
         'utf8'
       );
@@ -141,7 +142,7 @@ describe('SessionService - Initialization Bug Fix', () => {
 
       // And it should read from the correct path
       expect(mockFs.readFile).toHaveBeenCalledWith(
-        '/mock/user/data/session.json',
+        path.join('/mock/user/data', 'session.json'),
         'utf8'
       );
     });
@@ -155,7 +156,7 @@ describe('SessionService - Initialization Bug Fix', () => {
       expect(mockGetPath).toHaveBeenCalledWith('userData');
 
       // And it should delete the correct path
-      expect(mockFs.unlink).toHaveBeenCalledWith('/mock/user/data/session.json');
+      expect(mockFs.unlink).toHaveBeenCalledWith(path.join('/mock/user/data', 'session.json'));
     });
 
     it('should cache sessionFilePath after first initialization', async () => {
@@ -253,7 +254,7 @@ describe('SessionService - Initialization Bug Fix', () => {
       await sessionService.saveSession(sessionData);
 
       expect(mockFs.writeFile).toHaveBeenCalledWith(
-        '/different/user/path/session.json',
+        path.join('/different/user/path', 'session.json'),
         expect.any(String),
         'utf8'
       );
@@ -286,7 +287,7 @@ describe('SessionService - Initialization Bug Fix', () => {
       await sessionService.clearSession();
 
       // All operations should use the same path
-      const expectedPath = '/mock/user/data/session.json';
+      const expectedPath = path.join('/mock/user/data', 'session.json');
       expect(mockFs.writeFile).toHaveBeenCalledWith(expectedPath, expect.any(String), 'utf8');
       expect(mockFs.readFile).toHaveBeenCalledWith(expectedPath, 'utf8');
       expect(mockFs.unlink).toHaveBeenCalledWith(expectedPath);
