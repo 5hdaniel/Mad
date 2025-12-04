@@ -256,6 +256,13 @@ function App() {
     checkAppLocation();
   }, []);
 
+  // Windows: Skip permissions screen automatically (Full Disk Access not needed)
+  useEffect(() => {
+    if (isWindows && currentStep === 'permissions') {
+      setCurrentStep('dashboard');
+    }
+  }, [isWindows, currentStep]);
+
   const handleLoginSuccess = (user: { id: string; email: string; display_name?: string; avatar_url?: string }, token: string, provider: string, subscriptionData: Subscription | undefined, isNewUser: boolean): void => {
     // Track if this is a new user flow for secure storage setup
     setIsNewUserFlow(isNewUser);
@@ -373,6 +380,13 @@ function App() {
   };
 
   const checkPermissions = async (): Promise<void> => {
+    // On Windows, there's no Full Disk Access to check - skip permission check
+    if (isWindows) {
+      setHasPermissions(true);
+      return;
+    }
+
+    // macOS: Check for Full Disk Access permission
     const result = await window.electron.checkPermissions();
     if (result.hasPermission) {
       setHasPermissions(true);
@@ -679,7 +693,7 @@ function App() {
           />
         )}
 
-        {currentStep === 'permissions' && (
+        {currentStep === 'permissions' && isMacOS && (
           <PermissionsScreen
             onPermissionsGranted={handlePermissionsGranted}
             onCheckAgain={checkPermissions}
