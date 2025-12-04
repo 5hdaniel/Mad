@@ -9,15 +9,18 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import App from '../../App';
 import { AuthProvider, NetworkProvider } from '../../contexts';
+import { PlatformProvider } from '../../contexts/PlatformContext';
 
-// Helper to render App with AuthProvider and NetworkProvider
+// Helper to render App with all required providers
 const renderApp = () => {
   return render(
-    <NetworkProvider>
-      <AuthProvider>
-        <App />
-      </AuthProvider>
-    </NetworkProvider>
+    <PlatformProvider>
+      <NetworkProvider>
+        <AuthProvider>
+          <App />
+        </AuthProvider>
+      </NetworkProvider>
+    </PlatformProvider>
   );
 };
 
