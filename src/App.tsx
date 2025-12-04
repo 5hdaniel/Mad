@@ -113,6 +113,17 @@ function App() {
         const result = await window.api.system.hasEncryptionKeyStore();
         // If key store exists, user has already set up secure storage before
         setHasSecureStorageSetup(result.hasKeyStore);
+
+        // Windows: Initialize database immediately on startup (DPAPI doesn't require user interaction)
+        // This ensures database tables exist before AuthContext tries to load sessions
+        if (isWindows && result.hasKeyStore) {
+          try {
+            await window.api.system.initializeSecureStorage();
+            setIsDatabaseInitialized(true);
+          } catch (dbError) {
+            console.error('[App] Failed to initialize Windows database on startup:', dbError);
+          }
+        }
       } catch (error) {
         console.error('[App] Failed to check key store existence:', error);
         // Assume not set up if check fails (will show setup screen for safety)
@@ -122,7 +133,7 @@ function App() {
       }
     };
     checkKeyStoreExists();
-  }, []);
+  }, [isWindows]);
 
   // NOTE: We removed the auto-initialization for returning users.
   // The keychain prompt should NEVER appear before the user logs in.
@@ -174,16 +185,27 @@ function App() {
           const result = await window.api.system.initializeSecureStorage();
           if (result.success) {
             setIsDatabaseInitialized(true);
+            setHasSecureStorageSetup(true);
+
             // Complete login with pending OAuth data
-            if (pendingOAuthData) {
-              login(
-                pendingOAuthData.user,
-                pendingOAuthData.token,
-                pendingOAuthData.provider,
-                pendingOAuthData.subscription,
-                pendingOAuthData.isNewUser
-              );
-              setPendingOAuthData(null);
+            try {
+              const loginResult = await window.api.auth.completePendingLogin(pendingOAuthData);
+              if (loginResult.success && loginResult.user && loginResult.sessionToken) {
+                const subscriptionData = loginResult.subscription as Subscription | undefined;
+                // Convert User type to match auth context expectations
+                const user = loginResult.user as { id: string; email: string; display_name?: string; avatar_url?: string };
+                setIsNewUserFlow(loginResult.isNewUser || false);
+                login(
+                  user,
+                  loginResult.sessionToken,
+                  pendingOAuthData.provider,
+                  subscriptionData,
+                  loginResult.isNewUser || false
+                );
+                setPendingOAuthData(null);
+              }
+            } catch (loginError) {
+              console.error('[App] Failed to complete pending login:', loginError);
             }
           }
         } catch (error) {
