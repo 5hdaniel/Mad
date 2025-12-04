@@ -195,7 +195,7 @@ describe('iOSMessagesParser', () => {
     it('should handle timestamp for 2001-01-01 00:00:00 UTC (Apple epoch)', () => {
       const date = convertAppleTimestamp(1); // 1 nanosecond after epoch
       expect(date).not.toBeNull();
-      expect(date!.getFullYear()).toBe(2001);
+      expect(date!.getUTCFullYear()).toBe(2001);
     });
   });
 
