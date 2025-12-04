@@ -94,6 +94,7 @@ if (typeof window !== 'undefined') {
 
   // Mock electron for tests
   global.window.electron = {
+    platform: 'darwin', // Default to macOS for tests (can be overridden in specific tests)
     getAppInfo: jest.fn(),
     getMacOSVersion: jest.fn(),
     checkPermissions: jest.fn(),
