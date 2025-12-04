@@ -91,5 +91,5 @@ module.exports = {
 
   // Concise error output for CI/CD
   bail: 1, // Stop after first test failure (optional - remove if you want all failures)
-  maxWorkers: process.env.CI ? 2 : undefined, // Limit parallel tests in CI for cleaner output
+  maxWorkers: process.env.CI ? 2 : '50%', // Limit parallel tests in CI for cleaner output
 };

@@ -491,6 +491,8 @@ const handleGoogleCompleteLogin = async (event: IpcMainInvokeEvent, authCode: st
       });
     } else {
       // Update existing user - sync profile AND user state from cloud (source of truth)
+      // BUT: Only update terms/privacy fields if cloud has them (don't overwrite local acceptance with null)
+      // This handles cases where sync to cloud failed but user accepted locally
       await databaseService.updateUser(localUser.id, {
         // Profile fields from OAuth
         email: userInfo.email,
@@ -498,15 +500,38 @@ const handleGoogleCompleteLogin = async (event: IpcMainInvokeEvent, authCode: st
         last_name: userInfo.family_name,
         display_name: userInfo.name,
         avatar_url: userInfo.picture,
-        // User state from Supabase (cloud is source of truth)
-        terms_accepted_at: cloudUser.terms_accepted_at,
-        privacy_policy_accepted_at: cloudUser.privacy_policy_accepted_at,
-        terms_version_accepted: cloudUser.terms_version_accepted,
-        privacy_policy_version_accepted: cloudUser.privacy_policy_version_accepted,
-        email_onboarding_completed_at: cloudUser.email_onboarding_completed_at,
+        // User state from Supabase - only update if cloud has values
+        ...(cloudUser.terms_accepted_at && {
+          terms_accepted_at: cloudUser.terms_accepted_at,
+          terms_version_accepted: cloudUser.terms_version_accepted,
+        }),
+        ...(cloudUser.privacy_policy_accepted_at && {
+          privacy_policy_accepted_at: cloudUser.privacy_policy_accepted_at,
+          privacy_policy_version_accepted: cloudUser.privacy_policy_version_accepted,
+        }),
+        ...(cloudUser.email_onboarding_completed_at && {
+          email_onboarding_completed_at: cloudUser.email_onboarding_completed_at,
+        }),
         subscription_tier: cloudUser.subscription_tier,
         subscription_status: cloudUser.subscription_status,
       });
+
+      // Bidirectional sync: If local has terms accepted but cloud doesn't, sync to cloud
+      if (localUser.terms_accepted_at && !cloudUser.terms_accepted_at) {
+        await logService.info('Local user has accepted terms but cloud does not - syncing to cloud', 'AuthHandlers');
+        try {
+          await supabaseService.syncTermsAcceptance(
+            cloudUser.id,
+            localUser.terms_version_accepted || CURRENT_TERMS_VERSION,
+            localUser.privacy_policy_version_accepted || CURRENT_PRIVACY_POLICY_VERSION
+          );
+          await logService.info('Successfully synced local terms acceptance to cloud', 'AuthHandlers');
+        } catch (syncError) {
+          await logService.error('Failed to sync local terms to cloud', 'AuthHandlers', {
+            error: syncError instanceof Error ? syncError.message : 'Unknown error'
+          });
+        }
+      }
     }
 
     // Update last login (localUser is guaranteed non-null from the if/else above)
@@ -1006,21 +1031,46 @@ const handleMicrosoftLogin = async (mainWindow: BrowserWindow | null): Promise<L
           });
         } else {
           // Update existing user - sync profile AND user state from cloud (source of truth)
+          // BUT: Only update terms/privacy fields if cloud has them (don't overwrite local acceptance with null)
+          // This handles cases where sync to cloud failed but user accepted locally
           await databaseService.updateUser(localUser.id, {
             // Profile fields from OAuth
             email: userInfo.email,
             first_name: userInfo.given_name,
             last_name: userInfo.family_name,
             display_name: userInfo.name,
-            // User state from Supabase (cloud is source of truth)
-            terms_accepted_at: cloudUser.terms_accepted_at,
-            privacy_policy_accepted_at: cloudUser.privacy_policy_accepted_at,
-            terms_version_accepted: cloudUser.terms_version_accepted,
-            privacy_policy_version_accepted: cloudUser.privacy_policy_version_accepted,
-            email_onboarding_completed_at: cloudUser.email_onboarding_completed_at,
+            // User state from Supabase - only update if cloud has values
+            ...(cloudUser.terms_accepted_at && {
+              terms_accepted_at: cloudUser.terms_accepted_at,
+              terms_version_accepted: cloudUser.terms_version_accepted,
+            }),
+            ...(cloudUser.privacy_policy_accepted_at && {
+              privacy_policy_accepted_at: cloudUser.privacy_policy_accepted_at,
+              privacy_policy_version_accepted: cloudUser.privacy_policy_version_accepted,
+            }),
+            ...(cloudUser.email_onboarding_completed_at && {
+              email_onboarding_completed_at: cloudUser.email_onboarding_completed_at,
+            }),
             subscription_tier: cloudUser.subscription_tier,
             subscription_status: cloudUser.subscription_status,
           });
+
+          // Bidirectional sync: If local has terms accepted but cloud doesn't, sync to cloud
+          if (localUser.terms_accepted_at && !cloudUser.terms_accepted_at) {
+            await logService.info('Local user has accepted terms but cloud does not - syncing to cloud', 'AuthHandlers');
+            try {
+              await supabaseService.syncTermsAcceptance(
+                cloudUser.id,
+                localUser.terms_version_accepted || CURRENT_TERMS_VERSION,
+                localUser.privacy_policy_version_accepted || CURRENT_PRIVACY_POLICY_VERSION
+              );
+              await logService.info('Successfully synced local terms acceptance to cloud', 'AuthHandlers');
+            } catch (syncError) {
+              await logService.error('Failed to sync local terms to cloud', 'AuthHandlers', {
+                error: syncError instanceof Error ? syncError.message : 'Unknown error'
+              });
+            }
+          }
         }
 
         // Update last login (localUser is guaranteed non-null from the if/else above)
@@ -1433,20 +1483,46 @@ const handleCompletePendingLogin = async (
       });
     } else {
       // Update existing user - sync profile AND user state from cloud (source of truth)
+      // BUT: Only update terms/privacy fields if cloud has them (don't overwrite local acceptance with null)
+      // This handles cases where sync to cloud failed but user accepted locally
       await databaseService.updateUser(localUser.id, {
         email: userInfo.email,
         first_name: userInfo.given_name,
         last_name: userInfo.family_name,
         display_name: userInfo.name,
         avatar_url: userInfo.picture,
-        terms_accepted_at: cloudUser.terms_accepted_at,
-        privacy_policy_accepted_at: cloudUser.privacy_policy_accepted_at,
-        terms_version_accepted: cloudUser.terms_version_accepted,
-        privacy_policy_version_accepted: cloudUser.privacy_policy_version_accepted,
-        email_onboarding_completed_at: cloudUser.email_onboarding_completed_at,
+        // User state from Supabase - only update if cloud has values
+        ...(cloudUser.terms_accepted_at && {
+          terms_accepted_at: cloudUser.terms_accepted_at,
+          terms_version_accepted: cloudUser.terms_version_accepted,
+        }),
+        ...(cloudUser.privacy_policy_accepted_at && {
+          privacy_policy_accepted_at: cloudUser.privacy_policy_accepted_at,
+          privacy_policy_version_accepted: cloudUser.privacy_policy_version_accepted,
+        }),
+        ...(cloudUser.email_onboarding_completed_at && {
+          email_onboarding_completed_at: cloudUser.email_onboarding_completed_at,
+        }),
         subscription_tier: cloudUser.subscription_tier ?? 'free',
         subscription_status: cloudUser.subscription_status ?? 'trial',
       });
+
+      // Bidirectional sync: If local has terms accepted but cloud doesn't, sync to cloud
+      if (localUser.terms_accepted_at && !cloudUser.terms_accepted_at) {
+        await logService.info('Local user has accepted terms but cloud does not - syncing to cloud', 'AuthHandlers');
+        try {
+          await supabaseService.syncTermsAcceptance(
+            cloudUser.id,
+            localUser.terms_version_accepted || CURRENT_TERMS_VERSION,
+            localUser.privacy_policy_version_accepted || CURRENT_PRIVACY_POLICY_VERSION
+          );
+          await logService.info('Successfully synced local terms acceptance to cloud', 'AuthHandlers');
+        } catch (syncError) {
+          await logService.error('Failed to sync local terms to cloud', 'AuthHandlers', {
+            error: syncError instanceof Error ? syncError.message : 'Unknown error'
+          });
+        }
+      }
     }
 
     if (!localUser) {
