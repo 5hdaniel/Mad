@@ -39,7 +39,7 @@ jobs:
         continue-on-error: true
 
       - name: Run tests
-        run: npm test
+        run: npm test -- --silent --maxWorkers=2
 
       - name: Upload coverage to Codecov
         if: matrix.os == 'macos-latest' && matrix.node-version == '20.x'

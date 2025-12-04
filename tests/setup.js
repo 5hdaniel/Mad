@@ -14,6 +14,11 @@ configure({
 // Set DEBUG_PRINT_LIMIT to reduce DOM output
 process.env.DEBUG_PRINT_LIMIT = '500';
 
+// Limit stack trace depth in CI/CD for cleaner error output
+if (process.env.CI) {
+  Error.stackTraceLimit = 3; // Only show 3 stack frames in CI
+}
+
 // Mock window.api for tests (only in jsdom environment)
 if (typeof window !== 'undefined') {
   global.window = global.window || {};
