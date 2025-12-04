@@ -8,6 +8,7 @@
  */
 
 import { jest } from '@jest/globals';
+import path from 'path';
 
 // Set HOME environment variable before imports
 process.env.HOME = '/Users/testuser';
@@ -108,7 +109,7 @@ describe('MessagesService', () => {
       const connection = messagesService.openMessagesDatabase();
 
       expect(sqlite3.Database).toHaveBeenCalledWith(
-        '/Users/testuser/Library/Messages/chat.db',
+        path.join(process.env.HOME!, 'Library/Messages/chat.db'),
         1 // OPEN_READONLY
       );
       expect(connection).toHaveProperty('db');
