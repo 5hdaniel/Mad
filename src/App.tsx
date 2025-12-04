@@ -19,7 +19,7 @@ import KeychainExplanation from './components/KeychainExplanation';
 import Dashboard from './components/Dashboard';
 import AuditTransactionModal from './components/AuditTransactionModal';
 import OfflineFallback from './components/OfflineFallback';
-import { useAuth, useNetwork } from './contexts';
+import { useAuth, useNetwork, usePlatform } from './contexts';
 import type { Conversation } from './hooks/useConversations';
 import type { Subscription } from '../electron/types/models';
 
@@ -68,6 +68,9 @@ function App() {
 
   // Network state from context
   const { isOnline, isChecking, connectionError, checkConnection, setConnectionError } = useNetwork();
+
+  // Platform detection
+  const { isMacOS, isWindows } = usePlatform();
 
   // Local UI state
   const [currentStep, setCurrentStep] = useState<AppStep>('loading');
@@ -161,6 +164,38 @@ function App() {
     checkEmailStatus();
   }, [currentUser?.id]);
 
+  // Handle Windows database initialization without keychain prompt
+  // Windows uses DPAPI (Data Protection API) which doesn't require user interaction
+  useEffect(() => {
+    const initializeWindowsDatabase = async () => {
+      if (isWindows && pendingOAuthData && !isAuthenticated && !isInitializingDatabase) {
+        setIsInitializingDatabase(true);
+        try {
+          const result = await window.api.system.initializeSecureStorage();
+          if (result.success) {
+            setIsDatabaseInitialized(true);
+            // Complete login with pending OAuth data
+            if (pendingOAuthData) {
+              login(
+                pendingOAuthData.user,
+                pendingOAuthData.token,
+                pendingOAuthData.provider,
+                pendingOAuthData.subscription,
+                pendingOAuthData.isNewUser
+              );
+              setPendingOAuthData(null);
+            }
+          }
+        } catch (error) {
+          console.error('[App] Failed to initialize Windows database:', error);
+        } finally {
+          setIsInitializingDatabase(false);
+        }
+      }
+    };
+    initializeWindowsDatabase();
+  }, [isWindows, pendingOAuthData, isAuthenticated, isInitializingDatabase, login]);
+
   // Handle auth state changes to update navigation
   // FLOW: Login FIRST, then keychain setup if needed (for both new and returning users)
   useEffect(() => {
@@ -168,8 +203,11 @@ function App() {
       // If we have pending OAuth data, we're in the middle of the login-first flow
       // Show keychain explanation/setup screen (OAuth succeeded, need keychain to save data)
       if (pendingOAuthData && !isAuthenticated) {
-        // Show keychain explanation screen - OAuth data is in memory waiting
-        setCurrentStep('keychain-explanation');
+        // macOS: Show keychain explanation screen - OAuth data is in memory waiting
+        // Windows: Auto-initialize database (handled by separate useEffect above)
+        if (isMacOS) {
+          setCurrentStep('keychain-explanation');
+        }
         return;
       }
 
@@ -594,7 +632,7 @@ function App() {
           />
         )}
 
-        {currentStep === 'keychain-explanation' && (
+        {currentStep === 'keychain-explanation' && isMacOS && (
           <KeychainExplanation
             onContinue={handleKeychainExplanationContinue}
             isLoading={isInitializingDatabase}
