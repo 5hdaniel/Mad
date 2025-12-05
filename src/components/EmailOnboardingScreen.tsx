@@ -42,43 +42,45 @@ const WINDOWS_SETUP_STEPS = [
 /**
  * Progress indicator component showing setup steps
  */
-function SetupProgressIndicator({ currentStep, isWindows }: { currentStep: number; isWindows: boolean }) {
+function SetupProgressIndicator({ currentStep, navigationStep, isWindows }: { currentStep: number; navigationStep: number; isWindows: boolean }) {
   const steps = isWindows ? WINDOWS_SETUP_STEPS : MACOS_SETUP_STEPS;
   return (
-    <div className="flex items-center justify-center gap-1 mb-6">
-      {steps.map((step, index) => (
-        <React.Fragment key={step.id}>
-          <div className="flex flex-col items-center">
-            <div
-              className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-all ${
-                step.id < currentStep
-                  ? 'bg-green-500 text-white'
-                  : step.id === currentStep
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-gray-200 text-gray-500'
-              }`}
-            >
-              {step.id < currentStep ? (
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-              ) : (
-                step.id
-              )}
+    <div className="mb-8">
+      <div className="flex items-center justify-center px-2">
+        {steps.map((step, index) => (
+          <React.Fragment key={step.id}>
+            <div className="flex flex-col items-center">
+              <div
+                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-all flex-shrink-0 ${
+                  step.id < currentStep
+                    ? 'bg-green-500 text-white'
+                    : step.id === currentStep
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-gray-200 text-gray-500'
+                } ${navigationStep === step.id ? 'ring-2 ring-offset-2 ring-blue-500' : ''}`}
+              >
+                {step.id < currentStep ? (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                ) : (
+                  step.id
+                )}
+              </div>
+              <span className={`text-xs mt-2 text-center max-w-[50px] ${navigationStep === step.id ? 'text-blue-600 font-medium' : step.id === currentStep ? 'text-blue-600 font-medium' : 'text-gray-500'}`}>
+                {step.label}
+              </span>
             </div>
-            <span className={`text-xs mt-1 ${step.id === currentStep ? 'text-blue-600 font-medium' : 'text-gray-500'}`}>
-              {step.label}
-            </span>
-          </div>
-          {index < steps.length - 1 && (
-            <div
-              className={`w-6 h-0.5 mb-5 transition-all ${
-                step.id < currentStep ? 'bg-green-500' : 'bg-gray-200'
-              }`}
-            />
-          )}
-        </React.Fragment>
-      ))}
+            {index < steps.length - 1 && (
+              <div
+                className={`flex-1 h-0.5 mx-1 transition-all max-w-[48px] ${
+                  step.id < currentStep ? 'bg-green-500' : 'bg-gray-200'
+                }`}
+              />
+            )}
+          </React.Fragment>
+        ))}
+      </div>
     </div>
   );
 }
@@ -93,6 +95,7 @@ function EmailOnboardingScreen({ userId, authProvider, onComplete, onSkip }: Ema
   const [connections, setConnections] = useState<Connections>({ google: null, microsoft: null });
   const [loadingConnections, setLoadingConnections] = useState<boolean>(true);
   const [connectingProvider, setConnectingProvider] = useState<string | null>(null);
+  const [navigationStep, setNavigationStep] = useState<number>(1);
   const { isWindows } = usePlatform();
 
   // Determine primary and secondary providers based on how user logged in
@@ -102,6 +105,24 @@ function EmailOnboardingScreen({ userId, authProvider, onComplete, onSkip }: Ema
 
   // Current step differs by platform (Windows: step 3, macOS: step 4)
   const currentStep = isWindows ? 3 : 4;
+  const steps = isWindows ? WINDOWS_SETUP_STEPS : MACOS_SETUP_STEPS;
+
+  // Navigation handlers
+  const handleBackStep = (): void => {
+    if (navigationStep > 1) {
+      setNavigationStep(navigationStep - 1);
+    }
+  };
+
+  const handleNextStep = (): void => {
+    // Only allow navigation forward if not past the current step
+    if (navigationStep < currentStep) {
+      setNavigationStep(navigationStep + 1);
+    }
+  };
+
+  const isFirstStep = navigationStep === 1;
+  const isLastNavigableStep = navigationStep === currentStep;
 
   // Check existing connections on mount
   useEffect(() => {
@@ -240,7 +261,7 @@ function EmailOnboardingScreen({ userId, authProvider, onComplete, onSkip }: Ema
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-8">
       <div className="max-w-lg w-full bg-white rounded-2xl shadow-xl p-8">
         {/* Progress Indicator */}
-        <SetupProgressIndicator currentStep={currentStep} isWindows={isWindows} />
+        <SetupProgressIndicator currentStep={currentStep} navigationStep={navigationStep} isWindows={isWindows} />
 
         {/* Header */}
         <div className="text-center mb-8">
@@ -385,6 +406,39 @@ function EmailOnboardingScreen({ userId, authProvider, onComplete, onSkip }: Ema
               </button>
             )}
           </div>
+        </div>
+
+        {/* Navigation Buttons */}
+        <div className="flex items-center justify-between gap-3 mb-6 pt-2 border-t border-gray-200">
+          <button
+            onClick={handleBackStep}
+            disabled={isFirstStep}
+            className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+              isFirstStep
+                ? 'text-gray-400 cursor-not-allowed bg-gray-100'
+                : 'text-gray-700 hover:bg-gray-100'
+            }`}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            <span>Back</span>
+          </button>
+
+          <button
+            onClick={handleNextStep}
+            disabled={isLastNavigableStep}
+            className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+              isLastNavigableStep
+                ? 'text-gray-400 cursor-not-allowed bg-gray-100'
+                : 'text-blue-600 hover:bg-blue-50'
+            }`}
+          >
+            <span>Next</span>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
         </div>
 
         {/* Skip Button */}
