@@ -48,6 +48,9 @@ function SetupProgressIndicator({ currentStep, navigationStep, isWindows }: { cu
     <div className="mb-8">
       {/* Circles and connecting lines */}
       <div className="flex items-center justify-center px-2 mb-3">
+        {/* Invisible spacer before first circle */}
+        <div className="w-1 h-0.5 flex-shrink-0" />
+
         {steps.map((step, index) => (
           <React.Fragment key={step.id}>
             <div
@@ -76,6 +79,9 @@ function SetupProgressIndicator({ currentStep, navigationStep, isWindows }: { cu
             )}
           </React.Fragment>
         ))}
+
+        {/* Invisible spacer after last circle */}
+        <div className="w-1 h-0.5 flex-shrink-0" />
       </div>
 
       {/* Labels */}
