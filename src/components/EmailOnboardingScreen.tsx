@@ -23,20 +23,18 @@ interface EmailOnboardingScreenProps {
 }
 
 // Setup steps for progress indicator - platform specific
-// macOS: Full 5-step flow with Secure Storage and Permissions
+// macOS: 4-step flow (Sign In happens before onboarding)
 const MACOS_SETUP_STEPS = [
-  { id: 1, label: 'Sign In' },
-  { id: 2, label: 'Phone Type' },
-  { id: 3, label: 'Secure Storage' },
-  { id: 4, label: 'Connect Email' },
-  { id: 5, label: 'Permissions' },
+  { id: 1, label: 'Phone Type' },
+  { id: 2, label: 'Secure Storage' },
+  { id: 3, label: 'Connect Email' },
+  { id: 4, label: 'Permissions' },
 ];
 
-// Windows: Simplified 3-step flow (no Secure Storage or Permissions needed)
+// Windows: Simplified 2-step flow (no Secure Storage or Permissions needed)
 const WINDOWS_SETUP_STEPS = [
-  { id: 1, label: 'Sign In' },
-  { id: 2, label: 'Phone Type' },
-  { id: 3, label: 'Connect Email' },
+  { id: 1, label: 'Phone Type' },
+  { id: 2, label: 'Connect Email' },
 ];
 
 /**
@@ -127,8 +125,9 @@ function EmailOnboardingScreen({ userId, authProvider, onComplete, onSkip }: Ema
   const primaryProvider = isPrimaryGoogle ? 'google' : 'microsoft';
   const secondaryProvider = isPrimaryGoogle ? 'microsoft' : 'google';
 
-  // Current step differs by platform (Windows: step 3, macOS: step 4)
-  const currentStep = isWindows ? 3 : 4;
+  // Current step differs by platform (Windows: step 2, macOS: step 3)
+  // Sign In is step 0 (happens before onboarding)
+  const currentStep = isWindows ? 2 : 3;
   const steps = isWindows ? WINDOWS_SETUP_STEPS : MACOS_SETUP_STEPS;
 
   // Navigation handlers
@@ -287,39 +286,171 @@ function EmailOnboardingScreen({ userId, authProvider, onComplete, onSkip }: Ema
         {/* Progress Indicator */}
         <SetupProgressIndicator currentStep={currentStep} navigationStep={navigationStep} isWindows={isWindows} />
 
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full mb-6 shadow-lg">
-            <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-            </svg>
-          </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-3">Connect Your {primaryInfo.name}</h2>
-          <p className="text-gray-600">
-            Connect your {primaryInfo.name} account to export email communications alongside text messages for complete audit trails.
-          </p>
-        </div>
+        {/* Conditional Content Based on Navigation Step */}
+        {navigationStep === 1 && (
+          <>
+            {/* Phone Type Step */}
+            <div className="text-center mb-8">
+              <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full mb-6 shadow-lg">
+                <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-3">Select Your Phone Type</h2>
+              <p className="text-gray-600">
+                Choose the type of device you'll be using with this application.
+              </p>
+            </div>
 
-        {/* Benefits List */}
-        <div className="mb-8 bg-blue-50 rounded-xl p-4">
-          <h3 className="text-sm font-semibold text-blue-900 mb-3">Why connect your email?</h3>
-          <ul className="space-y-2">
-            <li className="flex items-start gap-2 text-sm text-blue-800">
-              <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-              <span>Export complete communication history with clients</span>
-            </li>
-            <li className="flex items-start gap-2 text-sm text-blue-800">
-              <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-              <span>Include emails in your audit documentation</span>
-            </li>
-          </ul>
-        </div>
+            <div className="mb-8 bg-blue-50 rounded-xl p-4">
+              <h3 className="text-sm font-semibold text-blue-900 mb-3">Why is this important?</h3>
+              <ul className="space-y-2">
+                <li className="flex items-start gap-2 text-sm text-blue-800">
+                  <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span>Optimizes the application for your device</span>
+                </li>
+                <li className="flex items-start gap-2 text-sm text-blue-800">
+                  <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span>Ensures compatibility with your phone's features</span>
+                </li>
+              </ul>
+            </div>
 
-        {/* Primary Connection Card - Highlighted */}
+            <div className="space-y-3 mb-8">
+              <button className="w-full px-4 py-3 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white text-sm font-semibold rounded-lg transition-all shadow-md">
+                iOS
+              </button>
+              <button className="w-full px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-900 text-sm font-semibold rounded-lg transition-all">
+                Android
+              </button>
+            </div>
+          </>
+        )}
+
+        {navigationStep === 2 && !isWindows && (
+          <>
+            {/* Secure Storage Step (macOS only) */}
+            <div className="text-center mb-8">
+              <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-green-500 to-teal-600 rounded-full mb-6 shadow-lg">
+                <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-3">Secure Storage Settings</h2>
+              <p className="text-gray-600">
+                Configure how your data is stored and protected on this device.
+              </p>
+            </div>
+
+            <div className="mb-8 bg-green-50 rounded-xl p-4">
+              <h3 className="text-sm font-semibold text-green-900 mb-3">Security Features</h3>
+              <ul className="space-y-2">
+                <li className="flex items-start gap-2 text-sm text-green-800">
+                  <svg className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span>Encrypt sensitive data at rest</span>
+                </li>
+                <li className="flex items-start gap-2 text-sm text-green-800">
+                  <svg className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span>Protect data with device biometrics</span>
+                </li>
+              </ul>
+            </div>
+
+            <div className="space-y-3 mb-8">
+              <button className="w-full px-4 py-3 bg-gradient-to-r from-green-500 to-teal-600 hover:from-green-600 hover:to-teal-700 text-white text-sm font-semibold rounded-lg transition-all shadow-md">
+                Enable Secure Storage
+              </button>
+              <button className="w-full px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-900 text-sm font-semibold rounded-lg transition-all">
+                Skip for Now
+              </button>
+            </div>
+          </>
+        )}
+
+        {(navigationStep === 3 && !isWindows) || (navigationStep === 2 && isWindows) ? (
+          <>
+            {/* Connect Email Step */}
+            <div className="text-center mb-8">
+              <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full mb-6 shadow-lg">
+                <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-3">Connect Your {primaryInfo.name}</h2>
+              <p className="text-gray-600">
+                Connect your {primaryInfo.name} account to export email communications alongside text messages for complete audit trails.
+              </p>
+            </div>
+
+            <div className="mb-8 bg-blue-50 rounded-xl p-4">
+              <h3 className="text-sm font-semibold text-blue-900 mb-3">Why connect your email?</h3>
+              <ul className="space-y-2">
+                <li className="flex items-start gap-2 text-sm text-blue-800">
+                  <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span>Export complete communication history with clients</span>
+                </li>
+                <li className="flex items-start gap-2 text-sm text-blue-800">
+                  <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span>Include emails in your audit documentation</span>
+                </li>
+              </ul>
+            </div>
+          </>
+        ) : null}
+
+        {navigationStep === 4 && !isWindows && (
+          <>
+            {/* Permissions Step (macOS only) */}
+            <div className="text-center mb-8">
+              <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-purple-500 to-pink-600 rounded-full mb-6 shadow-lg">
+                <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-3">App Permissions</h2>
+              <p className="text-gray-600">
+                Grant necessary permissions for the application to function properly.
+              </p>
+            </div>
+
+            <div className="mb-8 bg-purple-50 rounded-xl p-4">
+              <h3 className="text-sm font-semibold text-purple-900 mb-3">Required Permissions</h3>
+              <ul className="space-y-2">
+                <li className="flex items-start gap-2 text-sm text-purple-800">
+                  <svg className="w-5 h-5 text-purple-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span>Access contact information</span>
+                </li>
+                <li className="flex items-start gap-2 text-sm text-purple-800">
+                  <svg className="w-5 h-5 text-purple-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span>Access call history</span>
+                </li>
+              </ul>
+            </div>
+
+            <button className="w-full px-4 py-3 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white text-sm font-semibold rounded-lg transition-all shadow-md mb-3">
+              Grant Permissions
+            </button>
+          </>
+        )}
+
+        {/* Primary Connection Card - Highlighted (only show for email step) */}
+        {((navigationStep === 3 && !isWindows) || (navigationStep === 2 && isWindows)) && (
         <div className="mb-6">
           <div className="p-5 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl border-2 border-blue-200">
             <div className="flex items-center justify-between mb-3">
@@ -431,6 +562,8 @@ function EmailOnboardingScreen({ userId, authProvider, onComplete, onSkip }: Ema
             )}
           </div>
         </div>
+        </>
+        )}
 
         {/* Navigation Buttons */}
         <div className="flex items-center justify-between gap-3 mb-6 pt-2 border-t border-gray-200">
