@@ -1,0 +1,115 @@
+/**
+ * Apple Driver IPC Handlers
+ *
+ * Handles IPC communication for Apple driver detection and installation.
+ */
+
+import { ipcMain, shell, BrowserWindow } from 'electron';
+import log from 'electron-log';
+import {
+  checkAppleDrivers,
+  installAppleDrivers,
+  hasBundledDrivers,
+  getITunesDownloadUrl,
+  getITunesWebUrl,
+  checkForDriverUpdate,
+  downloadAppleDrivers,
+} from './services/appleDriverService';
+
+/**
+ * Register driver-related IPC handlers
+ */
+export function registerDriverHandlers(): void {
+  // Check if Apple drivers are installed
+  ipcMain.handle('drivers:check-apple', async () => {
+    log.info('[DriverHandlers] Checking Apple driver status');
+    const status = await checkAppleDrivers();
+    log.info('[DriverHandlers] Apple driver status:', status);
+    return status;
+  });
+
+  // Check if bundled drivers are available
+  ipcMain.handle('drivers:has-bundled', () => {
+    return { hasBundled: hasBundledDrivers() };
+  });
+
+  // Check for driver updates
+  ipcMain.handle('drivers:check-update', async () => {
+    log.info('[DriverHandlers] Checking for driver updates');
+    const result = await checkForDriverUpdate();
+    log.info('[DriverHandlers] Update check result:', result);
+    return result;
+  });
+
+  // Install Apple drivers (requires user consent in UI)
+  // Will download on-demand if not bundled
+  ipcMain.handle('drivers:install-apple', async (event) => {
+    log.info('[DriverHandlers] User consented to install Apple drivers');
+
+    // Check if we have drivers available (bundled or previously downloaded)
+    if (!hasBundledDrivers()) {
+      log.info('[DriverHandlers] No bundled drivers, downloading on-demand...');
+
+      // Send progress to renderer
+      const window = BrowserWindow.fromWebContents(event.sender);
+
+      const downloadResult = await downloadAppleDrivers((progress) => {
+        if (window && !window.isDestroyed()) {
+          window.webContents.send('drivers:download-progress', progress);
+        }
+      });
+
+      if (!downloadResult.success) {
+        log.error('[DriverHandlers] Download failed:', downloadResult.error);
+        return {
+          success: false,
+          error: downloadResult.error || 'Failed to download drivers',
+        };
+      }
+
+      log.info('[DriverHandlers] Download complete, proceeding with installation');
+    }
+
+    const result = await installAppleDrivers();
+    log.info('[DriverHandlers] Installation result:', result);
+    return result;
+  });
+
+  // Download drivers without installing (for pre-download option)
+  ipcMain.handle('drivers:download', async (event) => {
+    log.info('[DriverHandlers] Downloading Apple drivers...');
+
+    const window = BrowserWindow.fromWebContents(event.sender);
+
+    const result = await downloadAppleDrivers((progress) => {
+      if (window && !window.isDestroyed()) {
+        window.webContents.send('drivers:download-progress', progress);
+      }
+    });
+
+    log.info('[DriverHandlers] Download result:', result);
+    return result;
+  });
+
+  // Open iTunes in Microsoft Store
+  ipcMain.handle('drivers:open-itunes-store', async () => {
+    try {
+      await shell.openExternal(getITunesDownloadUrl());
+      return { success: true };
+    } catch (error) {
+      log.error('[DriverHandlers] Failed to open iTunes store:', error);
+      // Fallback to web URL
+      try {
+        await shell.openExternal(getITunesWebUrl());
+        return { success: true };
+      } catch (_fallbackError) {
+        return {
+          success: false,
+          error: 'Failed to open iTunes download page',
+        };
+      }
+    }
+  });
+
+  log.info('[DriverHandlers] Registered driver IPC handlers');
+}

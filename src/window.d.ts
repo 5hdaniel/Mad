@@ -4,12 +4,34 @@
  */
 
 import type { GetConversationsResult } from './hooks/useConversations';
+import type { iOSDevice, BackupProgress } from './types/iphone';
+
+/**
+ * iOS Device information from libimobiledevice
+ */
+interface iOSDeviceInfo {
+  /** Unique Device Identifier (40-character hex string) */
+  udid: string;
+  /** User-defined device name (e.g., "John's iPhone") */
+  name: string;
+  /** Device model identifier (e.g., "iPhone14,2") */
+  productType: string;
+  /** iOS version (e.g., "17.0") */
+  productVersion: string;
+  /** Device serial number */
+  serialNumber: string;
+  /** Whether the device is currently connected */
+  isConnected: boolean;
+}
 
 /**
  * Legacy electron namespace (maintained for backward compatibility)
  * Exposed via contextBridge in preload.js
  */
 interface ElectronAPI {
+  // Platform detection
+  platform: 'darwin' | 'win32' | 'linux' | string;
+
   // App Info
   getAppInfo: () => Promise<{ version: string; name: string }>;
   getMacOSVersion: () => Promise<{ version: string }>;
@@ -65,6 +87,56 @@ interface ElectronAPI {
   outlookSignout: () => Promise<{ success: boolean }>;
   onDeviceCode: (callback: (info: unknown) => void) => () => void;
   onExportProgress: (callback: (progress: unknown) => void) => () => void;
+
+  // iOS Device Detection (Windows only)
+  device?: {
+    startDetection: () => void;
+    stopDetection: () => void;
+    onConnected: (callback: (device: iOSDevice) => void) => (() => void) | undefined;
+    onDisconnected: (callback: () => void) => (() => void) | undefined;
+  };
+
+  // iOS Backup Management (Windows only)
+  backup?: {
+    start: (options: { udid: string }) => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
+    submitPassword: (options: { udid: string; password: string }) => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
+    cancel: () => Promise<void>;
+    onProgress: (callback: (progress: BackupProgress) => void) => (() => void) | undefined;
+  };
+
+  // Apple Driver Management (Windows only)
+  drivers: {
+    /** Check if Apple Mobile Device Support drivers are installed */
+    checkApple: () => Promise<{
+      installed: boolean;
+      version?: string;
+      serviceRunning: boolean;
+      error?: string;
+    }>;
+    /** Check if bundled Apple drivers are available in the app */
+    hasBundled: () => Promise<{ hasBundled: boolean }>;
+    /** Install Apple Mobile Device Support drivers (requires user consent) */
+    installApple: () => Promise<{
+      success: boolean;
+      cancelled?: boolean;
+      error?: string;
+      rebootRequired?: boolean;
+    }>;
+    /** Open iTunes in Microsoft Store for manual installation */
+    openITunesStore: () => Promise<{ success: boolean; error?: string }>;
+    /** Check if a driver update is available */
+    checkUpdate: () => Promise<{
+      updateAvailable: boolean;
+      installedVersion: string | null;
+      bundledVersion: string | null;
+    }>;
+  };
 }
 
 /**
@@ -158,6 +230,21 @@ interface MainAPI {
     contactSupport: (errorDetails?: string) => Promise<{ success: boolean; error?: string }>;
     getDiagnostics: () => Promise<{ success: boolean; diagnostics?: string; error?: string }>;
   };
+  device: {
+    /** Lists all currently connected iOS devices */
+    list: () => Promise<{ success: boolean; devices?: iOSDeviceInfo[]; error?: string }>;
+    /** Starts device detection polling */
+    startDetection: () => Promise<{ success: boolean; error?: string }>;
+    /** Stops device detection polling */
+    stopDetection: () => Promise<{ success: boolean; error?: string }>;
+    /** Checks if libimobiledevice tools are available */
+    checkAvailability: () => Promise<{ success: boolean; available?: boolean; error?: string }>;
+    /** Subscribes to device connected events */
+    onConnected: (callback: (device: iOSDeviceInfo) => void) => () => void;
+    /** Subscribes to device disconnected events */
+    onDisconnected: (callback: (device: iOSDeviceInfo) => void) => () => void;
+  };
+
   // Event listeners for login completion
   onGoogleLoginComplete: (callback: (result: { success: boolean; user?: unknown; sessionToken?: string; subscription?: unknown; isNewUser?: boolean; error?: string }) => void) => () => void;
   onGoogleLoginPending: (callback: (result: { success: boolean; pendingLogin?: boolean; oauthData?: unknown; error?: string }) => void) => () => void;
@@ -169,6 +256,135 @@ interface MainAPI {
   onMicrosoftMailboxConnected: (callback: (result: { success: boolean }) => void) => () => void;
   onGoogleMailboxCancelled: (callback: () => void) => () => void;
   onMicrosoftMailboxCancelled: (callback: () => void) => () => void;
+
+  /**
+   * Backup API for iPhone data extraction
+   * Note: Domain filtering is NOT supported - see docs/BACKUP_RESEARCH.md
+   */
+  backup: {
+    /** Get backup system capabilities */
+    getCapabilities: () => Promise<{
+      supportsDomainFiltering: boolean;
+      supportsIncremental: boolean;
+      supportsSkipApps: boolean;
+      supportsEncryption: boolean;
+      availableDomains: string[];
+    }>;
+
+    /** Get current backup status */
+    getStatus: () => Promise<{
+      isRunning: boolean;
+      currentDeviceUdid: string | null;
+      progress: {
+        phase: 'preparing' | 'transferring' | 'finishing' | 'extracting';
+        percentComplete: number;
+        currentFile: string | null;
+        filesTransferred: number;
+        totalFiles: number | null;
+        bytesTransferred: number;
+        totalBytes: number | null;
+        estimatedTimeRemaining: number | null;
+      } | null;
+    }>;
+
+    /** Start a backup operation */
+    start: (options: {
+      udid: string;
+      outputDir?: string;
+      forceFullBackup?: boolean;
+      skipApps?: boolean;
+    }) => Promise<{
+      success: boolean;
+      backupPath: string | null;
+      error: string | null;
+      duration: number;
+      deviceUdid: string;
+      isIncremental: boolean;
+      backupSize: number;
+    }>;
+
+    /** Start a backup with password (for encrypted backups) */
+    startWithPassword?: (options: {
+      udid: string;
+      password: string;
+      outputPath?: string;
+    }) => Promise<{
+      success: boolean;
+      backupPath?: string;
+      error?: string;
+      errorCode?: string;
+    }>;
+
+    /** Check if a device requires encrypted backup */
+    checkEncryption?: (udid: string) => Promise<{
+      success: boolean;
+      isEncrypted?: boolean;
+      needsPassword?: boolean;
+      error?: string;
+    }>;
+
+    /** Verify a backup password */
+    verifyPassword?: (backupPath: string, password: string) => Promise<{
+      success: boolean;
+      valid?: boolean;
+      error?: string;
+    }>;
+
+    /** Check if an existing backup is encrypted */
+    isEncrypted?: (backupPath: string) => Promise<{
+      success: boolean;
+      isEncrypted?: boolean;
+      error?: string;
+    }>;
+
+    /** Cancel an in-progress backup */
+    cancel: () => Promise<{ success: boolean }>;
+
+    /** List all existing backups */
+    list: () => Promise<Array<{
+      path: string;
+      deviceUdid: string;
+      createdAt: Date;
+      size: number;
+      isEncrypted: boolean;
+      iosVersion: string | null;
+      deviceName: string | null;
+    }>>;
+
+    /** Delete a specific backup */
+    delete: (backupPath: string) => Promise<{ success: boolean; error?: string }>;
+
+    /** Clean up old backups */
+    cleanup: (keepCount?: number) => Promise<{ success: boolean; error?: string }>;
+
+    /** Subscribe to backup progress updates */
+    onProgress: (callback: (progress: {
+      phase: 'preparing' | 'transferring' | 'finishing' | 'extracting';
+      percentComplete: number;
+      currentFile: string | null;
+      filesTransferred: number;
+      totalFiles: number | null;
+      bytesTransferred: number;
+      totalBytes: number | null;
+      estimatedTimeRemaining: number | null;
+    }) => void) => () => void;
+
+    /** Subscribe to backup completion events */
+    onComplete: (callback: (result: {
+      success: boolean;
+      backupPath: string | null;
+      error: string | null;
+      duration: number;
+      deviceUdid: string;
+      isIncremental: boolean;
+      backupSize: number;
+    }) => void) => () => void;
+
+    /** Subscribe to backup error events */
+    onError: (callback: (error: { message: string }) => void) => () => void;
+  };
+
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [key: string]: any; // Allow other properties for backwards compatibility
 }

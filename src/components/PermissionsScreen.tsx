@@ -18,21 +18,22 @@ interface AppInfo {
   name: string;
 }
 
-// Setup steps for progress indicator
-const SETUP_STEPS = [
+// Setup steps for progress indicator - macOS only (this screen doesn't show on Windows)
+const MACOS_SETUP_STEPS = [
   { id: 1, label: 'Sign In' },
-  { id: 2, label: 'Secure Storage' },
-  { id: 3, label: 'Connect Email' },
-  { id: 4, label: 'Permissions' },
+  { id: 2, label: 'Phone Type' },
+  { id: 3, label: 'Secure Storage' },
+  { id: 4, label: 'Connect Email' },
+  { id: 5, label: 'Permissions' },
 ];
 
 /**
- * Progress indicator component showing setup steps
+ * Progress indicator component showing setup steps (macOS only)
  */
 function SetupProgressIndicator({ currentStep }: { currentStep: number }) {
   return (
     <div className="flex items-center justify-center gap-1 mb-6">
-      {SETUP_STEPS.map((step, index) => (
+      {MACOS_SETUP_STEPS.map((step, index) => (
         <React.Fragment key={step.id}>
           <div className="flex flex-col items-center">
             <div
@@ -56,9 +57,9 @@ function SetupProgressIndicator({ currentStep }: { currentStep: number }) {
               {step.label}
             </span>
           </div>
-          {index < SETUP_STEPS.length - 1 && (
+          {index < MACOS_SETUP_STEPS.length - 1 && (
             <div
-              className={`w-8 h-0.5 mb-5 transition-all ${
+              className={`w-6 h-0.5 mb-5 transition-all ${
                 step.id < currentStep ? 'bg-green-500' : 'bg-gray-200'
               }`}
             />
@@ -166,7 +167,7 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain: _onCheckAgain }
       <div className="flex items-center justify-center min-h-full py-8">
         <div className="max-w-2xl mx-auto p-8 bg-white rounded-lg shadow-lg">
           {/* Setup Progress Indicator */}
-          <SetupProgressIndicator currentStep={4} />
+          <SetupProgressIndicator currentStep={5} />
 
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-20 h-20 bg-primary/10 rounded-full mb-6">
@@ -221,7 +222,7 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain: _onCheckAgain }
     <div className="flex items-center justify-center min-h-full py-8">
       <div className="max-w-2xl mx-auto p-8 bg-white rounded-lg shadow-lg">
         {/* Setup Progress Indicator */}
-        <SetupProgressIndicator currentStep={4} />
+        <SetupProgressIndicator currentStep={5} />
 
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-primary/10 rounded-full mb-4">

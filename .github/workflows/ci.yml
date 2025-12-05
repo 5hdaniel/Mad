@@ -13,7 +13,7 @@ jobs:
 
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [macos-latest, windows-latest]
         node-version: [18.x, 20.x]
 
     steps:
@@ -28,6 +28,9 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Rebuild native modules
+        run: npm rebuild better-sqlite3-multiple-ciphers
+
       - name: TypeScript type check
         run: npm run type-check
 
@@ -36,10 +39,10 @@ jobs:
         continue-on-error: true
 
       - name: Run tests
-        run: npm test
+        run: npm test -- --silent --maxWorkers=2
 
       - name: Upload coverage to Codecov
-        if: matrix.os == 'ubuntu-latest' && matrix.node-version == '20.x'
+        if: matrix.os == 'macos-latest' && matrix.node-version == '20.x'
         uses: codecov/codecov-action@v3
         with:
           files: ./coverage/lcov.info
@@ -53,7 +56,7 @@ jobs:
 
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [macos-latest, windows-latest]
 
     steps:
       - name: Checkout code
@@ -107,7 +110,7 @@ jobs:
 
     strategy:
       matrix:
-        os: [macos-latest]
+        os: [macos-latest, windows-latest]
 
     steps:
       - name: Checkout code
@@ -168,11 +171,82 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
-      - name: Upload package artifacts
+      - name: Download and extract Apple drivers (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          echo "Downloading iTunes installer to extract Apple Mobile Device Support..."
+
+          # Download iTunes installer
+          $iTunesUrl = "https://www.apple.com/itunes/download/win64"
+          $installerPath = "$env:TEMP\iTunes64Setup.exe"
+          $extractPath = "$env:TEMP\iTunes-extracted"
+          $targetPath = "resources\win\apple-drivers"
+
+          echo "Downloading from $iTunesUrl..."
+          Invoke-WebRequest -Uri $iTunesUrl -OutFile $installerPath -UseBasicParsing
+
+          echo "Download complete. Size: $((Get-Item $installerPath).Length / 1MB) MB"
+
+          # Extract using 7-Zip (pre-installed on GitHub runners)
+          echo "Extracting with 7-Zip..."
+          7z x $installerPath -o"$extractPath" -y
+
+          # Find the MSI
+          echo "Looking for AppleMobileDeviceSupport MSI..."
+          $msi = Get-ChildItem -Path $extractPath -Recurse -Filter "AppleMobileDeviceSupport*.msi" | Select-Object -First 1
+
+          if ($msi) {
+            echo "Found: $($msi.FullName)"
+
+            # Ensure target directory exists
+            New-Item -ItemType Directory -Force -Path $targetPath | Out-Null
+
+            # Copy MSI to resources
+            Copy-Item $msi.FullName -Destination "$targetPath\AppleMobileDeviceSupport64.msi"
+
+            # Create version file
+            $version = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($msi.FullName).FileVersion
+            if (-not $version) { $version = "unknown" }
+            Set-Content -Path "$targetPath\version.txt" -Value $version
+
+            echo "Apple drivers extracted successfully!"
+            echo "MSI: $targetPath\AppleMobileDeviceSupport64.msi"
+            echo "Version: $version"
+          } else {
+            echo "::warning::Could not find AppleMobileDeviceSupport MSI in extracted files"
+            echo "Extracted contents:"
+            Get-ChildItem -Path $extractPath -Recurse | Select-Object FullName
+          }
+
+          # Cleanup
+          Remove-Item $installerPath -Force -ErrorAction SilentlyContinue
+          Remove-Item $extractPath -Recurse -Force -ErrorAction SilentlyContinue
+        shell: pwsh
+
+      - name: Package for Windows
+        if: matrix.os == 'windows-latest'
+        run: |
+          echo "Building Windows package..."
+          npm run package:unsigned
+          echo "Build complete. Checking artifacts..."
+          Get-ChildItem -Path dist -Filter "*.exe" | Format-Table Name, Length
+        shell: pwsh
+
+      - name: Upload macOS package artifacts
+        if: matrix.os == 'macos-latest'
         uses: actions/upload-artifact@v4
         with:
           name: packages-${{ matrix.os }}
           path: |
             dist/*.dmg
             dist/*.zip
+          retention-days: 30
+
+      - name: Upload Windows package artifacts
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages-${{ matrix.os }}
+          path: |
+            dist/*.exe
           retention-days: 30

@@ -35,11 +35,14 @@ import { registerAddressHandlers } from './address-handlers';
 import { registerFeedbackHandlers } from './feedback-handlers';
 import { registerSystemHandlers } from './system-handlers';
 import { registerPreferenceHandlers } from './preference-handlers';
+import { registerDeviceHandlers, cleanupDeviceHandlers } from './device-handlers';
+import { registerBackupHandlers } from './backup-handlers';
+import { registerSyncHandlers, cleanupSyncHandlers } from './sync-handlers';
+import { registerDriverHandlers } from './driver-handlers';
 import OutlookService from './outlookService';
 
 // Configure logging for auto-updater
 log.transports.file.level = 'info';
-autoUpdater.logger = log;
 
 let mainWindow: BrowserWindow | null = null;
 const outlookService = new OutlookService();
@@ -122,42 +125,45 @@ function createWindow(): void {
   }
 }
 
-// Auto-updater event handlers
-autoUpdater.on('checking-for-update', () => {
-  log.info('Checking for update...');
-});
-
-autoUpdater.on('update-available', (info) => {
-  log.info('Update available:', info);
-  if (mainWindow) {
-    mainWindow.webContents.send('update-available', info);
-  }
-});
-
-autoUpdater.on('update-not-available', (info) => {
-  log.info('Update not available:', info);
-});
-
-autoUpdater.on('error', (err) => {
-  log.error('Error in auto-updater:', err);
-});
-
-autoUpdater.on('download-progress', (progressObj) => {
-  const message = `Download speed: ${progressObj.bytesPerSecond} - Downloaded ${progressObj.percent.toFixed(2)}%`;
-  log.info(message);
-  if (mainWindow) {
-    mainWindow.webContents.send('update-progress', progressObj);
-  }
-});
-
-autoUpdater.on('update-downloaded', (info) => {
-  log.info('Update downloaded:', info);
-  if (mainWindow) {
-    mainWindow.webContents.send('update-downloaded', info);
-  }
-});
-
 app.whenReady().then(async () => {
+  // Configure auto-updater after app is ready
+  autoUpdater.logger = log;
+
+  // Auto-updater event handlers
+  autoUpdater.on('checking-for-update', () => {
+    log.info('Checking for update...');
+  });
+
+  autoUpdater.on('update-available', (info) => {
+    log.info('Update available:', info);
+    if (mainWindow) {
+      mainWindow.webContents.send('update-available', info);
+    }
+  });
+
+  autoUpdater.on('update-not-available', (info) => {
+    log.info('Update not available:', info);
+  });
+
+  autoUpdater.on('error', (err) => {
+    log.error('Error in auto-updater:', err);
+  });
+
+  autoUpdater.on('download-progress', (progressObj) => {
+    const message = `Download speed: ${progressObj.bytesPerSecond} - Downloaded ${progressObj.percent.toFixed(2)}%`;
+    log.info(message);
+    if (mainWindow) {
+      mainWindow.webContents.send('update-progress', progressObj);
+    }
+  });
+
+  autoUpdater.on('update-downloaded', (info) => {
+    log.info('Update downloaded:', info);
+    if (mainWindow) {
+      mainWindow.webContents.send('update-downloaded', info);
+    }
+  });
+
   // Set up Content Security Policy
   setupContentSecurityPolicy();
 
@@ -177,12 +183,23 @@ app.whenReady().then(async () => {
   registerFeedbackHandlers();
   registerSystemHandlers();
   registerPreferenceHandlers();
+  registerDeviceHandlers(mainWindow!);
+  registerBackupHandlers(mainWindow!);
+  registerSyncHandlers(mainWindow!);
+  registerDriverHandlers();
 });
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
+});
+
+app.on('before-quit', () => {
+  // Clean up device detection polling
+  cleanupDeviceHandlers();
+  // Clean up sync handlers
+  cleanupSyncHandlers();
 });
 
 app.on('activate', () => {

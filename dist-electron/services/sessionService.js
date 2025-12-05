@@ -17,7 +17,13 @@ const logService_1 = __importDefault(require("./logService"));
  */
 class SessionService {
     constructor() {
-        this.sessionFilePath = path_1.default.join(electron_1.app.getPath('userData'), 'session.json');
+        this.sessionFilePath = null;
+    }
+    getSessionFilePath() {
+        if (!this.sessionFilePath) {
+            this.sessionFilePath = path_1.default.join(electron_1.app.getPath('userData'), 'session.json');
+        }
+        return this.sessionFilePath;
     }
     /**
      * Save session data to disk
@@ -31,7 +37,7 @@ class SessionService {
                 createdAt: sessionData.createdAt || now,
                 savedAt: now
             };
-            await fs_1.promises.writeFile(this.sessionFilePath, JSON.stringify(data, null, 2), 'utf8');
+            await fs_1.promises.writeFile(this.getSessionFilePath(), JSON.stringify(data, null, 2), 'utf8');
             await logService_1.default.info('Session saved successfully', 'SessionService');
             return true;
         }
@@ -46,7 +52,7 @@ class SessionService {
      */
     async loadSession() {
         try {
-            const data = await fs_1.promises.readFile(this.sessionFilePath, 'utf8');
+            const data = await fs_1.promises.readFile(this.getSessionFilePath(), 'utf8');
             const session = JSON.parse(data);
             // Check if session is expired (absolute timeout)
             if (session.expiresAt && Date.now() > session.expiresAt) {
@@ -71,7 +77,7 @@ class SessionService {
      */
     async clearSession() {
         try {
-            await fs_1.promises.unlink(this.sessionFilePath);
+            await fs_1.promises.unlink(this.getSessionFilePath());
             await logService_1.default.info('Session cleared successfully', 'SessionService');
             return true;
         }

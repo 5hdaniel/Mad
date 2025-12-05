@@ -5,6 +5,7 @@ node_modules/
 dist/
 build/
 !build/entitlements.mac.plist
+!build/icon.ico
 
 # Test coverage
 coverage/
@@ -37,3 +38,9 @@ linear-import.csv
 ROADMAP.md
 # Compiled preload script
 electron/preload.js
+
+# Apple drivers (downloaded during build, not stored in git)
+resources/win/apple-drivers/*.msi
+
+# Temporary build files
+temp-itunes-extract/

@@ -1,37 +1,4 @@
 "use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -65,10 +32,13 @@ const address_handlers_1 = require("./address-handlers");
 const feedback_handlers_1 = require("./feedback-handlers");
 const system_handlers_1 = require("./system-handlers");
 const preference_handlers_1 = require("./preference-handlers");
+const device_handlers_1 = require("./device-handlers");
+const backup_handlers_1 = require("./backup-handlers");
+const sync_handlers_1 = require("./sync-handlers");
+const driver_handlers_1 = require("./driver-handlers");
 const outlookService_1 = __importDefault(require("./outlookService"));
 // Configure logging for auto-updater
 electron_log_1.default.transports.file.level = 'info';
-electron_updater_1.autoUpdater.logger = electron_log_1.default;
 let mainWindow = null;
 const outlookService = new outlookService_1.default();
 /**
@@ -144,50 +114,47 @@ function createWindow() {
         }, constants_1.UPDATE_CHECK_DELAY);
     }
 }
-// Auto-updater event handlers
-electron_updater_1.autoUpdater.on('checking-for-update', () => {
-    electron_log_1.default.info('Checking for update...');
-});
-electron_updater_1.autoUpdater.on('update-available', (info) => {
-    electron_log_1.default.info('Update available:', info);
-    if (mainWindow) {
-        mainWindow.webContents.send('update-available', info);
-    }
-});
-electron_updater_1.autoUpdater.on('update-not-available', (info) => {
-    electron_log_1.default.info('Update not available:', info);
-});
-electron_updater_1.autoUpdater.on('error', (err) => {
-    electron_log_1.default.error('Error in auto-updater:', err);
-});
-electron_updater_1.autoUpdater.on('download-progress', (progressObj) => {
-    const message = `Download speed: ${progressObj.bytesPerSecond} - Downloaded ${progressObj.percent.toFixed(2)}%`;
-    electron_log_1.default.info(message);
-    if (mainWindow) {
-        mainWindow.webContents.send('update-progress', progressObj);
-    }
-});
-electron_updater_1.autoUpdater.on('update-downloaded', (info) => {
-    electron_log_1.default.info('Update downloaded:', info);
-    if (mainWindow) {
-        mainWindow.webContents.send('update-downloaded', info);
-    }
-});
 electron_1.app.whenReady().then(async () => {
+    // Configure auto-updater after app is ready
+    electron_updater_1.autoUpdater.logger = electron_log_1.default;
+    // Auto-updater event handlers
+    electron_updater_1.autoUpdater.on('checking-for-update', () => {
+        electron_log_1.default.info('Checking for update...');
+    });
+    electron_updater_1.autoUpdater.on('update-available', (info) => {
+        electron_log_1.default.info('Update available:', info);
+        if (mainWindow) {
+            mainWindow.webContents.send('update-available', info);
+        }
+    });
+    electron_updater_1.autoUpdater.on('update-not-available', (info) => {
+        electron_log_1.default.info('Update not available:', info);
+    });
+    electron_updater_1.autoUpdater.on('error', (err) => {
+        electron_log_1.default.error('Error in auto-updater:', err);
+    });
+    electron_updater_1.autoUpdater.on('download-progress', (progressObj) => {
+        const message = `Download speed: ${progressObj.bytesPerSecond} - Downloaded ${progressObj.percent.toFixed(2)}%`;
+        electron_log_1.default.info(message);
+        if (mainWindow) {
+            mainWindow.webContents.send('update-progress', progressObj);
+        }
+    });
+    electron_updater_1.autoUpdater.on('update-downloaded', (info) => {
+        electron_log_1.default.info('Update downloaded:', info);
+        if (mainWindow) {
+            mainWindow.webContents.send('update-downloaded', info);
+        }
+    });
     // Set up Content Security Policy
     setupContentSecurityPolicy();
-    // Check if this is a returning user (has existing encryption key store)
-    // For returning users: initialize database normally (they've already granted keychain access)
-    // For new users: defer database initialization until after SecureStorageSetup screen
-    // This prevents surprising new users with a system password prompt at app startup
-    const { databaseEncryptionService } = await Promise.resolve().then(() => __importStar(require('./services/databaseEncryptionService')));
-    const isReturningUser = databaseEncryptionService.hasKeyStore();
-    if (isReturningUser) {
-        // Returning user - they've already set up keychain access
-        await (0, auth_handlers_1.initializeDatabase)();
-    }
-    // For new users, database will be initialized via 'system:initialize-database' IPC call
-    // after they complete the SecureStorageSetup screen
+    // Database initialization is now ALWAYS deferred to the renderer process
+    // This allows us to show an explanation screen before the keychain prompt
+    // for both new users (SecureStorageSetup) and returning users (KeychainExplanation)
+    //
+    // The renderer will call 'system:initialize-secure-storage' which handles:
+    // 1. Database initialization (triggers keychain prompt)
+    // 2. Clearing sessions/tokens for session-only OAuth
     createWindow();
     (0, auth_handlers_1.registerAuthHandlers)(mainWindow);
     (0, transaction_handlers_1.registerTransactionHandlers)(mainWindow);
@@ -196,11 +163,21 @@ electron_1.app.whenReady().then(async () => {
     (0, feedback_handlers_1.registerFeedbackHandlers)();
     (0, system_handlers_1.registerSystemHandlers)();
     (0, preference_handlers_1.registerPreferenceHandlers)();
+    (0, device_handlers_1.registerDeviceHandlers)(mainWindow);
+    (0, backup_handlers_1.registerBackupHandlers)(mainWindow);
+    (0, sync_handlers_1.registerSyncHandlers)(mainWindow);
+    (0, driver_handlers_1.registerDriverHandlers)();
 });
 electron_1.app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') {
         electron_1.app.quit();
     }
+});
+electron_1.app.on('before-quit', () => {
+    // Clean up device detection polling
+    (0, device_handlers_1.cleanupDeviceHandlers)();
+    // Clean up sync handlers
+    (0, sync_handlers_1.cleanupSyncHandlers)();
 });
 electron_1.app.on('activate', () => {
     if (electron_1.BrowserWindow.getAllWindows().length === 0) {

@@ -11,3 +11,15 @@ export * from './database';
 
 // Re-export IPC types
 export * from './ipc';
+
+// Re-export device types
+export * from './device';
+
+// Re-export iOS message types
+export * from './iosMessages';
+
+// Re-export iOS contact types
+export * from './iosContacts';
+
+// Re-export backup types
+export * from './backup';

@@ -19,12 +19,15 @@ import KeychainExplanation from './components/KeychainExplanation';
 import Dashboard from './components/Dashboard';
 import AuditTransactionModal from './components/AuditTransactionModal';
 import OfflineFallback from './components/OfflineFallback';
-import { useAuth, useNetwork } from './contexts';
+import PhoneTypeSelection from './components/PhoneTypeSelection';
+import AndroidComingSoon from './components/AndroidComingSoon';
+import AppleDriverSetup from './components/AppleDriverSetup';
+import { useAuth, useNetwork, usePlatform } from './contexts';
 import type { Conversation } from './hooks/useConversations';
 import type { Subscription } from '../electron/types/models';
 
 // Type definitions
-type AppStep = 'loading' | 'login' | 'secure-storage-setup' | 'keychain-explanation' | 'email-onboarding' | 'microsoft-login' | 'permissions' | 'dashboard' | 'outlook' | 'complete' | 'contacts';
+type AppStep = 'loading' | 'login' | 'secure-storage-setup' | 'keychain-explanation' | 'phone-type-selection' | 'android-coming-soon' | 'apple-driver-setup' | 'email-onboarding' | 'microsoft-login' | 'permissions' | 'dashboard' | 'outlook' | 'complete' | 'contacts';
 
 interface AppExportResult {
   exportPath?: string;
@@ -69,6 +72,9 @@ function App() {
   // Network state from context
   const { isOnline, isChecking, connectionError, checkConnection, setConnectionError } = useNetwork();
 
+  // Platform detection
+  const { isMacOS, isWindows } = usePlatform();
+
   // Local UI state
   const [currentStep, setCurrentStep] = useState<AppStep>('loading');
   const [hasPermissions, setHasPermissions] = useState<boolean>(false);
@@ -94,6 +100,10 @@ function App() {
   const [isNewUserFlow, setIsNewUserFlow] = useState<boolean>(false); // Track if this is a new user flow
   const [isDatabaseInitialized, setIsDatabaseInitialized] = useState<boolean>(false); // Track if database is ready
   const [isInitializingDatabase, setIsInitializingDatabase] = useState<boolean>(false); // Track initialization in progress
+  const [hasSelectedPhoneType, setHasSelectedPhoneType] = useState<boolean>(false);
+  const [selectedPhoneType, setSelectedPhoneType] = useState<'iphone' | 'android' | null>(null);
+  const [isLoadingPhoneType, setIsLoadingPhoneType] = useState<boolean>(true);
+  const [needsDriverSetup, setNeedsDriverSetup] = useState<boolean>(false); // Track if Windows + iPhone needs driver setup
   const [skipKeychainExplanation, setSkipKeychainExplanation] = useState<boolean>(() => {
     // Check localStorage for user preference
     return localStorage.getItem('skipKeychainExplanation') === 'true';
@@ -110,6 +120,17 @@ function App() {
         const result = await window.api.system.hasEncryptionKeyStore();
         // If key store exists, user has already set up secure storage before
         setHasSecureStorageSetup(result.hasKeyStore);
+
+        // Windows: Initialize database immediately on startup (DPAPI doesn't require user interaction)
+        // This ensures database tables exist before AuthContext tries to load sessions
+        if (isWindows && result.hasKeyStore) {
+          try {
+            await window.api.system.initializeSecureStorage();
+            setIsDatabaseInitialized(true);
+          } catch (dbError) {
+            console.error('[App] Failed to initialize Windows database on startup:', dbError);
+          }
+        }
       } catch (error) {
         console.error('[App] Failed to check key store existence:', error);
         // Assume not set up if check fails (will show setup screen for safety)
@@ -119,7 +140,7 @@ function App() {
       }
     };
     checkKeyStoreExists();
-  }, []);
+  }, [isWindows]);
 
   // NOTE: We removed the auto-initialization for returning users.
   // The keychain prompt should NEVER appear before the user logs in.
@@ -161,21 +182,140 @@ function App() {
     checkEmailStatus();
   }, [currentUser?.id]);
 
+  // Load user's phone type from database when user logs in
+  useEffect(() => {
+    const loadPhoneType = async () => {
+      if (currentUser?.id) {
+        setIsLoadingPhoneType(true);
+        try {
+          // Type assertion for the user API
+          const userApi = window.api.user as { getPhoneType: (userId: string) => Promise<{ success: boolean; phoneType: 'iphone' | 'android' | null; error?: string }> };
+          const result = await userApi.getPhoneType(currentUser.id);
+          if (result.success && result.phoneType) {
+            setSelectedPhoneType(result.phoneType);
+
+            // On Windows + iPhone, check if drivers need to be installed/updated
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const drivers = (window.electron as any)?.drivers;
+            if (isWindows && result.phoneType === 'iphone' && drivers) {
+              try {
+                const driverStatus = await drivers.checkApple();
+                if (!driverStatus.installed || !driverStatus.serviceRunning) {
+                  // Drivers not installed or service not running - need setup
+                  console.log('[App] iPhone selected but Apple drivers not ready, showing setup');
+                  setNeedsDriverSetup(true);
+                  setHasSelectedPhoneType(false); // Don't skip driver setup
+                } else {
+                  // Drivers are good
+                  setNeedsDriverSetup(false);
+                  setHasSelectedPhoneType(true);
+                }
+              } catch (driverError) {
+                console.error('[App] Failed to check driver status:', driverError);
+                // On error, assume drivers need setup
+                setNeedsDriverSetup(true);
+                setHasSelectedPhoneType(false);
+              }
+            } else {
+              // Not Windows + iPhone, no driver check needed
+              setNeedsDriverSetup(false);
+              setHasSelectedPhoneType(true);
+            }
+          } else {
+            // No phone type stored - user needs to select
+            setHasSelectedPhoneType(false);
+            setSelectedPhoneType(null);
+            setNeedsDriverSetup(false);
+          }
+        } catch (error) {
+          console.error('[App] Failed to load phone type:', error);
+          // On error, assume not selected so user can choose
+          setHasSelectedPhoneType(false);
+          setSelectedPhoneType(null);
+          setNeedsDriverSetup(false);
+        } finally {
+          setIsLoadingPhoneType(false);
+        }
+      } else {
+        // No user logged in
+        setIsLoadingPhoneType(false);
+        setHasSelectedPhoneType(false);
+        setSelectedPhoneType(null);
+        setNeedsDriverSetup(false);
+      }
+    };
+    loadPhoneType();
+  }, [currentUser?.id, isWindows]);
+
+  // Handle Windows database initialization without keychain prompt
+  // Windows uses DPAPI (Data Protection API) which doesn't require user interaction
+  useEffect(() => {
+    const initializeWindowsDatabase = async () => {
+      if (isWindows && pendingOAuthData && !isAuthenticated && !isInitializingDatabase) {
+        setIsInitializingDatabase(true);
+        try {
+          const result = await window.api.system.initializeSecureStorage();
+          if (result.success) {
+            setIsDatabaseInitialized(true);
+            setHasSecureStorageSetup(true);
+
+            // Complete login with pending OAuth data
+            try {
+              const loginResult = await window.api.auth.completePendingLogin(pendingOAuthData);
+              if (loginResult.success && loginResult.user && loginResult.sessionToken) {
+                const subscriptionData = loginResult.subscription as Subscription | undefined;
+                // Convert User type to match auth context expectations
+                const user = loginResult.user as { id: string; email: string; display_name?: string; avatar_url?: string };
+                setIsNewUserFlow(loginResult.isNewUser || false);
+                login(
+                  user,
+                  loginResult.sessionToken,
+                  pendingOAuthData.provider,
+                  subscriptionData,
+                  loginResult.isNewUser || false
+                );
+                setPendingOAuthData(null);
+              }
+            } catch (loginError) {
+              console.error('[App] Failed to complete pending login:', loginError);
+            }
+          }
+        } catch (error) {
+          console.error('[App] Failed to initialize Windows database:', error);
+        } finally {
+          setIsInitializingDatabase(false);
+        }
+      }
+    };
+    initializeWindowsDatabase();
+  }, [isWindows, pendingOAuthData, isAuthenticated, isInitializingDatabase, login]);
+
   // Handle auth state changes to update navigation
   // FLOW: Login FIRST, then keychain setup if needed (for both new and returning users)
   useEffect(() => {
-    if (!isAuthLoading && !isCheckingEmailOnboarding && !isCheckingSecureStorage) {
+    if (!isAuthLoading && !isCheckingEmailOnboarding && !isCheckingSecureStorage && !isLoadingPhoneType) {
       // If we have pending OAuth data, we're in the middle of the login-first flow
       // Show keychain explanation/setup screen (OAuth succeeded, need keychain to save data)
       if (pendingOAuthData && !isAuthenticated) {
-        // Show keychain explanation screen - OAuth data is in memory waiting
-        setCurrentStep('keychain-explanation');
+        // macOS: Show keychain explanation screen - OAuth data is in memory waiting
+        // Windows: Auto-initialize database (handled by separate useEffect above)
+        if (isMacOS) {
+          setCurrentStep('keychain-explanation');
+        }
         return;
       }
 
       if (isAuthenticated && !needsTermsAcceptance) {
         // User is authenticated and has accepted terms
-        if (!hasCompletedEmailOnboarding) {
+        // Check if user has selected phone type (new step after terms acceptance)
+        if (!hasSelectedPhoneType && !needsDriverSetup) {
+          // No phone type selected yet, and not in driver setup mode
+          setCurrentStep('phone-type-selection');
+        } else if (needsDriverSetup && isWindows) {
+          // Windows + iPhone user needs to set up Apple drivers
+          setCurrentStep('apple-driver-setup');
+        } else if (!hasCompletedEmailOnboarding || !hasEmailConnected) {
+          // Show email onboarding if never completed OR if no email is connected
           setCurrentStep('email-onboarding');
         } else if (hasPermissions) {
           setCurrentStep('dashboard');
@@ -189,12 +329,19 @@ function App() {
         setCurrentStep('login');
       }
     }
-  }, [isAuthenticated, isAuthLoading, needsTermsAcceptance, hasPermissions, hasCompletedEmailOnboarding, isCheckingEmailOnboarding, isCheckingSecureStorage, pendingOAuthData]);
+  }, [isAuthenticated, isAuthLoading, needsTermsAcceptance, hasPermissions, hasCompletedEmailOnboarding, hasEmailConnected, isCheckingEmailOnboarding, isCheckingSecureStorage, pendingOAuthData, hasSelectedPhoneType, isLoadingPhoneType, needsDriverSetup, isWindows]);
 
   useEffect(() => {
     checkPermissions();
     checkAppLocation();
   }, []);
+
+  // Windows: Skip permissions screen automatically (Full Disk Access not needed)
+  useEffect(() => {
+    if (isWindows && currentStep === 'permissions') {
+      setCurrentStep('dashboard');
+    }
+  }, [isWindows, currentStep]);
 
   const handleLoginSuccess = (user: { id: string; email: string; display_name?: string; avatar_url?: string }, token: string, provider: string, subscriptionData: Subscription | undefined, isNewUser: boolean): void => {
     // Track if this is a new user flow for secure storage setup
@@ -225,10 +372,87 @@ function App() {
     await declineTerms();
   };
 
+  // Handle phone type selection - saves to database
+  const handleSelectIPhone = async (): Promise<void> => {
+    if (!currentUser?.id) return;
+
+    try {
+      // Type assertion for the user API
+      const userApi = window.api.user as { setPhoneType: (userId: string, phoneType: 'iphone' | 'android') => Promise<{ success: boolean; error?: string }> };
+      const result = await userApi.setPhoneType(currentUser.id, 'iphone');
+      if (result.success) {
+        setSelectedPhoneType('iphone');
+        // On Windows, show Apple driver setup before continuing
+        // On macOS, drivers are bundled with the OS
+        if (isWindows) {
+          setCurrentStep('apple-driver-setup');
+        } else {
+          setHasSelectedPhoneType(true);
+          // Continue to email onboarding (flow will be handled by useEffect)
+        }
+      } else {
+        console.error('[App] Failed to save phone type:', result.error);
+      }
+    } catch (error) {
+      console.error('[App] Error saving phone type:', error);
+    }
+  };
+
+  // Handle Apple driver setup completion (Windows only)
+  const handleAppleDriverSetupComplete = (): void => {
+    setNeedsDriverSetup(false);
+    setHasSelectedPhoneType(true);
+    // Continue to email onboarding (flow will be handled by useEffect)
+  };
+
+  // Handle Apple driver setup skip (Windows only)
+  const handleAppleDriverSetupSkip = (): void => {
+    // User chose to skip - they can set up drivers later
+    setNeedsDriverSetup(false);
+    setHasSelectedPhoneType(true);
+    // Continue to email onboarding (flow will be handled by useEffect)
+  };
+
+  const handleSelectAndroid = (): void => {
+    setSelectedPhoneType('android');
+    // Don't set hasSelectedPhoneType yet - show coming soon screen first
+    setCurrentStep('android-coming-soon');
+  };
+
+  const handleAndroidGoBack = (): void => {
+    // Go back to phone type selection
+    setSelectedPhoneType(null);
+    setCurrentStep('phone-type-selection');
+  };
+
+  const handleAndroidContinueWithEmail = async (): Promise<void> => {
+    if (!currentUser?.id) return;
+
+    try {
+      // User chooses to continue with email-only features
+      // Save android as phone type to database
+      const userApi = window.api.user as { setPhoneType: (userId: string, phoneType: 'iphone' | 'android') => Promise<{ success: boolean; error?: string }> };
+      const result = await userApi.setPhoneType(currentUser.id, 'android');
+      if (result.success) {
+        setHasSelectedPhoneType(true);
+        // selectedPhoneType is already 'android' from handleSelectAndroid
+        // Continue to email onboarding (flow will be handled by useEffect)
+      } else {
+        console.error('[App] Failed to save phone type:', result.error);
+      }
+    } catch (error) {
+      console.error('[App] Error saving phone type:', error);
+    }
+  };
+
   const handleLogout = async (): Promise<void> => {
     await logout();
     setShowProfile(false);
     setIsNewUserFlow(false);
+    // Phone type is stored in database per user, no need to clear on logout
+    // It will be loaded fresh when a user logs in
+    setHasSelectedPhoneType(false);
+    setSelectedPhoneType(null);
     setCurrentStep('login');
   };
 
@@ -313,6 +537,13 @@ function App() {
   };
 
   const checkPermissions = async (): Promise<void> => {
+    // On Windows, there's no Full Disk Access to check - skip permission check
+    if (isWindows) {
+      setHasPermissions(true);
+      return;
+    }
+
+    // macOS: Check for Full Disk Access permission
     const result = await window.electron.checkPermissions();
     if (result.hasPermission) {
       setHasPermissions(true);
@@ -469,7 +700,7 @@ function App() {
       case 'permissions':
         return 'Setup Permissions';
       case 'dashboard':
-        return 'Dashboard';
+        return 'Magic Audit';
       case 'contacts':
         return 'Select Contacts for Export';
       case 'outlook':
@@ -594,12 +825,33 @@ function App() {
           />
         )}
 
-        {currentStep === 'keychain-explanation' && (
+        {currentStep === 'keychain-explanation' && isMacOS && (
           <KeychainExplanation
             onContinue={handleKeychainExplanationContinue}
             isLoading={isInitializingDatabase}
             hasPendingLogin={!!pendingOAuthData}
             skipExplanation={skipKeychainExplanation}
+          />
+        )}
+
+        {currentStep === 'phone-type-selection' && (
+          <PhoneTypeSelection
+            onSelectIPhone={handleSelectIPhone}
+            onSelectAndroid={handleSelectAndroid}
+          />
+        )}
+
+        {currentStep === 'android-coming-soon' && (
+          <AndroidComingSoon
+            onGoBack={handleAndroidGoBack}
+            onContinueWithEmail={handleAndroidContinueWithEmail}
+          />
+        )}
+
+        {currentStep === 'apple-driver-setup' && isWindows && (
+          <AppleDriverSetup
+            onComplete={handleAppleDriverSetupComplete}
+            onSkip={handleAppleDriverSetupSkip}
           />
         )}
 
@@ -619,7 +871,7 @@ function App() {
           />
         )}
 
-        {currentStep === 'permissions' && (
+        {currentStep === 'permissions' && isMacOS && (
           <PermissionsScreen
             onPermissionsGranted={handlePermissionsGranted}
             onCheckAgain={checkPermissions}
@@ -727,7 +979,8 @@ function App() {
       {/* Key forces re-mount when email connection status changes, triggering fresh health check */}
       {/* IMPORTANT: Don't run health checks until user has completed permissions setup, otherwise
           it tries to access contacts database before Full Disk Access is granted */}
-      {isAuthenticated && currentUser && authProvider && hasPermissions && currentStep === 'dashboard' && (
+      {/* Only show when email is connected - if not connected, Dashboard shows setup prompt instead */}
+      {isAuthenticated && currentUser && authProvider && hasPermissions && currentStep === 'dashboard' && hasEmailConnected && (
         <SystemHealthMonitor
           key={`health-monitor-${hasEmailConnected}`}
           userId={currentUser.id}

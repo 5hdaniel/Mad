@@ -28,10 +28,13 @@ interface SessionData {
  * Session data is stored in app's user data directory
  */
 class SessionService {
-  private sessionFilePath: string;
+  private sessionFilePath: string | null = null;
 
-  constructor() {
-    this.sessionFilePath = path.join(app.getPath('userData'), 'session.json');
+  private getSessionFilePath(): string {
+    if (!this.sessionFilePath) {
+      this.sessionFilePath = path.join(app.getPath('userData'), 'session.json');
+    }
+    return this.sessionFilePath;
   }
 
   /**
@@ -46,7 +49,7 @@ class SessionService {
         createdAt: sessionData.createdAt || now,
         savedAt: now
       };
-      await fs.writeFile(this.sessionFilePath, JSON.stringify(data, null, 2), 'utf8');
+      await fs.writeFile(this.getSessionFilePath(), JSON.stringify(data, null, 2), 'utf8');
       await logService.info('Session saved successfully', 'SessionService');
       return true;
     } catch (error) {
@@ -65,7 +68,7 @@ class SessionService {
    */
   async loadSession(): Promise<SessionData | null> {
     try {
-      const data = await fs.readFile(this.sessionFilePath, 'utf8');
+      const data = await fs.readFile(this.getSessionFilePath(), 'utf8');
       const session: SessionData = JSON.parse(data);
 
       // Check if session is expired (absolute timeout)
@@ -96,7 +99,7 @@ class SessionService {
    */
   async clearSession(): Promise<boolean> {
     try {
-      await fs.unlink(this.sessionFilePath);
+      await fs.unlink(this.getSessionFilePath());
       await logService.info('Session cleared successfully', 'SessionService');
       return true;
     } catch (error: any) {

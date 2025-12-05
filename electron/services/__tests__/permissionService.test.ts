@@ -4,6 +4,7 @@
 
 import permissionService from '../permissionService';
 import { promises as fs } from 'fs';
+import os from 'os';
 
 // Mock fs module
 jest.mock('fs', () => ({
@@ -15,12 +16,31 @@ jest.mock('fs', () => ({
   },
 }));
 
+// Mock os module
+jest.mock('os', () => ({
+  platform: jest.fn(),
+}));
+
+// Mock logService
+jest.mock('../logService', () => ({
+  __esModule: true,
+  default: {
+    info: jest.fn(),
+    error: jest.fn(),
+    debug: jest.fn(),
+    warn: jest.fn(),
+  },
+}));
+
 const mockFs = fs as jest.Mocked<typeof fs>;
+const mockOs = os as jest.Mocked<typeof os>;
 
 describe('PermissionService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     permissionService.clearCache();
+    // Default to macOS for existing tests
+    mockOs.platform.mockReturnValue('darwin' as NodeJS.Platform);
   });
 
   describe('checkFullDiskAccess', () => {
@@ -218,6 +238,108 @@ describe('PermissionService', () => {
       expect(result.type).toBe('UNKNOWN_ERROR');
       expect(result.title).toBe('An Error Occurred');
       expect(result.actionHandler).toBe('retry');
+    });
+  });
+
+  describe('Platform-aware permission checks', () => {
+    describe('Windows platform', () => {
+      beforeEach(() => {
+        mockOs.platform.mockReturnValue('win32' as NodeJS.Platform);
+      });
+
+      it('should skip Full Disk Access check and return success on Windows', async () => {
+        const result = await permissionService.checkFullDiskAccess();
+
+        expect(result.hasPermission).toBe(true);
+        expect(result.error).toBeUndefined();
+        expect(mockFs.access).not.toHaveBeenCalled();
+      });
+
+      it('should skip Contacts permission check and return success on Windows', async () => {
+        const result = await permissionService.checkContactsPermission();
+
+        expect(result.hasPermission).toBe(true);
+        expect(result.error).toBeUndefined();
+        expect(mockFs.access).not.toHaveBeenCalled();
+      });
+
+      it('should skip Contacts loading check and return success on Windows', async () => {
+        const result = await permissionService.checkContactsLoading();
+
+        expect(result.canLoadContacts).toBe(true);
+        expect(result.contactCount).toBe(0);
+        expect(result.error).toBeUndefined();
+      });
+
+      it('should return allGranted: true on Windows without checking files', async () => {
+        const result = await permissionService.checkAllPermissions();
+
+        expect(result.allGranted).toBe(true);
+        expect(result.errors).toHaveLength(0);
+        expect(mockFs.access).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('Linux platform', () => {
+      beforeEach(() => {
+        mockOs.platform.mockReturnValue('linux' as NodeJS.Platform);
+      });
+
+      it('should skip Full Disk Access check and return success on Linux', async () => {
+        const result = await permissionService.checkFullDiskAccess();
+
+        expect(result.hasPermission).toBe(true);
+        expect(result.error).toBeUndefined();
+        expect(mockFs.access).not.toHaveBeenCalled();
+      });
+
+      it('should skip Contacts permission check and return success on Linux', async () => {
+        const result = await permissionService.checkContactsPermission();
+
+        expect(result.hasPermission).toBe(true);
+        expect(result.error).toBeUndefined();
+        expect(mockFs.access).not.toHaveBeenCalled();
+      });
+
+      it('should skip Contacts loading check and return success on Linux', async () => {
+        const result = await permissionService.checkContactsLoading();
+
+        expect(result.canLoadContacts).toBe(true);
+        expect(result.contactCount).toBe(0);
+        expect(result.error).toBeUndefined();
+      });
+
+      it('should return allGranted: true on Linux without checking files', async () => {
+        const result = await permissionService.checkAllPermissions();
+
+        expect(result.allGranted).toBe(true);
+        expect(result.errors).toHaveLength(0);
+        expect(mockFs.access).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('macOS platform', () => {
+      beforeEach(() => {
+        mockOs.platform.mockReturnValue('darwin' as NodeJS.Platform);
+      });
+
+      it('should perform actual Full Disk Access check on macOS', async () => {
+        (mockFs.access as jest.Mock).mockResolvedValue(undefined);
+
+        const result = await permissionService.checkFullDiskAccess();
+
+        expect(result.hasPermission).toBe(true);
+        expect(mockFs.access).toHaveBeenCalled();
+      });
+
+      it('should perform actual Contacts permission check on macOS', async () => {
+        (mockFs.access as jest.Mock).mockResolvedValue(undefined);
+
+        const result = await permissionService.checkContactsPermission();
+
+        expect(result.hasPermission).toBe(true);
+        expect(mockFs.access).toHaveBeenCalled();
+      });
     });
   });
 });

@@ -5,6 +5,8 @@
 
 import { promises as fs } from 'fs';
 import path from 'path';
+import os from 'os';
+import logService from './logService';
 
 interface PermissionResult {
   hasPermission: boolean;
@@ -73,10 +75,21 @@ class PermissionService {
   }
 
   /**
-   * Check Full Disk Access permission
+   * Check Full Disk Access permission (macOS only)
    * @returns {Promise<{hasPermission: boolean, error?: string}>}
    */
   async checkFullDiskAccess(): Promise<PermissionResult> {
+    // Windows/Linux: Full Disk Access is macOS-only, skip this check
+    if (os.platform() !== 'darwin') {
+      logService.info(
+        `Skipping Full Disk Access check on ${os.platform()} (macOS-only feature)`,
+        'PermissionService'
+      );
+      return {
+        hasPermission: true,
+      };
+    }
+
     try {
       const messagesDbPath = path.join(process.env.HOME!, 'Library/Messages/chat.db');
       await fs.access(messagesDbPath, fs.constants.R_OK);
@@ -102,10 +115,21 @@ class PermissionService {
   }
 
   /**
-   * Check Contacts permission
+   * Check Contacts permission (macOS only)
    * @returns {Promise<{hasPermission: boolean, error?: string}>}
    */
   async checkContactsPermission(): Promise<PermissionResult> {
+    // Windows/Linux: Contacts app is macOS-only, skip this check
+    if (os.platform() !== 'darwin') {
+      logService.info(
+        `Skipping Contacts permission check on ${os.platform()} (macOS-only feature)`,
+        'PermissionService'
+      );
+      return {
+        hasPermission: true,
+      };
+    }
+
     try {
       const contactsDbPath = path.join(
         process.env.HOME!,
@@ -135,11 +159,23 @@ class PermissionService {
   }
 
   /**
-   * Check if contacts are actually loading from the Contacts app
+   * Check if contacts are actually loading from the Contacts app (macOS only)
    * This is a more thorough check than just checking directory access
    * @returns {Promise<{canLoadContacts: boolean, contactCount?: number, error?: Object}>}
    */
   async checkContactsLoading(): Promise<ContactsLoadingResult> {
+    // Windows/Linux: Contacts app is macOS-only, skip this check
+    if (os.platform() !== 'darwin') {
+      logService.info(
+        `Skipping Contacts loading check on ${os.platform()} (macOS-only feature)`,
+        'PermissionService'
+      );
+      return {
+        canLoadContacts: true,
+        contactCount: 0,
+      };
+    }
+
     try {
       // Import contactsService here to avoid circular dependencies
       const { getContactNames } = await import('./contactsService');
@@ -185,7 +221,8 @@ class PermissionService {
         contactCount,
       };
     } catch (error) {
-      console.error('[PermissionService] Contacts loading check failed:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logService.error('Contacts loading check failed', 'PermissionService', { error: errorMessage });
       return {
         canLoadContacts: false,
         contactCount: 0,

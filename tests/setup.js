@@ -14,6 +14,11 @@ configure({
 // Set DEBUG_PRINT_LIMIT to reduce DOM output
 process.env.DEBUG_PRINT_LIMIT = '500';
 
+// Limit stack trace depth in CI/CD for cleaner error output
+if (process.env.CI) {
+  Error.stackTraceLimit = 3; // Only show 3 stack frames in CI
+}
+
 // Mock window.api for tests (only in jsdom environment)
 if (typeof window !== 'undefined') {
   global.window = global.window || {};
@@ -32,6 +37,9 @@ if (typeof window !== 'undefined') {
       microsoftConnectMailbox: jest.fn(),
       googleDisconnectMailbox: jest.fn(),
       microsoftDisconnectMailbox: jest.fn(),
+      checkEmailOnboarding: jest.fn(),
+      completeEmailOnboarding: jest.fn(),
+      completePendingLogin: jest.fn(),
     },
     transactions: {
       getAll: jest.fn(),
@@ -66,6 +74,8 @@ if (typeof window !== 'undefined') {
       openPrivacyPane: jest.fn(),
       contactSupport: jest.fn(),
       getDiagnostics: jest.fn(),
+      hasEncryptionKeyStore: jest.fn(),
+      initializeSecureStorage: jest.fn(),
     },
     address: {
       initialize: jest.fn(),
@@ -75,6 +85,10 @@ if (typeof window !== 'undefined') {
     preferences: {
       get: jest.fn(),
       update: jest.fn(),
+    },
+    user: {
+      getPhoneType: jest.fn(),
+      setPhoneType: jest.fn(),
     },
     shell: {
       openExternal: jest.fn(),
@@ -89,6 +103,7 @@ if (typeof window !== 'undefined') {
 
   // Mock electron for tests
   global.window.electron = {
+    platform: 'darwin', // Default to macOS for tests (can be overridden in specific tests)
     getAppInfo: jest.fn(),
     getMacOSVersion: jest.fn(),
     checkPermissions: jest.fn(),
@@ -102,6 +117,28 @@ if (typeof window !== 'undefined') {
     outlookExportEmails: jest.fn(),
     openFolder: jest.fn(),
     onExportProgress: jest.fn(() => jest.fn()),
+    // iOS Device Detection (Windows only)
+    device: {
+      startDetection: jest.fn(),
+      stopDetection: jest.fn(),
+      onConnected: jest.fn(() => jest.fn()),
+      onDisconnected: jest.fn(() => jest.fn()),
+    },
+    // iOS Backup Management (Windows only)
+    backup: {
+      start: jest.fn(),
+      submitPassword: jest.fn(),
+      cancel: jest.fn(),
+      onProgress: jest.fn(() => jest.fn()),
+    },
+    // Apple Driver Management (Windows only)
+    drivers: {
+      checkApple: jest.fn(),
+      installApple: jest.fn(),
+      hasBundled: jest.fn(),
+      openITunesStore: jest.fn(),
+      checkUpdate: jest.fn(),
+    },
   };
 }
 

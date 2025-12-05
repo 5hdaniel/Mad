@@ -589,6 +589,212 @@ describe('Auth Handlers', () => {
     });
   });
 
+  describe('Bidirectional Terms Acceptance Sync', () => {
+    const mockCloudUser = {
+      id: 'cloud-user-id',
+      email: 'test@example.com',
+      subscription_tier: 'free' as const,
+      subscription_status: 'trial' as const,
+    };
+
+    const mockOAuthUserInfo = {
+      id: 'oauth-123',
+      email: 'test@example.com',
+      given_name: 'Test',
+      family_name: 'User',
+      name: 'Test User',
+    };
+
+    const mockTokens = {
+      access_token: 'access-token',
+      refresh_token: 'refresh-token',
+      expires_at: new Date(Date.now() + 3600000).toISOString(),
+      scopes: ['email', 'profile'],
+    };
+
+    beforeEach(() => {
+      // Reset mocks
+      mockDatabaseService.getUserByOAuthId.mockReset();
+      mockDatabaseService.updateUser.mockReset();
+      mockDatabaseService.createUser.mockReset();
+      mockSupabaseService.syncUser.mockReset();
+      mockSupabaseService.syncTermsAcceptance.mockReset();
+      mockGoogleAuthService.exchangeCodeForTokens.mockReset();
+      mockDatabaseService.updateLastLogin.mockResolvedValue(undefined);
+      mockDatabaseService.saveOAuthToken.mockResolvedValue(undefined);
+      mockDatabaseService.createSession.mockResolvedValue('test-session-token');
+      mockSupabaseService.registerDevice.mockResolvedValue(undefined);
+      mockSupabaseService.trackEvent.mockResolvedValue(undefined);
+      mockSupabaseService.validateSubscription.mockResolvedValue(undefined);
+      mockAuditService.log.mockResolvedValue(undefined);
+
+      // Set up Google auth service mock
+      mockGoogleAuthService.exchangeCodeForTokens.mockResolvedValue({
+        tokens: {
+          access_token: mockTokens.access_token,
+          refresh_token: mockTokens.refresh_token,
+          expires_at: mockTokens.expires_at,
+          scopes: mockTokens.scopes,
+        },
+        userInfo: mockOAuthUserInfo,
+      });
+    });
+
+    it('should preserve local terms acceptance when cloud has none', async () => {
+      const localUserWithTerms = {
+        id: TEST_USER_ID,
+        email: 'test@example.com',
+        oauth_provider: 'google',
+        oauth_id: 'oauth-123',
+        terms_accepted_at: '2024-01-01T00:00:00.000Z',
+        privacy_policy_accepted_at: '2024-01-01T00:00:00.000Z',
+        terms_version_accepted: '1.0',
+        privacy_policy_version_accepted: '1.0',
+      };
+
+      const cloudUserNoTerms = {
+        ...mockCloudUser,
+        terms_accepted_at: null,
+        privacy_policy_accepted_at: null,
+      };
+
+      mockDatabaseService.getUserByOAuthId.mockResolvedValue(localUserWithTerms);
+      mockDatabaseService.getUserById.mockResolvedValue(localUserWithTerms);
+      mockSupabaseService.syncUser.mockResolvedValue(cloudUserNoTerms as any);
+      mockSupabaseService.syncTermsAcceptance.mockResolvedValue(undefined);
+
+      const handler = registeredHandlers.get('auth:google:complete-login');
+      await handler(mockEvent, 'test-auth-code');
+
+      // Verify local terms were NOT overwritten (updateUser should not include terms fields)
+      expect(mockDatabaseService.updateUser).toHaveBeenCalledWith(
+        TEST_USER_ID,
+        expect.not.objectContaining({
+          terms_accepted_at: null,
+          privacy_policy_accepted_at: null,
+        })
+      );
+
+      // Verify bidirectional sync was attempted
+      expect(mockSupabaseService.syncTermsAcceptance).toHaveBeenCalledWith(
+        cloudUserNoTerms.id,
+        '1.0',
+        '1.0'
+      );
+
+      expect(mockLogService.info).toHaveBeenCalledWith(
+        'Local user has accepted terms but cloud does not - syncing to cloud',
+        'AuthHandlers'
+      );
+    });
+
+    it('should update local terms when cloud has newer acceptance', async () => {
+      const localUserNoTerms = {
+        id: TEST_USER_ID,
+        email: 'test@example.com',
+        oauth_provider: 'google',
+        oauth_id: 'oauth-123',
+        terms_accepted_at: null,
+        privacy_policy_accepted_at: null,
+      };
+
+      const cloudUserWithTerms = {
+        ...mockCloudUser,
+        terms_accepted_at: '2024-01-15T00:00:00.000Z',
+        privacy_policy_accepted_at: '2024-01-15T00:00:00.000Z',
+        terms_version_accepted: '1.0',
+        privacy_policy_version_accepted: '1.0',
+      };
+
+      mockDatabaseService.getUserByOAuthId.mockResolvedValue(localUserNoTerms);
+      mockDatabaseService.getUserById.mockResolvedValue({ ...localUserNoTerms, ...cloudUserWithTerms });
+      mockSupabaseService.syncUser.mockResolvedValue(cloudUserWithTerms as any);
+
+      const handler = registeredHandlers.get('auth:google:complete-login');
+      await handler(mockEvent, 'test-auth-code');
+
+      // Verify cloud terms were synced to local
+      expect(mockDatabaseService.updateUser).toHaveBeenCalledWith(
+        TEST_USER_ID,
+        expect.objectContaining({
+          terms_accepted_at: '2024-01-15T00:00:00.000Z',
+          privacy_policy_accepted_at: '2024-01-15T00:00:00.000Z',
+          terms_version_accepted: '1.0',
+          privacy_policy_version_accepted: '1.0',
+        })
+      );
+
+      // Should NOT attempt bidirectional sync since cloud has terms
+      expect(mockSupabaseService.syncTermsAcceptance).not.toHaveBeenCalled();
+    });
+
+    it('should handle bidirectional sync failure gracefully', async () => {
+      const localUserWithTerms = {
+        id: TEST_USER_ID,
+        email: 'test@example.com',
+        oauth_provider: 'google',
+        oauth_id: 'oauth-123',
+        terms_accepted_at: '2024-01-01T00:00:00.000Z',
+        privacy_policy_accepted_at: '2024-01-01T00:00:00.000Z',
+        terms_version_accepted: '1.0',
+        privacy_policy_version_accepted: '1.0',
+      };
+
+      const cloudUserNoTerms = {
+        ...mockCloudUser,
+        terms_accepted_at: null,
+        privacy_policy_accepted_at: null,
+      };
+
+      mockDatabaseService.getUserByOAuthId.mockResolvedValue(localUserWithTerms);
+      mockDatabaseService.getUserById.mockResolvedValue(localUserWithTerms);
+      mockSupabaseService.syncUser.mockResolvedValue(cloudUserNoTerms as any);
+      mockSupabaseService.syncTermsAcceptance.mockRejectedValue(new Error('Network error'));
+
+      const handler = registeredHandlers.get('auth:google:complete-login');
+      const result = await handler(mockEvent, 'test-auth-code');
+
+      // Login should still succeed even if bidirectional sync fails
+      expect(result.success).toBe(true);
+
+      // Error should be logged
+      expect(mockLogService.error).toHaveBeenCalledWith(
+        'Failed to sync local terms to cloud',
+        'AuthHandlers',
+        expect.objectContaining({
+          error: 'Network error'
+        })
+      );
+    });
+
+    it('should not sync when both local and cloud have no terms', async () => {
+      const localUserNoTerms = {
+        id: TEST_USER_ID,
+        email: 'test@example.com',
+        oauth_provider: 'google',
+        oauth_id: 'oauth-123',
+        terms_accepted_at: null,
+        privacy_policy_accepted_at: null,
+      };
+
+      const cloudUserNoTerms = {
+        ...mockCloudUser,
+        terms_accepted_at: null,
+        privacy_policy_accepted_at: null,
+      };
+
+      mockDatabaseService.getUserByOAuthId.mockResolvedValue(localUserNoTerms);
+      mockDatabaseService.getUserById.mockResolvedValue(localUserNoTerms);
+      mockSupabaseService.syncUser.mockResolvedValue(cloudUserNoTerms as any);
+
+      const handler = registeredHandlers.get('auth:google:complete-login');
+      await handler(mockEvent, 'test-auth-code');
+
+      // Should not attempt any terms sync
+      expect(mockSupabaseService.syncTermsAcceptance).not.toHaveBeenCalled();
+    });
+  });
+
   describe('auth:validate-session', () => {
     const mockSession = {
       user_id: TEST_USER_ID,
@@ -723,35 +929,7 @@ describe('Auth Handlers', () => {
     });
   });
 
-  describe('shell:open-external', () => {
-    it('should open valid HTTPS URL', async () => {
-      mockShellOpenExternal.mockResolvedValue(undefined);
-
-      const handler = registeredHandlers.get('shell:open-external');
-      const result = await handler(mockEvent, 'https://example.com');
-
-      expect(result.success).toBe(true);
-      expect(mockShellOpenExternal).toHaveBeenCalledWith('https://example.com');
-    });
-
-    it('should reject invalid URLs', async () => {
-      const handler = registeredHandlers.get('shell:open-external');
-      const result = await handler(mockEvent, 'javascript:alert(1)');
-
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('Validation error');
-    });
-
-    it('should handle shell open failure', async () => {
-      mockShellOpenExternal.mockRejectedValue(new Error('Shell error'));
-
-      const handler = registeredHandlers.get('shell:open-external');
-      const result = await handler(mockEvent, 'https://example.com');
-
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('Shell error');
-    });
-  });
+  // Note: shell:open-external handler tests are in system-handlers.test.ts
 
   describe('auth:google:disconnect-mailbox', () => {
     it('should disconnect Google mailbox successfully', async () => {

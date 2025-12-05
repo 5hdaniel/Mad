@@ -8,8 +8,13 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import Transactions from '../Transactions';
+import { PlatformProvider } from '../../contexts/PlatformContext';
 
 describe('Transactions', () => {
+  // Helper to render component with PlatformProvider
+  const renderWithProvider = (ui: React.ReactElement) => {
+    return render(<PlatformProvider>{ui}</PlatformProvider>);
+  };
   const mockUserId = 'user-123';
   const mockProvider = 'google';
   const mockOnClose = jest.fn();
@@ -63,7 +68,7 @@ describe('Transactions', () => {
 
   describe('Transaction Listing', () => {
     it('should render transactions list when loaded', async () => {
-      render(<Transactions userId={mockUserId} provider={mockProvider} onClose={mockOnClose} />);
+      renderWithProvider(<Transactions userId={mockUserId} provider={mockProvider} onClose={mockOnClose} />);
 
       // Wait for transactions to load
       await waitFor(() => {
@@ -84,7 +89,7 @@ describe('Transactions', () => {
         () => new Promise((resolve) => setTimeout(resolve, 1000))
       );
 
-      render(<Transactions userId={mockUserId} provider={mockProvider} onClose={mockOnClose} />);
+      renderWithProvider(<Transactions userId={mockUserId} provider={mockProvider} onClose={mockOnClose} />);
 
       expect(screen.getByText(/loading transactions/i)).toBeInTheDocument();
     });
@@ -95,7 +100,7 @@ describe('Transactions', () => {
         transactions: [],
       });
 
-      render(<Transactions userId={mockUserId} provider={mockProvider} onClose={mockOnClose} />);
+      renderWithProvider(<Transactions userId={mockUserId} provider={mockProvider} onClose={mockOnClose} />);
 
       await waitFor(() => {
         expect(screen.getByText(/no transactions yet/i)).toBeInTheDocument();
@@ -108,7 +113,7 @@ describe('Transactions', () => {
         error: 'Database connection failed',
       });
 
-      render(<Transactions userId={mockUserId} provider={mockProvider} onClose={mockOnClose} />);
+      renderWithProvider(<Transactions userId={mockUserId} provider={mockProvider} onClose={mockOnClose} />);
 
       await waitFor(() => {
         expect(screen.getByText(/database connection failed/i)).toBeInTheDocument();
@@ -116,7 +121,7 @@ describe('Transactions', () => {
     });
 
     it('should display transaction count in header', async () => {
-      render(<Transactions userId={mockUserId} provider={mockProvider} onClose={mockOnClose} />);
+      renderWithProvider(<Transactions userId={mockUserId} provider={mockProvider} onClose={mockOnClose} />);
 
       await waitFor(() => {
         expect(screen.getByText(/3 properties found/i)).toBeInTheDocument();
@@ -126,7 +131,7 @@ describe('Transactions', () => {
 
   describe('Transaction Filtering', () => {
     it('should filter by active status by default', async () => {
-      render(<Transactions userId={mockUserId} provider={mockProvider} onClose={mockOnClose} />);
+      renderWithProvider(<Transactions userId={mockUserId} provider={mockProvider} onClose={mockOnClose} />);
 
       await waitFor(() => {
         expect(screen.getByText('123 Main Street')).toBeInTheDocument();
@@ -141,7 +146,7 @@ describe('Transactions', () => {
     });
 
     it('should filter by closed status when clicked', async () => {
-      render(<Transactions userId={mockUserId} provider={mockProvider} onClose={mockOnClose} />);
+      renderWithProvider(<Transactions userId={mockUserId} provider={mockProvider} onClose={mockOnClose} />);
 
       await waitFor(() => {
         expect(screen.getByText('123 Main Street')).toBeInTheDocument();
@@ -162,7 +167,7 @@ describe('Transactions', () => {
     });
 
     it('should show all transactions when all filter is clicked', async () => {
-      render(<Transactions userId={mockUserId} provider={mockProvider} onClose={mockOnClose} />);
+      renderWithProvider(<Transactions userId={mockUserId} provider={mockProvider} onClose={mockOnClose} />);
 
       await waitFor(() => {
         expect(screen.getByText('123 Main Street')).toBeInTheDocument();
@@ -181,7 +186,7 @@ describe('Transactions', () => {
     });
 
     it('should filter by search query', async () => {
-      render(<Transactions userId={mockUserId} provider={mockProvider} onClose={mockOnClose} />);
+      renderWithProvider(<Transactions userId={mockUserId} provider={mockProvider} onClose={mockOnClose} />);
 
       await waitFor(() => {
         expect(screen.getByText('123 Main Street')).toBeInTheDocument();
@@ -197,7 +202,7 @@ describe('Transactions', () => {
     });
 
     it('should show no matching transactions message', async () => {
-      render(<Transactions userId={mockUserId} provider={mockProvider} onClose={mockOnClose} />);
+      renderWithProvider(<Transactions userId={mockUserId} provider={mockProvider} onClose={mockOnClose} />);
 
       await waitFor(() => {
         expect(screen.getByText('123 Main Street')).toBeInTheDocument();
@@ -215,7 +220,7 @@ describe('Transactions', () => {
 
   describe('Transaction Display', () => {
     it('should display transaction type correctly', async () => {
-      render(<Transactions userId={mockUserId} provider={mockProvider} onClose={mockOnClose} />);
+      renderWithProvider(<Transactions userId={mockUserId} provider={mockProvider} onClose={mockOnClose} />);
 
       await waitFor(() => {
         expect(screen.getByText('123 Main Street')).toBeInTheDocument();
@@ -225,7 +230,7 @@ describe('Transactions', () => {
     });
 
     it('should format sale price as currency', async () => {
-      render(<Transactions userId={mockUserId} provider={mockProvider} onClose={mockOnClose} />);
+      renderWithProvider(<Transactions userId={mockUserId} provider={mockProvider} onClose={mockOnClose} />);
 
       await waitFor(() => {
         expect(screen.getByText('123 Main Street')).toBeInTheDocument();
@@ -236,7 +241,7 @@ describe('Transactions', () => {
     });
 
     it('should display email count', async () => {
-      render(<Transactions userId={mockUserId} provider={mockProvider} onClose={mockOnClose} />);
+      renderWithProvider(<Transactions userId={mockUserId} provider={mockProvider} onClose={mockOnClose} />);
 
       await waitFor(() => {
         expect(screen.getByText('123 Main Street')).toBeInTheDocument();
@@ -253,7 +258,7 @@ describe('Transactions', () => {
         contacts: [],
       });
 
-      render(<Transactions userId={mockUserId} provider={mockProvider} onClose={mockOnClose} />);
+      renderWithProvider(<Transactions userId={mockUserId} provider={mockProvider} onClose={mockOnClose} />);
 
       await waitFor(() => {
         expect(screen.getByText('123 Main Street')).toBeInTheDocument();
@@ -277,7 +282,7 @@ describe('Transactions', () => {
         emailsScanned: 100,
       });
 
-      render(<Transactions userId={mockUserId} provider={mockProvider} onClose={mockOnClose} />);
+      renderWithProvider(<Transactions userId={mockUserId} provider={mockProvider} onClose={mockOnClose} />);
 
       await waitFor(() => {
         expect(screen.getByText('123 Main Street')).toBeInTheDocument();
@@ -299,7 +304,7 @@ describe('Transactions', () => {
         () => new Promise((resolve) => setTimeout(resolve, 1000))
       );
 
-      render(<Transactions userId={mockUserId} provider={mockProvider} onClose={mockOnClose} />);
+      renderWithProvider(<Transactions userId={mockUserId} provider={mockProvider} onClose={mockOnClose} />);
 
       await waitFor(() => {
         expect(screen.getByText('123 Main Street')).toBeInTheDocument();
@@ -319,7 +324,7 @@ describe('Transactions', () => {
         emailsScanned: 100,
       });
 
-      render(<Transactions userId={mockUserId} provider={mockProvider} onClose={mockOnClose} />);
+      renderWithProvider(<Transactions userId={mockUserId} provider={mockProvider} onClose={mockOnClose} />);
 
       await waitFor(() => {
         expect(screen.getByText('123 Main Street')).toBeInTheDocument();
@@ -339,7 +344,7 @@ describe('Transactions', () => {
         error: 'Email API connection failed',
       });
 
-      render(<Transactions userId={mockUserId} provider={mockProvider} onClose={mockOnClose} />);
+      renderWithProvider(<Transactions userId={mockUserId} provider={mockProvider} onClose={mockOnClose} />);
 
       await waitFor(() => {
         expect(screen.getByText('123 Main Street')).toBeInTheDocument();
@@ -356,7 +361,7 @@ describe('Transactions', () => {
 
   describe('Quick Export', () => {
     it('should show export button on each transaction', async () => {
-      render(<Transactions userId={mockUserId} provider={mockProvider} onClose={mockOnClose} />);
+      renderWithProvider(<Transactions userId={mockUserId} provider={mockProvider} onClose={mockOnClose} />);
 
       await waitFor(() => {
         expect(screen.getByText('123 Main Street')).toBeInTheDocument();
@@ -370,7 +375,7 @@ describe('Transactions', () => {
 
   describe('Navigation', () => {
     it('should call onClose when back button is clicked', async () => {
-      render(<Transactions userId={mockUserId} provider={mockProvider} onClose={mockOnClose} />);
+      renderWithProvider(<Transactions userId={mockUserId} provider={mockProvider} onClose={mockOnClose} />);
 
       await waitFor(() => {
         expect(screen.getByText('123 Main Street')).toBeInTheDocument();
@@ -392,7 +397,7 @@ describe('Transactions', () => {
         },
       });
 
-      render(<Transactions userId={mockUserId} provider={mockProvider} onClose={mockOnClose} />);
+      renderWithProvider(<Transactions userId={mockUserId} provider={mockProvider} onClose={mockOnClose} />);
 
       await waitFor(() => {
         expect(screen.getByText('123 Main Street')).toBeInTheDocument();
@@ -444,7 +449,7 @@ describe('Transactions', () => {
     });
 
     it('should display transaction price and closing date', async () => {
-      render(<Transactions userId={mockUserId} provider={mockProvider} onClose={mockOnClose} />);
+      renderWithProvider(<Transactions userId={mockUserId} provider={mockProvider} onClose={mockOnClose} />);
 
       await waitFor(() => {
         expect(screen.getByText('123 Main Street')).toBeInTheDocument();
@@ -473,7 +478,7 @@ describe('Transactions', () => {
         },
       });
 
-      render(<Transactions userId={mockUserId} provider={mockProvider} onClose={mockOnClose} />);
+      renderWithProvider(<Transactions userId={mockUserId} provider={mockProvider} onClose={mockOnClose} />);
 
       await waitFor(() => {
         expect(screen.getByText('123 Main Street')).toBeInTheDocument();

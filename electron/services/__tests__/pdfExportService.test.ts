@@ -59,7 +59,8 @@ describe('PDFExportService', () => {
 
       const result = pdfExportService.getDefaultExportPath(transaction as any);
 
-      expect(result).toContain('/mock/downloads');
+      expect(result).toContain('mock');
+      expect(result).toContain('downloads');
       expect(result).toContain('Transaction_');
       expect(result).toContain('123_Main_St');
       expect(result).toMatch(/\.pdf$/);

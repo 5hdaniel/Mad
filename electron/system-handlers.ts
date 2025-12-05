@@ -118,11 +118,19 @@ If you're seeing this error:
 // Guard to prevent multiple concurrent initializations
 let isInitializing = false;
 let initializationComplete = false;
+let handlersRegistered = false;
 
 /**
  * Register all system and permission-related IPC handlers
  */
 export function registerSystemHandlers(): void {
+  // Prevent double registration (can happen during hot-reload or app reactivation)
+  if (handlersRegistered) {
+    logService.warn('System handlers already registered, skipping duplicate registration', 'SystemHandlers');
+    return;
+  }
+  handlersRegistered = true;
+
   // ===== SECURE STORAGE (KEYCHAIN) SETUP =====
 
   /**
@@ -591,14 +599,17 @@ export function registerSystemHandlers(): void {
       const validatedUserId = userId ? validateUserId(userId) : null;
       const validatedProvider = provider ? validateProvider(provider) : null;
 
+      // Skip permission checks on Windows (macOS-only features)
+      const isMacOS = os.platform() === 'darwin';
+
       const [permissions, connection, contactsLoading] = await Promise.all([
-        permissionService.checkAllPermissions(),
+        isMacOS ? permissionService.checkAllPermissions() : { allGranted: true, permissions: {}, errors: [] },
         validatedUserId && validatedProvider ? (
           validatedProvider === 'google'
             ? connectionStatusService.checkGoogleConnection(validatedUserId)
             : connectionStatusService.checkMicrosoftConnection(validatedUserId)
         ) : null,
-        permissionService.checkContactsLoading(),
+        isMacOS ? permissionService.checkContactsLoading() : { canLoadContacts: true, contactCount: 0 },
       ]);
 
       const issues: unknown[] = [];
@@ -742,6 +753,66 @@ export function registerSystemHandlers(): void {
         success: false,
         error: errorMessage,
       };
+    }
+  });
+
+  // ===== USER PHONE TYPE PREFERENCES =====
+
+  /**
+   * Get user's mobile phone type preference
+   * @param userId - User ID to get phone type for
+   * @returns Phone type ('iphone' | 'android' | null)
+   */
+  ipcMain.handle('user:get-phone-type', async (event: IpcMainInvokeEvent, userId: string): Promise<{ success: boolean; phoneType: 'iphone' | 'android' | null; error?: string }> => {
+    try {
+      const validatedUserId = validateUserId(userId);
+      // validateUserId throws when required (default), so validatedUserId is never null here
+      const user = await databaseService.getUserById(validatedUserId!);
+
+      if (!user) {
+        return { success: true, phoneType: null };
+      }
+
+      return {
+        success: true,
+        phoneType: user.mobile_phone_type as 'iphone' | 'android' | null
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logService.error('Failed to get user phone type', 'SystemHandlers', { error: errorMessage });
+      if (error instanceof ValidationError) {
+        return { success: false, phoneType: null, error: `Validation error: ${error.message}` };
+      }
+      return { success: false, phoneType: null, error: errorMessage };
+    }
+  });
+
+  /**
+   * Set user's mobile phone type preference
+   * @param userId - User ID to set phone type for
+   * @param phoneType - Phone type to set ('iphone' | 'android')
+   */
+  ipcMain.handle('user:set-phone-type', async (event: IpcMainInvokeEvent, userId: string, phoneType: 'iphone' | 'android'): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const validatedUserId = validateUserId(userId);
+
+      // Validate phone type
+      if (phoneType !== 'iphone' && phoneType !== 'android') {
+        return { success: false, error: 'Invalid phone type. Must be "iphone" or "android"' };
+      }
+
+      // validateUserId throws when required (default), so validatedUserId is never null here
+      await databaseService.updateUser(validatedUserId!, { mobile_phone_type: phoneType });
+      logService.info(`Updated phone type for user ${validatedUserId} to ${phoneType}`, 'SystemHandlers');
+
+      return { success: true };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logService.error('Failed to set user phone type', 'SystemHandlers', { error: errorMessage });
+      if (error instanceof ValidationError) {
+        return { success: false, error: `Validation error: ${error.message}` };
+      }
+      return { success: false, error: errorMessage };
     }
   });
 

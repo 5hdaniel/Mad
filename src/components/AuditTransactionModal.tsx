@@ -3,6 +3,7 @@ import { SPECIFIC_ROLES, ROLE_TO_CATEGORY, AUDIT_WORKFLOW_STEPS } from '../const
 import { filterRolesByTransactionType, getTransactionTypeContext, getRoleDisplayName } from '../utils/transactionRoleUtils';
 import ContactSelectModal from './ContactSelectModal';
 import type { Contact, Transaction } from '../../electron/types/models';
+import { usePlatform } from '../contexts/PlatformContext';
 
 // Type definitions
 interface AuditTransactionModalProps {
@@ -91,6 +92,7 @@ interface RoleConfig {
  * Comprehensive transaction creation with address verification and contact assignment
  */
 function AuditTransactionModal({ userId, provider: _provider, onClose, onSuccess }: AuditTransactionModalProps): React.ReactElement {
+  const { isMacOS, isWindows } = usePlatform();
   const [step, setStep] = useState<number>(1); // 1: Address, 2: Client & Agents, 3: Professional Services
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -623,6 +625,7 @@ interface RoleAssignmentProps {
 }
 
 function RoleAssignment({ role, required, multiple, assignments, onAssign, onRemove, userId, propertyAddress, transactionType }: RoleAssignmentProps): React.ReactElement {
+  const { isMacOS, isWindows } = usePlatform();
   const [contacts, setContacts] = React.useState<Contact[]>([]);
   const [loading, setLoading] = React.useState<boolean>(true);
   const [error, setError] = React.useState<ErrorState | null>(null);
@@ -649,24 +652,48 @@ function RoleAssignment({ role, required, multiple, assignments, onAssign, onRem
         if (!result.contacts || result.contacts.length === 0) {
           setError({
             type: 'no_contacts',
-            message: 'No contacts found. Make sure you have Full Disk Access enabled and have imported your emails.',
-            action: 'Check permissions in System Settings > Privacy & Security > Full Disk Access',
+            message: isMacOS
+              ? 'No contacts found. Make sure you have Full Disk Access enabled and have imported your emails.'
+              : isWindows
+              ? 'No contacts found. Make sure you have imported your emails and synced your iPhone messages.'
+              : 'No contacts found. Make sure you have imported your emails.',
+            action: isMacOS
+              ? 'Check permissions in System Settings > Privacy & Security > Full Disk Access'
+              : isWindows
+              ? 'Connect your iPhone via USB and create a backup to sync contacts and messages'
+              : 'Import your emails',
           });
         }
       } else {
         // API returned error
         setError({
           type: 'api_error',
-          message: result.error || 'Failed to load contacts. This may be due to missing permissions.',
-          action: 'Please check Full Disk Access permission in System Settings',
+          message: isMacOS
+            ? (result.error || 'Failed to load contacts. This may be due to missing permissions.')
+            : isWindows
+            ? (result.error || 'Failed to load contacts. Connect your iPhone to sync contacts.')
+            : (result.error || 'Failed to load contacts.'),
+          action: isMacOS
+            ? 'Please check Full Disk Access permission in System Settings'
+            : isWindows
+            ? 'Connect your iPhone via USB and create a backup'
+            : 'Check your connection',
         });
       }
     } catch (err: unknown) {
       console.error('Failed to load contacts:', err);
       setError({
         type: 'exception',
-        message: 'Unable to load contacts. Please check your permissions.',
-        action: 'Open System Settings and enable Full Disk Access for this app',
+        message: isMacOS
+          ? 'Unable to load contacts. Please check your permissions.'
+          : isWindows
+          ? 'Unable to load contacts. Please sync your iPhone backup.'
+          : 'Unable to load contacts.',
+        action: isMacOS
+          ? 'Open System Settings and enable Full Disk Access for this app'
+          : isWindows
+          ? 'Connect your iPhone via USB and create a backup'
+          : 'Try again',
       });
     } finally {
       setLoading(false);

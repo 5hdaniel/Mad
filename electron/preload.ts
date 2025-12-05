@@ -579,6 +579,30 @@ contextBridge.exposeInMainWorld('api', {
 
   /**
    * ============================================
+   * USER PREFERENCES METHODS
+   * ============================================
+   * User-specific preferences stored in local database
+   */
+  user: {
+    /**
+     * Gets user's mobile phone type preference
+     * @param {string} userId - User ID to get phone type for
+     * @returns {Promise<{success: boolean, phoneType: 'iphone' | 'android' | null, error?: string}>} Phone type result
+     */
+    getPhoneType: (userId: string) => ipcRenderer.invoke('user:get-phone-type', userId),
+
+    /**
+     * Sets user's mobile phone type preference
+     * @param {string} userId - User ID to set phone type for
+     * @param {string} phoneType - Phone type ('iphone' | 'android')
+     * @returns {Promise<{success: boolean, error?: string}>} Set result
+     */
+    setPhoneType: (userId: string, phoneType: 'iphone' | 'android') => ipcRenderer.invoke('user:set-phone-type', userId, phoneType),
+  },
+
+
+  /**
+   * ============================================
    * EVENT LISTENERS
    * ============================================
    * Subscribe to asynchronous events from the main process
@@ -728,6 +752,148 @@ contextBridge.exposeInMainWorld('api', {
   },
 
   /**
+   * Listens for backup progress updates
+   * @param {Function} callback - Callback function to handle progress updates
+   * @returns {Function} Cleanup function to remove listener
+   */
+  onBackupProgress: (callback: (progress: { phase: string; percent: number }) => void) => {
+    const listener = (_: IpcRendererEvent, progress: { phase: string; percent: number }) => callback(progress);
+    ipcRenderer.on('backup:progress', listener);
+    return () => ipcRenderer.removeListener('backup:progress', listener);
+  },
+
+  /**
+   * Listens for backup password required events
+   * @param {Function} callback - Callback function when password is needed
+   * @returns {Function} Cleanup function to remove listener
+   */
+  onBackupPasswordRequired: (callback: (data: { udid: string }) => void) => {
+    const listener = (_: IpcRendererEvent, data: { udid: string }) => callback(data);
+    ipcRenderer.on('backup:password-required', listener);
+    return () => ipcRenderer.removeListener('backup:password-required', listener);
+  },
+
+  /**
+   * ============================================
+   * BACKUP METHODS
+   * ============================================
+   * iPhone backup operations for extracting messages and contacts
+   */
+  backup: {
+    /**
+     * Gets backup system capabilities
+     * Note: Domain filtering is NOT supported - see docs/BACKUP_RESEARCH.md
+     * @returns {Promise<BackupCapabilities>} Available capabilities
+     */
+    getCapabilities: () => ipcRenderer.invoke('backup:capabilities'),
+
+    /**
+     * Gets current backup status
+     * @returns {Promise<BackupStatus>} Current status including progress
+     */
+    getStatus: () => ipcRenderer.invoke('backup:status'),
+
+    /**
+     * Starts a backup operation for the specified device
+     * @param {BackupOptions} options - Backup options including device UDID
+     * @returns {Promise<BackupResult>} Backup result
+     */
+    start: (options: { udid: string; outputDir?: string; forceFullBackup?: boolean; skipApps?: boolean }) =>
+      ipcRenderer.invoke('backup:start', options),
+
+    /**
+     * Cancels an in-progress backup
+     * @returns {Promise<{success: boolean}>} Cancellation result
+     */
+    cancel: () => ipcRenderer.invoke('backup:cancel'),
+
+    /**
+     * Lists all existing backups
+     * @returns {Promise<BackupInfo[]>} List of backup information
+     */
+    list: () => ipcRenderer.invoke('backup:list'),
+
+    /**
+     * Deletes a specific backup
+     * @param {string} backupPath - Path to the backup to delete
+     * @returns {Promise<{success: boolean, error?: string}>} Deletion result
+     */
+    delete: (backupPath: string) => ipcRenderer.invoke('backup:delete', backupPath),
+
+    /**
+     * Cleans up old backups, keeping only the most recent
+     * @param {number} keepCount - Number of backups to keep per device
+     * @returns {Promise<{success: boolean, error?: string}>} Cleanup result
+     */
+    cleanup: (keepCount?: number) => ipcRenderer.invoke('backup:cleanup', keepCount),
+
+    /**
+     * Check if a device requires encrypted backup
+     * @param {string} udid - Device unique identifier
+     * @returns {Promise<{success: boolean, isEncrypted?: boolean, needsPassword?: boolean, error?: string}>}
+     */
+    checkEncryption: (udid: string) => ipcRenderer.invoke('backup:check-encryption', udid),
+
+    /**
+     * Start a backup with password (for encrypted backups)
+     * @param {Object} options - Backup options including password
+     * @returns {Promise<{success: boolean, backupPath?: string, error?: string, errorCode?: string}>}
+     */
+    startWithPassword: (options: { udid: string; password: string; outputPath?: string }) =>
+      ipcRenderer.invoke('backup:start-with-password', options),
+
+    /**
+     * Verify a backup password without starting backup
+     * @param {string} backupPath - Path to the backup
+     * @param {string} password - Password to verify
+     * @returns {Promise<{success: boolean, valid?: boolean, error?: string}>}
+     */
+    verifyPassword: (backupPath: string, password: string) =>
+      ipcRenderer.invoke('backup:verify-password', backupPath, password),
+
+    /**
+     * Check if an existing backup is encrypted
+     * @param {string} backupPath - Path to the backup
+     * @returns {Promise<{success: boolean, isEncrypted?: boolean, error?: string}>}
+     */
+    isEncrypted: (backupPath: string) =>
+      ipcRenderer.invoke('backup:is-encrypted', backupPath),
+
+    /**
+     * Subscribes to backup progress updates
+     * @param {Function} callback - Called with progress updates
+     * @returns {Function} Cleanup function to remove listener
+     */
+    onProgress: (callback: (progress: any) => void) => {
+      const listener = (_: IpcRendererEvent, progress: any) => callback(progress);
+      ipcRenderer.on('backup:progress', listener);
+      return () => ipcRenderer.removeListener('backup:progress', listener);
+    },
+
+    /**
+     * Subscribes to backup completion events
+     * @param {Function} callback - Called when backup completes
+     * @returns {Function} Cleanup function to remove listener
+     */
+    onComplete: (callback: (result: any) => void) => {
+      const listener = (_: IpcRendererEvent, result: any) => callback(result);
+      ipcRenderer.on('backup:complete', listener);
+      return () => ipcRenderer.removeListener('backup:complete', listener);
+    },
+
+    /**
+     * Subscribes to backup error events
+     * @param {Function} callback - Called when backup encounters an error
+     * @returns {Function} Cleanup function to remove listener
+     */
+    onError: (callback: (error: { message: string }) => void) => {
+      const listener = (_: IpcRendererEvent, error: any) => callback(error);
+      ipcRenderer.on('backup:error', listener);
+      return () => ipcRenderer.removeListener('backup:error', listener);
+    },
+  },
+
+  /**
    * ============================================
    * SHELL METHODS
    * ============================================
@@ -741,6 +907,220 @@ contextBridge.exposeInMainWorld('api', {
      */
     openExternal: (url: string) => ipcRenderer.invoke('shell:open-external', url),
   },
+
+  /**
+   * ============================================
+   * DEVICE DETECTION METHODS
+   * ============================================
+   * Handles iOS device detection via USB using libimobiledevice
+   */
+  device: {
+    /**
+     * Lists all currently connected iOS devices
+     * @returns {Promise<{success: boolean, devices?: Array, error?: string}>} List of connected devices
+     */
+    list: () => ipcRenderer.invoke('device:list'),
+
+    /**
+     * Starts device detection polling
+     * @returns {Promise<{success: boolean, error?: string}>} Start result
+     */
+    startDetection: () => ipcRenderer.invoke('device:start-detection'),
+
+    /**
+     * Stops device detection polling
+     * @returns {Promise<{success: boolean, error?: string}>} Stop result
+     */
+    stopDetection: () => ipcRenderer.invoke('device:stop-detection'),
+
+    /**
+     * Checks if libimobiledevice tools are available
+     * @returns {Promise<{success: boolean, available?: boolean, error?: string}>} Availability check result
+     */
+    checkAvailability: () => ipcRenderer.invoke('device:check-availability'),
+
+    /**
+     * Subscribes to device connected events
+     * @param {Function} callback - Callback function when device connects
+     * @returns {Function} Cleanup function to remove listener
+     */
+    onConnected: (callback: (device: any) => void) => {
+      const listener = (_: IpcRendererEvent, device: any) => callback(device);
+      ipcRenderer.on('device:connected', listener);
+      return () => ipcRenderer.removeListener('device:connected', listener);
+    },
+
+    /**
+     * Subscribes to device disconnected events
+     * @param {Function} callback - Callback function when device disconnects
+     * @returns {Function} Cleanup function to remove listener
+     */
+    onDisconnected: (callback: (device: any) => void) => {
+      const listener = (_: IpcRendererEvent, device: any) => callback(device);
+      ipcRenderer.on('device:disconnected', listener);
+      return () => ipcRenderer.removeListener('device:disconnected', listener);
+    },
+  },
+
+  /**
+   * ============================================
+   * APPLE DRIVER METHODS (Windows only)
+   * ============================================
+   * Detects and installs Apple Mobile Device Support drivers
+   */
+  drivers: {
+    /**
+     * Check if Apple Mobile Device Support drivers are installed
+     * @returns {Promise<{isInstalled: boolean, version: string|null, serviceRunning: boolean, error: string|null}>}
+     */
+    checkApple: () => ipcRenderer.invoke('drivers:check-apple'),
+
+    /**
+     * Check if bundled Apple drivers are available in the app
+     * @returns {Promise<{available: boolean}>}
+     */
+    hasBundled: () => ipcRenderer.invoke('drivers:has-bundled'),
+
+    /**
+     * Install Apple Mobile Device Support drivers
+     * IMPORTANT: Only call after user has given consent
+     * @returns {Promise<{success: boolean, error: string|null, rebootRequired: boolean}>}
+     */
+    installApple: () => ipcRenderer.invoke('drivers:install-apple'),
+
+    /**
+     * Open iTunes in Microsoft Store for manual installation
+     * @returns {Promise<{success: boolean, error?: string}>}
+     */
+    openITunesStore: () => ipcRenderer.invoke('drivers:open-itunes-store'),
+  },
+
+  /**
+   * ============================================
+   * SYNC METHODS (Windows iPhone Sync)
+   * ============================================
+   * Complete iPhone sync flow: backup -> decrypt -> parse -> resolve
+   */
+  sync: {
+    /**
+     * Starts a complete sync operation for an iPhone
+     * @param {Object} options - Sync options
+     * @param {string} options.udid - Device UDID to sync
+     * @param {string} [options.password] - Password for encrypted backups
+     * @param {boolean} [options.forceFullBackup] - Force full backup (no incremental)
+     * @returns {Promise<SyncResult>} Sync result with messages, contacts, conversations
+     */
+    start: (options: { udid: string; password?: string; forceFullBackup?: boolean }) =>
+      ipcRenderer.invoke('sync:start', options),
+
+    /**
+     * Cancels an in-progress sync operation
+     * @returns {Promise<{success: boolean}>} Cancellation result
+     */
+    cancel: () => ipcRenderer.invoke('sync:cancel'),
+
+    /**
+     * Gets current sync status
+     * @returns {Promise<{isRunning: boolean, phase: string}>} Current sync status
+     */
+    getStatus: () => ipcRenderer.invoke('sync:status'),
+
+    /**
+     * Gets all connected iOS devices
+     * @returns {Promise<Array>} List of connected devices
+     */
+    getDevices: () => ipcRenderer.invoke('sync:devices'),
+
+    /**
+     * Starts device detection polling
+     * @param {number} [intervalMs] - Polling interval in milliseconds
+     * @returns {Promise<{success: boolean}>} Start result
+     */
+    startDetection: (intervalMs?: number) => ipcRenderer.invoke('sync:start-detection', intervalMs),
+
+    /**
+     * Stops device detection polling
+     * @returns {Promise<{success: boolean}>} Stop result
+     */
+    stopDetection: () => ipcRenderer.invoke('sync:stop-detection'),
+
+    /**
+     * Subscribes to sync progress updates
+     * @param {Function} callback - Callback with progress info
+     * @returns {Function} Cleanup function to remove listener
+     */
+    onProgress: (callback: (progress: any) => void) => {
+      const listener = (_: IpcRendererEvent, progress: any) => callback(progress);
+      ipcRenderer.on('sync:progress', listener);
+      return () => ipcRenderer.removeListener('sync:progress', listener);
+    },
+
+    /**
+     * Subscribes to sync phase changes
+     * @param {Function} callback - Callback with phase name
+     * @returns {Function} Cleanup function to remove listener
+     */
+    onPhase: (callback: (phase: string) => void) => {
+      const listener = (_: IpcRendererEvent, phase: string) => callback(phase);
+      ipcRenderer.on('sync:phase', listener);
+      return () => ipcRenderer.removeListener('sync:phase', listener);
+    },
+
+    /**
+     * Subscribes to device connected events during sync
+     * @param {Function} callback - Callback with device info
+     * @returns {Function} Cleanup function to remove listener
+     */
+    onDeviceConnected: (callback: (device: any) => void) => {
+      const listener = (_: IpcRendererEvent, device: any) => callback(device);
+      ipcRenderer.on('sync:device-connected', listener);
+      return () => ipcRenderer.removeListener('sync:device-connected', listener);
+    },
+
+    /**
+     * Subscribes to device disconnected events during sync
+     * @param {Function} callback - Callback with device info
+     * @returns {Function} Cleanup function to remove listener
+     */
+    onDeviceDisconnected: (callback: (device: any) => void) => {
+      const listener = (_: IpcRendererEvent, device: any) => callback(device);
+      ipcRenderer.on('sync:device-disconnected', listener);
+      return () => ipcRenderer.removeListener('sync:device-disconnected', listener);
+    },
+
+    /**
+     * Subscribes to password required events (encrypted backup)
+     * @param {Function} callback - Callback when password is needed
+     * @returns {Function} Cleanup function to remove listener
+     */
+    onPasswordRequired: (callback: () => void) => {
+      const listener = () => callback();
+      ipcRenderer.on('sync:password-required', listener);
+      return () => ipcRenderer.removeListener('sync:password-required', listener);
+    },
+
+    /**
+     * Subscribes to sync error events
+     * @param {Function} callback - Callback with error info
+     * @returns {Function} Cleanup function to remove listener
+     */
+    onError: (callback: (error: { message: string }) => void) => {
+      const listener = (_: IpcRendererEvent, error: any) => callback(error);
+      ipcRenderer.on('sync:error', listener);
+      return () => ipcRenderer.removeListener('sync:error', listener);
+    },
+
+    /**
+     * Subscribes to sync completion events
+     * @param {Function} callback - Callback with sync result
+     * @returns {Function} Cleanup function to remove listener
+     */
+    onComplete: (callback: (result: any) => void) => {
+      const listener = (_: IpcRendererEvent, result: any) => callback(result);
+      ipcRenderer.on('sync:complete', listener);
+      return () => ipcRenderer.removeListener('sync:complete', listener);
+    },
+  },
 });
 
 /**
@@ -751,6 +1131,12 @@ contextBridge.exposeInMainWorld('api', {
  * New code should use the 'api' namespace above instead
  */
 contextBridge.exposeInMainWorld('electron', {
+  /**
+   * Current platform identifier from Node.js process.platform
+   * @type {'darwin' | 'win32' | 'linux'}
+   */
+  platform: process.platform,
+
   /**
    * Gets application info (version, name, etc.)
    * @returns {Promise<{version: string, name: string}>} App info
@@ -934,5 +1320,44 @@ contextBridge.exposeInMainWorld('electron', {
     const listener = (_: IpcRendererEvent, progress: any) => callback(progress);
     ipcRenderer.on('export-progress', listener);
     return () => ipcRenderer.removeListener('export-progress', listener);
-  }
+  },
+
+  /**
+   * ============================================
+   * APPLE DRIVER METHODS (Windows only - Legacy)
+   * ============================================
+   * Detects and installs Apple Mobile Device Support drivers
+   */
+  drivers: {
+    /**
+     * Check if Apple Mobile Device Support drivers are installed
+     * @returns {Promise<{installed: boolean, version?: string, serviceRunning: boolean, error?: string}>}
+     */
+    checkApple: () => ipcRenderer.invoke('drivers:check-apple'),
+
+    /**
+     * Check if bundled Apple drivers are available in the app
+     * @returns {Promise<{hasBundled: boolean}>}
+     */
+    hasBundled: () => ipcRenderer.invoke('drivers:has-bundled'),
+
+    /**
+     * Install Apple Mobile Device Support drivers
+     * IMPORTANT: Only call after user has given consent
+     * @returns {Promise<{success: boolean, cancelled?: boolean, error?: string, rebootRequired?: boolean}>}
+     */
+    installApple: () => ipcRenderer.invoke('drivers:install-apple'),
+
+    /**
+     * Open iTunes in Microsoft Store for manual installation
+     * @returns {Promise<{success: boolean, error?: string}>}
+     */
+    openITunesStore: () => ipcRenderer.invoke('drivers:open-itunes-store'),
+
+    /**
+     * Check if a driver update is available
+     * @returns {Promise<{updateAvailable: boolean, installedVersion?: string, bundledVersion?: string}>}
+     */
+    checkUpdate: () => ipcRenderer.invoke('drivers:check-update'),
+  },
 });

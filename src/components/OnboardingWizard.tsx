@@ -1,31 +1,40 @@
 import React, { useState, useEffect } from 'react';
+import { usePlatform } from '../contexts/PlatformContext';
 
 interface OnboardingWizardProps {
   onComplete: (result?: { skipped?: boolean }) => void;
 }
 
 /**
- * Onboarding Wizard
- * Guides new users through permission setup
+ * Platform-Aware Onboarding Wizard
+ * Guides new users through platform-specific setup based on their operating system
  *
- * Flow:
- * 1. Welcome screen
- * 2. Request Contacts permission
- * 3. Setup Full Disk Access (opens System Preferences)
- * 4. Wait for user to toggle on Full Disk Access
- * 5. Completion celebration
+ * macOS Flow (5 steps):
+ * 1. Welcome screen - shows macOS-specific features (Contacts, Full Disk Access)
+ * 2. Request Contacts permission - opens Contacts app
+ * 3. Setup Full Disk Access - opens System Settings
+ * 4. Wait for user to grant Full Disk Access - polls every 2 seconds
+ * 5. Completion celebration - acknowledges iMessage access
+ *
+ * Windows Flow (3 steps):
+ * 1. Welcome screen - shows Windows-specific features (iPhone Backup, Email)
+ * 2. iPhone backup setup - detailed instructions for USB connection, trust, and creating backups
+ * 5. Completion celebration - acknowledges iPhone sync capability
+ *
+ * Note: Steps 3 and 4 are skipped on Windows as they are macOS-specific
  */
 function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
-  const [step, setStep] = useState(1); // 1=welcome, 2=contacts, 3=full-disk, 4=waiting, 5=complete
+  const { isMacOS, isWindows } = usePlatform();
+  const [step, setStep] = useState(1); // 1=welcome, 2=contacts/iphone, 3=full-disk, 4=waiting, 5=complete
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [contactsGranted, setContactsGranted] = useState(false);
   const [_fullDiskGranted, setFullDiskGranted] = useState(false);
   const [_checkingPermissions, _setCheckingPermissions] = useState(false);
 
-  // Poll for Full Disk Access permission
+  // Poll for Full Disk Access permission (macOS only)
   useEffect(() => {
-    if (step === 4) {
+    if (step === 4 && isMacOS) {
       const interval = setInterval(async () => {
         const result = await window.api.system.checkFullDiskAccessStatus();
         if (result.hasAccess) {
@@ -37,7 +46,7 @@ function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
 
       return () => clearInterval(interval);
     }
-  }, [step]);
+  }, [step, isMacOS]);
 
   const handleRequestContacts = async () => {
     setLoading(true);
@@ -113,7 +122,15 @@ function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
         <div className="h-2 bg-gray-200">
           <div
             className="h-full bg-gradient-to-r from-indigo-500 to-purple-600 transition-all duration-500"
-            style={{ width: `${(step / 5) * 100}%` }}
+            style={{
+              width: `${
+                isMacOS
+                  ? (step / 5) * 100  // macOS: 5 steps total
+                  : step === 1 ? 33   // Windows: step 1 = 33%
+                  : step === 2 ? 66   // Windows: step 2 = 66%
+                  : 100               // Windows: step 5 = 100%
+              }%`
+            }}
           />
         </div>
 
@@ -138,18 +155,38 @@ function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-8 text-left">
                 <h3 className="font-semibold text-gray-900 mb-3">What we'll do:</h3>
                 <ul className="space-y-3 text-sm text-gray-700">
-                  <li className="flex items-start gap-3">
-                    <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    <span><strong>Contacts Access:</strong> Match phone numbers to contact names in your emails</span>
-                  </li>
-                  <li className="flex items-start gap-3">
-                    <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    <span><strong>Full Disk Access:</strong> Read your iMessages to find transaction communications</span>
-                  </li>
+                  {isMacOS && (
+                    <>
+                      <li className="flex items-start gap-3">
+                        <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        <span><strong>Contacts Access:</strong> Match phone numbers to contact names in your emails</span>
+                      </li>
+                      <li className="flex items-start gap-3">
+                        <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        <span><strong>Full Disk Access:</strong> Read your iMessages to find transaction communications</span>
+                      </li>
+                    </>
+                  )}
+                  {isWindows && (
+                    <>
+                      <li className="flex items-start gap-3">
+                        <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        <span><strong>iPhone Connection:</strong> Set up USB connectivity to sync your iPhone messages</span>
+                      </li>
+                      <li className="flex items-start gap-3">
+                        <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        <span><strong>Email & Outlook:</strong> Connect your email to find transaction communications</span>
+                      </li>
+                    </>
+                  )}
                 </ul>
               </div>
 
@@ -170,8 +207,8 @@ function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
             </div>
           )}
 
-          {/* Step 2: Contacts Permission */}
-          {step === 2 && (
+          {/* Step 2: macOS - Contacts Permission / Windows - iPhone Connection */}
+          {step === 2 && isMacOS && (
             <div className="text-center">
               <div className="mb-6">
                 <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full mx-auto flex items-center justify-center">
@@ -231,8 +268,67 @@ function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
             </div>
           )}
 
-          {/* Step 3: Full Disk Access Setup */}
-          {step === 3 && (
+          {/* Step 2: Windows - iPhone Backup Setup */}
+          {step === 2 && isWindows && (
+            <div className="text-center">
+              <div className="mb-6">
+                <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full mx-auto flex items-center justify-center">
+                  <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  </svg>
+                </div>
+              </div>
+
+              <h2 className="text-2xl font-bold text-gray-900 mb-3">iPhone Backup Setup</h2>
+              <p className="text-gray-600 mb-6">
+                To export messages on Windows, Magic Audit needs to create a backup of your iPhone.
+                This allows us to access your contacts and messages for transaction audits.
+              </p>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6 text-left">
+                <h3 className="font-semibold text-gray-900 mb-3">How to create a backup:</h3>
+                <ol className="space-y-3 text-sm text-gray-700">
+                  <li className="flex items-start gap-3">
+                    <span className="flex-shrink-0 w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold">1</span>
+                    <span>Connect your iPhone to this computer using a USB cable</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <span className="flex-shrink-0 w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold">2</span>
+                    <span>Unlock your iPhone and tap <strong>"Trust This Computer"</strong> when prompted</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <span className="flex-shrink-0 w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold">3</span>
+                    <span>Enter your iPhone passcode to authorize the connection</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <span className="flex-shrink-0 w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold">4</span>
+                    <span>In Magic Audit, go to the <strong>iPhone Sync</strong> section from the main dashboard</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <span className="flex-shrink-0 w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold">5</span>
+                    <span>Click <strong>"Create Backup"</strong> to sync your iPhone messages and contacts</span>
+                  </li>
+                </ol>
+              </div>
+
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-8">
+                <p className="text-sm text-yellow-800">
+                  <strong className="text-yellow-900">Important:</strong> The first backup may take several minutes depending on your iPhone data size.
+                  Keep your iPhone connected and unlocked during the backup process.
+                </p>
+              </div>
+
+              <button
+                onClick={() => setStep(5)}
+                className="px-8 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all"
+              >
+                I Understand, Continue →
+              </button>
+            </div>
+          )}
+
+          {/* Step 3: Full Disk Access Setup (macOS only) */}
+          {step === 3 && isMacOS && (
             <div className="text-center">
               <div className="mb-6">
                 <div className="w-20 h-20 bg-gradient-to-br from-purple-500 to-pink-600 rounded-full mx-auto flex items-center justify-center">
@@ -295,8 +391,8 @@ function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
             </div>
           )}
 
-          {/* Step 4: Waiting for Permission */}
-          {step === 4 && (
+          {/* Step 4: Waiting for Permission (macOS only) */}
+          {step === 4 && isMacOS && (
             <div className="text-center">
               <div className="mb-6">
                 <div className="w-20 h-20 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full mx-auto flex items-center justify-center animate-pulse">
@@ -348,12 +444,31 @@ function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
 
               <h2 className="text-3xl font-bold text-gray-900 mb-3">🎉 You're All Set!</h2>
               <p className="text-lg text-gray-600 mb-8">
-                All permissions granted. You can now start auditing transactions!
+                {isMacOS
+                  ? "All permissions granted. You can now start auditing transactions!"
+                  : "Setup complete. You can now start auditing transactions!"
+                }
               </p>
 
               <div className="bg-green-50 border border-green-200 rounded-lg p-6 mb-8">
                 <h3 className="font-semibold text-gray-900 mb-3">What you can do now:</h3>
                 <ul className="space-y-2 text-sm text-gray-700">
+                  {isMacOS && (
+                    <li className="flex items-center gap-2">
+                      <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      <span>Access your iMessages directly for transaction communications</span>
+                    </li>
+                  )}
+                  {isWindows && (
+                    <li className="flex items-center gap-2">
+                      <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      <span>Connect your iPhone to sync messages and transaction communications</span>
+                    </li>
+                  )}
                   <li className="flex items-center gap-2">
                     <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
