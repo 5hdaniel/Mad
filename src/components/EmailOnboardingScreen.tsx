@@ -449,9 +449,10 @@ function EmailOnboardingScreen({ userId, authProvider, onComplete, onSkip }: Ema
           </>
         )}
 
-        {/* Primary Connection Card - Highlighted (only show for email step) */}
+        {/* Email Connection Cards - Highlighted (only show for email step) */}
         {((navigationStep === 3 && !isWindows) || (navigationStep === 2 && isWindows)) && (
-        <div className="mb-6">
+          <>
+            <div className="mb-6">
           <div className="p-5 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl border-2 border-blue-200">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-3">
@@ -561,8 +562,8 @@ function EmailOnboardingScreen({ userId, authProvider, onComplete, onSkip }: Ema
               </button>
             )}
           </div>
-        </div>
-        </>
+            </div>
+          </>
         )}
 
         {/* Navigation Buttons */}
