@@ -21,12 +21,13 @@ interface EmailOnboardingScreenProps {
   onSkip: () => void;
 }
 
-// Setup steps for progress indicator
+// Setup steps for progress indicator (5 steps)
 const SETUP_STEPS = [
   { id: 1, label: 'Sign In' },
-  { id: 2, label: 'Secure Storage' },
-  { id: 3, label: 'Connect Email' },
-  { id: 4, label: 'Permissions' },
+  { id: 2, label: 'Phone Type' },
+  { id: 3, label: 'Secure Storage' },
+  { id: 4, label: 'Connect Email' },
+  { id: 5, label: 'Permissions' },
 ];
 
 /**
@@ -61,7 +62,7 @@ function SetupProgressIndicator({ currentStep }: { currentStep: number }) {
           </div>
           {index < SETUP_STEPS.length - 1 && (
             <div
-              className={`w-8 h-0.5 mb-5 transition-all ${
+              className={`w-6 h-0.5 mb-5 transition-all ${
                 step.id < currentStep ? 'bg-green-500' : 'bg-gray-200'
               }`}
             />
@@ -225,7 +226,7 @@ function EmailOnboardingScreen({ userId, authProvider, onComplete, onSkip }: Ema
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-8">
       <div className="max-w-lg w-full bg-white rounded-2xl shadow-xl p-8">
         {/* Progress Indicator */}
-        <SetupProgressIndicator currentStep={3} />
+        <SetupProgressIndicator currentStep={4} />
 
         {/* Header */}
         <div className="text-center mb-8">

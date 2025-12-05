@@ -425,6 +425,12 @@ export interface WindowApi {
     update: (userId: string, partialPreferences: Record<string, unknown>) => Promise<{ success: boolean }>;
   };
 
+  // User preference methods (stored in local database)
+  user: {
+    getPhoneType: (userId: string) => Promise<{ success: boolean; phoneType: 'iphone' | 'android' | null; error?: string }>;
+    setPhoneType: (userId: string, phoneType: 'iphone' | 'android') => Promise<{ success: boolean; error?: string }>;
+  };
+
   // Contact methods
   contacts: {
     getAll: (userId: string) => Promise<{ success: boolean; contacts?: Contact[]; error?: string }>;

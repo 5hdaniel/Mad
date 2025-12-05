@@ -835,6 +835,7 @@ class DatabaseService implements IDatabaseService {
       'terms_version_accepted',
       'privacy_policy_version_accepted',
       'email_onboarding_completed_at',
+      'mobile_phone_type',
     ];
 
     const fields: string[] = [];

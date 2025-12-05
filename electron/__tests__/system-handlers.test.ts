@@ -50,6 +50,41 @@ jest.mock('../services/permissionService', () => ({
   default: mockPermissionService,
 }));
 
+jest.mock('../services/databaseService', () => ({
+  __esModule: true,
+  default: {
+    getUserById: jest.fn(),
+    updateUser: jest.fn(),
+    isInitialized: jest.fn().mockReturnValue(true),
+    clearAllSessions: jest.fn(),
+    clearAllOAuthTokens: jest.fn(),
+  },
+}));
+
+jest.mock('../services/databaseEncryptionService', () => ({
+  databaseEncryptionService: {
+    hasKeyStore: jest.fn().mockReturnValue(true),
+  },
+}));
+
+jest.mock('../services/logService', () => ({
+  __esModule: true,
+  default: {
+    info: jest.fn().mockResolvedValue(undefined),
+    error: jest.fn().mockResolvedValue(undefined),
+    debug: jest.fn().mockResolvedValue(undefined),
+    warn: jest.fn().mockResolvedValue(undefined),
+  },
+}));
+
+jest.mock('../auth-handlers', () => ({
+  initializeDatabase: jest.fn(),
+}));
+
+// Import after mocks
+import databaseService from '../services/databaseService';
+const mockDatabaseService = databaseService as jest.Mocked<typeof databaseService>;
+
 jest.mock('../services/connectionStatusService', () => ({
   default: mockConnectionStatusService,
 }));
@@ -618,6 +653,140 @@ describe('System Handlers', () => {
         expect(result.success).toBe(true);
         expect(result.summary).toBeDefined();
         expect(result.summary.totalIssues).toBeGreaterThanOrEqual(2);
+      });
+    });
+  });
+
+  describe('User Phone Type Preferences', () => {
+    describe('user:get-phone-type', () => {
+      it('should return phone type for user with iphone', async () => {
+        mockDatabaseService.getUserById.mockResolvedValue({
+          id: TEST_USER_ID,
+          mobile_phone_type: 'iphone',
+        });
+
+        const handler = registeredHandlers.get('user:get-phone-type');
+        const result = await handler(mockEvent, TEST_USER_ID);
+
+        expect(result.success).toBe(true);
+        expect(result.phoneType).toBe('iphone');
+        expect(mockDatabaseService.getUserById).toHaveBeenCalledWith(TEST_USER_ID);
+      });
+
+      it('should return phone type for user with android', async () => {
+        mockDatabaseService.getUserById.mockResolvedValue({
+          id: TEST_USER_ID,
+          mobile_phone_type: 'android',
+        });
+
+        const handler = registeredHandlers.get('user:get-phone-type');
+        const result = await handler(mockEvent, TEST_USER_ID);
+
+        expect(result.success).toBe(true);
+        expect(result.phoneType).toBe('android');
+      });
+
+      it('should return null phone type when user has not selected', async () => {
+        mockDatabaseService.getUserById.mockResolvedValue({
+          id: TEST_USER_ID,
+          mobile_phone_type: null,
+        });
+
+        const handler = registeredHandlers.get('user:get-phone-type');
+        const result = await handler(mockEvent, TEST_USER_ID);
+
+        expect(result.success).toBe(true);
+        expect(result.phoneType).toBe(null);
+      });
+
+      it('should return null phone type when user not found', async () => {
+        mockDatabaseService.getUserById.mockResolvedValue(null);
+
+        const handler = registeredHandlers.get('user:get-phone-type');
+        const result = await handler(mockEvent, TEST_USER_ID);
+
+        expect(result.success).toBe(true);
+        expect(result.phoneType).toBe(null);
+      });
+
+      it('should handle invalid user ID', async () => {
+        const handler = registeredHandlers.get('user:get-phone-type');
+        const result = await handler(mockEvent, '');
+
+        expect(result.success).toBe(false);
+        expect(result.phoneType).toBe(null);
+        expect(result.error).toContain('Validation error');
+      });
+
+      it('should handle database errors', async () => {
+        mockDatabaseService.getUserById.mockRejectedValue(
+          new Error('Database connection failed')
+        );
+
+        const handler = registeredHandlers.get('user:get-phone-type');
+        const result = await handler(mockEvent, TEST_USER_ID);
+
+        expect(result.success).toBe(false);
+        expect(result.phoneType).toBe(null);
+        expect(result.error).toContain('Database connection failed');
+      });
+    });
+
+    describe('user:set-phone-type', () => {
+      it('should set phone type to iphone', async () => {
+        mockDatabaseService.updateUser.mockResolvedValue(undefined);
+
+        const handler = registeredHandlers.get('user:set-phone-type');
+        const result = await handler(mockEvent, TEST_USER_ID, 'iphone');
+
+        expect(result.success).toBe(true);
+        expect(mockDatabaseService.updateUser).toHaveBeenCalledWith(
+          TEST_USER_ID,
+          { mobile_phone_type: 'iphone' }
+        );
+      });
+
+      it('should set phone type to android', async () => {
+        mockDatabaseService.updateUser.mockResolvedValue(undefined);
+
+        const handler = registeredHandlers.get('user:set-phone-type');
+        const result = await handler(mockEvent, TEST_USER_ID, 'android');
+
+        expect(result.success).toBe(true);
+        expect(mockDatabaseService.updateUser).toHaveBeenCalledWith(
+          TEST_USER_ID,
+          { mobile_phone_type: 'android' }
+        );
+      });
+
+      it('should reject invalid phone type', async () => {
+        const handler = registeredHandlers.get('user:set-phone-type');
+        const result = await handler(mockEvent, TEST_USER_ID, 'blackberry');
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('Invalid phone type');
+        expect(mockDatabaseService.updateUser).not.toHaveBeenCalled();
+      });
+
+      it('should handle invalid user ID', async () => {
+        const handler = registeredHandlers.get('user:set-phone-type');
+        const result = await handler(mockEvent, '', 'iphone');
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('Validation error');
+        expect(mockDatabaseService.updateUser).not.toHaveBeenCalled();
+      });
+
+      it('should handle database errors', async () => {
+        mockDatabaseService.updateUser.mockRejectedValue(
+          new Error('Database update failed')
+        );
+
+        const handler = registeredHandlers.get('user:set-phone-type');
+        const result = await handler(mockEvent, TEST_USER_ID, 'iphone');
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('Database update failed');
       });
     });
   });

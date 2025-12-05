@@ -19,12 +19,14 @@ import KeychainExplanation from './components/KeychainExplanation';
 import Dashboard from './components/Dashboard';
 import AuditTransactionModal from './components/AuditTransactionModal';
 import OfflineFallback from './components/OfflineFallback';
+import PhoneTypeSelection from './components/PhoneTypeSelection';
+import AndroidComingSoon from './components/AndroidComingSoon';
 import { useAuth, useNetwork, usePlatform } from './contexts';
 import type { Conversation } from './hooks/useConversations';
 import type { Subscription } from '../electron/types/models';
 
 // Type definitions
-type AppStep = 'loading' | 'login' | 'secure-storage-setup' | 'keychain-explanation' | 'email-onboarding' | 'microsoft-login' | 'permissions' | 'dashboard' | 'outlook' | 'complete' | 'contacts';
+type AppStep = 'loading' | 'login' | 'secure-storage-setup' | 'keychain-explanation' | 'phone-type-selection' | 'android-coming-soon' | 'email-onboarding' | 'microsoft-login' | 'permissions' | 'dashboard' | 'outlook' | 'complete' | 'contacts';
 
 interface AppExportResult {
   exportPath?: string;
@@ -97,6 +99,9 @@ function App() {
   const [isNewUserFlow, setIsNewUserFlow] = useState<boolean>(false); // Track if this is a new user flow
   const [isDatabaseInitialized, setIsDatabaseInitialized] = useState<boolean>(false); // Track if database is ready
   const [isInitializingDatabase, setIsInitializingDatabase] = useState<boolean>(false); // Track initialization in progress
+  const [hasSelectedPhoneType, setHasSelectedPhoneType] = useState<boolean>(false);
+  const [selectedPhoneType, setSelectedPhoneType] = useState<'iphone' | 'android' | null>(null);
+  const [isLoadingPhoneType, setIsLoadingPhoneType] = useState<boolean>(true);
   const [skipKeychainExplanation, setSkipKeychainExplanation] = useState<boolean>(() => {
     // Check localStorage for user preference
     return localStorage.getItem('skipKeychainExplanation') === 'true';
@@ -175,6 +180,41 @@ function App() {
     checkEmailStatus();
   }, [currentUser?.id]);
 
+  // Load user's phone type from database when user logs in
+  useEffect(() => {
+    const loadPhoneType = async () => {
+      if (currentUser?.id) {
+        setIsLoadingPhoneType(true);
+        try {
+          // Type assertion for the user API
+          const userApi = window.api.user as { getPhoneType: (userId: string) => Promise<{ success: boolean; phoneType: 'iphone' | 'android' | null; error?: string }> };
+          const result = await userApi.getPhoneType(currentUser.id);
+          if (result.success && result.phoneType) {
+            setSelectedPhoneType(result.phoneType);
+            setHasSelectedPhoneType(true);
+          } else {
+            // No phone type stored - user needs to select
+            setHasSelectedPhoneType(false);
+            setSelectedPhoneType(null);
+          }
+        } catch (error) {
+          console.error('[App] Failed to load phone type:', error);
+          // On error, assume not selected so user can choose
+          setHasSelectedPhoneType(false);
+          setSelectedPhoneType(null);
+        } finally {
+          setIsLoadingPhoneType(false);
+        }
+      } else {
+        // No user logged in
+        setIsLoadingPhoneType(false);
+        setHasSelectedPhoneType(false);
+        setSelectedPhoneType(null);
+      }
+    };
+    loadPhoneType();
+  }, [currentUser?.id]);
+
   // Handle Windows database initialization without keychain prompt
   // Windows uses DPAPI (Data Protection API) which doesn't require user interaction
   useEffect(() => {
@@ -221,7 +261,7 @@ function App() {
   // Handle auth state changes to update navigation
   // FLOW: Login FIRST, then keychain setup if needed (for both new and returning users)
   useEffect(() => {
-    if (!isAuthLoading && !isCheckingEmailOnboarding && !isCheckingSecureStorage) {
+    if (!isAuthLoading && !isCheckingEmailOnboarding && !isCheckingSecureStorage && !isLoadingPhoneType) {
       // If we have pending OAuth data, we're in the middle of the login-first flow
       // Show keychain explanation/setup screen (OAuth succeeded, need keychain to save data)
       if (pendingOAuthData && !isAuthenticated) {
@@ -235,7 +275,10 @@ function App() {
 
       if (isAuthenticated && !needsTermsAcceptance) {
         // User is authenticated and has accepted terms
-        if (!hasCompletedEmailOnboarding) {
+        // Check if user has selected phone type (new step after terms acceptance)
+        if (!hasSelectedPhoneType) {
+          setCurrentStep('phone-type-selection');
+        } else if (!hasCompletedEmailOnboarding) {
           setCurrentStep('email-onboarding');
         } else if (hasPermissions) {
           setCurrentStep('dashboard');
@@ -249,7 +292,7 @@ function App() {
         setCurrentStep('login');
       }
     }
-  }, [isAuthenticated, isAuthLoading, needsTermsAcceptance, hasPermissions, hasCompletedEmailOnboarding, isCheckingEmailOnboarding, isCheckingSecureStorage, pendingOAuthData]);
+  }, [isAuthenticated, isAuthLoading, needsTermsAcceptance, hasPermissions, hasCompletedEmailOnboarding, isCheckingEmailOnboarding, isCheckingSecureStorage, pendingOAuthData, hasSelectedPhoneType, isLoadingPhoneType]);
 
   useEffect(() => {
     checkPermissions();
@@ -292,10 +335,66 @@ function App() {
     await declineTerms();
   };
 
+  // Handle phone type selection - saves to database
+  const handleSelectIPhone = async (): Promise<void> => {
+    if (!currentUser?.id) return;
+
+    try {
+      // Type assertion for the user API
+      const userApi = window.api.user as { setPhoneType: (userId: string, phoneType: 'iphone' | 'android') => Promise<{ success: boolean; error?: string }> };
+      const result = await userApi.setPhoneType(currentUser.id, 'iphone');
+      if (result.success) {
+        setSelectedPhoneType('iphone');
+        setHasSelectedPhoneType(true);
+        // Continue to email onboarding (flow will be handled by useEffect)
+      } else {
+        console.error('[App] Failed to save phone type:', result.error);
+      }
+    } catch (error) {
+      console.error('[App] Error saving phone type:', error);
+    }
+  };
+
+  const handleSelectAndroid = (): void => {
+    setSelectedPhoneType('android');
+    // Don't set hasSelectedPhoneType yet - show coming soon screen first
+    setCurrentStep('android-coming-soon');
+  };
+
+  const handleAndroidGoBack = (): void => {
+    // Go back to phone type selection
+    setSelectedPhoneType(null);
+    setCurrentStep('phone-type-selection');
+  };
+
+  const handleAndroidContinueWithEmail = async (): Promise<void> => {
+    if (!currentUser?.id) return;
+
+    try {
+      // User chooses to continue with email-only features
+      // Save android as phone type to database
+      const userApi = window.api.user as { setPhoneType: (userId: string, phoneType: 'iphone' | 'android') => Promise<{ success: boolean; error?: string }> };
+      const result = await userApi.setPhoneType(currentUser.id, 'android');
+      if (result.success) {
+        setHasSelectedPhoneType(true);
+        // selectedPhoneType is already 'android' from handleSelectAndroid
+        // Continue to email onboarding (flow will be handled by useEffect)
+      } else {
+        console.error('[App] Failed to save phone type:', result.error);
+      }
+    } catch (error) {
+      console.error('[App] Error saving phone type:', error);
+    }
+  };
+
   const handleLogout = async (): Promise<void> => {
     await logout();
     setShowProfile(false);
     setIsNewUserFlow(false);
+    // Phone type is stored in database per user, no need to clear on logout
+    // It will be loaded fresh when a user logs in
+    setHasSelectedPhoneType(false);
+    setSelectedPhoneType(null);
     setCurrentStep('login');
   };
 
@@ -543,7 +642,7 @@ function App() {
       case 'permissions':
         return 'Setup Permissions';
       case 'dashboard':
-        return 'Dashboard';
+        return 'Magic Audit';
       case 'contacts':
         return 'Select Contacts for Export';
       case 'outlook':
@@ -677,6 +776,20 @@ function App() {
           />
         )}
 
+        {currentStep === 'phone-type-selection' && (
+          <PhoneTypeSelection
+            onSelectIPhone={handleSelectIPhone}
+            onSelectAndroid={handleSelectAndroid}
+          />
+        )}
+
+        {currentStep === 'android-coming-soon' && (
+          <AndroidComingSoon
+            onGoBack={handleAndroidGoBack}
+            onContinueWithEmail={handleAndroidContinueWithEmail}
+          />
+        )}
+
         {currentStep === 'email-onboarding' && currentUser && authProvider && (
           <EmailOnboardingScreen
             userId={currentUser.id}
@@ -801,7 +914,8 @@ function App() {
       {/* Key forces re-mount when email connection status changes, triggering fresh health check */}
       {/* IMPORTANT: Don't run health checks until user has completed permissions setup, otherwise
           it tries to access contacts database before Full Disk Access is granted */}
-      {isAuthenticated && currentUser && authProvider && hasPermissions && currentStep === 'dashboard' && (
+      {/* Only show when email is connected - if not connected, Dashboard shows setup prompt instead */}
+      {isAuthenticated && currentUser && authProvider && hasPermissions && currentStep === 'dashboard' && hasEmailConnected && (
         <SystemHealthMonitor
           key={`health-monitor-${hasEmailConnected}`}
           userId={currentUser.id}

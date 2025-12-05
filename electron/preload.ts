@@ -577,6 +577,29 @@ contextBridge.exposeInMainWorld('api', {
     getDiagnostics: () => ipcRenderer.invoke('system:get-diagnostics'),
   },
 
+  /**
+   * ============================================
+   * USER PREFERENCES METHODS
+   * ============================================
+   * User-specific preferences stored in local database
+   */
+  user: {
+    /**
+     * Gets user's mobile phone type preference
+     * @param {string} userId - User ID to get phone type for
+     * @returns {Promise<{success: boolean, phoneType: 'iphone' | 'android' | null, error?: string}>} Phone type result
+     */
+    getPhoneType: (userId: string) => ipcRenderer.invoke('user:get-phone-type', userId),
+
+    /**
+     * Sets user's mobile phone type preference
+     * @param {string} userId - User ID to set phone type for
+     * @param {string} phoneType - Phone type ('iphone' | 'android')
+     * @returns {Promise<{success: boolean, error?: string}>} Set result
+     */
+    setPhoneType: (userId: string, phoneType: 'iphone' | 'android') => ipcRenderer.invoke('user:set-phone-type', userId, phoneType),
+  },
+
 
   /**
    * ============================================

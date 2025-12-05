@@ -64,6 +64,7 @@ export interface User {
   notification_preferences?: string | Record<string, unknown>;
   company?: string;
   job_title?: string;
+  mobile_phone_type?: 'iphone' | 'android';
 
   // Sync
   last_cloud_sync_at?: Date | string;

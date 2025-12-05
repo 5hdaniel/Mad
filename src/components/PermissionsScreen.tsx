@@ -18,12 +18,13 @@ interface AppInfo {
   name: string;
 }
 
-// Setup steps for progress indicator
+// Setup steps for progress indicator (5 steps)
 const SETUP_STEPS = [
   { id: 1, label: 'Sign In' },
-  { id: 2, label: 'Secure Storage' },
-  { id: 3, label: 'Connect Email' },
-  { id: 4, label: 'Permissions' },
+  { id: 2, label: 'Phone Type' },
+  { id: 3, label: 'Secure Storage' },
+  { id: 4, label: 'Connect Email' },
+  { id: 5, label: 'Permissions' },
 ];
 
 /**
@@ -58,7 +59,7 @@ function SetupProgressIndicator({ currentStep }: { currentStep: number }) {
           </div>
           {index < SETUP_STEPS.length - 1 && (
             <div
-              className={`w-8 h-0.5 mb-5 transition-all ${
+              className={`w-6 h-0.5 mb-5 transition-all ${
                 step.id < currentStep ? 'bg-green-500' : 'bg-gray-200'
               }`}
             />
@@ -166,7 +167,7 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain: _onCheckAgain }
       <div className="flex items-center justify-center min-h-full py-8">
         <div className="max-w-2xl mx-auto p-8 bg-white rounded-lg shadow-lg">
           {/* Setup Progress Indicator */}
-          <SetupProgressIndicator currentStep={4} />
+          <SetupProgressIndicator currentStep={5} />
 
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-20 h-20 bg-primary/10 rounded-full mb-6">
@@ -221,7 +222,7 @@ function PermissionsScreen({ onPermissionsGranted, onCheckAgain: _onCheckAgain }
     <div className="flex items-center justify-center min-h-full py-8">
       <div className="max-w-2xl mx-auto p-8 bg-white rounded-lg shadow-lg">
         {/* Setup Progress Indicator */}
-        <SetupProgressIndicator currentStep={4} />
+        <SetupProgressIndicator currentStep={5} />
 
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-primary/10 rounded-full mb-4">

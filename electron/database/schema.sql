@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS users_local (
   notification_preferences TEXT DEFAULT '{}',
   company TEXT,
   job_title TEXT,
+  mobile_phone_type TEXT CHECK (mobile_phone_type IN ('iphone', 'android')),
 
   -- Sync tracking
   last_cloud_sync_at DATETIME,
