@@ -321,11 +321,23 @@ function EmailOnboardingScreen({ userId, authProvider, onComplete, onSkip }: Ema
             </div>
 
             <div className="space-y-3 mb-8">
-              <button className="w-full px-4 py-3 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white text-sm font-semibold rounded-lg transition-all shadow-md">
-                iOS
+              <button
+                onClick={handleNextStep}
+                className="w-full px-4 py-3 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white text-sm font-semibold rounded-lg transition-all shadow-md flex items-center justify-center gap-3"
+              >
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M17.05 13.5c-.91 0-1.64.75-1.64 1.67s.73 1.67 1.64 1.67 1.64-.75 1.64-1.67-.73-1.67-1.64-1.67m-4.5-5.25c.56 0 1.03.46 1.03 1.03s-.46 1.03-1.03 1.03-1.03-.46-1.03-1.03.46-1.03 1.03-1.03m5.5 0c.56 0 1.03.46 1.03 1.03s-.46 1.03-1.03 1.03-1.03-.46-1.03-1.03.46-1.03 1.03-1.03M6 19.54C6 20.31 6.81 21 7.76 21h8.48c.95 0 1.76-.69 1.76-1.46V4.46C18 3.65 17.19 3 16.24 3H7.76C6.81 3 6 3.69 6 4.46v15.08m9-13.03c.56 0 1.03.46 1.03 1.03s-.46 1.03-1.03 1.03-1.03-.46-1.03-1.03.46-1.03 1.03-1.03m-3 0c.56 0 1.03.46 1.03 1.03s-.46 1.03-1.03 1.03-1.03-.46-1.03-1.03.46-1.03 1.03-1.03" />
+                </svg>
+                <span>iOS</span>
               </button>
-              <button className="w-full px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-900 text-sm font-semibold rounded-lg transition-all">
-                Android
+              <button
+                onClick={handleNextStep}
+                className="w-full px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-900 text-sm font-semibold rounded-lg transition-all flex items-center justify-center gap-3"
+              >
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M6.17 18.5c.29 0 .54.12.69.34l1.39 2.03c.18.27.17.72-.05.97-.22.26-.66.26-.87 0l-1.39-2.03c-.18-.27-.17-.72.05-.97.22-.25.66-.25.87 0M10.44 11.27C8.89 11.27 7.63 12.54 7.63 14.1c0 1.56 1.26 2.83 2.81 2.83 1.56 0 2.82-1.27 2.82-2.83 0-1.56-1.26-2.83-2.82-2.83m11.53 6.2c.25.25.38.57.38.93 0 .35-.13.67-.38.92-.25.25-.58.38-.93.38-.36 0-.68-.13-.93-.38l-1.06-1.06c-.25.15-.55.24-.86.24-.34 0-.65-.09-.92-.24l-1.06 1.06c-.25.25-.58.38-.93.38-.36 0-.68-.13-.93-.38-.25-.25-.38-.57-.38-.92 0-.36.13-.68.38-.93l1.06-1.06c-.15-.27-.24-.58-.24-.92s.09-.65.24-.92l-1.06-1.06c-.25-.25-.38-.57-.38-.93 0-.35.13-.67.38-.92.25-.25.57-.38.93-.38.35 0 .68.13.93.38l1.06 1.06c.27-.15.58-.24.92-.24.34 0 .65.09.86.24l1.06-1.06c.25-.25.57-.38.93-.38.35 0 .68.13.93.38.25.25.38.57.38.92 0 .36-.13.68-.38.93l-1.06 1.06c.15.27.24.57.24.92s-.09.65-.24.92l1.06 1.06M3.94 18.5c.29 0 .54.12.69.34l.87 1.27.87-1.27c.15-.22.4-.34.69-.34.22 0 .43.07.57.21.15.15.23.35.23.56 0 .15-.04.28-.12.41l-.87 1.27.87 1.27c.08.13.12.26.12.41 0 .21-.08.41-.23.56-.14.14-.35.21-.57.21-.29 0-.54-.12-.69-.34l-.87-1.27-.87 1.27c-.15.22-.4.34-.69.34-.22 0-.43-.07-.57-.21-.15-.15-.23-.35-.23-.56 0-.15.04-.28.12-.41l.87-1.27-.87-1.27c-.08-.13-.12-.26-.12-.41 0-.21.08-.41.23-.56.14-.14.35-.21.57-.21" />
+                </svg>
+                <span>Android</span>
               </button>
             </div>
           </>
@@ -365,10 +377,16 @@ function EmailOnboardingScreen({ userId, authProvider, onComplete, onSkip }: Ema
             </div>
 
             <div className="space-y-3 mb-8">
-              <button className="w-full px-4 py-3 bg-gradient-to-r from-green-500 to-teal-600 hover:from-green-600 hover:to-teal-700 text-white text-sm font-semibold rounded-lg transition-all shadow-md">
+              <button
+                onClick={handleNextStep}
+                className="w-full px-4 py-3 bg-gradient-to-r from-green-500 to-teal-600 hover:from-green-600 hover:to-teal-700 text-white text-sm font-semibold rounded-lg transition-all shadow-md"
+              >
                 Enable Secure Storage
               </button>
-              <button className="w-full px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-900 text-sm font-semibold rounded-lg transition-all">
+              <button
+                onClick={handleNextStep}
+                className="w-full px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-900 text-sm font-semibold rounded-lg transition-all"
+              >
                 Skip for Now
               </button>
             </div>
@@ -443,7 +461,10 @@ function EmailOnboardingScreen({ userId, authProvider, onComplete, onSkip }: Ema
               </ul>
             </div>
 
-            <button className="w-full px-4 py-3 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white text-sm font-semibold rounded-lg transition-all shadow-md mb-3">
+            <button
+              onClick={handleContinue}
+              className="w-full px-4 py-3 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white text-sm font-semibold rounded-lg transition-all shadow-md mb-3"
+            >
               Grant Permissions
             </button>
           </>
