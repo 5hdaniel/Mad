@@ -46,30 +46,26 @@ function SetupProgressIndicator({ currentStep, navigationStep, isWindows }: { cu
   const steps = isWindows ? WINDOWS_SETUP_STEPS : MACOS_SETUP_STEPS;
   return (
     <div className="mb-8">
-      <div className="flex items-center justify-center px-2">
+      {/* Circles and connecting lines */}
+      <div className="flex items-center justify-center px-2 mb-3">
         {steps.map((step, index) => (
           <React.Fragment key={step.id}>
-            <div className="flex flex-col items-center">
-              <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-all flex-shrink-0 ${
-                  step.id < currentStep
-                    ? 'bg-green-500 text-white'
-                    : step.id === currentStep
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-gray-200 text-gray-500'
-                } ${navigationStep === step.id ? 'ring-2 ring-offset-2 ring-blue-500' : ''}`}
-              >
-                {step.id < currentStep ? (
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                ) : (
-                  step.id
-                )}
-              </div>
-              <span className={`text-xs mt-2 text-center max-w-[50px] ${navigationStep === step.id ? 'text-blue-600 font-medium' : step.id === currentStep ? 'text-blue-600 font-medium' : 'text-gray-500'}`}>
-                {step.label}
-              </span>
+            <div
+              className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-all flex-shrink-0 ${
+                step.id < currentStep
+                  ? 'bg-green-500 text-white'
+                  : step.id === currentStep
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-gray-200 text-gray-500'
+              } ${navigationStep === step.id ? 'ring-2 ring-offset-2 ring-blue-500' : ''}`}
+            >
+              {step.id < currentStep ? (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              ) : (
+                step.id
+              )}
             </div>
             {index < steps.length - 1 && (
               <div
@@ -79,6 +75,17 @@ function SetupProgressIndicator({ currentStep, navigationStep, isWindows }: { cu
               />
             )}
           </React.Fragment>
+        ))}
+      </div>
+
+      {/* Labels */}
+      <div className="flex items-start justify-center px-2">
+        {steps.map((step, index) => (
+          <div key={step.id} className={`flex-1 text-center ${index < steps.length - 1 ? 'max-w-[56px]' : ''}`}>
+            <span className={`text-xs ${navigationStep === step.id ? 'text-blue-600 font-medium' : step.id === currentStep ? 'text-blue-600 font-medium' : 'text-gray-500'}`}>
+              {step.label}
+            </span>
+          </div>
         ))}
       </div>
     </div>
