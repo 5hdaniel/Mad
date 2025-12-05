@@ -11,10 +11,19 @@ import { exec, spawn } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
 import fs from 'fs';
+import https from 'https';
 import { app } from 'electron';
 import log from 'electron-log';
 
 const execAsync = promisify(exec);
+
+// Apple iTunes download URL (contains the drivers we need)
+const ITUNES_DOWNLOAD_URL = 'https://www.apple.com/itunes/download/win64';
+
+// Directory to store downloaded drivers
+function getDownloadedDriversPath(): string {
+  return path.join(app.getPath('userData'), 'apple-drivers');
+}
 
 /**
  * Status of Apple drivers on the system
@@ -38,6 +47,8 @@ export interface DriverInstallResult {
   error: string | null;
   /** Whether a reboot is required */
   rebootRequired: boolean;
+  /** Whether the user cancelled the installation (e.g., declined UAC) */
+  cancelled?: boolean;
 }
 
 /**
@@ -156,8 +167,17 @@ async function checkAppleMobileDeviceService(): Promise<boolean> {
 
 /**
  * Get path to bundled Apple driver MSI
+ * Checks both bundled resources and previously downloaded drivers
  */
 export function getBundledDriverPath(): string | null {
+  // First, check for previously downloaded drivers
+  const downloadedPath = getDownloadedDriverPath();
+  if (downloadedPath) {
+    log.info('[AppleDriverService] Using downloaded driver at:', downloadedPath);
+    return downloadedPath;
+  }
+
+  // Then check bundled resources
   const isDev = !app.isPackaged;
 
   let basePath: string;
@@ -179,7 +199,7 @@ export function getBundledDriverPath(): string | null {
     return altPath;
   }
 
-  log.warn('[AppleDriverService] Bundled driver MSI not found at:', basePath);
+  log.warn('[AppleDriverService] No driver MSI found (bundled or downloaded)');
   return null;
 }
 
@@ -242,35 +262,44 @@ export async function installAppleDrivers(): Promise<DriverInstallResult> {
 }
 
 /**
- * Run MSI installer with elevated privileges
+ * Run MSI installer with elevated privileges using PowerShell
+ * This triggers the UAC prompt for admin elevation
  */
 function runMsiInstaller(msiPath: string): Promise<DriverInstallResult> {
   return new Promise((resolve) => {
-    // Use msiexec to install silently
-    const args = [
-      '/i',
-      `"${msiPath}"`,
-      '/qn',           // Quiet, no UI
-      '/norestart',    // Don't restart
-      'REBOOT=ReallySuppress',
-    ];
+    // Build msiexec arguments
+    const msiArgs = `/i "${msiPath}" /qn /norestart REBOOT=ReallySuppress`;
 
-    log.info('[AppleDriverService] Running: msiexec', args.join(' '));
+    // Use PowerShell Start-Process with -Verb RunAs to trigger UAC elevation
+    // -Wait ensures we wait for the installation to complete
+    // -PassThru returns the process object so we can get the exit code
+    const psCommand = `
+      $process = Start-Process -FilePath "msiexec.exe" -ArgumentList '${msiArgs}' -Verb RunAs -Wait -PassThru
+      exit $process.ExitCode
+    `.trim();
 
-    // spawn msiexec - it will trigger UAC prompt
-    const installer = spawn('msiexec', args, {
-      shell: true,
-      // This will trigger UAC if needed
+    log.info('[AppleDriverService] Running elevated installer via PowerShell');
+    log.info('[AppleDriverService] msiexec args:', msiArgs);
+
+    const installer = spawn('powershell', ['-Command', psCommand], {
+      shell: false,
     });
 
     let stderr = '';
+    let stdout = '';
+
+    installer.stdout?.on('data', (data) => {
+      stdout += data.toString();
+    });
 
     installer.stderr?.on('data', (data) => {
       stderr += data.toString();
     });
 
     installer.on('close', (code) => {
-      log.info('[AppleDriverService] MSI installer exited with code:', code);
+      log.info('[AppleDriverService] Installer exited with code:', code);
+      log.info('[AppleDriverService] stdout:', stdout);
+      if (stderr) log.info('[AppleDriverService] stderr:', stderr);
 
       if (code === 0) {
         resolve({
@@ -285,18 +314,20 @@ function runMsiInstaller(msiPath: string): Promise<DriverInstallResult> {
           error: null,
           rebootRequired: true,
         });
-      } else if (code === 1602) {
+      } else if (code === 1602 || code === 1) {
         // 1602 = ERROR_INSTALL_USEREXIT (user cancelled UAC or installer)
+        // 1 = PowerShell error, often from cancelled UAC
         resolve({
           success: false,
-          error: 'Installation was cancelled',
+          error: null,
           rebootRequired: false,
+          cancelled: true,
         });
       } else if (code === 1603) {
         // 1603 = ERROR_INSTALL_FAILURE
         resolve({
           success: false,
-          error: 'Installation failed. Try running as administrator.',
+          error: 'Installation failed. The installer encountered an error.',
           rebootRequired: false,
         });
       } else {
@@ -333,6 +364,311 @@ async function startAppleMobileDeviceService(): Promise<void> {
 }
 
 /**
+ * Download a file from URL to destination
+ */
+function downloadFile(url: string, destPath: string, onProgress?: (percent: number) => void): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const file = fs.createWriteStream(destPath);
+
+    const request = https.get(url, (response) => {
+      // Handle redirects
+      if (response.statusCode === 301 || response.statusCode === 302) {
+        const redirectUrl = response.headers.location;
+        if (redirectUrl) {
+          file.close();
+          fs.unlinkSync(destPath);
+          downloadFile(redirectUrl, destPath, onProgress).then(resolve).catch(reject);
+          return;
+        }
+      }
+
+      if (response.statusCode !== 200) {
+        reject(new Error(`Failed to download: HTTP ${response.statusCode}`));
+        return;
+      }
+
+      const totalSize = parseInt(response.headers['content-length'] || '0', 10);
+      let downloadedSize = 0;
+
+      response.on('data', (chunk) => {
+        downloadedSize += chunk.length;
+        if (onProgress && totalSize > 0) {
+          onProgress(Math.round((downloadedSize / totalSize) * 100));
+        }
+      });
+
+      response.pipe(file);
+
+      file.on('finish', () => {
+        file.close();
+        resolve();
+      });
+    });
+
+    request.on('error', (err) => {
+      fs.unlink(destPath, () => {}); // Delete partial file
+      reject(err);
+    });
+
+    file.on('error', (err) => {
+      fs.unlink(destPath, () => {}); // Delete partial file
+      reject(err);
+    });
+  });
+}
+
+/**
+ * Get path to bundled 7za.exe (standalone 7-Zip CLI)
+ */
+function getBundled7za(): string | null {
+  const isDev = !app.isPackaged;
+
+  let basePath: string;
+  if (isDev) {
+    basePath = path.join(__dirname, '../../resources/win');
+  } else {
+    basePath = path.join(process.resourcesPath, 'win');
+  }
+
+  const sevenZaPath = path.join(basePath, '7za.exe');
+  if (fs.existsSync(sevenZaPath)) {
+    return sevenZaPath;
+  }
+
+  return null;
+}
+
+/**
+ * Find 7-zip executable on the system
+ * Checks bundled 7za.exe first, then system installations
+ */
+function find7Zip(): string | null {
+  // First check for bundled 7za.exe
+  const bundled = getBundled7za();
+  if (bundled) {
+    log.info('[AppleDriverService] Using bundled 7za.exe');
+    return bundled;
+  }
+
+  // Then check system installations
+  const possiblePaths = [
+    'C:\\Program Files\\7-Zip\\7z.exe',
+    'C:\\Program Files (x86)\\7-Zip\\7z.exe',
+    path.join(process.env.LOCALAPPDATA || '', '7-Zip', '7z.exe'),
+  ];
+
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) {
+      return p;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Recursively find files matching a pattern
+ */
+function findFilesRecursive(dir: string, pattern: RegExp, maxDepth = 3, currentDepth = 0): string[] {
+  const results: string[] = [];
+
+  if (currentDepth > maxDepth || !fs.existsSync(dir)) {
+    return results;
+  }
+
+  try {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isFile() && pattern.test(entry.name)) {
+        results.push(fullPath);
+      } else if (entry.isDirectory()) {
+        results.push(...findFilesRecursive(fullPath, pattern, maxDepth, currentDepth + 1));
+      }
+    }
+  } catch {
+    // Ignore permission errors
+  }
+
+  return results;
+}
+
+/**
+ * Extract MSI from iTunes installer
+ * iTunes installer is an EXE that contains multiple MSI files
+ */
+async function extractMsiFromInstaller(installerPath: string, outputDir: string): Promise<string | null> {
+  try {
+    // Create output directory
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
+
+    log.info('[AppleDriverService] Extracting iTunes installer...');
+
+    // Method 1: Try 7-Zip (most reliable for iTunes installer)
+    const sevenZipPath = find7Zip();
+    if (sevenZipPath) {
+      log.info('[AppleDriverService] Found 7-Zip at:', sevenZipPath);
+      try {
+        await execAsync(`"${sevenZipPath}" x "${installerPath}" -o"${outputDir}" -y`, {
+          timeout: 120000,
+        });
+        log.info('[AppleDriverService] 7-Zip extraction successful');
+      } catch (err) {
+        log.warn('[AppleDriverService] 7-Zip extraction failed:', err);
+      }
+    } else {
+      log.info('[AppleDriverService] 7-Zip not found, trying alternative methods...');
+
+      // Method 2: Try running installer with /extract (some Apple installers support this)
+      try {
+        await execAsync(`"${installerPath}" /extract "${outputDir}"`, { timeout: 120000 });
+        log.info('[AppleDriverService] /extract flag worked');
+      } catch {
+        log.info('[AppleDriverService] /extract flag not supported');
+
+        // Method 3: Try expand command (works for some archive types)
+        try {
+          await execAsync(`expand "${installerPath}" -F:* "${outputDir}"`, { timeout: 120000 });
+          log.info('[AppleDriverService] expand command worked');
+        } catch {
+          log.info('[AppleDriverService] expand command failed');
+
+          // Method 4: Try 7z command from PATH
+          try {
+            await execAsync(`7z x "${installerPath}" -o"${outputDir}" -y`, { timeout: 120000 });
+            log.info('[AppleDriverService] 7z from PATH worked');
+          } catch {
+            log.error('[AppleDriverService] No extraction method available');
+            log.error('[AppleDriverService] 7-Zip is required to extract Apple drivers.');
+            log.error('[AppleDriverService] Either bundle 7za.exe in resources/win/ or install 7-Zip from https://7-zip.org/');
+            throw new Error('7-Zip is required to extract the driver installer. Please install 7-Zip from https://7-zip.org/ and try again.');
+          }
+        }
+      }
+    }
+
+    // Look for the AppleMobileDeviceSupport MSI anywhere in the extracted files
+    const msiPattern = /AppleMobileDeviceSupport(64)?\.msi$/i;
+    const foundMsis = findFilesRecursive(outputDir, msiPattern);
+
+    if (foundMsis.length > 0) {
+      // Prefer 64-bit version
+      const msi64 = foundMsis.find((f) => f.toLowerCase().includes('64'));
+      const selectedMsi = msi64 || foundMsis[0];
+      log.info('[AppleDriverService] Found MSI:', selectedMsi);
+      return selectedMsi;
+    }
+
+    // List what we did extract for debugging
+    log.warn('[AppleDriverService] MSI not found. Extracted contents:');
+    try {
+      const extracted = fs.readdirSync(outputDir);
+      log.warn('[AppleDriverService] Files in output dir:', extracted.slice(0, 20)); // First 20 files
+    } catch {
+      log.warn('[AppleDriverService] Could not list output directory');
+    }
+
+    log.error('[AppleDriverService] AppleMobileDeviceSupport MSI not found in extracted files');
+    log.error('[AppleDriverService] The iTunes installer format may have changed.');
+    return null;
+  } catch (error) {
+    log.error('[AppleDriverService] Failed to extract installer:', error);
+    return null;
+  }
+}
+
+/**
+ * Download and extract Apple drivers on-demand
+ * Call this after user consents to installation
+ */
+export async function downloadAppleDrivers(
+  onProgress?: (status: { phase: 'downloading' | 'extracting' | 'complete'; percent: number }) => void
+): Promise<{ success: boolean; msiPath?: string; error?: string }> {
+  const driversDir = getDownloadedDriversPath();
+  const installerPath = path.join(driversDir, 'iTunes64Setup.exe');
+  const extractDir = path.join(driversDir, 'extracted');
+
+  try {
+    // Create directory if needed
+    if (!fs.existsSync(driversDir)) {
+      fs.mkdirSync(driversDir, { recursive: true });
+    }
+
+    // Check if we already have the extracted MSI
+    const existingMsi = getDownloadedDriverPath();
+    if (existingMsi) {
+      log.info('[AppleDriverService] Using previously downloaded drivers');
+      onProgress?.({ phase: 'complete', percent: 100 });
+      return { success: true, msiPath: existingMsi };
+    }
+
+    // Download iTunes installer
+    log.info('[AppleDriverService] Downloading iTunes installer...');
+    onProgress?.({ phase: 'downloading', percent: 0 });
+
+    await downloadFile(
+      ITUNES_DOWNLOAD_URL,
+      installerPath,
+      (percent) => onProgress?.({ phase: 'downloading', percent })
+    );
+
+    log.info('[AppleDriverService] Download complete, extracting...');
+    onProgress?.({ phase: 'extracting', percent: 0 });
+
+    // Extract the MSI
+    const msiPath = await extractMsiFromInstaller(installerPath, extractDir);
+
+    // Clean up installer to save space
+    try {
+      fs.unlinkSync(installerPath);
+    } catch {
+      // Ignore cleanup errors
+    }
+
+    if (!msiPath) {
+      return {
+        success: false,
+        error: 'Could not extract Apple drivers from installer. Please install iTunes manually.',
+      };
+    }
+
+    onProgress?.({ phase: 'complete', percent: 100 });
+    return { success: true, msiPath };
+  } catch (error) {
+    log.error('[AppleDriverService] Failed to download drivers:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Download failed',
+    };
+  }
+}
+
+/**
+ * Get path to downloaded (on-demand) driver MSI
+ */
+function getDownloadedDriverPath(): string | null {
+  const extractDir = path.join(getDownloadedDriversPath(), 'extracted');
+
+  if (!fs.existsSync(extractDir)) {
+    return null;
+  }
+
+  // Use recursive search to find the MSI anywhere in the extracted folder
+  const msiPattern = /AppleMobileDeviceSupport(64)?\.msi$/i;
+  const foundMsis = findFilesRecursive(extractDir, msiPattern);
+
+  if (foundMsis.length > 0) {
+    // Prefer 64-bit version
+    const msi64 = foundMsis.find((f) => f.toLowerCase().includes('64'));
+    return msi64 || foundMsis[0];
+  }
+
+  return null;
+}
+
+/**
  * Get iTunes download URL
  */
 export function getITunesDownloadUrl(): string {
@@ -345,4 +681,90 @@ export function getITunesDownloadUrl(): string {
  */
 export function getITunesWebUrl(): string {
   return 'https://www.apple.com/itunes/download/win64';
+}
+
+/**
+ * Compare two version strings
+ * @returns negative if a < b, 0 if a == b, positive if a > b
+ */
+export function compareVersions(a: string | null, b: string | null): number {
+  if (!a && !b) return 0;
+  if (!a) return -1;
+  if (!b) return 1;
+
+  const partsA = a.split('.').map(Number);
+  const partsB = b.split('.').map(Number);
+
+  const maxLength = Math.max(partsA.length, partsB.length);
+
+  for (let i = 0; i < maxLength; i++) {
+    const numA = partsA[i] || 0;
+    const numB = partsB[i] || 0;
+    if (numA !== numB) {
+      return numA - numB;
+    }
+  }
+
+  return 0;
+}
+
+/**
+ * Get the bundled driver version from a version file
+ * We store this in a version.txt file alongside the MSI
+ */
+export function getBundledDriverVersion(): string | null {
+  const driverPath = getBundledDriverPath();
+  if (!driverPath) return null;
+
+  const versionFilePath = path.join(path.dirname(driverPath), 'version.txt');
+
+  try {
+    if (fs.existsSync(versionFilePath)) {
+      const version = fs.readFileSync(versionFilePath, 'utf-8').trim();
+      return version || null;
+    }
+  } catch (error) {
+    log.warn('[AppleDriverService] Could not read bundled version:', error);
+  }
+
+  return null;
+}
+
+/**
+ * Check if a driver update is available
+ */
+export async function checkForDriverUpdate(): Promise<{
+  updateAvailable: boolean;
+  installedVersion: string | null;
+  bundledVersion: string | null;
+}> {
+  const status = await checkAppleDrivers();
+  const bundledVersion = getBundledDriverVersion();
+
+  // If not installed, definitely needs installation (not an "update" per se)
+  if (!status.isInstalled) {
+    return {
+      updateAvailable: false, // It's a fresh install, not an update
+      installedVersion: null,
+      bundledVersion,
+    };
+  }
+
+  // If we don't know the bundled version, can't determine if update is available
+  if (!bundledVersion) {
+    return {
+      updateAvailable: false,
+      installedVersion: status.version,
+      bundledVersion: null,
+    };
+  }
+
+  // Compare versions
+  const needsUpdate = compareVersions(status.version, bundledVersion) < 0;
+
+  return {
+    updateAvailable: needsUpdate,
+    installedVersion: status.version,
+    bundledVersion,
+  };
 }

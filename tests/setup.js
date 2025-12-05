@@ -131,6 +131,14 @@ if (typeof window !== 'undefined') {
       cancel: jest.fn(),
       onProgress: jest.fn(() => jest.fn()),
     },
+    // Apple Driver Management (Windows only)
+    drivers: {
+      checkApple: jest.fn(),
+      installApple: jest.fn(),
+      hasBundled: jest.fn(),
+      openITunesStore: jest.fn(),
+      checkUpdate: jest.fn(),
+    },
   };
 }
 

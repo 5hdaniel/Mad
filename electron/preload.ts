@@ -1320,5 +1320,44 @@ contextBridge.exposeInMainWorld('electron', {
     const listener = (_: IpcRendererEvent, progress: any) => callback(progress);
     ipcRenderer.on('export-progress', listener);
     return () => ipcRenderer.removeListener('export-progress', listener);
-  }
+  },
+
+  /**
+   * ============================================
+   * APPLE DRIVER METHODS (Windows only - Legacy)
+   * ============================================
+   * Detects and installs Apple Mobile Device Support drivers
+   */
+  drivers: {
+    /**
+     * Check if Apple Mobile Device Support drivers are installed
+     * @returns {Promise<{installed: boolean, version?: string, serviceRunning: boolean, error?: string}>}
+     */
+    checkApple: () => ipcRenderer.invoke('drivers:check-apple'),
+
+    /**
+     * Check if bundled Apple drivers are available in the app
+     * @returns {Promise<{hasBundled: boolean}>}
+     */
+    hasBundled: () => ipcRenderer.invoke('drivers:has-bundled'),
+
+    /**
+     * Install Apple Mobile Device Support drivers
+     * IMPORTANT: Only call after user has given consent
+     * @returns {Promise<{success: boolean, cancelled?: boolean, error?: string, rebootRequired?: boolean}>}
+     */
+    installApple: () => ipcRenderer.invoke('drivers:install-apple'),
+
+    /**
+     * Open iTunes in Microsoft Store for manual installation
+     * @returns {Promise<{success: boolean, error?: string}>}
+     */
+    openITunesStore: () => ipcRenderer.invoke('drivers:open-itunes-store'),
+
+    /**
+     * Check if a driver update is available
+     * @returns {Promise<{updateAvailable: boolean, installedVersion?: string, bundledVersion?: string}>}
+     */
+    checkUpdate: () => ipcRenderer.invoke('drivers:check-update'),
+  },
 });

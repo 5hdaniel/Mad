@@ -4,7 +4,7 @@
  * Handles IPC communication for Apple driver detection and installation.
  */
 
-import { ipcMain, shell } from 'electron';
+import { ipcMain, shell, BrowserWindow } from 'electron';
 import log from 'electron-log';
 import {
   checkAppleDrivers,
@@ -12,6 +12,8 @@ import {
   hasBundledDrivers,
   getITunesDownloadUrl,
   getITunesWebUrl,
+  checkForDriverUpdate,
+  downloadAppleDrivers,
 } from './services/appleDriverService';
 
 /**
@@ -28,14 +30,64 @@ export function registerDriverHandlers(): void {
 
   // Check if bundled drivers are available
   ipcMain.handle('drivers:has-bundled', () => {
-    return { available: hasBundledDrivers() };
+    return { hasBundled: hasBundledDrivers() };
+  });
+
+  // Check for driver updates
+  ipcMain.handle('drivers:check-update', async () => {
+    log.info('[DriverHandlers] Checking for driver updates');
+    const result = await checkForDriverUpdate();
+    log.info('[DriverHandlers] Update check result:', result);
+    return result;
   });
 
   // Install Apple drivers (requires user consent in UI)
-  ipcMain.handle('drivers:install-apple', async () => {
+  // Will download on-demand if not bundled
+  ipcMain.handle('drivers:install-apple', async (event) => {
     log.info('[DriverHandlers] User consented to install Apple drivers');
+
+    // Check if we have drivers available (bundled or previously downloaded)
+    if (!hasBundledDrivers()) {
+      log.info('[DriverHandlers] No bundled drivers, downloading on-demand...');
+
+      // Send progress to renderer
+      const window = BrowserWindow.fromWebContents(event.sender);
+
+      const downloadResult = await downloadAppleDrivers((progress) => {
+        if (window && !window.isDestroyed()) {
+          window.webContents.send('drivers:download-progress', progress);
+        }
+      });
+
+      if (!downloadResult.success) {
+        log.error('[DriverHandlers] Download failed:', downloadResult.error);
+        return {
+          success: false,
+          error: downloadResult.error || 'Failed to download drivers',
+        };
+      }
+
+      log.info('[DriverHandlers] Download complete, proceeding with installation');
+    }
+
     const result = await installAppleDrivers();
     log.info('[DriverHandlers] Installation result:', result);
+    return result;
+  });
+
+  // Download drivers without installing (for pre-download option)
+  ipcMain.handle('drivers:download', async (event) => {
+    log.info('[DriverHandlers] Downloading Apple drivers...');
+
+    const window = BrowserWindow.fromWebContents(event.sender);
+
+    const result = await downloadAppleDrivers((progress) => {
+      if (window && !window.isDestroyed()) {
+        window.webContents.send('drivers:download-progress', progress);
+      }
+    });
+
+    log.info('[DriverHandlers] Download result:', result);
     return result;
   });
 

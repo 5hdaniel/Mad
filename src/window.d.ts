@@ -109,6 +109,34 @@ interface ElectronAPI {
     cancel: () => Promise<void>;
     onProgress: (callback: (progress: BackupProgress) => void) => (() => void) | undefined;
   };
+
+  // Apple Driver Management (Windows only)
+  drivers: {
+    /** Check if Apple Mobile Device Support drivers are installed */
+    checkApple: () => Promise<{
+      installed: boolean;
+      version?: string;
+      serviceRunning: boolean;
+      error?: string;
+    }>;
+    /** Check if bundled Apple drivers are available in the app */
+    hasBundled: () => Promise<{ hasBundled: boolean }>;
+    /** Install Apple Mobile Device Support drivers (requires user consent) */
+    installApple: () => Promise<{
+      success: boolean;
+      cancelled?: boolean;
+      error?: string;
+      rebootRequired?: boolean;
+    }>;
+    /** Open iTunes in Microsoft Store for manual installation */
+    openITunesStore: () => Promise<{ success: boolean; error?: string }>;
+    /** Check if a driver update is available */
+    checkUpdate: () => Promise<{
+      updateAvailable: boolean;
+      installedVersion: string | null;
+      bundledVersion: string | null;
+    }>;
+  };
 }
 
 /**

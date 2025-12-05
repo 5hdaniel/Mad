@@ -171,6 +171,58 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
+      - name: Download and extract Apple drivers (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          echo "Downloading iTunes installer to extract Apple Mobile Device Support..."
+
+          # Download iTunes installer
+          $iTunesUrl = "https://www.apple.com/itunes/download/win64"
+          $installerPath = "$env:TEMP\iTunes64Setup.exe"
+          $extractPath = "$env:TEMP\iTunes-extracted"
+          $targetPath = "resources\win\apple-drivers"
+
+          echo "Downloading from $iTunesUrl..."
+          Invoke-WebRequest -Uri $iTunesUrl -OutFile $installerPath -UseBasicParsing
+
+          echo "Download complete. Size: $((Get-Item $installerPath).Length / 1MB) MB"
+
+          # Extract using 7-Zip (pre-installed on GitHub runners)
+          echo "Extracting with 7-Zip..."
+          7z x $installerPath -o"$extractPath" -y
+
+          # Find the MSI
+          echo "Looking for AppleMobileDeviceSupport MSI..."
+          $msi = Get-ChildItem -Path $extractPath -Recurse -Filter "AppleMobileDeviceSupport*.msi" | Select-Object -First 1
+
+          if ($msi) {
+            echo "Found: $($msi.FullName)"
+
+            # Ensure target directory exists
+            New-Item -ItemType Directory -Force -Path $targetPath | Out-Null
+
+            # Copy MSI to resources
+            Copy-Item $msi.FullName -Destination "$targetPath\AppleMobileDeviceSupport64.msi"
+
+            # Create version file
+            $version = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($msi.FullName).FileVersion
+            if (-not $version) { $version = "unknown" }
+            Set-Content -Path "$targetPath\version.txt" -Value $version
+
+            echo "Apple drivers extracted successfully!"
+            echo "MSI: $targetPath\AppleMobileDeviceSupport64.msi"
+            echo "Version: $version"
+          } else {
+            echo "::warning::Could not find AppleMobileDeviceSupport MSI in extracted files"
+            echo "Extracted contents:"
+            Get-ChildItem -Path $extractPath -Recurse | Select-Object FullName
+          }
+
+          # Cleanup
+          Remove-Item $installerPath -Force -ErrorAction SilentlyContinue
+          Remove-Item $extractPath -Recurse -Force -ErrorAction SilentlyContinue
+        shell: pwsh
+
       - name: Package for Windows
         if: matrix.os == 'windows-latest'
         run: |

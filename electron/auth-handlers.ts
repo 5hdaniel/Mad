@@ -1819,6 +1819,8 @@ export const registerAuthHandlers = (mainWindow: BrowserWindow | null): void => 
       // Check local database
       const completed = await databaseService.hasCompletedEmailOnboarding(validatedUserId);
 
+      await logService.info('Email onboarding check', 'AuthHandlers', { userId: validatedUserId.substring(0, 8) + '...', completed });
+
       return { success: true, completed };
     } catch (error) {
       await logService.error(

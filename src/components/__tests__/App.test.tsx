@@ -482,4 +482,58 @@ describe('App', () => {
       expect(profileButton).toHaveTextContent('T');
     });
   });
+
+  describe('Email Onboarding Flow', () => {
+    it('should show email onboarding when user has no email connected', async () => {
+      window.api.auth.getCurrentUser.mockResolvedValue({
+        success: true,
+        user: mockUser,
+        sessionToken: 'test-token',
+        provider: 'google',
+        subscription: mockSubscription,
+        isNewUser: false,
+      });
+      window.electron.checkPermissions.mockResolvedValue({ hasPermission: true });
+      // User completed onboarding before but has no email connected
+      window.api.auth.checkEmailOnboarding.mockResolvedValue({ success: true, completed: true });
+      window.api.system.checkAllConnections.mockResolvedValue({
+        success: true,
+        google: { connected: false },
+        microsoft: { connected: false },
+      });
+
+      renderApp();
+
+      await waitFor(() => {
+        // Should show email onboarding screen, not dashboard
+        // Use heading role to find the main title
+        expect(screen.getByRole('heading', { name: /Connect Your Email/i })).toBeInTheDocument();
+      });
+    });
+
+    it('should show dashboard when user has email connected', async () => {
+      window.api.auth.getCurrentUser.mockResolvedValue({
+        success: true,
+        user: mockUser,
+        sessionToken: 'test-token',
+        provider: 'google',
+        subscription: mockSubscription,
+        isNewUser: false,
+      });
+      window.electron.checkPermissions.mockResolvedValue({ hasPermission: true });
+      window.api.auth.checkEmailOnboarding.mockResolvedValue({ success: true, completed: true });
+      window.api.system.checkAllConnections.mockResolvedValue({
+        success: true,
+        google: { connected: true, email: 'test@gmail.com' },
+        microsoft: { connected: false },
+      });
+
+      renderApp();
+
+      await waitFor(() => {
+        // Should show dashboard
+        expect(screen.getByText(/Welcome to Magic Audit/i)).toBeInTheDocument();
+      });
+    });
+  });
 });
