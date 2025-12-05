@@ -52,7 +52,7 @@ function SetupProgressIndicator({ currentStep, navigationStep, isWindows }: { cu
         <div className="w-1 h-0.5 flex-shrink-0" />
 
         {steps.map((step, index) => (
-          <React.Fragment key={step.id}>
+          <React.Fragment key={`circle-${step.id}`}>
             <div
               className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-all flex-shrink-0 ${
                 step.id < currentStep
@@ -84,15 +84,26 @@ function SetupProgressIndicator({ currentStep, navigationStep, isWindows }: { cu
         <div className="w-1 h-0.5 flex-shrink-0" />
       </div>
 
-      {/* Labels */}
+      {/* Labels - aligned with circles above */}
       <div className="flex items-start justify-center px-2">
+        {/* Invisible spacer to match circle row */}
+        <div className="w-1 flex-shrink-0" />
+
         {steps.map((step, index) => (
-          <div key={step.id} className={`flex-1 text-center ${index < steps.length - 1 ? 'max-w-[56px]' : ''}`}>
-            <span className={`text-xs ${navigationStep === step.id ? 'text-blue-600 font-medium' : step.id === currentStep ? 'text-blue-600 font-medium' : 'text-gray-500'}`}>
-              {step.label}
-            </span>
-          </div>
+          <React.Fragment key={`label-${step.id}`}>
+            <div className="flex-shrink-0 w-8 flex items-center justify-center">
+              <span className={`text-xs text-center max-w-[56px] ${navigationStep === step.id ? 'text-blue-600 font-medium' : step.id === currentStep ? 'text-blue-600 font-medium' : 'text-gray-500'}`}>
+                {step.label}
+              </span>
+            </div>
+            {index < steps.length - 1 && (
+              <div className="flex-1 mx-1 max-w-[48px]" />
+            )}
+          </React.Fragment>
         ))}
+
+        {/* Invisible spacer to match circle row */}
+        <div className="w-1 flex-shrink-0" />
       </div>
     </div>
   );
