@@ -929,35 +929,7 @@ describe('Auth Handlers', () => {
     });
   });
 
-  describe('shell:open-external', () => {
-    it('should open valid HTTPS URL', async () => {
-      mockShellOpenExternal.mockResolvedValue(undefined);
-
-      const handler = registeredHandlers.get('shell:open-external');
-      const result = await handler(mockEvent, 'https://example.com');
-
-      expect(result.success).toBe(true);
-      expect(mockShellOpenExternal).toHaveBeenCalledWith('https://example.com');
-    });
-
-    it('should reject invalid URLs', async () => {
-      const handler = registeredHandlers.get('shell:open-external');
-      const result = await handler(mockEvent, 'javascript:alert(1)');
-
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('Validation error');
-    });
-
-    it('should handle shell open failure', async () => {
-      mockShellOpenExternal.mockRejectedValue(new Error('Shell error'));
-
-      const handler = registeredHandlers.get('shell:open-external');
-      const result = await handler(mockEvent, 'https://example.com');
-
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('Shell error');
-    });
-  });
+  // Note: shell:open-external handler tests are in system-handlers.test.ts
 
   describe('auth:google:disconnect-mailbox', () => {
     it('should disconnect Google mailbox successfully', async () => {

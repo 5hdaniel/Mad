@@ -10,6 +10,7 @@ import type { IpcMainInvokeEvent } from 'electron';
 
 // Mock electron module
 const mockIpcHandle = jest.fn();
+const mockShellOpenExternal = jest.fn();
 
 jest.mock('electron', () => ({
   ipcMain: {
@@ -17,6 +18,9 @@ jest.mock('electron', () => ({
   },
   app: {
     getPath: jest.fn().mockReturnValue('/tmp/test-user-data'),
+  },
+  shell: {
+    openExternal: mockShellOpenExternal,
   },
 }));
 
@@ -787,6 +791,72 @@ describe('System Handlers', () => {
 
         expect(result.success).toBe(false);
         expect(result.error).toContain('Database update failed');
+      });
+    });
+  });
+
+  describe('Shell Operations', () => {
+    describe('shell:open-external', () => {
+      beforeEach(() => {
+        mockShellOpenExternal.mockReset();
+      });
+
+      it('should open valid HTTPS URL', async () => {
+        mockShellOpenExternal.mockResolvedValue(undefined);
+
+        const handler = registeredHandlers.get('shell:open-external');
+        const result = await handler(mockEvent, 'https://example.com');
+
+        expect(result.success).toBe(true);
+        expect(mockShellOpenExternal).toHaveBeenCalledWith('https://example.com');
+      });
+
+      it('should open valid HTTP URL', async () => {
+        mockShellOpenExternal.mockResolvedValue(undefined);
+
+        const handler = registeredHandlers.get('shell:open-external');
+        const result = await handler(mockEvent, 'http://example.com');
+
+        expect(result.success).toBe(true);
+        expect(mockShellOpenExternal).toHaveBeenCalledWith('http://example.com');
+      });
+
+      it('should open valid mailto URL', async () => {
+        mockShellOpenExternal.mockResolvedValue(undefined);
+
+        const handler = registeredHandlers.get('shell:open-external');
+        const result = await handler(mockEvent, 'mailto:test@example.com');
+
+        expect(result.success).toBe(true);
+        expect(mockShellOpenExternal).toHaveBeenCalledWith('mailto:test@example.com');
+      });
+
+      it('should reject javascript URLs', async () => {
+        const handler = registeredHandlers.get('shell:open-external');
+        const result = await handler(mockEvent, 'javascript:alert(1)');
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('Protocol not allowed');
+        expect(mockShellOpenExternal).not.toHaveBeenCalled();
+      });
+
+      it('should reject file URLs', async () => {
+        const handler = registeredHandlers.get('shell:open-external');
+        const result = await handler(mockEvent, 'file:///etc/passwd');
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('Protocol not allowed');
+        expect(mockShellOpenExternal).not.toHaveBeenCalled();
+      });
+
+      it('should handle shell open failure', async () => {
+        mockShellOpenExternal.mockRejectedValue(new Error('Shell error'));
+
+        const handler = registeredHandlers.get('shell:open-external');
+        const result = await handler(mockEvent, 'https://example.com');
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('Shell error');
       });
     });
   });
