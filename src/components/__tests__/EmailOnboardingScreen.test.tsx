@@ -8,6 +8,21 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import EmailOnboardingScreen from '../EmailOnboardingScreen';
+import { PlatformProvider } from '../../contexts/PlatformContext';
+
+// Store original window.electron
+const originalElectron = window.electron;
+
+// Helper to render with PlatformProvider
+function renderWithPlatform(ui: React.ReactElement, platform: string = 'darwin') {
+  Object.defineProperty(window, 'electron', {
+    value: { platform },
+    writable: true,
+    configurable: true,
+  });
+
+  return render(<PlatformProvider>{ui}</PlatformProvider>);
+}
 
 describe('EmailOnboardingScreen', () => {
   const mockUserId = 'user-123';
@@ -30,9 +45,18 @@ describe('EmailOnboardingScreen', () => {
     window.api.onMicrosoftMailboxConnected.mockReturnValue(jest.fn());
   });
 
+  afterEach(() => {
+    // Restore original window.electron
+    Object.defineProperty(window, 'electron', {
+      value: originalElectron,
+      writable: true,
+      configurable: true,
+    });
+  });
+
   describe('Rendering', () => {
     it('should render the email onboarding screen with title for Microsoft user', async () => {
-      render(
+      renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="microsoft"
@@ -45,7 +69,7 @@ describe('EmailOnboardingScreen', () => {
     });
 
     it('should render the email onboarding screen with title for Google user', async () => {
-      render(
+      renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="google"
@@ -58,7 +82,7 @@ describe('EmailOnboardingScreen', () => {
     });
 
     it('should show explanation text', async () => {
-      render(
+      renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="microsoft"
@@ -73,7 +97,7 @@ describe('EmailOnboardingScreen', () => {
     });
 
     it('should show benefits list', async () => {
-      render(
+      renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="microsoft"
@@ -90,7 +114,7 @@ describe('EmailOnboardingScreen', () => {
     });
 
     it('should show primary provider (Outlook) prominently for Microsoft user', async () => {
-      render(
+      renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="microsoft"
@@ -111,7 +135,7 @@ describe('EmailOnboardingScreen', () => {
     });
 
     it('should show primary provider (Gmail) prominently for Google user', async () => {
-      render(
+      renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="google"
@@ -132,7 +156,7 @@ describe('EmailOnboardingScreen', () => {
     });
 
     it('should show skip button when no connections', async () => {
-      render(
+      renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="microsoft"
@@ -147,7 +171,7 @@ describe('EmailOnboardingScreen', () => {
     });
 
     it('should show helper text about connecting later', async () => {
-      render(
+      renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="microsoft"
@@ -170,7 +194,7 @@ describe('EmailOnboardingScreen', () => {
         () => new Promise((resolve) => setTimeout(resolve, 1000))
       );
 
-      render(
+      renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="microsoft"
@@ -183,7 +207,7 @@ describe('EmailOnboardingScreen', () => {
     });
 
     it('should show "Optional" for secondary provider when not connected', async () => {
-      render(
+      renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="microsoft"
@@ -205,7 +229,7 @@ describe('EmailOnboardingScreen', () => {
         microsoft: { connected: false },
       });
 
-      render(
+      renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="microsoft"
@@ -226,7 +250,7 @@ describe('EmailOnboardingScreen', () => {
         microsoft: { connected: true, email: 'user@outlook.com' },
       });
 
-      render(
+      renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="microsoft"
@@ -247,7 +271,7 @@ describe('EmailOnboardingScreen', () => {
         microsoft: { connected: false },
       });
 
-      render(
+      renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="microsoft"
@@ -268,7 +292,7 @@ describe('EmailOnboardingScreen', () => {
         microsoft: { connected: false },
       });
 
-      render(
+      renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="microsoft"
@@ -291,7 +315,7 @@ describe('EmailOnboardingScreen', () => {
         microsoft: { connected: false },
       });
 
-      render(
+      renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="microsoft"
@@ -313,7 +337,7 @@ describe('EmailOnboardingScreen', () => {
         microsoft: { connected: false },
       });
 
-      render(
+      renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="microsoft"
@@ -334,7 +358,7 @@ describe('EmailOnboardingScreen', () => {
         microsoft: { connected: true, email: 'user@outlook.com' },
       });
 
-      render(
+      renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="microsoft"
@@ -351,7 +375,7 @@ describe('EmailOnboardingScreen', () => {
 
   describe('Connect Gmail', () => {
     it('should call googleConnectMailbox when Connect Gmail is clicked', async () => {
-      render(
+      renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="microsoft"
@@ -375,7 +399,7 @@ describe('EmailOnboardingScreen', () => {
         () => new Promise((resolve) => setTimeout(() => resolve({ success: true }), 1000))
       );
 
-      render(
+      renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="microsoft"
@@ -399,7 +423,7 @@ describe('EmailOnboardingScreen', () => {
         () => new Promise((resolve) => setTimeout(() => resolve({ success: true }), 1000))
       );
 
-      render(
+      renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="microsoft"
@@ -420,7 +444,7 @@ describe('EmailOnboardingScreen', () => {
     });
 
     it('should register mailbox connected listener when connecting Gmail', async () => {
-      render(
+      renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="microsoft"
@@ -442,7 +466,7 @@ describe('EmailOnboardingScreen', () => {
 
   describe('Connect Outlook', () => {
     it('should call microsoftConnectMailbox when Connect Outlook is clicked', async () => {
-      render(
+      renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="microsoft"
@@ -466,7 +490,7 @@ describe('EmailOnboardingScreen', () => {
         () => new Promise((resolve) => setTimeout(() => resolve({ success: true }), 1000))
       );
 
-      render(
+      renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="microsoft"
@@ -486,7 +510,7 @@ describe('EmailOnboardingScreen', () => {
     });
 
     it('should register mailbox connected listener when connecting Outlook', async () => {
-      render(
+      renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="microsoft"
@@ -508,7 +532,7 @@ describe('EmailOnboardingScreen', () => {
 
   describe('Navigation', () => {
     it('should call onSkip when Skip for Now is clicked', async () => {
-      render(
+      renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="microsoft"
@@ -534,7 +558,7 @@ describe('EmailOnboardingScreen', () => {
         microsoft: { connected: false },
       });
 
-      render(
+      renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="microsoft"
@@ -560,7 +584,7 @@ describe('EmailOnboardingScreen', () => {
         microsoft: { connected: false },
       });
 
-      render(
+      renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="microsoft"
@@ -583,7 +607,7 @@ describe('EmailOnboardingScreen', () => {
         microsoft: { connected: false },
       });
 
-      render(
+      renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="microsoft"
@@ -607,7 +631,7 @@ describe('EmailOnboardingScreen', () => {
 
   describe('API Integration', () => {
     it('should check connections on mount', async () => {
-      render(
+      renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="microsoft"
@@ -637,7 +661,7 @@ describe('EmailOnboardingScreen', () => {
         error: 'Network error',
       });
 
-      render(
+      renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="microsoft"
@@ -655,7 +679,7 @@ describe('EmailOnboardingScreen', () => {
     it('should handle Gmail connection failure gracefully', async () => {
       window.api.auth.googleConnectMailbox.mockRejectedValue(new Error('Connection failed'));
 
-      render(
+      renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="microsoft"
@@ -680,7 +704,7 @@ describe('EmailOnboardingScreen', () => {
     it('should handle Outlook connection failure gracefully', async () => {
       window.api.auth.microsoftConnectMailbox.mockRejectedValue(new Error('Connection failed'));
 
-      render(
+      renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="microsoft"
@@ -705,7 +729,7 @@ describe('EmailOnboardingScreen', () => {
 
   describe('Accessibility', () => {
     it('should have accessible buttons', async () => {
-      render(
+      renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="microsoft"
@@ -727,7 +751,7 @@ describe('EmailOnboardingScreen', () => {
         () => new Promise((resolve) => setTimeout(resolve, 1000))
       );
 
-      render(
+      renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="microsoft"
