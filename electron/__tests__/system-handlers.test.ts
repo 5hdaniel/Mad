@@ -12,6 +12,12 @@ import type { IpcMainInvokeEvent } from 'electron';
 const mockIpcHandle = jest.fn();
 const mockShellOpenExternal = jest.fn();
 
+// Mock os module to simulate macOS for health check tests
+jest.mock('os', () => ({
+  ...jest.requireActual('os'),
+  platform: jest.fn().mockReturnValue('darwin'),
+}));
+
 jest.mock('electron', () => ({
   ipcMain: {
     handle: mockIpcHandle,

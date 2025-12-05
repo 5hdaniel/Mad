@@ -49,6 +49,19 @@ describe('App', () => {
       shouldPrompt: false,
       appPath: '/Applications/MagicAudit.app',
     });
+    // Mock user phone type - default to iphone so tests skip phone type selection
+    window.api.user.getPhoneType.mockResolvedValue({ success: true, phoneType: 'iphone' });
+    // Mock secure storage - default to already set up
+    window.api.system.hasEncryptionKeyStore.mockResolvedValue({ hasKeyStore: true });
+    window.api.system.initializeSecureStorage.mockResolvedValue({ success: true });
+    // Mock email connection status - default to completed onboarding
+    window.api.system.checkAllConnections.mockResolvedValue({
+      success: true,
+      google: { connected: true, email: 'test@gmail.com' },
+      microsoft: { connected: false },
+    });
+    // Mock email onboarding check - default to completed
+    window.api.auth.checkEmailOnboarding.mockResolvedValue({ success: true, completed: true });
   });
 
   describe('Authentication', () => {
@@ -98,7 +111,8 @@ describe('App', () => {
       renderApp();
 
       await waitFor(() => {
-        expect(screen.getByText(/dashboard/i)).toBeInTheDocument();
+        // Dashboard shows "Welcome to Magic Audit" heading
+        expect(screen.getByText(/Welcome to Magic Audit/i)).toBeInTheDocument();
       });
     });
 
@@ -138,7 +152,7 @@ describe('App', () => {
       renderApp();
 
       await waitFor(() => {
-        expect(screen.getByText(/dashboard/i)).toBeInTheDocument();
+        expect(screen.getByText(/Welcome to Magic Audit/i)).toBeInTheDocument();
       });
 
       // Verify session token is NOT stored in localStorage
@@ -173,7 +187,7 @@ describe('App', () => {
 
       // Wait for dashboard
       await waitFor(() => {
-        expect(screen.getByText(/dashboard/i)).toBeInTheDocument();
+        expect(screen.getByText(/Welcome to Magic Audit/i)).toBeInTheDocument();
       });
 
       // Click profile button (uses user initial) - title includes full text
@@ -213,7 +227,7 @@ describe('App', () => {
       renderApp();
 
       await waitFor(() => {
-        expect(screen.getByText(/dashboard/i)).toBeInTheDocument();
+        expect(screen.getByText(/Welcome to Magic Audit/i)).toBeInTheDocument();
       });
 
       const profileButton = screen.getByTitle(/Test User/i);
@@ -283,7 +297,7 @@ describe('App', () => {
       renderApp();
 
       await waitFor(() => {
-        expect(screen.getByText(/dashboard/i)).toBeInTheDocument();
+        expect(screen.getByText(/Welcome to Magic Audit/i)).toBeInTheDocument();
       });
 
       // Profile button should show user initial
@@ -295,7 +309,7 @@ describe('App', () => {
       renderApp();
 
       await waitFor(() => {
-        expect(screen.getByText(/dashboard/i)).toBeInTheDocument();
+        expect(screen.getByText(/Welcome to Magic Audit/i)).toBeInTheDocument();
       });
 
       const profileButton = screen.getByTitle(/Test User/i);
@@ -317,7 +331,7 @@ describe('App', () => {
       renderApp();
 
       await waitFor(() => {
-        expect(screen.getByText(/dashboard/i)).toBeInTheDocument();
+        expect(screen.getByText(/Welcome to Magic Audit/i)).toBeInTheDocument();
       });
 
       // Open profile modal
@@ -346,7 +360,7 @@ describe('App', () => {
       renderApp();
 
       await waitFor(() => {
-        expect(screen.getByText(/dashboard/i)).toBeInTheDocument();
+        expect(screen.getByText(/Welcome to Magic Audit/i)).toBeInTheDocument();
       });
 
       // Open profile modal
@@ -440,7 +454,7 @@ describe('App', () => {
       renderApp();
 
       await waitFor(() => {
-        expect(screen.getByText(/dashboard/i)).toBeInTheDocument();
+        expect(screen.getByText(/Welcome to Magic Audit/i)).toBeInTheDocument();
       });
 
       const profileButton = screen.getByTitle(/Alice/i);
@@ -461,7 +475,7 @@ describe('App', () => {
       renderApp();
 
       await waitFor(() => {
-        expect(screen.getByText(/dashboard/i)).toBeInTheDocument();
+        expect(screen.getByText(/Welcome to Magic Audit/i)).toBeInTheDocument();
       });
 
       const profileButton = screen.getByTitle(/test@example.com/i);

@@ -37,6 +37,9 @@ if (typeof window !== 'undefined') {
       microsoftConnectMailbox: jest.fn(),
       googleDisconnectMailbox: jest.fn(),
       microsoftDisconnectMailbox: jest.fn(),
+      checkEmailOnboarding: jest.fn(),
+      completeEmailOnboarding: jest.fn(),
+      completePendingLogin: jest.fn(),
     },
     transactions: {
       getAll: jest.fn(),
@@ -71,6 +74,8 @@ if (typeof window !== 'undefined') {
       openPrivacyPane: jest.fn(),
       contactSupport: jest.fn(),
       getDiagnostics: jest.fn(),
+      hasEncryptionKeyStore: jest.fn(),
+      initializeSecureStorage: jest.fn(),
     },
     address: {
       initialize: jest.fn(),
@@ -80,6 +85,10 @@ if (typeof window !== 'undefined') {
     preferences: {
       get: jest.fn(),
       update: jest.fn(),
+    },
+    user: {
+      getPhoneType: jest.fn(),
+      setPhoneType: jest.fn(),
     },
     shell: {
       openExternal: jest.fn(),
