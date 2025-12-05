@@ -384,6 +384,8 @@ const handleGoogleCompleteLogin = async (event, authCode) => {
         }
         else {
             // Update existing user - sync profile AND user state from cloud (source of truth)
+            // BUT: Only update terms/privacy fields if cloud has them (don't overwrite local acceptance with null)
+            // This handles cases where sync to cloud failed but user accepted locally
             await databaseService_1.default.updateUser(localUser.id, {
                 // Profile fields from OAuth
                 email: userInfo.email,
@@ -391,15 +393,34 @@ const handleGoogleCompleteLogin = async (event, authCode) => {
                 last_name: userInfo.family_name,
                 display_name: userInfo.name,
                 avatar_url: userInfo.picture,
-                // User state from Supabase (cloud is source of truth)
-                terms_accepted_at: cloudUser.terms_accepted_at,
-                privacy_policy_accepted_at: cloudUser.privacy_policy_accepted_at,
-                terms_version_accepted: cloudUser.terms_version_accepted,
-                privacy_policy_version_accepted: cloudUser.privacy_policy_version_accepted,
-                email_onboarding_completed_at: cloudUser.email_onboarding_completed_at,
+                // User state from Supabase - only update if cloud has values
+                ...(cloudUser.terms_accepted_at && {
+                    terms_accepted_at: cloudUser.terms_accepted_at,
+                    terms_version_accepted: cloudUser.terms_version_accepted,
+                }),
+                ...(cloudUser.privacy_policy_accepted_at && {
+                    privacy_policy_accepted_at: cloudUser.privacy_policy_accepted_at,
+                    privacy_policy_version_accepted: cloudUser.privacy_policy_version_accepted,
+                }),
+                ...(cloudUser.email_onboarding_completed_at && {
+                    email_onboarding_completed_at: cloudUser.email_onboarding_completed_at,
+                }),
                 subscription_tier: cloudUser.subscription_tier,
                 subscription_status: cloudUser.subscription_status,
             });
+            // Bidirectional sync: If local has terms accepted but cloud doesn't, sync to cloud
+            if (localUser.terms_accepted_at && !cloudUser.terms_accepted_at) {
+                await logService_1.default.info('Local user has accepted terms but cloud does not - syncing to cloud', 'AuthHandlers');
+                try {
+                    await supabaseService_1.default.syncTermsAcceptance(cloudUser.id, localUser.terms_version_accepted || legalVersions_1.CURRENT_TERMS_VERSION, localUser.privacy_policy_version_accepted || legalVersions_1.CURRENT_PRIVACY_POLICY_VERSION);
+                    await logService_1.default.info('Successfully synced local terms acceptance to cloud', 'AuthHandlers');
+                }
+                catch (syncError) {
+                    await logService_1.default.error('Failed to sync local terms to cloud', 'AuthHandlers', {
+                        error: syncError instanceof Error ? syncError.message : 'Unknown error'
+                    });
+                }
+            }
         }
         // Update last login (localUser is guaranteed non-null from the if/else above)
         if (!localUser) {
@@ -656,6 +677,7 @@ const handleMicrosoftLogin = async (mainWindow) => {
         const authWindow = new electron_1.BrowserWindow({
             width: 500,
             height: 700,
+            show: true, // Ensure window is visible immediately
             webPreferences: {
                 nodeIntegration: false,
                 contextIsolation: true,
@@ -665,6 +687,9 @@ const handleMicrosoftLogin = async (mainWindow) => {
             autoHideMenuBar: true,
             title: 'Sign in with Microsoft'
         });
+        // Ensure the auth window is visible and focused
+        authWindow.show();
+        authWindow.focus();
         // Strip CSP headers to allow Microsoft's scripts to load
         const filter = { urls: ['*://*.microsoftonline.com/*', '*://*.msauth.net/*', '*://*.msftauth.net/*'] };
         authWindow.webContents.session.webRequest.onHeadersReceived(filter, (details, callback) => {
@@ -714,19 +739,41 @@ const handleMicrosoftLogin = async (mainWindow) => {
                 }
             }
         };
+        // Helper to safely log URLs (redact auth codes from callback URLs)
+        const safeLogUrl = (url) => {
+            if (url.startsWith('http://localhost:3000/callback')) {
+                return 'http://localhost:3000/callback?code=[REDACTED]';
+            }
+            // For other URLs, show first 80 chars of path only (no query params that might have tokens)
+            try {
+                const parsed = new URL(url);
+                return `${parsed.origin}${parsed.pathname.substring(0, 80)}...`;
+            }
+            catch {
+                return url.substring(0, 50) + '...';
+            }
+        };
         // Use will-navigate to intercept the callback before it hits the HTTP server
         authWindow.webContents.on('will-navigate', (event, url) => {
+            logService_1.default.info(`[MicrosoftLogin] will-navigate: ${safeLogUrl(url)}`, 'AuthHandlers');
             if (url.startsWith('http://localhost:3000/callback')) {
+                logService_1.default.info('[MicrosoftLogin] Intercepted callback URL via will-navigate', 'AuthHandlers');
                 event.preventDefault(); // Prevent the navigation to avoid HTTP round-trip
                 handleCallbackUrl(url);
             }
         });
         // Also handle will-redirect as a fallback for server-side redirects
         authWindow.webContents.on('will-redirect', (event, url) => {
+            logService_1.default.info(`[MicrosoftLogin] will-redirect: ${safeLogUrl(url)}`, 'AuthHandlers');
             if (url.startsWith('http://localhost:3000/callback')) {
+                logService_1.default.info('[MicrosoftLogin] Intercepted callback URL via will-redirect', 'AuthHandlers');
                 event.preventDefault(); // Prevent the redirect to avoid HTTP round-trip
                 handleCallbackUrl(url);
             }
+        });
+        // Also listen to did-navigate for debugging - this fires AFTER navigation completes
+        authWindow.webContents.on('did-navigate', (_event, url) => {
+            logService_1.default.info(`[MicrosoftLogin] did-navigate: ${safeLogUrl(url)}`, 'AuthHandlers');
         });
         // Return authUrl immediately so browser can open
         // Don't wait for user - return early
@@ -820,21 +867,42 @@ const handleMicrosoftLogin = async (mainWindow) => {
                 }
                 else {
                     // Update existing user - sync profile AND user state from cloud (source of truth)
+                    // BUT: Only update terms/privacy fields if cloud has them (don't overwrite local acceptance with null)
+                    // This handles cases where sync to cloud failed but user accepted locally
                     await databaseService_1.default.updateUser(localUser.id, {
                         // Profile fields from OAuth
                         email: userInfo.email,
                         first_name: userInfo.given_name,
                         last_name: userInfo.family_name,
                         display_name: userInfo.name,
-                        // User state from Supabase (cloud is source of truth)
-                        terms_accepted_at: cloudUser.terms_accepted_at,
-                        privacy_policy_accepted_at: cloudUser.privacy_policy_accepted_at,
-                        terms_version_accepted: cloudUser.terms_version_accepted,
-                        privacy_policy_version_accepted: cloudUser.privacy_policy_version_accepted,
-                        email_onboarding_completed_at: cloudUser.email_onboarding_completed_at,
+                        // User state from Supabase - only update if cloud has values
+                        ...(cloudUser.terms_accepted_at && {
+                            terms_accepted_at: cloudUser.terms_accepted_at,
+                            terms_version_accepted: cloudUser.terms_version_accepted,
+                        }),
+                        ...(cloudUser.privacy_policy_accepted_at && {
+                            privacy_policy_accepted_at: cloudUser.privacy_policy_accepted_at,
+                            privacy_policy_version_accepted: cloudUser.privacy_policy_version_accepted,
+                        }),
+                        ...(cloudUser.email_onboarding_completed_at && {
+                            email_onboarding_completed_at: cloudUser.email_onboarding_completed_at,
+                        }),
                         subscription_tier: cloudUser.subscription_tier,
                         subscription_status: cloudUser.subscription_status,
                     });
+                    // Bidirectional sync: If local has terms accepted but cloud doesn't, sync to cloud
+                    if (localUser.terms_accepted_at && !cloudUser.terms_accepted_at) {
+                        await logService_1.default.info('Local user has accepted terms but cloud does not - syncing to cloud', 'AuthHandlers');
+                        try {
+                            await supabaseService_1.default.syncTermsAcceptance(cloudUser.id, localUser.terms_version_accepted || legalVersions_1.CURRENT_TERMS_VERSION, localUser.privacy_policy_version_accepted || legalVersions_1.CURRENT_PRIVACY_POLICY_VERSION);
+                            await logService_1.default.info('Successfully synced local terms acceptance to cloud', 'AuthHandlers');
+                        }
+                        catch (syncError) {
+                            await logService_1.default.error('Failed to sync local terms to cloud', 'AuthHandlers', {
+                                error: syncError instanceof Error ? syncError.message : 'Unknown error'
+                            });
+                        }
+                    }
                 }
                 // Update last login (localUser is guaranteed non-null from the if/else above)
                 if (!localUser) {
@@ -970,6 +1038,7 @@ const handleMicrosoftConnectMailbox = async (mainWindow, userId) => {
         const authWindow = new electron_1.BrowserWindow({
             width: 500,
             height: 700,
+            show: true, // Ensure window is visible immediately
             webPreferences: {
                 nodeIntegration: false,
                 contextIsolation: true,
@@ -979,6 +1048,9 @@ const handleMicrosoftConnectMailbox = async (mainWindow, userId) => {
             autoHideMenuBar: true,
             title: 'Connect Microsoft Mailbox'
         });
+        // Ensure the auth window is visible and focused
+        authWindow.show();
+        authWindow.focus();
         // Strip CSP headers to allow Microsoft's scripts to load
         const filter = { urls: ['*://*.microsoftonline.com/*', '*://*.msauth.net/*', '*://*.msftauth.net/*'] };
         authWindow.webContents.session.webRequest.onHeadersReceived(filter, (details, callback) => {
@@ -1028,26 +1100,55 @@ const handleMicrosoftConnectMailbox = async (mainWindow, userId) => {
                 }
             }
         };
+        // Helper to safely log URLs (redact auth codes from callback URLs)
+        const safeLogMailboxUrl = (url) => {
+            if (url.startsWith('http://localhost:3000/callback')) {
+                return 'http://localhost:3000/callback?code=[REDACTED]';
+            }
+            // For other URLs, show first 80 chars of path only (no query params that might have tokens)
+            try {
+                const parsed = new URL(url);
+                return `${parsed.origin}${parsed.pathname.substring(0, 80)}...`;
+            }
+            catch {
+                return url.substring(0, 50) + '...';
+            }
+        };
         // Use will-navigate to intercept the callback before it hits the HTTP server
         authWindow.webContents.on('will-navigate', (event, url) => {
+            logService_1.default.info(`[MicrosoftMailbox] will-navigate: ${safeLogMailboxUrl(url)}`, 'AuthHandlers');
             if (url.startsWith('http://localhost:3000/callback')) {
+                logService_1.default.info('[MicrosoftMailbox] Intercepted callback URL via will-navigate', 'AuthHandlers');
                 event.preventDefault(); // Prevent the navigation to avoid HTTP round-trip
                 handleMailboxCallbackUrl(url);
             }
         });
         // Also handle will-redirect as a fallback for server-side redirects
         authWindow.webContents.on('will-redirect', (event, url) => {
+            logService_1.default.info(`[MicrosoftMailbox] will-redirect: ${safeLogMailboxUrl(url)}`, 'AuthHandlers');
             if (url.startsWith('http://localhost:3000/callback')) {
+                logService_1.default.info('[MicrosoftMailbox] Intercepted callback URL via will-redirect', 'AuthHandlers');
                 event.preventDefault(); // Prevent the redirect to avoid HTTP round-trip
                 handleMailboxCallbackUrl(url);
             }
+        });
+        // Also listen to did-navigate for debugging - this fires AFTER navigation completes
+        authWindow.webContents.on('did-navigate', (_event, url) => {
+            logService_1.default.info(`[MicrosoftMailbox] did-navigate: ${safeLogMailboxUrl(url)}`, 'AuthHandlers');
         });
         // Return authUrl immediately so browser can open
         // Don't wait for user - return early
         setTimeout(async () => {
             try {
-                // Wait for code from local server (in background)
-                const code = await codePromise;
+                // Wait for code from local server (in background) with timeout
+                await logService_1.default.info('Waiting for mailbox authorization code from local server...', 'AuthHandlers');
+                // Add timeout to prevent infinite waiting (same as login flow)
+                const timeoutMs = 120000; // 2 minutes
+                const codeWithTimeout = Promise.race([
+                    codePromise,
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('Mailbox authentication timed out - no response from Microsoft. Please try again.')), timeoutMs))
+                ]);
+                const code = await codeWithTimeout;
                 authCompleted = true;
                 await logService_1.default.info('Received mailbox authorization code from redirect', 'AuthHandlers');
                 // Exchange code for tokens
@@ -1152,20 +1253,42 @@ const handleCompletePendingLogin = async (_event, oauthData) => {
         }
         else {
             // Update existing user - sync profile AND user state from cloud (source of truth)
+            // BUT: Only update terms/privacy fields if cloud has them (don't overwrite local acceptance with null)
+            // This handles cases where sync to cloud failed but user accepted locally
             await databaseService_1.default.updateUser(localUser.id, {
                 email: userInfo.email,
                 first_name: userInfo.given_name,
                 last_name: userInfo.family_name,
                 display_name: userInfo.name,
                 avatar_url: userInfo.picture,
-                terms_accepted_at: cloudUser.terms_accepted_at,
-                privacy_policy_accepted_at: cloudUser.privacy_policy_accepted_at,
-                terms_version_accepted: cloudUser.terms_version_accepted,
-                privacy_policy_version_accepted: cloudUser.privacy_policy_version_accepted,
-                email_onboarding_completed_at: cloudUser.email_onboarding_completed_at,
+                // User state from Supabase - only update if cloud has values
+                ...(cloudUser.terms_accepted_at && {
+                    terms_accepted_at: cloudUser.terms_accepted_at,
+                    terms_version_accepted: cloudUser.terms_version_accepted,
+                }),
+                ...(cloudUser.privacy_policy_accepted_at && {
+                    privacy_policy_accepted_at: cloudUser.privacy_policy_accepted_at,
+                    privacy_policy_version_accepted: cloudUser.privacy_policy_version_accepted,
+                }),
+                ...(cloudUser.email_onboarding_completed_at && {
+                    email_onboarding_completed_at: cloudUser.email_onboarding_completed_at,
+                }),
                 subscription_tier: cloudUser.subscription_tier ?? 'free',
                 subscription_status: cloudUser.subscription_status ?? 'trial',
             });
+            // Bidirectional sync: If local has terms accepted but cloud doesn't, sync to cloud
+            if (localUser.terms_accepted_at && !cloudUser.terms_accepted_at) {
+                await logService_1.default.info('Local user has accepted terms but cloud does not - syncing to cloud', 'AuthHandlers');
+                try {
+                    await supabaseService_1.default.syncTermsAcceptance(cloudUser.id, localUser.terms_version_accepted || legalVersions_1.CURRENT_TERMS_VERSION, localUser.privacy_policy_version_accepted || legalVersions_1.CURRENT_PRIVACY_POLICY_VERSION);
+                    await logService_1.default.info('Successfully synced local terms acceptance to cloud', 'AuthHandlers');
+                }
+                catch (syncError) {
+                    await logService_1.default.error('Failed to sync local terms to cloud', 'AuthHandlers', {
+                        error: syncError instanceof Error ? syncError.message : 'Unknown error'
+                    });
+                }
+            }
         }
         if (!localUser) {
             throw new Error('Local user is unexpectedly null after creation/update');
@@ -1380,8 +1503,30 @@ const registerAuthHandlers = (mainWindow) => {
         try {
             // Validate input
             const validatedUserId = (0, validation_1.validateUserId)(userId);
-            // Check local database
-            const completed = await databaseService_1.default.hasCompletedEmailOnboarding(validatedUserId);
+            // Check local database for onboarding completion flag
+            const onboardingCompleted = await databaseService_1.default.hasCompletedEmailOnboarding(validatedUserId);
+            // For session-only OAuth: Also check if there's a valid mailbox token
+            // Tokens are cleared on each session, so user needs to reconnect mailbox even if onboarding was done before
+            let hasValidMailboxToken = false;
+            if (onboardingCompleted) {
+                // Check for Google or Microsoft mailbox tokens
+                const googleToken = await databaseService_1.default.getOAuthToken(validatedUserId, 'google', 'mailbox');
+                const microsoftToken = await databaseService_1.default.getOAuthToken(validatedUserId, 'microsoft', 'mailbox');
+                hasValidMailboxToken = !!(googleToken || microsoftToken);
+                if (!hasValidMailboxToken) {
+                    await logService_1.default.info('Email onboarding was completed but no mailbox token found (session-only OAuth)', 'AuthHandlers', {
+                        userId: validatedUserId.substring(0, 8) + '...',
+                    });
+                }
+            }
+            // Onboarding is only considered complete if we have both the flag AND a valid token
+            const completed = onboardingCompleted && hasValidMailboxToken;
+            await logService_1.default.info('Email onboarding check', 'AuthHandlers', {
+                userId: validatedUserId.substring(0, 8) + '...',
+                completed,
+                onboardingCompleted,
+                hasValidMailboxToken,
+            });
             return { success: true, completed };
         }
         catch (error) {
@@ -1476,21 +1621,6 @@ const registerAuthHandlers = (mainWindow) => {
             return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
         }
     });
-    // Shell: Open external URL
-    electron_1.ipcMain.handle('shell:open-external', async (event, url) => {
-        try {
-            // Validate input - prevent opening malicious URLs
-            const validatedUrl = (0, validation_1.validateUrl)(url);
-            await electron_1.shell.openExternal(validatedUrl);
-            return { success: true };
-        }
-        catch (error) {
-            await logService_1.default.error('Failed to open external URL', 'AuthHandlers', { error: error instanceof Error ? error.message : 'Unknown error' });
-            if (error instanceof validation_1.ValidationError) {
-                return { success: false, error: `Validation error: ${error.message}` };
-            }
-            return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
-        }
-    });
+    // Note: shell:open-external handler is registered in system-handlers.ts
 };
 exports.registerAuthHandlers = registerAuthHandlers;

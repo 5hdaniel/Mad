@@ -846,6 +846,7 @@ const handleMicrosoftLogin = async (mainWindow: BrowserWindow | null): Promise<L
     const authWindow = new BrowserWindow({
       width: 500,
       height: 700,
+      show: true, // Ensure window is visible immediately
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
@@ -855,6 +856,10 @@ const handleMicrosoftLogin = async (mainWindow: BrowserWindow | null): Promise<L
       autoHideMenuBar: true,
       title: 'Sign in with Microsoft'
     });
+
+    // Ensure the auth window is visible and focused
+    authWindow.show();
+    authWindow.focus();
 
     // Strip CSP headers to allow Microsoft's scripts to load
     const filter = { urls: ['*://*.microsoftonline.com/*', '*://*.msauth.net/*', '*://*.msftauth.net/*'] };
@@ -910,9 +915,25 @@ const handleMicrosoftLogin = async (mainWindow: BrowserWindow | null): Promise<L
       }
     };
 
+    // Helper to safely log URLs (redact auth codes from callback URLs)
+    const safeLogUrl = (url: string): string => {
+      if (url.startsWith('http://localhost:3000/callback')) {
+        return 'http://localhost:3000/callback?code=[REDACTED]';
+      }
+      // For other URLs, show first 80 chars of path only (no query params that might have tokens)
+      try {
+        const parsed = new URL(url);
+        return `${parsed.origin}${parsed.pathname.substring(0, 80)}...`;
+      } catch {
+        return url.substring(0, 50) + '...';
+      }
+    };
+
     // Use will-navigate to intercept the callback before it hits the HTTP server
     authWindow.webContents.on('will-navigate', (event: ElectronEvent, url: string) => {
+      logService.info(`[MicrosoftLogin] will-navigate: ${safeLogUrl(url)}`, 'AuthHandlers');
       if (url.startsWith('http://localhost:3000/callback')) {
+        logService.info('[MicrosoftLogin] Intercepted callback URL via will-navigate', 'AuthHandlers');
         event.preventDefault(); // Prevent the navigation to avoid HTTP round-trip
         handleCallbackUrl(url);
       }
@@ -920,10 +941,17 @@ const handleMicrosoftLogin = async (mainWindow: BrowserWindow | null): Promise<L
 
     // Also handle will-redirect as a fallback for server-side redirects
     authWindow.webContents.on('will-redirect', (event: ElectronEvent, url: string) => {
+      logService.info(`[MicrosoftLogin] will-redirect: ${safeLogUrl(url)}`, 'AuthHandlers');
       if (url.startsWith('http://localhost:3000/callback')) {
+        logService.info('[MicrosoftLogin] Intercepted callback URL via will-redirect', 'AuthHandlers');
         event.preventDefault(); // Prevent the redirect to avoid HTTP round-trip
         handleCallbackUrl(url);
       }
+    });
+
+    // Also listen to did-navigate for debugging - this fires AFTER navigation completes
+    authWindow.webContents.on('did-navigate', (_event: ElectronEvent, url: string) => {
+      logService.info(`[MicrosoftLogin] did-navigate: ${safeLogUrl(url)}`, 'AuthHandlers');
     });
 
     // Return authUrl immediately so browser can open
@@ -1239,6 +1267,7 @@ const handleMicrosoftConnectMailbox = async (mainWindow: BrowserWindow | null, u
     const authWindow = new BrowserWindow({
       width: 500,
       height: 700,
+      show: true, // Ensure window is visible immediately
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
@@ -1248,6 +1277,10 @@ const handleMicrosoftConnectMailbox = async (mainWindow: BrowserWindow | null, u
       autoHideMenuBar: true,
       title: 'Connect Microsoft Mailbox'
     });
+
+    // Ensure the auth window is visible and focused
+    authWindow.show();
+    authWindow.focus();
 
     // Strip CSP headers to allow Microsoft's scripts to load
     const filter = { urls: ['*://*.microsoftonline.com/*', '*://*.msauth.net/*', '*://*.msftauth.net/*'] };
@@ -1303,9 +1336,25 @@ const handleMicrosoftConnectMailbox = async (mainWindow: BrowserWindow | null, u
       }
     };
 
+    // Helper to safely log URLs (redact auth codes from callback URLs)
+    const safeLogMailboxUrl = (url: string): string => {
+      if (url.startsWith('http://localhost:3000/callback')) {
+        return 'http://localhost:3000/callback?code=[REDACTED]';
+      }
+      // For other URLs, show first 80 chars of path only (no query params that might have tokens)
+      try {
+        const parsed = new URL(url);
+        return `${parsed.origin}${parsed.pathname.substring(0, 80)}...`;
+      } catch {
+        return url.substring(0, 50) + '...';
+      }
+    };
+
     // Use will-navigate to intercept the callback before it hits the HTTP server
     authWindow.webContents.on('will-navigate', (event: ElectronEvent, url: string) => {
+      logService.info(`[MicrosoftMailbox] will-navigate: ${safeLogMailboxUrl(url)}`, 'AuthHandlers');
       if (url.startsWith('http://localhost:3000/callback')) {
+        logService.info('[MicrosoftMailbox] Intercepted callback URL via will-navigate', 'AuthHandlers');
         event.preventDefault(); // Prevent the navigation to avoid HTTP round-trip
         handleMailboxCallbackUrl(url);
       }
@@ -1313,18 +1362,36 @@ const handleMicrosoftConnectMailbox = async (mainWindow: BrowserWindow | null, u
 
     // Also handle will-redirect as a fallback for server-side redirects
     authWindow.webContents.on('will-redirect', (event: ElectronEvent, url: string) => {
+      logService.info(`[MicrosoftMailbox] will-redirect: ${safeLogMailboxUrl(url)}`, 'AuthHandlers');
       if (url.startsWith('http://localhost:3000/callback')) {
+        logService.info('[MicrosoftMailbox] Intercepted callback URL via will-redirect', 'AuthHandlers');
         event.preventDefault(); // Prevent the redirect to avoid HTTP round-trip
         handleMailboxCallbackUrl(url);
       }
+    });
+
+    // Also listen to did-navigate for debugging - this fires AFTER navigation completes
+    authWindow.webContents.on('did-navigate', (_event: ElectronEvent, url: string) => {
+      logService.info(`[MicrosoftMailbox] did-navigate: ${safeLogMailboxUrl(url)}`, 'AuthHandlers');
     });
 
     // Return authUrl immediately so browser can open
     // Don't wait for user - return early
     setTimeout(async () => {
       try {
-        // Wait for code from local server (in background)
-        const code = await codePromise;
+        // Wait for code from local server (in background) with timeout
+        await logService.info('Waiting for mailbox authorization code from local server...', 'AuthHandlers');
+
+        // Add timeout to prevent infinite waiting (same as login flow)
+        const timeoutMs = 120000; // 2 minutes
+        const codeWithTimeout = Promise.race([
+          codePromise,
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Mailbox authentication timed out - no response from Microsoft. Please try again.')), timeoutMs)
+          )
+        ]);
+
+        const code = await codeWithTimeout;
         authCompleted = true;
         await logService.info('Received mailbox authorization code from redirect', 'AuthHandlers');
 
@@ -1816,10 +1883,34 @@ export const registerAuthHandlers = (mainWindow: BrowserWindow | null): void => 
       // Validate input
       const validatedUserId = validateUserId(userId)!;
 
-      // Check local database
-      const completed = await databaseService.hasCompletedEmailOnboarding(validatedUserId);
+      // Check local database for onboarding completion flag
+      const onboardingCompleted = await databaseService.hasCompletedEmailOnboarding(validatedUserId);
 
-      await logService.info('Email onboarding check', 'AuthHandlers', { userId: validatedUserId.substring(0, 8) + '...', completed });
+      // For session-only OAuth: Also check if there's a valid mailbox token
+      // Tokens are cleared on each session, so user needs to reconnect mailbox even if onboarding was done before
+      let hasValidMailboxToken = false;
+      if (onboardingCompleted) {
+        // Check for Google or Microsoft mailbox tokens
+        const googleToken = await databaseService.getOAuthToken(validatedUserId, 'google', 'mailbox');
+        const microsoftToken = await databaseService.getOAuthToken(validatedUserId, 'microsoft', 'mailbox');
+        hasValidMailboxToken = !!(googleToken || microsoftToken);
+
+        if (!hasValidMailboxToken) {
+          await logService.info('Email onboarding was completed but no mailbox token found (session-only OAuth)', 'AuthHandlers', {
+            userId: validatedUserId.substring(0, 8) + '...',
+          });
+        }
+      }
+
+      // Onboarding is only considered complete if we have both the flag AND a valid token
+      const completed = onboardingCompleted && hasValidMailboxToken;
+
+      await logService.info('Email onboarding check', 'AuthHandlers', {
+        userId: validatedUserId.substring(0, 8) + '...',
+        completed,
+        onboardingCompleted,
+        hasValidMailboxToken,
+      });
 
       return { success: true, completed };
     } catch (error) {
