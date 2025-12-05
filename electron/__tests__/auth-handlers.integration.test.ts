@@ -529,22 +529,7 @@ describe('Auth Handlers Integration Tests', () => {
       expect(result2.error).toContain('invalid characters');
     });
 
-    it('should reject invalid URLs in shell:open-external', async () => {
-      const handler = registeredHandlers.get('shell:open-external');
-
-      // JavaScript protocol
-      const result1 = await handler(mockEvent, 'javascript:alert(1)');
-      expect(result1.success).toBe(false);
-
-      // File protocol
-      const result2 = await handler(mockEvent, 'file:///etc/passwd');
-      expect(result2.success).toBe(false);
-
-      // Valid HTTPS should work
-      mockShellOpenExternal.mockResolvedValue(undefined);
-      const result3 = await handler(mockEvent, 'https://example.com');
-      expect(result3.success).toBe(true);
-    });
+    // Note: shell:open-external handler tests are in system-handlers.test.ts
   });
 
   describe('Mailbox Connection Flows', () => {
