@@ -1945,24 +1945,5 @@ export const registerAuthHandlers = (mainWindow: BrowserWindow | null): void => 
     }
   });
 
-  // Shell: Open external URL
-  ipcMain.handle('shell:open-external', async (event, url: string): Promise<AuthResponse> => {
-    try {
-      // Validate input - prevent opening malicious URLs
-      const validatedUrl = validateUrl(url);
-
-      await shell.openExternal(validatedUrl);
-      return { success: true };
-    } catch (error) {
-      await logService.error(
-        'Failed to open external URL',
-        'AuthHandlers',
-        { error: error instanceof Error ? error.message : 'Unknown error' }
-      );
-      if (error instanceof ValidationError) {
-        return { success: false, error: `Validation error: ${error.message}` };
-      }
-      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
-    }
-  });
+  // Note: shell:open-external handler is registered in system-handlers.ts
 };

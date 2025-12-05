@@ -18,8 +18,8 @@ interface AppInfo {
   name: string;
 }
 
-// Setup steps for progress indicator (5 steps)
-const SETUP_STEPS = [
+// Setup steps for progress indicator - macOS only (this screen doesn't show on Windows)
+const MACOS_SETUP_STEPS = [
   { id: 1, label: 'Sign In' },
   { id: 2, label: 'Phone Type' },
   { id: 3, label: 'Secure Storage' },
@@ -28,12 +28,12 @@ const SETUP_STEPS = [
 ];
 
 /**
- * Progress indicator component showing setup steps
+ * Progress indicator component showing setup steps (macOS only)
  */
 function SetupProgressIndicator({ currentStep }: { currentStep: number }) {
   return (
     <div className="flex items-center justify-center gap-1 mb-6">
-      {SETUP_STEPS.map((step, index) => (
+      {MACOS_SETUP_STEPS.map((step, index) => (
         <React.Fragment key={step.id}>
           <div className="flex flex-col items-center">
             <div
@@ -57,7 +57,7 @@ function SetupProgressIndicator({ currentStep }: { currentStep: number }) {
               {step.label}
             </span>
           </div>
-          {index < SETUP_STEPS.length - 1 && (
+          {index < MACOS_SETUP_STEPS.length - 1 && (
             <div
               className={`w-6 h-0.5 mb-5 transition-all ${
                 step.id < currentStep ? 'bg-green-500' : 'bg-gray-200'

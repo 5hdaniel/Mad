@@ -118,11 +118,19 @@ If you're seeing this error:
 // Guard to prevent multiple concurrent initializations
 let isInitializing = false;
 let initializationComplete = false;
+let handlersRegistered = false;
 
 /**
  * Register all system and permission-related IPC handlers
  */
 export function registerSystemHandlers(): void {
+  // Prevent double registration (can happen during hot-reload or app reactivation)
+  if (handlersRegistered) {
+    logService.warn('System handlers already registered, skipping duplicate registration', 'SystemHandlers');
+    return;
+  }
+  handlersRegistered = true;
+
   // ===== SECURE STORAGE (KEYCHAIN) SETUP =====
 
   /**

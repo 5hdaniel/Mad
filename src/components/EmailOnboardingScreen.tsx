@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { usePlatform } from '../contexts/PlatformContext';
 
 interface ConnectionStatus {
   connected: boolean;
@@ -21,8 +22,9 @@ interface EmailOnboardingScreenProps {
   onSkip: () => void;
 }
 
-// Setup steps for progress indicator (5 steps)
-const SETUP_STEPS = [
+// Setup steps for progress indicator - platform specific
+// macOS: Full 5-step flow with Secure Storage and Permissions
+const MACOS_SETUP_STEPS = [
   { id: 1, label: 'Sign In' },
   { id: 2, label: 'Phone Type' },
   { id: 3, label: 'Secure Storage' },
@@ -30,13 +32,21 @@ const SETUP_STEPS = [
   { id: 5, label: 'Permissions' },
 ];
 
+// Windows: Simplified 3-step flow (no Secure Storage or Permissions needed)
+const WINDOWS_SETUP_STEPS = [
+  { id: 1, label: 'Sign In' },
+  { id: 2, label: 'Phone Type' },
+  { id: 3, label: 'Connect Email' },
+];
+
 /**
  * Progress indicator component showing setup steps
  */
-function SetupProgressIndicator({ currentStep }: { currentStep: number }) {
+function SetupProgressIndicator({ currentStep, isWindows }: { currentStep: number; isWindows: boolean }) {
+  const steps = isWindows ? WINDOWS_SETUP_STEPS : MACOS_SETUP_STEPS;
   return (
     <div className="flex items-center justify-center gap-1 mb-6">
-      {SETUP_STEPS.map((step, index) => (
+      {steps.map((step, index) => (
         <React.Fragment key={step.id}>
           <div className="flex flex-col items-center">
             <div
@@ -60,7 +70,7 @@ function SetupProgressIndicator({ currentStep }: { currentStep: number }) {
               {step.label}
             </span>
           </div>
-          {index < SETUP_STEPS.length - 1 && (
+          {index < steps.length - 1 && (
             <div
               className={`w-6 h-0.5 mb-5 transition-all ${
                 step.id < currentStep ? 'bg-green-500' : 'bg-gray-200'
@@ -83,11 +93,15 @@ function EmailOnboardingScreen({ userId, authProvider, onComplete, onSkip }: Ema
   const [connections, setConnections] = useState<Connections>({ google: null, microsoft: null });
   const [loadingConnections, setLoadingConnections] = useState<boolean>(true);
   const [connectingProvider, setConnectingProvider] = useState<string | null>(null);
+  const { isWindows } = usePlatform();
 
   // Determine primary and secondary providers based on how user logged in
   const isPrimaryGoogle = authProvider === 'google';
   const primaryProvider = isPrimaryGoogle ? 'google' : 'microsoft';
   const secondaryProvider = isPrimaryGoogle ? 'microsoft' : 'google';
+
+  // Current step differs by platform (Windows: step 3, macOS: step 4)
+  const currentStep = isWindows ? 3 : 4;
 
   // Check existing connections on mount
   useEffect(() => {
@@ -226,7 +240,7 @@ function EmailOnboardingScreen({ userId, authProvider, onComplete, onSkip }: Ema
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-8">
       <div className="max-w-lg w-full bg-white rounded-2xl shadow-xl p-8">
         {/* Progress Indicator */}
-        <SetupProgressIndicator currentStep={4} />
+        <SetupProgressIndicator currentStep={currentStep} isWindows={isWindows} />
 
         {/* Header */}
         <div className="text-center mb-8">

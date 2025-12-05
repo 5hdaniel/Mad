@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
+import { usePlatform } from '../contexts/PlatformContext';
 
-// Setup steps for progress indicator (5 steps now)
-const SETUP_STEPS = [
+// Setup steps for progress indicator - platform specific
+// macOS: Full 5-step flow with Secure Storage and Permissions
+const MACOS_SETUP_STEPS = [
   { id: 1, label: 'Sign In' },
   { id: 2, label: 'Phone Type' },
   { id: 3, label: 'Secure Storage' },
@@ -9,13 +11,21 @@ const SETUP_STEPS = [
   { id: 5, label: 'Permissions' },
 ];
 
+// Windows: Simplified 3-step flow (no Secure Storage or Permissions needed)
+const WINDOWS_SETUP_STEPS = [
+  { id: 1, label: 'Sign In' },
+  { id: 2, label: 'Phone Type' },
+  { id: 3, label: 'Connect Email' },
+];
+
 /**
  * Progress indicator component showing setup steps
  */
-function SetupProgressIndicator({ currentStep }: { currentStep: number }) {
+function SetupProgressIndicator({ currentStep, isWindows }: { currentStep: number; isWindows: boolean }) {
+  const steps = isWindows ? WINDOWS_SETUP_STEPS : MACOS_SETUP_STEPS;
   return (
     <div className="flex items-center justify-center gap-1 mb-6">
-      {SETUP_STEPS.map((step, index) => (
+      {steps.map((step, index) => (
         <React.Fragment key={step.id}>
           <div className="flex flex-col items-center">
             <div
@@ -39,7 +49,7 @@ function SetupProgressIndicator({ currentStep }: { currentStep: number }) {
               {step.label}
             </span>
           </div>
-          {index < SETUP_STEPS.length - 1 && (
+          {index < steps.length - 1 && (
             <div
               className={`w-6 h-0.5 mb-5 transition-all ${
                 step.id < currentStep ? 'bg-green-500' : 'bg-gray-200'
@@ -67,6 +77,7 @@ interface PhoneTypeSelectionProps {
 function PhoneTypeSelection({ onSelectIPhone, onSelectAndroid }: PhoneTypeSelectionProps) {
   const [selectedType, setSelectedType] = useState<PhoneType>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { isWindows } = usePlatform();
 
   const handleContinue = async () => {
     if (!selectedType) return;
@@ -84,7 +95,7 @@ function PhoneTypeSelection({ onSelectIPhone, onSelectAndroid }: PhoneTypeSelect
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center p-4">
       <div className="max-w-xl w-full">
         {/* Progress Indicator */}
-        <SetupProgressIndicator currentStep={2} />
+        <SetupProgressIndicator currentStep={2} isWindows={isWindows} />
 
         {/* Main Card */}
         <div className="bg-white rounded-2xl shadow-xl p-8">
