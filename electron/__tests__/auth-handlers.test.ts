@@ -26,6 +26,8 @@ jest.mock('electron', () => ({
   BrowserWindow: jest.fn().mockImplementation(() => ({
     loadURL: jest.fn(),
     close: jest.fn(),
+    show: jest.fn(),
+    focus: jest.fn(),
     on: jest.fn(), // For 'closed' event listener
     isDestroyed: jest.fn().mockReturnValue(false),
     webContents: {
@@ -69,6 +71,8 @@ jest.mock('../services/databaseService', () => ({
     validateSession: jest.fn(),
     deleteSession: jest.fn(),
     acceptTerms: jest.fn(),
+    hasCompletedEmailOnboarding: jest.fn(),
+    getOAuthToken: jest.fn(),
   },
 }));
 
@@ -548,6 +552,72 @@ describe('Auth Handlers', () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toContain('DB error');
+    });
+  });
+
+  describe('auth:check-email-onboarding', () => {
+    beforeEach(() => {
+      mockDatabaseService.hasCompletedEmailOnboarding.mockReset();
+      mockDatabaseService.getOAuthToken.mockReset();
+    });
+
+    it('should return completed=true when onboarding done and mailbox token exists', async () => {
+      mockDatabaseService.hasCompletedEmailOnboarding.mockResolvedValue(true);
+      mockDatabaseService.getOAuthToken.mockResolvedValue({ access_token: 'test-token' });
+
+      const handler = registeredHandlers.get('auth:check-email-onboarding');
+      const result = await handler(mockEvent, TEST_USER_ID);
+
+      expect(result.success).toBe(true);
+      expect(result.completed).toBe(true);
+    });
+
+    it('should return completed=false when onboarding done but no mailbox token (session-only OAuth)', async () => {
+      mockDatabaseService.hasCompletedEmailOnboarding.mockResolvedValue(true);
+      mockDatabaseService.getOAuthToken.mockResolvedValue(null); // No token
+
+      const handler = registeredHandlers.get('auth:check-email-onboarding');
+      const result = await handler(mockEvent, TEST_USER_ID);
+
+      expect(result.success).toBe(true);
+      expect(result.completed).toBe(false);
+      expect(mockLogService.info).toHaveBeenCalledWith(
+        'Email onboarding was completed but no mailbox token found (session-only OAuth)',
+        'AuthHandlers',
+        expect.any(Object)
+      );
+    });
+
+    it('should return completed=false when onboarding not done', async () => {
+      mockDatabaseService.hasCompletedEmailOnboarding.mockResolvedValue(false);
+
+      const handler = registeredHandlers.get('auth:check-email-onboarding');
+      const result = await handler(mockEvent, TEST_USER_ID);
+
+      expect(result.success).toBe(true);
+      expect(result.completed).toBe(false);
+      // Should not check for tokens if onboarding not completed
+      expect(mockDatabaseService.getOAuthToken).not.toHaveBeenCalled();
+    });
+
+    it('should handle invalid user ID', async () => {
+      const handler = registeredHandlers.get('auth:check-email-onboarding');
+      const result = await handler(mockEvent, '');
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Validation error');
+    });
+
+    it('should check for both Google and Microsoft tokens', async () => {
+      mockDatabaseService.hasCompletedEmailOnboarding.mockResolvedValue(true);
+      mockDatabaseService.getOAuthToken.mockResolvedValue(null);
+
+      const handler = registeredHandlers.get('auth:check-email-onboarding');
+      await handler(mockEvent, TEST_USER_ID);
+
+      // Should check for both providers
+      expect(mockDatabaseService.getOAuthToken).toHaveBeenCalledWith(TEST_USER_ID, 'google', 'mailbox');
+      expect(mockDatabaseService.getOAuthToken).toHaveBeenCalledWith(TEST_USER_ID, 'microsoft', 'mailbox');
     });
   });
 
@@ -1076,6 +1146,8 @@ describe('Auth Handlers', () => {
       const mockAuthWindow = {
         loadURL: jest.fn(),
         close: jest.fn(),
+        show: jest.fn(),
+        focus: jest.fn(),
         on: jest.fn((event: string, handler: () => void) => {
           if (event === 'closed') {
             closedHandler = handler;
@@ -1126,6 +1198,8 @@ describe('Auth Handlers', () => {
       const mockAuthWindow = {
         loadURL: jest.fn(),
         close: jest.fn(),
+        show: jest.fn(),
+        focus: jest.fn(),
         on: jest.fn((event: string, handler: () => void) => {
           if (event === 'closed') {
             closedHandler = handler;
@@ -1189,6 +1263,8 @@ describe('Auth Handlers', () => {
       const mockAuthWindow = {
         loadURL: jest.fn(),
         close: jest.fn(),
+        show: jest.fn(),
+        focus: jest.fn(),
         on: jest.fn((event: string, handler: () => void) => {
           if (event === 'closed') {
             closedHandler = handler;
@@ -1239,6 +1315,8 @@ describe('Auth Handlers', () => {
       const mockAuthWindow = {
         loadURL: jest.fn(),
         close: jest.fn(),
+        show: jest.fn(),
+        focus: jest.fn(),
         on: jest.fn((event: string, handler: () => void) => {
           if (event === 'closed') {
             closedHandler = handler;
@@ -1288,6 +1366,8 @@ describe('Auth Handlers', () => {
       const mockAuthWindow = {
         loadURL: jest.fn(),
         close: jest.fn(),
+        show: jest.fn(),
+        focus: jest.fn(),
         on: jest.fn(),
         isDestroyed: jest.fn().mockReturnValue(false),
         webContents: {

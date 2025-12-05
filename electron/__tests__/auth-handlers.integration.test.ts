@@ -30,6 +30,8 @@ jest.mock('electron', () => ({
   BrowserWindow: jest.fn().mockImplementation(() => ({
     loadURL: jest.fn(),
     close: jest.fn(),
+    show: jest.fn(),
+    focus: jest.fn(),
     on: jest.fn(),
     isDestroyed: jest.fn().mockReturnValue(false),
     webContents: {
