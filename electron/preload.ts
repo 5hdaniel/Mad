@@ -245,6 +245,52 @@ contextBridge.exposeInMainWorld('api', {
 
   /**
    * ============================================
+   * SUGGESTED TRANSACTIONS METHODS
+   * ============================================
+   * Manages suggested transactions that require user review/approval
+   */
+  suggestedTransactions: {
+    /**
+     * Gets all pending suggested transactions for a user
+     * @param {string} userId - User ID to get suggestions for
+     * @returns {Promise<{success: boolean, transactions?: Array, error?: string}>} Pending suggested transactions
+     */
+    getPending: (userId: string) => ipcRenderer.invoke('suggested-transactions:get-pending', userId),
+
+    /**
+     * Gets a specific suggested transaction by ID
+     * @param {string} suggestedId - Suggested transaction ID
+     * @returns {Promise<{success: boolean, transaction?: object, error?: string}>} Suggested transaction details
+     */
+    getById: (suggestedId: string) => ipcRenderer.invoke('suggested-transactions:get-by-id', suggestedId),
+
+    /**
+     * Updates a suggested transaction with user edits before approval
+     * @param {string} suggestedId - Suggested transaction ID
+     * @param {Object} updates - Fields to update (address, price, dates, etc.)
+     * @returns {Promise<{success: boolean, transaction?: object, error?: string}>} Updated suggested transaction
+     */
+    update: (suggestedId: string, updates: any) => ipcRenderer.invoke('suggested-transactions:update', suggestedId, updates),
+
+    /**
+     * Approves a suggested transaction and creates a confirmed transaction
+     * @param {string} suggestedId - Suggested transaction ID to approve
+     * @param {Object} transactionData - Final transaction data (may include user corrections)
+     * @returns {Promise<{success: boolean, transaction?: object, error?: string}>} Created confirmed transaction
+     */
+    approve: (suggestedId: string, transactionData: any) => ipcRenderer.invoke('suggested-transactions:approve', suggestedId, transactionData),
+
+    /**
+     * Rejects a suggested transaction
+     * @param {string} suggestedId - Suggested transaction ID to reject
+     * @param {string} reason - Optional reason for rejection
+     * @returns {Promise<{success: boolean, error?: string}>} Rejection result
+     */
+    reject: (suggestedId: string, reason?: string) => ipcRenderer.invoke('suggested-transactions:reject', suggestedId, reason),
+  },
+
+  /**
+   * ============================================
    * CONTACT METHODS
    * ============================================
    * Manages contacts, imports, and contact-transaction associations

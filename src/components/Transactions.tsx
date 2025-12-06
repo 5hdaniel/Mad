@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import AuditTransactionModal from './AuditTransactionModal';
 import ExportModal from './ExportModal';
 import ContactSelectModal from './ContactSelectModal';
+import SuggestedTransactionsList from './SuggestedTransactionsList';
+import SuggestedTransactionModal from './SuggestedTransactionModal';
 import { ROLE_TO_CATEGORY, AUDIT_WORKFLOW_STEPS } from '../constants/contactRoles';
 import { filterRolesByTransactionType, getRoleDisplayName } from '../utils/transactionRoleUtils';
-import type { Contact as BaseContact, Transaction } from '../../electron/types/models';
+import type { Contact as BaseContact, Transaction, SuggestedTransaction } from '../../electron/types/models';
 
 interface ExtendedContact extends BaseContact {
   address_mention_count?: number;
@@ -73,11 +75,13 @@ interface TransactionsProps {
  */
 function Transactions({ userId, provider, onClose }: TransactionsProps) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [suggestedTransactions, setSuggestedTransactions] = useState<SuggestedTransaction[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [scanning, setScanning] = useState<boolean>(false);
   const [scanProgress, setScanProgress] = useState<ScanProgress | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  const [selectedSuggestedTransaction, setSelectedSuggestedTransaction] = useState<SuggestedTransaction | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<'active' | 'closed' | 'all'>('active');
   const [showAuditCreate, setShowAuditCreate] = useState<boolean>(false);
@@ -116,6 +120,20 @@ function Transactions({ userId, provider, onClose }: TransactionsProps) {
     }
   };
 
+  const loadSuggestedTransactions = async () => {
+    try {
+      const result = await window.api.suggestedTransactions.getPending(userId);
+
+      if (result.success) {
+        setSuggestedTransactions((result.transactions as SuggestedTransaction[]) || []);
+      } else {
+        console.error('Failed to load suggested transactions:', result.error);
+      }
+    } catch (err) {
+      console.error('Error loading suggested transactions:', err);
+    }
+  };
+
   const handleScanProgress = (progress: unknown) => {
     setScanProgress(progress as ScanProgress);
   };
@@ -138,8 +156,9 @@ function Transactions({ userId, provider, onClose }: TransactionsProps) {
           message: `Found ${result.transactionsFound} transactions from ${result.emailsScanned} emails!`,
         });
 
-        // Reload transactions
+        // Reload transactions and suggested transactions
         await loadTransactions();
+        await loadSuggestedTransactions();
       } else {
         setError(result.error || 'Scan failed');
       }
@@ -193,6 +212,55 @@ function Transactions({ userId, provider, onClose }: TransactionsProps) {
     setTimeout(() => setQuickExportSuccess(null), 5000);
     // Reload transactions to update export status
     loadTransactions();
+  };
+
+  const handleApproveSuggestedTransaction = async (data: unknown) => {
+    if (!selectedSuggestedTransaction) return;
+
+    try {
+      const result = await window.api.suggestedTransactions.approve(
+        selectedSuggestedTransaction.id,
+        data
+      );
+
+      if (result.success) {
+        setQuickExportSuccess('Transaction approved and created successfully!');
+        setTimeout(() => setQuickExportSuccess(null), 5000);
+
+        // Reload both transactions and suggested transactions
+        await loadTransactions();
+        await loadSuggestedTransactions();
+      } else {
+        setError(result.error || 'Failed to approve transaction');
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to approve transaction';
+      setError(errorMessage);
+    }
+  };
+
+  const handleRejectSuggestedTransaction = async (reason?: string) => {
+    if (!selectedSuggestedTransaction) return;
+
+    try {
+      const result = await window.api.suggestedTransactions.reject(
+        selectedSuggestedTransaction.id,
+        reason
+      );
+
+      if (result.success) {
+        setQuickExportSuccess('Suggested transaction rejected');
+        setTimeout(() => setQuickExportSuccess(null), 5000);
+
+        // Reload suggested transactions
+        await loadSuggestedTransactions();
+      } else {
+        setError(result.error || 'Failed to reject transaction');
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to reject transaction';
+      setError(errorMessage);
+    }
   };
 
   return (
@@ -402,8 +470,20 @@ function Transactions({ userId, provider, onClose }: TransactionsProps) {
               </div>
             </div>
           ) : (
-            <div className="grid gap-6">
-              {filteredTransactions.map((transaction: Transaction) => (
+            <div>
+              {/* Suggested Transactions List */}
+              {suggestedTransactions.length > 0 && (
+                <SuggestedTransactionsList
+                  suggestedTransactions={suggestedTransactions}
+                  onSelectTransaction={setSelectedSuggestedTransaction}
+                  formatCurrency={formatCurrency}
+                  formatDate={formatDate}
+                />
+              )}
+
+              {/* Confirmed Transactions Grid */}
+              <div className="grid gap-6">
+                {filteredTransactions.map((transaction: Transaction) => (
                 <div
                   key={transaction.id}
                   className="bg-white border-2 border-gray-200 rounded-xl p-6 hover:border-blue-400 hover:shadow-xl transition-all cursor-pointer transform hover:scale-[1.01]"
@@ -489,6 +569,7 @@ function Transactions({ userId, provider, onClose }: TransactionsProps) {
                   </div>
                 </div>
               ))}
+              </div>
             </div>
           )}
       </div>
@@ -522,6 +603,19 @@ function Transactions({ userId, provider, onClose }: TransactionsProps) {
           userId={quickExportTransaction.user_id}
           onClose={() => setQuickExportTransaction(null)}
           onExportComplete={handleQuickExportComplete}
+        />
+      )}
+
+      {/* Suggested Transaction Modal */}
+      {selectedSuggestedTransaction && (
+        <SuggestedTransactionModal
+          suggestion={selectedSuggestedTransaction}
+          isOpen={!!selectedSuggestedTransaction}
+          onClose={() => setSelectedSuggestedTransaction(null)}
+          onApprove={handleApproveSuggestedTransaction}
+          onReject={handleRejectSuggestedTransaction}
+          formatCurrency={formatCurrency}
+          formatDate={formatDate}
         />
       )}
     </div>
