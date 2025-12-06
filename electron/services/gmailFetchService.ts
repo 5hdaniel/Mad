@@ -168,15 +168,6 @@ class GmailFetchService {
       let pageCount = 0;
       let estimatedTotal = 0;
 
-      // Report initial progress
-      if (onProgress) {
-        onProgress({
-          fetched: 0,
-          total: maxResults,
-          percentage: 0,
-        });
-      }
-
       // Paginate through all results
       do {
         pageCount++;
@@ -209,22 +200,22 @@ class GmailFetchService {
 
         // Report progress
         if (onProgress) {
-          const targetTotal = Math.min(
-            estimatedTotal || maxResults,
-            maxResults,
-          );
-          const percentage =
-            targetTotal > 0
-              ? Math.min(
-                  100,
-                  Math.round((allMessages.length / targetTotal) * 100),
-                )
-              : 0;
+          const hasEstimate = estimatedTotal > 0;
+          const targetTotal = hasEstimate
+            ? Math.min(estimatedTotal, maxResults)
+            : allMessages.length;
+          const percentage = hasEstimate
+            ? Math.min(
+                100,
+                Math.round((allMessages.length / targetTotal) * 100),
+              )
+            : 0;
           onProgress({
             fetched: allMessages.length,
             total: targetTotal,
             estimatedTotal,
             percentage,
+            hasEstimate,
           });
         }
 
