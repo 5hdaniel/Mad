@@ -28,7 +28,7 @@ import databaseService from './services/databaseService';
 import microsoftAuthService from './services/microsoftAuthService';
 // NOTE: tokenEncryptionService removed - using session-only OAuth
 // Tokens stored in encrypted database, no additional keychain encryption needed
-import { initializeDatabase, registerAuthHandlers } from './auth-handlers';
+import { registerAuthHandlers } from './auth-handlers';
 import { registerTransactionHandlers } from './transaction-handlers';
 import { registerContactHandlers } from './contact-handlers';
 import { registerAddressHandlers } from './address-handlers';

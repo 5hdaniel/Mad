@@ -12,6 +12,7 @@ coverage/
 
 # Electron
 out/
+dist-electron/
 
 # Logs
 *.log
@@ -26,6 +27,9 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+# Claude Code local settings
+.claude/settings.local.json
 
 # Environment
 .env

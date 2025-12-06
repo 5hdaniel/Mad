@@ -3,7 +3,7 @@
 // This file contains auth handlers to be added to main.js
 // ============================================
 
-import { ipcMain, app, shell, BrowserWindow, Event as ElectronEvent } from 'electron';
+import { ipcMain, app, BrowserWindow, Event as ElectronEvent } from 'electron';
 import os from 'os';
 import crypto from 'crypto';
 import type { IpcMainInvokeEvent, OnHeadersReceivedListenerDetails, HeadersReceivedResponse } from 'electron';
@@ -31,7 +31,6 @@ import {
   validateUserId,
   validateAuthCode,
   validateSessionToken,
-  validateUrl,
 } from './utils/validation';
 
 // Import constants
