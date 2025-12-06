@@ -20,6 +20,7 @@ export type ExportStatus = 'not_exported' | 'exported' | 're_export_needed';
 export type ExportFormat = 'pdf' | 'csv' | 'json' | 'txt_eml' | 'excel';
 export type CommunicationType = 'email' | 'text' | 'imessage';
 export type FeedbackType = 'correction' | 'confirmation' | 'rejection';
+export type SuggestedTransactionStatus = 'pending' | 'approved' | 'rejected';
 
 // ============================================
 // USER MODELS
@@ -221,6 +222,64 @@ export interface Transaction {
 }
 
 // ============================================
+// SUGGESTED TRANSACTION MODELS
+// ============================================
+
+export interface DetectedParty {
+  name: string;
+  email?: string;
+  role?: string;
+}
+
+export interface SuggestedTransaction {
+  id: string;
+  user_id: string;
+
+  // Property Information (May be partial)
+  property_address?: string;
+  property_street?: string;
+  property_city?: string;
+  property_state?: string;
+  property_zip?: string;
+  property_coordinates?: string;
+
+  // Transaction Details (Detected from emails)
+  transaction_type?: TransactionType;
+  closing_date?: Date | string;
+  representation_start_date?: Date | string;
+
+  // Extracted Data
+  first_communication_date?: Date | string;
+  last_communication_date?: Date | string;
+  communications_count: number;
+  extraction_confidence?: number;
+
+  // Financial Data
+  sale_price?: number;
+  listing_price?: number;
+  earnest_money_amount?: number;
+
+  // Parties & Contacts
+  other_parties?: DetectedParty[];
+  detected_contacts?: DetectedParty[];
+
+  // Source Email Information
+  source_communication_ids: string[];
+
+  // Review Status
+  status: SuggestedTransactionStatus;
+  reviewed_at?: Date | string;
+  reviewed_by_user: boolean;
+
+  // User Edits (before approval)
+  user_edits?: Record<string, unknown>;
+
+  // Timestamps
+  created_at: Date | string;
+  updated_at: Date | string;
+}
+
+// ============================================
 // COMMUNICATION MODELS
 // ============================================
 
@@ -313,12 +372,14 @@ export type NewUser = Omit<User, 'id' | 'created_at' | 'updated_at'>;
 export type NewContact = Omit<Contact, 'id' | 'created_at' | 'updated_at'>;
 export type NewTransaction = Omit<Transaction, 'id' | 'created_at' | 'updated_at'>;
 export type NewCommunication = Omit<Communication, 'id' | 'created_at'>;
+export type NewSuggestedTransaction = Omit<SuggestedTransaction, 'id' | 'created_at' | 'updated_at'>;
 
 // Type for updating records (all fields optional except id)
 export type UpdateUser = Partial<Omit<User, 'id'>> & { id: string };
 export type UpdateContact = Partial<Omit<Contact, 'id'>> & { id: string };
 export type UpdateTransaction = Partial<Omit<Transaction, 'id'>> & { id: string };
 export type UpdateCommunication = Partial<Omit<Communication, 'id'>> & { id: string };
+export type UpdateSuggestedTransaction = Partial<Omit<SuggestedTransaction, 'id'>> & { id: string };
 
 // Filters for querying
 export interface TransactionFilters {

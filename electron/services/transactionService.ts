@@ -4,6 +4,9 @@ import type {
   UpdateTransaction,
   NewCommunication,
   OAuthProvider,
+  SuggestedTransaction,
+  NewSuggestedTransaction,
+  DetectedParty,
 } from '../types';
 
 import gmailFetchService from './gmailFetchService';
@@ -184,7 +187,9 @@ class TransactionService {
       if (onProgress) onProgress({ step: 'saving', message: 'Saving transactions...' });
 
       const transactions: TransactionWithSummary[] = [];
+      const processedEmailIds = new Set<string>();
 
+      // Create transactions from grouped emails
       for (const address of propertyAddresses) {
         const emailGroup = grouped[address];
         const summary = transactionExtractorService.generateTransactionSummary(emailGroup);
@@ -193,13 +198,25 @@ class TransactionService {
         if (!summary) continue;
         const transactionId = await this._createTransactionFromSummary(userId, summary);
 
-        // Save communications
-        await this._saveCommunications(userId, transactionId, emailGroup as any, emails as any);
+        // Save communications and track them
+        const savedCommIds = await this._saveCommunications(userId, transactionId, emailGroup as any, emails as any);
+        savedCommIds.forEach(id => processedEmailIds.add(id));
 
         transactions.push({
           id: transactionId,
           ...summary,
         });
+      }
+
+      // Create suggested transactions for real estate emails that weren't grouped
+      const ungroupedRealEstateEmails = realEstateEmails.filter(
+        (email: any) => !processedEmailIds.has(email.subject + email.from) // Simple tracking
+      );
+
+      if (ungroupedRealEstateEmails.length > 0) {
+        for (const email of ungroupedRealEstateEmails) {
+          await this._createSuggestedTransaction(userId, email, emails as any);
+        }
       }
 
       // Step 5: Complete
@@ -290,7 +307,9 @@ class TransactionService {
     transactionId: string,
     analyzedEmails: any[],
     originalEmails: any[]
-  ): Promise<void> {
+  ): Promise<string[]> {
+    const savedIds: string[] = [];
+
     for (const analyzed of analyzedEmails) {
       // Find original email
       const originalEmail = originalEmails.find(
@@ -317,14 +336,83 @@ class TransactionService {
         has_attachments: originalEmail.hasAttachments || false,
         attachment_count: originalEmail.attachmentCount || 0,
         attachment_metadata: originalEmail.attachments,
-        keywords_detected: analyzed.keywords,
-        parties_involved: analyzed.parties,
+        keywords_detected: JSON.stringify(analyzed.keywords || []),
+        parties_involved: JSON.stringify(analyzed.parties || []),
         relevance_score: analyzed.confidence,
         flagged_for_review: false,
         is_compliance_related: analyzed.isRealEstateRelated || false,
       };
 
-      await databaseService.createCommunication(commData as NewCommunication);
+      const comm = await databaseService.createCommunication(commData as NewCommunication);
+      savedIds.push(comm.id);
+    }
+
+    return savedIds;
+  }
+
+  /**
+   * Create a suggested transaction from a real estate email
+   * @private
+   */
+  private async _createSuggestedTransaction(
+    userId: string,
+    analyzedEmail: any,
+    originalEmails: any[]
+  ): Promise<void> {
+    try {
+      // Find original email data
+      const originalEmail = originalEmails.find(
+        (e: any) => e.subject === analyzedEmail.subject && e.from === analyzedEmail.from
+      );
+
+      if (!originalEmail) return;
+
+      // Parse address if available
+      const addresses = analyzedEmail.addresses || [];
+      const addressParts = addresses.length > 0 ? this._parseAddress(addresses[0]) : { street: null, city: null, state: null, zip: null };
+
+      // Extract parties
+      const detectedParties: DetectedParty[] = (analyzedEmail.parties || []).map((party: any) => ({
+        name: party.name || party.email || 'Unknown',
+        email: party.email,
+        role: party.role,
+      }));
+
+      // Prepare suggested transaction data
+      const suggestedData: NewSuggestedTransaction = {
+        user_id: userId,
+        property_address: addresses.length > 0 ? addresses[0] : undefined,
+        property_street: addressParts.street || undefined,
+        property_city: addressParts.city || undefined,
+        property_state: addressParts.state || undefined,
+        property_zip: addressParts.zip || undefined,
+        transaction_type: analyzedEmail.transactionType || undefined,
+        first_communication_date: new Date(analyzedEmail.date).toISOString(),
+        last_communication_date: new Date(analyzedEmail.date).toISOString(),
+        communications_count: 1,
+        extraction_confidence: analyzedEmail.confidence,
+        sale_price: analyzedEmail.amounts && analyzedEmail.amounts.length > 0 ? Math.max(...analyzedEmail.amounts) : undefined,
+        closing_date: analyzedEmail.dates && analyzedEmail.dates.length > 0 ? analyzedEmail.dates[0] : undefined,
+        other_parties: detectedParties,
+        detected_contacts: detectedParties,
+        source_communication_ids: [originalEmail.id || (analyzedEmail.subject + analyzedEmail.from)],
+        status: 'pending',
+        reviewed_by_user: false,
+      };
+
+      await databaseService.createSuggestedTransaction(suggestedData);
+
+      await logService.info(`Created suggested transaction from email`, 'TransactionService._createSuggestedTransaction', {
+        userId,
+        hasAddress: !!suggestedData.property_address,
+        confidence: suggestedData.extraction_confidence,
+      });
+    } catch (error) {
+      await logService.error(`Failed to create suggested transaction`, 'TransactionService._createSuggestedTransaction', {
+        error: error instanceof Error ? error.message : String(error),
+        userId,
+      });
+      // Don't throw - we want to continue scanning other emails
     }
   }
 
@@ -570,6 +658,73 @@ class TransactionService {
       realEstateEmailsFound: realEstateEmails.length,
       analyzed: realEstateEmails as any,
     };
+  }
+
+  /**
+   * Get all pending suggested transactions for a user
+   */
+  async getSuggestedTransactions(userId: string): Promise<SuggestedTransaction[]> {
+    return await databaseService.getSuggestedTransactions(userId, 'pending');
+  }
+
+  /**
+   * Get a specific suggested transaction
+   */
+  async getSuggestedTransactionById(id: string): Promise<SuggestedTransaction | null> {
+    return await databaseService.getSuggestedTransactionById(id);
+  }
+
+  /**
+   * Update a suggested transaction with user edits
+   */
+  async updateSuggestedTransaction(id: string, updates: Partial<SuggestedTransaction>): Promise<SuggestedTransaction> {
+    return await databaseService.updateSuggestedTransaction(id, updates);
+  }
+
+  /**
+   * Approve a suggested transaction and create a confirmed transaction
+   */
+  async approveSuggestedTransaction(suggestedId: string, transactionData: Partial<NewTransaction>): Promise<Transaction> {
+    const suggestedTx = await this.getSuggestedTransactionById(suggestedId);
+    if (!suggestedTx) {
+      throw new Error(`Suggested transaction ${suggestedId} not found`);
+    }
+
+    // Merge suggested transaction data with user-provided updates
+    const finalTransactionData: NewTransaction = {
+      user_id: suggestedTx.user_id,
+      property_address: transactionData.property_address || suggestedTx.property_address!,
+      property_street: transactionData.property_street || suggestedTx.property_street,
+      property_city: transactionData.property_city || suggestedTx.property_city,
+      property_state: transactionData.property_state || suggestedTx.property_state,
+      property_zip: transactionData.property_zip || suggestedTx.property_zip,
+      transaction_type: transactionData.transaction_type || suggestedTx.transaction_type,
+      transaction_status: transactionData.transaction_status || 'pending',
+      status: transactionData.status || 'active',
+      closing_date: transactionData.closing_date || suggestedTx.closing_date,
+      closing_date_verified: false,
+      communications_scanned: suggestedTx.communications_count || 0,
+      extraction_confidence: suggestedTx.extraction_confidence,
+      first_communication_date: suggestedTx.first_communication_date,
+      last_communication_date: suggestedTx.last_communication_date,
+      total_communications_count: suggestedTx.communications_count || 0,
+      sale_price: transactionData.sale_price || suggestedTx.sale_price,
+      other_parties: transactionData.other_parties || JSON.stringify(suggestedTx.other_parties || []),
+      export_status: 'not_exported',
+      export_count: 0,
+      offer_count: 0,
+      failed_offers_count: 0,
+    };
+
+    // Approve the suggested transaction and create the confirmed one
+    return await databaseService.approveSuggestedTransaction(suggestedId, finalTransactionData);
+  }
+
+  /**
+   * Reject a suggested transaction
+   */
+  async rejectSuggestedTransaction(id: string, reason?: string): Promise<void> {
+    await databaseService.rejectSuggestedTransaction(id, reason);
   }
 }
 

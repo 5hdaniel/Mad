@@ -2438,6 +2438,199 @@ class DatabaseService implements IDatabaseService {
   }
 
   /**
+   * Create a suggested transaction
+   */
+  async createSuggestedTransaction(data: any): Promise<any> {
+    const id = crypto.randomUUID();
+
+    const sql = `
+      INSERT INTO suggested_transactions (
+        id, user_id, property_address, property_street, property_city,
+        property_state, property_zip, transaction_type, closing_date,
+        first_communication_date, last_communication_date, communications_count,
+        extraction_confidence, sale_price, listing_price, earnest_money_amount,
+        other_parties, detected_contacts, source_communication_ids, status,
+        reviewed_by_user, user_edits
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+
+    const params = [
+      id,
+      data.user_id,
+      data.property_address || null,
+      data.property_street || null,
+      data.property_city || null,
+      data.property_state || null,
+      data.property_zip || null,
+      data.transaction_type || null,
+      data.closing_date || null,
+      data.first_communication_date || null,
+      data.last_communication_date || null,
+      data.communications_count || 1,
+      data.extraction_confidence || null,
+      data.sale_price || null,
+      data.listing_price || null,
+      data.earnest_money_amount || null,
+      data.other_parties ? JSON.stringify(data.other_parties) : null,
+      data.detected_contacts ? JSON.stringify(data.detected_contacts) : null,
+      data.source_communication_ids ? JSON.stringify(data.source_communication_ids) : null,
+      data.status || 'pending',
+      data.reviewed_by_user ? 1 : 0,
+      data.user_edits ? JSON.stringify(data.user_edits) : null,
+    ];
+
+    this._run(sql, params);
+    return this.getSuggestedTransactionById(id);
+  }
+
+  /**
+   * Get suggested transaction by ID
+   */
+  async getSuggestedTransactionById(id: string): Promise<any> {
+    const sql = 'SELECT * FROM suggested_transactions WHERE id = ?';
+    const result = this._get(sql, [id]);
+
+    if (!result) return null;
+
+    return this._parseSuggestedTransaction(result);
+  }
+
+  /**
+   * Get all suggested transactions for a user
+   */
+  async getSuggestedTransactions(userId: string, status?: string): Promise<any[]> {
+    let sql = 'SELECT * FROM suggested_transactions WHERE user_id = ?';
+    const params: any[] = [userId];
+
+    if (status) {
+      sql += ' AND status = ?';
+      params.push(status);
+    }
+
+    sql += ' ORDER BY created_at DESC';
+
+    const results = this._all(sql, params);
+    return results.map((r: any) => this._parseSuggestedTransaction(r));
+  }
+
+  /**
+   * Update suggested transaction
+   */
+  async updateSuggestedTransaction(id: string, updates: any): Promise<any> {
+    const fields: string[] = [];
+    const params: any[] = [];
+
+    if (updates.property_address !== undefined) {
+      fields.push('property_address = ?');
+      params.push(updates.property_address);
+    }
+    if (updates.property_street !== undefined) {
+      fields.push('property_street = ?');
+      params.push(updates.property_street);
+    }
+    if (updates.property_city !== undefined) {
+      fields.push('property_city = ?');
+      params.push(updates.property_city);
+    }
+    if (updates.property_state !== undefined) {
+      fields.push('property_state = ?');
+      params.push(updates.property_state);
+    }
+    if (updates.property_zip !== undefined) {
+      fields.push('property_zip = ?');
+      params.push(updates.property_zip);
+    }
+    if (updates.transaction_type !== undefined) {
+      fields.push('transaction_type = ?');
+      params.push(updates.transaction_type);
+    }
+    if (updates.closing_date !== undefined) {
+      fields.push('closing_date = ?');
+      params.push(updates.closing_date);
+    }
+    if (updates.sale_price !== undefined) {
+      fields.push('sale_price = ?');
+      params.push(updates.sale_price);
+    }
+    if (updates.listing_price !== undefined) {
+      fields.push('listing_price = ?');
+      params.push(updates.listing_price);
+    }
+    if (updates.status !== undefined) {
+      fields.push('status = ?');
+      params.push(updates.status);
+    }
+    if (updates.reviewed_by_user !== undefined) {
+      fields.push('reviewed_by_user = ?');
+      params.push(updates.reviewed_by_user ? 1 : 0);
+    }
+    if (updates.user_edits !== undefined) {
+      fields.push('user_edits = ?');
+      params.push(JSON.stringify(updates.user_edits));
+    }
+    if (updates.reviewed_at !== undefined) {
+      fields.push('reviewed_at = ?');
+      params.push(updates.reviewed_at);
+    }
+
+    if (fields.length === 0) return this.getSuggestedTransactionById(id);
+
+    params.push(id);
+    const sql = `UPDATE suggested_transactions SET ${fields.join(', ')} WHERE id = ?`;
+    this._run(sql, params);
+
+    return this.getSuggestedTransactionById(id);
+  }
+
+  /**
+   * Approve a suggested transaction (convert to confirmed)
+   */
+  async approveSuggestedTransaction(suggestedId: string, transactionData: NewTransaction): Promise<Transaction> {
+    // Create the confirmed transaction
+    const transaction = await this.createTransaction(transactionData);
+
+    // Mark suggested transaction as approved
+    await this.updateSuggestedTransaction(suggestedId, {
+      status: 'approved',
+      reviewed_by_user: true,
+      reviewed_at: new Date().toISOString(),
+    });
+
+    return transaction;
+  }
+
+  /**
+   * Reject a suggested transaction
+   */
+  async rejectSuggestedTransaction(id: string, reason?: string): Promise<void> {
+    const updates: any = {
+      status: 'rejected',
+      reviewed_by_user: true,
+      reviewed_at: new Date().toISOString(),
+    };
+
+    if (reason) {
+      updates.user_edits = { rejection_reason: reason };
+    }
+
+    await this.updateSuggestedTransaction(id, updates);
+  }
+
+  /**
+   * Parse suggested transaction from database row
+   */
+  private _parseSuggestedTransaction(row: any): any {
+    return {
+      ...row,
+      other_parties: row.other_parties ? JSON.parse(row.other_parties) : undefined,
+      detected_contacts: row.detected_contacts ? JSON.parse(row.detected_contacts) : undefined,
+      source_communication_ids: row.source_communication_ids ? JSON.parse(row.source_communication_ids) : [],
+      user_edits: row.user_edits ? JSON.parse(row.user_edits) : undefined,
+      reviewed_by_user: row.reviewed_by_user === 1,
+    };
+  }
+
+  /**
    * Get database encryption status
    * @returns Object containing encryption status information
    */

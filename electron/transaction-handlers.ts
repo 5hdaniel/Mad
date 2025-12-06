@@ -695,4 +695,209 @@ export const registerTransactionHandlers = (mainWindow: BrowserWindow | null): v
       };
     }
   });
+
+  // Get suggested transactions for a user
+  ipcMain.handle('suggested-transactions:get-pending', async (event: IpcMainInvokeEvent, userId: string): Promise<TransactionResponse> => {
+    try {
+      // Validate input
+      const validatedUserId = validateUserId(userId);
+      if (!validatedUserId) {
+        throw new ValidationError('User ID validation failed', 'userId');
+      }
+
+      const suggestedTransactions = await transactionService.getSuggestedTransactions(validatedUserId);
+
+      return {
+        success: true,
+        transactions: suggestedTransactions,
+      };
+    } catch (error) {
+      logService.error('Get suggested transactions failed', 'Transactions', {
+        userId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      if (error instanceof ValidationError) {
+        return {
+          success: false,
+          error: `Validation error: ${error.message}`,
+        };
+      }
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  });
+
+  // Get a specific suggested transaction
+  ipcMain.handle('suggested-transactions:get-by-id', async (event: IpcMainInvokeEvent, suggestedId: string): Promise<TransactionResponse> => {
+    try {
+      // Validate input
+      if (!suggestedId || typeof suggestedId !== 'string') {
+        throw new ValidationError('Suggested transaction ID is required', 'suggestedId');
+      }
+
+      const suggestedTransaction = await transactionService.getSuggestedTransactionById(suggestedId);
+
+      if (!suggestedTransaction) {
+        return {
+          success: false,
+          error: 'Suggested transaction not found',
+        };
+      }
+
+      return {
+        success: true,
+        transaction: suggestedTransaction,
+      };
+    } catch (error) {
+      logService.error('Get suggested transaction failed', 'Transactions', {
+        suggestedId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      if (error instanceof ValidationError) {
+        return {
+          success: false,
+          error: `Validation error: ${error.message}`,
+        };
+      }
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  });
+
+  // Update a suggested transaction with user edits
+  ipcMain.handle('suggested-transactions:update', async (event: IpcMainInvokeEvent, suggestedId: string, updates: unknown): Promise<TransactionResponse> => {
+    try {
+      // Validate inputs
+      if (!suggestedId || typeof suggestedId !== 'string') {
+        throw new ValidationError('Suggested transaction ID is required', 'suggestedId');
+      }
+      const validatedUpdates = sanitizeObject(updates || {});
+
+      const updated = await transactionService.updateSuggestedTransaction(suggestedId, validatedUpdates as any);
+
+      logService.info('Suggested transaction updated', 'Transactions', {
+        suggestedId,
+        updatedFields: Object.keys(validatedUpdates),
+      });
+
+      return {
+        success: true,
+        transaction: updated,
+      };
+    } catch (error) {
+      logService.error('Update suggested transaction failed', 'Transactions', {
+        suggestedId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      if (error instanceof ValidationError) {
+        return {
+          success: false,
+          error: `Validation error: ${error.message}`,
+        };
+      }
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  });
+
+  // Approve a suggested transaction and create confirmed transaction
+  ipcMain.handle('suggested-transactions:approve', async (event: IpcMainInvokeEvent, suggestedId: string, transactionData: unknown): Promise<TransactionResponse> => {
+    try {
+      // Validate inputs
+      if (!suggestedId || typeof suggestedId !== 'string') {
+        throw new ValidationError('Suggested transaction ID is required', 'suggestedId');
+      }
+      const validatedData = validateTransactionData(sanitizeObject(transactionData || {}), false);
+
+      const createdTransaction = await transactionService.approveSuggestedTransaction(suggestedId, validatedData as any);
+
+      // Audit log suggested transaction approval
+      await auditService.log({
+        userId: createdTransaction.user_id,
+        action: 'SUGGESTED_TRANSACTION_APPROVED',
+        resourceType: 'TRANSACTION',
+        resourceId: createdTransaction.id,
+        metadata: { suggestedId, propertyAddress: createdTransaction.property_address },
+        success: true,
+      });
+
+      logService.info('Suggested transaction approved', 'Transactions', {
+        suggestedId,
+        transactionId: createdTransaction.id,
+      });
+
+      return {
+        success: true,
+        transaction: createdTransaction,
+      };
+    } catch (error) {
+      logService.error('Approve suggested transaction failed', 'Transactions', {
+        suggestedId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      if (error instanceof ValidationError) {
+        return {
+          success: false,
+          error: `Validation error: ${error.message}`,
+        };
+      }
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  });
+
+  // Reject a suggested transaction
+  ipcMain.handle('suggested-transactions:reject', async (event: IpcMainInvokeEvent, suggestedId: string, reason?: string): Promise<TransactionResponse> => {
+    try {
+      // Validate input
+      if (!suggestedId || typeof suggestedId !== 'string') {
+        throw new ValidationError('Suggested transaction ID is required', 'suggestedId');
+      }
+      const validatedReason = reason && typeof reason === 'string' ? reason.trim() : undefined;
+
+      await transactionService.rejectSuggestedTransaction(suggestedId, validatedReason);
+
+      // Audit log suggested transaction rejection
+      await auditService.log({
+        userId: 'unknown', // We don't have user_id at this point
+        action: 'SUGGESTED_TRANSACTION_REJECTED',
+        resourceType: 'TRANSACTION',
+        resourceId: suggestedId,
+        metadata: { reason: validatedReason },
+        success: true,
+      });
+
+      logService.info('Suggested transaction rejected', 'Transactions', {
+        suggestedId,
+        reason: validatedReason,
+      });
+
+      return {
+        success: true,
+      };
+    } catch (error) {
+      logService.error('Reject suggested transaction failed', 'Transactions', {
+        suggestedId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      if (error instanceof ValidationError) {
+        return {
+          success: false,
+          error: `Validation error: ${error.message}`,
+        };
+      }
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  });
 };

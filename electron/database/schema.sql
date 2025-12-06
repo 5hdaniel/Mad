@@ -293,6 +293,59 @@ CREATE TABLE IF NOT EXISTS extracted_transaction_data (
 );
 
 -- ============================================
+-- SUGGESTED TRANSACTIONS TABLE (Pending User Review)
+-- ============================================
+CREATE TABLE IF NOT EXISTS suggested_transactions (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+
+  -- Property Information (May be partial)
+  property_address TEXT,
+  property_street TEXT,
+  property_city TEXT,
+  property_state TEXT,
+  property_zip TEXT,
+  property_coordinates TEXT,
+
+  -- Transaction Details (Detected from emails)
+  transaction_type TEXT CHECK (transaction_type IN ('purchase', 'sale')),
+  closing_date DATE,
+  representation_start_date DATE,
+
+  -- Extracted Data
+  first_communication_date DATETIME,
+  last_communication_date DATETIME,
+  communications_count INTEGER DEFAULT 0,
+  extraction_confidence INTEGER,
+
+  -- Financial Data
+  sale_price DECIMAL(12, 2),
+  listing_price DECIMAL(12, 2),
+  earnest_money_amount DECIMAL(10, 2),
+
+  -- Parties & Contacts
+  other_parties TEXT, -- JSON array of detected parties
+  detected_contacts TEXT, -- JSON array of {name, email, role}
+
+  -- Source Email Information
+  source_communication_ids TEXT, -- JSON array of email IDs that triggered this suggestion
+
+  -- Review Status
+  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+  reviewed_at DATETIME,
+  reviewed_by_user INTEGER DEFAULT 0, -- 1 if user has seen it
+
+  -- User Edits (before approval)
+  user_edits TEXT, -- JSON object of fields user has edited
+
+  -- Timestamps
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+  FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE
+);
+
+-- ============================================
 -- INDEXES (Performance Optimization)
 -- ============================================
 -- Note: Indexes for migration-added columns are created in the migration code
@@ -311,6 +364,9 @@ CREATE INDEX IF NOT EXISTS idx_communications_user_id ON communications(user_id)
 CREATE INDEX IF NOT EXISTS idx_communications_transaction_id ON communications(transaction_id);
 CREATE INDEX IF NOT EXISTS idx_communications_sent_at ON communications(sent_at);
 CREATE INDEX IF NOT EXISTS idx_extracted_data_transaction_id ON extracted_transaction_data(transaction_id);
+CREATE INDEX IF NOT EXISTS idx_suggested_transactions_user_id ON suggested_transactions(user_id);
+CREATE INDEX IF NOT EXISTS idx_suggested_transactions_status ON suggested_transactions(status);
+CREATE INDEX IF NOT EXISTS idx_suggested_transactions_user_status ON suggested_transactions(user_id, status);
 
 -- ============================================
 -- TRIGGERS (Auto-update timestamps)
@@ -334,4 +390,10 @@ CREATE TRIGGER IF NOT EXISTS update_contacts_timestamp
 AFTER UPDATE ON contacts
 BEGIN
   UPDATE contacts SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS update_suggested_transactions_timestamp
+AFTER UPDATE ON suggested_transactions
+BEGIN
+  UPDATE suggested_transactions SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
 END;
