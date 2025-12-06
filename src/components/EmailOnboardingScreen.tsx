@@ -18,6 +18,8 @@ interface ConnectionResult {
 interface EmailOnboardingScreenProps {
   userId: string;
   authProvider: 'google' | 'microsoft';
+  selectedPhoneType?: 'iphone' | 'android' | null;
+  onPhoneTypeChange?: (phoneType: 'iphone' | 'android') => Promise<void>;
   onComplete: () => void;
   onSkip: () => void;
 }
@@ -113,11 +115,12 @@ function SetupProgressIndicator({ currentStep, navigationStep, isWindows }: { cu
  * This screen appears after terms acceptance and before the permissions screen.
  * Shows the primary email service (matching login provider) prominently, with the other as optional.
  */
-function EmailOnboardingScreen({ userId, authProvider, onComplete, onSkip }: EmailOnboardingScreenProps) {
+function EmailOnboardingScreen({ userId, authProvider, selectedPhoneType, onPhoneTypeChange, onComplete, onSkip }: EmailOnboardingScreenProps) {
   const [connections, setConnections] = useState<Connections>({ google: null, microsoft: null });
   const [loadingConnections, setLoadingConnections] = useState<boolean>(true);
   const [connectingProvider, setConnectingProvider] = useState<string | null>(null);
   const [navigationStep, setNavigationStep] = useState<number>(1);
+  const [phoneTypeChanging, setPhoneTypeChanging] = useState<boolean>(false);
   const { isWindows } = usePlatform();
 
   // Determine primary and secondary providers based on how user logged in
@@ -243,6 +246,20 @@ function EmailOnboardingScreen({ userId, authProvider, onComplete, onSkip }: Ema
     onSkip();
   };
 
+  const handlePhoneTypeSelect = async (phoneType: 'iphone' | 'android'): Promise<void> => {
+    if (!onPhoneTypeChange) return;
+    setPhoneTypeChanging(true);
+    try {
+      await onPhoneTypeChange(phoneType);
+      // Phone type updated, now advance to next step
+      setNavigationStep(navigationStep + 1);
+    } catch (error) {
+      console.error('[EmailOnboarding] Failed to update phone type:', error);
+    } finally {
+      setPhoneTypeChanging(false);
+    }
+  };
+
   const hasAnyConnection = connections.google?.connected || connections.microsoft?.connected;
   const primaryConnection = isPrimaryGoogle ? connections.google : connections.microsoft;
   const secondaryConnection = isPrimaryGoogle ? connections.microsoft : connections.google;
@@ -323,9 +340,25 @@ function EmailOnboardingScreen({ userId, authProvider, onComplete, onSkip }: Ema
             <div className="grid grid-cols-2 gap-4 mb-8">
               {/* iPhone Option */}
               <button
-                onClick={handleNextStep}
-                className="relative p-6 rounded-xl border-2 border-gray-200 hover:border-blue-400 hover:bg-blue-50 transition-all duration-200 text-left"
+                onClick={() => handlePhoneTypeSelect('iphone')}
+                disabled={phoneTypeChanging}
+                className={`relative p-6 rounded-xl border-2 transition-all duration-200 text-left disabled:opacity-50 disabled:cursor-not-allowed ${
+                  selectedPhoneType === 'iphone'
+                    ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200'
+                    : 'border-gray-200 hover:border-blue-400 hover:bg-blue-50'
+                }`}
               >
+                {/* Checkmark for selected */}
+                {selectedPhoneType === 'iphone' && (
+                  <div className="absolute top-3 right-3">
+                    <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
+                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                  </div>
+                )}
+
                 {/* Apple Logo */}
                 <div className="w-12 h-12 bg-gray-900 rounded-xl flex items-center justify-center mb-4">
                   <svg className="w-7 h-7 text-white" viewBox="0 0 24 24" fill="currentColor">
@@ -341,9 +374,25 @@ function EmailOnboardingScreen({ userId, authProvider, onComplete, onSkip }: Ema
 
               {/* Android Option */}
               <button
-                onClick={handleNextStep}
-                className="relative p-6 rounded-xl border-2 border-gray-200 hover:border-green-400 hover:bg-green-50 transition-all duration-200 text-left"
+                onClick={() => handlePhoneTypeSelect('android')}
+                disabled={phoneTypeChanging}
+                className={`relative p-6 rounded-xl border-2 transition-all duration-200 text-left disabled:opacity-50 disabled:cursor-not-allowed ${
+                  selectedPhoneType === 'android'
+                    ? 'border-green-500 bg-green-50 ring-2 ring-green-200'
+                    : 'border-gray-200 hover:border-green-400 hover:bg-green-50'
+                }`}
               >
+                {/* Checkmark for selected */}
+                {selectedPhoneType === 'android' && (
+                  <div className="absolute top-3 right-3">
+                    <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
+                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                  </div>
+                )}
+
                 {/* Android Logo */}
                 <div className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center mb-4">
                   <svg className="w-7 h-7 text-white" viewBox="0 0 24 24" fill="currentColor">
