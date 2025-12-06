@@ -838,6 +838,7 @@ function App() {
           <PhoneTypeSelection
             onSelectIPhone={handleSelectIPhone}
             onSelectAndroid={handleSelectAndroid}
+            selectedType={selectedPhoneType}
           />
         )}
 
