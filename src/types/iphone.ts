@@ -21,7 +21,7 @@ export interface iOSDevice {
 // ============================================
 
 export interface BackupProgress {
-  phase: "preparing" | "backing_up" | "extracting" | "complete" | "error";
+  phase: 'preparing' | 'backing_up' | 'extracting' | 'complete' | 'error';
   percent: number;
   currentFile?: string;
   totalFiles?: number;
@@ -42,7 +42,7 @@ export interface BackupResult {
 // SYNC STATUS TYPES
 // ============================================
 
-export type SyncStatus = "idle" | "syncing" | "complete" | "error";
+export type SyncStatus = 'idle' | 'syncing' | 'complete' | 'error';
 
 // ============================================
 // COMPONENT PROP TYPES

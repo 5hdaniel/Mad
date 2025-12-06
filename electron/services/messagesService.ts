@@ -3,13 +3,13 @@
  * Handles queries to the macOS Messages database
  */
 
-import path from "path";
-import sqlite3 from "sqlite3";
-import { promisify } from "util";
+import path from 'path';
+import sqlite3 from 'sqlite3';
+import { promisify } from 'util';
 
-const { getYearsAgoTimestamp } = require("../utils/dateUtils");
-const { normalizePhoneNumber } = require("../utils/phoneUtils");
-const { MESSAGES_DB_PATH } = require("../constants");
+const { getYearsAgoTimestamp } = require('../utils/dateUtils');
+const { normalizePhoneNumber } = require('../utils/phoneUtils');
+const { MESSAGES_DB_PATH } = require('../constants');
 
 // ============================================
 // TYPES
@@ -63,15 +63,9 @@ interface ContactInfo {
  * Open Messages database connection
  */
 function openMessagesDatabase(): DatabaseConnection {
-  const messagesDbPath = path.join(
-    process.env.HOME as string,
-    MESSAGES_DB_PATH,
-  );
+  const messagesDbPath = path.join(process.env.HOME as string, MESSAGES_DB_PATH);
   const db = new sqlite3.Database(messagesDbPath, sqlite3.OPEN_READONLY);
-  const dbAll = promisify(db.all.bind(db)) as (
-    sql: string,
-    params?: any[],
-  ) => Promise<any[]>;
+  const dbAll = promisify(db.all.bind(db)) as (sql: string, params?: any[]) => Promise<any[]>;
   const dbClose = promisify(db.close.bind(db)) as () => Promise<void>;
 
   return { db, dbAll, dbClose };
@@ -113,9 +107,7 @@ async function getAllConversations(): Promise<Conversation[]> {
 /**
  * Get group chat participants
  */
-async function getGroupChatParticipants(
-  chatId: number,
-): Promise<Participant[]> {
+async function getGroupChatParticipants(chatId: number): Promise<Participant[]> {
   const { dbAll, dbClose } = openMessagesDatabase();
 
   try {
@@ -126,7 +118,7 @@ async function getGroupChatParticipants(
       JOIN handle ON chat_handle_join.handle_id = handle.ROWID
       WHERE chat_handle_join.chat_id = ?
     `,
-      [chatId],
+      [chatId]
     );
 
     await dbClose();
@@ -143,11 +135,7 @@ async function getGroupChatParticipants(
  * Individual chats have phone numbers or emails
  */
 function isGroupChat(chatIdentifier: string): boolean {
-  return (
-    Boolean(chatIdentifier) &&
-    chatIdentifier.startsWith("chat") &&
-    !chatIdentifier.includes("@")
-  );
+  return Boolean(chatIdentifier) && chatIdentifier.startsWith('chat') && !chatIdentifier.includes('@');
 }
 
 /**
@@ -164,13 +152,13 @@ async function getMessagesForContact(contact: ContactInfo): Promise<Message[]> {
     // Add phone numbers
     if (contact.phones && contact.phones.length > 0) {
       contact.phones.forEach((phone) => {
-        whereClauses.push("handle.id = ?");
+        whereClauses.push('handle.id = ?');
         params.push(phone);
 
         // Also try normalized version
         const normalized = normalizePhoneNumber(phone);
         if (normalized !== phone) {
-          whereClauses.push("handle.id = ?");
+          whereClauses.push('handle.id = ?');
           params.push(normalized);
         }
       });
@@ -179,7 +167,7 @@ async function getMessagesForContact(contact: ContactInfo): Promise<Message[]> {
     // Add emails
     if (contact.emails && contact.emails.length > 0) {
       contact.emails.forEach((email) => {
-        whereClauses.push("handle.id = ?");
+        whereClauses.push('handle.id = ?');
         params.push(email);
       });
     }
@@ -190,7 +178,7 @@ async function getMessagesForContact(contact: ContactInfo): Promise<Message[]> {
       return [];
     }
 
-    const whereClause = whereClauses.join(" OR ");
+    const whereClause = whereClauses.join(' OR ');
 
     // Query messages
     const messages: Message[] = await dbAll(
@@ -212,7 +200,7 @@ async function getMessagesForContact(contact: ContactInfo): Promise<Message[]> {
       WHERE ${whereClause}
       ORDER BY message.date ASC
     `,
-      params,
+      params
     );
 
     await dbClose();
@@ -245,7 +233,7 @@ async function getMessagesForChat(chatId: number): Promise<Message[]> {
       WHERE chat_message_join.chat_id = ?
       ORDER BY message.date ASC
     `,
-      [chatId],
+      [chatId]
     );
 
     await dbClose();
@@ -278,7 +266,7 @@ async function getRecentChats(): Promise<Chat[]> {
       HAVING last_message_date > ?
       ORDER BY last_message_date DESC
     `,
-      [fiveYearsAgo],
+      [fiveYearsAgo]
     );
 
     await dbClose();
@@ -299,4 +287,10 @@ export {
   getRecentChats,
 };
 
-export type { Conversation, Participant, Message, Chat, ContactInfo };
+export type {
+  Conversation,
+  Participant,
+  Message,
+  Chat,
+  ContactInfo,
+};

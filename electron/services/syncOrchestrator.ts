@@ -12,34 +12,31 @@
  * This is the main integration point for all iPhone-related services.
  */
 
-import { EventEmitter } from "events";
-import log from "electron-log";
-import {
-  DeviceDetectionService,
-  deviceDetectionService,
-} from "./deviceDetectionService";
-import { BackupService } from "./backupService";
-import { BackupDecryptionService } from "./backupDecryptionService";
-import { iOSMessagesParser } from "./iosMessagesParser";
-import { iOSContactsParser } from "./iosContactsParser";
-import type { iOSDevice } from "../types/device";
-import type { iOSMessage, iOSConversation } from "../types/iosMessages";
-import type { iOSContact } from "../types/iosContacts";
-import type { BackupProgress } from "../types/backup";
+import { EventEmitter } from 'events';
+import log from 'electron-log';
+import { DeviceDetectionService, deviceDetectionService } from './deviceDetectionService';
+import { BackupService } from './backupService';
+import { BackupDecryptionService } from './backupDecryptionService';
+import { iOSMessagesParser } from './iosMessagesParser';
+import { iOSContactsParser } from './iosContactsParser';
+import type { iOSDevice } from '../types/device';
+import type { iOSMessage, iOSConversation } from '../types/iosMessages';
+import type { iOSContact } from '../types/iosContacts';
+import type { BackupProgress } from '../types/backup';
 
 /**
  * Sync phases for progress tracking
  */
 export type SyncPhase =
-  | "idle"
-  | "backup"
-  | "decrypting"
-  | "parsing-contacts"
-  | "parsing-messages"
-  | "resolving"
-  | "cleanup"
-  | "complete"
-  | "error";
+  | 'idle'
+  | 'backup'
+  | 'decrypting'
+  | 'parsing-contacts'
+  | 'parsing-messages'
+  | 'resolving'
+  | 'cleanup'
+  | 'complete'
+  | 'error';
 
 /**
  * Result of a complete sync operation
@@ -104,7 +101,7 @@ export class SyncOrchestrator extends EventEmitter {
 
   private isRunning: boolean = false;
   private isCancelled: boolean = false;
-  private currentPhase: SyncPhase = "idle";
+  private currentPhase: SyncPhase = 'idle';
   private startTime: number = 0;
 
   constructor() {
@@ -123,31 +120,28 @@ export class SyncOrchestrator extends EventEmitter {
    */
   private setupEventForwarding(): void {
     // Forward backup progress events
-    this.backupService.on("progress", (progress: BackupProgress) => {
+    this.backupService.on('progress', (progress: BackupProgress) => {
       this.emitProgress({
-        phase: "backup",
+        phase: 'backup',
         phaseProgress: progress.percentComplete,
-        overallProgress: this.calculateOverallProgress(
-          "backup",
-          progress.percentComplete,
-        ),
+        overallProgress: this.calculateOverallProgress('backup', progress.percentComplete),
         message: this.getBackupProgressMessage(progress),
         backupProgress: progress,
       });
     });
 
     // Forward password required events
-    this.backupService.on("password-required", () => {
-      this.emit("password-required");
+    this.backupService.on('password-required', () => {
+      this.emit('password-required');
     });
 
     // Forward device events
-    this.deviceService.on("device-connected", (device: iOSDevice) => {
-      this.emit("device-connected", device);
+    this.deviceService.on('device-connected', (device: iOSDevice) => {
+      this.emit('device-connected', device);
     });
 
-    this.deviceService.on("device-disconnected", (device: iOSDevice) => {
-      this.emit("device-disconnected", device);
+    this.deviceService.on('device-disconnected', (device: iOSDevice) => {
+      this.emit('device-disconnected', device);
     });
   }
 
@@ -156,18 +150,18 @@ export class SyncOrchestrator extends EventEmitter {
    */
   async sync(options: SyncOptions): Promise<SyncResult> {
     if (this.isRunning) {
-      return this.errorResult("Sync already in progress");
+      return this.errorResult('Sync already in progress');
     }
 
     this.isRunning = true;
     this.isCancelled = false;
     this.startTime = Date.now();
 
-    log.info("[SyncOrchestrator] Starting sync", { udid: options.udid });
+    log.info('[SyncOrchestrator] Starting sync', { udid: options.udid });
 
     try {
       // Step 1: Create backup
-      this.setPhase("backup");
+      this.setPhase('backup');
       const backupResult = await this.backupService.startBackup({
         udid: options.udid,
         password: options.password,
@@ -176,11 +170,11 @@ export class SyncOrchestrator extends EventEmitter {
       });
 
       if (this.isCancelled) {
-        return this.errorResult("Sync cancelled by user");
+        return this.errorResult('Sync cancelled by user');
       }
 
       if (!backupResult.success || !backupResult.backupPath) {
-        return this.errorResult(backupResult.error || "Backup failed");
+        return this.errorResult(backupResult.error || 'Backup failed');
       }
 
       let backupPath = backupResult.backupPath;
@@ -188,65 +182,65 @@ export class SyncOrchestrator extends EventEmitter {
       // Step 2: Decrypt if needed
       if (backupResult.isEncrypted) {
         if (!options.password) {
-          this.emit("password-required");
-          return this.errorResult("Password required for encrypted backup");
+          this.emit('password-required');
+          return this.errorResult('Password required for encrypted backup');
         }
 
-        this.setPhase("decrypting");
+        this.setPhase('decrypting');
         this.emitProgress({
-          phase: "decrypting",
+          phase: 'decrypting',
           phaseProgress: 0,
-          overallProgress: this.calculateOverallProgress("decrypting", 0),
-          message: "Decrypting backup...",
+          overallProgress: this.calculateOverallProgress('decrypting', 0),
+          message: 'Decrypting backup...',
         });
 
         const decryptResult = await this.decryptionService.decryptBackup(
           backupPath,
-          options.password,
+          options.password
         );
 
         if (this.isCancelled) {
-          return this.errorResult("Sync cancelled by user");
+          return this.errorResult('Sync cancelled by user');
         }
 
         if (!decryptResult.success || !decryptResult.decryptedPath) {
-          return this.errorResult(decryptResult.error || "Decryption failed");
+          return this.errorResult(decryptResult.error || 'Decryption failed');
         }
 
         backupPath = decryptResult.decryptedPath;
       }
 
       // Step 3: Parse contacts
-      this.setPhase("parsing-contacts");
+      this.setPhase('parsing-contacts');
       this.emitProgress({
-        phase: "parsing-contacts",
+        phase: 'parsing-contacts',
         phaseProgress: 0,
-        overallProgress: this.calculateOverallProgress("parsing-contacts", 0),
-        message: "Reading contacts...",
+        overallProgress: this.calculateOverallProgress('parsing-contacts', 0),
+        message: 'Reading contacts...',
       });
 
       this.contactsParser.open(backupPath);
       const contacts = this.contactsParser.getAllContacts();
 
       this.emitProgress({
-        phase: "parsing-contacts",
+        phase: 'parsing-contacts',
         phaseProgress: 100,
-        overallProgress: this.calculateOverallProgress("parsing-contacts", 100),
+        overallProgress: this.calculateOverallProgress('parsing-contacts', 100),
         message: `Found ${contacts.length} contacts`,
       });
 
       if (this.isCancelled) {
         this.contactsParser.close();
-        return this.errorResult("Sync cancelled by user");
+        return this.errorResult('Sync cancelled by user');
       }
 
       // Step 4: Parse messages
-      this.setPhase("parsing-messages");
+      this.setPhase('parsing-messages');
       this.emitProgress({
-        phase: "parsing-messages",
+        phase: 'parsing-messages',
         phaseProgress: 0,
-        overallProgress: this.calculateOverallProgress("parsing-messages", 0),
-        message: "Reading messages...",
+        overallProgress: this.calculateOverallProgress('parsing-messages', 0),
+        message: 'Reading messages...',
       });
 
       this.messagesParser.open(backupPath);
@@ -265,12 +259,9 @@ export class SyncOrchestrator extends EventEmitter {
         if (loadedCount % 10 === 0) {
           const progress = (loadedCount / conversations.length) * 100;
           this.emitProgress({
-            phase: "parsing-messages",
+            phase: 'parsing-messages',
             phaseProgress: progress,
-            overallProgress: this.calculateOverallProgress(
-              "parsing-messages",
-              progress,
-            ),
+            overallProgress: this.calculateOverallProgress('parsing-messages', progress),
             message: `Loading conversations: ${loadedCount}/${conversations.length}`,
           });
         }
@@ -279,30 +270,27 @@ export class SyncOrchestrator extends EventEmitter {
       if (this.isCancelled) {
         this.messagesParser.close();
         this.contactsParser.close();
-        return this.errorResult("Sync cancelled by user");
+        return this.errorResult('Sync cancelled by user');
       }
 
       // Step 5: Resolve contact names
-      this.setPhase("resolving");
+      this.setPhase('resolving');
       this.emitProgress({
-        phase: "resolving",
+        phase: 'resolving',
         phaseProgress: 0,
-        overallProgress: this.calculateOverallProgress("resolving", 0),
-        message: "Resolving contact names...",
+        overallProgress: this.calculateOverallProgress('resolving', 0),
+        message: 'Resolving contact names...',
       });
 
-      const resolvedConversations = this.resolveContactNames(
-        conversations,
-        contacts,
-      );
+      const resolvedConversations = this.resolveContactNames(conversations, contacts);
 
       // Step 6: Cleanup
-      this.setPhase("cleanup");
+      this.setPhase('cleanup');
       this.emitProgress({
-        phase: "cleanup",
+        phase: 'cleanup',
         phaseProgress: 0,
-        overallProgress: this.calculateOverallProgress("cleanup", 0),
-        message: "Cleaning up...",
+        overallProgress: this.calculateOverallProgress('cleanup', 0),
+        message: 'Cleaning up...',
       });
 
       this.messagesParser.close();
@@ -318,9 +306,9 @@ export class SyncOrchestrator extends EventEmitter {
 
       const duration = Date.now() - this.startTime;
       this.isRunning = false;
-      this.setPhase("complete");
+      this.setPhase('complete');
 
-      log.info("[SyncOrchestrator] Sync complete", {
+      log.info('[SyncOrchestrator] Sync complete', {
         conversations: resolvedConversations.length,
         messages: allMessages.length,
         contacts: contacts.length,
@@ -336,12 +324,11 @@ export class SyncOrchestrator extends EventEmitter {
         duration,
       };
 
-      this.emit("complete", result);
+      this.emit('complete', result);
       return result;
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-      log.error("[SyncOrchestrator] Sync failed", { error: errorMessage });
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      log.error('[SyncOrchestrator] Sync failed', { error: errorMessage });
 
       // Cleanup on error
       try {
@@ -352,8 +339,8 @@ export class SyncOrchestrator extends EventEmitter {
       }
 
       this.isRunning = false;
-      this.setPhase("error");
-      this.emit("error", error);
+      this.setPhase('error');
+      this.emit('error', error);
 
       return this.errorResult(errorMessage);
     }
@@ -367,7 +354,7 @@ export class SyncOrchestrator extends EventEmitter {
       return;
     }
 
-    log.info("[SyncOrchestrator] Cancelling sync");
+    log.info('[SyncOrchestrator] Cancelling sync');
     this.isCancelled = true;
     this.backupService.cancelBackup();
   }
@@ -408,7 +395,7 @@ export class SyncOrchestrator extends EventEmitter {
    */
   private resolveContactNames(
     conversations: iOSConversation[],
-    _contacts: iOSContact[],
+    _contacts: iOSContact[]
   ): iOSConversation[] {
     return conversations.map((conv) => {
       // Resolve participants to display names
@@ -438,29 +425,26 @@ export class SyncOrchestrator extends EventEmitter {
    */
   private setPhase(phase: SyncPhase): void {
     this.currentPhase = phase;
-    this.emit("phase", phase);
+    this.emit('phase', phase);
   }
 
   /**
    * Emit a progress event
    */
   private emitProgress(progress: SyncProgress): void {
-    this.emit("progress", progress);
+    this.emit('progress', progress);
   }
 
   /**
    * Calculate overall progress based on phase weights
    */
-  private calculateOverallProgress(
-    phase: SyncPhase,
-    phaseProgress: number,
-  ): number {
+  private calculateOverallProgress(phase: SyncPhase, phaseProgress: number): number {
     const phaseWeights: Record<SyncPhase, { start: number; weight: number }> = {
       idle: { start: 0, weight: 0 },
       backup: { start: 0, weight: 60 }, // Backup is the longest phase
       decrypting: { start: 60, weight: 10 },
-      "parsing-contacts": { start: 70, weight: 5 },
-      "parsing-messages": { start: 75, weight: 15 },
+      'parsing-contacts': { start: 70, weight: 5 },
+      'parsing-messages': { start: 75, weight: 15 },
       resolving: { start: 90, weight: 5 },
       cleanup: { start: 95, weight: 5 },
       complete: { start: 100, weight: 0 },
@@ -476,19 +460,19 @@ export class SyncOrchestrator extends EventEmitter {
    */
   private getBackupProgressMessage(progress: BackupProgress): string {
     switch (progress.phase) {
-      case "preparing":
-        return "Preparing backup...";
-      case "transferring":
+      case 'preparing':
+        return 'Preparing backup...';
+      case 'transferring':
         if (progress.filesTransferred && progress.totalFiles) {
           return `Transferring files: ${progress.filesTransferred}/${progress.totalFiles}`;
         }
         return `Transferring... ${Math.round(progress.percentComplete)}%`;
-      case "finishing":
-        return "Finalizing backup...";
-      case "extracting":
-        return "Extracting data...";
-      case "decrypting":
-        return "Decrypting...";
+      case 'finishing':
+        return 'Finalizing backup...';
+      case 'extracting':
+        return 'Extracting data...';
+      case 'decrypting':
+        return 'Decrypting...';
       default:
         return `Backing up... ${Math.round(progress.percentComplete)}%`;
     }

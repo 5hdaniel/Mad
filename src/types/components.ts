@@ -3,7 +3,7 @@
  * These types are used throughout the React frontend
  */
 
-import type { ReactNode } from "react";
+import type { ReactNode } from 'react';
 import type {
   User,
   Contact,
@@ -12,7 +12,7 @@ import type {
   ExportFormat,
   CommunicationType,
   OAuthProvider,
-} from "../../electron/types/models";
+} from '../../electron/types/models';
 
 // ============================================
 // COMMON COMPONENT PROPS
@@ -37,8 +37,7 @@ export interface ErrorProps {
 // TRANSACTION COMPONENT PROPS
 // ============================================
 
-export interface TransactionListProps
-  extends BaseComponentProps, LoadingProps, ErrorProps {
+export interface TransactionListProps extends BaseComponentProps, LoadingProps, ErrorProps {
   transactions: Transaction[];
   selectedTransactionId?: string;
   onSelectTransaction?: (transaction: Transaction) => void;
@@ -46,20 +45,12 @@ export interface TransactionListProps
   onExportTransaction?: (transactionId: string, format: ExportFormat) => void;
 }
 
-export interface TransactionDetailsProps
-  extends BaseComponentProps, LoadingProps, ErrorProps {
+export interface TransactionDetailsProps extends BaseComponentProps, LoadingProps, ErrorProps {
   transaction: Transaction | null;
   contacts?: Contact[];
   communications?: Communication[];
-  onUpdateTransaction?: (
-    transactionId: string,
-    updates: Partial<Transaction>,
-  ) => void;
-  onLinkContact?: (
-    transactionId: string,
-    contactId: string,
-    role?: string,
-  ) => void;
+  onUpdateTransaction?: (transactionId: string, updates: Partial<Transaction>) => void;
+  onLinkContact?: (transactionId: string, contactId: string, role?: string) => void;
   onUnlinkContact?: (transactionId: string, contactId: string) => void;
   onExport?: (format: ExportFormat) => void;
 }
@@ -83,8 +74,7 @@ export interface TransactionCardProps extends BaseComponentProps {
 // CONTACT COMPONENT PROPS
 // ============================================
 
-export interface ContactListProps
-  extends BaseComponentProps, LoadingProps, ErrorProps {
+export interface ContactListProps extends BaseComponentProps, LoadingProps, ErrorProps {
   contacts: Contact[];
   selectedContactId?: string;
   onSelectContact?: (contact: Contact) => void;
@@ -92,8 +82,7 @@ export interface ContactListProps
   onCreateContact?: () => void;
 }
 
-export interface ContactDetailsProps
-  extends BaseComponentProps, LoadingProps, ErrorProps {
+export interface ContactDetailsProps extends BaseComponentProps, LoadingProps, ErrorProps {
   contact: Contact | null;
   transactions?: Transaction[];
   onUpdateContact?: (contactId: string, updates: Partial<Contact>) => void;
@@ -119,8 +108,7 @@ export interface ContactCardProps extends BaseComponentProps {
 // COMMUNICATION COMPONENT PROPS
 // ============================================
 
-export interface ConversationListProps
-  extends BaseComponentProps, LoadingProps, ErrorProps {
+export interface ConversationListProps extends BaseComponentProps, LoadingProps, ErrorProps {
   communications: Communication[];
   selectedCommunicationId?: string;
   onSelectCommunication?: (communication: Communication) => void;
@@ -157,7 +145,7 @@ export interface DashboardStats {
   totalContacts: number;
   totalCommunications: number;
   recentActivity: Array<{
-    type: "transaction" | "contact" | "communication";
+    type: 'transaction' | 'contact' | 'communication';
     id: string;
     description: string;
     timestamp: Date | string;
@@ -177,7 +165,7 @@ export interface InputFieldProps {
   label: string;
   name: string;
   value: string | number;
-  type?: "text" | "email" | "tel" | "number" | "date" | "password";
+  type?: 'text' | 'email' | 'tel' | 'number' | 'date' | 'password';
   placeholder?: string;
   required?: boolean;
   error?: string;
@@ -231,7 +219,7 @@ export interface ModalProps extends BaseComponentProps {
   isOpen: boolean;
   onClose: () => void;
   title?: string;
-  size?: "small" | "medium" | "large" | "fullscreen";
+  size?: 'small' | 'medium' | 'large' | 'fullscreen';
   closeOnOverlayClick?: boolean;
 }
 
@@ -243,7 +231,7 @@ export interface ConfirmDialogProps {
   cancelText?: string;
   onConfirm: () => void;
   onCancel: () => void;
-  variant?: "default" | "danger" | "warning";
+  variant?: 'default' | 'danger' | 'warning';
 }
 
 // ============================================
@@ -251,11 +239,11 @@ export interface ConfirmDialogProps {
 // ============================================
 
 export interface ButtonProps extends BaseComponentProps {
-  variant?: "primary" | "secondary" | "danger" | "success" | "ghost";
-  size?: "small" | "medium" | "large";
+  variant?: 'primary' | 'secondary' | 'danger' | 'success' | 'ghost';
+  size?: 'small' | 'medium' | 'large';
   disabled?: boolean;
   loading?: boolean;
-  type?: "button" | "submit" | "reset";
+  type?: 'button' | 'submit' | 'reset';
   onClick?: () => void;
   icon?: ReactNode;
 }
@@ -308,7 +296,7 @@ export interface ExportProgressProps {
 // TOAST/NOTIFICATION TYPES
 // ============================================
 
-export type ToastVariant = "success" | "error" | "warning" | "info";
+export type ToastVariant = 'success' | 'error' | 'warning' | 'info';
 
 export interface ToastMessage {
   id: string;
@@ -371,7 +359,7 @@ export interface TourStep {
   target: string;
   title: string;
   content: string;
-  placement?: "top" | "bottom" | "left" | "right";
+  placement?: 'top' | 'bottom' | 'left' | 'right';
   disableBeacon?: boolean;
 }
 

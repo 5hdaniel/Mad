@@ -7,16 +7,9 @@
  * Tests encryption detection, password verification, and decryption operations
  */
 
-import {
-  jest,
-  describe,
-  it,
-  expect,
-  beforeEach,
-  afterEach,
-} from "@jest/globals";
-import crypto from "crypto";
-import path from "path";
+import { jest, describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+import crypto from 'crypto';
+import path from 'path';
 
 // Mock fs module
 const mockExistsSync = jest.fn();
@@ -28,7 +21,7 @@ const mockStatSync = jest.fn();
 const mockUnlinkSync = jest.fn();
 const mockRmdirSync = jest.fn();
 
-jest.mock("fs", () => ({
+jest.mock('fs', () => ({
   existsSync: mockExistsSync,
   readFileSync: mockReadFileSync,
   writeFileSync: mockWriteFileSync,
@@ -41,7 +34,7 @@ jest.mock("fs", () => ({
 
 // Mock simple-plist
 const mockPlistParse = jest.fn();
-jest.mock("simple-plist", () => ({
+jest.mock('simple-plist', () => ({
   parse: mockPlistParse,
 }));
 
@@ -50,7 +43,7 @@ const mockDbPrepare = jest.fn();
 const mockDbClose = jest.fn();
 const mockDbGet = jest.fn();
 
-jest.mock("better-sqlite3-multiple-ciphers", () => {
+jest.mock('better-sqlite3-multiple-ciphers', () => {
   return jest.fn().mockImplementation(() => ({
     prepare: mockDbPrepare,
     close: mockDbClose,
@@ -63,7 +56,7 @@ const mockLogDebug = jest.fn().mockResolvedValue(undefined);
 const mockLogWarn = jest.fn().mockResolvedValue(undefined);
 const mockLogError = jest.fn().mockResolvedValue(undefined);
 
-jest.mock("../logService", () => ({
+jest.mock('../logService', () => ({
   __esModule: true,
   default: {
     info: mockLogInfo,
@@ -74,12 +67,9 @@ jest.mock("../logService", () => ({
 }));
 
 // Import the service after mocks are set up
-import {
-  BackupDecryptionService,
-  backupDecryptionService,
-} from "../backupDecryptionService";
+import { BackupDecryptionService, backupDecryptionService } from '../backupDecryptionService';
 
-describe("BackupDecryptionService", () => {
+describe('BackupDecryptionService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockDbPrepare.mockReturnValue({ get: mockDbGet });
@@ -89,172 +79,148 @@ describe("BackupDecryptionService", () => {
     jest.clearAllMocks();
   });
 
-  describe("isBackupEncrypted", () => {
-    it("should return false when Manifest.plist does not exist", async () => {
+  describe('isBackupEncrypted', () => {
+    it('should return false when Manifest.plist does not exist', async () => {
       mockExistsSync.mockReturnValue(false);
 
-      const result =
-        await backupDecryptionService.isBackupEncrypted("/path/to/backup");
+      const result = await backupDecryptionService.isBackupEncrypted('/path/to/backup');
 
       expect(result).toBe(false);
-      expect(mockExistsSync).toHaveBeenCalledWith(
-        path.join("/path/to/backup", "Manifest.plist"),
-      );
+      expect(mockExistsSync).toHaveBeenCalledWith(path.join('/path/to/backup', 'Manifest.plist'));
     });
 
-    it("should return true when backup is encrypted", async () => {
+    it('should return true when backup is encrypted', async () => {
       mockExistsSync.mockReturnValue(true);
-      mockReadFileSync.mockReturnValue(Buffer.from("plist-data"));
+      mockReadFileSync.mockReturnValue(Buffer.from('plist-data'));
       mockPlistParse.mockReturnValue({
         IsEncrypted: true,
         BackupKeyBag: Buffer.alloc(100),
       });
 
-      const result =
-        await backupDecryptionService.isBackupEncrypted("/path/to/backup");
+      const result = await backupDecryptionService.isBackupEncrypted('/path/to/backup');
 
       expect(result).toBe(true);
     });
 
-    it("should return false when backup is not encrypted", async () => {
+    it('should return false when backup is not encrypted', async () => {
       mockExistsSync.mockReturnValue(true);
-      mockReadFileSync.mockReturnValue(Buffer.from("plist-data"));
+      mockReadFileSync.mockReturnValue(Buffer.from('plist-data'));
       mockPlistParse.mockReturnValue({
         IsEncrypted: false,
       });
 
-      const result =
-        await backupDecryptionService.isBackupEncrypted("/path/to/backup");
+      const result = await backupDecryptionService.isBackupEncrypted('/path/to/backup');
 
       expect(result).toBe(false);
     });
 
-    it("should return false on error", async () => {
+    it('should return false on error', async () => {
       mockExistsSync.mockImplementation(() => {
-        throw new Error("File access error");
+        throw new Error('File access error');
       });
 
-      const result =
-        await backupDecryptionService.isBackupEncrypted("/path/to/backup");
+      const result = await backupDecryptionService.isBackupEncrypted('/path/to/backup');
 
       expect(result).toBe(false);
     });
   });
 
-  describe("verifyPassword", () => {
-    it("should return false when backup is not encrypted", async () => {
+  describe('verifyPassword', () => {
+    it('should return false when backup is not encrypted', async () => {
       mockExistsSync.mockReturnValue(true);
-      mockReadFileSync.mockReturnValue(Buffer.from("plist-data"));
+      mockReadFileSync.mockReturnValue(Buffer.from('plist-data'));
       mockPlistParse.mockReturnValue({
         IsEncrypted: false,
       });
 
-      const result = await backupDecryptionService.verifyPassword(
-        "/path/to/backup",
-        "password",
-      );
+      const result = await backupDecryptionService.verifyPassword('/path/to/backup', 'password');
 
       expect(result).toBe(false);
     });
 
-    it("should return false when keybag is missing", async () => {
+    it('should return false when keybag is missing', async () => {
       mockExistsSync.mockReturnValue(true);
-      mockReadFileSync.mockReturnValue(Buffer.from("plist-data"));
+      mockReadFileSync.mockReturnValue(Buffer.from('plist-data'));
       mockPlistParse.mockReturnValue({
         IsEncrypted: true,
         // No BackupKeyBag
       });
 
-      const result = await backupDecryptionService.verifyPassword(
-        "/path/to/backup",
-        "password",
-      );
+      const result = await backupDecryptionService.verifyPassword('/path/to/backup', 'password');
 
       expect(result).toBe(false);
     });
 
-    it("should return false on error", async () => {
+    it('should return false on error', async () => {
       mockExistsSync.mockImplementation(() => {
-        throw new Error("File access error");
+        throw new Error('File access error');
       });
 
-      const result = await backupDecryptionService.verifyPassword(
-        "/path/to/backup",
-        "password",
-      );
+      const result = await backupDecryptionService.verifyPassword('/path/to/backup', 'password');
 
       expect(result).toBe(false);
     });
   });
 
-  describe("decryptBackup", () => {
-    it("should fail when Manifest.plist does not exist", async () => {
+  describe('decryptBackup', () => {
+    it('should fail when Manifest.plist does not exist', async () => {
       mockExistsSync.mockReturnValue(false);
 
-      const result = await backupDecryptionService.decryptBackup(
-        "/path/to/backup",
-        "password",
-      );
+      const result = await backupDecryptionService.decryptBackup('/path/to/backup', 'password');
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Manifest.plist not found");
+      expect(result.error).toContain('Manifest.plist not found');
       expect(result.decryptedPath).toBeNull();
     });
 
-    it("should fail when backup is not encrypted", async () => {
+    it('should fail when backup is not encrypted', async () => {
       mockExistsSync.mockReturnValue(true);
-      mockReadFileSync.mockReturnValue(Buffer.from("plist-data"));
+      mockReadFileSync.mockReturnValue(Buffer.from('plist-data'));
       mockPlistParse.mockReturnValue({
         IsEncrypted: false,
       });
 
-      const result = await backupDecryptionService.decryptBackup(
-        "/path/to/backup",
-        "password",
-      );
+      const result = await backupDecryptionService.decryptBackup('/path/to/backup', 'password');
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Backup is not encrypted");
+      expect(result.error).toBe('Backup is not encrypted');
       expect(result.decryptedPath).toBeNull();
     });
 
-    it("should log info when starting decryption", async () => {
+    it('should log info when starting decryption', async () => {
       mockExistsSync.mockReturnValue(true);
-      mockReadFileSync.mockReturnValue(Buffer.from("plist-data"));
+      mockReadFileSync.mockReturnValue(Buffer.from('plist-data'));
       mockPlistParse.mockReturnValue({
         IsEncrypted: true,
         BackupKeyBag: createMockKeybag(),
         ManifestKey: createMockManifestKey(),
       });
 
-      await backupDecryptionService.decryptBackup(
-        "/path/to/backup",
-        "password",
-      );
+      await backupDecryptionService.decryptBackup('/path/to/backup', 'password');
 
       expect(mockLogInfo).toHaveBeenCalledWith(
-        "Starting backup decryption",
-        "BackupDecryptionService",
-        expect.objectContaining({ backupPath: "/path/to/backup" }),
+        'Starting backup decryption',
+        'BackupDecryptionService',
+        expect.objectContaining({ backupPath: '/path/to/backup' })
       );
     });
   });
 
-  describe("cleanup", () => {
-    it("should do nothing when path does not exist", async () => {
+  describe('cleanup', () => {
+    it('should do nothing when path does not exist', async () => {
       mockExistsSync.mockReturnValue(false);
 
-      await backupDecryptionService.cleanup("/path/to/decrypted");
+      await backupDecryptionService.cleanup('/path/to/decrypted');
 
       expect(mockReaddirSync).not.toHaveBeenCalled();
     });
 
-    it("should securely delete files and remove directory", async () => {
+    it('should securely delete files and remove directory', async () => {
       mockExistsSync.mockReturnValue(true);
-      mockReaddirSync.mockReturnValue(["sms.db", "AddressBook.sqlitedb"]);
+      mockReaddirSync.mockReturnValue(['sms.db', 'AddressBook.sqlitedb']);
       mockStatSync.mockReturnValue({ isFile: () => true, size: 1024 });
 
-      await backupDecryptionService.cleanup("/path/to/decrypted");
+      await backupDecryptionService.cleanup('/path/to/decrypted');
 
       // Should overwrite each file with zeros
       expect(mockWriteFileSync).toHaveBeenCalledTimes(2);
@@ -264,29 +230,29 @@ describe("BackupDecryptionService", () => {
       expect(mockRmdirSync).toHaveBeenCalled();
     });
 
-    it("should log warning on cleanup failure", async () => {
+    it('should log warning on cleanup failure', async () => {
       mockExistsSync.mockReturnValue(true);
       mockReaddirSync.mockImplementation(() => {
-        throw new Error("Permission denied");
+        throw new Error('Permission denied');
       });
 
-      await backupDecryptionService.cleanup("/path/to/decrypted");
+      await backupDecryptionService.cleanup('/path/to/decrypted');
 
       expect(mockLogWarn).toHaveBeenCalledWith(
-        "Failed to clean up decrypted files",
-        "BackupDecryptionService",
-        expect.objectContaining({ error: "Permission denied" }),
+        'Failed to clean up decrypted files',
+        'BackupDecryptionService',
+        expect.objectContaining({ error: 'Permission denied' })
       );
     });
   });
 
-  describe("BackupDecryptionService class", () => {
-    it("should be instantiable", () => {
+  describe('BackupDecryptionService class', () => {
+    it('should be instantiable', () => {
       const service = new BackupDecryptionService();
       expect(service).toBeDefined();
     });
 
-    it("should export singleton instance", () => {
+    it('should export singleton instance', () => {
       expect(backupDecryptionService).toBeDefined();
       expect(backupDecryptionService).toBeInstanceOf(BackupDecryptionService);
     });
@@ -301,14 +267,14 @@ function createMockKeybag(): Buffer {
   const parts: Buffer[] = [];
 
   // Add UUID tag
-  parts.push(Buffer.from("UUID"));
+  parts.push(Buffer.from('UUID'));
   const uuidLen = Buffer.alloc(4);
   uuidLen.writeUInt32BE(16, 0);
   parts.push(uuidLen);
   parts.push(crypto.randomBytes(16));
 
   // Add TYPE tag (Backup = 1)
-  parts.push(Buffer.from("TYPE"));
+  parts.push(Buffer.from('TYPE'));
   const typeLen = Buffer.alloc(4);
   typeLen.writeUInt32BE(4, 0);
   parts.push(typeLen);
@@ -317,14 +283,14 @@ function createMockKeybag(): Buffer {
   parts.push(typeVal);
 
   // Add SALT tag
-  parts.push(Buffer.from("SALT"));
+  parts.push(Buffer.from('SALT'));
   const saltLen = Buffer.alloc(4);
   saltLen.writeUInt32BE(20, 0);
   parts.push(saltLen);
   parts.push(crypto.randomBytes(20));
 
   // Add ITER tag
-  parts.push(Buffer.from("ITER"));
+  parts.push(Buffer.from('ITER'));
   const iterLen = Buffer.alloc(4);
   iterLen.writeUInt32BE(4, 0);
   parts.push(iterLen);

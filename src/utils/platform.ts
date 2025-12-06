@@ -8,7 +8,7 @@
  * - Linux: Similar to Windows (USB sync)
  */
 
-export type Platform = "macos" | "windows" | "linux";
+export type Platform = 'macos' | 'windows' | 'linux';
 
 /**
  * Gets the current platform from Electron's process.platform.
@@ -16,21 +16,21 @@ export type Platform = "macos" | "windows" | "linux";
  */
 export function getPlatform(): Platform {
   // In Electron, we can access process.platform via preload
-  const platform = window.electron?.platform || "unknown";
+  const platform = window.electron?.platform || 'unknown';
 
   switch (platform) {
-    case "darwin":
-      return "macos";
-    case "win32":
-      return "windows";
-    case "linux":
-      return "linux";
+    case 'darwin':
+      return 'macos';
+    case 'win32':
+      return 'windows';
+    case 'linux':
+      return 'linux';
     default:
       console.warn(
         `[Platform] Unknown platform detected: "${platform}". Defaulting to Windows. ` +
-          `This may cause unexpected behavior. Please report this issue.`,
+        `This may cause unexpected behavior. Please report this issue.`
       );
-      return "windows"; // Default to Windows for safety
+      return 'windows'; // Default to Windows for safety
   }
 }
 
@@ -38,21 +38,21 @@ export function getPlatform(): Platform {
  * Returns true if running on macOS
  */
 export function isMacOS(): boolean {
-  return getPlatform() === "macos";
+  return getPlatform() === 'macos';
 }
 
 /**
  * Returns true if running on Windows
  */
 export function isWindows(): boolean {
-  return getPlatform() === "windows";
+  return getPlatform() === 'windows';
 }
 
 /**
  * Returns true if running on Linux
  */
 export function isLinux(): boolean {
-  return getPlatform() === "linux";
+  return getPlatform() === 'linux';
 }
 
 /**
@@ -61,13 +61,13 @@ export function isLinux(): boolean {
  */
 export const platformFeatures = {
   /** Access to local Messages.app database (macOS only) */
-  localMessagesAccess: ["macos"],
+  localMessagesAccess: ['macos'],
   /** Access to local Contacts.app database (macOS only) */
-  localContactsAccess: ["macos"],
+  localContactsAccess: ['macos'],
   /** Sync messages from iPhone via USB (Windows/Linux) */
-  iPhoneUSBSync: ["windows", "linux"],
+  iPhoneUSBSync: ['windows', 'linux'],
   /** Email integration via OAuth (all platforms) */
-  emailIntegration: ["macos", "windows", "linux"],
+  emailIntegration: ['macos', 'windows', 'linux'],
 } as const;
 
 export type FeatureName = keyof typeof platformFeatures;

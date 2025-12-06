@@ -11,11 +11,11 @@
  * - Return value structure
  */
 
-import { contextBridge, ipcRenderer, IpcRendererEvent } from "electron";
+import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
 
 // Expose protected methods that allow the renderer process to use
 // ipcRenderer without exposing the entire object
-contextBridge.exposeInMainWorld("api", {
+contextBridge.exposeInMainWorld('api', {
   /**
    * ============================================
    * AUTHENTICATION METHODS
@@ -27,107 +27,96 @@ contextBridge.exposeInMainWorld("api", {
      * Initiates Google OAuth login flow
      * @returns {Promise<{success: boolean, authUrl?: string, error?: string}>} Login initiation result
      */
-    googleLogin: () => ipcRenderer.invoke("auth:google:login"),
+    googleLogin: () => ipcRenderer.invoke('auth:google:login'),
 
     /**
      * Completes Google OAuth login with authorization code
      * @param {string} code - OAuth authorization code from Google
      * @returns {Promise<{success: boolean, user?: object, sessionToken?: string, error?: string}>} Login completion result
      */
-    googleCompleteLogin: (code: string) =>
-      ipcRenderer.invoke("auth:google:complete-login", code),
+    googleCompleteLogin: (code: string) => ipcRenderer.invoke('auth:google:complete-login', code),
 
     /**
      * Initiates Microsoft OAuth login flow
      * @returns {Promise<{success: boolean, authUrl?: string, error?: string}>} Login initiation result
      */
-    microsoftLogin: () => ipcRenderer.invoke("auth:microsoft:login"),
+    microsoftLogin: () => ipcRenderer.invoke('auth:microsoft:login'),
 
     /**
      * Completes Microsoft OAuth login with authorization code
      * @param {string} code - OAuth authorization code from Microsoft
      * @returns {Promise<{success: boolean, user?: object, sessionToken?: string, error?: string}>} Login completion result
      */
-    microsoftCompleteLogin: (code: string) =>
-      ipcRenderer.invoke("auth:microsoft:complete-login", code),
+    microsoftCompleteLogin: (code: string) => ipcRenderer.invoke('auth:microsoft:complete-login', code),
 
     /**
      * Connects Google mailbox for a logged-in user
      * @param {string} userId - User ID to connect mailbox for
      * @returns {Promise<{success: boolean, error?: string}>} Connection result
      */
-    googleConnectMailbox: (userId: string) =>
-      ipcRenderer.invoke("auth:google:connect-mailbox", userId),
+    googleConnectMailbox: (userId: string) => ipcRenderer.invoke('auth:google:connect-mailbox', userId),
 
     /**
      * Connects Microsoft mailbox for a logged-in user
      * @param {string} userId - User ID to connect mailbox for
      * @returns {Promise<{success: boolean, error?: string}>} Connection result
      */
-    microsoftConnectMailbox: (userId: string) =>
-      ipcRenderer.invoke("auth:microsoft:connect-mailbox", userId),
+    microsoftConnectMailbox: (userId: string) => ipcRenderer.invoke('auth:microsoft:connect-mailbox', userId),
 
     /**
      * Disconnects Google mailbox for a logged-in user
      * @param {string} userId - User ID to disconnect mailbox for
      * @returns {Promise<{success: boolean, error?: string}>} Disconnection result
      */
-    googleDisconnectMailbox: (userId: string) =>
-      ipcRenderer.invoke("auth:google:disconnect-mailbox", userId),
+    googleDisconnectMailbox: (userId: string) => ipcRenderer.invoke('auth:google:disconnect-mailbox', userId),
 
     /**
      * Disconnects Microsoft mailbox for a logged-in user
      * @param {string} userId - User ID to disconnect mailbox for
      * @returns {Promise<{success: boolean, error?: string}>} Disconnection result
      */
-    microsoftDisconnectMailbox: (userId: string) =>
-      ipcRenderer.invoke("auth:microsoft:disconnect-mailbox", userId),
+    microsoftDisconnectMailbox: (userId: string) => ipcRenderer.invoke('auth:microsoft:disconnect-mailbox', userId),
 
     /**
      * Logs out the current user and invalidates session
      * @param {string} sessionToken - Session token to invalidate
      * @returns {Promise<{success: boolean, error?: string}>} Logout result
      */
-    logout: (sessionToken: string) =>
-      ipcRenderer.invoke("auth:logout", sessionToken),
+    logout: (sessionToken: string) => ipcRenderer.invoke('auth:logout', sessionToken),
 
     /**
      * Validates an existing session token
      * @param {string} sessionToken - Session token to validate
      * @returns {Promise<{valid: boolean, user?: object, error?: string}>} Validation result
      */
-    validateSession: (sessionToken: string) =>
-      ipcRenderer.invoke("auth:validate-session", sessionToken),
+    validateSession: (sessionToken: string) => ipcRenderer.invoke('auth:validate-session', sessionToken),
 
     /**
      * Gets the currently authenticated user
      * @returns {Promise<{success: boolean, user?: object, error?: string}>} Current user data
      */
-    getCurrentUser: () => ipcRenderer.invoke("auth:get-current-user"),
+    getCurrentUser: () => ipcRenderer.invoke('auth:get-current-user'),
 
     /**
      * Records user's acceptance of terms and conditions
      * @param {string} userId - User ID accepting terms
      * @returns {Promise<{success: boolean, error?: string}>} Acceptance result
      */
-    acceptTerms: (userId: string) =>
-      ipcRenderer.invoke("auth:accept-terms", userId),
+    acceptTerms: (userId: string) => ipcRenderer.invoke('auth:accept-terms', userId),
 
     /**
      * Marks email onboarding as completed for a user
      * @param {string} userId - User ID completing email onboarding
      * @returns {Promise<{success: boolean, error?: string}>} Completion result
      */
-    completeEmailOnboarding: (userId: string) =>
-      ipcRenderer.invoke("auth:complete-email-onboarding", userId),
+    completeEmailOnboarding: (userId: string) => ipcRenderer.invoke('auth:complete-email-onboarding', userId),
 
     /**
      * Checks if user has completed email onboarding
      * @param {string} userId - User ID to check
      * @returns {Promise<{success: boolean, completed: boolean, error?: string}>} Onboarding status
      */
-    checkEmailOnboarding: (userId: string) =>
-      ipcRenderer.invoke("auth:check-email-onboarding", userId),
+    checkEmailOnboarding: (userId: string) => ipcRenderer.invoke('auth:check-email-onboarding', userId),
 
     /**
      * Completes a pending login after keychain/database setup
@@ -135,8 +124,7 @@ contextBridge.exposeInMainWorld("api", {
      * @param {Object} oauthData - The pending OAuth data from login-pending event
      * @returns {Promise<{success: boolean, user?: object, sessionToken?: string, subscription?: object, isNewUser?: boolean, error?: string}>} Login completion result
      */
-    completePendingLogin: (oauthData: any) =>
-      ipcRenderer.invoke("auth:complete-pending-login", oauthData),
+    completePendingLogin: (oauthData: any) => ipcRenderer.invoke('auth:complete-pending-login', oauthData),
   },
 
   /**
@@ -152,24 +140,14 @@ contextBridge.exposeInMainWorld("api", {
      * @param {Object} options - Scan options (provider, dateRange, propertyAddress, etc.)
      * @returns {Promise<{success: boolean, newCount?: number, updatedCount?: number, error?: string}>} Scan results
      */
-    scan: (userId: string, options: any) =>
-      ipcRenderer.invoke("transactions:scan", userId, options),
-
-    /**
-     * Cancels an ongoing mailbox scan
-     * @param {string} userId - User ID to cancel scan for
-     * @returns {Promise<{success: boolean, cancelled?: boolean, error?: string}>} Cancellation result
-     */
-    cancelScan: (userId: string) =>
-      ipcRenderer.invoke("transactions:cancel-scan", userId),
+    scan: (userId: string, options: any) => ipcRenderer.invoke('transactions:scan', userId, options),
 
     /**
      * Retrieves all transactions for a user
      * @param {string} userId - User ID to get transactions for
      * @returns {Promise<{success: boolean, transactions?: Array, error?: string}>} All user transactions
      */
-    getAll: (userId: string) =>
-      ipcRenderer.invoke("transactions:get-all", userId),
+    getAll: (userId: string) => ipcRenderer.invoke('transactions:get-all', userId),
 
     /**
      * Creates a new manual transaction
@@ -177,8 +155,7 @@ contextBridge.exposeInMainWorld("api", {
      * @param {Object} transactionData - Transaction details (address, type, status, dates, etc.)
      * @returns {Promise<{success: boolean, transaction?: object, error?: string}>} Created transaction
      */
-    create: (userId: string, transactionData: any) =>
-      ipcRenderer.invoke("transactions:create", userId, transactionData),
+    create: (userId: string, transactionData: any) => ipcRenderer.invoke('transactions:create', userId, transactionData),
 
     /**
      * Creates a new audited transaction with verified data
@@ -186,28 +163,21 @@ contextBridge.exposeInMainWorld("api", {
      * @param {Object} transactionData - Audited transaction details
      * @returns {Promise<{success: boolean, transaction?: object, error?: string}>} Created audited transaction
      */
-    createAudited: (userId: string, transactionData: any) =>
-      ipcRenderer.invoke(
-        "transactions:create-audited",
-        userId,
-        transactionData,
-      ),
+    createAudited: (userId: string, transactionData: any) => ipcRenderer.invoke('transactions:create-audited', userId, transactionData),
 
     /**
      * Gets detailed information for a specific transaction
      * @param {string} transactionId - Transaction ID to retrieve
      * @returns {Promise<{success: boolean, transaction?: object, error?: string}>} Transaction details
      */
-    getDetails: (transactionId: string) =>
-      ipcRenderer.invoke("transactions:get-details", transactionId),
+    getDetails: (transactionId: string) => ipcRenderer.invoke('transactions:get-details', transactionId),
 
     /**
      * Gets transaction with all associated contacts
      * @param {string} transactionId - Transaction ID to retrieve
      * @returns {Promise<{success: boolean, transaction?: object, contacts?: Array, error?: string}>} Transaction with contacts
      */
-    getWithContacts: (transactionId: string) =>
-      ipcRenderer.invoke("transactions:get-with-contacts", transactionId),
+    getWithContacts: (transactionId: string) => ipcRenderer.invoke('transactions:get-with-contacts', transactionId),
 
     /**
      * Updates transaction details
@@ -215,16 +185,14 @@ contextBridge.exposeInMainWorld("api", {
      * @param {Object} updates - Fields to update (status, dates, address, etc.)
      * @returns {Promise<{success: boolean, transaction?: object, error?: string}>} Updated transaction
      */
-    update: (transactionId: string, updates: any) =>
-      ipcRenderer.invoke("transactions:update", transactionId, updates),
+    update: (transactionId: string, updates: any) => ipcRenderer.invoke('transactions:update', transactionId, updates),
 
     /**
      * Deletes a transaction
      * @param {string} transactionId - Transaction ID to delete
      * @returns {Promise<{success: boolean, error?: string}>} Deletion result
      */
-    delete: (transactionId: string) =>
-      ipcRenderer.invoke("transactions:delete", transactionId),
+    delete: (transactionId: string) => ipcRenderer.invoke('transactions:delete', transactionId),
 
     /**
      * Assigns a contact to a transaction with a specific role
@@ -236,23 +204,8 @@ contextBridge.exposeInMainWorld("api", {
      * @param {string} notes - Additional notes about this assignment
      * @returns {Promise<{success: boolean, error?: string}>} Assignment result
      */
-    assignContact: (
-      transactionId: string,
-      contactId: string,
-      role: string,
-      roleCategory: string,
-      isPrimary: boolean,
-      notes: string,
-    ) =>
-      ipcRenderer.invoke(
-        "transactions:assign-contact",
-        transactionId,
-        contactId,
-        role,
-        roleCategory,
-        isPrimary,
-        notes,
-      ),
+    assignContact: (transactionId: string, contactId: string, role: string, roleCategory: string, isPrimary: boolean, notes: string) =>
+      ipcRenderer.invoke('transactions:assign-contact', transactionId, contactId, role, roleCategory, isPrimary, notes),
 
     /**
      * Removes a contact from a transaction
@@ -260,12 +213,7 @@ contextBridge.exposeInMainWorld("api", {
      * @param {string} contactId - Contact ID to remove
      * @returns {Promise<{success: boolean, error?: string}>} Removal result
      */
-    removeContact: (transactionId: string, contactId: string) =>
-      ipcRenderer.invoke(
-        "transactions:remove-contact",
-        transactionId,
-        contactId,
-      ),
+    removeContact: (transactionId: string, contactId: string) => ipcRenderer.invoke('transactions:remove-contact', transactionId, contactId),
 
     /**
      * Re-analyzes emails for a specific property and date range
@@ -275,19 +223,8 @@ contextBridge.exposeInMainWorld("api", {
      * @param {Object} dateRange - Date range to search within {start, end}
      * @returns {Promise<{success: boolean, newCount?: number, updatedCount?: number, error?: string}>} Re-analysis results
      */
-    reanalyze: (
-      userId: string,
-      provider: string,
-      propertyAddress: string,
-      dateRange: any,
-    ) =>
-      ipcRenderer.invoke(
-        "transactions:reanalyze",
-        userId,
-        provider,
-        propertyAddress,
-        dateRange,
-      ),
+    reanalyze: (userId: string, provider: string, propertyAddress: string, dateRange: any) =>
+      ipcRenderer.invoke('transactions:reanalyze', userId, provider, propertyAddress, dateRange),
 
     /**
      * Exports transaction as PDF to specified path
@@ -295,8 +232,7 @@ contextBridge.exposeInMainWorld("api", {
      * @param {string} outputPath - File path to save PDF
      * @returns {Promise<{success: boolean, filePath?: string, error?: string}>} Export result
      */
-    exportPDF: (transactionId: string, outputPath: string) =>
-      ipcRenderer.invoke("transactions:export-pdf", transactionId, outputPath),
+    exportPDF: (transactionId: string, outputPath: string) => ipcRenderer.invoke('transactions:export-pdf', transactionId, outputPath),
 
     /**
      * Exports transaction with enhanced options (format, included data, etc.)
@@ -304,12 +240,7 @@ contextBridge.exposeInMainWorld("api", {
      * @param {Object} options - Export options (format, includeContacts, includeEmails, etc.)
      * @returns {Promise<{success: boolean, filePath?: string, error?: string}>} Export result
      */
-    exportEnhanced: (transactionId: string, options: any) =>
-      ipcRenderer.invoke(
-        "transactions:export-enhanced",
-        transactionId,
-        options,
-      ),
+    exportEnhanced: (transactionId: string, options: any) => ipcRenderer.invoke('transactions:export-enhanced', transactionId, options),
   },
 
   /**
@@ -324,15 +255,14 @@ contextBridge.exposeInMainWorld("api", {
      * @param {string} userId - User ID to get contacts for
      * @returns {Promise<{success: boolean, contacts?: Array, error?: string}>} All user contacts
      */
-    getAll: (userId: string) => ipcRenderer.invoke("contacts:get-all", userId),
+    getAll: (userId: string) => ipcRenderer.invoke('contacts:get-all', userId),
 
     /**
      * Gets contacts available for assignment (not deleted/archived)
      * @param {string} userId - User ID to get available contacts for
      * @returns {Promise<{success: boolean, contacts?: Array, error?: string}>} Available contacts
      */
-    getAvailable: (userId: string) =>
-      ipcRenderer.invoke("contacts:get-available", userId),
+    getAvailable: (userId: string) => ipcRenderer.invoke('contacts:get-available', userId),
 
     /**
      * Imports contacts from system address book or external source
@@ -340,8 +270,7 @@ contextBridge.exposeInMainWorld("api", {
      * @param {Array} contactsToImport - Array of contact objects to import
      * @returns {Promise<{success: boolean, imported?: number, skipped?: number, error?: string}>} Import results
      */
-    import: (userId: string, contactsToImport: any[]) =>
-      ipcRenderer.invoke("contacts:import", userId, contactsToImport),
+    import: (userId: string, contactsToImport: any[]) => ipcRenderer.invoke('contacts:import', userId, contactsToImport),
 
     /**
      * Gets contacts sorted by activity/relevance for a property
@@ -349,12 +278,7 @@ contextBridge.exposeInMainWorld("api", {
      * @param {string} propertyAddress - Property address to find relevant contacts for
      * @returns {Promise<{success: boolean, contacts?: Array, error?: string}>} Sorted contacts
      */
-    getSortedByActivity: (userId: string, propertyAddress: string) =>
-      ipcRenderer.invoke(
-        "contacts:get-sorted-by-activity",
-        userId,
-        propertyAddress,
-      ),
+    getSortedByActivity: (userId: string, propertyAddress: string) => ipcRenderer.invoke('contacts:get-sorted-by-activity', userId, propertyAddress),
 
     /**
      * Creates a new contact
@@ -362,8 +286,7 @@ contextBridge.exposeInMainWorld("api", {
      * @param {Object} contactData - Contact details (name, email, phone, company, etc.)
      * @returns {Promise<{success: boolean, contact?: object, error?: string}>} Created contact
      */
-    create: (userId: string, contactData: any) =>
-      ipcRenderer.invoke("contacts:create", userId, contactData),
+    create: (userId: string, contactData: any) => ipcRenderer.invoke('contacts:create', userId, contactData),
 
     /**
      * Updates contact details
@@ -371,32 +294,28 @@ contextBridge.exposeInMainWorld("api", {
      * @param {Object} updates - Fields to update (name, email, phone, etc.)
      * @returns {Promise<{success: boolean, contact?: object, error?: string}>} Updated contact
      */
-    update: (contactId: string, updates: any) =>
-      ipcRenderer.invoke("contacts:update", contactId, updates),
+    update: (contactId: string, updates: any) => ipcRenderer.invoke('contacts:update', contactId, updates),
 
     /**
      * Checks if a contact can be deleted (not assigned to transactions)
      * @param {string} contactId - Contact ID to check
      * @returns {Promise<{canDelete: boolean, reason?: string, transactionCount?: number}>} Deletion eligibility
      */
-    checkCanDelete: (contactId: string) =>
-      ipcRenderer.invoke("contacts:checkCanDelete", contactId),
+    checkCanDelete: (contactId: string) => ipcRenderer.invoke('contacts:checkCanDelete', contactId),
 
     /**
      * Deletes a contact (only if not assigned to transactions)
      * @param {string} contactId - Contact ID to delete
      * @returns {Promise<{success: boolean, error?: string}>} Deletion result
      */
-    delete: (contactId: string) =>
-      ipcRenderer.invoke("contacts:delete", contactId),
+    delete: (contactId: string) => ipcRenderer.invoke('contacts:delete', contactId),
 
     /**
      * Removes a contact (soft delete/archive)
      * @param {string} contactId - Contact ID to remove
      * @returns {Promise<{success: boolean, error?: string}>} Removal result
      */
-    remove: (contactId: string) =>
-      ipcRenderer.invoke("contacts:remove", contactId),
+    remove: (contactId: string) => ipcRenderer.invoke('contacts:remove', contactId),
   },
 
   /**
@@ -411,8 +330,7 @@ contextBridge.exposeInMainWorld("api", {
      * @param {string} apiKey - Google Places API key
      * @returns {Promise<{success: boolean, error?: string}>} Initialization result
      */
-    initialize: (apiKey: string) =>
-      ipcRenderer.invoke("address:initialize", apiKey),
+    initialize: (apiKey: string) => ipcRenderer.invoke('address:initialize', apiKey),
 
     /**
      * Gets address autocomplete suggestions
@@ -420,32 +338,28 @@ contextBridge.exposeInMainWorld("api", {
      * @param {string} sessionToken - Session token for request batching
      * @returns {Promise<{success: boolean, suggestions?: Array, error?: string}>} Address suggestions
      */
-    getSuggestions: (input: string, sessionToken: string) =>
-      ipcRenderer.invoke("address:get-suggestions", input, sessionToken),
+    getSuggestions: (input: string, sessionToken: string) => ipcRenderer.invoke('address:get-suggestions', input, sessionToken),
 
     /**
      * Gets detailed information for a specific place
      * @param {string} placeId - Google Place ID
      * @returns {Promise<{success: boolean, place?: object, error?: string}>} Place details
      */
-    getDetails: (placeId: string) =>
-      ipcRenderer.invoke("address:get-details", placeId),
+    getDetails: (placeId: string) => ipcRenderer.invoke('address:get-details', placeId),
 
     /**
      * Geocodes an address to coordinates
      * @param {string} address - Address to geocode
      * @returns {Promise<{success: boolean, coordinates?: {lat: number, lng: number}, error?: string}>} Geocoding result
      */
-    geocode: (address: string) =>
-      ipcRenderer.invoke("address:geocode", address),
+    geocode: (address: string) => ipcRenderer.invoke('address:geocode', address),
 
     /**
      * Validates and standardizes an address
      * @param {string} address - Address to validate
      * @returns {Promise<{valid: boolean, standardized?: string, components?: object, error?: string}>} Validation result
      */
-    validate: (address: string) =>
-      ipcRenderer.invoke("address:validate", address),
+    validate: (address: string) => ipcRenderer.invoke('address:validate', address),
   },
 
   /**
@@ -461,16 +375,14 @@ contextBridge.exposeInMainWorld("api", {
      * @param {Object} feedbackData - Feedback details (field, original, corrected, etc.)
      * @returns {Promise<{success: boolean, error?: string}>} Submission result
      */
-    submit: (userId: string, feedbackData: any) =>
-      ipcRenderer.invoke("feedback:submit", userId, feedbackData),
+    submit: (userId: string, feedbackData: any) => ipcRenderer.invoke('feedback:submit', userId, feedbackData),
 
     /**
      * Gets all feedback entries for a transaction
      * @param {string} transactionId - Transaction ID
      * @returns {Promise<{success: boolean, feedback?: Array, error?: string}>} Transaction feedback
      */
-    getForTransaction: (transactionId: string) =>
-      ipcRenderer.invoke("feedback:get-for-transaction", transactionId),
+    getForTransaction: (transactionId: string) => ipcRenderer.invoke('feedback:get-for-transaction', transactionId),
 
     /**
      * Gets accuracy metrics for a specific field
@@ -478,8 +390,7 @@ contextBridge.exposeInMainWorld("api", {
      * @param {string} fieldName - Field name to get metrics for (e.g., 'propertyAddress')
      * @returns {Promise<{success: boolean, metrics?: object, error?: string}>} Field metrics
      */
-    getMetrics: (userId: string, fieldName: string) =>
-      ipcRenderer.invoke("feedback:get-metrics", userId, fieldName),
+    getMetrics: (userId: string, fieldName: string) => ipcRenderer.invoke('feedback:get-metrics', userId, fieldName),
 
     /**
      * Gets AI suggestion based on learning from past feedback
@@ -489,19 +400,8 @@ contextBridge.exposeInMainWorld("api", {
      * @param {number} confidence - Confidence score (0-1)
      * @returns {Promise<{success: boolean, suggestion?: any, confidence?: number, error?: string}>} AI suggestion
      */
-    getSuggestion: (
-      userId: string,
-      fieldName: string,
-      extractedValue: any,
-      confidence: number,
-    ) =>
-      ipcRenderer.invoke(
-        "feedback:get-suggestion",
-        userId,
-        fieldName,
-        extractedValue,
-        confidence,
-      ),
+    getSuggestion: (userId: string, fieldName: string, extractedValue: any, confidence: number) =>
+      ipcRenderer.invoke('feedback:get-suggestion', userId, fieldName, extractedValue, confidence),
 
     /**
      * Gets learning statistics for a field (accuracy trends, improvement)
@@ -509,8 +409,7 @@ contextBridge.exposeInMainWorld("api", {
      * @param {string} fieldName - Field name
      * @returns {Promise<{success: boolean, stats?: object, error?: string}>} Learning stats
      */
-    getLearningStats: (userId: string, fieldName: string) =>
-      ipcRenderer.invoke("feedback:get-learning-stats", userId, fieldName),
+    getLearningStats: (userId: string, fieldName: string) => ipcRenderer.invoke('feedback:get-learning-stats', userId, fieldName),
   },
 
   /**
@@ -525,7 +424,7 @@ contextBridge.exposeInMainWorld("api", {
      * @param {string} userId - User ID
      * @returns {Promise<{success: boolean, preferences?: object, error?: string}>} User preferences
      */
-    get: (userId: string) => ipcRenderer.invoke("preferences:get", userId),
+    get: (userId: string) => ipcRenderer.invoke('preferences:get', userId),
 
     /**
      * Saves all user preferences (overwrites existing)
@@ -533,8 +432,7 @@ contextBridge.exposeInMainWorld("api", {
      * @param {Object} preferences - Complete preferences object
      * @returns {Promise<{success: boolean, error?: string}>} Save result
      */
-    save: (userId: string, preferences: any) =>
-      ipcRenderer.invoke("preferences:save", userId, preferences),
+    save: (userId: string, preferences: any) => ipcRenderer.invoke('preferences:save', userId, preferences),
 
     /**
      * Updates specific preference fields (merges with existing)
@@ -542,8 +440,7 @@ contextBridge.exposeInMainWorld("api", {
      * @param {Object} partialPreferences - Preferences to update
      * @returns {Promise<{success: boolean, preferences?: object, error?: string}>} Update result
      */
-    update: (userId: string, partialPreferences: any) =>
-      ipcRenderer.invoke("preferences:update", userId, partialPreferences),
+    update: (userId: string, partialPreferences: any) => ipcRenderer.invoke('preferences:update', userId, partialPreferences),
   },
 
   /**
@@ -558,119 +455,105 @@ contextBridge.exposeInMainWorld("api", {
      * Used to check if encryption is already available (user already authorized)
      * @returns {Promise<{success: boolean, available: boolean, platform?: string, guidance?: string, error?: string}>} Status result
      */
-    getSecureStorageStatus: () =>
-      ipcRenderer.invoke("system:get-secure-storage-status"),
+    getSecureStorageStatus: () => ipcRenderer.invoke('system:get-secure-storage-status'),
 
     /**
      * Initializes secure storage (triggers keychain prompt on macOS)
      * Should be called after user login and terms acceptance
      * @returns {Promise<{success: boolean, available: boolean, platform?: string, guidance?: string, error?: string}>} Initialization result
      */
-    initializeSecureStorage: () =>
-      ipcRenderer.invoke("system:initialize-secure-storage"),
+    initializeSecureStorage: () => ipcRenderer.invoke('system:initialize-secure-storage'),
 
     /**
      * Checks if the database encryption key store file exists
      * Used to determine if this is a new user (needs secure storage setup) vs returning user
      * @returns {Promise<{success: boolean, hasKeyStore: boolean}>} Key store check result
      */
-    hasEncryptionKeyStore: () =>
-      ipcRenderer.invoke("system:has-encryption-key-store"),
+    hasEncryptionKeyStore: () => ipcRenderer.invoke('system:has-encryption-key-store'),
 
     /**
      * Initializes the database after secure storage setup
      * Should be called after the user has authorized keychain access (new users only)
      * @returns {Promise<{success: boolean, error?: string}>} Database initialization result
      */
-    initializeDatabase: () => ipcRenderer.invoke("system:initialize-database"),
+    initializeDatabase: () => ipcRenderer.invoke('system:initialize-database'),
 
     /**
      * Checks if the database is initialized and ready for operations
      * Used to determine if we can save user data after OAuth
      * @returns {Promise<{success: boolean, initialized: boolean}>} Database initialization status
      */
-    isDatabaseInitialized: () =>
-      ipcRenderer.invoke("system:is-database-initialized"),
+    isDatabaseInitialized: () => ipcRenderer.invoke('system:is-database-initialized'),
 
     /**
      * Runs the complete permission setup flow for onboarding
      * @returns {Promise<{success: boolean, error?: string}>} Setup result
      */
-    runPermissionSetup: () => ipcRenderer.invoke("system:run-permission-setup"),
+    runPermissionSetup: () => ipcRenderer.invoke('system:run-permission-setup'),
 
     /**
      * Requests macOS contacts permission
      * @returns {Promise<{granted: boolean, error?: string}>} Permission request result
      */
-    requestContactsPermission: () =>
-      ipcRenderer.invoke("system:request-contacts-permission"),
+    requestContactsPermission: () => ipcRenderer.invoke('system:request-contacts-permission'),
 
     /**
      * Initiates Full Disk Access setup process
      * @returns {Promise<{success: boolean, error?: string}>} Setup result
      */
-    setupFullDiskAccess: () =>
-      ipcRenderer.invoke("system:setup-full-disk-access"),
+    setupFullDiskAccess: () => ipcRenderer.invoke('system:setup-full-disk-access'),
 
     /**
      * Opens macOS System Preferences to a specific privacy pane
      * @param {string} pane - Privacy pane identifier (e.g., 'Privacy_AllFiles', 'Privacy_Contacts')
      * @returns {Promise<{success: boolean, error?: string}>} Open result
      */
-    openPrivacyPane: (pane: string) =>
-      ipcRenderer.invoke("system:open-privacy-pane", pane),
+    openPrivacyPane: (pane: string) => ipcRenderer.invoke('system:open-privacy-pane', pane),
 
     /**
      * Checks current Full Disk Access status
      * @returns {Promise<{granted: boolean, error?: string}>} Status check result
      */
-    checkFullDiskAccessStatus: () =>
-      ipcRenderer.invoke("system:check-full-disk-access-status"),
+    checkFullDiskAccessStatus: () => ipcRenderer.invoke('system:check-full-disk-access-status'),
 
     /**
      * Checks if app has Full Disk Access permission
      * @returns {Promise<{granted: boolean, error?: string}>} Permission status
      */
-    checkFullDiskAccess: () =>
-      ipcRenderer.invoke("system:check-full-disk-access"),
+    checkFullDiskAccess: () => ipcRenderer.invoke('system:check-full-disk-access'),
 
     /**
      * Checks if app has Contacts permission
      * @returns {Promise<{granted: boolean, error?: string}>} Permission status
      */
-    checkContactsPermission: () =>
-      ipcRenderer.invoke("system:check-contacts-permission"),
+    checkContactsPermission: () => ipcRenderer.invoke('system:check-contacts-permission'),
 
     /**
      * Checks all required system permissions
      * @returns {Promise<{allGranted: boolean, fullDiskAccess: boolean, contacts: boolean, error?: string}>} All permission statuses
      */
-    checkAllPermissions: () =>
-      ipcRenderer.invoke("system:check-all-permissions"),
+    checkAllPermissions: () => ipcRenderer.invoke('system:check-all-permissions'),
 
     /**
      * Checks Google account connection and token validity
      * @param {string} userId - User ID to check
      * @returns {Promise<{connected: boolean, valid: boolean, error?: string}>} Connection status
      */
-    checkGoogleConnection: (userId: string) =>
-      ipcRenderer.invoke("system:check-google-connection", userId),
+    checkGoogleConnection: (userId: string) => ipcRenderer.invoke('system:check-google-connection', userId),
 
     /**
      * Checks Microsoft account connection and token validity
      * @param {string} userId - User ID to check
      * @returns {Promise<{connected: boolean, valid: boolean, error?: string}>} Connection status
      */
-    checkMicrosoftConnection: (userId: string) =>
-      ipcRenderer.invoke("system:check-microsoft-connection", userId),
+    checkMicrosoftConnection: (userId: string) => ipcRenderer.invoke('system:check-microsoft-connection', userId),
 
     /**
      * Checks all email provider connections
      * @param {string} userId - User ID to check
      * @returns {Promise<{google: object, microsoft: object, error?: string}>} All connection statuses
      */
-    checkAllConnections: (userId: string) =>
-      ipcRenderer.invoke("system:check-all-connections", userId),
+    checkAllConnections: (userId: string) => ipcRenderer.invoke('system:check-all-connections', userId),
 
     /**
      * Runs comprehensive health check for a provider
@@ -678,22 +561,20 @@ contextBridge.exposeInMainWorld("api", {
      * @param {string} provider - Provider to check ('google' or 'microsoft')
      * @returns {Promise<{healthy: boolean, issues?: Array, error?: string}>} Health check result
      */
-    healthCheck: (userId: string, provider: string) =>
-      ipcRenderer.invoke("system:health-check", userId, provider),
+    healthCheck: (userId: string, provider: string) => ipcRenderer.invoke('system:health-check', userId, provider),
 
     /**
      * Opens support email with pre-filled content
      * @param {string} errorDetails - Optional error details to include
      * @returns {Promise<{success: boolean, error?: string}>} Result
      */
-    contactSupport: (errorDetails?: string) =>
-      ipcRenderer.invoke("system:contact-support", errorDetails),
+    contactSupport: (errorDetails?: string) => ipcRenderer.invoke('system:contact-support', errorDetails),
 
     /**
      * Gets diagnostic information for support requests
      * @returns {Promise<{success: boolean, diagnostics?: string, error?: string}>} Diagnostic data
      */
-    getDiagnostics: () => ipcRenderer.invoke("system:get-diagnostics"),
+    getDiagnostics: () => ipcRenderer.invoke('system:get-diagnostics'),
   },
 
   /**
@@ -708,8 +589,7 @@ contextBridge.exposeInMainWorld("api", {
      * @param {string} userId - User ID to get phone type for
      * @returns {Promise<{success: boolean, phoneType: 'iphone' | 'android' | null, error?: string}>} Phone type result
      */
-    getPhoneType: (userId: string) =>
-      ipcRenderer.invoke("user:get-phone-type", userId),
+    getPhoneType: (userId: string) => ipcRenderer.invoke('user:get-phone-type', userId),
 
     /**
      * Sets user's mobile phone type preference
@@ -717,9 +597,9 @@ contextBridge.exposeInMainWorld("api", {
      * @param {string} phoneType - Phone type ('iphone' | 'android')
      * @returns {Promise<{success: boolean, error?: string}>} Set result
      */
-    setPhoneType: (userId: string, phoneType: "iphone" | "android") =>
-      ipcRenderer.invoke("user:set-phone-type", userId, phoneType),
+    setPhoneType: (userId: string, phoneType: 'iphone' | 'android') => ipcRenderer.invoke('user:set-phone-type', userId, phoneType),
   },
+
 
   /**
    * ============================================
@@ -735,8 +615,8 @@ contextBridge.exposeInMainWorld("api", {
    */
   onGoogleLoginComplete: (callback: (result: any) => void) => {
     const listener = (_: IpcRendererEvent, result: any) => callback(result);
-    ipcRenderer.on("google:login-complete", listener);
-    return () => ipcRenderer.removeListener("google:login-complete", listener);
+    ipcRenderer.on('google:login-complete', listener);
+    return () => ipcRenderer.removeListener('google:login-complete', listener);
   },
 
   /**
@@ -746,8 +626,8 @@ contextBridge.exposeInMainWorld("api", {
    */
   onGoogleLoginPending: (callback: (result: any) => void) => {
     const listener = (_: IpcRendererEvent, result: any) => callback(result);
-    ipcRenderer.on("google:login-pending", listener);
-    return () => ipcRenderer.removeListener("google:login-pending", listener);
+    ipcRenderer.on('google:login-pending', listener);
+    return () => ipcRenderer.removeListener('google:login-pending', listener);
   },
 
   /**
@@ -757,8 +637,8 @@ contextBridge.exposeInMainWorld("api", {
    */
   onGoogleLoginCancelled: (callback: () => void) => {
     const listener = () => callback();
-    ipcRenderer.on("google:login-cancelled", listener);
-    return () => ipcRenderer.removeListener("google:login-cancelled", listener);
+    ipcRenderer.on('google:login-cancelled', listener);
+    return () => ipcRenderer.removeListener('google:login-cancelled', listener);
   },
 
   /**
@@ -768,9 +648,8 @@ contextBridge.exposeInMainWorld("api", {
    */
   onGoogleMailboxConnected: (callback: (result: any) => void) => {
     const listener = (_: IpcRendererEvent, result: any) => callback(result);
-    ipcRenderer.on("google:mailbox-connected", listener);
-    return () =>
-      ipcRenderer.removeListener("google:mailbox-connected", listener);
+    ipcRenderer.on('google:mailbox-connected', listener);
+    return () => ipcRenderer.removeListener('google:mailbox-connected', listener);
   },
 
   /**
@@ -780,9 +659,8 @@ contextBridge.exposeInMainWorld("api", {
    */
   onGoogleMailboxCancelled: (callback: () => void) => {
     const listener = () => callback();
-    ipcRenderer.on("google:mailbox-cancelled", listener);
-    return () =>
-      ipcRenderer.removeListener("google:mailbox-cancelled", listener);
+    ipcRenderer.on('google:mailbox-cancelled', listener);
+    return () => ipcRenderer.removeListener('google:mailbox-cancelled', listener);
   },
 
   /**
@@ -792,9 +670,8 @@ contextBridge.exposeInMainWorld("api", {
    */
   onMicrosoftLoginComplete: (callback: (result: any) => void) => {
     const listener = (_: IpcRendererEvent, result: any) => callback(result);
-    ipcRenderer.on("microsoft:login-complete", listener);
-    return () =>
-      ipcRenderer.removeListener("microsoft:login-complete", listener);
+    ipcRenderer.on('microsoft:login-complete', listener);
+    return () => ipcRenderer.removeListener('microsoft:login-complete', listener);
   },
 
   /**
@@ -804,9 +681,8 @@ contextBridge.exposeInMainWorld("api", {
    */
   onMicrosoftLoginPending: (callback: (result: any) => void) => {
     const listener = (_: IpcRendererEvent, result: any) => callback(result);
-    ipcRenderer.on("microsoft:login-pending", listener);
-    return () =>
-      ipcRenderer.removeListener("microsoft:login-pending", listener);
+    ipcRenderer.on('microsoft:login-pending', listener);
+    return () => ipcRenderer.removeListener('microsoft:login-pending', listener);
   },
 
   /**
@@ -816,9 +692,8 @@ contextBridge.exposeInMainWorld("api", {
    */
   onMicrosoftLoginCancelled: (callback: () => void) => {
     const listener = () => callback();
-    ipcRenderer.on("microsoft:login-cancelled", listener);
-    return () =>
-      ipcRenderer.removeListener("microsoft:login-cancelled", listener);
+    ipcRenderer.on('microsoft:login-cancelled', listener);
+    return () => ipcRenderer.removeListener('microsoft:login-cancelled', listener);
   },
 
   /**
@@ -828,9 +703,8 @@ contextBridge.exposeInMainWorld("api", {
    */
   onMicrosoftMailboxConnected: (callback: (result: any) => void) => {
     const listener = (_: IpcRendererEvent, result: any) => callback(result);
-    ipcRenderer.on("microsoft:mailbox-connected", listener);
-    return () =>
-      ipcRenderer.removeListener("microsoft:mailbox-connected", listener);
+    ipcRenderer.on('microsoft:mailbox-connected', listener);
+    return () => ipcRenderer.removeListener('microsoft:mailbox-connected', listener);
   },
 
   /**
@@ -840,9 +714,8 @@ contextBridge.exposeInMainWorld("api", {
    */
   onMicrosoftMailboxCancelled: (callback: () => void) => {
     const listener = () => callback();
-    ipcRenderer.on("microsoft:mailbox-cancelled", listener);
-    return () =>
-      ipcRenderer.removeListener("microsoft:mailbox-cancelled", listener);
+    ipcRenderer.on('microsoft:mailbox-cancelled', listener);
+    return () => ipcRenderer.removeListener('microsoft:mailbox-cancelled', listener);
   },
 
   /**
@@ -852,9 +725,8 @@ contextBridge.exposeInMainWorld("api", {
    */
   onGoogleMailboxDisconnected: (callback: (result: any) => void) => {
     const listener = (_: IpcRendererEvent, result: any) => callback(result);
-    ipcRenderer.on("google:mailbox-disconnected", listener);
-    return () =>
-      ipcRenderer.removeListener("google:mailbox-disconnected", listener);
+    ipcRenderer.on('google:mailbox-disconnected', listener);
+    return () => ipcRenderer.removeListener('google:mailbox-disconnected', listener);
   },
 
   /**
@@ -864,9 +736,8 @@ contextBridge.exposeInMainWorld("api", {
    */
   onMicrosoftMailboxDisconnected: (callback: (result: any) => void) => {
     const listener = (_: IpcRendererEvent, result: any) => callback(result);
-    ipcRenderer.on("microsoft:mailbox-disconnected", listener);
-    return () =>
-      ipcRenderer.removeListener("microsoft:mailbox-disconnected", listener);
+    ipcRenderer.on('microsoft:mailbox-disconnected', listener);
+    return () => ipcRenderer.removeListener('microsoft:mailbox-disconnected', listener);
   },
 
   /**
@@ -876,9 +747,8 @@ contextBridge.exposeInMainWorld("api", {
    */
   onTransactionScanProgress: (callback: (progress: any) => void) => {
     const listener = (_: IpcRendererEvent, progress: any) => callback(progress);
-    ipcRenderer.on("transactions:scan-progress", listener);
-    return () =>
-      ipcRenderer.removeListener("transactions:scan-progress", listener);
+    ipcRenderer.on('transactions:scan-progress', listener);
+    return () => ipcRenderer.removeListener('transactions:scan-progress', listener);
   },
 
   /**
@@ -886,15 +756,10 @@ contextBridge.exposeInMainWorld("api", {
    * @param {Function} callback - Callback function to handle progress updates
    * @returns {Function} Cleanup function to remove listener
    */
-  onBackupProgress: (
-    callback: (progress: { phase: string; percent: number }) => void,
-  ) => {
-    const listener = (
-      _: IpcRendererEvent,
-      progress: { phase: string; percent: number },
-    ) => callback(progress);
-    ipcRenderer.on("backup:progress", listener);
-    return () => ipcRenderer.removeListener("backup:progress", listener);
+  onBackupProgress: (callback: (progress: { phase: string; percent: number }) => void) => {
+    const listener = (_: IpcRendererEvent, progress: { phase: string; percent: number }) => callback(progress);
+    ipcRenderer.on('backup:progress', listener);
+    return () => ipcRenderer.removeListener('backup:progress', listener);
   },
 
   /**
@@ -903,11 +768,9 @@ contextBridge.exposeInMainWorld("api", {
    * @returns {Function} Cleanup function to remove listener
    */
   onBackupPasswordRequired: (callback: (data: { udid: string }) => void) => {
-    const listener = (_: IpcRendererEvent, data: { udid: string }) =>
-      callback(data);
-    ipcRenderer.on("backup:password-required", listener);
-    return () =>
-      ipcRenderer.removeListener("backup:password-required", listener);
+    const listener = (_: IpcRendererEvent, data: { udid: string }) => callback(data);
+    ipcRenderer.on('backup:password-required', listener);
+    return () => ipcRenderer.removeListener('backup:password-required', listener);
   },
 
   /**
@@ -922,72 +785,62 @@ contextBridge.exposeInMainWorld("api", {
      * Note: Domain filtering is NOT supported - see docs/BACKUP_RESEARCH.md
      * @returns {Promise<BackupCapabilities>} Available capabilities
      */
-    getCapabilities: () => ipcRenderer.invoke("backup:capabilities"),
+    getCapabilities: () => ipcRenderer.invoke('backup:capabilities'),
 
     /**
      * Gets current backup status
      * @returns {Promise<BackupStatus>} Current status including progress
      */
-    getStatus: () => ipcRenderer.invoke("backup:status"),
+    getStatus: () => ipcRenderer.invoke('backup:status'),
 
     /**
      * Starts a backup operation for the specified device
      * @param {BackupOptions} options - Backup options including device UDID
      * @returns {Promise<BackupResult>} Backup result
      */
-    start: (options: {
-      udid: string;
-      outputDir?: string;
-      forceFullBackup?: boolean;
-      skipApps?: boolean;
-    }) => ipcRenderer.invoke("backup:start", options),
+    start: (options: { udid: string; outputDir?: string; forceFullBackup?: boolean; skipApps?: boolean }) =>
+      ipcRenderer.invoke('backup:start', options),
 
     /**
      * Cancels an in-progress backup
      * @returns {Promise<{success: boolean}>} Cancellation result
      */
-    cancel: () => ipcRenderer.invoke("backup:cancel"),
+    cancel: () => ipcRenderer.invoke('backup:cancel'),
 
     /**
      * Lists all existing backups
      * @returns {Promise<BackupInfo[]>} List of backup information
      */
-    list: () => ipcRenderer.invoke("backup:list"),
+    list: () => ipcRenderer.invoke('backup:list'),
 
     /**
      * Deletes a specific backup
      * @param {string} backupPath - Path to the backup to delete
      * @returns {Promise<{success: boolean, error?: string}>} Deletion result
      */
-    delete: (backupPath: string) =>
-      ipcRenderer.invoke("backup:delete", backupPath),
+    delete: (backupPath: string) => ipcRenderer.invoke('backup:delete', backupPath),
 
     /**
      * Cleans up old backups, keeping only the most recent
      * @param {number} keepCount - Number of backups to keep per device
      * @returns {Promise<{success: boolean, error?: string}>} Cleanup result
      */
-    cleanup: (keepCount?: number) =>
-      ipcRenderer.invoke("backup:cleanup", keepCount),
+    cleanup: (keepCount?: number) => ipcRenderer.invoke('backup:cleanup', keepCount),
 
     /**
      * Check if a device requires encrypted backup
      * @param {string} udid - Device unique identifier
      * @returns {Promise<{success: boolean, isEncrypted?: boolean, needsPassword?: boolean, error?: string}>}
      */
-    checkEncryption: (udid: string) =>
-      ipcRenderer.invoke("backup:check-encryption", udid),
+    checkEncryption: (udid: string) => ipcRenderer.invoke('backup:check-encryption', udid),
 
     /**
      * Start a backup with password (for encrypted backups)
      * @param {Object} options - Backup options including password
      * @returns {Promise<{success: boolean, backupPath?: string, error?: string, errorCode?: string}>}
      */
-    startWithPassword: (options: {
-      udid: string;
-      password: string;
-      outputPath?: string;
-    }) => ipcRenderer.invoke("backup:start-with-password", options),
+    startWithPassword: (options: { udid: string; password: string; outputPath?: string }) =>
+      ipcRenderer.invoke('backup:start-with-password', options),
 
     /**
      * Verify a backup password without starting backup
@@ -996,7 +849,7 @@ contextBridge.exposeInMainWorld("api", {
      * @returns {Promise<{success: boolean, valid?: boolean, error?: string}>}
      */
     verifyPassword: (backupPath: string, password: string) =>
-      ipcRenderer.invoke("backup:verify-password", backupPath, password),
+      ipcRenderer.invoke('backup:verify-password', backupPath, password),
 
     /**
      * Check if an existing backup is encrypted
@@ -1004,7 +857,7 @@ contextBridge.exposeInMainWorld("api", {
      * @returns {Promise<{success: boolean, isEncrypted?: boolean, error?: string}>}
      */
     isEncrypted: (backupPath: string) =>
-      ipcRenderer.invoke("backup:is-encrypted", backupPath),
+      ipcRenderer.invoke('backup:is-encrypted', backupPath),
 
     /**
      * Subscribes to backup progress updates
@@ -1012,10 +865,9 @@ contextBridge.exposeInMainWorld("api", {
      * @returns {Function} Cleanup function to remove listener
      */
     onProgress: (callback: (progress: any) => void) => {
-      const listener = (_: IpcRendererEvent, progress: any) =>
-        callback(progress);
-      ipcRenderer.on("backup:progress", listener);
-      return () => ipcRenderer.removeListener("backup:progress", listener);
+      const listener = (_: IpcRendererEvent, progress: any) => callback(progress);
+      ipcRenderer.on('backup:progress', listener);
+      return () => ipcRenderer.removeListener('backup:progress', listener);
     },
 
     /**
@@ -1025,8 +877,8 @@ contextBridge.exposeInMainWorld("api", {
      */
     onComplete: (callback: (result: any) => void) => {
       const listener = (_: IpcRendererEvent, result: any) => callback(result);
-      ipcRenderer.on("backup:complete", listener);
-      return () => ipcRenderer.removeListener("backup:complete", listener);
+      ipcRenderer.on('backup:complete', listener);
+      return () => ipcRenderer.removeListener('backup:complete', listener);
     },
 
     /**
@@ -1036,8 +888,8 @@ contextBridge.exposeInMainWorld("api", {
      */
     onError: (callback: (error: { message: string }) => void) => {
       const listener = (_: IpcRendererEvent, error: any) => callback(error);
-      ipcRenderer.on("backup:error", listener);
-      return () => ipcRenderer.removeListener("backup:error", listener);
+      ipcRenderer.on('backup:error', listener);
+      return () => ipcRenderer.removeListener('backup:error', listener);
     },
   },
 
@@ -1053,8 +905,7 @@ contextBridge.exposeInMainWorld("api", {
      * @param {string} url - URL to open
      * @returns {Promise<{success: boolean, error?: string}>} Open result
      */
-    openExternal: (url: string) =>
-      ipcRenderer.invoke("shell:open-external", url),
+    openExternal: (url: string) => ipcRenderer.invoke('shell:open-external', url),
   },
 
   /**
@@ -1068,25 +919,25 @@ contextBridge.exposeInMainWorld("api", {
      * Lists all currently connected iOS devices
      * @returns {Promise<{success: boolean, devices?: Array, error?: string}>} List of connected devices
      */
-    list: () => ipcRenderer.invoke("device:list"),
+    list: () => ipcRenderer.invoke('device:list'),
 
     /**
      * Starts device detection polling
      * @returns {Promise<{success: boolean, error?: string}>} Start result
      */
-    startDetection: () => ipcRenderer.invoke("device:start-detection"),
+    startDetection: () => ipcRenderer.invoke('device:start-detection'),
 
     /**
      * Stops device detection polling
      * @returns {Promise<{success: boolean, error?: string}>} Stop result
      */
-    stopDetection: () => ipcRenderer.invoke("device:stop-detection"),
+    stopDetection: () => ipcRenderer.invoke('device:stop-detection'),
 
     /**
      * Checks if libimobiledevice tools are available
      * @returns {Promise<{success: boolean, available?: boolean, error?: string}>} Availability check result
      */
-    checkAvailability: () => ipcRenderer.invoke("device:check-availability"),
+    checkAvailability: () => ipcRenderer.invoke('device:check-availability'),
 
     /**
      * Subscribes to device connected events
@@ -1095,8 +946,8 @@ contextBridge.exposeInMainWorld("api", {
      */
     onConnected: (callback: (device: any) => void) => {
       const listener = (_: IpcRendererEvent, device: any) => callback(device);
-      ipcRenderer.on("device:connected", listener);
-      return () => ipcRenderer.removeListener("device:connected", listener);
+      ipcRenderer.on('device:connected', listener);
+      return () => ipcRenderer.removeListener('device:connected', listener);
     },
 
     /**
@@ -1106,8 +957,8 @@ contextBridge.exposeInMainWorld("api", {
      */
     onDisconnected: (callback: (device: any) => void) => {
       const listener = (_: IpcRendererEvent, device: any) => callback(device);
-      ipcRenderer.on("device:disconnected", listener);
-      return () => ipcRenderer.removeListener("device:disconnected", listener);
+      ipcRenderer.on('device:disconnected', listener);
+      return () => ipcRenderer.removeListener('device:disconnected', listener);
     },
   },
 
@@ -1122,26 +973,26 @@ contextBridge.exposeInMainWorld("api", {
      * Check if Apple Mobile Device Support drivers are installed
      * @returns {Promise<{isInstalled: boolean, version: string|null, serviceRunning: boolean, error: string|null}>}
      */
-    checkApple: () => ipcRenderer.invoke("drivers:check-apple"),
+    checkApple: () => ipcRenderer.invoke('drivers:check-apple'),
 
     /**
      * Check if bundled Apple drivers are available in the app
      * @returns {Promise<{available: boolean}>}
      */
-    hasBundled: () => ipcRenderer.invoke("drivers:has-bundled"),
+    hasBundled: () => ipcRenderer.invoke('drivers:has-bundled'),
 
     /**
      * Install Apple Mobile Device Support drivers
      * IMPORTANT: Only call after user has given consent
      * @returns {Promise<{success: boolean, error: string|null, rebootRequired: boolean}>}
      */
-    installApple: () => ipcRenderer.invoke("drivers:install-apple"),
+    installApple: () => ipcRenderer.invoke('drivers:install-apple'),
 
     /**
      * Open iTunes in Microsoft Store for manual installation
      * @returns {Promise<{success: boolean, error?: string}>}
      */
-    openITunesStore: () => ipcRenderer.invoke("drivers:open-itunes-store"),
+    openITunesStore: () => ipcRenderer.invoke('drivers:open-itunes-store'),
   },
 
   /**
@@ -1159,43 +1010,39 @@ contextBridge.exposeInMainWorld("api", {
      * @param {boolean} [options.forceFullBackup] - Force full backup (no incremental)
      * @returns {Promise<SyncResult>} Sync result with messages, contacts, conversations
      */
-    start: (options: {
-      udid: string;
-      password?: string;
-      forceFullBackup?: boolean;
-    }) => ipcRenderer.invoke("sync:start", options),
+    start: (options: { udid: string; password?: string; forceFullBackup?: boolean }) =>
+      ipcRenderer.invoke('sync:start', options),
 
     /**
      * Cancels an in-progress sync operation
      * @returns {Promise<{success: boolean}>} Cancellation result
      */
-    cancel: () => ipcRenderer.invoke("sync:cancel"),
+    cancel: () => ipcRenderer.invoke('sync:cancel'),
 
     /**
      * Gets current sync status
      * @returns {Promise<{isRunning: boolean, phase: string}>} Current sync status
      */
-    getStatus: () => ipcRenderer.invoke("sync:status"),
+    getStatus: () => ipcRenderer.invoke('sync:status'),
 
     /**
      * Gets all connected iOS devices
      * @returns {Promise<Array>} List of connected devices
      */
-    getDevices: () => ipcRenderer.invoke("sync:devices"),
+    getDevices: () => ipcRenderer.invoke('sync:devices'),
 
     /**
      * Starts device detection polling
      * @param {number} [intervalMs] - Polling interval in milliseconds
      * @returns {Promise<{success: boolean}>} Start result
      */
-    startDetection: (intervalMs?: number) =>
-      ipcRenderer.invoke("sync:start-detection", intervalMs),
+    startDetection: (intervalMs?: number) => ipcRenderer.invoke('sync:start-detection', intervalMs),
 
     /**
      * Stops device detection polling
      * @returns {Promise<{success: boolean}>} Stop result
      */
-    stopDetection: () => ipcRenderer.invoke("sync:stop-detection"),
+    stopDetection: () => ipcRenderer.invoke('sync:stop-detection'),
 
     /**
      * Subscribes to sync progress updates
@@ -1203,10 +1050,9 @@ contextBridge.exposeInMainWorld("api", {
      * @returns {Function} Cleanup function to remove listener
      */
     onProgress: (callback: (progress: any) => void) => {
-      const listener = (_: IpcRendererEvent, progress: any) =>
-        callback(progress);
-      ipcRenderer.on("sync:progress", listener);
-      return () => ipcRenderer.removeListener("sync:progress", listener);
+      const listener = (_: IpcRendererEvent, progress: any) => callback(progress);
+      ipcRenderer.on('sync:progress', listener);
+      return () => ipcRenderer.removeListener('sync:progress', listener);
     },
 
     /**
@@ -1216,8 +1062,8 @@ contextBridge.exposeInMainWorld("api", {
      */
     onPhase: (callback: (phase: string) => void) => {
       const listener = (_: IpcRendererEvent, phase: string) => callback(phase);
-      ipcRenderer.on("sync:phase", listener);
-      return () => ipcRenderer.removeListener("sync:phase", listener);
+      ipcRenderer.on('sync:phase', listener);
+      return () => ipcRenderer.removeListener('sync:phase', listener);
     },
 
     /**
@@ -1227,9 +1073,8 @@ contextBridge.exposeInMainWorld("api", {
      */
     onDeviceConnected: (callback: (device: any) => void) => {
       const listener = (_: IpcRendererEvent, device: any) => callback(device);
-      ipcRenderer.on("sync:device-connected", listener);
-      return () =>
-        ipcRenderer.removeListener("sync:device-connected", listener);
+      ipcRenderer.on('sync:device-connected', listener);
+      return () => ipcRenderer.removeListener('sync:device-connected', listener);
     },
 
     /**
@@ -1239,9 +1084,8 @@ contextBridge.exposeInMainWorld("api", {
      */
     onDeviceDisconnected: (callback: (device: any) => void) => {
       const listener = (_: IpcRendererEvent, device: any) => callback(device);
-      ipcRenderer.on("sync:device-disconnected", listener);
-      return () =>
-        ipcRenderer.removeListener("sync:device-disconnected", listener);
+      ipcRenderer.on('sync:device-disconnected', listener);
+      return () => ipcRenderer.removeListener('sync:device-disconnected', listener);
     },
 
     /**
@@ -1251,9 +1095,8 @@ contextBridge.exposeInMainWorld("api", {
      */
     onPasswordRequired: (callback: () => void) => {
       const listener = () => callback();
-      ipcRenderer.on("sync:password-required", listener);
-      return () =>
-        ipcRenderer.removeListener("sync:password-required", listener);
+      ipcRenderer.on('sync:password-required', listener);
+      return () => ipcRenderer.removeListener('sync:password-required', listener);
     },
 
     /**
@@ -1263,8 +1106,8 @@ contextBridge.exposeInMainWorld("api", {
      */
     onError: (callback: (error: { message: string }) => void) => {
       const listener = (_: IpcRendererEvent, error: any) => callback(error);
-      ipcRenderer.on("sync:error", listener);
-      return () => ipcRenderer.removeListener("sync:error", listener);
+      ipcRenderer.on('sync:error', listener);
+      return () => ipcRenderer.removeListener('sync:error', listener);
     },
 
     /**
@@ -1274,8 +1117,8 @@ contextBridge.exposeInMainWorld("api", {
      */
     onComplete: (callback: (result: any) => void) => {
       const listener = (_: IpcRendererEvent, result: any) => callback(result);
-      ipcRenderer.on("sync:complete", listener);
-      return () => ipcRenderer.removeListener("sync:complete", listener);
+      ipcRenderer.on('sync:complete', listener);
+      return () => ipcRenderer.removeListener('sync:complete', listener);
     },
   },
 });
@@ -1287,7 +1130,7 @@ contextBridge.exposeInMainWorld("api", {
  * @deprecated - Maintained for backward compatibility with older code
  * New code should use the 'api' namespace above instead
  */
-contextBridge.exposeInMainWorld("electron", {
+contextBridge.exposeInMainWorld('electron', {
   /**
    * Current platform identifier from Node.js process.platform
    * @type {'darwin' | 'win32' | 'linux'}
@@ -1298,79 +1141,76 @@ contextBridge.exposeInMainWorld("electron", {
    * Gets application info (version, name, etc.)
    * @returns {Promise<{version: string, name: string}>} App info
    */
-  getAppInfo: () => ipcRenderer.invoke("get-app-info"),
+  getAppInfo: () => ipcRenderer.invoke('get-app-info'),
 
   /**
    * Gets macOS version information
    * @returns {Promise<{version: string}>} macOS version
    */
-  getMacOSVersion: () => ipcRenderer.invoke("get-macos-version"),
+  getMacOSVersion: () => ipcRenderer.invoke('get-macos-version'),
 
   /**
    * Checks if app is in /Applications folder
    * @returns {Promise<{inApplications: boolean, path: string}>} Location check result
    */
-  checkAppLocation: () => ipcRenderer.invoke("check-app-location"),
+  checkAppLocation: () => ipcRenderer.invoke('check-app-location'),
 
   /**
    * Legacy permission check method
    * @returns {Promise<object>} Permission statuses
    */
-  checkPermissions: () => ipcRenderer.invoke("check-permissions"),
+  checkPermissions: () => ipcRenderer.invoke('check-permissions'),
 
   /**
    * Triggers Full Disk Access check
    * @returns {Promise<{granted: boolean}>} Access status
    */
-  triggerFullDiskAccess: () => ipcRenderer.invoke("trigger-full-disk-access"),
+  triggerFullDiskAccess: () => ipcRenderer.invoke('trigger-full-disk-access'),
 
   /**
    * Legacy permission request method
    * @returns {Promise<object>} Permission request result
    */
-  requestPermissions: () => ipcRenderer.invoke("request-permissions"),
+  requestPermissions: () => ipcRenderer.invoke('request-permissions'),
 
   /**
    * Requests contacts permission
    * @returns {Promise<{granted: boolean}>} Permission result
    */
-  requestContactsPermission: () =>
-    ipcRenderer.invoke("request-contacts-permission"),
+  requestContactsPermission: () => ipcRenderer.invoke('request-contacts-permission'),
 
   /**
    * Opens macOS System Settings/Preferences
    * @returns {Promise<{success: boolean}>} Open result
    */
-  openSystemSettings: () => ipcRenderer.invoke("open-system-settings"),
+  openSystemSettings: () => ipcRenderer.invoke('open-system-settings'),
 
   /**
    * Gets iMessage conversations from Messages database
    * @returns {Promise<Array>} List of conversations
    */
-  getConversations: () => ipcRenderer.invoke("get-conversations"),
+  getConversations: () => ipcRenderer.invoke('get-conversations'),
 
   /**
    * Gets messages for a specific chat
    * @param {string} chatId - Chat ID to get messages for
    * @returns {Promise<Array>} List of messages
    */
-  getMessages: (chatId: string) => ipcRenderer.invoke("get-messages", chatId),
+  getMessages: (chatId: string) => ipcRenderer.invoke('get-messages', chatId),
 
   /**
    * Exports conversations to text files
    * @param {Array<string>} conversationIds - Array of conversation IDs to export
    * @returns {Promise<{success: boolean, exportPath?: string}>} Export result
    */
-  exportConversations: (conversationIds: string[]) =>
-    ipcRenderer.invoke("export-conversations", conversationIds),
+  exportConversations: (conversationIds: string[]) => ipcRenderer.invoke('export-conversations', conversationIds),
 
   /**
    * Opens a folder in Finder
    * @param {string} folderPath - Path to folder to open
    * @returns {Promise<{success: boolean}>} Open result
    */
-  openFolder: (folderPath: string) =>
-    ipcRenderer.invoke("open-folder", folderPath),
+  openFolder: (folderPath: string) => ipcRenderer.invoke('open-folder', folderPath),
 
   /**
    * ============================================
@@ -1385,8 +1225,8 @@ contextBridge.exposeInMainWorld("electron", {
    */
   onUpdateAvailable: (callback: (info: any) => void) => {
     const listener = (_: IpcRendererEvent, info: any) => callback(info);
-    ipcRenderer.on("update-available", listener);
-    return () => ipcRenderer.removeListener("update-available", listener);
+    ipcRenderer.on('update-available', listener);
+    return () => ipcRenderer.removeListener('update-available', listener);
   },
 
   /**
@@ -1396,8 +1236,8 @@ contextBridge.exposeInMainWorld("electron", {
    */
   onUpdateProgress: (callback: (progress: any) => void) => {
     const listener = (_: IpcRendererEvent, progress: any) => callback(progress);
-    ipcRenderer.on("update-progress", listener);
-    return () => ipcRenderer.removeListener("update-progress", listener);
+    ipcRenderer.on('update-progress', listener);
+    return () => ipcRenderer.removeListener('update-progress', listener);
   },
 
   /**
@@ -1407,15 +1247,15 @@ contextBridge.exposeInMainWorld("electron", {
    */
   onUpdateDownloaded: (callback: (info: any) => void) => {
     const listener = (_: IpcRendererEvent, info: any) => callback(info);
-    ipcRenderer.on("update-downloaded", listener);
-    return () => ipcRenderer.removeListener("update-downloaded", listener);
+    ipcRenderer.on('update-downloaded', listener);
+    return () => ipcRenderer.removeListener('update-downloaded', listener);
   },
 
   /**
    * Installs downloaded update and restarts app
    * @returns {void}
    */
-  installUpdate: () => ipcRenderer.send("install-update"),
+  installUpdate: () => ipcRenderer.send('install-update'),
 
   /**
    * ============================================
@@ -1427,39 +1267,38 @@ contextBridge.exposeInMainWorld("electron", {
    * Initializes Outlook integration
    * @returns {Promise<{success: boolean}>} Initialization result
    */
-  outlookInitialize: () => ipcRenderer.invoke("outlook-initialize"),
+  outlookInitialize: () => ipcRenderer.invoke('outlook-initialize'),
 
   /**
    * Authenticates with Outlook/Microsoft 365
    * @returns {Promise<{success: boolean}>} Authentication result
    */
-  outlookAuthenticate: () => ipcRenderer.invoke("outlook-authenticate"),
+  outlookAuthenticate: () => ipcRenderer.invoke('outlook-authenticate'),
 
   /**
    * Checks if user is authenticated with Outlook
    * @returns {Promise<{authenticated: boolean}>} Authentication status
    */
-  outlookIsAuthenticated: () => ipcRenderer.invoke("outlook-is-authenticated"),
+  outlookIsAuthenticated: () => ipcRenderer.invoke('outlook-is-authenticated'),
 
   /**
    * Gets authenticated user's email address
    * @returns {Promise<{email: string}>} User email
    */
-  outlookGetUserEmail: () => ipcRenderer.invoke("outlook-get-user-email"),
+  outlookGetUserEmail: () => ipcRenderer.invoke('outlook-get-user-email'),
 
   /**
    * Exports emails for specified contacts
    * @param {Array} contacts - Contacts to export emails for
    * @returns {Promise<{success: boolean}>} Export result
    */
-  outlookExportEmails: (contacts: any[]) =>
-    ipcRenderer.invoke("outlook-export-emails", contacts),
+  outlookExportEmails: (contacts: any[]) => ipcRenderer.invoke('outlook-export-emails', contacts),
 
   /**
    * Signs out from Outlook
    * @returns {Promise<{success: boolean}>} Sign out result
    */
-  outlookSignout: () => ipcRenderer.invoke("outlook-signout"),
+  outlookSignout: () => ipcRenderer.invoke('outlook-signout'),
 
   /**
    * Listens for device code during authentication flow
@@ -1468,8 +1307,8 @@ contextBridge.exposeInMainWorld("electron", {
    */
   onDeviceCode: (callback: (info: any) => void) => {
     const listener = (_: IpcRendererEvent, info: any) => callback(info);
-    ipcRenderer.on("device-code-received", listener);
-    return () => ipcRenderer.removeListener("device-code-received", listener);
+    ipcRenderer.on('device-code-received', listener);
+    return () => ipcRenderer.removeListener('device-code-received', listener);
   },
 
   /**
@@ -1479,8 +1318,8 @@ contextBridge.exposeInMainWorld("electron", {
    */
   onExportProgress: (callback: (progress: any) => void) => {
     const listener = (_: IpcRendererEvent, progress: any) => callback(progress);
-    ipcRenderer.on("export-progress", listener);
-    return () => ipcRenderer.removeListener("export-progress", listener);
+    ipcRenderer.on('export-progress', listener);
+    return () => ipcRenderer.removeListener('export-progress', listener);
   },
 
   /**
@@ -1494,31 +1333,31 @@ contextBridge.exposeInMainWorld("electron", {
      * Check if Apple Mobile Device Support drivers are installed
      * @returns {Promise<{installed: boolean, version?: string, serviceRunning: boolean, error?: string}>}
      */
-    checkApple: () => ipcRenderer.invoke("drivers:check-apple"),
+    checkApple: () => ipcRenderer.invoke('drivers:check-apple'),
 
     /**
      * Check if bundled Apple drivers are available in the app
      * @returns {Promise<{hasBundled: boolean}>}
      */
-    hasBundled: () => ipcRenderer.invoke("drivers:has-bundled"),
+    hasBundled: () => ipcRenderer.invoke('drivers:has-bundled'),
 
     /**
      * Install Apple Mobile Device Support drivers
      * IMPORTANT: Only call after user has given consent
      * @returns {Promise<{success: boolean, cancelled?: boolean, error?: string, rebootRequired?: boolean}>}
      */
-    installApple: () => ipcRenderer.invoke("drivers:install-apple"),
+    installApple: () => ipcRenderer.invoke('drivers:install-apple'),
 
     /**
      * Open iTunes in Microsoft Store for manual installation
      * @returns {Promise<{success: boolean, error?: string}>}
      */
-    openITunesStore: () => ipcRenderer.invoke("drivers:open-itunes-store"),
+    openITunesStore: () => ipcRenderer.invoke('drivers:open-itunes-store'),
 
     /**
      * Check if a driver update is available
      * @returns {Promise<{updateAvailable: boolean, installedVersion?: string, bundledVersion?: string}>}
      */
-    checkUpdate: () => ipcRenderer.invoke("drivers:check-update"),
+    checkUpdate: () => ipcRenderer.invoke('drivers:check-update'),
   },
 });

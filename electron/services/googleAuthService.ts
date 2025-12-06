@@ -4,15 +4,15 @@
  * Supports two-step consent: login (minimal scopes) + mailbox access (Gmail scopes)
  */
 
-import { google, Auth } from "googleapis";
-import http from "http";
-import url from "url";
-import dotenv from "dotenv";
-import databaseService from "./databaseService";
+import { google, Auth } from 'googleapis';
+import http from 'http';
+import url from 'url';
+import dotenv from 'dotenv';
+import databaseService from './databaseService';
 // NOTE: tokenEncryptionService removed - using session-only OAuth
 // Tokens stored in encrypted database, no additional keychain encryption needed
 
-dotenv.config({ path: ".env.development" });
+dotenv.config({ path: '.env.development' });
 
 // ============================================
 // TYPES & INTERFACES
@@ -59,7 +59,7 @@ interface RefreshTokenResult {
 class GoogleAuthService {
   private oauth2Client: Auth.OAuth2Client | null = null;
   private initialized: boolean = false;
-  private redirectUri: string = "http://localhost:3001/callback"; // Different port than Microsoft
+  private redirectUri: string = 'http://localhost:3001/callback'; // Different port than Microsoft
   private server: http.Server | null = null;
   // Store resolve/reject functions to allow direct code resolution from navigation interception
   private codeResolver: ((code: string) => void) | null = null;
@@ -77,25 +77,20 @@ class GoogleAuthService {
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
 
     if (!clientId || !clientSecret) {
-      console.error(
-        "[GoogleAuth] Missing credentials. Check .env.development file.",
-      );
-      throw new Error("Google OAuth credentials not configured");
+      console.error('[GoogleAuth] Missing credentials. Check .env.development file.');
+      throw new Error('Google OAuth credentials not configured');
     }
 
-    console.log(
-      "[GoogleAuth] Initializing with client ID:",
-      clientId.substring(0, 20) + "...",
-    );
+    console.log('[GoogleAuth] Initializing with client ID:', clientId.substring(0, 20) + '...');
 
     this.oauth2Client = new google.auth.OAuth2(
       clientId,
       clientSecret,
-      this.redirectUri, // Use local redirect URI
+      this.redirectUri // Use local redirect URI
     );
 
     this.initialized = true;
-    console.log("[GoogleAuth] Initialized successfully");
+    console.log('[GoogleAuth] Initialized successfully');
   }
 
   /**
@@ -108,7 +103,7 @@ class GoogleAuthService {
       this.initialize();
     }
     if (!this.oauth2Client) {
-      throw new Error("Google OAuth2 client is not initialized");
+      throw new Error('Google OAuth2 client is not initialized');
     }
     return this.oauth2Client;
   }
@@ -120,9 +115,7 @@ class GoogleAuthService {
    */
   resolveCodeDirectly(code: string): void {
     if (this.codeResolver) {
-      console.log(
-        "[GoogleAuth] Resolving code directly from navigation interception",
-      );
+      console.log('[GoogleAuth] Resolving code directly from navigation interception');
       this.codeResolver(code);
       this.codeResolver = null;
       this.codeRejecter = null;
@@ -136,9 +129,7 @@ class GoogleAuthService {
    */
   rejectCodeDirectly(error: string): void {
     if (this.codeRejecter) {
-      console.log(
-        "[GoogleAuth] Rejecting code directly from navigation interception",
-      );
+      console.log('[GoogleAuth] Rejecting code directly from navigation interception');
       this.codeRejecter(new Error(error));
       this.codeResolver = null;
       this.codeRejecter = null;
@@ -157,20 +148,16 @@ class GoogleAuthService {
       this.codeRejecter = reject;
 
       this.server = http.createServer((req, res) => {
-        const parsedUrl = url.parse(req.url || "", true);
-        console.log(
-          `[GoogleAuth] HTTP server received request: ${parsedUrl.pathname}`,
-        );
+        const parsedUrl = url.parse(req.url || '', true);
+        console.log(`[GoogleAuth] HTTP server received request: ${parsedUrl.pathname}`);
 
-        if (parsedUrl.pathname === "/callback") {
+        if (parsedUrl.pathname === '/callback') {
           const code = parsedUrl.query.code as string | undefined;
           const error = parsedUrl.query.error as string | undefined;
-          console.log(
-            `[GoogleAuth] Callback received via HTTP server - code: ${code ? "present" : "missing"}, error: ${error || "none"}`,
-          );
+          console.log(`[GoogleAuth] Callback received via HTTP server - code: ${code ? 'present' : 'missing'}, error: ${error || 'none'}`);
 
           if (error) {
-            res.writeHead(200, { "Content-Type": "text/html" });
+            res.writeHead(200, { 'Content-Type': 'text/html' });
             res.end(`
               <!DOCTYPE html>
               <html>
@@ -194,11 +181,9 @@ class GoogleAuthService {
               </html>
             `);
             this.stopLocalServer();
-            reject(
-              new Error((parsedUrl.query.error_description as string) || error),
-            );
+            reject(new Error((parsedUrl.query.error_description as string) || error));
           } else if (code) {
-            res.writeHead(200, { "Content-Type": "text/html" });
+            res.writeHead(200, { 'Content-Type': 'text/html' });
             res.end(`
               <!DOCTYPE html>
               <html>
@@ -253,7 +238,7 @@ class GoogleAuthService {
             this.stopLocalServer();
             resolve(code);
           } else {
-            res.writeHead(400, { "Content-Type": "text/html" });
+            res.writeHead(400, { 'Content-Type': 'text/html' });
             res.end(`
               <html>
                 <body style="font-family: system-ui; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0;">
@@ -268,13 +253,11 @@ class GoogleAuthService {
         }
       });
 
-      this.server.listen(3001, "localhost", () => {
-        console.log(
-          "[GoogleAuth] Local callback server listening on http://localhost:3001",
-        );
+      this.server.listen(3001, 'localhost', () => {
+        console.log('[GoogleAuth] Local callback server listening on http://localhost:3001');
       });
 
-      this.server.on("error", (err: Error) => {
+      this.server.on('error', (err: Error) => {
         reject(err);
       });
     });
@@ -287,7 +270,7 @@ class GoogleAuthService {
     if (this.server) {
       this.server.close();
       this.server = null;
-      console.log("[GoogleAuth] Local callback server stopped");
+      console.log('[GoogleAuth] Local callback server stopped');
     }
   }
 
@@ -300,25 +283,25 @@ class GoogleAuthService {
     const client = this._ensureClient();
 
     const scopes = [
-      "openid",
-      "https://www.googleapis.com/auth/userinfo.email",
-      "https://www.googleapis.com/auth/userinfo.profile",
+      'openid',
+      'https://www.googleapis.com/auth/userinfo.email',
+      'https://www.googleapis.com/auth/userinfo.profile',
     ];
 
     try {
-      console.log("[GoogleAuth] Starting login flow with minimal scopes");
+      console.log('[GoogleAuth] Starting login flow with minimal scopes');
 
       // Start local server to catch redirect
       const codePromise = this.startLocalServer();
 
       // Generate auth URL
       const authUrl = client.generateAuthUrl({
-        access_type: "offline",
+        access_type: 'offline',
         scope: scopes,
-        prompt: "select_account", // Show account picker, only consent if needed
+        prompt: 'select_account', // Show account picker, only consent if needed
       });
 
-      console.log("[GoogleAuth] Auth URL generated, local server started");
+      console.log('[GoogleAuth] Auth URL generated, local server started');
 
       return {
         authUrl,
@@ -326,7 +309,7 @@ class GoogleAuthService {
         scopes,
       };
     } catch (error) {
-      console.error("[GoogleAuth] Login flow failed:", error);
+      console.error('[GoogleAuth] Login flow failed:', error);
       this.stopLocalServer();
       throw error;
     }
@@ -341,12 +324,12 @@ class GoogleAuthService {
     const client = this._ensureClient();
 
     try {
-      console.log("[GoogleAuth] Exchanging code for tokens");
+      console.log('[GoogleAuth] Exchanging code for tokens');
 
       const { tokens } = await client.getToken(code);
       client.setCredentials(tokens);
 
-      console.log("[GoogleAuth] Tokens obtained successfully");
+      console.log('[GoogleAuth] Tokens obtained successfully');
 
       // Get user info
       const userInfo = await this.getUserInfo(tokens.access_token!);
@@ -358,12 +341,12 @@ class GoogleAuthService {
           expires_at: tokens.expiry_date
             ? new Date(tokens.expiry_date).toISOString()
             : null,
-          scopes: tokens.scope ? tokens.scope.split(" ") : [],
+          scopes: tokens.scope ? tokens.scope.split(' ') : [],
         },
         userInfo,
       };
     } catch (error) {
-      console.error("[GoogleAuth] Code exchange failed:", error);
+      console.error('[GoogleAuth] Code exchange failed:', error);
       throw error;
     }
   }
@@ -378,23 +361,23 @@ class GoogleAuthService {
     const client = this._ensureClient();
 
     const scopes = [
-      "openid",
-      "https://www.googleapis.com/auth/userinfo.email",
-      "https://www.googleapis.com/auth/userinfo.profile",
-      "https://www.googleapis.com/auth/gmail.readonly",
+      'openid',
+      'https://www.googleapis.com/auth/userinfo.email',
+      'https://www.googleapis.com/auth/userinfo.profile',
+      'https://www.googleapis.com/auth/gmail.readonly',
     ];
 
     try {
-      console.log("[GoogleAuth] Starting mailbox connection flow");
+      console.log('[GoogleAuth] Starting mailbox connection flow');
 
       // Start local server to catch redirect
       const codePromise = this.startLocalServer();
 
       // Generate auth URL with optional login hint
       const authUrlOptions: Auth.GenerateAuthUrlOpts = {
-        access_type: "offline",
+        access_type: 'offline',
         scope: scopes,
-        prompt: "select_account", // Show account picker, only consent if needed
+        prompt: 'select_account', // Show account picker, only consent if needed
       };
 
       if (loginHint) {
@@ -403,9 +386,7 @@ class GoogleAuthService {
 
       const authUrl = client.generateAuthUrl(authUrlOptions);
 
-      console.log(
-        "[GoogleAuth] Mailbox auth URL generated, local server started",
-      );
+      console.log('[GoogleAuth] Mailbox auth URL generated, local server started');
 
       return {
         authUrl,
@@ -413,7 +394,7 @@ class GoogleAuthService {
         scopes,
       };
     } catch (error) {
-      console.error("[GoogleAuth] Mailbox flow failed:", error);
+      console.error('[GoogleAuth] Mailbox flow failed:', error);
       this.stopLocalServer();
       throw error;
     }
@@ -428,7 +409,7 @@ class GoogleAuthService {
     const client = this._ensureClient();
 
     try {
-      const oauth2 = google.oauth2({ version: "v2", auth: client });
+      const oauth2 = google.oauth2({ version: 'v2', auth: client });
 
       // Set credentials if provided
       if (accessToken) {
@@ -437,7 +418,7 @@ class GoogleAuthService {
 
       const { data } = await oauth2.userinfo.get();
 
-      console.log("[GoogleAuth] User info retrieved:", data.email);
+      console.log('[GoogleAuth] User info retrieved:', data.email);
 
       return {
         id: data.id!,
@@ -450,7 +431,7 @@ class GoogleAuthService {
         locale: data.locale || undefined,
       };
     } catch (error) {
-      console.error("[GoogleAuth] Failed to get user info:", error);
+      console.error('[GoogleAuth] Failed to get user info:', error);
       throw error;
     }
   }
@@ -464,7 +445,7 @@ class GoogleAuthService {
     const client = this._ensureClient();
 
     try {
-      console.log("[GoogleAuth] Refreshing access token");
+      console.log('[GoogleAuth] Refreshing access token');
 
       client.setCredentials({
         refresh_token: refreshToken,
@@ -472,7 +453,7 @@ class GoogleAuthService {
 
       const { credentials } = await client.refreshAccessToken();
 
-      console.log("[GoogleAuth] Token refreshed successfully");
+      console.log('[GoogleAuth] Token refreshed successfully');
 
       return {
         access_token: credentials.access_token!,
@@ -481,7 +462,7 @@ class GoogleAuthService {
           : null,
       };
     } catch (error) {
-      console.error("[GoogleAuth] Token refresh failed:", error);
+      console.error('[GoogleAuth] Token refresh failed:', error);
       throw error;
     }
   }
@@ -491,22 +472,16 @@ class GoogleAuthService {
    * @param userId - User ID to refresh token for
    * @returns Success status with new token data
    */
-  async refreshAccessToken(
-    userId: string,
-  ): Promise<{ success: boolean; error?: string }> {
+  async refreshAccessToken(userId: string): Promise<{ success: boolean; error?: string }> {
     try {
-      console.log("[GoogleAuth] Refreshing access token for user:", userId);
+      console.log('[GoogleAuth] Refreshing access token for user:', userId);
 
       // Get current token from database
-      const tokenRecord = await databaseService.getOAuthToken(
-        userId,
-        "google",
-        "mailbox",
-      );
+      const tokenRecord = await databaseService.getOAuthToken(userId, 'google', 'mailbox');
 
       if (!tokenRecord || !tokenRecord.refresh_token) {
-        console.error("[GoogleAuth] No refresh token found for user");
-        return { success: false, error: "No refresh token available" };
+        console.error('[GoogleAuth] No refresh token found for user');
+        return { success: false, error: 'No refresh token available' };
       }
 
       // Session-only OAuth: tokens stored unencrypted in encrypted database
@@ -517,7 +492,7 @@ class GoogleAuthService {
 
       // Update database with new tokens (no encryption needed)
       // Note: Google typically doesn't return a new refresh token, so we keep the old one
-      await databaseService.saveOAuthToken(userId, "google", "mailbox", {
+      await databaseService.saveOAuthToken(userId, 'google', 'mailbox', {
         access_token: newTokens.access_token,
         refresh_token: tokenRecord.refresh_token, // Keep existing refresh token
         token_expires_at: newTokens.expires_at ?? undefined,
@@ -526,17 +501,14 @@ class GoogleAuthService {
         mailbox_connected: true,
       });
 
-      console.log(
-        "[GoogleAuth] Token refreshed successfully. New expiry:",
-        newTokens.expires_at,
-      );
+      console.log('[GoogleAuth] Token refreshed successfully. New expiry:', newTokens.expires_at);
 
       return { success: true };
     } catch (error) {
-      console.error("[GoogleAuth] Failed to refresh access token:", error);
+      console.error('[GoogleAuth] Failed to refresh access token:', error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: error instanceof Error ? error.message : 'Unknown error'
       };
     }
   }
@@ -549,13 +521,13 @@ class GoogleAuthService {
     const client = this._ensureClient();
 
     try {
-      console.log("[GoogleAuth] Revoking token");
+      console.log('[GoogleAuth] Revoking token');
 
       await client.revokeToken(accessToken);
 
-      console.log("[GoogleAuth] Token revoked successfully");
+      console.log('[GoogleAuth] Token revoked successfully');
     } catch (error) {
-      console.error("[GoogleAuth] Token revocation failed:", error);
+      console.error('[GoogleAuth] Token revocation failed:', error);
       throw error;
     }
   }

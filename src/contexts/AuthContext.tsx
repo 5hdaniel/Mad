@@ -4,15 +4,8 @@
  * Handles user authentication, session management, and subscription state.
  */
 
-import React, {
-  createContext,
-  useContext,
-  useState,
-  useEffect,
-  useCallback,
-  useMemo,
-} from "react";
-import type { OAuthProvider, Subscription } from "../../electron/types/models";
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import type { OAuthProvider, Subscription } from '../../electron/types/models';
 
 // User interface
 export interface User {
@@ -37,13 +30,7 @@ interface AuthState {
 // Auth context value interface
 interface AuthContextValue extends AuthState {
   // Actions
-  login: (
-    user: User,
-    token: string,
-    provider: string,
-    subscription: Subscription | undefined,
-    isNewUser: boolean,
-  ) => void;
+  login: (user: User, token: string, provider: string, subscription: Subscription | undefined, isNewUser: boolean) => void;
   logout: () => Promise<void>;
   acceptTerms: () => Promise<void>;
   declineTerms: () => Promise<void>;
@@ -74,9 +61,7 @@ interface AuthProviderProps {
  * AuthProvider component
  * Wraps the application and provides authentication state and actions
  */
-export function AuthProvider({
-  children,
-}: AuthProviderProps): React.ReactElement {
+export function AuthProvider({ children }: AuthProviderProps): React.ReactElement {
   const [state, setState] = useState<AuthState>(defaultAuthState);
 
   /**
@@ -93,10 +78,9 @@ export function AuthProvider({
             email: result.user.email,
             display_name: result.user.display_name,
             avatar_url: result.user.avatar_url,
-            terms_accepted_at:
-              result.user.terms_accepted_at instanceof Date
-                ? result.user.terms_accepted_at.toISOString()
-                : result.user.terms_accepted_at,
+            terms_accepted_at: result.user.terms_accepted_at instanceof Date
+              ? result.user.terms_accepted_at.toISOString()
+              : result.user.terms_accepted_at,
           };
           setState({
             isAuthenticated: true,
@@ -108,14 +92,14 @@ export function AuthProvider({
             needsTermsAcceptance: result.isNewUser ?? false,
           });
         } else {
-          setState((prev) => ({ ...prev, isLoading: false }));
+          setState(prev => ({ ...prev, isLoading: false }));
         }
       } catch {
         // Session check failed silently - user will need to log in
-        setState((prev) => ({ ...prev, isLoading: false }));
+        setState(prev => ({ ...prev, isLoading: false }));
       }
     } else {
-      setState((prev) => ({ ...prev, isLoading: false }));
+      setState(prev => ({ ...prev, isLoading: false }));
     }
   }, []);
 
@@ -127,26 +111,23 @@ export function AuthProvider({
   /**
    * Handle successful login
    */
-  const login = useCallback(
-    (
-      user: User,
-      token: string,
-      provider: string,
-      subscription: Subscription | undefined,
-      isNewUser: boolean,
-    ) => {
-      setState({
-        isAuthenticated: true,
-        isLoading: false,
-        currentUser: user,
-        sessionToken: token,
-        authProvider: provider as OAuthProvider,
-        subscription,
-        needsTermsAcceptance: isNewUser,
-      });
-    },
-    [],
-  );
+  const login = useCallback((
+    user: User,
+    token: string,
+    provider: string,
+    subscription: Subscription | undefined,
+    isNewUser: boolean
+  ) => {
+    setState({
+      isAuthenticated: true,
+      isLoading: false,
+      currentUser: user,
+      sessionToken: token,
+      authProvider: provider as OAuthProvider,
+      subscription,
+      needsTermsAcceptance: isNewUser,
+    });
+  }, []);
 
   /**
    * Handle logout
@@ -174,9 +155,9 @@ export function AuthProvider({
     if (state.currentUser && window.api?.auth?.acceptTerms) {
       try {
         await window.api.auth.acceptTerms(state.currentUser.id);
-        setState((prev) => ({ ...prev, needsTermsAcceptance: false }));
+        setState(prev => ({ ...prev, needsTermsAcceptance: false }));
       } catch (error) {
-        console.error("Failed to accept terms:", error);
+        console.error('Failed to accept terms:', error);
         throw error;
       }
     }
@@ -193,7 +174,7 @@ export function AuthProvider({
    * Refresh session - re-check authentication status
    */
   const refreshSession = useCallback(async () => {
-    setState((prev) => ({ ...prev, isLoading: true }));
+    setState(prev => ({ ...prev, isLoading: true }));
     await checkSession();
   }, [checkSession]);
 
@@ -201,33 +182,24 @@ export function AuthProvider({
    * Clear terms requirement flag (for use after accepting terms)
    */
   const clearTermsRequirement = useCallback(() => {
-    setState((prev) => ({ ...prev, needsTermsAcceptance: false }));
+    setState(prev => ({ ...prev, needsTermsAcceptance: false }));
   }, []);
 
   // Memoize context value to prevent unnecessary re-renders
-  const contextValue = useMemo<AuthContextValue>(
-    () => ({
-      ...state,
-      login,
-      logout,
-      acceptTerms,
-      declineTerms,
-      refreshSession,
-      clearTermsRequirement,
-    }),
-    [
-      state,
-      login,
-      logout,
-      acceptTerms,
-      declineTerms,
-      refreshSession,
-      clearTermsRequirement,
-    ],
-  );
+  const contextValue = useMemo<AuthContextValue>(() => ({
+    ...state,
+    login,
+    logout,
+    acceptTerms,
+    declineTerms,
+    refreshSession,
+    clearTermsRequirement,
+  }), [state, login, logout, acceptTerms, declineTerms, refreshSession, clearTermsRequirement]);
 
   return (
-    <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>
+    <AuthContext.Provider value={contextValue}>
+      {children}
+    </AuthContext.Provider>
   );
 }
 
@@ -238,7 +210,7 @@ export function AuthProvider({
 export function useAuth(): AuthContextValue {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider");
+    throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
 }
@@ -247,10 +219,7 @@ export function useAuth(): AuthContextValue {
  * Custom hook to check if user is authenticated
  * Returns a simpler interface for components that only need auth status
  */
-export function useIsAuthenticated(): {
-  isAuthenticated: boolean;
-  isLoading: boolean;
-} {
+export function useIsAuthenticated(): { isAuthenticated: boolean; isLoading: boolean } {
   const { isAuthenticated, isLoading } = useAuth();
   return { isAuthenticated, isLoading };
 }

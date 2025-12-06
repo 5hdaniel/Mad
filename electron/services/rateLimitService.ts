@@ -4,8 +4,8 @@
  * Tracks failed login attempts and implements account lockout
  */
 
-import crypto from "crypto";
-import logService from "./logService";
+import crypto from 'crypto';
+import logService from './logService';
 
 /**
  * Rate limit entry for tracking authentication attempts
@@ -44,10 +44,7 @@ class RateLimitService {
    * @returns Hashed identifier
    */
   private hashIdentifier(identifier: string): string {
-    return crypto
-      .createHash("sha256")
-      .update(identifier.toLowerCase())
-      .digest("hex");
+    return crypto.createHash('sha256').update(identifier.toLowerCase()).digest('hex');
   }
 
   /**
@@ -63,11 +60,15 @@ class RateLimitService {
     // Check if account is locked
     if (entry?.lockedUntil && now < entry.lockedUntil) {
       const retryAfterSeconds = Math.ceil((entry.lockedUntil - now) / 1000);
-      await logService.warn("Rate limit: Account locked", "RateLimitService", {
-        identifier: hashedId.substring(0, 8) + "...", // Log only partial hash
-        lockedUntil: new Date(entry.lockedUntil).toISOString(),
-        retryAfterSeconds,
-      });
+      await logService.warn(
+        'Rate limit: Account locked',
+        'RateLimitService',
+        {
+          identifier: hashedId.substring(0, 8) + '...', // Log only partial hash
+          lockedUntil: new Date(entry.lockedUntil).toISOString(),
+          retryAfterSeconds
+        }
+      );
       return {
         allowed: false,
         remainingAttempts: 0,
@@ -111,9 +112,9 @@ class RateLimitService {
       // Clear attempts on successful authentication
       this.attempts.delete(hashedId);
       await logService.info(
-        "Rate limit: Cleared after successful authentication",
-        "RateLimitService",
-        { identifier: hashedId.substring(0, 8) + "..." },
+        'Rate limit: Cleared after successful authentication',
+        'RateLimitService',
+        { identifier: hashedId.substring(0, 8) + '...' }
       );
       return;
     }
@@ -132,23 +133,23 @@ class RateLimitService {
     if (entry.attempts >= this.MAX_ATTEMPTS) {
       entry.lockedUntil = now + this.LOCKOUT_MS;
       await logService.error(
-        "Rate limit: Account locked due to too many failed attempts",
-        "RateLimitService",
+        'Rate limit: Account locked due to too many failed attempts',
+        'RateLimitService',
         {
-          identifier: hashedId.substring(0, 8) + "...",
+          identifier: hashedId.substring(0, 8) + '...',
           attempts: entry.attempts,
-          lockedUntil: new Date(entry.lockedUntil).toISOString(),
-        },
+          lockedUntil: new Date(entry.lockedUntil).toISOString()
+        }
       );
     } else {
       await logService.warn(
-        "Rate limit: Failed authentication attempt recorded",
-        "RateLimitService",
+        'Rate limit: Failed authentication attempt recorded',
+        'RateLimitService',
         {
-          identifier: hashedId.substring(0, 8) + "...",
+          identifier: hashedId.substring(0, 8) + '...',
           attempts: entry.attempts,
-          remainingAttempts: this.MAX_ATTEMPTS - entry.attempts,
-        },
+          remainingAttempts: this.MAX_ATTEMPTS - entry.attempts
+        }
       );
     }
 
@@ -183,9 +184,9 @@ class RateLimitService {
     const hashedId = this.hashIdentifier(identifier);
     this.attempts.delete(hashedId);
     await logService.info(
-      "Rate limit: Account manually unlocked",
-      "RateLimitService",
-      { identifier: hashedId.substring(0, 8) + "..." },
+      'Rate limit: Account manually unlocked',
+      'RateLimitService',
+      { identifier: hashedId.substring(0, 8) + '...' }
     );
   }
 
@@ -195,8 +196,8 @@ class RateLimitService {
   async clearAll(): Promise<void> {
     this.attempts.clear();
     await logService.info(
-      "Rate limit: All entries cleared",
-      "RateLimitService",
+      'Rate limit: All entries cleared',
+      'RateLimitService'
     );
   }
 

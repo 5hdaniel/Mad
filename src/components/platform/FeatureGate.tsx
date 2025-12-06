@@ -5,9 +5,9 @@
  * Features are mapped to platforms in the platformFeatures config.
  */
 
-import React, { ReactNode } from "react";
-import { usePlatform } from "../../contexts/PlatformContext";
-import { FeatureName } from "../../utils/platform";
+import React, { ReactNode } from 'react';
+import { usePlatform } from '../../contexts/PlatformContext';
+import { FeatureName } from '../../utils/platform';
 
 interface FeatureGateProps {
   /** The feature to check availability for */

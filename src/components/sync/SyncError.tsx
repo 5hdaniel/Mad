@@ -1,5 +1,5 @@
-import React from "react";
-import type { SyncErrorCode } from "./types";
+import React from 'react';
+import type { SyncErrorCode } from './types';
 
 interface SyncErrorProps {
   error: SyncErrorCode | string;
@@ -8,20 +8,18 @@ interface SyncErrorProps {
 }
 
 const friendlyErrors: Record<string, string> = {
-  DEVICE_DISCONNECTED:
-    "Your iPhone was disconnected. Please reconnect and try again.",
-  DEVICE_LOCKED: "Please unlock your iPhone and try again.",
-  BACKUP_FAILED: "The sync could not be completed. Please try again.",
-  PASSWORD_INCORRECT: "The backup password was incorrect. Please try again.",
+  'DEVICE_DISCONNECTED': 'Your iPhone was disconnected. Please reconnect and try again.',
+  'DEVICE_LOCKED': 'Please unlock your iPhone and try again.',
+  'BACKUP_FAILED': 'The sync could not be completed. Please try again.',
+  'PASSWORD_INCORRECT': 'The backup password was incorrect. Please try again.',
 };
 
 export const SyncError: React.FC<SyncErrorProps> = ({
   error,
   onRetry,
-  onCancel,
+  onCancel
 }) => {
-  const message =
-    friendlyErrors[error] || "An unexpected error occurred. Please try again.";
+  const message = friendlyErrors[error] || 'An unexpected error occurred. Please try again.';
 
   return (
     <div className="sync-error">
@@ -42,7 +40,9 @@ export const SyncError: React.FC<SyncErrorProps> = ({
         </svg>
       </div>
 
-      <h3 className="text-lg font-medium mb-2">Sync Failed</h3>
+      <h3 className="text-lg font-medium mb-2">
+        Sync Failed
+      </h3>
 
       <p className="text-gray-600 mb-4 max-w-xs text-center">{message}</p>
 

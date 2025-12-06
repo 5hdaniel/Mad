@@ -2,9 +2,9 @@
  * Custom hook for managing Joyride tour state
  * Handles tour initialization and completion
  */
-import { useState, useEffect, Dispatch, SetStateAction } from "react";
-import { CallBackProps, STATUS, ACTIONS } from "react-joyride";
-import confetti from "canvas-confetti";
+import { useState, useEffect, Dispatch, SetStateAction } from 'react';
+import { CallBackProps, STATUS, ACTIONS } from 'react-joyride';
+import confetti from 'canvas-confetti';
 
 /**
  * Return type for useTour hook
@@ -21,10 +21,7 @@ export interface UseTourReturn {
  * @param storageKey - localStorage key to track if user has seen tour
  * @returns Tour state and handlers
  */
-export function useTour(
-  shouldStart: boolean,
-  storageKey: string = "hasSeenTour",
-): UseTourReturn {
+export function useTour(shouldStart: boolean, storageKey: string = 'hasSeenTour'): UseTourReturn {
   const [runTour, setRunTour] = useState<boolean>(false);
 
   // Start tour when condition is met and user hasn't seen it
@@ -41,20 +38,19 @@ export function useTour(
     const { status, action } = data;
 
     // Handle tour completion, skip, or close (X button)
-    const isFinishedOrSkipped =
-      status === STATUS.FINISHED || status === STATUS.SKIPPED;
+    const isFinishedOrSkipped = status === STATUS.FINISHED || status === STATUS.SKIPPED;
     const isClosed = action === ACTIONS.CLOSE;
 
     if (isFinishedOrSkipped || isClosed) {
       setRunTour(false);
-      localStorage.setItem(storageKey, "true");
+      localStorage.setItem(storageKey, 'true');
 
       // Trigger confetti when tour is completed (not skipped or closed)
       if (status === STATUS.FINISHED) {
         confetti({
           particleCount: 100,
           spread: 70,
-          origin: { y: 0.6 },
+          origin: { y: 0.6 }
         });
       }
     }
@@ -63,6 +59,6 @@ export function useTour(
   return {
     runTour,
     setRunTour,
-    handleJoyrideCallback,
+    handleJoyrideCallback
   };
 }

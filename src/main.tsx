@@ -1,14 +1,14 @@
-import React from "react";
-import ReactDOM from "react-dom/client";
-import App from "./App";
-import { AuthProvider, NetworkProvider, PlatformProvider } from "./contexts";
-import ErrorBoundary from "./components/ErrorBoundary";
-import "./index.css";
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
+import { AuthProvider, NetworkProvider, PlatformProvider } from './contexts';
+import ErrorBoundary from './components/ErrorBoundary';
+import './index.css';
 
-const rootElement = document.getElementById("root");
+const rootElement = document.getElementById('root');
 
 if (!rootElement) {
-  throw new Error("Root element not found");
+  throw new Error('Root element not found');
 }
 
 ReactDOM.createRoot(rootElement).render(
@@ -22,5 +22,5 @@ ReactDOM.createRoot(rootElement).render(
         </NetworkProvider>
       </PlatformProvider>
     </ErrorBoundary>
-  </React.StrictMode>,
+  </React.StrictMode>
 );

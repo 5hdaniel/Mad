@@ -7,18 +7,18 @@
  * Update status enumeration
  */
 export type UpdateStatus =
-  | "idle"
-  | "checking"
-  | "available"
-  | "not-available"
-  | "downloading"
-  | "downloaded"
-  | "error";
+  | 'idle'
+  | 'checking'
+  | 'available'
+  | 'not-available'
+  | 'downloading'
+  | 'downloaded'
+  | 'error';
 
 /**
  * Update channel types
  */
-export type UpdateChannel = "stable" | "beta" | "alpha";
+export type UpdateChannel = 'stable' | 'beta' | 'alpha';
 
 /**
  * Update information structure
@@ -69,13 +69,13 @@ export class UpdateService {
   private checkIntervalId?: NodeJS.Timeout;
   private eventListeners: Map<string, UpdateEventCallback[]>;
 
-  constructor(currentVersion: string = "1.0.0", config: UpdateConfig = {}) {
+  constructor(currentVersion: string = '1.0.0', config: UpdateConfig = {}) {
     this.currentVersion = currentVersion;
-    this.status = "idle";
+    this.status = 'idle';
     this.config = {
       autoDownload: false,
       autoInstall: false,
-      channel: "stable",
+      channel: 'stable',
       checkInterval: 3600000, // 1 hour default
       ...config,
     };
@@ -114,16 +114,16 @@ export class UpdateService {
    * Check for updates
    */
   async checkForUpdates(): Promise<UpdateInfo | null> {
-    this.status = "checking";
-    this.emit("checking-for-update");
+    this.status = 'checking';
+    this.emit('checking-for-update');
 
     try {
       // Simulate update check (in real implementation, this would call an API)
       await this.simulateUpdateCheck();
 
       if (this.availableUpdate) {
-        this.status = "available";
-        this.emit("update-available", this.availableUpdate);
+        this.status = 'available';
+        this.emit('update-available', this.availableUpdate);
 
         if (this.config.autoDownload) {
           await this.downloadUpdate();
@@ -131,13 +131,13 @@ export class UpdateService {
 
         return this.availableUpdate;
       } else {
-        this.status = "not-available";
-        this.emit("update-not-available");
+        this.status = 'not-available';
+        this.emit('update-not-available');
         return null;
       }
     } catch (error) {
-      this.status = "error";
-      this.emit("error", error);
+      this.status = 'error';
+      this.emit('error', error);
       throw error;
     }
   }
@@ -157,25 +157,25 @@ export class UpdateService {
    */
   async downloadUpdate(): Promise<void> {
     if (!this.availableUpdate) {
-      throw new Error("No update available to download");
+      throw new Error('No update available to download');
     }
 
-    this.status = "downloading";
-    this.emit("download-started");
+    this.status = 'downloading';
+    this.emit('download-started');
 
     try {
       // Simulate download progress
       await this.simulateDownload();
 
-      this.status = "downloaded";
-      this.emit("download-completed");
+      this.status = 'downloaded';
+      this.emit('download-completed');
 
       if (this.config.autoInstall) {
         await this.installUpdate();
       }
     } catch (error) {
-      this.status = "error";
-      this.emit("error", error);
+      this.status = 'error';
+      this.emit('error', error);
       throw error;
     }
   }
@@ -192,7 +192,7 @@ export class UpdateService {
         totalBytes,
         percentage: i,
       };
-      this.emit("download-progress", this.downloadProgress);
+      this.emit('download-progress', this.downloadProgress);
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
   }
@@ -201,16 +201,16 @@ export class UpdateService {
    * Install update
    */
   async installUpdate(): Promise<void> {
-    if (this.status !== "downloaded") {
-      throw new Error("Update must be downloaded before installing");
+    if (this.status !== 'downloaded') {
+      throw new Error('Update must be downloaded before installing');
     }
 
-    this.emit("before-quit-for-update");
+    this.emit('before-quit-for-update');
 
     // In real implementation, this would trigger app restart and update installation
     // For now, just emit event
     await new Promise((resolve) => setTimeout(resolve, 500));
-    this.emit("update-installed");
+    this.emit('update-installed');
   }
 
   /**
@@ -271,7 +271,7 @@ export class UpdateService {
    * Get update channel
    */
   async getChannel(): Promise<UpdateChannel> {
-    return this.config.channel || "stable";
+    return this.config.channel || 'stable';
   }
 
   /**
@@ -318,7 +318,7 @@ export class UpdateService {
    */
   async reset(): Promise<void> {
     await this.stopAutoUpdateCheck();
-    this.status = "idle";
+    this.status = 'idle';
     this.availableUpdate = undefined;
     this.downloadProgress = undefined;
     this.eventListeners.clear();

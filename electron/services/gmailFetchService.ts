@@ -1,9 +1,8 @@
-import { google, gmail_v1, Auth } from "googleapis";
+import { google, gmail_v1, Auth } from 'googleapis';
 // NOTE: tokenEncryptionService removed - using session-only OAuth
 // Tokens stored in encrypted database, no additional keychain encryption needed
-import databaseService from "./databaseService";
-import logService from "./logService";
-import { OAuthToken } from "../types/models";
+import databaseService from './databaseService';
+import { OAuthToken } from '../types/models';
 
 /**
  * Email attachment metadata
@@ -38,16 +37,6 @@ interface ParsedEmail {
 }
 
 /**
- * Progress callback for email fetching
- */
-interface FetchProgress {
-  fetched: number;
-  total: number;
-  estimatedTotal?: number;
-  percentage: number;
-}
-
-/**
  * Search options for email queries
  */
 interface EmailSearchOptions {
@@ -55,7 +44,6 @@ interface EmailSearchOptions {
   after?: Date | null;
   before?: Date | null;
   maxResults?: number;
-  onProgress?: (progress: FetchProgress) => void;
 }
 
 /**
@@ -73,24 +61,21 @@ class GmailFetchService {
   async initialize(userId: string): Promise<boolean> {
     try {
       // Get OAuth token from database
-      const tokenRecord: OAuthToken | null =
-        await databaseService.getOAuthToken(userId, "google", "mailbox");
+      const tokenRecord: OAuthToken | null = await databaseService.getOAuthToken(userId, 'google', 'mailbox');
 
       if (!tokenRecord) {
-        throw new Error(
-          "No Gmail OAuth token found. User needs to connect Gmail first.",
-        );
+        throw new Error('No Gmail OAuth token found. User needs to connect Gmail first.');
       }
 
       // Session-only OAuth: tokens stored unencrypted in encrypted database
-      const accessToken = tokenRecord.access_token || "";
+      const accessToken = tokenRecord.access_token || '';
       const refreshToken = tokenRecord.refresh_token || null;
 
       // Initialize OAuth2 client
       const oauth2Client = new google.auth.OAuth2(
         process.env.GOOGLE_CLIENT_ID,
         process.env.GOOGLE_CLIENT_SECRET,
-        process.env.GOOGLE_REDIRECT_URI,
+        process.env.GOOGLE_REDIRECT_URI
       );
 
       // Set credentials
@@ -100,8 +85,8 @@ class GmailFetchService {
       });
 
       // Handle token refresh (session-only, no encryption needed)
-      oauth2Client.on("tokens", async (tokens) => {
-        logService.info("Tokens refreshed", "GmailFetch");
+      oauth2Client.on('tokens', async (tokens) => {
+        console.log('[GmailFetch] Tokens refreshed');
         if (tokens.refresh_token) {
           // Update refresh token in database (no encryption)
           await databaseService.updateOAuthToken(tokenRecord.id, {
@@ -112,21 +97,19 @@ class GmailFetchService {
           // Update access token (no encryption)
           await databaseService.updateOAuthToken(tokenRecord.id, {
             access_token: tokens.access_token,
-            token_expires_at: new Date(
-              Date.now() + (tokens.expiry_date || 3600000),
-            ).toISOString(),
+            token_expires_at: new Date(Date.now() + (tokens.expiry_date || 3600000)).toISOString(),
           });
         }
       });
 
       // Store client and initialize Gmail API
       this.oauth2Client = oauth2Client;
-      this.gmail = google.gmail({ version: "v1", auth: oauth2Client });
+      this.gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
-      logService.info("Initialized successfully", "GmailFetch");
+      console.log('[GmailFetch] Initialized successfully');
       return true;
     } catch (error) {
-      logService.error("Initialization failed", "GmailFetch", { error });
+      console.error('[GmailFetch] Initialization failed:', error);
       throw error;
     }
   }
@@ -136,16 +119,10 @@ class GmailFetchService {
    * @param options - Search options
    * @returns Array of email messages
    */
-  async searchEmails({
-    query = "",
-    after = null,
-    before = null,
-    maxResults = 100,
-    onProgress,
-  }: EmailSearchOptions = {}): Promise<ParsedEmail[]> {
+  async searchEmails({ query = '', after = null, before = null, maxResults = 100 }: EmailSearchOptions = {}): Promise<ParsedEmail[]> {
     try {
       if (!this.gmail) {
-        throw new Error("Gmail API not initialized. Call initialize() first.");
+        throw new Error('Gmail API not initialized. Call initialize() first.');
       }
 
       // Build query string
@@ -161,115 +138,26 @@ class GmailFetchService {
         searchQuery += ` before:${beforeDate}`;
       }
 
-      logService.info("Searching emails", "GmailFetch", { query: searchQuery });
+      console.log('[GmailFetch] Searching emails with query:', searchQuery);
 
-      const allMessages: gmail_v1.Schema$Message[] = [];
-      let nextPageToken: string | undefined = undefined;
-      let pageCount = 0;
-      let estimatedTotal = 0;
+      // Search for messages
+      const response = await this.gmail.users.messages.list({
+        userId: 'me',
+        q: searchQuery.trim(),
+        maxResults: maxResults,
+      });
 
-      // Report initial progress
-      if (onProgress) {
-        onProgress({
-          fetched: 0,
-          total: maxResults,
-          percentage: 0,
-        });
-      }
+      const messages = response.data.messages || [];
+      console.log(`[GmailFetch] Found ${messages.length} messages`);
 
-      // Paginate through all results
-      do {
-        pageCount++;
-        logService.debug(`Fetching page ${pageCount}`, "GmailFetch");
-
-        const response: { data: gmail_v1.Schema$ListMessagesResponse } =
-          await this.gmail.users.messages.list({
-            userId: "me",
-            q: searchQuery.trim(),
-            maxResults: Math.min(100, maxResults - allMessages.length), // Fetch up to 100 per page
-            pageToken: nextPageToken,
-          });
-
-        // Get estimated total from first response
-        if (pageCount === 1 && response.data.resultSizeEstimate) {
-          estimatedTotal = response.data.resultSizeEstimate;
-          logService.info(
-            `Estimated total emails: ${estimatedTotal}`,
-            "GmailFetch",
-          );
-        }
-
-        const messages = response.data.messages || [];
-        logService.debug(
-          `Page ${pageCount}: Found ${messages.length} messages`,
-          "GmailFetch",
-        );
-
-        allMessages.push(...messages);
-
-        // Report progress
-        if (onProgress) {
-          const targetTotal = Math.min(
-            estimatedTotal || maxResults,
-            maxResults,
-          );
-          const percentage =
-            targetTotal > 0
-              ? Math.min(
-                  100,
-                  Math.round((allMessages.length / targetTotal) * 100),
-                )
-              : 0;
-          onProgress({
-            fetched: allMessages.length,
-            total: targetTotal,
-            estimatedTotal,
-            percentage,
-          });
-        }
-
-        nextPageToken = response.data.nextPageToken ?? undefined;
-
-        // Stop if we've reached the requested maxResults or no more pages
-        if (allMessages.length >= maxResults || !nextPageToken) {
-          break;
-        }
-      } while (nextPageToken);
-
-      logService.info(
-        `Total messages found: ${allMessages.length}`,
-        "GmailFetch",
+      // Fetch full message details for each
+      const fullMessages = await Promise.all(
+        messages.map(msg => this.getEmailById(msg.id!))
       );
-
-      // Fetch full message details for each (in batches to avoid overwhelming the API)
-      const fullMessages: ParsedEmail[] = [];
-      const batchSize = 10;
-      for (let i = 0; i < allMessages.length; i += batchSize) {
-        const batch = allMessages.slice(i, i + batchSize);
-        const batchResults = await Promise.all(
-          batch
-            .filter((msg) => msg.id)
-            .map((msg) => this.getEmailById(msg.id as string)),
-        );
-        fullMessages.push(...batchResults);
-
-        // Report progress for fetching details
-        if (onProgress) {
-          const percentage = Math.round(
-            (fullMessages.length / allMessages.length) * 100,
-          );
-          onProgress({
-            fetched: fullMessages.length,
-            total: allMessages.length,
-            estimatedTotal,
-            percentage,
-          });
-        }
-      }
 
       return fullMessages;
     } catch (error) {
-      logService.error("Search emails failed", "GmailFetch", { error });
+      console.error('[GmailFetch] Search emails failed:', error);
       throw error;
     }
   }
@@ -282,21 +170,19 @@ class GmailFetchService {
   async getEmailById(messageId: string): Promise<ParsedEmail> {
     try {
       if (!this.gmail) {
-        throw new Error("Gmail API not initialized. Call initialize() first.");
+        throw new Error('Gmail API not initialized. Call initialize() first.');
       }
 
       const response = await this.gmail.users.messages.get({
-        userId: "me",
+        userId: 'me',
         id: messageId,
-        format: "full",
+        format: 'full',
       });
 
       const message = response.data;
       return this._parseMessage(message);
     } catch (error) {
-      logService.error(`Failed to get message ${messageId}`, "GmailFetch", {
-        error,
-      });
+      console.error(`[GmailFetch] Failed to get message ${messageId}:`, error);
       throw error;
     }
   }
@@ -308,21 +194,19 @@ class GmailFetchService {
   private _parseMessage(message: gmail_v1.Schema$Message): ParsedEmail {
     const headers = message.payload?.headers || [];
     const getHeader = (name: string): string | null => {
-      const header = headers.find(
-        (h) => h.name?.toLowerCase() === name.toLowerCase(),
-      );
+      const header = headers.find(h => h.name?.toLowerCase() === name.toLowerCase());
       return header ? header.value || null : null;
     };
 
     // Extract body
-    let body = "";
-    let bodyPlain = "";
+    let body = '';
+    let bodyPlain = '';
 
     const extractBody = (part: gmail_v1.Schema$MessagePart): void => {
-      if (part.mimeType === "text/plain" && part.body?.data) {
-        bodyPlain = Buffer.from(part.body.data, "base64").toString("utf-8");
-      } else if (part.mimeType === "text/html" && part.body?.data) {
-        body = Buffer.from(part.body.data, "base64").toString("utf-8");
+      if (part.mimeType === 'text/plain' && part.body?.data) {
+        bodyPlain = Buffer.from(part.body.data, 'base64').toString('utf-8');
+      } else if (part.mimeType === 'text/html' && part.body?.data) {
+        body = Buffer.from(part.body.data, 'base64').toString('utf-8');
       }
 
       if (part.parts) {
@@ -334,10 +218,8 @@ class GmailFetchService {
       message.payload.parts.forEach(extractBody);
     } else if (message.payload?.body?.data) {
       // Single part message
-      const content = Buffer.from(message.payload.body.data, "base64").toString(
-        "utf-8",
-      );
-      if (message.payload.mimeType === "text/plain") {
+      const content = Buffer.from(message.payload.body.data, 'base64').toString('utf-8');
+      if (message.payload.mimeType === 'text/plain') {
         bodyPlain = content;
       } else {
         body = content;
@@ -350,7 +232,7 @@ class GmailFetchService {
       if (part.filename && part.body?.attachmentId) {
         attachments.push({
           filename: part.filename,
-          mimeType: part.mimeType || "application/octet-stream",
+          mimeType: part.mimeType || 'application/octet-stream',
           size: part.body.size || 0,
           attachmentId: part.body.attachmentId,
         });
@@ -365,17 +247,17 @@ class GmailFetchService {
     }
 
     return {
-      id: message.id || "",
-      threadId: message.threadId || "",
-      subject: getHeader("Subject"),
-      from: getHeader("From"),
-      to: getHeader("To"),
-      cc: getHeader("Cc"),
-      bcc: getHeader("Bcc"),
-      date: new Date(parseInt(message.internalDate || "0")),
+      id: message.id || '',
+      threadId: message.threadId || '',
+      subject: getHeader('Subject'),
+      from: getHeader('From'),
+      to: getHeader('To'),
+      cc: getHeader('Cc'),
+      bcc: getHeader('Bcc'),
+      date: new Date(parseInt(message.internalDate || '0')),
       body: body,
       bodyPlain: bodyPlain || body,
-      snippet: message.snippet || "",
+      snippet: message.snippet || '',
       hasAttachments: attachments.length > 0,
       attachmentCount: attachments.length,
       attachments: attachments,
@@ -390,24 +272,21 @@ class GmailFetchService {
    * @param attachmentId - Attachment ID
    * @returns Attachment data
    */
-  async getAttachment(
-    messageId: string,
-    attachmentId: string,
-  ): Promise<Buffer> {
+  async getAttachment(messageId: string, attachmentId: string): Promise<Buffer> {
     try {
       if (!this.gmail) {
-        throw new Error("Gmail API not initialized. Call initialize() first.");
+        throw new Error('Gmail API not initialized. Call initialize() first.');
       }
 
       const response = await this.gmail.users.messages.attachments.get({
-        userId: "me",
+        userId: 'me',
         messageId: messageId,
         id: attachmentId,
       });
 
-      return Buffer.from(response.data.data || "", "base64");
+      return Buffer.from(response.data.data || '', 'base64');
     } catch (error) {
-      logService.error("Failed to get attachment", "GmailFetch", { error });
+      console.error(`[GmailFetch] Failed to get attachment:`, error);
       throw error;
     }
   }
@@ -419,16 +298,16 @@ class GmailFetchService {
   async getUserEmail(): Promise<string> {
     try {
       if (!this.gmail) {
-        throw new Error("Gmail API not initialized. Call initialize() first.");
+        throw new Error('Gmail API not initialized. Call initialize() first.');
       }
 
       const response = await this.gmail.users.getProfile({
-        userId: "me",
+        userId: 'me',
       });
 
-      return response.data.emailAddress || "";
+      return response.data.emailAddress || '';
     } catch (error) {
-      logService.error("Failed to get user email", "GmailFetch", { error });
+      console.error('[GmailFetch] Failed to get user email:', error);
       throw error;
     }
   }

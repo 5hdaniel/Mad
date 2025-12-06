@@ -3,13 +3,13 @@
  * Provides structured logging with different severity levels
  */
 
-import * as fs from "fs";
-import * as path from "path";
+import * as fs from 'fs';
+import * as path from 'path';
 
 /**
  * Log level enumeration
  */
-export type LogLevel = "debug" | "info" | "warn" | "error";
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 /**
  * Log entry structure
@@ -51,7 +51,7 @@ export class LogService {
     this.config = {
       logToFile: false,
       logToConsole: true,
-      minLevel: "info",
+      minLevel: 'info',
       maxLogFiles: 10,
       ...config,
     };
@@ -76,16 +76,16 @@ export class LogService {
       }
 
       // Create log file with timestamp
-      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       this.logFilePath = path.join(
         this.config.logDirectory,
-        `app-${timestamp}.log`,
+        `app-${timestamp}.log`
       );
 
       // Rotate old log files if needed
       this.rotateLogFiles();
     } catch (error) {
-      console.error("Failed to initialize log file:", error);
+      console.error('Failed to initialize log file:', error);
     }
   }
 
@@ -100,13 +100,11 @@ export class LogService {
     try {
       const files = fs
         .readdirSync(this.config.logDirectory)
-        .filter((file) => file.startsWith("app-") && file.endsWith(".log"))
+        .filter((file) => file.startsWith('app-') && file.endsWith('.log'))
         .map((file) => ({
           name: file,
           path: path.join(this.config.logDirectory!, file),
-          time: fs
-            .statSync(path.join(this.config.logDirectory!, file))
-            .mtime.getTime(),
+          time: fs.statSync(path.join(this.config.logDirectory!, file)).mtime.getTime(),
         }))
         .sort((a, b) => b.time - a.time);
 
@@ -121,7 +119,7 @@ export class LogService {
         });
       }
     } catch (error) {
-      console.error("Failed to rotate log files:", error);
+      console.error('Failed to rotate log files:', error);
     }
   }
 
@@ -129,7 +127,7 @@ export class LogService {
    * Check if a log level should be logged based on configuration
    */
   private shouldLog(level: LogLevel): boolean {
-    const minLevel = this.config.minLevel || "info";
+    const minLevel = this.config.minLevel || 'info';
     return this.LOG_LEVELS[level] >= this.LOG_LEVELS[minLevel];
   }
 
@@ -139,10 +137,10 @@ export class LogService {
   private formatLogEntry(entry: LogEntry): string {
     const timestamp = entry.timestamp.toISOString();
     const level = entry.level.toUpperCase().padEnd(5);
-    const context = entry.context ? `[${entry.context}]` : "";
+    const context = entry.context ? `[${entry.context}]` : '';
     const metadata = entry.metadata
       ? `\n${JSON.stringify(entry.metadata, null, 2)}`
-      : "";
+      : '';
 
     return `${timestamp} ${level} ${context} ${entry.message}${metadata}`;
   }
@@ -156,9 +154,9 @@ export class LogService {
     }
 
     return new Promise((resolve, reject) => {
-      fs.appendFile(this.logFilePath!, formattedEntry + "\n", (error) => {
+      fs.appendFile(this.logFilePath!, formattedEntry + '\n', (error) => {
         if (error) {
-          console.error("Failed to write to log file:", error);
+          console.error('Failed to write to log file:', error);
           reject(error);
         } else {
           resolve();
@@ -172,16 +170,16 @@ export class LogService {
    */
   private writeToConsole(level: LogLevel, formattedEntry: string): void {
     switch (level) {
-      case "debug":
+      case 'debug':
         console.debug(formattedEntry);
         break;
-      case "info":
+      case 'info':
         console.info(formattedEntry);
         break;
-      case "warn":
+      case 'warn':
         console.warn(formattedEntry);
         break;
-      case "error":
+      case 'error':
         console.error(formattedEntry);
         break;
     }
@@ -194,7 +192,7 @@ export class LogService {
     level: LogLevel,
     message: string,
     context?: string,
-    metadata?: Record<string, unknown>,
+    metadata?: Record<string, unknown>
   ): Promise<void> {
     if (!this.shouldLog(level)) {
       return;
@@ -222,45 +220,29 @@ export class LogService {
   /**
    * Log debug message
    */
-  async debug(
-    message: string,
-    context?: string,
-    metadata?: Record<string, unknown>,
-  ): Promise<void> {
-    await this.log("debug", message, context, metadata);
+  async debug(message: string, context?: string, metadata?: Record<string, unknown>): Promise<void> {
+    await this.log('debug', message, context, metadata);
   }
 
   /**
    * Log info message
    */
-  async info(
-    message: string,
-    context?: string,
-    metadata?: Record<string, unknown>,
-  ): Promise<void> {
-    await this.log("info", message, context, metadata);
+  async info(message: string, context?: string, metadata?: Record<string, unknown>): Promise<void> {
+    await this.log('info', message, context, metadata);
   }
 
   /**
    * Log warning message
    */
-  async warn(
-    message: string,
-    context?: string,
-    metadata?: Record<string, unknown>,
-  ): Promise<void> {
-    await this.log("warn", message, context, metadata);
+  async warn(message: string, context?: string, metadata?: Record<string, unknown>): Promise<void> {
+    await this.log('warn', message, context, metadata);
   }
 
   /**
    * Log error message
    */
-  async error(
-    message: string,
-    context?: string,
-    metadata?: Record<string, unknown>,
-  ): Promise<void> {
-    await this.log("error", message, context, metadata);
+  async error(message: string, context?: string, metadata?: Record<string, unknown>): Promise<void> {
+    await this.log('error', message, context, metadata);
   }
 
   /**
@@ -291,9 +273,9 @@ export class LogService {
     }
 
     return new Promise((resolve, reject) => {
-      fs.writeFile(this.logFilePath!, "", (error) => {
+      fs.writeFile(this.logFilePath!, '', (error) => {
         if (error) {
-          console.error("Failed to clear log file:", error);
+          console.error('Failed to clear log file:', error);
           reject(error);
         } else {
           resolve();

@@ -3,9 +3,9 @@
  * Parses sms.db from iOS backups to extract conversations and messages
  */
 
-import Database from "better-sqlite3-multiple-ciphers";
-import path from "path";
-import log from "electron-log";
+import Database from 'better-sqlite3-multiple-ciphers';
+import path from 'path';
+import log from 'electron-log';
 import {
   iOSMessage,
   iOSAttachment,
@@ -14,7 +14,7 @@ import {
   RawAttachmentRow,
   RawChatRow,
   RawHandleRow,
-} from "../types/iosMessages";
+} from '../types/iosMessages';
 
 /**
  * Convert Apple Cocoa Core Data timestamp to JavaScript Date
@@ -40,10 +40,10 @@ export function convertAppleTimestamp(timestamp: number | null): Date | null {
  */
 export class iOSMessagesParser {
   private db: Database.Database | null = null;
-  private backupPath: string = "";
+  private backupPath: string = '';
 
   // The sms.db hash in iOS backups (SHA-1 of domain + path)
-  static readonly SMS_DB_HASH = "3d0d7e5fb2ce288813306e4d4636395e047a3d28";
+  static readonly SMS_DB_HASH = '3d0d7e5fb2ce288813306e4d4636395e047a3d28';
 
   /**
    * Open the sms.db database from a backup
@@ -55,11 +55,11 @@ export class iOSMessagesParser {
     try {
       this.db = new Database(dbPath, { readonly: true });
       this.backupPath = backupPath;
-      log.info("iOSMessagesParser: Opened database", { backupPath });
+      log.info('iOSMessagesParser: Opened database', { backupPath });
     } catch (error) {
-      log.error("iOSMessagesParser: Failed to open database", {
+      log.error('iOSMessagesParser: Failed to open database', {
         backupPath,
-        error: error instanceof Error ? error.message : String(error),
+        error: error instanceof Error ? error.message : String(error)
       });
       throw error;
     }
@@ -72,14 +72,14 @@ export class iOSMessagesParser {
     if (this.db) {
       try {
         this.db.close();
-        log.info("iOSMessagesParser: Closed database");
+        log.info('iOSMessagesParser: Closed database');
       } catch (error) {
-        log.error("iOSMessagesParser: Error closing database", {
-          error: error instanceof Error ? error.message : String(error),
+        log.error('iOSMessagesParser: Error closing database', {
+          error: error instanceof Error ? error.message : String(error)
         });
       }
       this.db = null;
-      this.backupPath = "";
+      this.backupPath = '';
     }
   }
 
@@ -95,7 +95,7 @@ export class iOSMessagesParser {
    */
   private ensureOpen(): void {
     if (!this.db) {
-      throw new Error("Database not open. Call open() first.");
+      throw new Error('Database not open. Call open() first.');
     }
   }
 
@@ -106,19 +106,17 @@ export class iOSMessagesParser {
     this.ensureOpen();
 
     try {
-      const row = this.db!.prepare(
-        `
+      const row = this.db!.prepare(`
         SELECT id FROM handle WHERE ROWID = ?
-      `,
-      ).get(handleId) as RawHandleRow | undefined;
+      `).get(handleId) as RawHandleRow | undefined;
 
-      return row?.id || "";
+      return row?.id || '';
     } catch (error) {
-      log.error("iOSMessagesParser: Error getting handle", {
+      log.error('iOSMessagesParser: Error getting handle', {
         handleId,
-        error: error instanceof Error ? error.message : String(error),
+        error: error instanceof Error ? error.message : String(error)
       });
-      return "";
+      return '';
     }
   }
 
@@ -129,8 +127,7 @@ export class iOSMessagesParser {
     this.ensureOpen();
 
     try {
-      const chats = this.db!.prepare(
-        `
+      const chats = this.db!.prepare(`
         SELECT
           chat.ROWID,
           chat.guid,
@@ -138,8 +135,7 @@ export class iOSMessagesParser {
           chat.display_name
         FROM chat
         ORDER BY chat.ROWID
-      `,
-      ).all() as RawChatRow[];
+      `).all() as RawChatRow[];
 
       const conversations: iOSConversation[] = [];
 
@@ -149,18 +145,14 @@ export class iOSMessagesParser {
           const participants = this.getParticipants(chat.ROWID);
 
           // Get last message date
-          const lastMessageRow = this.db!.prepare(
-            `
+          const lastMessageRow = this.db!.prepare(`
             SELECT MAX(message.date) as last_date
             FROM message
             JOIN chat_message_join ON message.ROWID = chat_message_join.message_id
             WHERE chat_message_join.chat_id = ?
-          `,
-          ).get(chat.ROWID) as { last_date: number | null } | undefined;
+          `).get(chat.ROWID) as { last_date: number | null } | undefined;
 
-          const lastMessageDate = convertAppleTimestamp(
-            lastMessageRow?.last_date || null,
-          );
+          const lastMessageDate = convertAppleTimestamp(lastMessageRow?.last_date || null);
 
           // Skip chats with no messages
           if (!lastMessageDate) {
@@ -168,40 +160,33 @@ export class iOSMessagesParser {
           }
 
           // Determine if group chat (more than 1 participant or starts with 'chat')
-          const isGroupChat =
-            participants.length > 1 ||
-            (chat.chat_identifier?.startsWith("chat") &&
-              !chat.chat_identifier.includes("@"));
+          const isGroupChat = participants.length > 1 ||
+            (chat.chat_identifier?.startsWith('chat') && !chat.chat_identifier.includes('@'));
 
           conversations.push({
             chatId: chat.ROWID,
-            chatIdentifier: chat.chat_identifier || chat.display_name || "",
+            chatIdentifier: chat.chat_identifier || chat.display_name || '',
             participants,
             messages: [], // Messages loaded separately via getMessages()
             lastMessage: lastMessageDate,
             isGroupChat,
           });
         } catch (chatError) {
-          log.error("iOSMessagesParser: Error processing chat", {
+          log.error('iOSMessagesParser: Error processing chat', {
             chatId: chat.ROWID,
-            error:
-              chatError instanceof Error
-                ? chatError.message
-                : String(chatError),
+            error: chatError instanceof Error ? chatError.message : String(chatError)
           });
           // Continue with next chat
         }
       }
 
       // Sort by last message date descending
-      conversations.sort(
-        (a, b) => b.lastMessage.getTime() - a.lastMessage.getTime(),
-      );
+      conversations.sort((a, b) => b.lastMessage.getTime() - a.lastMessage.getTime());
 
       return conversations;
     } catch (error) {
-      log.error("iOSMessagesParser: Error getting conversations", {
-        error: error instanceof Error ? error.message : String(error),
+      log.error('iOSMessagesParser: Error getting conversations', {
+        error: error instanceof Error ? error.message : String(error)
       });
       return [];
     }
@@ -214,20 +199,18 @@ export class iOSMessagesParser {
     this.ensureOpen();
 
     try {
-      const rows = this.db!.prepare(
-        `
+      const rows = this.db!.prepare(`
         SELECT DISTINCT handle.id
         FROM chat_handle_join
         JOIN handle ON chat_handle_join.handle_id = handle.ROWID
         WHERE chat_handle_join.chat_id = ?
-      `,
-      ).all(chatId) as Array<{ id: string }>;
+      `).all(chatId) as Array<{ id: string }>;
 
-      return rows.map((row) => row.id);
+      return rows.map(row => row.id);
     } catch (error) {
-      log.error("iOSMessagesParser: Error getting participants", {
+      log.error('iOSMessagesParser: Error getting participants', {
         chatId,
-        error: error instanceof Error ? error.message : String(error),
+        error: error instanceof Error ? error.message : String(error)
       });
       return [];
     }
@@ -269,13 +252,13 @@ export class iOSMessagesParser {
 
       const rows = this.db!.prepare(query).all(chatId) as RawMessageRow[];
 
-      return rows.map((row) => this.mapMessage(row));
+      return rows.map(row => this.mapMessage(row));
     } catch (error) {
-      log.error("iOSMessagesParser: Error getting messages", {
+      log.error('iOSMessagesParser: Error getting messages', {
         chatId,
         limit,
         offset,
-        error: error instanceof Error ? error.message : String(error),
+        error: error instanceof Error ? error.message : String(error)
       });
       return [];
     }
@@ -287,14 +270,14 @@ export class iOSMessagesParser {
   private mapMessage(row: RawMessageRow): iOSMessage {
     return {
       id: row.ROWID,
-      guid: row.guid || "",
+      guid: row.guid || '',
       text: row.text,
-      handle: row.handle_id ? this.getHandle(row.handle_id) : "",
+      handle: row.handle_id ? this.getHandle(row.handle_id) : '',
       isFromMe: row.is_from_me === 1,
       date: convertAppleTimestamp(row.date) || new Date(0),
       dateRead: convertAppleTimestamp(row.date_read),
       dateDelivered: convertAppleTimestamp(row.date_delivered),
-      service: row.service === "iMessage" ? "iMessage" : "SMS",
+      service: row.service === 'iMessage' ? 'iMessage' : 'SMS',
       attachments: this.getAttachments(row.ROWID),
     };
   }
@@ -307,8 +290,7 @@ export class iOSMessagesParser {
     this.ensureOpen();
 
     try {
-      const rows = this.db!.prepare(
-        `
+      const rows = this.db!.prepare(`
         SELECT
           attachment.ROWID,
           attachment.guid,
@@ -318,20 +300,19 @@ export class iOSMessagesParser {
         FROM attachment
         JOIN message_attachment_join ON attachment.ROWID = message_attachment_join.attachment_id
         WHERE message_attachment_join.message_id = ?
-      `,
-      ).all(messageId) as RawAttachmentRow[];
+      `).all(messageId) as RawAttachmentRow[];
 
-      return rows.map((row) => ({
+      return rows.map(row => ({
         id: row.ROWID,
-        guid: row.guid || "",
-        filename: row.filename || "",
-        mimeType: row.mime_type || "",
-        transferName: row.transfer_name || "",
+        guid: row.guid || '',
+        filename: row.filename || '',
+        mimeType: row.mime_type || '',
+        transferName: row.transfer_name || '',
       }));
     } catch (error) {
-      log.error("iOSMessagesParser: Error getting attachments", {
+      log.error('iOSMessagesParser: Error getting attachments', {
         messageId,
-        error: error instanceof Error ? error.message : String(error),
+        error: error instanceof Error ? error.message : String(error)
       });
       return [];
     }
@@ -373,10 +354,10 @@ export class iOSMessagesParser {
       const searchPattern = `%${query}%`;
       const rows = this.db!.prepare(sql).all(searchPattern) as RawMessageRow[];
 
-      return rows.map((row) => this.mapMessage(row));
+      return rows.map(row => this.mapMessage(row));
     } catch (error) {
-      log.error("iOSMessagesParser: Error searching messages", {
-        error: error instanceof Error ? error.message : String(error),
+      log.error('iOSMessagesParser: Error searching messages', {
+        error: error instanceof Error ? error.message : String(error)
       });
       return [];
     }
@@ -389,20 +370,18 @@ export class iOSMessagesParser {
     this.ensureOpen();
 
     try {
-      const row = this.db!.prepare(
-        `
+      const row = this.db!.prepare(`
         SELECT COUNT(*) as count
         FROM message
         JOIN chat_message_join ON message.ROWID = chat_message_join.message_id
         WHERE chat_message_join.chat_id = ?
-      `,
-      ).get(chatId) as { count: number } | undefined;
+      `).get(chatId) as { count: number } | undefined;
 
       return row?.count || 0;
     } catch (error) {
-      log.error("iOSMessagesParser: Error getting message count", {
+      log.error('iOSMessagesParser: Error getting message count', {
         chatId,
-        error: error instanceof Error ? error.message : String(error),
+        error: error instanceof Error ? error.message : String(error)
       });
       return 0;
     }
@@ -411,16 +390,11 @@ export class iOSMessagesParser {
   /**
    * Get conversation with messages populated
    */
-  getConversationWithMessages(
-    chatId: number,
-    limit?: number,
-    offset?: number,
-  ): iOSConversation | null {
+  getConversationWithMessages(chatId: number, limit?: number, offset?: number): iOSConversation | null {
     this.ensureOpen();
 
     try {
-      const chat = this.db!.prepare(
-        `
+      const chat = this.db!.prepare(`
         SELECT
           chat.ROWID,
           chat.guid,
@@ -428,8 +402,7 @@ export class iOSMessagesParser {
           chat.display_name
         FROM chat
         WHERE chat.ROWID = ?
-      `,
-      ).get(chatId) as RawChatRow | undefined;
+      `).get(chatId) as RawChatRow | undefined;
 
       if (!chat) {
         return null;
@@ -438,26 +411,25 @@ export class iOSMessagesParser {
       const participants = this.getParticipants(chatId);
       const messages = this.getMessages(chatId, limit, offset);
 
-      const lastMessageDate =
-        messages.length > 0 ? messages[messages.length - 1].date : new Date(0);
+      const lastMessageDate = messages.length > 0
+        ? messages[messages.length - 1].date
+        : new Date(0);
 
-      const isGroupChat =
-        participants.length > 1 ||
-        (chat.chat_identifier?.startsWith("chat") &&
-          !chat.chat_identifier.includes("@"));
+      const isGroupChat = participants.length > 1 ||
+        (chat.chat_identifier?.startsWith('chat') && !chat.chat_identifier.includes('@'));
 
       return {
         chatId: chat.ROWID,
-        chatIdentifier: chat.chat_identifier || chat.display_name || "",
+        chatIdentifier: chat.chat_identifier || chat.display_name || '',
         participants,
         messages,
         lastMessage: lastMessageDate,
         isGroupChat,
       };
     } catch (error) {
-      log.error("iOSMessagesParser: Error getting conversation with messages", {
+      log.error('iOSMessagesParser: Error getting conversation with messages', {
         chatId,
-        error: error instanceof Error ? error.message : String(error),
+        error: error instanceof Error ? error.message : String(error)
       });
       return null;
     }

@@ -3,23 +3,23 @@
  * Analyzes user corrections to detect patterns and generate smart suggestions
  */
 
-import databaseService from "./databaseService";
-import { UserFeedback } from "../types/models";
+import databaseService from './databaseService';
+import { UserFeedback } from '../types/models';
 
 interface Pattern {
-  type: "date_adjustment" | "substitution" | "rejection" | "number_adjustment";
+  type: 'date_adjustment' | 'substitution' | 'rejection' | 'number_adjustment';
   [key: string]: any;
 }
 
 interface DateAdjustmentPattern extends Pattern {
-  type: "date_adjustment";
+  type: 'date_adjustment';
   adjustment_days: number;
   confidence: number;
   sample_size: number;
 }
 
 interface SubstitutionPattern extends Pattern {
-  type: "substitution";
+  type: 'substitution';
   from_value: string;
   to_value: string;
   frequency: number;
@@ -27,13 +27,13 @@ interface SubstitutionPattern extends Pattern {
 }
 
 interface RejectionPattern extends Pattern {
-  type: "rejection";
+  type: 'rejection';
   rejected_values: string[];
   sample_size: number;
 }
 
 interface NumberAdjustmentPattern extends Pattern {
-  type: "number_adjustment";
+  type: 'number_adjustment';
   percent_adjustment: number;
   confidence: number;
   sample_size: number;
@@ -78,11 +78,7 @@ class FeedbackLearningService {
 
     try {
       // Get recent feedback for this field
-      const feedback = await databaseService.getFeedbackByField(
-        userId,
-        fieldName,
-        50,
-      );
+      const feedback = await databaseService.getFeedbackByField(userId, fieldName, 50);
 
       if (feedback.length < 3) {
         return []; // Need at least 3 corrections to detect patterns
@@ -91,7 +87,7 @@ class FeedbackLearningService {
       const patterns: Pattern[] = [];
 
       // Pattern 1: Consistent date adjustment
-      if (fieldName === "closing_date") {
+      if (fieldName === 'closing_date') {
         const datePattern = this._detectDateAdjustmentPattern(feedback);
         if (datePattern) patterns.push(datePattern);
       }
@@ -105,11 +101,7 @@ class FeedbackLearningService {
       if (rejectionPattern) patterns.push(rejectionPattern);
 
       // Pattern 4: Number adjustment (for prices, amounts)
-      if (
-        fieldName === "sale_price" ||
-        fieldName.includes("price") ||
-        fieldName.includes("amount")
-      ) {
+      if (fieldName === 'sale_price' || fieldName.includes('price') || fieldName.includes('amount')) {
         const numberPattern = this._detectNumberAdjustmentPattern(feedback);
         if (numberPattern) patterns.push(numberPattern);
       }
@@ -119,7 +111,7 @@ class FeedbackLearningService {
 
       return patterns;
     } catch (error) {
-      console.error("[FeedbackLearning] Pattern detection failed:", error);
+      console.error('[FeedbackLearning] Pattern detection failed:', error);
       return [];
     }
   }
@@ -136,7 +128,7 @@ class FeedbackLearningService {
     userId: string,
     fieldName: string,
     extractedValue: unknown,
-    confidence?: number,
+    confidence?: number
   ): Promise<Suggestion | null> {
     // Only suggest for medium/low confidence extractions
     if (confidence && confidence > 85) {
@@ -164,12 +156,8 @@ class FeedbackLearningService {
    * Detect date adjustment pattern (e.g., user always adds 30 days)
    * @private
    */
-  private _detectDateAdjustmentPattern(
-    feedback: UserFeedback[],
-  ): DateAdjustmentPattern | null {
-    const corrections = feedback.filter(
-      (f) => f.feedback_type === "correction",
-    );
+  private _detectDateAdjustmentPattern(feedback: UserFeedback[]): DateAdjustmentPattern | null {
+    const corrections = feedback.filter(f => f.feedback_type === 'correction');
 
     if (corrections.length < 3) return null;
 
@@ -183,9 +171,7 @@ class FeedbackLearningService {
 
         if (isNaN(original.getTime()) || isNaN(corrected.getTime())) continue;
 
-        const diffDays = Math.round(
-          (corrected.getTime() - original.getTime()) / (1000 * 60 * 60 * 24),
-        );
+        const diffDays = Math.round((corrected.getTime() - original.getTime()) / (1000 * 60 * 60 * 24));
         adjustments.push(diffDays);
       } catch {
         continue;
@@ -195,17 +181,14 @@ class FeedbackLearningService {
     if (adjustments.length < 3) return null;
 
     // Check if adjustments are consistent
-    const avg =
-      adjustments.reduce((sum, val) => sum + val, 0) / adjustments.length;
-    const variance =
-      adjustments.reduce((sum, val) => sum + Math.pow(val - avg, 2), 0) /
-      adjustments.length;
+    const avg = adjustments.reduce((sum, val) => sum + val, 0) / adjustments.length;
+    const variance = adjustments.reduce((sum, val) => sum + Math.pow(val - avg, 2), 0) / adjustments.length;
     const stdDev = Math.sqrt(variance);
 
     // If standard deviation is low, we have a pattern
     if (stdDev < 5 && Math.abs(avg) > 1) {
       return {
-        type: "date_adjustment",
+        type: 'date_adjustment',
         adjustment_days: Math.round(avg),
         confidence: Math.max(0, 100 - stdDev * 10),
         sample_size: adjustments.length,
@@ -219,12 +202,8 @@ class FeedbackLearningService {
    * Detect substitution pattern (e.g., user always changes "purchase" to "sale")
    * @private
    */
-  private _detectSubstitutionPattern(
-    feedback: UserFeedback[],
-  ): SubstitutionPattern | null {
-    const corrections = feedback.filter(
-      (f) => f.feedback_type === "correction",
-    );
+  private _detectSubstitutionPattern(feedback: UserFeedback[]): SubstitutionPattern | null {
+    const corrections = feedback.filter(f => f.feedback_type === 'correction');
 
     if (corrections.length < 3) return null;
 
@@ -239,7 +218,7 @@ class FeedbackLearningService {
 
     // Find most common substitution
     let maxCount = 0;
-    let mostCommon: string = "";
+    let mostCommon: string = '';
 
     Object.entries(substitutions).forEach(([sub, count]) => {
       if (count > maxCount) {
@@ -250,13 +229,13 @@ class FeedbackLearningService {
 
     // If substitution appears in >50% of corrections, it's a pattern
     if (mostCommon && maxCount / corrections.length > 0.5) {
-      const parts = mostCommon.split(" -> ");
+      const parts = mostCommon.split(' -> ');
       if (parts.length < 2) return null;
       const [original, corrected] = parts;
       return {
-        type: "substitution",
-        from_value: original || "",
-        to_value: corrected || "",
+        type: 'substitution',
+        from_value: original || '',
+        to_value: corrected || '',
         frequency: maxCount / corrections.length,
         sample_size: corrections.length,
       };
@@ -269,10 +248,8 @@ class FeedbackLearningService {
    * Detect rejection pattern (e.g., user always rejects certain values)
    * @private
    */
-  private _detectRejectionPattern(
-    feedback: UserFeedback[],
-  ): RejectionPattern | null {
-    const rejections = feedback.filter((f) => f.feedback_type === "rejection");
+  private _detectRejectionPattern(feedback: UserFeedback[]): RejectionPattern | null {
+    const rejections = feedback.filter(f => f.feedback_type === 'rejection');
 
     if (rejections.length < 2) return null;
 
@@ -280,7 +257,7 @@ class FeedbackLearningService {
     const rejectedValues: Record<string, number> = {};
 
     for (const rejection of rejections) {
-      const key = rejection.original_value || "unknown";
+      const key = rejection.original_value || 'unknown';
       rejectedValues[key] = (rejectedValues[key] || 0) + 1;
     }
 
@@ -290,7 +267,7 @@ class FeedbackLearningService {
 
     if (frequentlyRejected.length > 0) {
       return {
-        type: "rejection",
+        type: 'rejection',
         rejected_values: frequentlyRejected,
         sample_size: rejections.length,
       };
@@ -303,12 +280,8 @@ class FeedbackLearningService {
    * Detect number adjustment pattern (e.g., user always subtracts earnest money)
    * @private
    */
-  private _detectNumberAdjustmentPattern(
-    feedback: UserFeedback[],
-  ): NumberAdjustmentPattern | null {
-    const corrections = feedback.filter(
-      (f) => f.feedback_type === "correction",
-    );
+  private _detectNumberAdjustmentPattern(feedback: UserFeedback[]): NumberAdjustmentPattern | null {
+    const corrections = feedback.filter(f => f.feedback_type === 'correction');
 
     if (corrections.length < 3) return null;
 
@@ -317,12 +290,8 @@ class FeedbackLearningService {
     for (const correction of corrections) {
       try {
         if (!correction.corrected_value || !correction.original_value) continue;
-        const original = parseFloat(
-          correction.original_value.replace(/[^0-9.-]/g, ""),
-        );
-        const corrected = parseFloat(
-          correction.corrected_value.replace(/[^0-9.-]/g, ""),
-        );
+        const original = parseFloat(correction.original_value.replace(/[^0-9.-]/g, ''));
+        const corrected = parseFloat(correction.corrected_value.replace(/[^0-9.-]/g, ''));
 
         if (isNaN(original) || isNaN(corrected)) continue;
 
@@ -338,19 +307,13 @@ class FeedbackLearningService {
     if (adjustments.length < 3) return null;
 
     // Check for consistent percentage adjustment
-    const avgPercent =
-      adjustments.reduce((sum, val) => sum + val.percent, 0) /
-      adjustments.length;
-    const variance =
-      adjustments.reduce(
-        (sum, val) => sum + Math.pow(val.percent - avgPercent, 2),
-        0,
-      ) / adjustments.length;
+    const avgPercent = adjustments.reduce((sum, val) => sum + val.percent, 0) / adjustments.length;
+    const variance = adjustments.reduce((sum, val) => sum + Math.pow(val.percent - avgPercent, 2), 0) / adjustments.length;
     const stdDev = Math.sqrt(variance);
 
     if (stdDev < 10 && Math.abs(avgPercent) > 1) {
       return {
-        type: "number_adjustment",
+        type: 'number_adjustment',
         percent_adjustment: avgPercent,
         confidence: Math.max(0, 100 - stdDev * 5),
         sample_size: adjustments.length,
@@ -364,14 +327,10 @@ class FeedbackLearningService {
    * Apply pattern to generate suggestion
    * @private
    */
-  private _applyPattern(
-    pattern: Pattern,
-    extractedValue: unknown,
-    _fieldName: string,
-  ): Suggestion | null {
+  private _applyPattern(pattern: Pattern, extractedValue: unknown, _fieldName: string): Suggestion | null {
     try {
       switch (pattern.type) {
-        case "date_adjustment": {
+        case 'date_adjustment': {
           const datePattern = pattern as DateAdjustmentPattern;
           const date = new Date(extractedValue as string | number | Date);
           if (isNaN(date.getTime())) return null;
@@ -380,13 +339,13 @@ class FeedbackLearningService {
           adjusted.setDate(adjusted.getDate() + datePattern.adjustment_days);
 
           return {
-            value: adjusted.toISOString().split("T")[0], // YYYY-MM-DD format
-            reason: `Based on ${datePattern.sample_size} past corrections, you typically adjust dates by ${datePattern.adjustment_days > 0 ? "+" : ""}${datePattern.adjustment_days} days`,
+            value: adjusted.toISOString().split('T')[0], // YYYY-MM-DD format
+            reason: `Based on ${datePattern.sample_size} past corrections, you typically adjust dates by ${datePattern.adjustment_days > 0 ? '+' : ''}${datePattern.adjustment_days} days`,
             confidence: datePattern.confidence,
           };
         }
 
-        case "substitution": {
+        case 'substitution': {
           const subPattern = pattern as SubstitutionPattern;
           if (String(extractedValue) === subPattern.from_value) {
             return {
@@ -398,7 +357,7 @@ class FeedbackLearningService {
           return null;
         }
 
-        case "rejection": {
+        case 'rejection': {
           const rejPattern = pattern as RejectionPattern;
           if (rejPattern.rejected_values.includes(String(extractedValue))) {
             return {
@@ -411,18 +370,16 @@ class FeedbackLearningService {
           return null;
         }
 
-        case "number_adjustment": {
+        case 'number_adjustment': {
           const numPattern = pattern as NumberAdjustmentPattern;
-          const num = parseFloat(
-            String(extractedValue).replace(/[^0-9.-]/g, ""),
-          );
+          const num = parseFloat(String(extractedValue).replace(/[^0-9.-]/g, ''));
           if (isNaN(num)) return null;
 
           const adjusted = num * (1 + numPattern.percent_adjustment / 100);
 
           return {
-            value: `$${adjusted.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-            reason: `Based on ${numPattern.sample_size} past corrections, you typically adjust by ${numPattern.percent_adjustment > 0 ? "+" : ""}${numPattern.percent_adjustment.toFixed(1)}%`,
+            value: `$${adjusted.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+            reason: `Based on ${numPattern.sample_size} past corrections, you typically adjust by ${numPattern.percent_adjustment > 0 ? '+' : ''}${numPattern.percent_adjustment.toFixed(1)}%`,
             confidence: numPattern.confidence,
           };
         }
@@ -431,7 +388,7 @@ class FeedbackLearningService {
           return null;
       }
     } catch (error) {
-      console.error("[FeedbackLearning] Pattern application failed:", error);
+      console.error('[FeedbackLearning] Pattern application failed:', error);
       return null;
     }
   }
@@ -455,25 +412,15 @@ class FeedbackLearningService {
   /**
    * Get learning statistics for a field
    */
-  async getLearningStats(
-    userId: string,
-    fieldName: string,
-  ): Promise<LearningStats> {
-    const feedback = await databaseService.getFeedbackByField(
-      userId,
-      fieldName,
-      100,
-    );
+  async getLearningStats(userId: string, fieldName: string): Promise<LearningStats> {
+    const feedback = await databaseService.getFeedbackByField(userId, fieldName, 100);
     const patterns = await this.detectPatterns(userId, fieldName);
 
     const stats: LearningStats = {
       total_feedback: feedback.length,
-      confirmations: feedback.filter((f) => f.feedback_type === "confirmation")
-        .length,
-      corrections: feedback.filter((f) => f.feedback_type === "correction")
-        .length,
-      rejections: feedback.filter((f) => f.feedback_type === "rejection")
-        .length,
+      confirmations: feedback.filter(f => f.feedback_type === 'confirmation').length,
+      corrections: feedback.filter(f => f.feedback_type === 'correction').length,
+      rejections: feedback.filter(f => f.feedback_type === 'rejection').length,
       patterns_detected: patterns.length,
       patterns: patterns,
     };

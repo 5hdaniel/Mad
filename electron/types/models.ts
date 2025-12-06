@@ -7,19 +7,19 @@
 // ENUMS
 // ============================================
 
-export type OAuthProvider = "google" | "microsoft";
-export type OAuthPurpose = "authentication" | "mailbox";
-export type SubscriptionTier = "free" | "pro" | "enterprise";
-export type SubscriptionStatus = "trial" | "active" | "cancelled" | "expired";
-export type Theme = "light" | "dark" | "auto";
-export type ContactSource = "manual" | "email" | "contacts_app";
-export type TransactionType = "purchase" | "sale";
-export type TransactionStatus = "completed" | "pending";
-export type Status = "active" | "closed";
-export type ExportStatus = "not_exported" | "exported" | "re_export_needed";
-export type ExportFormat = "pdf" | "csv" | "json" | "txt_eml" | "excel";
-export type CommunicationType = "email" | "text" | "imessage";
-export type FeedbackType = "correction" | "confirmation" | "rejection";
+export type OAuthProvider = 'google' | 'microsoft';
+export type OAuthPurpose = 'authentication' | 'mailbox';
+export type SubscriptionTier = 'free' | 'pro' | 'enterprise';
+export type SubscriptionStatus = 'trial' | 'active' | 'cancelled' | 'expired';
+export type Theme = 'light' | 'dark' | 'auto';
+export type ContactSource = 'manual' | 'email' | 'contacts_app';
+export type TransactionType = 'purchase' | 'sale';
+export type TransactionStatus = 'completed' | 'pending';
+export type Status = 'active' | 'closed';
+export type ExportStatus = 'not_exported' | 'exported' | 're_export_needed';
+export type ExportFormat = 'pdf' | 'csv' | 'json' | 'txt_eml' | 'excel';
+export type CommunicationType = 'email' | 'text' | 'imessage';
+export type FeedbackType = 'correction' | 'confirmation' | 'rejection';
 
 // ============================================
 // USER MODELS
@@ -64,7 +64,7 @@ export interface User {
   notification_preferences?: string | Record<string, unknown>;
   company?: string;
   job_title?: string;
-  mobile_phone_type?: "iphone" | "android";
+  mobile_phone_type?: 'iphone' | 'android';
 
   // Sync
   last_cloud_sync_at?: Date | string;
@@ -309,23 +309,16 @@ export interface UserFeedback {
 // ============================================
 
 // Type for creating new records (omit auto-generated fields)
-export type NewUser = Omit<User, "id" | "created_at" | "updated_at">;
-export type NewContact = Omit<Contact, "id" | "created_at" | "updated_at">;
-export type NewTransaction = Omit<
-  Transaction,
-  "id" | "created_at" | "updated_at"
->;
-export type NewCommunication = Omit<Communication, "id" | "created_at">;
+export type NewUser = Omit<User, 'id' | 'created_at' | 'updated_at'>;
+export type NewContact = Omit<Contact, 'id' | 'created_at' | 'updated_at'>;
+export type NewTransaction = Omit<Transaction, 'id' | 'created_at' | 'updated_at'>;
+export type NewCommunication = Omit<Communication, 'id' | 'created_at'>;
 
 // Type for updating records (all fields optional except id)
-export type UpdateUser = Partial<Omit<User, "id">> & { id: string };
-export type UpdateContact = Partial<Omit<Contact, "id">> & { id: string };
-export type UpdateTransaction = Partial<Omit<Transaction, "id">> & {
-  id: string;
-};
-export type UpdateCommunication = Partial<Omit<Communication, "id">> & {
-  id: string;
-};
+export type UpdateUser = Partial<Omit<User, 'id'>> & { id: string };
+export type UpdateContact = Partial<Omit<Contact, 'id'>> & { id: string };
+export type UpdateTransaction = Partial<Omit<Transaction, 'id'>> & { id: string };
+export type UpdateCommunication = Partial<Omit<Communication, 'id'>> & { id: string };
 
 // Filters for querying
 export interface TransactionFilters {
