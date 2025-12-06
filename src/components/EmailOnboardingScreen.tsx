@@ -680,18 +680,20 @@ function EmailOnboardingScreen({ userId, authProvider, selectedPhoneType, onPhon
           </button>
         </div>
 
-        {/* Skip Button */}
-        <div className="text-center">
-          <button
-            onClick={handleSkip}
-            className="text-gray-500 hover:text-gray-700 py-2 text-sm font-medium transition-colors"
-          >
-            Skip for Now
-          </button>
-          <p className="text-xs text-gray-500 mt-1">
-            You can always connect your email later in Settings
-          </p>
-        </div>
+        {/* Skip Button - Only show on email step */}
+        {((navigationStep === 3 && !isWindows) || (navigationStep === 2 && isWindows)) && (
+          <div className="text-center">
+            <button
+              onClick={handleSkip}
+              className="text-gray-500 hover:text-gray-700 py-2 text-sm font-medium transition-colors"
+            >
+              Skip for Now
+            </button>
+            <p className="text-xs text-gray-500 mt-1">
+              You can always connect your email later in Settings
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
