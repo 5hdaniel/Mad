@@ -108,6 +108,7 @@ type InstallStatus =
 interface AppleDriverSetupProps {
   onComplete: () => void;
   onSkip: () => void;
+  onBack?: () => void;
 }
 
 /**
@@ -118,7 +119,7 @@ interface AppleDriverSetupProps {
  * The component explains what tools are being installed and obtains
  * user consent before triggering the installation (which shows UAC prompt).
  */
-function AppleDriverSetup({ onComplete, onSkip }: AppleDriverSetupProps) {
+function AppleDriverSetup({ onComplete, onSkip, onBack }: AppleDriverSetupProps) {
   const [status, setStatus] = useState<InstallStatus>("checking");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [hasBundled, setHasBundled] = useState(false);
@@ -623,6 +624,36 @@ function AppleDriverSetup({ onComplete, onSkip }: AppleDriverSetupProps) {
             {status === "checking" && (
               <div className="text-center py-4">
                 <div className="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+              </div>
+            )}
+
+            {/* Back Button */}
+            {onBack && (
+              <div className="flex items-center justify-start gap-3 mt-6 pt-4 border-t border-gray-200">
+                <button
+                  onClick={onBack}
+                  disabled={status === "installing" || status === "checking"}
+                  className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+                    status === "installing" || status === "checking"
+                      ? "text-gray-400 cursor-not-allowed bg-gray-100"
+                      : "text-gray-700 hover:bg-gray-100"
+                  }`}
+                >
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M15 19l-7-7 7-7"
+                    />
+                  </svg>
+                  <span>Back</span>
+                </button>
               </div>
             )}
           </div>

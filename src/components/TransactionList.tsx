@@ -116,7 +116,8 @@ function TransactionList({
   const stopScan = async (): Promise<void> => {
     try {
       await window.api.transactions.cancelScan(userId);
-      setScanProgress({ step: "cancelled", message: "Scan stopped" });
+      // Log scan cancellation but don't show UI message
+      console.log("Scan stopped by user");
     } catch (err) {
       console.error("Failed to stop scan:", err);
     }
