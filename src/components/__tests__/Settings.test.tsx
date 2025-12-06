@@ -50,8 +50,8 @@ describe("Settings", () => {
     const selects = screen.getAllByRole("combobox");
     return selects.find((select) =>
       Array.from(select.querySelectorAll("option")).some(
-        (opt) => opt.value === "pdf"
-      )
+        (opt) => opt.value === "pdf",
+      ),
     ) as HTMLSelectElement;
   };
 

@@ -8,14 +8,19 @@
 
 import outlookFetchService from "../outlookFetchService";
 import databaseService from "../databaseService";
+import microsoftAuthService from "../microsoftAuthService";
 import axios from "axios";
 
 // Mock dependencies
 jest.mock("../databaseService");
+jest.mock("../microsoftAuthService");
 jest.mock("axios");
 
 const mockDatabaseService = databaseService as jest.Mocked<
   typeof databaseService
+>;
+const mockMicrosoftAuthService = microsoftAuthService as jest.Mocked<
+  typeof microsoftAuthService
 >;
 const mockAxios = axios as jest.MockedFunction<typeof axios>;
 
@@ -153,7 +158,9 @@ describe("OutlookFetchService", () => {
       mockAxios.mockResolvedValue({ data: { value: mockMessages } });
 
       // Request only 50 results
-      const results = await outlookFetchService.searchEmails({ maxResults: 50 });
+      const results = await outlookFetchService.searchEmails({
+        maxResults: 50,
+      });
 
       // Should return only 50 results even though 100 were fetched
       expect(results).toHaveLength(50);
@@ -195,16 +202,54 @@ describe("OutlookFetchService", () => {
       );
     });
 
-    it("should handle 401 unauthorized errors", async () => {
+    it("should handle 401 unauthorized errors with token refresh failure", async () => {
       const error = {
         response: { status: 401 },
         message: "Unauthorized",
       };
       mockAxios.mockRejectedValue(error);
-
-      await expect(outlookFetchService.searchEmails({})).rejects.toMatchObject(
-        error,
+      // Mock token refresh to fail
+      mockMicrosoftAuthService.refreshToken.mockRejectedValue(
+        new Error("Token refresh failed"),
       );
+
+      await expect(outlookFetchService.searchEmails({})).rejects.toThrow(
+        "Microsoft access token expired and refresh failed. Please reconnect Outlook.",
+      );
+    });
+
+    it("should retry request after successful token refresh", async () => {
+      const error401 = {
+        response: { status: 401 },
+        message: "Unauthorized",
+      };
+      // searchEmails makes multiple requests: first for count, then for data
+      // All requests initially fail with 401, then succeed after refresh
+      let callCount = 0;
+      mockAxios.mockImplementation(() => {
+        callCount++;
+        if (callCount <= 2) {
+          // First two calls fail (count + data request)
+          return Promise.reject(error401);
+        }
+        // After refresh, return empty results
+        return Promise.resolve({ data: { value: [], "@odata.count": 0 } });
+      });
+
+      // Mock successful token refresh
+      mockMicrosoftAuthService.refreshToken.mockResolvedValue({
+        access_token: "new-access-token",
+        refresh_token: "new-refresh-token",
+        expires_in: 3600,
+        scope: "Mail.Read",
+      });
+      mockDatabaseService.saveOAuthToken.mockResolvedValue("token-id");
+
+      const results = await outlookFetchService.searchEmails({});
+
+      expect(results).toHaveLength(0);
+      expect(mockMicrosoftAuthService.refreshToken).toHaveBeenCalled();
+      expect(mockDatabaseService.saveOAuthToken).toHaveBeenCalled();
     });
   });
 

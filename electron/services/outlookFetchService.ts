@@ -3,6 +3,7 @@ import axios, { AxiosRequestConfig } from "axios";
 // Tokens stored in encrypted database, no additional keychain encryption needed
 import databaseService from "./databaseService";
 import logService from "./logService";
+import microsoftAuthService from "./microsoftAuthService";
 import { OAuthToken } from "../types/models";
 
 /**
@@ -109,6 +110,7 @@ interface EmailSearchOptions {
 class OutlookFetchService {
   private graphApiUrl = "https://graph.microsoft.com/v1.0";
   private accessToken: string | null = null;
+  private refreshToken: string | null = null;
   private userId: string | null = null;
 
   /**
@@ -131,6 +133,7 @@ class OutlookFetchService {
 
       // Session-only OAuth: tokens stored unencrypted in encrypted database
       this.accessToken = tokenRecord.access_token || "";
+      this.refreshToken = tokenRecord.refresh_token || null;
 
       logService.info("Initialized successfully", "OutlookFetch");
       return true;
@@ -148,6 +151,7 @@ class OutlookFetchService {
     endpoint: string,
     method: string = "GET",
     data: any = null,
+    isRetry: boolean = false,
   ): Promise<T> {
     try {
       const config: AxiosRequestConfig = {
@@ -166,13 +170,54 @@ class OutlookFetchService {
       const response = await axios(config);
       return response.data;
     } catch (error: any) {
-      // Handle token expiration
-      if (error.response && error.response.status === 401) {
-        logService.error(
-          "Access token expired, need to refresh",
-          "OutlookFetch",
-        );
-        // TODO: Implement token refresh logic
+      // Handle token expiration with refresh
+      if (error.response && error.response.status === 401 && !isRetry) {
+        if (this.refreshToken && this.userId) {
+          logService.info(
+            "Access token expired, attempting refresh",
+            "OutlookFetch",
+          );
+          try {
+            const tokenResponse = await microsoftAuthService.refreshToken(
+              this.refreshToken,
+            );
+            this.accessToken = tokenResponse.access_token;
+            this.refreshToken = tokenResponse.refresh_token;
+
+            // Update token in database
+            await databaseService.saveOAuthToken(
+              this.userId,
+              "microsoft",
+              "mailbox",
+              {
+                access_token: tokenResponse.access_token,
+                refresh_token: tokenResponse.refresh_token,
+                token_expires_at: new Date(
+                  Date.now() + tokenResponse.expires_in * 1000,
+                ),
+              },
+            );
+
+            logService.info("Token refreshed successfully", "OutlookFetch");
+            // Retry the request with new token
+            return this._graphRequest<T>(endpoint, method, data, true);
+          } catch (refreshError) {
+            logService.error("Token refresh failed", "OutlookFetch", {
+              error: refreshError,
+            });
+            throw new Error(
+              "Microsoft access token expired and refresh failed. Please reconnect Outlook.",
+            );
+          }
+        } else {
+          logService.error(
+            "Access token expired but no refresh token available",
+            "OutlookFetch",
+          );
+          throw new Error(
+            "Microsoft access token expired. Please reconnect Outlook.",
+          );
+        }
       }
       throw error;
     }
@@ -201,9 +246,11 @@ class OutlookFetchService {
       const filters: string[] = [];
 
       if (query) {
+        // Escape single quotes in OData filters to prevent injection
+        const escapedQuery = query.replace(/'/g, "''");
         // Search in subject and body
         filters.push(
-          `(contains(subject,'${query}') or contains(body/content,'${query}'))`,
+          `(contains(subject,'${escapedQuery}') or contains(body/content,'${escapedQuery}'))`,
         );
       }
 
