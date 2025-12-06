@@ -8,34 +8,34 @@
  * Reference: https://github.com/jsharkey13/iphone_backup_decrypt
  */
 
-import crypto from 'crypto';
-import fs from 'fs';
-import path from 'path';
-import plist from 'simple-plist';
-import logService from './logService';
+import crypto from "crypto";
+import fs from "fs";
+import path from "path";
+import plist from "simple-plist";
+import logService from "./logService";
 import type {
   DecryptionResult,
   ManifestPlist,
   Keybag,
   KeybagItem,
   EncryptionKeys,
-} from '../types/backup';
+} from "../types/backup";
 
 // Import better-sqlite3-multiple-ciphers for reading Manifest.db
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const Database = require('better-sqlite3-multiple-ciphers');
+const Database = require("better-sqlite3-multiple-ciphers");
 
 /**
  * Backup Decryption Service Class
  * Decrypts iOS encrypted backups to extract messages and contacts
  */
 export class BackupDecryptionService {
-  private static readonly SERVICE_NAME = 'BackupDecryptionService';
+  private static readonly SERVICE_NAME = "BackupDecryptionService";
 
   // Files we need to decrypt
   private readonly requiredFiles = [
-    '3d0d7e5fb2ce288813306e4d4636395e047a3d28', // sms.db
-    '31bb7ba8914766d4ba40d6dfb6113c8b614be442', // AddressBook.sqlitedb
+    "3d0d7e5fb2ce288813306e4d4636395e047a3d28", // sms.db
+    "31bb7ba8914766d4ba40d6dfb6113c8b614be442", // AddressBook.sqlitedb
   ];
 
   /**
@@ -46,21 +46,21 @@ export class BackupDecryptionService {
    */
   async decryptBackup(
     backupPath: string,
-    password: string
+    password: string,
   ): Promise<DecryptionResult> {
     try {
       await logService.info(
-        'Starting backup decryption',
+        "Starting backup decryption",
         BackupDecryptionService.SERVICE_NAME,
-        { backupPath }
+        { backupPath },
       );
 
       // 1. Read and parse Manifest.plist to get encryption info
-      const manifestPath = path.join(backupPath, 'Manifest.plist');
+      const manifestPath = path.join(backupPath, "Manifest.plist");
       if (!fs.existsSync(manifestPath)) {
         return {
           success: false,
-          error: 'Manifest.plist not found - invalid backup',
+          error: "Manifest.plist not found - invalid backup",
           decryptedPath: null,
         };
       }
@@ -69,7 +69,7 @@ export class BackupDecryptionService {
       if (!manifest.IsEncrypted) {
         return {
           success: false,
-          error: 'Backup is not encrypted',
+          error: "Backup is not encrypted",
           decryptedPath: null,
         };
       }
@@ -81,26 +81,29 @@ export class BackupDecryptionService {
       const keys = await this.deriveKeys(password, keybag);
 
       // 4. Verify password is correct by attempting to unwrap class keys
-      const classKeysUnwrapped = this.unwrapClassKeys(keybag, keys.keyEncryptionKey);
+      const classKeysUnwrapped = this.unwrapClassKeys(
+        keybag,
+        keys.keyEncryptionKey,
+      );
       if (!classKeysUnwrapped) {
         return {
           success: false,
-          error: 'Incorrect password',
+          error: "Incorrect password",
           decryptedPath: null,
         };
       }
       keys.classKeys = classKeysUnwrapped;
 
       // 5. Decrypt Manifest.db to get file list
-      const manifestDbPath = path.join(backupPath, 'Manifest.db');
+      const manifestDbPath = path.join(backupPath, "Manifest.db");
       const decryptedManifestDb = await this.decryptManifestDb(
         manifestDbPath,
         manifest.ManifestKey!,
-        keys
+        keys,
       );
 
       // 6. Create output directory for decrypted files
-      const outputPath = path.join(backupPath, 'decrypted');
+      const outputPath = path.join(backupPath, "decrypted");
       if (!fs.existsSync(outputPath)) {
         fs.mkdirSync(outputPath, { recursive: true });
       }
@@ -110,13 +113,13 @@ export class BackupDecryptionService {
         backupPath,
         decryptedManifestDb,
         keys,
-        outputPath
+        outputPath,
       );
 
       await logService.info(
-        'Backup decryption completed successfully',
+        "Backup decryption completed successfully",
         BackupDecryptionService.SERVICE_NAME,
-        { outputPath }
+        { outputPath },
       );
 
       // Clear sensitive data from memory
@@ -129,14 +132,15 @@ export class BackupDecryptionService {
       };
     } catch (error) {
       await logService.error(
-        'Decryption failed',
+        "Decryption failed",
         BackupDecryptionService.SERVICE_NAME,
-        { error: error instanceof Error ? error.message : String(error) }
+        { error: error instanceof Error ? error.message : String(error) },
       );
 
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown decryption error',
+        error:
+          error instanceof Error ? error.message : "Unknown decryption error",
         decryptedPath: null,
       };
     }
@@ -149,7 +153,7 @@ export class BackupDecryptionService {
    */
   async isBackupEncrypted(backupPath: string): Promise<boolean> {
     try {
-      const manifestPath = path.join(backupPath, 'Manifest.plist');
+      const manifestPath = path.join(backupPath, "Manifest.plist");
       if (!fs.existsSync(manifestPath)) {
         return false;
       }
@@ -168,7 +172,7 @@ export class BackupDecryptionService {
    */
   async verifyPassword(backupPath: string, password: string): Promise<boolean> {
     try {
-      const manifestPath = path.join(backupPath, 'Manifest.plist');
+      const manifestPath = path.join(backupPath, "Manifest.plist");
       const manifest = await this.readManifest(manifestPath);
 
       if (!manifest.IsEncrypted || !manifest.BackupKeyBag) {
@@ -199,7 +203,7 @@ export class BackupDecryptionService {
       IsEncrypted: parsed.IsEncrypted as boolean,
       ManifestKey: parsed.ManifestKey as Buffer | undefined,
       BackupKeyBag: parsed.BackupKeyBag as Buffer | undefined,
-      Lockdown: parsed.Lockdown as ManifestPlist['Lockdown'],
+      Lockdown: parsed.Lockdown as ManifestPlist["Lockdown"],
     };
   }
 
@@ -222,7 +226,7 @@ export class BackupDecryptionService {
       if (offset + 8 > keybagData.length) break;
 
       // Read tag (4 bytes) and length (4 bytes)
-      const tag = keybagData.toString('ascii', offset, offset + 4);
+      const tag = keybagData.toString("ascii", offset, offset + 4);
       const length = keybagData.readUInt32BE(offset + 4);
       offset += 8;
 
@@ -232,62 +236,62 @@ export class BackupDecryptionService {
       offset += length;
 
       switch (tag) {
-        case 'UUID':
+        case "UUID":
           if (currentClass === null) {
             keybag.uuid = Buffer.from(value);
           } else {
             currentItem.uuid = Buffer.from(value);
           }
           break;
-        case 'TYPE':
+        case "TYPE":
           keybag.type = value.readUInt32BE(0);
           break;
-        case 'HMCK':
+        case "HMCK":
           keybag.hmck = Buffer.from(value);
           break;
-        case 'WRAP':
+        case "WRAP":
           if (currentClass === null) {
             keybag.wrap = value.readUInt32BE(0);
           } else {
             currentItem.wrap = value.readUInt32BE(0);
           }
           break;
-        case 'SALT':
+        case "SALT":
           if (currentClass === null) {
             keybag.salt = Buffer.from(value);
           } else {
             currentItem.salt = Buffer.from(value);
           }
           break;
-        case 'ITER':
+        case "ITER":
           if (currentClass === null) {
             keybag.iter = value.readUInt32BE(0);
           } else {
             currentItem.iter = value.readUInt32BE(0);
           }
           break;
-        case 'DPWT':
+        case "DPWT":
           if (currentClass === null) {
             keybag.dpwt = value.readUInt32BE(0);
           } else {
             currentItem.dpwt = value.readUInt32BE(0);
           }
           break;
-        case 'DPIC':
+        case "DPIC":
           if (currentClass === null) {
             keybag.dpic = value.readUInt32BE(0);
           } else {
             currentItem.dpic = value.readUInt32BE(0);
           }
           break;
-        case 'DPSL':
+        case "DPSL":
           if (currentClass === null) {
             keybag.dpsl = Buffer.from(value);
           } else {
             currentItem.dpsl = Buffer.from(value);
           }
           break;
-        case 'CLAS':
+        case "CLAS":
           // Save previous class item if any
           if (currentClass !== null && currentItem.wpky) {
             keybag.classKeys.set(currentClass, currentItem as KeybagItem);
@@ -295,13 +299,13 @@ export class BackupDecryptionService {
           currentClass = value.readUInt32BE(0);
           currentItem = { clas: currentClass };
           break;
-        case 'KTYP':
+        case "KTYP":
           currentItem.ktyp = value.readUInt32BE(0);
           break;
-        case 'WPKY':
+        case "WPKY":
           currentItem.wpky = Buffer.from(value);
           break;
-        case 'PBKY':
+        case "PBKY":
           currentItem.publicKey = Buffer.from(value);
           break;
       }
@@ -319,7 +323,10 @@ export class BackupDecryptionService {
    * Derive encryption keys from password using PBKDF2
    * iOS uses double PBKDF2 for backup encryption
    */
-  private async deriveKeys(password: string, keybag: Keybag): Promise<EncryptionKeys> {
+  private async deriveKeys(
+    password: string,
+    keybag: Keybag,
+  ): Promise<EncryptionKeys> {
     // First round: derive key from password
     const iterations1 = keybag.dpic || 10000;
     const salt1 = keybag.dpsl || keybag.salt || Buffer.alloc(20);
@@ -329,7 +336,7 @@ export class BackupDecryptionService {
       salt1,
       iterations1,
       32,
-      'sha256'
+      "sha256",
     );
 
     // Second round: derive KEK from first derived key
@@ -341,7 +348,7 @@ export class BackupDecryptionService {
       salt2,
       iterations2,
       32,
-      'sha1'
+      "sha1",
     );
 
     // Clear intermediate key
@@ -359,7 +366,7 @@ export class BackupDecryptionService {
    */
   private unwrapClassKeys(
     keybag: Keybag,
-    kek: Buffer
+    kek: Buffer,
   ): Map<number, Buffer> | null {
     const classKeys = new Map<number, Buffer>();
 
@@ -403,7 +410,7 @@ export class BackupDecryptionService {
     wrappedKey.copy(r, 0, 8);
 
     // Create decipher
-    const decipher = crypto.createDecipheriv('aes-256-ecb', kek, null);
+    const decipher = crypto.createDecipheriv("aes-256-ecb", kek, null);
     decipher.setAutoPadding(false);
 
     // Perform unwrap iterations
@@ -420,9 +427,7 @@ export class BackupDecryptionService {
 
         // Decrypt A || R[i]
         const block = Buffer.concat([a, r.subarray((i - 1) * 8, i * 8)]);
-        const decrypted = Buffer.concat([
-          decipher.update(block),
-        ]);
+        const decrypted = Buffer.concat([decipher.update(block)]);
 
         // Update A and R[i]
         decrypted.copy(a, 0, 0, 8);
@@ -431,7 +436,9 @@ export class BackupDecryptionService {
     }
 
     // Verify IV (should be 0xA6A6A6A6A6A6A6A6)
-    const expectedIv = Buffer.from([0xa6, 0xa6, 0xa6, 0xa6, 0xa6, 0xa6, 0xa6, 0xa6]);
+    const expectedIv = Buffer.from([
+      0xa6, 0xa6, 0xa6, 0xa6, 0xa6, 0xa6, 0xa6, 0xa6,
+    ]);
     if (!a.equals(expectedIv)) {
       return null;
     }
@@ -445,7 +452,7 @@ export class BackupDecryptionService {
   private async decryptManifestDb(
     manifestDbPath: string,
     manifestKey: Buffer,
-    keys: EncryptionKeys
+    keys: EncryptionKeys,
   ): Promise<string> {
     // The manifest key has the class prepended (4 bytes)
     const protectionClass = manifestKey.readUInt32BE(0);
@@ -460,7 +467,7 @@ export class BackupDecryptionService {
     // Unwrap the database key
     const dbKey = this.aesKeyUnwrap(classKey, wrappedDbKey);
     if (!dbKey) {
-      throw new Error('Failed to unwrap Manifest.db key');
+      throw new Error("Failed to unwrap Manifest.db key");
     }
 
     // Decrypt Manifest.db
@@ -468,7 +475,7 @@ export class BackupDecryptionService {
     const decryptedDb = this.decryptAesCbc(dbKey, encryptedDb);
 
     // Write decrypted database to temp location
-    const decryptedDbPath = manifestDbPath + '.decrypted';
+    const decryptedDbPath = manifestDbPath + ".decrypted";
     fs.writeFileSync(decryptedDbPath, decryptedDb);
 
     // Clear key
@@ -482,13 +489,10 @@ export class BackupDecryptionService {
    */
   private decryptAesCbc(key: Buffer, data: Buffer): Buffer {
     const iv = Buffer.alloc(16, 0);
-    const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+    const decipher = crypto.createDecipheriv("aes-256-cbc", key, iv);
     decipher.setAutoPadding(false);
 
-    const decrypted = Buffer.concat([
-      decipher.update(data),
-      decipher.final(),
-    ]);
+    const decrypted = Buffer.concat([decipher.update(data), decipher.final()]);
 
     // Remove PKCS7 padding
     const paddingLength = decrypted[decrypted.length - 1];
@@ -506,7 +510,7 @@ export class BackupDecryptionService {
     backupPath: string,
     manifestDbPath: string,
     keys: EncryptionKeys,
-    outputPath: string
+    outputPath: string,
   ): Promise<void> {
     // Open decrypted Manifest.db
     const db = new Database(manifestDbPath, { readonly: true });
@@ -534,17 +538,21 @@ export class BackupDecryptionService {
     fileHash: string,
     manifestDb: typeof Database,
     keys: EncryptionKeys,
-    outputPath: string
+    outputPath: string,
   ): Promise<void> {
     // Look up file in Manifest.db
-    const row = manifestDb.prepare(
-      'SELECT fileID, domain, relativePath, file FROM Files WHERE fileID = ?'
-    ).get(fileHash) as { fileID: string; domain: string; relativePath: string; file: Buffer } | undefined;
+    const row = manifestDb
+      .prepare(
+        "SELECT fileID, domain, relativePath, file FROM Files WHERE fileID = ?",
+      )
+      .get(fileHash) as
+      | { fileID: string; domain: string; relativePath: string; file: Buffer }
+      | undefined;
 
     if (!row) {
       await logService.warn(
         `File not found in manifest: ${fileHash}`,
-        BackupDecryptionService.SERVICE_NAME
+        BackupDecryptionService.SERVICE_NAME,
       );
       return;
     }
@@ -556,7 +564,7 @@ export class BackupDecryptionService {
     } catch {
       await logService.warn(
         `Failed to parse file metadata for ${fileHash}`,
-        BackupDecryptionService.SERVICE_NAME
+        BackupDecryptionService.SERVICE_NAME,
       );
       return;
     }
@@ -567,7 +575,7 @@ export class BackupDecryptionService {
     if (!encryptionKey) {
       await logService.warn(
         `No encryption key for file ${fileHash}`,
-        BackupDecryptionService.SERVICE_NAME
+        BackupDecryptionService.SERVICE_NAME,
       );
       return;
     }
@@ -577,7 +585,7 @@ export class BackupDecryptionService {
     if (!classKey) {
       await logService.warn(
         `No class key for protection class ${protectionClass}`,
-        BackupDecryptionService.SERVICE_NAME
+        BackupDecryptionService.SERVICE_NAME,
       );
       return;
     }
@@ -588,7 +596,7 @@ export class BackupDecryptionService {
     if (!fileKey) {
       await logService.warn(
         `Failed to unwrap file key for ${fileHash}`,
-        BackupDecryptionService.SERVICE_NAME
+        BackupDecryptionService.SERVICE_NAME,
       );
       return;
     }
@@ -598,13 +606,13 @@ export class BackupDecryptionService {
     const encryptedFilePath = path.join(
       backupPath,
       fileHash.substring(0, 2),
-      fileHash
+      fileHash,
     );
 
     if (!fs.existsSync(encryptedFilePath)) {
       await logService.warn(
         `Encrypted file not found: ${encryptedFilePath}`,
-        BackupDecryptionService.SERVICE_NAME
+        BackupDecryptionService.SERVICE_NAME,
       );
       fileKey.fill(0);
       return;
@@ -614,13 +622,16 @@ export class BackupDecryptionService {
     const decryptedData = this.decryptAesCbc(fileKey, encryptedData);
 
     // Write decrypted file
-    const outputFilePath = path.join(outputPath, path.basename(row.relativePath));
+    const outputFilePath = path.join(
+      outputPath,
+      path.basename(row.relativePath),
+    );
     fs.writeFileSync(outputFilePath, decryptedData);
 
     await logService.debug(
       `Decrypted file: ${row.relativePath}`,
       BackupDecryptionService.SERVICE_NAME,
-      { outputPath: outputFilePath }
+      { outputPath: outputFilePath },
     );
 
     // Clear file key
@@ -659,16 +670,16 @@ export class BackupDecryptionService {
         }
         fs.rmdirSync(decryptedPath);
         await logService.debug(
-          'Cleaned up decrypted files',
+          "Cleaned up decrypted files",
           BackupDecryptionService.SERVICE_NAME,
-          { path: decryptedPath }
+          { path: decryptedPath },
         );
       }
     } catch (error) {
       await logService.warn(
-        'Failed to clean up decrypted files',
+        "Failed to clean up decrypted files",
         BackupDecryptionService.SERVICE_NAME,
-        { error: error instanceof Error ? error.message : String(error) }
+        { error: error instanceof Error ? error.message : String(error) },
       );
     }
   }

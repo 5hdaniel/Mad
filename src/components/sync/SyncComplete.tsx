@@ -1,5 +1,5 @@
-import React from 'react';
-import type { SyncResult } from './types';
+import React from "react";
+import type { SyncResult } from "./types";
 
 interface SyncCompleteProps {
   result: SyncResult;
@@ -8,7 +8,7 @@ interface SyncCompleteProps {
 
 export const SyncComplete: React.FC<SyncCompleteProps> = ({
   result,
-  onContinue
+  onContinue,
 }) => {
   const durationMinutes = Math.round(result.duration / 60000);
 
@@ -31,9 +31,7 @@ export const SyncComplete: React.FC<SyncCompleteProps> = ({
         </svg>
       </div>
 
-      <h3 className="text-lg font-medium mb-2">
-        Sync Complete!
-      </h3>
+      <h3 className="text-lg font-medium mb-2">Sync Complete!</h3>
 
       <div className="sync-summary space-y-2 my-4">
         <div className="summary-row flex items-center gap-2 text-gray-700">
@@ -73,7 +71,7 @@ export const SyncComplete: React.FC<SyncCompleteProps> = ({
       </div>
 
       <p className="text-sm text-gray-500">
-        Completed in {durationMinutes} minute{durationMinutes !== 1 ? 's' : ''}
+        Completed in {durationMinutes} minute{durationMinutes !== 1 ? "s" : ""}
       </p>
 
       <button

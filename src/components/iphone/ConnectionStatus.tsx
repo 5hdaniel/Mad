@@ -1,6 +1,6 @@
-import React from 'react';
-import type { ConnectionStatusProps } from '../../types/iphone';
-import { TrustComputerHint } from './TrustComputerHint';
+import React from "react";
+import type { ConnectionStatusProps } from "../../types/iphone";
+import { TrustComputerHint } from "./TrustComputerHint";
 
 /**
  * ConnectionStatus Component
@@ -30,7 +30,9 @@ export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({
             />
           </svg>
         </div>
-        <h3 className="text-xl font-semibold text-gray-800">Connect Your iPhone</h3>
+        <h3 className="text-xl font-semibold text-gray-800">
+          Connect Your iPhone
+        </h3>
         <p className="text-gray-500 mt-2 max-w-sm">
           Connect your iPhone using a USB cable to sync messages and contacts.
         </p>
@@ -58,11 +60,9 @@ export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({
         </svg>
       </div>
       <h3 className="text-xl font-semibold text-gray-800">
-        {device?.name || 'iPhone'}
+        {device?.name || "iPhone"}
       </h3>
-      <p className="text-sm text-gray-500 mt-1">
-        iOS {device?.productVersion}
-      </p>
+      <p className="text-sm text-gray-500 mt-1">iOS {device?.productVersion}</p>
       <button
         onClick={onSyncClick}
         className="mt-6 px-6 py-3 bg-gradient-to-r from-purple-500 to-indigo-600 text-white font-medium rounded-lg hover:from-purple-600 hover:to-indigo-700 transition-all shadow-md hover:shadow-lg"

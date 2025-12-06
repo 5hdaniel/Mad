@@ -3,7 +3,7 @@
  * Handles phone number normalization and formatting
  */
 
-import { REGEX_PATTERNS } from '../constants';
+import { REGEX_PATTERNS } from "../constants";
 
 /**
  * Normalize phone number by removing all non-digit characters
@@ -11,8 +11,8 @@ import { REGEX_PATTERNS } from '../constants';
  * @returns Normalized phone number (digits only)
  */
 export function normalizePhoneNumber(phone: string | null | undefined): string {
-  if (!phone) return '';
-  return phone.replace(REGEX_PATTERNS.PHONE_NORMALIZE, '');
+  if (!phone) return "";
+  return phone.replace(REGEX_PATTERNS.PHONE_NORMALIZE, "");
 }
 
 /**
@@ -22,10 +22,10 @@ export function normalizePhoneNumber(phone: string | null | undefined): string {
  * @returns Formatted phone number or email
  */
 export function formatPhoneNumber(phone: string | null | undefined): string {
-  if (!phone) return '';
+  if (!phone) return "";
 
   // Check if it's an email
-  if (phone.includes('@')) {
+  if (phone.includes("@")) {
     return phone;
   }
 
@@ -33,7 +33,7 @@ export function formatPhoneNumber(phone: string | null | undefined): string {
   const cleaned = normalizePhoneNumber(phone);
 
   // Format based on length
-  if (cleaned.length === 11 && cleaned[0] === '1') {
+  if (cleaned.length === 11 && cleaned[0] === "1") {
     // US number with country code: +1 (XXX) XXX-XXXX
     return `+1 (${cleaned.slice(1, 4)}) ${cleaned.slice(4, 7)}-${cleaned.slice(7)}`;
   } else if (cleaned.length === 10) {
@@ -54,7 +54,10 @@ export function formatPhoneNumber(phone: string | null | undefined): string {
  * @param phone2 - Second phone number
  * @returns True if phone numbers match
  */
-export function phoneNumbersMatch(phone1: string | null | undefined, phone2: string | null | undefined): boolean {
+export function phoneNumbersMatch(
+  phone1: string | null | undefined,
+  phone2: string | null | undefined,
+): boolean {
   const normalized1 = normalizePhoneNumber(phone1);
   const normalized2 = normalizePhoneNumber(phone2);
 

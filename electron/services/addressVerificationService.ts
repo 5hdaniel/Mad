@@ -3,7 +3,7 @@
  * Uses Google Places API to verify and autocomplete property addresses
  */
 
-import axios from 'axios';
+import axios from "axios";
 
 /**
  * Address suggestion from autocomplete
@@ -66,7 +66,7 @@ interface ParsedAddressComponents {
 
 class AddressVerificationService {
   private apiKey: string | null = null;
-  private readonly baseUrl = 'https://maps.googleapis.com/maps/api';
+  private readonly baseUrl = "https://maps.googleapis.com/maps/api";
 
   /**
    * Initialize with API key from environment or config
@@ -75,11 +75,11 @@ class AddressVerificationService {
     this.apiKey = apiKey || process.env.GOOGLE_MAPS_API_KEY || null;
 
     if (!this.apiKey) {
-      console.warn('[AddressVerification] No Google Maps API key configured');
+      console.warn("[AddressVerification] No Google Maps API key configured");
       return false;
     }
 
-    console.log('[AddressVerification] Initialized with API key');
+    console.log("[AddressVerification] Initialized with API key");
     return true;
   }
 
@@ -89,9 +89,12 @@ class AddressVerificationService {
    * @param sessionToken - Session token for billing optimization
    * @returns Array of address suggestions
    */
-  async getAddressSuggestions(input: string, sessionToken: string | null = null): Promise<AddressSuggestion[]> {
+  async getAddressSuggestions(
+    input: string,
+    sessionToken: string | null = null,
+  ): Promise<AddressSuggestion[]> {
     if (!this.apiKey) {
-      throw new Error('Google Maps API key not configured');
+      throw new Error("Google Maps API key not configured");
     }
 
     if (!input || input.length < 3) {
@@ -103,36 +106,51 @@ class AddressVerificationService {
       const params: any = {
         input: input,
         key: this.apiKey,
-        types: 'address',
-        components: 'country:us', // Restrict to US addresses (change as needed)
+        types: "address",
+        components: "country:us", // Restrict to US addresses (change as needed)
       };
 
       if (sessionToken) {
         params.sessiontoken = sessionToken;
       }
 
-      console.log('[AddressVerification] Fetching suggestions for:', input);
+      console.log("[AddressVerification] Fetching suggestions for:", input);
 
       const response = await axios.get(url, { params });
 
-      if (response.data.status !== 'OK' && response.data.status !== 'ZERO_RESULTS') {
-        console.error('[AddressVerification] API error:', response.data.status, response.data.error_message);
+      if (
+        response.data.status !== "OK" &&
+        response.data.status !== "ZERO_RESULTS"
+      ) {
+        console.error(
+          "[AddressVerification] API error:",
+          response.data.status,
+          response.data.error_message,
+        );
         throw new Error(`Google Places API error: ${response.data.status}`);
       }
 
       // Transform predictions to our format
-      const suggestions = (response.data.predictions || []).map((prediction: any) => ({
-        place_id: prediction.place_id,
-        formatted_address: prediction.description,
-        main_text: prediction.structured_formatting?.main_text || '',
-        secondary_text: prediction.structured_formatting?.secondary_text || '',
-      }));
+      const suggestions = (response.data.predictions || []).map(
+        (prediction: any) => ({
+          place_id: prediction.place_id,
+          formatted_address: prediction.description,
+          main_text: prediction.structured_formatting?.main_text || "",
+          secondary_text:
+            prediction.structured_formatting?.secondary_text || "",
+        }),
+      );
 
-      console.log(`[AddressVerification] Found ${suggestions.length} suggestions`);
+      console.log(
+        `[AddressVerification] Found ${suggestions.length} suggestions`,
+      );
 
       return suggestions;
     } catch (error) {
-      console.error('[AddressVerification] Failed to fetch suggestions:', (error as Error).message);
+      console.error(
+        "[AddressVerification] Failed to fetch suggestions:",
+        (error as Error).message,
+      );
       throw error;
     }
   }
@@ -144,7 +162,7 @@ class AddressVerificationService {
    */
   async getAddressDetails(placeId: string): Promise<AddressDetails> {
     if (!this.apiKey) {
-      throw new Error('Google Maps API key not configured');
+      throw new Error("Google Maps API key not configured");
     }
 
     try {
@@ -152,29 +170,34 @@ class AddressVerificationService {
       const params = {
         place_id: placeId,
         key: this.apiKey,
-        fields: 'address_components,formatted_address,geometry',
+        fields: "address_components,formatted_address,geometry",
       };
 
-      console.log('[AddressVerification] Fetching details for place:', placeId);
+      console.log("[AddressVerification] Fetching details for place:", placeId);
 
       const response = await axios.get(url, { params });
 
-      if (response.data.status !== 'OK') {
-        console.error('[AddressVerification] API error:', response.data.status);
+      if (response.data.status !== "OK") {
+        console.error("[AddressVerification] API error:", response.data.status);
         throw new Error(`Google Places API error: ${response.data.status}`);
       }
 
       const result = response.data.result;
 
       // Parse address components
-      const addressComponents = this._parseAddressComponents(result.address_components);
+      const addressComponents = this._parseAddressComponents(
+        result.address_components,
+      );
 
       return {
         formatted_address: result.formatted_address,
         street_number: addressComponents.street_number,
         route: addressComponents.route,
-        street: `${addressComponents.street_number || ''} ${addressComponents.route || ''}`.trim(),
-        city: addressComponents.locality || addressComponents.administrative_area_level_2,
+        street:
+          `${addressComponents.street_number || ""} ${addressComponents.route || ""}`.trim(),
+        city:
+          addressComponents.locality ||
+          addressComponents.administrative_area_level_2,
         state: addressComponents.administrative_area_level_1,
         state_short: addressComponents.administrative_area_level_1_short,
         zip: addressComponents.postal_code,
@@ -186,7 +209,10 @@ class AddressVerificationService {
         place_id: placeId,
       };
     } catch (error) {
-      console.error('[AddressVerification] Failed to fetch address details:', (error as Error).message);
+      console.error(
+        "[AddressVerification] Failed to fetch address details:",
+        (error as Error).message,
+      );
       throw error;
     }
   }
@@ -195,32 +221,34 @@ class AddressVerificationService {
    * Parse Google address components into usable format
    * @private
    */
-  private _parseAddressComponents(components: GoogleAddressComponent[]): ParsedAddressComponents {
+  private _parseAddressComponents(
+    components: GoogleAddressComponent[],
+  ): ParsedAddressComponents {
     const parsed: ParsedAddressComponents = {};
 
     components.forEach((component) => {
       const types = component.types;
 
-      if (types.includes('street_number')) {
+      if (types.includes("street_number")) {
         parsed.street_number = component.long_name;
       }
-      if (types.includes('route')) {
+      if (types.includes("route")) {
         parsed.route = component.long_name;
       }
-      if (types.includes('locality')) {
+      if (types.includes("locality")) {
         parsed.locality = component.long_name;
       }
-      if (types.includes('administrative_area_level_1')) {
+      if (types.includes("administrative_area_level_1")) {
         parsed.administrative_area_level_1 = component.long_name;
         parsed.administrative_area_level_1_short = component.short_name;
       }
-      if (types.includes('administrative_area_level_2')) {
+      if (types.includes("administrative_area_level_2")) {
         parsed.administrative_area_level_2 = component.long_name;
       }
-      if (types.includes('postal_code')) {
+      if (types.includes("postal_code")) {
         parsed.postal_code = component.long_name;
       }
-      if (types.includes('country')) {
+      if (types.includes("country")) {
         parsed.country = component.long_name;
         parsed.country_short = component.short_name;
       }
@@ -236,7 +264,7 @@ class AddressVerificationService {
    */
   async geocodeAddress(address: string): Promise<AddressDetails> {
     if (!this.apiKey) {
-      throw new Error('Google Maps API key not configured');
+      throw new Error("Google Maps API key not configured");
     }
 
     try {
@@ -246,24 +274,32 @@ class AddressVerificationService {
         key: this.apiKey,
       };
 
-      console.log('[AddressVerification] Geocoding address:', address);
+      console.log("[AddressVerification] Geocoding address:", address);
 
       const response = await axios.get(url, { params });
 
-      if (response.data.status !== 'OK') {
-        console.error('[AddressVerification] Geocoding error:', response.data.status);
+      if (response.data.status !== "OK") {
+        console.error(
+          "[AddressVerification] Geocoding error:",
+          response.data.status,
+        );
         throw new Error(`Geocoding failed: ${response.data.status}`);
       }
 
       const result = response.data.results[0];
-      const addressComponents = this._parseAddressComponents(result.address_components);
+      const addressComponents = this._parseAddressComponents(
+        result.address_components,
+      );
 
       return {
         formatted_address: result.formatted_address,
         street_number: addressComponents.street_number,
         route: addressComponents.route,
-        street: `${addressComponents.street_number || ''} ${addressComponents.route || ''}`.trim(),
-        city: addressComponents.locality || addressComponents.administrative_area_level_2,
+        street:
+          `${addressComponents.street_number || ""} ${addressComponents.route || ""}`.trim(),
+        city:
+          addressComponents.locality ||
+          addressComponents.administrative_area_level_2,
         state: addressComponents.administrative_area_level_1,
         state_short: addressComponents.administrative_area_level_1_short,
         zip: addressComponents.postal_code,
@@ -275,7 +311,10 @@ class AddressVerificationService {
         place_id: result.place_id,
       };
     } catch (error) {
-      console.error('[AddressVerification] Geocoding failed:', (error as Error).message);
+      console.error(
+        "[AddressVerification] Geocoding failed:",
+        (error as Error).message,
+      );
       throw error;
     }
   }

@@ -1,9 +1,13 @@
-import { PublicClientApplication, InteractionRequiredAuthError, AccountInfo } from '@azure/msal-node';
-import { Client } from '@microsoft/microsoft-graph-client';
-import 'isomorphic-fetch';
-import fs from 'fs';
-import path from 'path';
-import { app, BrowserWindow, shell } from 'electron';
+import {
+  PublicClientApplication,
+  InteractionRequiredAuthError,
+  AccountInfo,
+} from "@azure/msal-node";
+import { Client } from "@microsoft/microsoft-graph-client";
+import "isomorphic-fetch";
+import fs from "fs";
+import path from "path";
+import { app, BrowserWindow, shell } from "electron";
 
 interface MsalConfig {
   auth: {
@@ -101,10 +105,13 @@ class OutlookService {
    * Initialize MSAL with configuration from environment variables
    * Includes persistent token caching so users don't have to re-authenticate every time
    */
-  async initialize(clientId: string, tenantId: string = 'common'): Promise<void> {
+  async initialize(
+    clientId: string,
+    tenantId: string = "common",
+  ): Promise<void> {
     // Set up cache location in app's user data directory
-    const userDataPath = app.getPath('userData');
-    this.cacheLocation = path.join(userDataPath, 'msal-cache.json');
+    const userDataPath = app.getPath("userData");
+    this.cacheLocation = path.join(userDataPath, "msal-cache.json");
 
     const msalConfig: MsalConfig = {
       auth: {
@@ -116,14 +123,17 @@ class OutlookService {
           beforeCacheAccess: async (cacheContext) => {
             // Read cache from disk
             if (fs.existsSync(this.cacheLocation!)) {
-              const cacheData = fs.readFileSync(this.cacheLocation!, 'utf8');
+              const cacheData = fs.readFileSync(this.cacheLocation!, "utf8");
               cacheContext.tokenCache.deserialize(cacheData);
             }
           },
           afterCacheAccess: async (cacheContext) => {
             // Write cache to disk if it changed
             if (cacheContext.cacheHasChanged) {
-              fs.writeFileSync(this.cacheLocation!, cacheContext.tokenCache.serialize());
+              fs.writeFileSync(
+                this.cacheLocation!,
+                cacheContext.tokenCache.serialize(),
+              );
             }
           },
         },
@@ -146,12 +156,16 @@ class OutlookService {
    * Authenticate user using device code flow (best for desktop apps)
    * Returns user account info on success
    */
-  async authenticate(parentWindow: BrowserWindow | null): Promise<AuthenticateResult> {
+  async authenticate(
+    parentWindow: BrowserWindow | null,
+  ): Promise<AuthenticateResult> {
     if (!this.msalInstance) {
-      throw new Error('OutlookService not initialized. Call initialize() first.');
+      throw new Error(
+        "OutlookService not initialized. Call initialize() first.",
+      );
     }
 
-    const scopes = ['User.Read', 'Mail.Read'];
+    const scopes = ["User.Read", "Mail.Read"];
 
     try {
       // Try to get token silently from cache first
@@ -164,7 +178,8 @@ class OutlookService {
         };
 
         try {
-          const response = await this.msalInstance.acquireTokenSilent(silentRequest);
+          const response =
+            await this.msalInstance.acquireTokenSilent(silentRequest);
           this.accessToken = response.accessToken;
           this.initializeGraphClient();
           return { success: true, account: response.account ?? undefined };
@@ -184,16 +199,16 @@ class OutlookService {
           // Automatically open the browser for the user
 
           // Open browser automatically
-          shell.openExternal(response.verificationUri).catch(err => {
-            console.error('Failed to open browser:', err);
+          shell.openExternal(response.verificationUri).catch((err) => {
+            console.error("Failed to open browser:", err);
           });
 
           // Send to renderer if parentWindow is available
           if (parentWindow && !parentWindow.isDestroyed()) {
-            parentWindow.webContents.send('device-code-received', {
+            parentWindow.webContents.send("device-code-received", {
               verificationUri: response.verificationUri,
               userCode: response.userCode,
-              message: response.message
+              message: response.message,
             });
           }
 
@@ -201,7 +216,8 @@ class OutlookService {
         },
       };
 
-      const response = await this.msalInstance.acquireTokenByDeviceCode(deviceCodeRequest);
+      const response =
+        await this.msalInstance.acquireTokenByDeviceCode(deviceCodeRequest);
       this.accessToken = response?.accessToken ?? null;
       this.initializeGraphClient();
 
@@ -209,16 +225,15 @@ class OutlookService {
         success: true,
         account: response?.account ?? undefined,
         userInfo: {
-          username: response?.account?.username ?? '',
+          username: response?.account?.username ?? "",
           name: response?.account?.name ?? undefined,
-        }
+        },
       };
-
     } catch (error) {
-      console.error('Authentication error:', error);
+      console.error("Authentication error:", error);
       return {
         success: false,
-        error: (error as Error).message
+        error: (error as Error).message,
       };
     }
   }
@@ -239,14 +254,14 @@ class OutlookService {
    */
   async getUserEmail(): Promise<string> {
     if (!this.graphClient) {
-      throw new Error('Not authenticated. Call authenticate() first.');
+      throw new Error("Not authenticated. Call authenticate() first.");
     }
 
     try {
-      const user = await this.graphClient.api('/me').get();
+      const user = await this.graphClient.api("/me").get();
       return user.mail || user.userPrincipalName;
     } catch (error) {
-      console.error('Error getting user email:', error);
+      console.error("Error getting user email:", error);
       throw error;
     }
   }
@@ -256,9 +271,12 @@ class OutlookService {
    * @param {string} contactEmail - Email address to search for
    * @param {number} maxResults - Maximum number of emails to retrieve (default: 100)
    */
-  async getEmailsWithContact(contactEmail: string, maxResults: number = 100): Promise<EmailMessage[]> {
+  async getEmailsWithContact(
+    contactEmail: string,
+    maxResults: number = 100,
+  ): Promise<EmailMessage[]> {
     if (!this.graphClient) {
-      throw new Error('Not authenticated. Call authenticate() first.');
+      throw new Error("Not authenticated. Call authenticate() first.");
     }
 
     const graphClient = this.graphClient; // Capture client for use in this method
@@ -270,12 +288,18 @@ class OutlookService {
       const matchingEmails: EmailMessage[] = [];
 
       // Helper function to add timeout to promises
-      const withTimeout = <T>(promise: Promise<T>, timeoutMs: number = 60000): Promise<T> => {
+      const withTimeout = <T>(
+        promise: Promise<T>,
+        timeoutMs: number = 60000,
+      ): Promise<T> => {
         return Promise.race([
           promise,
           new Promise<T>((_, reject) =>
-            setTimeout(() => reject(new Error(`Request timeout after ${timeoutMs}ms`)), timeoutMs)
-          )
+            setTimeout(
+              () => reject(new Error(`Request timeout after ${timeoutMs}ms`)),
+              timeoutMs,
+            ),
+          ),
         ]);
       };
 
@@ -286,13 +310,15 @@ class OutlookService {
       try {
         const response = await withTimeout(
           this.graphClient
-            .api('/me/messages')
+            .api("/me/messages")
             .search(`"participants:${emailLower}"`)
-            .select('id,subject,from,toRecipients,ccRecipients,receivedDateTime,hasAttachments,importance')
+            .select(
+              "id,subject,from,toRecipients,ccRecipients,receivedDateTime,hasAttachments,importance",
+            )
             // Note: Cannot use .orderby() with $search - results are relevance-ranked
             .top(maxResults)
             .get(),
-          60000 // 60 second timeout
+          60000, // 60 second timeout
         );
 
         emailsToFetch = response.value || [];
@@ -304,12 +330,14 @@ class OutlookService {
 
         let response = await withTimeout(
           this.graphClient
-            .api('/me/messages')
-            .select('id,subject,from,toRecipients,ccRecipients,receivedDateTime,hasAttachments,importance')
-            .orderby('receivedDateTime DESC')
+            .api("/me/messages")
+            .select(
+              "id,subject,from,toRecipients,ccRecipients,receivedDateTime,hasAttachments,importance",
+            )
+            .orderby("receivedDateTime DESC")
             .top(50)
             .get(),
-          60000
+          60000,
         );
 
         const matchingEmailIds: EmailMessage[] = [];
@@ -319,21 +347,29 @@ class OutlookService {
         do {
           const emails: EmailMessage[] = response.value || [];
 
-          const matching = emails.filter(email => {
+          const matching = emails.filter((email) => {
             const fromEmail = email.from?.emailAddress?.address?.toLowerCase();
-            const toEmails = (email.toRecipients || []).map(r => r.emailAddress?.address?.toLowerCase());
-            const ccEmails = (email.ccRecipients || []).map(r => r.emailAddress?.address?.toLowerCase());
+            const toEmails = (email.toRecipients || []).map((r) =>
+              r.emailAddress?.address?.toLowerCase(),
+            );
+            const ccEmails = (email.ccRecipients || []).map((r) =>
+              r.emailAddress?.address?.toLowerCase(),
+            );
 
-            return fromEmail === emailLower ||
-                   toEmails.includes(emailLower) ||
-                   ccEmails.includes(emailLower);
+            return (
+              fromEmail === emailLower ||
+              toEmails.includes(emailLower) ||
+              ccEmails.includes(emailLower)
+            );
           });
 
           matchingEmailIds.push(...matching);
 
           if (matching.length === 0) {
             consecutivePagesWithNoMatches++;
-            if (consecutivePagesWithNoMatches >= maxConsecutivePagesWithNoMatches) {
+            if (
+              consecutivePagesWithNoMatches >= maxConsecutivePagesWithNoMatches
+            ) {
               break;
             }
           } else {
@@ -344,11 +380,14 @@ class OutlookService {
             break;
           }
 
-          nextLink = response['@odata.nextLink'];
+          nextLink = response["@odata.nextLink"];
           pageCount++;
 
           if (nextLink && pageCount < maxPages) {
-            response = await withTimeout(graphClient.api(nextLink).get(), 60000);
+            response = await withTimeout(
+              graphClient.api(nextLink).get(),
+              60000,
+            );
           } else {
             break;
           }
@@ -365,15 +404,20 @@ class OutlookService {
           const fullEmail = await withTimeout(
             graphClient
               .api(`/me/messages/${email.id}`)
-              .select('id,subject,from,toRecipients,ccRecipients,receivedDateTime,body,bodyPreview,hasAttachments,importance')
+              .select(
+                "id,subject,from,toRecipients,ccRecipients,receivedDateTime,body,bodyPreview,hasAttachments,importance",
+              )
               .get(),
-            30000 // 30 second timeout per email
+            30000, // 30 second timeout per email
           );
 
           // Merge the body into the email object
           matchingEmails.push(fullEmail);
         } catch (error) {
-          console.error(`[Email Fetch] Error fetching body for email ${email.id}:`, (error as Error).message);
+          console.error(
+            `[Email Fetch] Error fetching body for email ${email.id}:`,
+            (error as Error).message,
+          );
           // Still include the email but without body
           matchingEmails.push(email);
         }
@@ -381,12 +425,12 @@ class OutlookService {
 
       return matchingEmails;
     } catch (error) {
-      console.error('[Email Fetch] Error fetching emails:', error);
-      console.error('[Email Fetch] Error details:', {
+      console.error("[Email Fetch] Error fetching emails:", error);
+      console.error("[Email Fetch] Error details:", {
         message: (error as Error).message,
         code: (error as any).code,
         statusCode: (error as any).statusCode,
-        stack: (error as Error).stack
+        stack: (error as Error).stack,
       });
       throw error;
     }
@@ -403,31 +447,37 @@ class OutlookService {
     contactName: string,
     contactEmail: string,
     exportPath: string,
-    onProgress: ((progress: ExportProgress) => void) | null = null
+    onProgress: ((progress: ExportProgress) => void) | null = null,
   ): Promise<ExportResult> {
     try {
-      if (onProgress) onProgress({ stage: 'fetching', message: `Fetching emails for ${contactName}...` });
+      if (onProgress)
+        onProgress({
+          stage: "fetching",
+          message: `Fetching emails for ${contactName}...`,
+        });
 
       const emails = await this.getEmailsWithContact(contactEmail);
 
       if (emails.length === 0) {
-        if (onProgress) onProgress({ stage: 'complete', message: 'No emails found' });
+        if (onProgress)
+          onProgress({ stage: "complete", message: "No emails found" });
         return {
           success: true,
-          message: 'No emails found for this contact',
+          message: "No emails found for this contact",
           emailCount: 0,
         };
       }
 
-      if (onProgress) onProgress({
-        stage: 'processing',
-        message: `Processing ${emails.length} emails for ${contactName}...`,
-        current: 0,
-        total: emails.length
-      });
+      if (onProgress)
+        onProgress({
+          stage: "processing",
+          message: `Processing ${emails.length} emails for ${contactName}...`,
+          current: 0,
+          total: emails.length,
+        });
 
       // Create contact folder inside the export path
-      const sanitizedName = contactName.replace(/[^a-z0-9 ]/gi, '_');
+      const sanitizedName = contactName.replace(/[^a-z0-9 ]/gi, "_");
       const contactFolder = path.join(exportPath, sanitizedName);
 
       if (!fs.existsSync(contactFolder)) {
@@ -444,20 +494,25 @@ class OutlookService {
       content += `Email: ${contactEmail}\n`;
       content += `Export Date: ${new Date().toLocaleString()}\n`;
       content += `Total Emails: ${emails.length}\n`;
-      content += `\n${'='.repeat(80)}\n\n`;
+      content += `\n${"=".repeat(80)}\n\n`;
 
       // Sort emails by date (oldest first)
-      emails.sort((a, b) => new Date(a.receivedDateTime).getTime() - new Date(b.receivedDateTime).getTime());
+      emails.sort(
+        (a, b) =>
+          new Date(a.receivedDateTime).getTime() -
+          new Date(b.receivedDateTime).getTime(),
+      );
 
       emails.forEach((email, index) => {
         content += `EMAIL ${index + 1}\n`;
-        content += `${'-'.repeat(80)}\n`;
+        content += `${"-".repeat(80)}\n`;
         content += `Date: ${new Date(email.receivedDateTime).toLocaleString()}\n`;
 
         // Handle from field safely
         if (email.from && email.from.emailAddress) {
-          const fromName = email.from.emailAddress.name || 'Unknown';
-          const fromAddress = email.from.emailAddress.address || 'unknown@unknown.com';
+          const fromName = email.from.emailAddress.name || "Unknown";
+          const fromAddress =
+            email.from.emailAddress.address || "unknown@unknown.com";
           content += `From: ${fromName} <${fromAddress}>\n`;
         } else {
           content += `From: Unknown\n`;
@@ -465,9 +520,12 @@ class OutlookService {
 
         if (email.toRecipients && email.toRecipients.length > 0) {
           const recipients = email.toRecipients
-            .filter(r => r.emailAddress)
-            .map(r => `${r.emailAddress?.name || 'Unknown'} <${r.emailAddress?.address || 'unknown@unknown.com'}>`)
-            .join(', ');
+            .filter((r) => r.emailAddress)
+            .map(
+              (r) =>
+                `${r.emailAddress?.name || "Unknown"} <${r.emailAddress?.address || "unknown@unknown.com"}>`,
+            )
+            .join(", ");
           if (recipients) {
             content += `To: ${recipients}\n`;
           }
@@ -475,16 +533,19 @@ class OutlookService {
 
         if (email.ccRecipients && email.ccRecipients.length > 0) {
           const cc = email.ccRecipients
-            .filter(r => r.emailAddress)
-            .map(r => `${r.emailAddress?.name || 'Unknown'} <${r.emailAddress?.address || 'unknown@unknown.com'}>`)
-            .join(', ');
+            .filter((r) => r.emailAddress)
+            .map(
+              (r) =>
+                `${r.emailAddress?.name || "Unknown"} <${r.emailAddress?.address || "unknown@unknown.com"}>`,
+            )
+            .join(", ");
           if (cc) {
             content += `CC: ${cc}\n`;
           }
         }
 
-        content += `Subject: ${email.subject || '(No Subject)'}\n`;
-        content += `Importance: ${email.importance || 'normal'}\n`;
+        content += `Subject: ${email.subject || "(No Subject)"}\n`;
+        content += `Importance: ${email.importance || "normal"}\n`;
 
         if (email.hasAttachments) {
           content += `Attachments: Yes\n`;
@@ -497,15 +558,15 @@ class OutlookService {
           let bodyText = email.body.content;
 
           // If HTML, strip basic tags for readability
-          if (email.body.contentType === 'html') {
+          if (email.body.contentType === "html") {
             bodyText = bodyText
-              .replace(/<style[^>]*>.*?<\/style>/gs, '')
-              .replace(/<script[^>]*>.*?<\/script>/gs, '')
-              .replace(/<[^>]+>/g, '')
-              .replace(/&nbsp;/g, ' ')
-              .replace(/&amp;/g, '&')
-              .replace(/&lt;/g, '<')
-              .replace(/&gt;/g, '>')
+              .replace(/<style[^>]*>.*?<\/style>/gs, "")
+              .replace(/<script[^>]*>.*?<\/script>/gs, "")
+              .replace(/<[^>]+>/g, "")
+              .replace(/&nbsp;/g, " ")
+              .replace(/&amp;/g, "&")
+              .replace(/&lt;/g, "<")
+              .replace(/&gt;/g, ">")
               .replace(/&quot;/g, '"')
               .trim();
           }
@@ -513,16 +574,16 @@ class OutlookService {
           content += bodyText.trim();
         }
 
-        content += `\n\n${'='.repeat(80)}\n\n`;
+        content += `\n\n${"=".repeat(80)}\n\n`;
       });
 
       // Write to file
-      fs.writeFileSync(filePath, content, 'utf8');
+      fs.writeFileSync(filePath, content, "utf8");
 
       // Also export as JSON for potential future use
       const jsonFileName = `emails.json`;
       const jsonFilePath = path.join(contactFolder, jsonFileName);
-      fs.writeFileSync(jsonFilePath, JSON.stringify(emails, null, 2), 'utf8');
+      fs.writeFileSync(jsonFilePath, JSON.stringify(emails, null, 2), "utf8");
 
       return {
         success: true,
@@ -530,9 +591,8 @@ class OutlookService {
         exportPath: contactFolder,
         files: [fileName, jsonFileName],
       };
-
     } catch (error) {
-      console.error('Error exporting emails:', error);
+      console.error("Error exporting emails:", error);
       return {
         success: false,
         error: (error as Error).message,

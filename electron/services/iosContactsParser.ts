@@ -9,10 +9,10 @@
  * methods to resolve phone numbers and email addresses to contact names.
  */
 
-import Database from 'better-sqlite3-multiple-ciphers';
-import type { Database as DatabaseType, Statement } from 'better-sqlite3';
-import path from 'path';
-import log from 'electron-log';
+import Database from "better-sqlite3-multiple-ciphers";
+import type { Database as DatabaseType, Statement } from "better-sqlite3";
+import path from "path";
+import log from "electron-log";
 import type {
   iOSContact,
   ContactPhone,
@@ -20,13 +20,13 @@ import type {
   ContactLookupResult,
   RawContactRow,
   RawMultiValueRow,
-} from '../types/iosContacts';
-import { ABMultiValuePropertyType } from '../types/iosContacts';
+} from "../types/iosContacts";
+import { ABMultiValuePropertyType } from "../types/iosContacts";
 import {
   normalizePhoneNumber,
   isPhoneNumber,
   getTrailingDigits,
-} from '../utils/phoneNormalization';
+} from "../utils/phoneNormalization";
 
 /**
  * Parser for iOS AddressBook.sqlitedb from iTunes-style backups.
@@ -47,7 +47,8 @@ export class iOSContactsParser {
   private contactCache: Map<number, iOSContact> = new Map(); // contact id -> contact
 
   /** The AddressBook hash in iOS backups (SHA1 of domain-path) */
-  static readonly ADDRESSBOOK_DB_HASH = '31bb7ba8914766d4ba40d6dfb6113c8b614be442';
+  static readonly ADDRESSBOOK_DB_HASH =
+    "31bb7ba8914766d4ba40d6dfb6113c8b614be442";
 
   // Prepared statements
   private stmtAllContacts: Statement | null = null;
@@ -67,13 +68,13 @@ export class iOSContactsParser {
     try {
       // Open in readonly mode - we never modify the backup
       this.db = new Database(dbPath, { readonly: true });
-      log.info('[iOSContactsParser] Opened AddressBook database');
+      log.info("[iOSContactsParser] Opened AddressBook database");
 
       this.prepareStatements();
       this.buildLookupIndexes();
     } catch (error) {
-      log.error('[iOSContactsParser] Failed to open AddressBook database', {
-        error: error instanceof Error ? error.message : 'Unknown error',
+      log.error("[iOSContactsParser] Failed to open AddressBook database", {
+        error: error instanceof Error ? error.message : "Unknown error",
       });
       throw error;
     }
@@ -86,7 +87,7 @@ export class iOSContactsParser {
     if (this.db) {
       this.db.close();
       this.db = null;
-      log.info('[iOSContactsParser] Closed AddressBook database');
+      log.info("[iOSContactsParser] Closed AddressBook database");
     }
 
     this.phoneIndex.clear();
@@ -177,7 +178,7 @@ export class iOSContactsParser {
     // Get all multi-values (phones and emails)
     const multiValues = this.stmtMultiValues.all(
       ABMultiValuePropertyType.PHONE,
-      ABMultiValuePropertyType.EMAIL
+      ABMultiValuePropertyType.EMAIL,
     ) as RawMultiValueRow[];
 
     // Group multi-values by contact ID
@@ -212,7 +213,7 @@ export class iOSContactsParser {
     }
 
     const elapsed = Date.now() - startTime;
-    log.info('[iOSContactsParser] Built lookup indexes', {
+    log.info("[iOSContactsParser] Built lookup indexes", {
       contactCount: contacts.length,
       phoneIndexSize: this.phoneIndex.size,
       emailIndexSize: this.emailIndex.size,
@@ -225,7 +226,7 @@ export class iOSContactsParser {
    */
   private buildContact(
     row: RawContactRow,
-    multiValues: RawMultiValueRow[]
+    multiValues: RawMultiValueRow[],
   ): iOSContact {
     const phoneNumbers: ContactPhone[] = [];
     const emails: ContactEmail[] = [];
@@ -255,7 +256,7 @@ export class iOSContactsParser {
       displayName: this.computeDisplayName(
         row.First,
         row.Last,
-        row.Organization
+        row.Organization,
       ),
     };
   }
@@ -265,7 +266,7 @@ export class iOSContactsParser {
    * iOS stores labels like "_$!<Mobile>!$_" - we extract just "Mobile".
    */
   private cleanLabel(label: string | null): string {
-    if (!label) return 'other';
+    if (!label) return "other";
 
     // iOS uses format like "_$!<Mobile>!$_" or "_$!<Home>!$_"
     const match = label.match(/_\$!<(.+)>!\$_/);
@@ -283,7 +284,7 @@ export class iOSContactsParser {
   private computeDisplayName(
     firstName: string | null,
     lastName: string | null,
-    organization: string | null
+    organization: string | null,
   ): string {
     const parts: string[] = [];
 
@@ -295,14 +296,14 @@ export class iOSContactsParser {
     }
 
     if (parts.length > 0) {
-      return parts.join(' ');
+      return parts.join(" ");
     }
 
     if (organization?.trim()) {
       return organization.trim();
     }
 
-    return 'Unknown';
+    return "Unknown";
   }
 
   /**
@@ -340,7 +341,7 @@ export class iOSContactsParser {
     const multiValues = this.stmtMultiValuesByContact.all(
       id,
       ABMultiValuePropertyType.PHONE,
-      ABMultiValuePropertyType.EMAIL
+      ABMultiValuePropertyType.EMAIL,
     ) as RawMultiValueRow[];
 
     const contact = this.buildContact(row, multiValues);
@@ -366,7 +367,7 @@ export class iOSContactsParser {
     const contact = this.getContactById(contactId);
     return {
       contact,
-      matchedOn: contact ? 'phone' : null,
+      matchedOn: contact ? "phone" : null,
     };
   }
 
@@ -387,7 +388,7 @@ export class iOSContactsParser {
     const contact = this.getContactById(contactId);
     return {
       contact,
-      matchedOn: contact ? 'email' : null,
+      matchedOn: contact ? "email" : null,
     };
   }
 

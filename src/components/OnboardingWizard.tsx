@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { usePlatform } from '../contexts/PlatformContext';
+import React, { useState, useEffect } from "react";
+import { usePlatform } from "../contexts/PlatformContext";
 
 interface OnboardingWizardProps {
   onComplete: (result?: { skipped?: boolean }) => void;
@@ -68,8 +68,8 @@ function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
         }, 1500);
       }
     } catch (err) {
-      console.error('Failed to request contacts permission:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      console.error("Failed to request contacts permission:", err);
+      const errorMessage = err instanceof Error ? err.message : "Unknown error";
       setError(errorMessage);
       // Move on anyway after error
       setTimeout(() => {
@@ -92,11 +92,11 @@ function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
         // Move to waiting step
         setStep(4);
       } else {
-        setError('Failed to open System Preferences');
+        setError("Failed to open System Preferences");
       }
     } catch (err) {
-      console.error('Failed to setup Full Disk Access:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      console.error("Failed to setup Full Disk Access:", err);
+      const errorMessage = err instanceof Error ? err.message : "Unknown error";
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -125,11 +125,13 @@ function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
             style={{
               width: `${
                 isMacOS
-                  ? (step / 5) * 100  // macOS: 5 steps total
-                  : step === 1 ? 33   // Windows: step 1 = 33%
-                  : step === 2 ? 66   // Windows: step 2 = 66%
-                  : 100               // Windows: step 5 = 100%
-              }%`
+                  ? (step / 5) * 100 // macOS: 5 steps total
+                  : step === 1
+                    ? 33 // Windows: step 1 = 33%
+                    : step === 2
+                      ? 66 // Windows: step 2 = 66%
+                      : 100 // Windows: step 5 = 100%
+              }%`,
             }}
           />
         </div>
@@ -141,49 +143,115 @@ function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
             <div className="text-center">
               <div className="mb-6">
                 <div className="w-20 h-20 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full mx-auto flex items-center justify-center">
-                  <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
+                  <svg
+                    className="w-10 h-10 text-white"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5"
+                    />
                   </svg>
                 </div>
               </div>
 
-              <h2 className="text-3xl font-bold text-gray-900 mb-3">Welcome to Magic Audit!</h2>
+              <h2 className="text-3xl font-bold text-gray-900 mb-3">
+                Welcome to Magic Audit!
+              </h2>
               <p className="text-lg text-gray-600 mb-8">
                 Let's set up permissions so you can start auditing transactions
               </p>
 
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-8 text-left">
-                <h3 className="font-semibold text-gray-900 mb-3">What we'll do:</h3>
+                <h3 className="font-semibold text-gray-900 mb-3">
+                  What we'll do:
+                </h3>
                 <ul className="space-y-3 text-sm text-gray-700">
                   {isMacOS && (
                     <>
                       <li className="flex items-start gap-3">
-                        <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        <svg
+                          className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M5 13l4 4L19 7"
+                          />
                         </svg>
-                        <span><strong>Contacts Access:</strong> Match phone numbers to contact names in your emails</span>
+                        <span>
+                          <strong>Contacts Access:</strong> Match phone numbers
+                          to contact names in your emails
+                        </span>
                       </li>
                       <li className="flex items-start gap-3">
-                        <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        <svg
+                          className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M5 13l4 4L19 7"
+                          />
                         </svg>
-                        <span><strong>Full Disk Access:</strong> Read your iMessages to find transaction communications</span>
+                        <span>
+                          <strong>Full Disk Access:</strong> Read your iMessages
+                          to find transaction communications
+                        </span>
                       </li>
                     </>
                   )}
                   {isWindows && (
                     <>
                       <li className="flex items-start gap-3">
-                        <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        <svg
+                          className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M5 13l4 4L19 7"
+                          />
                         </svg>
-                        <span><strong>iPhone Connection:</strong> Set up USB connectivity to sync your iPhone messages</span>
+                        <span>
+                          <strong>iPhone Connection:</strong> Set up USB
+                          connectivity to sync your iPhone messages
+                        </span>
                       </li>
                       <li className="flex items-start gap-3">
-                        <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        <svg
+                          className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M5 13l4 4L19 7"
+                          />
                         </svg>
-                        <span><strong>Email & Outlook:</strong> Connect your email to find transaction communications</span>
+                        <span>
+                          <strong>Email & Outlook:</strong> Connect your email
+                          to find transaction communications
+                        </span>
                       </li>
                     </>
                   )}
@@ -212,26 +280,51 @@ function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
             <div className="text-center">
               <div className="mb-6">
                 <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full mx-auto flex items-center justify-center">
-                  <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  <svg
+                    className="w-10 h-10 text-white"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                    />
                   </svg>
                 </div>
               </div>
 
-              <h2 className="text-2xl font-bold text-gray-900 mb-3">Contacts Permission</h2>
+              <h2 className="text-2xl font-bold text-gray-900 mb-3">
+                Contacts Permission
+              </h2>
               <p className="text-gray-600 mb-8">
                 We'll briefly open the Contacts app to request permission.
                 <br />
-                This helps us match phone numbers to names in your communications.
+                This helps us match phone numbers to names in your
+                communications.
               </p>
 
               {contactsGranted && (
                 <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
                   <div className="flex items-center gap-2 justify-center text-green-700">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M5 13l4 4L19 7"
+                      />
                     </svg>
-                    <span className="font-medium">Contacts permission granted!</span>
+                    <span className="font-medium">
+                      Contacts permission granted!
+                    </span>
                   </div>
                 </div>
               )}
@@ -241,7 +334,9 @@ function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                   <p className="text-sm text-yellow-800">
                     {error}
                     <br />
-                    <span className="text-xs">Don't worry, we'll continue anyway.</span>
+                    <span className="text-xs">
+                      Don't worry, we'll continue anyway.
+                    </span>
                   </p>
                 </div>
               )}
@@ -253,16 +348,31 @@ function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
               >
                 {loading ? (
                   <span className="flex items-center gap-2">
-                    <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    <svg
+                      className="animate-spin h-5 w-5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      />
                     </svg>
                     Processing...
                   </span>
                 ) : contactsGranted ? (
-                  'Moving to next step...'
+                  "Moving to next step..."
                 ) : (
-                  'Grant Contacts Access →'
+                  "Grant Contacts Access →"
                 )}
               </button>
             </div>
@@ -273,48 +383,88 @@ function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
             <div className="text-center">
               <div className="mb-6">
                 <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full mx-auto flex items-center justify-center">
-                  <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  <svg
+                    className="w-10 h-10 text-white"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"
+                    />
                   </svg>
                 </div>
               </div>
 
-              <h2 className="text-2xl font-bold text-gray-900 mb-3">iPhone Backup Setup</h2>
+              <h2 className="text-2xl font-bold text-gray-900 mb-3">
+                iPhone Backup Setup
+              </h2>
               <p className="text-gray-600 mb-6">
-                To export messages on Windows, Magic Audit needs to create a backup of your iPhone.
-                This allows us to access your contacts and messages for transaction audits.
+                To export messages on Windows, Magic Audit needs to create a
+                backup of your iPhone. This allows us to access your contacts
+                and messages for transaction audits.
               </p>
 
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6 text-left">
-                <h3 className="font-semibold text-gray-900 mb-3">How to create a backup:</h3>
+                <h3 className="font-semibold text-gray-900 mb-3">
+                  How to create a backup:
+                </h3>
                 <ol className="space-y-3 text-sm text-gray-700">
                   <li className="flex items-start gap-3">
-                    <span className="flex-shrink-0 w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold">1</span>
-                    <span>Connect your iPhone to this computer using a USB cable</span>
+                    <span className="flex-shrink-0 w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold">
+                      1
+                    </span>
+                    <span>
+                      Connect your iPhone to this computer using a USB cable
+                    </span>
                   </li>
                   <li className="flex items-start gap-3">
-                    <span className="flex-shrink-0 w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold">2</span>
-                    <span>Unlock your iPhone and tap <strong>"Trust This Computer"</strong> when prompted</span>
+                    <span className="flex-shrink-0 w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold">
+                      2
+                    </span>
+                    <span>
+                      Unlock your iPhone and tap{" "}
+                      <strong>"Trust This Computer"</strong> when prompted
+                    </span>
                   </li>
                   <li className="flex items-start gap-3">
-                    <span className="flex-shrink-0 w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold">3</span>
-                    <span>Enter your iPhone passcode to authorize the connection</span>
+                    <span className="flex-shrink-0 w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold">
+                      3
+                    </span>
+                    <span>
+                      Enter your iPhone passcode to authorize the connection
+                    </span>
                   </li>
                   <li className="flex items-start gap-3">
-                    <span className="flex-shrink-0 w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold">4</span>
-                    <span>In Magic Audit, go to the <strong>iPhone Sync</strong> section from the main dashboard</span>
+                    <span className="flex-shrink-0 w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold">
+                      4
+                    </span>
+                    <span>
+                      In Magic Audit, go to the <strong>iPhone Sync</strong>{" "}
+                      section from the main dashboard
+                    </span>
                   </li>
                   <li className="flex items-start gap-3">
-                    <span className="flex-shrink-0 w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold">5</span>
-                    <span>Click <strong>"Create Backup"</strong> to sync your iPhone messages and contacts</span>
+                    <span className="flex-shrink-0 w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold">
+                      5
+                    </span>
+                    <span>
+                      Click <strong>"Create Backup"</strong> to sync your iPhone
+                      messages and contacts
+                    </span>
                   </li>
                 </ol>
               </div>
 
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-8">
                 <p className="text-sm text-yellow-800">
-                  <strong className="text-yellow-900">Important:</strong> The first backup may take several minutes depending on your iPhone data size.
-                  Keep your iPhone connected and unlocked during the backup process.
+                  <strong className="text-yellow-900">Important:</strong> The
+                  first backup may take several minutes depending on your iPhone
+                  data size. Keep your iPhone connected and unlocked during the
+                  backup process.
                 </p>
               </div>
 
@@ -332,34 +482,64 @@ function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
             <div className="text-center">
               <div className="mb-6">
                 <div className="w-20 h-20 bg-gradient-to-br from-purple-500 to-pink-600 rounded-full mx-auto flex items-center justify-center">
-                  <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  <svg
+                    className="w-10 h-10 text-white"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                    />
                   </svg>
                 </div>
               </div>
 
-              <h2 className="text-2xl font-bold text-gray-900 mb-3">Full Disk Access</h2>
+              <h2 className="text-2xl font-bold text-gray-900 mb-3">
+                Full Disk Access
+              </h2>
               <p className="text-gray-600 mb-6">
-                This permission allows Magic Audit to read your iMessages database.
+                This permission allows Magic Audit to read your iMessages
+                database.
               </p>
 
               <div className="bg-purple-50 border border-purple-200 rounded-lg p-6 mb-8 text-left">
-                <h3 className="font-semibold text-gray-900 mb-3">What happens next:</h3>
+                <h3 className="font-semibold text-gray-900 mb-3">
+                  What happens next:
+                </h3>
                 <ol className="space-y-3 text-sm text-gray-700">
                   <li className="flex items-start gap-3">
-                    <span className="flex-shrink-0 w-6 h-6 bg-purple-500 text-white rounded-full flex items-center justify-center text-xs font-bold">1</span>
-                    <span>System Settings will open to <strong>Privacy & Security → Full Disk Access</strong></span>
+                    <span className="flex-shrink-0 w-6 h-6 bg-purple-500 text-white rounded-full flex items-center justify-center text-xs font-bold">
+                      1
+                    </span>
+                    <span>
+                      System Settings will open to{" "}
+                      <strong>Privacy & Security → Full Disk Access</strong>
+                    </span>
                   </li>
                   <li className="flex items-start gap-3">
-                    <span className="flex-shrink-0 w-6 h-6 bg-purple-500 text-white rounded-full flex items-center justify-center text-xs font-bold">2</span>
-                    <span>Find <strong>MagicAudit</strong> in the list</span>
+                    <span className="flex-shrink-0 w-6 h-6 bg-purple-500 text-white rounded-full flex items-center justify-center text-xs font-bold">
+                      2
+                    </span>
+                    <span>
+                      Find <strong>MagicAudit</strong> in the list
+                    </span>
                   </li>
                   <li className="flex items-start gap-3">
-                    <span className="flex-shrink-0 w-6 h-6 bg-purple-500 text-white rounded-full flex items-center justify-center text-xs font-bold">3</span>
-                    <span>Toggle the switch <strong>ON</strong> next to MagicAudit</span>
+                    <span className="flex-shrink-0 w-6 h-6 bg-purple-500 text-white rounded-full flex items-center justify-center text-xs font-bold">
+                      3
+                    </span>
+                    <span>
+                      Toggle the switch <strong>ON</strong> next to MagicAudit
+                    </span>
                   </li>
                   <li className="flex items-start gap-3">
-                    <span className="flex-shrink-0 w-6 h-6 bg-purple-500 text-white rounded-full flex items-center justify-center text-xs font-bold">4</span>
+                    <span className="flex-shrink-0 w-6 h-6 bg-purple-500 text-white rounded-full flex items-center justify-center text-xs font-bold">
+                      4
+                    </span>
                     <span>Come back here - we'll detect it automatically!</span>
                   </li>
                 </ol>
@@ -378,14 +558,29 @@ function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
               >
                 {loading ? (
                   <span className="flex items-center gap-2">
-                    <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    <svg
+                      className="animate-spin h-5 w-5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      />
                     </svg>
                     Opening System Settings...
                   </span>
                 ) : (
-                  'Open System Settings →'
+                  "Open System Settings →"
                 )}
               </button>
             </div>
@@ -396,24 +591,53 @@ function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
             <div className="text-center">
               <div className="mb-6">
                 <div className="w-20 h-20 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full mx-auto flex items-center justify-center animate-pulse">
-                  <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  <svg
+                    className="w-10 h-10 text-white"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
                   </svg>
                 </div>
               </div>
 
-              <h2 className="text-2xl font-bold text-gray-900 mb-3">Waiting for Permission...</h2>
+              <h2 className="text-2xl font-bold text-gray-900 mb-3">
+                Waiting for Permission...
+              </h2>
               <p className="text-gray-600 mb-8">
-                Please toggle Full Disk Access <strong>ON</strong> in System Settings.
+                Please toggle Full Disk Access <strong>ON</strong> in System
+                Settings.
                 <br />
-                We're checking automatically - this will update when you're done!
+                We're checking automatically - this will update when you're
+                done!
               </p>
 
               <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 mb-8">
                 <div className="flex items-center justify-center gap-2 text-sm text-gray-600">
-                  <svg className="animate-spin h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  <svg
+                    className="animate-spin h-5 w-5 text-gray-400"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    />
                   </svg>
                   <span>Checking every 2 seconds...</span>
                 </div>
@@ -436,54 +660,125 @@ function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
             <div className="text-center">
               <div className="mb-6">
                 <div className="w-20 h-20 bg-gradient-to-br from-green-400 to-emerald-500 rounded-full mx-auto flex items-center justify-center animate-bounce">
-                  <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  <svg
+                    className="w-10 h-10 text-white"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M5 13l4 4L19 7"
+                    />
                   </svg>
                 </div>
               </div>
 
-              <h2 className="text-3xl font-bold text-gray-900 mb-3">🎉 You're All Set!</h2>
+              <h2 className="text-3xl font-bold text-gray-900 mb-3">
+                🎉 You're All Set!
+              </h2>
               <p className="text-lg text-gray-600 mb-8">
                 {isMacOS
                   ? "All permissions granted. You can now start auditing transactions!"
-                  : "Setup complete. You can now start auditing transactions!"
-                }
+                  : "Setup complete. You can now start auditing transactions!"}
               </p>
 
               <div className="bg-green-50 border border-green-200 rounded-lg p-6 mb-8">
-                <h3 className="font-semibold text-gray-900 mb-3">What you can do now:</h3>
+                <h3 className="font-semibold text-gray-900 mb-3">
+                  What you can do now:
+                </h3>
                 <ul className="space-y-2 text-sm text-gray-700">
                   {isMacOS && (
                     <li className="flex items-center gap-2">
-                      <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      <svg
+                        className="w-4 h-4 text-green-600"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M5 13l4 4L19 7"
+                        />
                       </svg>
-                      <span>Access your iMessages directly for transaction communications</span>
+                      <span>
+                        Access your iMessages directly for transaction
+                        communications
+                      </span>
                     </li>
                   )}
                   {isWindows && (
                     <li className="flex items-center gap-2">
-                      <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      <svg
+                        className="w-4 h-4 text-green-600"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M5 13l4 4L19 7"
+                        />
                       </svg>
-                      <span>Connect your iPhone to sync messages and transaction communications</span>
+                      <span>
+                        Connect your iPhone to sync messages and transaction
+                        communications
+                      </span>
                     </li>
                   )}
                   <li className="flex items-center gap-2">
-                    <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    <svg
+                      className="w-4 h-4 text-green-600"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M5 13l4 4L19 7"
+                      />
                     </svg>
                     <span>Scan your emails and messages for transactions</span>
                   </li>
                   <li className="flex items-center gap-2">
-                    <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    <svg
+                      className="w-4 h-4 text-green-600"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M5 13l4 4L19 7"
+                      />
                     </svg>
-                    <span>Export compliance documents with all communications</span>
+                    <span>
+                      Export compliance documents with all communications
+                    </span>
                   </li>
                   <li className="flex items-center gap-2">
-                    <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    <svg
+                      className="w-4 h-4 text-green-600"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M5 13l4 4L19 7"
+                      />
                     </svg>
                     <span>Keep perfect audit trails for every deal</span>
                   </li>

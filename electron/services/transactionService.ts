@@ -4,29 +4,39 @@ import type {
   UpdateTransaction,
   NewCommunication,
   OAuthProvider,
-} from '../types';
+} from "../types";
 
-import gmailFetchService from './gmailFetchService';
-import outlookFetchService from './outlookFetchService';
-import transactionExtractorService from './transactionExtractorService';
-import databaseService from './databaseService';
-import logService from './logService';
+import gmailFetchService from "./gmailFetchService";
+import outlookFetchService from "./outlookFetchService";
+import transactionExtractorService from "./transactionExtractorService";
+import databaseService from "./databaseService";
+import logService from "./logService";
+import supabaseService from "./supabaseService";
 
 // ============================================
 // TYPES
 // ============================================
+
+interface FetchProgress {
+  fetched: number;
+  total: number;
+  estimatedTotal?: number;
+  percentage: number;
+}
+
+interface ProgressUpdate {
+  step: "fetching" | "analyzing" | "grouping" | "saving" | "complete";
+  message: string;
+  fetchProgress?: FetchProgress;
+}
 
 interface ScanOptions {
   provider?: OAuthProvider;
   startDate?: Date;
   endDate?: Date;
   searchQuery?: string;
+  maxEmails?: number;
   onProgress?: (progress: ProgressUpdate) => void;
-}
-
-interface ProgressUpdate {
-  step: 'fetching' | 'analyzing' | 'grouping' | 'saving' | 'complete';
-  message: string;
 }
 
 interface ScanResult {
@@ -45,6 +55,8 @@ interface EmailFetchOptions {
   query?: string;
   after?: Date;
   before?: Date;
+  maxResults?: number;
+  onProgress?: (progress: FetchProgress) => void;
 }
 
 interface AnalyzedEmail {
@@ -74,7 +86,7 @@ interface EmailMessage {
 
 interface TransactionSummary {
   propertyAddress: string;
-  transactionType?: 'purchase' | 'sale';
+  transactionType?: "purchase" | "sale";
   closingDate?: Date | string;
   communicationsCount: number;
   confidence?: number;
@@ -105,7 +117,7 @@ interface AuditedTransactionData {
   property_state?: string;
   property_zip?: string;
   property_coordinates?: string;
-  transaction_type?: 'purchase' | 'sale';
+  transaction_type?: "purchase" | "sale";
   contact_assignments?: ContactAssignment[];
 }
 
@@ -133,68 +145,244 @@ interface ReanalysisResult {
  * Fetches emails → Analyzes → Extracts data → Saves to database
  */
 class TransactionService {
+  private scanCancelled: boolean = false;
+  private currentScanUserId: string | null = null;
+
   constructor() {}
+
+  /**
+   * Cancel the current scan for a user
+   */
+  cancelScan(userId: string): boolean {
+    if (this.currentScanUserId === userId) {
+      this.scanCancelled = true;
+      logService.info("Scan cancelled", "TransactionService.cancelScan", {
+        userId,
+      });
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Check if scan was cancelled and throw if so
+   */
+  private checkCancelled(): void {
+    if (this.scanCancelled) {
+      throw new Error("Scan cancelled by user");
+    }
+  }
 
   /**
    * Scan user's emails and extract transactions
    */
   async scanAndExtractTransactions(
     userId: string,
-    options: ScanOptions = {}
+    options: ScanOptions = {},
   ): Promise<ScanResult> {
+    // Reset cancellation state and track current scan
+    this.scanCancelled = false;
+    this.currentScanUserId = userId;
+
+    // Fetch user preferences for scan lookback
+    let lookbackMonths = 9; // Default 9 months
+    try {
+      const preferences = await supabaseService.getPreferences(userId);
+      if (preferences?.scan?.lookbackMonths) {
+        lookbackMonths = preferences.scan.lookbackMonths;
+      }
+    } catch {
+      // Use default if preferences unavailable
+    }
+
+    const defaultStartDate = new Date(
+      Date.now() - lookbackMonths * 30 * 24 * 60 * 60 * 1000,
+    );
+
     const {
-      provider,
-      startDate = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000), // Default 1 year back
+      provider: requestedProvider,
+      startDate = defaultStartDate,
       endDate = new Date(),
-      searchQuery = '',
+      searchQuery = "",
+      maxEmails = 70000, // Default to fetching up to 70,000 emails
       onProgress = null,
     } = options;
 
+    // Auto-detect providers if not specified
+    const providers: OAuthProvider[] = [];
+    if (requestedProvider) {
+      providers.push(requestedProvider);
+    } else {
+      // Check which mailbox tokens exist for this user
+      const googleToken = await databaseService.getOAuthToken(
+        userId,
+        "google",
+        "mailbox",
+      );
+      const microsoftToken = await databaseService.getOAuthToken(
+        userId,
+        "microsoft",
+        "mailbox",
+      );
+
+      if (googleToken?.access_token) {
+        providers.push("google");
+      }
+      if (microsoftToken?.access_token) {
+        providers.push("microsoft");
+      }
+
+      await logService.info(
+        "Auto-detected email providers",
+        "TransactionService.scanAndExtractTransactions",
+        {
+          userId,
+          providers,
+          googleConnected: !!googleToken?.access_token,
+          microsoftConnected: !!microsoftToken?.access_token,
+        },
+      );
+
+      if (providers.length === 0) {
+        throw new Error(
+          "No email provider connected. Please connect Gmail or Outlook first.",
+        );
+      }
+    }
+
     try {
-      // Step 1: Fetch emails
-      if (onProgress) onProgress({ step: 'fetching', message: 'Fetching emails...' });
+      // Step 1: Fetch emails from all connected providers
+      const allEmails: any[] = [];
 
-      const emails = await this._fetchEmails(userId, provider, {
-        query: searchQuery,
-        after: startDate,
-        before: endDate,
-      });
+      for (let i = 0; i < providers.length; i++) {
+        // Check for cancellation before each provider
+        this.checkCancelled();
 
-      await logService.info(`Fetched ${emails.length} emails`, 'TransactionService.scanAndExtractTransactions', { emailCount: emails.length, userId, provider });
+        const provider = providers[i];
+        const providerName = provider === "google" ? "Gmail" : "Outlook";
+        const providerPrefix =
+          providers.length > 1
+            ? `[${i + 1}/${providers.length}] ${providerName}: `
+            : "";
+
+        if (onProgress)
+          onProgress({
+            step: "fetching",
+            message: `${providerPrefix}Fetching emails...`,
+          });
+
+        const emails = await this._fetchEmails(userId, provider, {
+          query: searchQuery,
+          after: startDate,
+          before: endDate,
+          maxResults: Math.floor(maxEmails / providers.length), // Split limit between providers
+          onProgress: onProgress
+            ? (fetchProgress: FetchProgress) => {
+                // Check for cancellation during progress updates
+                if (this.scanCancelled) {
+                  throw new Error("Scan cancelled by user");
+                }
+                onProgress({
+                  step: "fetching",
+                  message: `${providerPrefix}Fetching emails... ${fetchProgress.fetched} of ${fetchProgress.total} (${fetchProgress.percentage}%)`,
+                  fetchProgress,
+                });
+              }
+            : undefined,
+        });
+
+        // Check for cancellation after fetching
+        this.checkCancelled();
+
+        allEmails.push(...emails);
+        await logService.info(
+          `Fetched ${emails.length} emails from ${providerName}`,
+          "TransactionService.scanAndExtractTransactions",
+          { emailCount: emails.length, userId, provider },
+        );
+      }
+
+      const emails = allEmails;
+      await logService.info(
+        `Fetched ${emails.length} total emails from ${providers.length} provider(s)`,
+        "TransactionService.scanAndExtractTransactions",
+        { emailCount: emails.length, userId, providers },
+      );
+
+      // Check for cancellation before analysis
+      this.checkCancelled();
 
       // Step 2: Analyze emails
-      if (onProgress) onProgress({ step: 'analyzing', message: `Analyzing ${emails.length} emails...` });
+      if (onProgress)
+        onProgress({
+          step: "analyzing",
+          message: `Analyzing ${emails.length} emails...`,
+        });
 
       const analyzed = transactionExtractorService.batchAnalyze(emails);
 
       // Filter to only real estate related emails
-      const realEstateEmails = analyzed.filter((a: any) => a.isRealEstateRelated);
+      const realEstateEmails = analyzed.filter(
+        (a: any) => a.isRealEstateRelated,
+      );
 
-      await logService.info(`Found ${realEstateEmails.length} real estate related emails`, 'TransactionService.scanAndExtractTransactions', { realEstateCount: realEstateEmails.length, totalEmails: emails.length });
+      await logService.info(
+        `Found ${realEstateEmails.length} real estate related emails`,
+        "TransactionService.scanAndExtractTransactions",
+        {
+          realEstateCount: realEstateEmails.length,
+          totalEmails: emails.length,
+        },
+      );
+
+      // Check for cancellation before grouping
+      this.checkCancelled();
 
       // Step 3: Group by property
-      if (onProgress) onProgress({ step: 'grouping', message: 'Grouping by property...' });
+      if (onProgress)
+        onProgress({ step: "grouping", message: "Grouping by property..." });
 
-      const grouped = transactionExtractorService.groupByProperty(realEstateEmails);
+      const grouped =
+        transactionExtractorService.groupByProperty(realEstateEmails);
       const propertyAddresses = Object.keys(grouped);
 
-      await logService.info(`Found ${propertyAddresses.length} properties`, 'TransactionService.scanAndExtractTransactions', { propertyCount: propertyAddresses.length });
+      await logService.info(
+        `Found ${propertyAddresses.length} properties`,
+        "TransactionService.scanAndExtractTransactions",
+        { propertyCount: propertyAddresses.length },
+      );
+
+      // Check for cancellation before saving
+      this.checkCancelled();
 
       // Step 4: Create transactions and save communications
-      if (onProgress) onProgress({ step: 'saving', message: 'Saving transactions...' });
+      if (onProgress)
+        onProgress({ step: "saving", message: "Saving transactions..." });
 
       const transactions: TransactionWithSummary[] = [];
 
       for (const address of propertyAddresses) {
+        // Check for cancellation for each property save
+        this.checkCancelled();
+
         const emailGroup = grouped[address];
-        const summary = transactionExtractorService.generateTransactionSummary(emailGroup);
+        const summary =
+          transactionExtractorService.generateTransactionSummary(emailGroup);
 
         // Create transaction in database if summary is valid
         if (!summary) continue;
-        const transactionId = await this._createTransactionFromSummary(userId, summary);
+        const transactionId = await this._createTransactionFromSummary(
+          userId,
+          summary,
+        );
 
         // Save communications
-        await this._saveCommunications(userId, transactionId, emailGroup as any, emails as any);
+        await this._saveCommunications(
+          userId,
+          transactionId,
+          emailGroup as any,
+          emails as any,
+        );
 
         transactions.push({
           id: transactionId,
@@ -203,7 +391,8 @@ class TransactionService {
       }
 
       // Step 5: Complete
-      if (onProgress) onProgress({ step: 'complete', message: 'Scan complete!' });
+      if (onProgress)
+        onProgress({ step: "complete", message: "Scan complete!" });
 
       return {
         success: true,
@@ -213,12 +402,24 @@ class TransactionService {
         transactions,
       };
     } catch (error) {
-      await logService.error('Transaction scan failed', 'TransactionService.scanAndExtractTransactions', {
-        error: error instanceof Error ? error.message : String(error),
-        userId,
-        provider,
-      });
+      // Check if this was a cancellation
+      const isCancelled = this.scanCancelled;
+
+      if (!isCancelled) {
+        await logService.error(
+          "Transaction scan failed",
+          "TransactionService.scanAndExtractTransactions",
+          {
+            error: error instanceof Error ? error.message : String(error),
+            userId,
+            providers,
+          },
+        );
+      }
       throw error;
+    } finally {
+      // Clear scan state
+      this.currentScanUserId = null;
     }
   }
 
@@ -229,12 +430,12 @@ class TransactionService {
   private async _fetchEmails(
     userId: string,
     provider: OAuthProvider | undefined,
-    options: EmailFetchOptions
+    options: EmailFetchOptions,
   ): Promise<any[]> {
-    if (provider === 'google') {
+    if (provider === "google") {
       await gmailFetchService.initialize(userId);
       return await gmailFetchService.searchEmails(options);
-    } else if (provider === 'microsoft') {
+    } else if (provider === "microsoft") {
       await outlookFetchService.initialize(userId);
       return await outlookFetchService.searchEmails(options);
     } else {
@@ -248,10 +449,19 @@ class TransactionService {
    */
   private async _createTransactionFromSummary(
     userId: string,
-    summary: any
+    summary: any,
   ): Promise<string> {
     // Parse address into components
     const addressParts = this._parseAddress(summary.propertyAddress);
+
+    // Helper to convert date to ISO string safely
+    const toISOString = (date: any): string | undefined => {
+      if (!date) return undefined;
+      if (date instanceof Date) return date.toISOString();
+      if (typeof date === "string") return date;
+      if (typeof date === "number") return new Date(date).toISOString();
+      return undefined;
+    };
 
     const transactionData: Partial<NewTransaction> = {
       user_id: userId,
@@ -261,23 +471,26 @@ class TransactionService {
       property_state: addressParts.state || undefined,
       property_zip: addressParts.zip || undefined,
       transaction_type: summary.transactionType,
-      transaction_status: 'completed',
-      status: 'active',
-      closing_date: summary.closingDate || undefined,
+      transaction_status: "completed",
+      status: "active",
+      closing_date: toISOString(summary.closingDate),
       closing_date_verified: false,
       communications_scanned: summary.communicationsCount || 0,
       extraction_confidence: summary.confidence,
-      first_communication_date: new Date(summary.firstCommunication).toISOString(),
-      last_communication_date: new Date(summary.lastCommunication).toISOString(),
+      first_communication_date: toISOString(summary.firstCommunication),
+      last_communication_date: toISOString(summary.lastCommunication),
       total_communications_count: summary.communicationsCount || 0,
-      sale_price: summary.salePrice,
-      export_status: 'not_exported',
+      sale_price:
+        typeof summary.salePrice === "number" ? summary.salePrice : undefined,
+      export_status: "not_exported",
       export_count: 0,
       offer_count: 0,
       failed_offers_count: 0,
     };
 
-    const transaction = await databaseService.createTransaction(transactionData as NewTransaction);
+    const transaction = await databaseService.createTransaction(
+      transactionData as NewTransaction,
+    );
     return transaction.id;
   }
 
@@ -289,21 +502,29 @@ class TransactionService {
     userId: string,
     transactionId: string,
     analyzedEmails: any[],
-    originalEmails: any[]
+    originalEmails: any[],
   ): Promise<void> {
     for (const analyzed of analyzedEmails) {
       // Find original email
       const originalEmail = originalEmails.find(
-        (e: any) => e.subject === analyzed.subject && e.from === analyzed.from
+        (e: any) => e.subject === analyzed.subject && e.from === analyzed.from,
       );
 
       if (!originalEmail) continue;
 
+      // Ensure dates are ISO strings
+      const sentAt =
+        analyzed.date instanceof Date
+          ? analyzed.date.toISOString()
+          : typeof analyzed.date === "string"
+            ? analyzed.date
+            : new Date().toISOString();
+
       const commData: Partial<NewCommunication> = {
         user_id: userId,
         transaction_id: transactionId,
-        communication_type: 'email',
-        source: analyzed.from.includes('@gmail') ? 'gmail' : 'outlook',
+        communication_type: "email",
+        source: analyzed.from.includes("@gmail") ? "gmail" : "outlook",
         email_thread_id: originalEmail.threadId,
         sender: analyzed.from,
         recipients: originalEmail.to,
@@ -312,13 +533,20 @@ class TransactionService {
         subject: analyzed.subject,
         body: originalEmail.body,
         body_plain: originalEmail.bodyPlain,
-        sent_at: analyzed.date,
-        received_at: analyzed.date,
+        sent_at: sentAt,
+        received_at: sentAt,
         has_attachments: originalEmail.hasAttachments || false,
         attachment_count: originalEmail.attachmentCount || 0,
-        attachment_metadata: originalEmail.attachments,
-        keywords_detected: analyzed.keywords,
-        parties_involved: analyzed.parties,
+        // Serialize arrays/objects for SQLite
+        attachment_metadata: originalEmail.attachments
+          ? JSON.stringify(originalEmail.attachments)
+          : undefined,
+        keywords_detected: Array.isArray(analyzed.keywords)
+          ? JSON.stringify(analyzed.keywords)
+          : analyzed.keywords,
+        parties_involved: Array.isArray(analyzed.parties)
+          ? JSON.stringify(analyzed.parties)
+          : analyzed.parties,
         relevance_score: analyzed.confidence,
         flagged_for_review: false,
         is_compliance_related: analyzed.isRealEstateRelated || false,
@@ -334,13 +562,13 @@ class TransactionService {
    */
   private _parseAddress(addressString: string): AddressComponents {
     // Simple parsing - could be improved
-    const parts = addressString.split(',').map((p) => p.trim());
+    const parts = addressString.split(",").map((p) => p.trim());
 
     return {
       street: parts[0] || null,
       city: parts[1] || null,
-      state: parts[2] ? parts[2].split(' ')[0] : null,
-      zip: parts[2] ? parts[2].split(' ')[1] : null,
+      state: parts[2] ? parts[2].split(" ")[0] : null,
+      zip: parts[2] ? parts[2].split(" ")[1] : null,
     };
   }
 
@@ -354,15 +582,19 @@ class TransactionService {
   /**
    * Get transaction by ID with communications
    */
-  async getTransactionDetails(transactionId: string): Promise<Transaction | null> {
+  async getTransactionDetails(
+    transactionId: string,
+  ): Promise<Transaction | null> {
     const transaction = await databaseService.getTransactionById(transactionId);
 
     if (!transaction) {
       return null;
     }
 
-    const communications = await databaseService.getCommunicationsByTransaction(transactionId);
-    const contact_assignments = await databaseService.getTransactionContacts(transactionId);
+    const communications =
+      await databaseService.getCommunicationsByTransaction(transactionId);
+    const contact_assignments =
+      await databaseService.getTransactionContacts(transactionId);
 
     return {
       ...transaction,
@@ -376,7 +608,7 @@ class TransactionService {
    */
   async createManualTransaction(
     userId: string,
-    transactionData: Partial<NewTransaction>
+    transactionData: Partial<NewTransaction>,
   ): Promise<Transaction> {
     const transaction = await databaseService.createTransaction({
       user_id: userId,
@@ -386,14 +618,14 @@ class TransactionService {
       property_state: transactionData.property_state,
       property_zip: transactionData.property_zip,
       transaction_type: transactionData.transaction_type,
-      transaction_status: 'pending',
-      status: transactionData.status || 'active',
+      transaction_status: "pending",
+      status: transactionData.status || "active",
       representation_start_date: transactionData.representation_start_date,
       closing_date: transactionData.closing_date,
       closing_date_verified: false,
       representation_start_confidence: undefined,
       closing_date_confidence: undefined,
-      export_status: 'not_exported',
+      export_status: "not_exported",
       export_count: 0,
       communications_scanned: 0,
       total_communications_count: 0,
@@ -410,7 +642,7 @@ class TransactionService {
    */
   async createAuditedTransaction(
     userId: string,
-    data: AuditedTransactionData
+    data: AuditedTransactionData,
   ): Promise<Transaction | null> {
     try {
       const {
@@ -434,10 +666,10 @@ class TransactionService {
         property_zip,
         property_coordinates,
         transaction_type,
-        transaction_status: 'pending',
-        status: 'active',
+        transaction_status: "pending",
+        status: "active",
         closing_date_verified: property_coordinates ? true : false,
-        export_status: 'not_exported',
+        export_status: "not_exported",
         export_count: 0,
         communications_scanned: 0,
         total_communications_count: 0,
@@ -463,11 +695,15 @@ class TransactionService {
       // Fetch the complete transaction with contacts
       return await this.getTransactionWithContacts(transactionId);
     } catch (error) {
-      await logService.error('Failed to create audited transaction', 'TransactionService.createAuditedTransaction', {
-        error: error instanceof Error ? error.message : String(error),
-        userId,
-        propertyAddress: data.property_address,
-      });
+      await logService.error(
+        "Failed to create audited transaction",
+        "TransactionService.createAuditedTransaction",
+        {
+          error: error instanceof Error ? error.message : String(error),
+          userId,
+          propertyAddress: data.property_address,
+        },
+      );
       throw error;
     }
   }
@@ -475,7 +711,9 @@ class TransactionService {
   /**
    * Get transaction with all assigned contacts
    */
-  async getTransactionWithContacts(transactionId: string): Promise<Transaction | null> {
+  async getTransactionWithContacts(
+    transactionId: string,
+  ): Promise<Transaction | null> {
     const transaction = await databaseService.getTransactionById(transactionId);
 
     if (!transaction) {
@@ -483,7 +721,8 @@ class TransactionService {
     }
 
     // Get all contact assignments
-    const contactAssignments = await databaseService.getTransactionContacts(transactionId);
+    const contactAssignments =
+      await databaseService.getTransactionContacts(transactionId);
 
     return {
       ...transaction,
@@ -500,7 +739,7 @@ class TransactionService {
     role: string,
     roleCategory: string,
     isPrimary: boolean = false,
-    notes: string | null = null
+    notes: string | null = null,
   ): Promise<any> {
     return await databaseService.assignContactToTransaction(transactionId, {
       contact_id: contactId,
@@ -515,8 +754,14 @@ class TransactionService {
   /**
    * Remove contact from transaction
    */
-  async removeContactFromTransaction(transactionId: string, contactId: string): Promise<void> {
-    return await databaseService.unlinkContactFromTransaction(transactionId, contactId);
+  async removeContactFromTransaction(
+    transactionId: string,
+    contactId: string,
+  ): Promise<void> {
+    return await databaseService.unlinkContactFromTransaction(
+      transactionId,
+      contactId,
+    );
   }
 
   /**
@@ -525,7 +770,7 @@ class TransactionService {
   async updateContactRole(
     transactionId: string,
     contactId: string,
-    updates: ContactRoleUpdate
+    updates: ContactRoleUpdate,
   ): Promise<any> {
     return await databaseService.updateContactRole(transactionId, contactId, {
       ...updates,
@@ -536,7 +781,10 @@ class TransactionService {
   /**
    * Update transaction
    */
-  async updateTransaction(transactionId: string, updates: Partial<UpdateTransaction>): Promise<any> {
+  async updateTransaction(
+    transactionId: string,
+    updates: Partial<UpdateTransaction>,
+  ): Promise<any> {
     return await databaseService.updateTransaction(transactionId, updates);
   }
 
@@ -554,11 +802,12 @@ class TransactionService {
     userId: string,
     provider: OAuthProvider,
     propertyAddress: string,
-    dateRange: DateRange = {}
+    dateRange: DateRange = {},
   ): Promise<ReanalysisResult> {
     const emails = await this._fetchEmails(userId, provider, {
       query: propertyAddress,
-      after: dateRange.start || new Date(Date.now() - 365 * 24 * 60 * 60 * 1000),
+      after:
+        dateRange.start || new Date(Date.now() - 365 * 24 * 60 * 60 * 1000),
       before: dateRange.end || new Date(),
     });
 

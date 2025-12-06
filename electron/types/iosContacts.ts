@@ -54,7 +54,7 @@ export interface ContactLookupResult {
   /** The matched contact, or null if not found */
   contact: iOSContact | null;
   /** How the contact was matched, or null if not found */
-  matchedOn: 'phone' | 'email' | null;
+  matchedOn: "phone" | "email" | null;
 }
 
 /**

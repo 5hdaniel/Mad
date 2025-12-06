@@ -1,4 +1,4 @@
-import { SPECIFIC_ROLES, ROLE_DISPLAY_NAMES } from '../constants/contactRoles';
+import { SPECIFIC_ROLES, ROLE_DISPLAY_NAMES } from "../constants/contactRoles";
 
 /**
  * Transaction Role Utilities
@@ -17,7 +17,7 @@ export interface RoleConfig {
 /**
  * Transaction type - represents which side of the deal the user represents
  */
-export type TransactionType = 'purchase' | 'sale';
+export type TransactionType = "purchase" | "sale";
 
 /**
  * Contact assignments mapping roles to assigned contacts
@@ -59,10 +59,10 @@ export interface RoleValidationResult {
 export function filterRolesByTransactionType(
   roles: RoleConfig[],
   transactionType: TransactionType,
-  stepTitle: string
+  stepTitle: string,
 ): RoleConfig[] {
   // Only filter roles for Client & Agents step
-  if (stepTitle !== 'Client & Agents') {
+  if (stepTitle !== "Client & Agents") {
     return roles; // Professional services - no filtering
   }
 
@@ -73,7 +73,7 @@ export function filterRolesByTransactionType(
     }
 
     // For purchase transactions: user is buyer's agent, so show seller's agent
-    if (transactionType === 'purchase') {
+    if (transactionType === "purchase") {
       return (
         roleConfig.role === SPECIFIC_ROLES.SELLER_AGENT ||
         roleConfig.role === SPECIFIC_ROLES.LISTING_AGENT
@@ -81,7 +81,7 @@ export function filterRolesByTransactionType(
     }
 
     // For sale transactions: user is seller's agent/listing agent, so show buyer's agent
-    if (transactionType === 'sale') {
+    if (transactionType === "sale") {
       return roleConfig.role === SPECIFIC_ROLES.BUYER_AGENT;
     }
 
@@ -95,17 +95,21 @@ export function filterRolesByTransactionType(
  * @param transactionType - 'purchase' or 'sale'
  * @returns Object with title and message
  */
-export function getTransactionTypeContext(transactionType: TransactionType): TransactionTypeContext {
-  if (transactionType === 'purchase') {
+export function getTransactionTypeContext(
+  transactionType: TransactionType,
+): TransactionTypeContext {
+  if (transactionType === "purchase") {
     return {
-      title: 'Transaction Type: Purchase',
-      message: "You're representing the buyer. Assign the seller's agent you're working with.",
+      title: "Transaction Type: Purchase",
+      message:
+        "You're representing the buyer. Assign the seller's agent you're working with.",
     };
   }
 
   return {
-    title: 'Transaction Type: Sale',
-    message: "You're representing the seller. Assign the buyer's agent you're working with.",
+    title: "Transaction Type: Sale",
+    message:
+      "You're representing the seller. Assign the buyer's agent you're working with.",
   };
 }
 
@@ -118,7 +122,7 @@ export function getTransactionTypeContext(transactionType: TransactionType): Tra
  */
 export function validateRoleAssignments(
   contactAssignments: ContactAssignments,
-  roles: RoleConfig[]
+  roles: RoleConfig[],
 ): RoleValidationResult {
   const missingRoles = roles
     .filter((roleConfig) => roleConfig.required)
@@ -145,13 +149,16 @@ export function validateRoleAssignments(
  * @param transactionType - 'purchase' or 'sale'
  * @returns Display name for the role
  */
-export function getRoleDisplayName(role: string, transactionType: TransactionType): string {
+export function getRoleDisplayName(
+  role: string,
+  transactionType: TransactionType,
+): string {
   // Special handling for CLIENT role - changes based on transaction type
   if (role === SPECIFIC_ROLES.CLIENT) {
-    if (transactionType === 'purchase') {
-      return 'Client (Buyer)';
-    } else if (transactionType === 'sale') {
-      return 'Client (Seller)';
+    if (transactionType === "purchase") {
+      return "Client (Buyer)";
+    } else if (transactionType === "sale") {
+      return "Client (Seller)";
     }
   }
 
