@@ -320,24 +320,41 @@ function EmailOnboardingScreen({ userId, authProvider, onComplete, onSkip }: Ema
               </ul>
             </div>
 
-            <div className="space-y-3 mb-8">
+            <div className="grid grid-cols-2 gap-4 mb-8">
+              {/* iPhone Option */}
               <button
                 onClick={handleNextStep}
-                className="w-full px-4 py-3 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white text-sm font-semibold rounded-lg transition-all shadow-md flex items-center justify-center gap-3"
+                className="relative p-6 rounded-xl border-2 border-gray-200 hover:border-blue-400 hover:bg-blue-50 transition-all duration-200 text-left"
               >
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M17.05 13.5c-.91 0-1.64.75-1.64 1.67s.73 1.67 1.64 1.67 1.64-.75 1.64-1.67-.73-1.67-1.64-1.67m-4.5-5.25c.56 0 1.03.46 1.03 1.03s-.46 1.03-1.03 1.03-1.03-.46-1.03-1.03.46-1.03 1.03-1.03m5.5 0c.56 0 1.03.46 1.03 1.03s-.46 1.03-1.03 1.03-1.03-.46-1.03-1.03.46-1.03 1.03-1.03M6 19.54C6 20.31 6.81 21 7.76 21h8.48c.95 0 1.76-.69 1.76-1.46V4.46C18 3.65 17.19 3 16.24 3H7.76C6.81 3 6 3.69 6 4.46v15.08m9-13.03c.56 0 1.03.46 1.03 1.03s-.46 1.03-1.03 1.03-1.03-.46-1.03-1.03.46-1.03 1.03-1.03m-3 0c.56 0 1.03.46 1.03 1.03s-.46 1.03-1.03 1.03-1.03-.46-1.03-1.03.46-1.03 1.03-1.03" />
-                </svg>
-                <span>iOS</span>
+                {/* Apple Logo */}
+                <div className="w-12 h-12 bg-gray-900 rounded-xl flex items-center justify-center mb-4">
+                  <svg className="w-7 h-7 text-white" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
+                  </svg>
+                </div>
+
+                <h3 className="font-semibold text-gray-900 mb-1">iPhone</h3>
+                <p className="text-sm text-gray-500">
+                  Sync messages and contacts from your iPhone
+                </p>
               </button>
+
+              {/* Android Option */}
               <button
                 onClick={handleNextStep}
-                className="w-full px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-900 text-sm font-semibold rounded-lg transition-all flex items-center justify-center gap-3"
+                className="relative p-6 rounded-xl border-2 border-gray-200 hover:border-green-400 hover:bg-green-50 transition-all duration-200 text-left"
               >
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M6.17 18.5c.29 0 .54.12.69.34l1.39 2.03c.18.27.17.72-.05.97-.22.26-.66.26-.87 0l-1.39-2.03c-.18-.27-.17-.72.05-.97.22-.25.66-.25.87 0M10.44 11.27C8.89 11.27 7.63 12.54 7.63 14.1c0 1.56 1.26 2.83 2.81 2.83 1.56 0 2.82-1.27 2.82-2.83 0-1.56-1.26-2.83-2.82-2.83m11.53 6.2c.25.25.38.57.38.93 0 .35-.13.67-.38.92-.25.25-.58.38-.93.38-.36 0-.68-.13-.93-.38l-1.06-1.06c-.25.15-.55.24-.86.24-.34 0-.65-.09-.92-.24l-1.06 1.06c-.25.25-.58.38-.93.38-.36 0-.68-.13-.93-.38-.25-.25-.38-.57-.38-.92 0-.36.13-.68.38-.93l1.06-1.06c-.15-.27-.24-.58-.24-.92s.09-.65.24-.92l-1.06-1.06c-.25-.25-.38-.57-.38-.93 0-.35.13-.67.38-.92.25-.25.57-.38.93-.38.35 0 .68.13.93.38l1.06 1.06c.27-.15.58-.24.92-.24.34 0 .65.09.86.24l1.06-1.06c.25-.25.57-.38.93-.38.35 0 .68.13.93.38.25.25.38.57.38.92 0 .36-.13.68-.38.93l-1.06 1.06c.15.27.24.57.24.92s-.09.65-.24.92l1.06 1.06M3.94 18.5c.29 0 .54.12.69.34l.87 1.27.87-1.27c.15-.22.4-.34.69-.34.22 0 .43.07.57.21.15.15.23.35.23.56 0 .15-.04.28-.12.41l-.87 1.27.87 1.27c.08.13.12.26.12.41 0 .21-.08.41-.23.56-.14.14-.35.21-.57.21-.29 0-.54-.12-.69-.34l-.87-1.27-.87 1.27c-.15.22-.4.34-.69.34-.22 0-.43-.07-.57-.21-.15-.15-.23-.35-.23-.56 0-.15.04-.28.12-.41l.87-1.27-.87-1.27c-.08-.13-.12-.26-.12-.41 0-.21.08-.41.23-.56.14-.14.35-.21.57-.21" />
-                </svg>
-                <span>Android</span>
+                {/* Android Logo */}
+                <div className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center mb-4">
+                  <svg className="w-7 h-7 text-white" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M17.6 9.48l1.84-3.18c.16-.31.04-.69-.26-.85-.29-.15-.65-.06-.83.22l-1.88 3.24a11.463 11.463 0 00-8.94 0L5.65 5.67c-.19-.29-.54-.38-.84-.22-.3.16-.42.54-.26.85L6.4 9.48A10.78 10.78 0 002 18h20a10.78 10.78 0 00-4.4-8.52zM7 15.25a1.25 1.25 0 110-2.5 1.25 1.25 0 010 2.5zm10 0a1.25 1.25 0 110-2.5 1.25 1.25 0 010 2.5z"/>
+                  </svg>
+                </div>
+
+                <h3 className="font-semibold text-gray-900 mb-1">Android</h3>
+                <p className="text-sm text-gray-500">
+                  Samsung, Google Pixel, and other Android phones
+                </p>
               </button>
             </div>
           </>
