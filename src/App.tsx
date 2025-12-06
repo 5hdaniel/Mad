@@ -202,7 +202,6 @@ function App() {
                 const driverStatus = await drivers.checkApple();
                 if (!driverStatus.installed || !driverStatus.serviceRunning) {
                   // Drivers not installed or service not running - need setup
-                  console.log('[App] iPhone selected but Apple drivers not ready, showing setup');
                   setNeedsDriverSetup(true);
                   setHasSelectedPhoneType(false); // Don't skip driver setup
                 } else {
