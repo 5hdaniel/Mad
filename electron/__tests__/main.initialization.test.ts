@@ -14,18 +14,18 @@
  * accessing autoUpdater APIs.
  */
 
-import { jest } from "@jest/globals";
+import { jest } from '@jest/globals';
 
-describe("Main Process - AutoUpdater Initialization Bug Fix", () => {
-  describe("AutoUpdater Configuration Timing", () => {
-    it("should configure autoUpdater after app.whenReady()", async () => {
+describe('Main Process - AutoUpdater Initialization Bug Fix', () => {
+  describe('AutoUpdater Configuration Timing', () => {
+    it('should configure autoUpdater after app.whenReady()', async () => {
       // This test verifies that autoUpdater is configured inside app.whenReady()
       // and not at module load time.
 
       // Mock the electron module
       const mockLog = {
         transports: {
-          file: { level: "info" },
+          file: { level: 'info' },
         },
         info: jest.fn(),
         error: jest.fn(),
@@ -39,20 +39,18 @@ describe("Main Process - AutoUpdater Initialization Bug Fix", () => {
       let readyCallback: (() => Promise<void>) | null = null;
 
       const mockApp = {
-        whenReady: jest
-          .fn()
-          .mockImplementation((callback?: () => Promise<void>) => {
-            if (callback) {
-              readyCallback = callback;
+        whenReady: jest.fn().mockImplementation((callback?: () => Promise<void>) => {
+          if (callback) {
+            readyCallback = callback;
+            return Promise.resolve();
+          }
+          return {
+            then: (cb: () => Promise<void>) => {
+              readyCallback = cb;
               return Promise.resolve();
-            }
-            return {
-              then: (cb: () => Promise<void>) => {
-                readyCallback = cb;
-                return Promise.resolve();
-              },
-            };
-          }),
+            },
+          };
+        }),
         on: jest.fn(),
         quit: jest.fn(),
       };
@@ -72,7 +70,7 @@ describe("Main Process - AutoUpdater Initialization Bug Fix", () => {
       }
     });
 
-    it("should register autoUpdater event handlers after app is ready", () => {
+    it('should register autoUpdater event handlers after app is ready', () => {
       // This test verifies event handlers are registered at the right time
       const eventHandlers: Record<string, Function> = {};
 
@@ -87,42 +85,24 @@ describe("Main Process - AutoUpdater Initialization Bug Fix", () => {
       expect(Object.keys(eventHandlers).length).toBe(0);
 
       // Simulate the event handler registration that happens in app.whenReady()
-      mockAutoUpdater.on("checking-for-update", () => {});
-      mockAutoUpdater.on("update-available", () => {});
-      mockAutoUpdater.on("update-not-available", () => {});
-      mockAutoUpdater.on("error", () => {});
-      mockAutoUpdater.on("download-progress", () => {});
-      mockAutoUpdater.on("update-downloaded", () => {});
+      mockAutoUpdater.on('checking-for-update', () => {});
+      mockAutoUpdater.on('update-available', () => {});
+      mockAutoUpdater.on('update-not-available', () => {});
+      mockAutoUpdater.on('error', () => {});
+      mockAutoUpdater.on('download-progress', () => {});
+      mockAutoUpdater.on('update-downloaded', () => {});
 
       // After registration, all handlers should be present
       expect(mockAutoUpdater.on).toHaveBeenCalledTimes(6);
-      expect(mockAutoUpdater.on).toHaveBeenCalledWith(
-        "checking-for-update",
-        expect.any(Function),
-      );
-      expect(mockAutoUpdater.on).toHaveBeenCalledWith(
-        "update-available",
-        expect.any(Function),
-      );
-      expect(mockAutoUpdater.on).toHaveBeenCalledWith(
-        "update-not-available",
-        expect.any(Function),
-      );
-      expect(mockAutoUpdater.on).toHaveBeenCalledWith(
-        "error",
-        expect.any(Function),
-      );
-      expect(mockAutoUpdater.on).toHaveBeenCalledWith(
-        "download-progress",
-        expect.any(Function),
-      );
-      expect(mockAutoUpdater.on).toHaveBeenCalledWith(
-        "update-downloaded",
-        expect.any(Function),
-      );
+      expect(mockAutoUpdater.on).toHaveBeenCalledWith('checking-for-update', expect.any(Function));
+      expect(mockAutoUpdater.on).toHaveBeenCalledWith('update-available', expect.any(Function));
+      expect(mockAutoUpdater.on).toHaveBeenCalledWith('update-not-available', expect.any(Function));
+      expect(mockAutoUpdater.on).toHaveBeenCalledWith('error', expect.any(Function));
+      expect(mockAutoUpdater.on).toHaveBeenCalledWith('download-progress', expect.any(Function));
+      expect(mockAutoUpdater.on).toHaveBeenCalledWith('update-downloaded', expect.any(Function));
     });
 
-    it("should handle the correct sequence of initialization", async () => {
+    it('should handle the correct sequence of initialization', async () => {
       // This test verifies the order of operations:
       // 1. Module loads
       // 2. app.whenReady() is called
@@ -140,52 +120,50 @@ describe("Main Process - AutoUpdater Initialization Bug Fix", () => {
       };
 
       const mockLog = {
-        transports: { file: { level: "info" } },
+        transports: { file: { level: 'info' } },
         info: jest.fn(),
         error: jest.fn(),
       };
 
       // Step 1: Module loads (no autoUpdater configuration yet)
-      executionOrder.push("module-load");
+      executionOrder.push('module-load');
       expect(mockAutoUpdater.logger).toBeNull();
 
       // Step 2: app.whenReady() callback executes
-      executionOrder.push("app.whenReady()");
+      executionOrder.push('app.whenReady()');
 
       // Step 3: Configure autoUpdater
       mockAutoUpdater.logger = mockLog;
-      executionOrder.push("autoUpdater.logger = log");
+      executionOrder.push('autoUpdater.logger = log');
 
       // Step 4: Register event handlers
-      mockAutoUpdater.on("checking-for-update", () => {});
-      mockAutoUpdater.on("update-available", () => {});
-      mockAutoUpdater.on("error", () => {});
+      mockAutoUpdater.on('checking-for-update', () => {});
+      mockAutoUpdater.on('update-available', () => {});
+      mockAutoUpdater.on('error', () => {});
 
       // Step 5: Create window
-      executionOrder.push("createWindow()");
+      executionOrder.push('createWindow()');
 
       // Verify the execution order
       expect(executionOrder).toEqual([
-        "module-load",
-        "app.whenReady()",
-        "autoUpdater.logger = log",
-        "autoUpdater.on(checking-for-update)",
-        "autoUpdater.on(update-available)",
-        "autoUpdater.on(error)",
-        "createWindow()",
+        'module-load',
+        'app.whenReady()',
+        'autoUpdater.logger = log',
+        'autoUpdater.on(checking-for-update)',
+        'autoUpdater.on(update-available)',
+        'autoUpdater.on(error)',
+        'createWindow()',
       ]);
 
       // Verify logger was set before event handlers
-      const loggerIndex = executionOrder.indexOf("autoUpdater.logger = log");
-      const firstEventIndex = executionOrder.indexOf(
-        "autoUpdater.on(checking-for-update)",
-      );
+      const loggerIndex = executionOrder.indexOf('autoUpdater.logger = log');
+      const firstEventIndex = executionOrder.indexOf('autoUpdater.on(checking-for-update)');
       expect(loggerIndex).toBeLessThan(firstEventIndex);
     });
   });
 
-  describe("Error Prevention", () => {
-    it("should not access autoUpdater properties before app is ready", async () => {
+  describe('Error Prevention', () => {
+    it('should not access autoUpdater properties before app is ready', async () => {
       // This test demonstrates the bug that was fixed:
       // Accessing autoUpdater.logger before app.whenReady() would cause
       // "Cannot read properties of undefined (reading 'getVersion')" error
@@ -216,39 +194,36 @@ describe("Main Process - AutoUpdater Initialization Bug Fix", () => {
       expect(autoUpdaterAccessed).toBe(true);
     });
 
-    it("should handle autoUpdater errors gracefully", () => {
+    it('should handle autoUpdater errors gracefully', () => {
       const mockLog = {
         error: jest.fn(),
       };
 
       const errorHandler = (err: Error) => {
-        mockLog.error("Error in auto-updater:", err);
+        mockLog.error('Error in auto-updater:', err);
       };
 
       // Simulate an error event
-      const testError = new Error("Update check failed");
+      const testError = new Error('Update check failed');
       errorHandler(testError);
 
       // Verify error was logged
-      expect(mockLog.error).toHaveBeenCalledWith(
-        "Error in auto-updater:",
-        testError,
-      );
+      expect(mockLog.error).toHaveBeenCalledWith('Error in auto-updater:', testError);
     });
   });
 
-  describe("Integration with App Lifecycle", () => {
-    it("should set up CSP, create window, and register handlers after app is ready", () => {
+  describe('Integration with App Lifecycle', () => {
+    it('should set up CSP, create window, and register handlers after app is ready', () => {
       const executionOrder: string[] = [];
 
       const mockApp = {
         whenReady: jest.fn().mockImplementation(() => {
           return Promise.resolve().then(() => {
             // This simulates what happens in app.whenReady()
-            executionOrder.push("configure-autoUpdater");
-            executionOrder.push("setup-CSP");
-            executionOrder.push("create-window");
-            executionOrder.push("register-auth-handlers");
+            executionOrder.push('configure-autoUpdater');
+            executionOrder.push('setup-CSP');
+            executionOrder.push('create-window');
+            executionOrder.push('register-auth-handlers');
           });
         }),
       };
@@ -259,15 +234,13 @@ describe("Main Process - AutoUpdater Initialization Bug Fix", () => {
       return new Promise<void>((resolve) => {
         setTimeout(() => {
           // Verify the correct sequence
-          expect(executionOrder).toContain("configure-autoUpdater");
-          expect(executionOrder).toContain("setup-CSP");
-          expect(executionOrder).toContain("create-window");
+          expect(executionOrder).toContain('configure-autoUpdater');
+          expect(executionOrder).toContain('setup-CSP');
+          expect(executionOrder).toContain('create-window');
 
           // autoUpdater should be configured before window creation
-          const autoUpdaterIndex = executionOrder.indexOf(
-            "configure-autoUpdater",
-          );
-          const windowIndex = executionOrder.indexOf("create-window");
+          const autoUpdaterIndex = executionOrder.indexOf('configure-autoUpdater');
+          const windowIndex = executionOrder.indexOf('create-window');
           expect(autoUpdaterIndex).toBeLessThan(windowIndex);
 
           resolve();

@@ -3,7 +3,7 @@
  * Tests the getTransactionsByContact method in databaseService
  */
 
-import type { Database, Statement } from "better-sqlite3";
+import type { Database, Statement } from 'better-sqlite3';
 
 interface MockStatement {
   get: jest.Mock;
@@ -49,27 +49,27 @@ const mockDatabase = {
 };
 
 // Mock electron before requiring databaseService
-jest.mock("electron", () => ({
+jest.mock('electron', () => ({
   app: {
-    getPath: jest.fn(() => "/mock/app/path"),
+    getPath: jest.fn(() => '/mock/app/path'),
   },
 }));
 
 // Mock better-sqlite3-multiple-ciphers
-jest.mock("better-sqlite3-multiple-ciphers", () => {
+jest.mock('better-sqlite3-multiple-ciphers', () => {
   return jest.fn().mockImplementation(() => mockDatabase);
 });
 
 // Mock databaseEncryptionService
-jest.mock("../databaseEncryptionService", () => ({
+jest.mock('../databaseEncryptionService', () => ({
   databaseEncryptionService: {
     initialize: jest.fn().mockResolvedValue(undefined),
-    getEncryptionKey: jest.fn().mockResolvedValue("mock-encryption-key"),
+    getEncryptionKey: jest.fn().mockResolvedValue('mock-encryption-key'),
   },
 }));
 
 // Mock logService
-jest.mock("../logService", () => ({
+jest.mock('../logService', () => ({
   default: {
     info: jest.fn(),
     debug: jest.fn(),
@@ -79,7 +79,7 @@ jest.mock("../logService", () => ({
 }));
 
 // Mock fs
-jest.mock("fs", () => ({
+jest.mock('fs', () => ({
   existsSync: jest.fn(() => true),
   mkdirSync: jest.fn(),
   readFileSync: jest.fn(),
@@ -89,9 +89,9 @@ jest.mock("fs", () => ({
 }));
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const databaseService = require("../databaseService").default;
+const databaseService = require('../databaseService').default;
 
-describe("DatabaseService - Contact Deletion Prevention", () => {
+describe('DatabaseService - Contact Deletion Prevention', () => {
   beforeEach(() => {
     // Reset mock state
     mockStatementCalls = [];
@@ -103,10 +103,10 @@ describe("DatabaseService - Contact Deletion Prevention", () => {
     databaseService.db = mockDatabase;
   });
 
-  describe("getTransactionsByContact", () => {
-    const contactId = "contact-123";
+  describe('getTransactionsByContact', () => {
+    const contactId = 'contact-123';
 
-    it("should return empty array when contact has no associated transactions", async () => {
+    it('should return empty array when contact has no associated transactions', async () => {
       // Mock empty results for all three queries
       mockStatementReturnValues = [[], [], []];
 
@@ -116,14 +116,14 @@ describe("DatabaseService - Contact Deletion Prevention", () => {
       expect(mockDatabase.prepare).toHaveBeenCalledTimes(3);
     });
 
-    it("should find transactions via direct FK references (buyer_agent_id)", async () => {
+    it('should find transactions via direct FK references (buyer_agent_id)', async () => {
       const mockTransaction: TransactionResult = {
-        id: "txn-1",
-        property_address: "123 Main St",
-        closing_date: "2024-01-15",
-        transaction_type: "purchase",
-        status: "active",
-        role: "Buyer Agent",
+        id: 'txn-1',
+        property_address: '123 Main St',
+        closing_date: '2024-01-15',
+        transaction_type: 'purchase',
+        status: 'active',
+        role: 'Buyer Agent',
       };
 
       // Direct FK returns transaction, junction and JSON return empty
@@ -133,21 +133,21 @@ describe("DatabaseService - Contact Deletion Prevention", () => {
 
       expect(result).toHaveLength(1);
       expect(result[0]).toMatchObject({
-        id: "txn-1",
-        property_address: "123 Main St",
-        roles: "Buyer Agent",
+        id: 'txn-1',
+        property_address: '123 Main St',
+        roles: 'Buyer Agent',
       });
     });
 
-    it("should find transactions via junction table (transaction_contacts)", async () => {
+    it('should find transactions via junction table (transaction_contacts)', async () => {
       const mockTransaction: TransactionResult = {
-        id: "txn-2",
-        property_address: "456 Oak Ave",
-        closing_date: "2024-02-20",
-        transaction_type: "sale",
-        status: "active",
-        specific_role: "inspector",
-        role_category: "inspection",
+        id: 'txn-2',
+        property_address: '456 Oak Ave',
+        closing_date: '2024-02-20',
+        transaction_type: 'sale',
+        status: 'active',
+        specific_role: 'inspector',
+        role_category: 'inspection',
       };
 
       // Direct FK empty, junction returns transaction, JSON empty
@@ -157,19 +157,19 @@ describe("DatabaseService - Contact Deletion Prevention", () => {
 
       expect(result).toHaveLength(1);
       expect(result[0]).toMatchObject({
-        id: "txn-2",
-        property_address: "456 Oak Ave",
-        roles: "inspector",
+        id: 'txn-2',
+        property_address: '456 Oak Ave',
+        roles: 'inspector',
       });
     });
 
-    it("should find transactions via JSON array (other_contacts)", async () => {
+    it('should find transactions via JSON array (other_contacts)', async () => {
       const mockTransaction: TransactionResult = {
-        id: "txn-3",
-        property_address: "789 Elm St",
-        closing_date: "2024-03-10",
-        transaction_type: "purchase",
-        status: "closed",
+        id: 'txn-3',
+        property_address: '789 Elm St',
+        closing_date: '2024-03-10',
+        transaction_type: 'purchase',
+        status: 'closed',
       };
 
       // Direct FK and junction empty, JSON returns transaction
@@ -179,30 +179,30 @@ describe("DatabaseService - Contact Deletion Prevention", () => {
 
       expect(result).toHaveLength(1);
       expect(result[0]).toMatchObject({
-        id: "txn-3",
-        property_address: "789 Elm St",
-        roles: "Other Contact",
+        id: 'txn-3',
+        property_address: '789 Elm St',
+        roles: 'Other Contact',
       });
     });
 
-    it("should deduplicate transactions found in multiple sources", async () => {
+    it('should deduplicate transactions found in multiple sources', async () => {
       const directTxn: TransactionResult = {
-        id: "txn-1",
-        property_address: "123 Main St",
-        closing_date: "2024-01-15",
-        transaction_type: "purchase",
-        status: "active",
-        role: "Buyer Agent",
+        id: 'txn-1',
+        property_address: '123 Main St',
+        closing_date: '2024-01-15',
+        transaction_type: 'purchase',
+        status: 'active',
+        role: 'Buyer Agent',
       };
 
       const junctionTxn: TransactionResult = {
-        id: "txn-1",
-        property_address: "123 Main St",
-        closing_date: "2024-01-15",
-        transaction_type: "purchase",
-        status: "active",
-        specific_role: "escrow_officer",
-        role_category: "title_escrow",
+        id: 'txn-1',
+        property_address: '123 Main St',
+        closing_date: '2024-01-15',
+        transaction_type: 'purchase',
+        status: 'active',
+        specific_role: 'escrow_officer',
+        role_category: 'title_escrow',
       };
 
       // Same transaction found in direct FK and junction
@@ -211,28 +211,28 @@ describe("DatabaseService - Contact Deletion Prevention", () => {
       const result = await databaseService.getTransactionsByContact(contactId);
 
       expect(result).toHaveLength(1);
-      expect(result[0].id).toBe("txn-1");
-      expect(result[0].roles).toContain("Buyer Agent");
-      expect(result[0].roles).toContain("escrow_officer");
+      expect(result[0].id).toBe('txn-1');
+      expect(result[0].roles).toContain('Buyer Agent');
+      expect(result[0].roles).toContain('escrow_officer');
     });
 
-    it("should combine multiple roles from the same transaction", async () => {
+    it('should combine multiple roles from the same transaction', async () => {
       const transactions: TransactionResult[] = [
         {
-          id: "txn-1",
-          property_address: "123 Main St",
-          closing_date: "2024-01-15",
-          transaction_type: "purchase",
-          status: "active",
-          role: "Buyer Agent",
+          id: 'txn-1',
+          property_address: '123 Main St',
+          closing_date: '2024-01-15',
+          transaction_type: 'purchase',
+          status: 'active',
+          role: 'Buyer Agent',
         },
         {
-          id: "txn-1",
-          property_address: "123 Main St",
-          closing_date: "2024-01-15",
-          transaction_type: "purchase",
-          status: "active",
-          role: "Seller Agent",
+          id: 'txn-1',
+          property_address: '123 Main St',
+          closing_date: '2024-01-15',
+          transaction_type: 'purchase',
+          status: 'active',
+          role: 'Seller Agent',
         },
       ];
 
@@ -241,34 +241,34 @@ describe("DatabaseService - Contact Deletion Prevention", () => {
       const result = await databaseService.getTransactionsByContact(contactId);
 
       expect(result).toHaveLength(1);
-      expect(result[0].roles).toBe("Buyer Agent, Seller Agent");
+      expect(result[0].roles).toBe('Buyer Agent, Seller Agent');
     });
 
-    it("should handle multiple transactions across different sources", async () => {
+    it('should handle multiple transactions across different sources', async () => {
       const directTxn: TransactionResult = {
-        id: "txn-1",
-        property_address: "123 Main St",
-        closing_date: "2024-01-15",
-        transaction_type: "purchase",
-        status: "active",
-        role: "Buyer Agent",
+        id: 'txn-1',
+        property_address: '123 Main St',
+        closing_date: '2024-01-15',
+        transaction_type: 'purchase',
+        status: 'active',
+        role: 'Buyer Agent',
       };
 
       const junctionTxn: TransactionResult = {
-        id: "txn-2",
-        property_address: "456 Oak Ave",
-        closing_date: "2024-02-20",
-        transaction_type: "sale",
-        status: "active",
-        specific_role: "inspector",
+        id: 'txn-2',
+        property_address: '456 Oak Ave',
+        closing_date: '2024-02-20',
+        transaction_type: 'sale',
+        status: 'active',
+        specific_role: 'inspector',
       };
 
       const jsonTxn: TransactionResult = {
-        id: "txn-3",
-        property_address: "789 Elm St",
-        closing_date: "2024-03-10",
-        transaction_type: "purchase",
-        status: "closed",
+        id: 'txn-3',
+        property_address: '789 Elm St',
+        closing_date: '2024-03-10',
+        transaction_type: 'purchase',
+        status: 'closed',
       };
 
       mockStatementReturnValues = [[directTxn], [junctionTxn], [jsonTxn]];
@@ -276,38 +276,34 @@ describe("DatabaseService - Contact Deletion Prevention", () => {
       const result = await databaseService.getTransactionsByContact(contactId);
 
       expect(result).toHaveLength(3);
-      expect(result.map((t: TransactionResult) => t.id)).toEqual([
-        "txn-1",
-        "txn-2",
-        "txn-3",
-      ]);
+      expect(result.map((t: TransactionResult) => t.id)).toEqual(['txn-1', 'txn-2', 'txn-3']);
     });
 
-    it("should use role_category when specific_role is not available", async () => {
+    it('should use role_category when specific_role is not available', async () => {
       const mockTransaction: TransactionResult = {
-        id: "txn-1",
-        property_address: "123 Main St",
-        closing_date: "2024-01-15",
-        transaction_type: "purchase",
-        status: "active",
+        id: 'txn-1',
+        property_address: '123 Main St',
+        closing_date: '2024-01-15',
+        transaction_type: 'purchase',
+        status: 'active',
         specific_role: null,
-        role_category: "inspection",
+        role_category: 'inspection',
       };
 
       mockStatementReturnValues = [[], [mockTransaction], []];
 
       const result = await databaseService.getTransactionsByContact(contactId);
 
-      expect(result[0].roles).toBe("inspection");
+      expect(result[0].roles).toBe('inspection');
     });
 
     it('should use "Associated Contact" as fallback when no role is specified', async () => {
       const mockTransaction: TransactionResult = {
-        id: "txn-1",
-        property_address: "123 Main St",
-        closing_date: "2024-01-15",
-        transaction_type: "purchase",
-        status: "active",
+        id: 'txn-1',
+        property_address: '123 Main St',
+        closing_date: '2024-01-15',
+        transaction_type: 'purchase',
+        status: 'active',
         specific_role: null,
         role_category: null,
       };
@@ -316,26 +312,26 @@ describe("DatabaseService - Contact Deletion Prevention", () => {
 
       const result = await databaseService.getTransactionsByContact(contactId);
 
-      expect(result[0].roles).toBe("Associated Contact");
+      expect(result[0].roles).toBe('Associated Contact');
     });
 
-    it("should handle all transaction types and statuses", async () => {
+    it('should handle all transaction types and statuses', async () => {
       const transactions: TransactionResult[] = [
         {
-          id: "txn-1",
-          property_address: "123 Main St",
-          closing_date: "2024-01-15",
-          transaction_type: "purchase",
-          status: "active",
-          role: "Buyer Agent",
+          id: 'txn-1',
+          property_address: '123 Main St',
+          closing_date: '2024-01-15',
+          transaction_type: 'purchase',
+          status: 'active',
+          role: 'Buyer Agent',
         },
         {
-          id: "txn-2",
-          property_address: "456 Oak Ave",
-          closing_date: "2024-02-20",
-          transaction_type: "sale",
-          status: "closed",
-          role: "Seller Agent",
+          id: 'txn-2',
+          property_address: '456 Oak Ave',
+          closing_date: '2024-02-20',
+          transaction_type: 'sale',
+          status: 'closed',
+          role: 'Seller Agent',
         },
       ];
 
@@ -344,10 +340,10 @@ describe("DatabaseService - Contact Deletion Prevention", () => {
       const result = await databaseService.getTransactionsByContact(contactId);
 
       expect(result).toHaveLength(2);
-      expect(result[0].transaction_type).toBe("purchase");
-      expect(result[0].status).toBe("active");
-      expect(result[1].transaction_type).toBe("sale");
-      expect(result[1].status).toBe("closed");
+      expect(result[0].transaction_type).toBe('purchase');
+      expect(result[0].status).toBe('active');
+      expect(result[1].transaction_type).toBe('sale');
+      expect(result[1].status).toBe('closed');
     });
   });
 });

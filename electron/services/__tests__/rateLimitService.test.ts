@@ -11,12 +11,12 @@ const mockLogService = {
   debug: jest.fn().mockResolvedValue(undefined),
 };
 
-jest.mock("../logService", () => mockLogService);
+jest.mock('../logService', () => mockLogService);
 
-import { rateLimitService } from "../rateLimitService";
+import { rateLimitService } from '../rateLimitService';
 
-describe("RateLimitService", () => {
-  const testEmail = "test@example.com";
+describe('RateLimitService', () => {
+  const testEmail = 'test@example.com';
 
   beforeEach(async () => {
     // Clear all entries before each test
@@ -24,15 +24,15 @@ describe("RateLimitService", () => {
     jest.clearAllMocks();
   });
 
-  describe("checkRateLimit", () => {
-    it("should allow requests under the limit", async () => {
+  describe('checkRateLimit', () => {
+    it('should allow requests under the limit', async () => {
       const result = await rateLimitService.checkRateLimit(testEmail);
 
       expect(result.allowed).toBe(true);
       expect(result.remainingAttempts).toBe(5);
     });
 
-    it("should track remaining attempts correctly", async () => {
+    it('should track remaining attempts correctly', async () => {
       // Record 3 failed attempts
       await rateLimitService.recordAttempt(testEmail, false);
       await rateLimitService.recordAttempt(testEmail, false);
@@ -44,7 +44,7 @@ describe("RateLimitService", () => {
       expect(result.remainingAttempts).toBe(2);
     });
 
-    it("should block after 5 failed attempts", async () => {
+    it('should block after 5 failed attempts', async () => {
       // Record 5 failed attempts
       for (let i = 0; i < 5; i++) {
         await rateLimitService.recordAttempt(testEmail, false);
@@ -57,7 +57,7 @@ describe("RateLimitService", () => {
       expect(result.lockedUntil).toBeDefined();
     });
 
-    it("should provide retry time when locked", async () => {
+    it('should provide retry time when locked', async () => {
       // Record 5 failed attempts to trigger lockout
       for (let i = 0; i < 5; i++) {
         await rateLimitService.recordAttempt(testEmail, false);
@@ -70,8 +70,8 @@ describe("RateLimitService", () => {
     });
   });
 
-  describe("recordAttempt", () => {
-    it("should reset attempts on successful login", async () => {
+  describe('recordAttempt', () => {
+    it('should reset attempts on successful login', async () => {
       // Record some failed attempts
       await rateLimitService.recordAttempt(testEmail, false);
       await rateLimitService.recordAttempt(testEmail, false);
@@ -86,7 +86,7 @@ describe("RateLimitService", () => {
       expect(result.remainingAttempts).toBe(5);
     });
 
-    it("should increment attempt count on failed login", async () => {
+    it('should increment attempt count on failed login', async () => {
       await rateLimitService.recordAttempt(testEmail, false);
 
       const result = await rateLimitService.checkRateLimit(testEmail);
@@ -94,7 +94,7 @@ describe("RateLimitService", () => {
       expect(result.remainingAttempts).toBe(4);
     });
 
-    it("should lock account after max failed attempts", async () => {
+    it('should lock account after max failed attempts', async () => {
       for (let i = 0; i < 5; i++) {
         await rateLimitService.recordAttempt(testEmail, false);
       }
@@ -105,15 +105,14 @@ describe("RateLimitService", () => {
     });
   });
 
-  describe("getRemainingAttempts", () => {
-    it("should return max attempts for new identifier", async () => {
-      const remaining =
-        await rateLimitService.getRemainingAttempts("new@example.com");
+  describe('getRemainingAttempts', () => {
+    it('should return max attempts for new identifier', async () => {
+      const remaining = await rateLimitService.getRemainingAttempts('new@example.com');
 
       expect(remaining).toBe(5);
     });
 
-    it("should return correct remaining after failed attempts", async () => {
+    it('should return correct remaining after failed attempts', async () => {
       await rateLimitService.recordAttempt(testEmail, false);
       await rateLimitService.recordAttempt(testEmail, false);
 
@@ -123,14 +122,14 @@ describe("RateLimitService", () => {
     });
   });
 
-  describe("isLocked", () => {
-    it("should return false for new identifier", async () => {
+  describe('isLocked', () => {
+    it('should return false for new identifier', async () => {
       const isLocked = await rateLimitService.isLocked(testEmail);
 
       expect(isLocked).toBe(false);
     });
 
-    it("should return true after max failed attempts", async () => {
+    it('should return true after max failed attempts', async () => {
       for (let i = 0; i < 5; i++) {
         await rateLimitService.recordAttempt(testEmail, false);
       }
@@ -140,7 +139,7 @@ describe("RateLimitService", () => {
       expect(isLocked).toBe(true);
     });
 
-    it("should return false after successful login clears lockout", async () => {
+    it('should return false after successful login clears lockout', async () => {
       // Lock the account
       for (let i = 0; i < 5; i++) {
         await rateLimitService.recordAttempt(testEmail, false);
@@ -155,8 +154,8 @@ describe("RateLimitService", () => {
     });
   });
 
-  describe("unlock", () => {
-    it("should manually unlock a locked account", async () => {
+  describe('unlock', () => {
+    it('should manually unlock a locked account', async () => {
       // Lock the account
       for (let i = 0; i < 5; i++) {
         await rateLimitService.recordAttempt(testEmail, false);
@@ -170,26 +169,24 @@ describe("RateLimitService", () => {
     });
   });
 
-  describe("clearAll", () => {
-    it("should clear all rate limit entries", async () => {
+  describe('clearAll', () => {
+    it('should clear all rate limit entries', async () => {
       // Add some entries
-      await rateLimitService.recordAttempt("user1@example.com", false);
-      await rateLimitService.recordAttempt("user2@example.com", false);
+      await rateLimitService.recordAttempt('user1@example.com', false);
+      await rateLimitService.recordAttempt('user2@example.com', false);
 
       await rateLimitService.clearAll();
 
-      const result1 =
-        await rateLimitService.checkRateLimit("user1@example.com");
-      const result2 =
-        await rateLimitService.checkRateLimit("user2@example.com");
+      const result1 = await rateLimitService.checkRateLimit('user1@example.com');
+      const result2 = await rateLimitService.checkRateLimit('user2@example.com');
 
       expect(result1.remainingAttempts).toBe(5);
       expect(result2.remainingAttempts).toBe(5);
     });
   });
 
-  describe("getConfig", () => {
-    it("should return configuration values", () => {
+  describe('getConfig', () => {
+    it('should return configuration values', () => {
       const config = rateLimitService.getConfig();
 
       expect(config.maxAttempts).toBe(5);
@@ -198,12 +195,12 @@ describe("RateLimitService", () => {
     });
   });
 
-  describe("case insensitivity", () => {
-    it("should treat emails case-insensitively", async () => {
-      await rateLimitService.recordAttempt("Test@Example.com", false);
-      await rateLimitService.recordAttempt("test@example.com", false);
+  describe('case insensitivity', () => {
+    it('should treat emails case-insensitively', async () => {
+      await rateLimitService.recordAttempt('Test@Example.com', false);
+      await rateLimitService.recordAttempt('test@example.com', false);
 
-      const result = await rateLimitService.checkRateLimit("TEST@EXAMPLE.COM");
+      const result = await rateLimitService.checkRateLimit('TEST@EXAMPLE.COM');
 
       // Both attempts should count against the same identifier
       expect(result.remainingAttempts).toBe(3);

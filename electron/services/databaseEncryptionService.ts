@@ -4,11 +4,11 @@
  * Keys are stored securely in the OS keychain (macOS Keychain, Windows DPAPI, Linux Secret Service)
  */
 
-import { safeStorage, app } from "electron";
-import crypto from "crypto";
-import fs from "fs";
-import path from "path";
-import logService from "./logService";
+import { safeStorage, app } from 'electron';
+import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
+import logService from './logService';
 
 /**
  * Key storage metadata interface
@@ -33,7 +33,7 @@ interface KeyStore {
  * Handles encryption key generation, storage, and retrieval for database encryption
  */
 class DatabaseEncryptionService {
-  private readonly KEY_STORE_FILENAME = "db-key-store.json";
+  private readonly KEY_STORE_FILENAME = 'db-key-store.json';
   private readonly KEY_VERSION = 1;
   private keyStorePath: string | null = null;
   private cachedKey: string | null = null;
@@ -44,17 +44,14 @@ class DatabaseEncryptionService {
    */
   async initialize(): Promise<void> {
     try {
-      const userDataPath = app.getPath("userData");
+      const userDataPath = app.getPath('userData');
       this.keyStorePath = path.join(userDataPath, this.KEY_STORE_FILENAME);
-      await logService.info(
-        "Database encryption service initialized",
-        "DatabaseEncryptionService",
-      );
+      await logService.info('Database encryption service initialized', 'DatabaseEncryptionService');
     } catch (error) {
       await logService.error(
-        "Failed to initialize encryption service",
-        "DatabaseEncryptionService",
-        { error: error instanceof Error ? error.message : String(error) },
+        'Failed to initialize encryption service',
+        'DatabaseEncryptionService',
+        { error: error instanceof Error ? error.message : String(error) }
       );
       throw error;
     }
@@ -69,9 +66,9 @@ class DatabaseEncryptionService {
       return safeStorage.isEncryptionAvailable();
     } catch (error) {
       logService.error(
-        "Error checking encryption availability",
-        "DatabaseEncryptionService",
-        { error: error instanceof Error ? error.message : String(error) },
+        'Error checking encryption availability',
+        'DatabaseEncryptionService',
+        { error: error instanceof Error ? error.message : String(error) }
       );
       return false;
     }
@@ -90,11 +87,11 @@ class DatabaseEncryptionService {
 
     if (!this.isEncryptionAvailable()) {
       const error = new Error(
-        "Encryption not available. Database encryption requires OS-level encryption support.",
+        'Encryption not available. Database encryption requires OS-level encryption support.'
       );
       await logService.error(
-        "Encryption not available on this system",
-        "DatabaseEncryptionService",
+        'Encryption not available on this system',
+        'DatabaseEncryptionService'
       );
       throw error;
     }
@@ -119,22 +116,22 @@ class DatabaseEncryptionService {
     try {
       // Generate 256-bit (32 bytes) key using cryptographically secure random
       const keyBuffer = crypto.randomBytes(32);
-      const keyHex = keyBuffer.toString("hex");
+      const keyHex = keyBuffer.toString('hex');
 
       // Encrypt and store the key
       await this.saveKeyToStore(keyHex);
 
       await logService.info(
-        "Generated new database encryption key",
-        "DatabaseEncryptionService",
+        'Generated new database encryption key',
+        'DatabaseEncryptionService'
       );
 
       return keyHex;
     } catch (error) {
       await logService.error(
-        "Failed to generate encryption key",
-        "DatabaseEncryptionService",
-        { error: error instanceof Error ? error.message : String(error) },
+        'Failed to generate encryption key',
+        'DatabaseEncryptionService',
+        { error: error instanceof Error ? error.message : String(error) }
       );
       throw error;
     }
@@ -146,7 +143,7 @@ class DatabaseEncryptionService {
    */
   private async getKeyFromStore(): Promise<string | null> {
     if (!this.keyStorePath) {
-      throw new Error("Encryption service not initialized");
+      throw new Error('Encryption service not initialized');
     }
 
     try {
@@ -154,33 +151,33 @@ class DatabaseEncryptionService {
         return null;
       }
 
-      const storeContent = fs.readFileSync(this.keyStorePath, "utf8");
+      const storeContent = fs.readFileSync(this.keyStorePath, 'utf8');
       const keyStore: KeyStore = JSON.parse(storeContent);
 
       if (!keyStore.encryptedKey) {
         await logService.warn(
-          "Key store exists but contains no encrypted key",
-          "DatabaseEncryptionService",
+          'Key store exists but contains no encrypted key',
+          'DatabaseEncryptionService'
         );
         return null;
       }
 
       // Decrypt the key using OS keychain
-      const encryptedBuffer = Buffer.from(keyStore.encryptedKey, "base64");
+      const encryptedBuffer = Buffer.from(keyStore.encryptedKey, 'base64');
       const decryptedKey = safeStorage.decryptString(encryptedBuffer);
 
       await logService.debug(
-        "Retrieved encryption key from store",
-        "DatabaseEncryptionService",
-        { keyId: keyStore.metadata.keyId, version: keyStore.metadata.version },
+        'Retrieved encryption key from store',
+        'DatabaseEncryptionService',
+        { keyId: keyStore.metadata.keyId, version: keyStore.metadata.version }
       );
 
       return decryptedKey;
     } catch (error) {
       await logService.error(
-        "Failed to retrieve encryption key from store",
-        "DatabaseEncryptionService",
-        { error: error instanceof Error ? error.message : String(error) },
+        'Failed to retrieve encryption key from store',
+        'DatabaseEncryptionService',
+        { error: error instanceof Error ? error.message : String(error) }
       );
       return null;
     }
@@ -192,13 +189,13 @@ class DatabaseEncryptionService {
    */
   private async saveKeyToStore(key: string): Promise<void> {
     if (!this.keyStorePath) {
-      throw new Error("Encryption service not initialized");
+      throw new Error('Encryption service not initialized');
     }
 
     try {
       // Encrypt the key using OS keychain
       const encryptedBuffer = safeStorage.encryptString(key);
-      const encryptedBase64 = encryptedBuffer.toString("base64");
+      const encryptedBase64 = encryptedBuffer.toString('base64');
 
       const keyStore: KeyStore = {
         encryptedKey: encryptedBase64,
@@ -217,20 +214,20 @@ class DatabaseEncryptionService {
 
       // Write key store to disk
       fs.writeFileSync(this.keyStorePath, JSON.stringify(keyStore, null, 2), {
-        encoding: "utf8",
+        encoding: 'utf8',
         mode: 0o600, // Read/write only for owner
       });
 
       await logService.info(
-        "Saved encryption key to store",
-        "DatabaseEncryptionService",
-        { keyId: keyStore.metadata.keyId },
+        'Saved encryption key to store',
+        'DatabaseEncryptionService',
+        { keyId: keyStore.metadata.keyId }
       );
     } catch (error) {
       await logService.error(
-        "Failed to save encryption key to store",
-        "DatabaseEncryptionService",
-        { error: error instanceof Error ? error.message : String(error) },
+        'Failed to save encryption key to store',
+        'DatabaseEncryptionService',
+        { error: error instanceof Error ? error.message : String(error) }
       );
       throw error;
     }
@@ -249,26 +246,23 @@ class DatabaseEncryptionService {
       }
 
       // Read the first 16 bytes of the file
-      const fd = fs.openSync(dbPath, "r");
+      const fd = fs.openSync(dbPath, 'r');
       const buffer = Buffer.alloc(16);
       fs.readSync(fd, buffer, 0, 16, 0);
       fs.closeSync(fd);
 
       // SQLite files start with "SQLite format 3\0"
-      const sqliteHeader = "SQLite format 3\0";
-      const headerMatch = buffer.toString("utf8", 0, 16) === sqliteHeader;
+      const sqliteHeader = 'SQLite format 3\0';
+      const headerMatch = buffer.toString('utf8', 0, 16) === sqliteHeader;
 
       // If it matches SQLite header, it's NOT encrypted
       // If it doesn't match, it's either encrypted or not a SQLite file
       return !headerMatch;
     } catch (error) {
       await logService.warn(
-        "Could not check database encryption status",
-        "DatabaseEncryptionService",
-        {
-          dbPath,
-          error: error instanceof Error ? error.message : String(error),
-        },
+        'Could not check database encryption status',
+        'DatabaseEncryptionService',
+        { dbPath, error: error instanceof Error ? error.message : String(error) }
       );
       return false;
     }
@@ -281,18 +275,18 @@ class DatabaseEncryptionService {
    */
   async rotateKey(): Promise<{ oldKey: string; newKey: string }> {
     if (!this.keyStorePath) {
-      throw new Error("Encryption service not initialized");
+      throw new Error('Encryption service not initialized');
     }
 
     const oldKey = await this.getEncryptionKey();
 
     // Generate new key
     const newKeyBuffer = crypto.randomBytes(32);
-    const newKey = newKeyBuffer.toString("hex");
+    const newKey = newKeyBuffer.toString('hex');
 
     // Update key store with new key and rotation timestamp
     const encryptedBuffer = safeStorage.encryptString(newKey);
-    const encryptedBase64 = encryptedBuffer.toString("base64");
+    const encryptedBase64 = encryptedBuffer.toString('base64');
 
     const keyStore: KeyStore = {
       encryptedKey: encryptedBase64,
@@ -305,7 +299,7 @@ class DatabaseEncryptionService {
     };
 
     fs.writeFileSync(this.keyStorePath, JSON.stringify(keyStore, null, 2), {
-      encoding: "utf8",
+      encoding: 'utf8',
       mode: 0o600,
     });
 
@@ -313,9 +307,9 @@ class DatabaseEncryptionService {
     this.cachedKey = newKey;
 
     await logService.info(
-      "Encryption key rotated successfully",
-      "DatabaseEncryptionService",
-      { newKeyId: keyStore.metadata.keyId },
+      'Encryption key rotated successfully',
+      'DatabaseEncryptionService',
+      { newKeyId: keyStore.metadata.keyId }
     );
 
     return { oldKey, newKey };
@@ -338,11 +332,8 @@ class DatabaseEncryptionService {
     if (!this.keyStorePath) {
       // Service not initialized yet, check default path
       try {
-        const userDataPath = app.getPath("userData");
-        const defaultKeyStorePath = path.join(
-          userDataPath,
-          this.KEY_STORE_FILENAME,
-        );
+        const userDataPath = app.getPath('userData');
+        const defaultKeyStorePath = path.join(userDataPath, this.KEY_STORE_FILENAME);
         return fs.existsSync(defaultKeyStorePath);
       } catch {
         return false;
@@ -361,14 +352,14 @@ class DatabaseEncryptionService {
     }
 
     try {
-      const storeContent = fs.readFileSync(this.keyStorePath, "utf8");
+      const storeContent = fs.readFileSync(this.keyStorePath, 'utf8');
       const keyStore: KeyStore = JSON.parse(storeContent);
       return keyStore.metadata;
     } catch (error) {
       await logService.error(
-        "Failed to read key metadata",
-        "DatabaseEncryptionService",
-        { error: error instanceof Error ? error.message : String(error) },
+        'Failed to read key metadata',
+        'DatabaseEncryptionService',
+        { error: error instanceof Error ? error.message : String(error) }
       );
       return null;
     }

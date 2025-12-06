@@ -1,8 +1,8 @@
-import axios, { AxiosError } from "axios";
-import http from "http";
-import url from "url";
-import crypto from "crypto";
-import databaseService from "./databaseService";
+import axios, { AxiosError } from 'axios';
+import http from 'http';
+import url from 'url';
+import crypto from 'crypto';
+import databaseService from './databaseService';
 // NOTE: tokenEncryptionService removed - using session-only OAuth
 // Tokens stored in encrypted database, no additional keychain encryption needed
 
@@ -55,7 +55,7 @@ interface RevokeTokenResult {
 class MicrosoftAuthService {
   private clientId: string;
   private tenantId: string;
-  private redirectUri: string = "http://localhost:3000/callback";
+  private redirectUri: string = 'http://localhost:3000/callback';
   private authorizeUrl: string;
   private tokenUrl: string;
   private server: http.Server | null = null;
@@ -64,10 +64,10 @@ class MicrosoftAuthService {
   private codeRejecter: ((error: Error) => void) | null = null;
 
   constructor() {
-    this.clientId = process.env.MICROSOFT_CLIENT_ID || "";
+    this.clientId = process.env.MICROSOFT_CLIENT_ID || '';
     // Note: client_secret not needed for public clients (desktop apps)
     // We use PKCE (Proof Key for Code Exchange) for security instead
-    this.tenantId = process.env.MICROSOFT_TENANT_ID || "common";
+    this.tenantId = process.env.MICROSOFT_TENANT_ID || 'common';
 
     // Microsoft OAuth2 endpoints
     this.authorizeUrl = `https://login.microsoftonline.com/${this.tenantId}/oauth2/v2.0/authorize`;
@@ -81,9 +81,7 @@ class MicrosoftAuthService {
    */
   resolveCodeDirectly(code: string): void {
     if (this.codeResolver) {
-      console.log(
-        "[MicrosoftAuth] Resolving code directly from navigation interception",
-      );
+      console.log('[MicrosoftAuth] Resolving code directly from navigation interception');
       this.codeResolver(code);
       this.codeResolver = null;
       this.codeRejecter = null;
@@ -97,9 +95,7 @@ class MicrosoftAuthService {
    */
   rejectCodeDirectly(error: string): void {
     if (this.codeRejecter) {
-      console.log(
-        "[MicrosoftAuth] Rejecting code directly from navigation interception",
-      );
+      console.log('[MicrosoftAuth] Rejecting code directly from navigation interception');
       this.codeRejecter(new Error(error));
       this.codeResolver = null;
       this.codeRejecter = null;
@@ -118,20 +114,16 @@ class MicrosoftAuthService {
       this.codeRejecter = reject;
 
       this.server = http.createServer((req, res) => {
-        const parsedUrl = url.parse(req.url || "", true);
-        console.log(
-          `[MicrosoftAuth] HTTP server received request: ${parsedUrl.pathname}`,
-        );
+        const parsedUrl = url.parse(req.url || '', true);
+        console.log(`[MicrosoftAuth] HTTP server received request: ${parsedUrl.pathname}`);
 
-        if (parsedUrl.pathname === "/callback") {
+        if (parsedUrl.pathname === '/callback') {
           const code = parsedUrl.query.code as string | undefined;
           const error = parsedUrl.query.error as string | undefined;
-          console.log(
-            `[MicrosoftAuth] Callback received via HTTP server - code: ${code ? "present" : "missing"}, error: ${error || "none"}`,
-          );
+          console.log(`[MicrosoftAuth] Callback received via HTTP server - code: ${code ? 'present' : 'missing'}, error: ${error || 'none'}`);
 
           if (error) {
-            res.writeHead(200, { "Content-Type": "text/html" });
+            res.writeHead(200, { 'Content-Type': 'text/html' });
             res.end(`
               <!DOCTYPE html>
               <html>
@@ -155,11 +147,9 @@ class MicrosoftAuthService {
               </html>
             `);
             this.stopLocalServer();
-            reject(
-              new Error((parsedUrl.query.error_description as string) || error),
-            );
+            reject(new Error((parsedUrl.query.error_description as string) || error));
           } else if (code) {
-            res.writeHead(200, { "Content-Type": "text/html" });
+            res.writeHead(200, { 'Content-Type': 'text/html' });
             res.end(`
               <!DOCTYPE html>
               <html>
@@ -214,7 +204,7 @@ class MicrosoftAuthService {
             this.stopLocalServer();
             resolve(code);
           } else {
-            res.writeHead(400, { "Content-Type": "text/html" });
+            res.writeHead(400, { 'Content-Type': 'text/html' });
             res.end(`
               <html>
                 <body style="font-family: system-ui; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0;">
@@ -229,13 +219,11 @@ class MicrosoftAuthService {
         }
       });
 
-      this.server.listen(3000, "localhost", () => {
-        console.log(
-          "[MicrosoftAuth] Local callback server listening on http://localhost:3000",
-        );
+      this.server.listen(3000, 'localhost', () => {
+        console.log('[MicrosoftAuth] Local callback server listening on http://localhost:3000');
       });
 
-      this.server.on("error", (err: Error) => {
+      this.server.on('error', (err: Error) => {
         reject(err);
       });
     });
@@ -248,7 +236,7 @@ class MicrosoftAuthService {
     if (this.server) {
       this.server.close();
       this.server = null;
-      console.log("[MicrosoftAuth] Local callback server stopped");
+      console.log('[MicrosoftAuth] Local callback server stopped');
     }
   }
 
@@ -258,30 +246,27 @@ class MicrosoftAuthService {
    */
   async authenticateForLogin(): Promise<AuthFlowResult> {
     const scopes = [
-      "openid",
-      "profile",
-      "email",
-      "User.Read",
-      "offline_access",
+      'openid',
+      'profile',
+      'email',
+      'User.Read',
+      'offline_access'
     ];
 
     // Generate PKCE challenge (optional but recommended)
-    const codeVerifier = crypto.randomBytes(32).toString("base64url");
-    const codeChallenge = crypto
-      .createHash("sha256")
-      .update(codeVerifier)
-      .digest("base64url");
+    const codeVerifier = crypto.randomBytes(32).toString('base64url');
+    const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('base64url');
 
     // Build authorization URL
     const params = new URLSearchParams({
       client_id: this.clientId,
-      response_type: "code",
+      response_type: 'code',
       redirect_uri: this.redirectUri,
-      scope: scopes.join(" "),
-      response_mode: "query",
-      prompt: "select_account", // Show account picker, only consent if needed
+      scope: scopes.join(' '),
+      response_mode: 'query',
+      prompt: 'select_account', // Show account picker, only consent if needed
       code_challenge: codeChallenge,
-      code_challenge_method: "S256",
+      code_challenge_method: 'S256'
     });
 
     const authUrl = `${this.authorizeUrl}?${params.toString()}`;
@@ -293,7 +278,7 @@ class MicrosoftAuthService {
       authUrl,
       codePromise,
       codeVerifier,
-      scopes,
+      scopes
     };
   }
 
@@ -304,34 +289,31 @@ class MicrosoftAuthService {
    */
   async authenticateForMailbox(loginHint?: string): Promise<AuthFlowResult> {
     const scopes = [
-      "openid",
-      "profile",
-      "email",
-      "User.Read",
-      "Mail.Read",
-      "Mail.ReadWrite",
-      "offline_access",
+      'openid',
+      'profile',
+      'email',
+      'User.Read',
+      'Mail.Read',
+      'Mail.ReadWrite',
+      'offline_access'
     ];
 
-    const codeVerifier = crypto.randomBytes(32).toString("base64url");
-    const codeChallenge = crypto
-      .createHash("sha256")
-      .update(codeVerifier)
-      .digest("base64url");
+    const codeVerifier = crypto.randomBytes(32).toString('base64url');
+    const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('base64url');
 
     const params = new URLSearchParams({
       client_id: this.clientId,
-      response_type: "code",
+      response_type: 'code',
       redirect_uri: this.redirectUri,
-      scope: scopes.join(" "),
-      response_mode: "query",
-      prompt: "select_account", // Show account picker, only consent if needed
+      scope: scopes.join(' '),
+      response_mode: 'query',
+      prompt: 'select_account', // Show account picker, only consent if needed
       code_challenge: codeChallenge,
-      code_challenge_method: "S256",
+      code_challenge_method: 'S256'
     });
 
     if (loginHint) {
-      params.append("login_hint", loginHint);
+      params.append('login_hint', loginHint);
     }
 
     const authUrl = `${this.authorizeUrl}?${params.toString()}`;
@@ -341,7 +323,7 @@ class MicrosoftAuthService {
       authUrl,
       codePromise,
       codeVerifier,
-      scopes,
+      scopes
     };
   }
 
@@ -350,36 +332,27 @@ class MicrosoftAuthService {
    * @param code - Authorization code from OAuth flow
    * @param codeVerifier - PKCE code verifier
    */
-  async exchangeCodeForTokens(
-    code: string,
-    codeVerifier: string,
-  ): Promise<TokenResponse> {
+  async exchangeCodeForTokens(code: string, codeVerifier: string): Promise<TokenResponse> {
     try {
       const params = new URLSearchParams({
         client_id: this.clientId,
         code: code,
         redirect_uri: this.redirectUri,
-        grant_type: "authorization_code",
-        code_verifier: codeVerifier,
+        grant_type: 'authorization_code',
+        code_verifier: codeVerifier
       });
 
       const response = await axios.post(this.tokenUrl, params.toString(), {
         headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
       });
 
       return response.data;
     } catch (error) {
       const axiosError = error as AxiosError;
-      console.error(
-        "Error exchanging code for tokens:",
-        axiosError.response?.data || axiosError.message,
-      );
-      throw new Error(
-        (axiosError.response?.data as any)?.error_description ||
-          "Failed to exchange authorization code",
-      );
+      console.error('Error exchanging code for tokens:', axiosError.response?.data || axiosError.message);
+      throw new Error((axiosError.response?.data as any)?.error_description || 'Failed to exchange authorization code');
     }
   }
 
@@ -389,10 +362,10 @@ class MicrosoftAuthService {
    */
   async getUserInfo(accessToken: string): Promise<UserInfo> {
     try {
-      const response = await axios.get("https://graph.microsoft.com/v1.0/me", {
+      const response = await axios.get('https://graph.microsoft.com/v1.0/me', {
         headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
+          Authorization: `Bearer ${accessToken}`
+        }
       });
 
       const user = response.data;
@@ -402,15 +375,12 @@ class MicrosoftAuthService {
         email: user.mail || user.userPrincipalName,
         name: user.displayName,
         given_name: user.givenName,
-        family_name: user.surname,
+        family_name: user.surname
       };
     } catch (error) {
       const axiosError = error as AxiosError;
-      console.error(
-        "Error getting user info:",
-        axiosError.response?.data || axiosError.message,
-      );
-      throw new Error("Failed to get user information");
+      console.error('Error getting user info:', axiosError.response?.data || axiosError.message);
+      throw new Error('Failed to get user information');
     }
   }
 
@@ -423,23 +393,20 @@ class MicrosoftAuthService {
       const params = new URLSearchParams({
         client_id: this.clientId,
         refresh_token: refreshToken,
-        grant_type: "refresh_token",
+        grant_type: 'refresh_token'
       });
 
       const response = await axios.post(this.tokenUrl, params.toString(), {
         headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
       });
 
       return response.data;
     } catch (error) {
       const axiosError = error as AxiosError;
-      console.error(
-        "Error refreshing token:",
-        axiosError.response?.data || axiosError.message,
-      );
-      throw new Error("Failed to refresh access token");
+      console.error('Error refreshing token:', axiosError.response?.data || axiosError.message);
+      throw new Error('Failed to refresh access token');
     }
   }
 
@@ -448,22 +415,16 @@ class MicrosoftAuthService {
    * @param userId - User ID to refresh token for
    * @returns Success status with new token data
    */
-  async refreshAccessToken(
-    userId: string,
-  ): Promise<{ success: boolean; error?: string }> {
+  async refreshAccessToken(userId: string): Promise<{ success: boolean; error?: string }> {
     try {
-      console.log("[MicrosoftAuth] Refreshing access token for user:", userId);
+      console.log('[MicrosoftAuth] Refreshing access token for user:', userId);
 
       // Get current token from database
-      const tokenRecord = await databaseService.getOAuthToken(
-        userId,
-        "microsoft",
-        "mailbox",
-      );
+      const tokenRecord = await databaseService.getOAuthToken(userId, 'microsoft', 'mailbox');
 
       if (!tokenRecord || !tokenRecord.refresh_token) {
-        console.error("[MicrosoftAuth] No refresh token found for user");
-        return { success: false, error: "No refresh token available" };
+        console.error('[MicrosoftAuth] No refresh token found for user');
+        return { success: false, error: 'No refresh token available' };
       }
 
       // Session-only OAuth: tokens stored unencrypted in encrypted database
@@ -473,12 +434,10 @@ class MicrosoftAuthService {
       const newTokens = await this.refreshToken(refreshToken);
 
       // Calculate new expiry time
-      const expiresAt = new Date(
-        Date.now() + newTokens.expires_in * 1000,
-      ).toISOString();
+      const expiresAt = new Date(Date.now() + newTokens.expires_in * 1000).toISOString();
 
       // Update database with new tokens (no encryption needed)
-      await databaseService.saveOAuthToken(userId, "microsoft", "mailbox", {
+      await databaseService.saveOAuthToken(userId, 'microsoft', 'mailbox', {
         access_token: newTokens.access_token,
         refresh_token: newTokens.refresh_token || tokenRecord.refresh_token, // Keep old if new not provided
         token_expires_at: expiresAt,
@@ -487,17 +446,14 @@ class MicrosoftAuthService {
         mailbox_connected: true,
       });
 
-      console.log(
-        "[MicrosoftAuth] Token refreshed successfully. New expiry:",
-        expiresAt,
-      );
+      console.log('[MicrosoftAuth] Token refreshed successfully. New expiry:', expiresAt);
 
       return { success: true };
     } catch (error) {
-      console.error("[MicrosoftAuth] Failed to refresh access token:", error);
+      console.error('[MicrosoftAuth] Failed to refresh access token:', error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: error instanceof Error ? error.message : 'Unknown error'
       };
     }
   }
@@ -509,10 +465,8 @@ class MicrosoftAuthService {
   async revokeToken(_accessToken: string): Promise<RevokeTokenResult> {
     // Microsoft OAuth2 doesn't provide a revocation endpoint
     // For proper logout, direct user to: https://login.microsoftonline.com/common/oauth2/v2.0/logout
-    console.log(
-      "Microsoft tokens cannot be revoked programmatically. User should sign out from Microsoft account.",
-    );
-    return { success: true, message: "Token will expire naturally" };
+    console.log('Microsoft tokens cannot be revoked programmatically. User should sign out from Microsoft account.');
+    return { success: true, message: 'Token will expire naturally' };
   }
 
   /**
@@ -521,27 +475,21 @@ class MicrosoftAuthService {
    */
   async getMailboxInfo(accessToken: string): Promise<MailboxInfo> {
     try {
-      const response = await axios.get(
-        "https://graph.microsoft.com/v1.0/me/mailFolders/inbox",
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-        },
-      );
+      const response = await axios.get('https://graph.microsoft.com/v1.0/me/mailFolders/inbox', {
+        headers: {
+          Authorization: `Bearer ${accessToken}`
+        }
+      });
 
       return {
         displayName: response.data.displayName,
         totalItemCount: response.data.totalItemCount,
-        unreadItemCount: response.data.unreadItemCount,
+        unreadItemCount: response.data.unreadItemCount
       };
     } catch (error) {
       const axiosError = error as AxiosError;
-      console.error(
-        "Error getting mailbox info:",
-        axiosError.response?.data || axiosError.message,
-      );
-      throw new Error("Failed to get mailbox information");
+      console.error('Error getting mailbox info:', axiosError.response?.data || axiosError.message);
+      throw new Error('Failed to get mailbox information');
     }
   }
 }

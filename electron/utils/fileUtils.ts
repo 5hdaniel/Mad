@@ -3,7 +3,7 @@
  * Handles file path sanitization and manipulation
  */
 
-import { REGEX_PATTERNS } from "../constants";
+import { REGEX_PATTERNS } from '../constants';
 
 /**
  * Sanitize filename by removing special characters
@@ -11,17 +11,14 @@ import { REGEX_PATTERNS } from "../constants";
  * @param preserveSpaces - Whether to preserve spaces (default: false)
  * @returns Sanitized filename
  */
-export function sanitizeFilename(
-  filename: string | null | undefined,
-  preserveSpaces: boolean = false,
-): string {
-  if (!filename) return "unnamed";
+export function sanitizeFilename(filename: string | null | undefined, preserveSpaces: boolean = false): string {
+  if (!filename) return 'unnamed';
 
   const pattern = preserveSpaces
     ? REGEX_PATTERNS.FILE_SANITIZE_WITH_SPACES
     : REGEX_PATTERNS.FILE_SANITIZE;
 
-  return filename.replace(pattern, "_").toLowerCase();
+  return filename.replace(pattern, '_').toLowerCase();
 }
 
 /**
@@ -30,17 +27,14 @@ export function sanitizeFilename(
  * @param preserveSpaces - Whether to preserve spaces (default: true)
  * @returns Sanitized filename with original casing
  */
-export function sanitizeFilenamePreserveCase(
-  filename: string | null | undefined,
-  preserveSpaces: boolean = true,
-): string {
-  if (!filename) return "unnamed";
+export function sanitizeFilenamePreserveCase(filename: string | null | undefined, preserveSpaces: boolean = true): string {
+  if (!filename) return 'unnamed';
 
   const pattern = preserveSpaces
     ? REGEX_PATTERNS.FILE_SANITIZE_WITH_SPACES
     : REGEX_PATTERNS.FILE_SANITIZE;
 
-  return filename.replace(pattern, "_");
+  return filename.replace(pattern, '_');
 }
 
 /**
@@ -49,10 +43,7 @@ export function sanitizeFilenamePreserveCase(
  * @param extension - File extension (without dot)
  * @returns Filename with timestamp
  */
-export function createTimestampedFilename(
-  baseName: string,
-  extension: string,
-): string {
+export function createTimestampedFilename(baseName: string, extension: string): string {
   const safeName = sanitizeFilename(baseName);
   const timestamp = Date.now();
   return `${safeName}_${timestamp}.${extension}`;
@@ -68,7 +59,7 @@ export function createTimestampedFilename(
 export async function ensureUniqueFilename(
   baseName: string,
   extension: string,
-  checkExists: (filename: string) => Promise<boolean>,
+  checkExists: (filename: string) => Promise<boolean>
 ): Promise<string> {
   const safeName = sanitizeFilename(baseName);
   let filename = `${safeName}.${extension}`;

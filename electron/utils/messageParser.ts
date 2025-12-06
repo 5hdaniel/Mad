@@ -10,8 +10,8 @@ import {
   STREAMTYPED_MARKER,
   STREAMTYPED_OFFSET,
   REGEX_PATTERNS,
-  FALLBACK_MESSAGES,
-} from "../constants";
+  FALLBACK_MESSAGES
+} from '../constants';
 
 /**
  * Message object interface
@@ -29,15 +29,13 @@ export interface Message {
  * @param attributedBodyBuffer - The attributedBody buffer from Messages database
  * @returns Extracted text or fallback message
  */
-export function extractTextFromAttributedBody(
-  attributedBodyBuffer: Buffer | null | undefined,
-): string {
+export function extractTextFromAttributedBody(attributedBodyBuffer: Buffer | null | undefined): string {
   if (!attributedBodyBuffer) {
     return FALLBACK_MESSAGES.REACTION_OR_SYSTEM;
   }
 
   try {
-    const bodyText = attributedBodyBuffer.toString("utf8");
+    const bodyText = attributedBodyBuffer.toString('utf8');
     let extractedText: string | null = null;
 
     // Method 1: Look for text after NSString marker
@@ -62,7 +60,7 @@ export function extractTextFromAttributedBody(
       return FALLBACK_MESSAGES.UNABLE_TO_EXTRACT;
     }
   } catch (e) {
-    console.error("Error parsing attributedBody:", (e as Error).message);
+    console.error('Error parsing attributedBody:', (e as Error).message);
     return FALLBACK_MESSAGES.PARSING_ERROR;
   }
 }
@@ -73,7 +71,7 @@ export function extractTextFromAttributedBody(
  * @returns Extracted text or null
  */
 function extractFromNSString(bodyText: string): string | null {
-  const nsStringIndex = bodyText.indexOf("NSString");
+  const nsStringIndex = bodyText.indexOf('NSString');
   if (nsStringIndex === -1) {
     return null;
   }
@@ -90,8 +88,8 @@ function extractFromNSString(bodyText: string): string | null {
   // Find the longest match that contains alphanumeric characters
   for (const match of allMatches.sort((a, b) => b.length - a.length)) {
     const cleaned = match
-      .replace(REGEX_PATTERNS.LEADING_SYMBOLS, "")
-      .replace(REGEX_PATTERNS.TRAILING_SYMBOLS, "")
+      .replace(REGEX_PATTERNS.LEADING_SYMBOLS, '')
+      .replace(REGEX_PATTERNS.TRAILING_SYMBOLS, '')
       .trim();
 
     // Accept if it has alphanumeric content and is reasonable length
@@ -121,7 +119,9 @@ function extractFromStreamtyped(bodyText: string): string | null {
   const textMatch = afterStream.match(REGEX_PATTERNS.MESSAGE_TEXT_READABLE);
 
   if (textMatch) {
-    return textMatch[0].replace(REGEX_PATTERNS.LEADING_SYMBOLS, "").trim();
+    return textMatch[0]
+      .replace(REGEX_PATTERNS.LEADING_SYMBOLS, '')
+      .trim();
   }
 
   return null;
@@ -134,8 +134,8 @@ function extractFromStreamtyped(bodyText: string): string | null {
  */
 export function cleanExtractedText(text: string): string {
   return text
-    .replace(REGEX_PATTERNS.NULL_BYTES, "") // Remove null bytes
-    .replace(REGEX_PATTERNS.CONTROL_CHARS, "") // Remove control chars
+    .replace(REGEX_PATTERNS.NULL_BYTES, '') // Remove null bytes
+    .replace(REGEX_PATTERNS.CONTROL_CHARS, '') // Remove control chars
     .trim();
 }
 

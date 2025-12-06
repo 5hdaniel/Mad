@@ -13,12 +13,7 @@
  */
 export interface BackupProgress {
   /** Current phase of the backup operation */
-  phase:
-    | "preparing"
-    | "transferring"
-    | "finishing"
-    | "extracting"
-    | "decrypting";
+  phase: 'preparing' | 'transferring' | 'finishing' | 'extracting' | 'decrypting';
   /** Overall percentage complete (0-100) */
   percentComplete: number;
   /** Current file being processed, if available */
@@ -131,14 +126,14 @@ export interface BackupStatus {
  * Error codes for backup operations
  */
 export type BackupErrorCode =
-  | "PASSWORD_REQUIRED"
-  | "INCORRECT_PASSWORD"
-  | "DEVICE_NOT_FOUND"
-  | "DEVICE_LOCKED"
-  | "BACKUP_CANCELLED"
-  | "INSUFFICIENT_SPACE"
-  | "DECRYPTION_FAILED"
-  | "UNKNOWN_ERROR";
+  | 'PASSWORD_REQUIRED'
+  | 'INCORRECT_PASSWORD'
+  | 'DEVICE_NOT_FOUND'
+  | 'DEVICE_LOCKED'
+  | 'BACKUP_CANCELLED'
+  | 'INSUFFICIENT_SPACE'
+  | 'DECRYPTION_FAILED'
+  | 'UNKNOWN_ERROR';
 
 /**
  * Encryption information for a backup
@@ -244,16 +239,16 @@ export interface FileMetadata {
  */
 export const REQUIRED_BACKUP_FILES = {
   SMS_DB: {
-    hash: "3d0d7e5fb2ce288813306e4d4636395e047a3d28",
-    domain: "HomeDomain",
-    relativePath: "Library/SMS/sms.db",
-    description: "iMessage/SMS database",
+    hash: '3d0d7e5fb2ce288813306e4d4636395e047a3d28',
+    domain: 'HomeDomain',
+    relativePath: 'Library/SMS/sms.db',
+    description: 'iMessage/SMS database',
   },
   ADDRESS_BOOK: {
-    hash: "31bb7ba8914766d4ba40d6dfb6113c8b614be442",
-    domain: "HomeDomain",
-    relativePath: "Library/AddressBook/AddressBook.sqlitedb",
-    description: "Contacts database",
+    hash: '31bb7ba8914766d4ba40d6dfb6113c8b614be442',
+    domain: 'HomeDomain',
+    relativePath: 'Library/AddressBook/AddressBook.sqlitedb',
+    description: 'Contacts database',
   },
 } as const;
 

@@ -2,7 +2,7 @@
  * Custom hook for managing selection state
  * Handles selecting/deselecting items and bulk operations
  */
-import { useState } from "react";
+import { useState } from 'react';
 
 /**
  * Item with ID field for selection
@@ -41,7 +41,7 @@ export function useSelection(): UseSelectionReturn {
   };
 
   const selectAll = (items: SelectableItem[]): void => {
-    setSelectedIds(new Set(items.map((item) => item.id)));
+    setSelectedIds(new Set(items.map(item => item.id)));
   };
 
   const deselectAll = (): void => {
@@ -58,6 +58,6 @@ export function useSelection(): UseSelectionReturn {
     selectAll,
     deselectAll,
     isSelected,
-    count: selectedIds.size,
+    count: selectedIds.size
   };
 }

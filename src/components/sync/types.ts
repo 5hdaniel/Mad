@@ -2,7 +2,7 @@
  * Type definitions for Sync Progress UI components
  */
 
-export type SyncPhase = "preparing" | "transferring" | "finishing";
+export type SyncPhase = 'preparing' | 'transferring' | 'finishing';
 
 export interface BackupProgress {
   phase: SyncPhase;
@@ -21,7 +21,7 @@ export interface SyncResult {
 }
 
 export type SyncErrorCode =
-  | "DEVICE_DISCONNECTED"
-  | "DEVICE_LOCKED"
-  | "BACKUP_FAILED"
-  | "PASSWORD_INCORRECT";
+  | 'DEVICE_DISCONNECTED'
+  | 'DEVICE_LOCKED'
+  | 'BACKUP_FAILED'
+  | 'PASSWORD_INCORRECT';

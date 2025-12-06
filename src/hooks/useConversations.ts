@@ -2,7 +2,7 @@
  * Custom hook for managing conversations data
  * Handles loading conversations from the electron backend
  */
-import { useState, useEffect } from "react";
+import { useState, useEffect } from 'react';
 
 /**
  * Conversation structure from iMessage database
@@ -58,17 +58,15 @@ export function useConversations(): UseConversationsReturn {
     setError(null);
 
     try {
-      const result: GetConversationsResult =
-        await window.electron.getConversations();
+      const result: GetConversationsResult = await window.electron.getConversations();
 
       if (result.success) {
         setConversations(result.conversations || []);
       } else {
-        setError(result.error || "Failed to load contacts");
+        setError(result.error || 'Failed to load contacts');
       }
     } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : "Unknown error occurred";
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
       setError(errorMessage);
     } finally {
       setIsLoading(false);
@@ -83,6 +81,6 @@ export function useConversations(): UseConversationsReturn {
     conversations,
     isLoading,
     error,
-    reload: loadConversations,
+    reload: loadConversations
   };
 }

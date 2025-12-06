@@ -1,5 +1,5 @@
-import React from "react";
-import type { SyncProgressProps } from "../../types/iphone";
+import React from 'react';
+import type { SyncProgressProps } from '../../types/iphone';
 
 /**
  * SyncProgress Component
@@ -11,23 +11,23 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
 }) => {
   const getPhaseLabel = (): string => {
     switch (progress.phase) {
-      case "preparing":
-        return "Preparing backup...";
-      case "backing_up":
-        return "Backing up device...";
-      case "extracting":
-        return "Extracting messages and contacts...";
-      case "complete":
-        return "Sync complete!";
-      case "error":
-        return "An error occurred";
+      case 'preparing':
+        return 'Preparing backup...';
+      case 'backing_up':
+        return 'Backing up device...';
+      case 'extracting':
+        return 'Extracting messages and contacts...';
+      case 'complete':
+        return 'Sync complete!';
+      case 'error':
+        return 'An error occurred';
       default:
-        return "Processing...";
+        return 'Processing...';
     }
   };
 
-  const isComplete = progress.phase === "complete";
-  const isError = progress.phase === "error";
+  const isComplete = progress.phase === 'complete';
+  const isError = progress.phase === 'error';
 
   return (
     <div className="p-6">
@@ -103,12 +103,11 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
       )}
 
       {/* File Progress */}
-      {progress.processedFiles !== undefined &&
-        progress.totalFiles !== undefined && (
-          <p className="text-xs text-gray-400 text-center">
-            {progress.processedFiles} of {progress.totalFiles} files processed
-          </p>
-        )}
+      {progress.processedFiles !== undefined && progress.totalFiles !== undefined && (
+        <p className="text-xs text-gray-400 text-center">
+          {progress.processedFiles} of {progress.totalFiles} files processed
+        </p>
+      )}
 
       {/* Cancel Button */}
       {onCancel && !isComplete && !isError && (

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import type { Contact, Transaction } from "../../electron/types/models";
+import React, { useState, useEffect } from 'react';
+import type { Contact, Transaction } from '../../electron/types/models';
 
 interface ManualTransactionModalProps {
   userId: string;
@@ -12,25 +12,20 @@ interface ManualTransactionModalProps {
  * ManualTransactionModal Component
  * Allows users to manually create a transaction by entering address and details
  */
-function ManualTransactionModal({
-  userId,
-  provider: _provider,
-  onClose,
-  onSuccess,
-}: ManualTransactionModalProps) {
-  const [propertyAddress, setPropertyAddress] = useState("");
-  const [representationStartDate, setRepresentationStartDate] = useState("");
-  const [closingDate, setClosingDate] = useState("");
-  const [transactionType, setTransactionType] = useState("purchase");
+function ManualTransactionModal({ userId, provider: _provider, onClose, onSuccess }: ManualTransactionModalProps) {
+  const [propertyAddress, setPropertyAddress] = useState('');
+  const [representationStartDate, setRepresentationStartDate] = useState('');
+  const [closingDate, setClosingDate] = useState('');
+  const [transactionType, setTransactionType] = useState('purchase');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState(1); // 1: Address, 2: Dates, 3: Contacts
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loadingContacts, setLoadingContacts] = useState(false);
-  const [buyerAgentId, setBuyerAgentId] = useState("");
-  const [sellerAgentId, setSellerAgentId] = useState("");
-  const [escrowOfficerId, setEscrowOfficerId] = useState("");
-  const [inspectorId, setInspectorId] = useState("");
+  const [buyerAgentId, setBuyerAgentId] = useState('');
+  const [sellerAgentId, setSellerAgentId] = useState('');
+  const [escrowOfficerId, setEscrowOfficerId] = useState('');
+  const [inspectorId, setInspectorId] = useState('');
 
   useEffect(() => {
     loadContacts();
@@ -44,7 +39,7 @@ function ManualTransactionModal({
         setContacts(result.contacts || []);
       }
     } catch (err) {
-      console.error("Failed to load contacts:", err);
+      console.error('Failed to load contacts:', err);
     } finally {
       setLoadingContacts(false);
     }
@@ -52,7 +47,7 @@ function ManualTransactionModal({
 
   const handleSave = async () => {
     if (!propertyAddress.trim()) {
-      setError("Property address is required");
+      setError('Property address is required');
       return;
     }
 
@@ -70,18 +65,17 @@ function ManualTransactionModal({
         seller_agent_id: sellerAgentId || null,
         escrow_officer_id: escrowOfficerId || null,
         inspector_id: inspectorId || null,
-        status: "active",
+        status: 'active',
       });
 
       if (result.success && result.transaction) {
         onSuccess(result.transaction);
         onClose();
       } else {
-        setError(result.error || "Failed to create transaction");
+        setError(result.error || 'Failed to create transaction');
       }
     } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : "Failed to create transaction";
+      const errorMessage = err instanceof Error ? err.message : 'Failed to create transaction';
       setError(errorMessage);
     } finally {
       setSaving(false);
@@ -94,27 +88,15 @@ function ManualTransactionModal({
         {/* Header */}
         <div className="bg-gradient-to-r from-green-500 to-teal-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
           <div>
-            <h3 className="text-xl font-bold text-white">
-              Create New Transaction
-            </h3>
+            <h3 className="text-xl font-bold text-white">Create New Transaction</h3>
             <p className="text-green-100 text-sm">Step {step} of 3</p>
           </div>
           <button
             onClick={onClose}
             className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-all"
           >
-            <svg
-              className="w-6 h-6"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
@@ -152,21 +134,21 @@ function ManualTransactionModal({
                 </label>
                 <div className="grid grid-cols-2 gap-3">
                   <button
-                    onClick={() => setTransactionType("purchase")}
+                    onClick={() => setTransactionType('purchase')}
                     className={`px-4 py-3 rounded-lg font-medium transition-all ${
-                      transactionType === "purchase"
-                        ? "bg-green-500 text-white shadow-md"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                      transactionType === 'purchase'
+                        ? 'bg-green-500 text-white shadow-md'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                     }`}
                   >
                     Purchase
                   </button>
                   <button
-                    onClick={() => setTransactionType("sale")}
+                    onClick={() => setTransactionType('sale')}
                     className={`px-4 py-3 rounded-lg font-medium transition-all ${
-                      transactionType === "sale"
-                        ? "bg-blue-500 text-white shadow-md"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                      transactionType === 'sale'
+                        ? 'bg-blue-500 text-white shadow-md'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                     }`}
                   >
                     Sale
@@ -180,26 +162,13 @@ function ManualTransactionModal({
             <div className="space-y-4">
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
                 <div className="flex items-start gap-2">
-                  <svg
-                    className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
+                  <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                   <div className="flex-1">
-                    <p className="text-sm font-medium text-blue-900">
-                      Dates are optional
-                    </p>
+                    <p className="text-sm font-medium text-blue-900">Dates are optional</p>
                     <p className="text-xs text-blue-700 mt-1">
-                      You can add dates now or later. We'll also try to
-                      auto-detect them from communications.
+                      You can add dates now or later. We'll also try to auto-detect them from communications.
                     </p>
                   </div>
                 </div>
@@ -236,21 +205,15 @@ function ManualTransactionModal({
               </div>
 
               <div className="bg-gray-50 rounded-lg p-4">
-                <h4 className="text-sm font-semibold text-gray-900 mb-2">
-                  Transaction Summary
-                </h4>
+                <h4 className="text-sm font-semibold text-gray-900 mb-2">Transaction Summary</h4>
                 <div className="space-y-1 text-sm">
                   <div className="flex justify-between">
                     <span className="text-gray-600">Address:</span>
-                    <span className="font-medium text-gray-900">
-                      {propertyAddress}
-                    </span>
+                    <span className="font-medium text-gray-900">{propertyAddress}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600">Type:</span>
-                    <span className="font-medium text-gray-900 capitalize">
-                      {transactionType}
-                    </span>
+                    <span className="font-medium text-gray-900 capitalize">{transactionType}</span>
                   </div>
                 </div>
               </div>
@@ -261,26 +224,13 @@ function ManualTransactionModal({
             <div className="space-y-4">
               <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-4">
                 <div className="flex items-start gap-2">
-                  <svg
-                    className="w-5 h-5 text-purple-600 flex-shrink-0 mt-0.5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
+                  <svg className="w-5 h-5 text-purple-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                   <div className="flex-1">
-                    <p className="text-sm font-medium text-purple-900">
-                      Assign contacts to this transaction
-                    </p>
+                    <p className="text-sm font-medium text-purple-900">Assign contacts to this transaction</p>
                     <p className="text-xs text-purple-700 mt-1">
-                      All contacts are optional. You can always add or update
-                      them later.
+                      All contacts are optional. You can always add or update them later.
                     </p>
                   </div>
                 </div>
@@ -293,25 +243,11 @@ function ManualTransactionModal({
                 </div>
               ) : contacts.length === 0 ? (
                 <div className="text-center py-8">
-                  <svg
-                    className="w-12 h-12 text-gray-300 mx-auto mb-3"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-                    />
+                  <svg className="w-12 h-12 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                   </svg>
-                  <p className="text-sm text-gray-600 mb-2">
-                    No contacts available
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    You can create contacts from the Dashboard later
-                  </p>
+                  <p className="text-sm text-gray-600 mb-2">No contacts available</p>
+                  <p className="text-xs text-gray-500">You can create contacts from the Dashboard later</p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -328,8 +264,7 @@ function ManualTransactionModal({
                       <option value="">-- None --</option>
                       {contacts.map((contact) => (
                         <option key={contact.id} value={contact.id}>
-                          {contact.name}{" "}
-                          {contact.company ? `(${contact.company})` : ""}
+                          {contact.name} {contact.company ? `(${contact.company})` : ''}
                         </option>
                       ))}
                     </select>
@@ -348,8 +283,7 @@ function ManualTransactionModal({
                       <option value="">-- None --</option>
                       {contacts.map((contact) => (
                         <option key={contact.id} value={contact.id}>
-                          {contact.name}{" "}
-                          {contact.company ? `(${contact.company})` : ""}
+                          {contact.name} {contact.company ? `(${contact.company})` : ''}
                         </option>
                       ))}
                     </select>
@@ -368,8 +302,7 @@ function ManualTransactionModal({
                       <option value="">-- None --</option>
                       {contacts.map((contact) => (
                         <option key={contact.id} value={contact.id}>
-                          {contact.name}{" "}
-                          {contact.company ? `(${contact.company})` : ""}
+                          {contact.name} {contact.company ? `(${contact.company})` : ''}
                         </option>
                       ))}
                     </select>
@@ -388,8 +321,7 @@ function ManualTransactionModal({
                       <option value="">-- None --</option>
                       {contacts.map((contact) => (
                         <option key={contact.id} value={contact.id}>
-                          {contact.name}{" "}
-                          {contact.company ? `(${contact.company})` : ""}
+                          {contact.name} {contact.company ? `(${contact.company})` : ''}
                         </option>
                       ))}
                     </select>
@@ -407,7 +339,7 @@ function ManualTransactionModal({
             disabled={saving}
             className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg font-medium transition-all disabled:opacity-50"
           >
-            {step === 1 ? "Cancel" : "Back"}
+            {step === 1 ? 'Cancel' : 'Back'}
           </button>
 
           <button
@@ -415,8 +347,8 @@ function ManualTransactionModal({
             disabled={saving || !propertyAddress.trim()}
             className={`px-6 py-2 rounded-lg font-semibold transition-all ${
               saving || !propertyAddress.trim()
-                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                : "bg-gradient-to-r from-green-500 to-teal-600 text-white hover:from-green-600 hover:to-teal-700 shadow-md hover:shadow-lg"
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-gradient-to-r from-green-500 to-teal-600 text-white hover:from-green-600 hover:to-teal-700 shadow-md hover:shadow-lg'
             }`}
           >
             {saving ? (
@@ -425,9 +357,9 @@ function ManualTransactionModal({
                 Creating...
               </span>
             ) : step < 3 ? (
-              "Next"
+              'Next'
             ) : (
-              "Create Transaction"
+              'Create Transaction'
             )}
           </button>
         </div>

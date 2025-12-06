@@ -2,7 +2,7 @@
  * SelectionControls Component
  * Provides select all/deselect all/show selected buttons
  */
-import React from "react";
+import React from 'react';
 
 interface SelectionControlsProps {
   onSelectAll: () => void;
@@ -17,7 +17,7 @@ export function SelectionControls({
   onDeselectAll,
   onToggleShowSelected,
   showOnlySelected,
-  selectedCount,
+  selectedCount
 }: SelectionControlsProps) {
   return (
     <>
@@ -42,11 +42,11 @@ export function SelectionControls({
         disabled={selectedCount === 0}
         className={`px-4 py-2 border rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
           showOnlySelected
-            ? "bg-primary text-white border-primary hover:bg-blue-600"
-            : "border-gray-300 hover:bg-gray-50"
+            ? 'bg-primary text-white border-primary hover:bg-blue-600'
+            : 'border-gray-300 hover:bg-gray-50'
         }`}
       >
-        {showOnlySelected ? "Show All" : "Show Selected"}
+        {showOnlySelected ? 'Show All' : 'Show Selected'}
       </button>
     </>
   );

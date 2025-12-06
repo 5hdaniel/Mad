@@ -6,13 +6,13 @@
  * scattering platform checks throughout the codebase.
  */
 
-import React, { createContext, useContext, useMemo, ReactNode } from "react";
+import React, { createContext, useContext, useMemo, ReactNode } from 'react';
 import {
   Platform,
   getPlatform,
   isFeatureAvailable,
   FeatureName,
-} from "../utils/platform";
+} from '../utils/platform';
 
 interface PlatformContextType {
   /** Current platform: 'macos' | 'windows' | 'linux' */
@@ -43,9 +43,9 @@ export function PlatformProvider({ children }: PlatformProviderProps) {
     return {
       platform,
       isFeatureAvailable,
-      isMacOS: platform === "macos",
-      isWindows: platform === "windows",
-      isLinux: platform === "linux",
+      isMacOS: platform === 'macos',
+      isWindows: platform === 'windows',
+      isLinux: platform === 'linux',
     };
   }, []);
 
@@ -64,7 +64,7 @@ export function PlatformProvider({ children }: PlatformProviderProps) {
 export function usePlatform(): PlatformContextType {
   const context = useContext(PlatformContext);
   if (!context) {
-    throw new Error("usePlatform must be used within PlatformProvider");
+    throw new Error('usePlatform must be used within PlatformProvider');
   }
   return context;
 }

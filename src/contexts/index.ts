@@ -2,14 +2,9 @@
  * Context exports
  */
 
-export {
-  AuthProvider,
-  useAuth,
-  useIsAuthenticated,
-  useCurrentUser,
-} from "./AuthContext";
-export type { User } from "./AuthContext";
+export { AuthProvider, useAuth, useIsAuthenticated, useCurrentUser } from './AuthContext';
+export type { User } from './AuthContext';
 
-export { NetworkProvider, useNetwork } from "./NetworkContext";
+export { NetworkProvider, useNetwork } from './NetworkContext';
 
-export { PlatformProvider, usePlatform } from "./PlatformContext";
+export { PlatformProvider, usePlatform } from './PlatformContext';

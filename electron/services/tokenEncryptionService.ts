@@ -4,9 +4,9 @@
  * Stores tokens securely in the OS keychain (macOS Keychain, Windows DPAPI, Linux Secret Service)
  */
 
-import { safeStorage } from "electron";
-import * as os from "os";
-import logService from "./logService";
+import { safeStorage } from 'electron';
+import * as os from 'os';
+import logService from './logService';
 
 /**
  * Error class for encryption-related failures with platform-specific guidance
@@ -17,7 +17,7 @@ export class EncryptionError extends Error {
 
   constructor(message: string, guidance: string) {
     super(message);
-    this.name = "EncryptionError";
+    this.name = 'EncryptionError';
     this.platform = os.platform();
     this.guidance = guidance;
   }
@@ -77,13 +77,9 @@ class TokenEncryptionService {
       this._encryptionChecked = true;
       return this._encryptionAvailable;
     } catch (error) {
-      logService.error(
-        "Error checking encryption availability",
-        "TokenEncryption",
-        {
-          error: error instanceof Error ? error.message : String(error),
-        },
-      );
+      logService.error('Error checking encryption availability', 'TokenEncryption', {
+        error: error instanceof Error ? error.message : String(error),
+      });
       this._encryptionChecked = true;
       this._encryptionAvailable = false;
       return false;
@@ -108,7 +104,7 @@ class TokenEncryptionService {
     return {
       available: this._encryptionAvailable,
       platform: os.platform(),
-      guidance: this._encryptionAvailable ? "" : this.getPlatformGuidance(),
+      guidance: this._encryptionAvailable ? '' : this.getPlatformGuidance(),
       checked: this._encryptionChecked,
     };
   }
@@ -116,18 +112,16 @@ class TokenEncryptionService {
   /**
    * Create an appropriate error for encryption unavailability
    */
-  private createUnavailableError(
-    operation: "encrypt" | "decrypt",
-  ): EncryptionError {
+  private createUnavailableError(operation: 'encrypt' | 'decrypt'): EncryptionError {
     const platform = os.platform();
     const guidance = this.getPlatformGuidance();
 
     let message: string;
-    if (platform === "linux") {
+    if (platform === 'linux') {
       message = `Cannot ${operation} token: No Linux secret service available (gnome-keyring or KWallet required).`;
-    } else if (platform === "darwin") {
+    } else if (platform === 'darwin') {
       message = `Cannot ${operation} token: macOS Keychain is not accessible.`;
-    } else if (platform === "win32") {
+    } else if (platform === 'win32') {
       message = `Cannot ${operation} token: Windows DPAPI is not available.`;
     } else {
       message = `Cannot ${operation} token: OS-level encryption is not available on this platform.`;
@@ -144,8 +138,8 @@ class TokenEncryptionService {
    */
   encrypt(plaintext: string): string {
     if (!this.isEncryptionAvailable()) {
-      const error = this.createUnavailableError("encrypt");
-      logService.error("Encryption not available", "TokenEncryption", {
+      const error = this.createUnavailableError('encrypt');
+      logService.error('Encryption not available', 'TokenEncryption', {
         message: error.message,
         platform: error.platform,
         guidance: error.guidance,
@@ -155,14 +149,14 @@ class TokenEncryptionService {
 
     try {
       const buffer = safeStorage.encryptString(plaintext);
-      return buffer.toString("base64");
+      return buffer.toString('base64');
     } catch (error) {
-      logService.error("Encryption operation failed", "TokenEncryption", {
+      logService.error('Encryption operation failed', 'TokenEncryption', {
         error: error instanceof Error ? error.message : String(error),
       });
       throw new EncryptionError(
-        "Failed to encrypt token",
-        "The encryption operation failed unexpectedly. Please try again or restart the application.",
+        'Failed to encrypt token',
+        'The encryption operation failed unexpectedly. Please try again or restart the application.'
       );
     }
   }
@@ -175,8 +169,8 @@ class TokenEncryptionService {
    */
   decrypt(encryptedBase64: string): string {
     if (!this.isEncryptionAvailable()) {
-      const error = this.createUnavailableError("decrypt");
-      logService.error("Decryption not available", "TokenEncryption", {
+      const error = this.createUnavailableError('decrypt');
+      logService.error('Decryption not available', 'TokenEncryption', {
         message: error.message,
         platform: error.platform,
         guidance: error.guidance,
@@ -185,15 +179,15 @@ class TokenEncryptionService {
     }
 
     try {
-      const buffer = Buffer.from(encryptedBase64, "base64");
+      const buffer = Buffer.from(encryptedBase64, 'base64');
       return safeStorage.decryptString(buffer);
     } catch (error) {
-      logService.error("Decryption operation failed", "TokenEncryption", {
+      logService.error('Decryption operation failed', 'TokenEncryption', {
         error: error instanceof Error ? error.message : String(error),
       });
       throw new EncryptionError(
-        "Failed to decrypt token",
-        "The decryption operation failed. The token may be corrupted or the encryption key has changed.",
+        'Failed to decrypt token',
+        'The decryption operation failed. The token may be corrupted or the encryption key has changed.'
       );
     }
   }

@@ -5,11 +5,11 @@
  * Emits events when devices are connected or disconnected.
  */
 
-import { spawn, exec } from "child_process";
-import { promisify } from "util";
-import { EventEmitter } from "events";
-import log from "electron-log";
-import { iOSDevice } from "../types/device";
+import { spawn, exec } from 'child_process';
+import { promisify } from 'util';
+import { EventEmitter } from 'events';
+import log from 'electron-log';
+import { iOSDevice } from '../types/device';
 
 const execAsync = promisify(exec);
 
@@ -18,11 +18,11 @@ const MIN_POLL_INTERVAL_MS = 2000;
 
 /** Mock device for development without Windows/iPhone */
 const MOCK_DEVICE: iOSDevice = {
-  udid: "00000000-0000000000000000",
-  name: "Mock iPhone",
-  productType: "iPhone14,2",
-  productVersion: "17.0",
-  serialNumber: "MOCK123456789",
+  udid: '00000000-0000000000000000',
+  name: 'Mock iPhone',
+  productType: 'iPhone14,2',
+  productVersion: '17.0',
+  serialNumber: 'MOCK123456789',
   isConnected: true,
 };
 
@@ -51,10 +51,10 @@ export class DeviceDetectionService extends EventEmitter {
 
   constructor() {
     super();
-    this.mockMode = process.env.MOCK_DEVICE === "true";
+    this.mockMode = process.env.MOCK_DEVICE === 'true';
 
     if (this.mockMode) {
-      log.info("[DeviceDetection] Running in mock mode");
+      log.info('[DeviceDetection] Running in mock mode');
     }
   }
 
@@ -68,15 +68,13 @@ export class DeviceDetectionService extends EventEmitter {
     }
 
     try {
-      await execAsync("idevice_id --version");
+      await execAsync('idevice_id --version');
       this.libimobiledeviceAvailable = true;
-      log.info("[DeviceDetection] libimobiledevice is available");
+      log.info('[DeviceDetection] libimobiledevice is available');
       return true;
     } catch {
       this.libimobiledeviceAvailable = false;
-      log.warn(
-        "[DeviceDetection] libimobiledevice is not available - device detection will not work",
-      );
+      log.warn('[DeviceDetection] libimobiledevice is not available - device detection will not work');
       return false;
     }
   }
@@ -87,14 +85,12 @@ export class DeviceDetectionService extends EventEmitter {
    */
   start(intervalMs: number = 2000): void {
     if (this.pollInterval) {
-      log.warn("[DeviceDetection] Already running, stopping first");
+      log.warn('[DeviceDetection] Already running, stopping first');
       this.stop();
     }
 
     const actualInterval = Math.max(intervalMs, MIN_POLL_INTERVAL_MS);
-    log.info(
-      `[DeviceDetection] Starting device polling (interval: ${actualInterval}ms)`,
-    );
+    log.info(`[DeviceDetection] Starting device polling (interval: ${actualInterval}ms)`);
 
     // Do an immediate check
     this.pollDevices();
@@ -110,7 +106,7 @@ export class DeviceDetectionService extends EventEmitter {
    */
   stop(): void {
     if (this.pollInterval) {
-      log.info("[DeviceDetection] Stopping device polling");
+      log.info('[DeviceDetection] Stopping device polling');
       clearInterval(this.pollInterval);
       this.pollInterval = null;
     }
@@ -145,15 +141,10 @@ export class DeviceDetectionService extends EventEmitter {
             const deviceInfo = await this.getDeviceInfo(udid);
             this.connectedDevices.set(udid, deviceInfo);
 
-            log.info(
-              `[DeviceDetection] Device connected: ${deviceInfo.name} (${udid})`,
-            );
-            this.emit("device-connected", deviceInfo);
+            log.info(`[DeviceDetection] Device connected: ${deviceInfo.name} (${udid})`);
+            this.emit('device-connected', deviceInfo);
           } catch (err) {
-            log.error(
-              `[DeviceDetection] Failed to get info for device ${udid}:`,
-              err,
-            );
+            log.error(`[DeviceDetection] Failed to get info for device ${udid}:`, err);
           }
         }
       }
@@ -166,15 +157,13 @@ export class DeviceDetectionService extends EventEmitter {
             device.isConnected = false;
             this.connectedDevices.delete(udid);
 
-            log.info(
-              `[DeviceDetection] Device disconnected: ${device.name} (${udid})`,
-            );
-            this.emit("device-disconnected", device);
+            log.info(`[DeviceDetection] Device disconnected: ${device.name} (${udid})`);
+            this.emit('device-disconnected', device);
           }
         }
       }
     } catch (err) {
-      log.error("[DeviceDetection] Error polling devices:", err);
+      log.error('[DeviceDetection] Error polling devices:', err);
     } finally {
       this.isPolling = false;
     }
@@ -197,19 +186,19 @@ export class DeviceDetectionService extends EventEmitter {
     }
 
     return new Promise((resolve) => {
-      const process = spawn("idevice_id", ["-l"]);
-      let stdout = "";
-      let stderr = "";
+      const process = spawn('idevice_id', ['-l']);
+      let stdout = '';
+      let stderr = '';
 
-      process.stdout.on("data", (data) => {
+      process.stdout.on('data', (data) => {
         stdout += data.toString();
       });
 
-      process.stderr.on("data", (data) => {
+      process.stderr.on('data', (data) => {
         stderr += data.toString();
       });
 
-      process.on("close", (code) => {
+      process.on('close', (code) => {
         if (code !== 0) {
           if (stderr.trim()) {
             log.debug(`[DeviceDetection] idevice_id stderr: ${stderr.trim()}`);
@@ -221,14 +210,14 @@ export class DeviceDetectionService extends EventEmitter {
 
         const udids = stdout
           .trim()
-          .split("\n")
+          .split('\n')
           .filter((line) => line.trim().length > 0);
 
         resolve(udids);
       });
 
-      process.on("error", (err) => {
-        log.error("[DeviceDetection] Failed to spawn idevice_id:", err);
+      process.on('error', (err) => {
+        log.error('[DeviceDetection] Failed to spawn idevice_id:', err);
         resolve([]);
       });
     });
@@ -246,23 +235,21 @@ export class DeviceDetectionService extends EventEmitter {
     }
 
     return new Promise((resolve, reject) => {
-      const process = spawn("ideviceinfo", ["-u", udid]);
-      let stdout = "";
-      let stderr = "";
+      const process = spawn('ideviceinfo', ['-u', udid]);
+      let stdout = '';
+      let stderr = '';
 
-      process.stdout.on("data", (data) => {
+      process.stdout.on('data', (data) => {
         stdout += data.toString();
       });
 
-      process.stderr.on("data", (data) => {
+      process.stderr.on('data', (data) => {
         stderr += data.toString();
       });
 
-      process.on("close", (code) => {
+      process.on('close', (code) => {
         if (code !== 0) {
-          reject(
-            new Error(`ideviceinfo exited with code ${code}: ${stderr.trim()}`),
-          );
+          reject(new Error(`ideviceinfo exited with code ${code}: ${stderr.trim()}`));
           return;
         }
 
@@ -274,7 +261,7 @@ export class DeviceDetectionService extends EventEmitter {
         }
       });
 
-      process.on("error", (err) => {
+      process.on('error', (err) => {
         reject(new Error(`Failed to spawn ideviceinfo: ${err.message}`));
       });
     });
@@ -287,11 +274,11 @@ export class DeviceDetectionService extends EventEmitter {
    * @returns Parsed device information
    */
   private parseDeviceInfo(udid: string, output: string): iOSDevice {
-    const lines = output.split("\n");
+    const lines = output.split('\n');
     const info: Record<string, string> = {};
 
     for (const line of lines) {
-      const colonIndex = line.indexOf(":");
+      const colonIndex = line.indexOf(':');
       if (colonIndex > 0) {
         const key = line.substring(0, colonIndex).trim();
         const value = line.substring(colonIndex + 1).trim();
@@ -301,10 +288,10 @@ export class DeviceDetectionService extends EventEmitter {
 
     return {
       udid,
-      name: info["DeviceName"] || "Unknown Device",
-      productType: info["ProductType"] || "Unknown",
-      productVersion: info["ProductVersion"] || "Unknown",
-      serialNumber: info["SerialNumber"] || "Unknown",
+      name: info['DeviceName'] || 'Unknown Device',
+      productType: info['ProductType'] || 'Unknown',
+      productVersion: info['ProductVersion'] || 'Unknown',
+      serialNumber: info['SerialNumber'] || 'Unknown',
       isConnected: true,
     };
   }

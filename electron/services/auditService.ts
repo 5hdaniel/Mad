@@ -9,8 +9,8 @@
  * - Queue mechanism for offline operation
  */
 
-import crypto from "crypto";
-import logService from "./logService";
+import crypto from 'crypto';
+import logService from './logService';
 
 // ============================================
 // TYPES
@@ -20,34 +20,34 @@ import logService from "./logService";
  * Audit actions representing security-relevant user operations
  */
 export type AuditAction =
-  | "LOGIN"
-  | "LOGOUT"
-  | "LOGIN_FAILED"
-  | "DATA_ACCESS"
-  | "DATA_EXPORT"
-  | "DATA_DELETE"
-  | "TRANSACTION_CREATE"
-  | "TRANSACTION_UPDATE"
-  | "TRANSACTION_DELETE"
-  | "CONTACT_CREATE"
-  | "CONTACT_UPDATE"
-  | "CONTACT_DELETE"
-  | "SETTINGS_CHANGE"
-  | "MAILBOX_CONNECT"
-  | "MAILBOX_DISCONNECT";
+  | 'LOGIN'
+  | 'LOGOUT'
+  | 'LOGIN_FAILED'
+  | 'DATA_ACCESS'
+  | 'DATA_EXPORT'
+  | 'DATA_DELETE'
+  | 'TRANSACTION_CREATE'
+  | 'TRANSACTION_UPDATE'
+  | 'TRANSACTION_DELETE'
+  | 'CONTACT_CREATE'
+  | 'CONTACT_UPDATE'
+  | 'CONTACT_DELETE'
+  | 'SETTINGS_CHANGE'
+  | 'MAILBOX_CONNECT'
+  | 'MAILBOX_DISCONNECT';
 
 /**
  * Resource types that can be audited
  */
 export type ResourceType =
-  | "USER"
-  | "SESSION"
-  | "TRANSACTION"
-  | "CONTACT"
-  | "COMMUNICATION"
-  | "EXPORT"
-  | "MAILBOX"
-  | "SETTINGS";
+  | 'USER'
+  | 'SESSION'
+  | 'TRANSACTION'
+  | 'CONTACT'
+  | 'COMMUNICATION'
+  | 'EXPORT'
+  | 'MAILBOX'
+  | 'SETTINGS';
 
 /**
  * Complete audit log entry with all fields
@@ -71,10 +71,7 @@ export interface AuditLogEntry {
 /**
  * Input for creating a new audit log entry (excludes auto-generated fields)
  */
-export type NewAuditLogEntry = Omit<
-  AuditLogEntry,
-  "id" | "timestamp" | "syncedAt"
->;
+export type NewAuditLogEntry = Omit<AuditLogEntry, 'id' | 'timestamp' | 'syncedAt'>;
 
 /**
  * Database representation of audit log entry
@@ -134,10 +131,7 @@ class AuditService {
   /**
    * Initialize the audit service with required dependencies
    */
-  initialize(
-    databaseService: IDatabaseService,
-    supabaseService: ISupabaseService,
-  ): void {
+  initialize(databaseService: IDatabaseService, supabaseService: ISupabaseService): void {
     if (this.initialized) {
       return;
     }
@@ -149,7 +143,7 @@ class AuditService {
     // Start periodic sync
     this.startSyncInterval();
 
-    logService.info("Audit service initialized", "AuditService");
+    logService.info('Audit service initialized', 'AuditService');
   }
 
   /**
@@ -162,9 +156,11 @@ class AuditService {
 
     this.syncIntervalId = setInterval(() => {
       this.syncToCloud().catch((error) => {
-        logService.warn("Periodic sync failed", "AuditService", {
-          error: error instanceof Error ? error.message : "Unknown error",
-        });
+        logService.warn(
+          'Periodic sync failed',
+          'AuditService',
+          { error: error instanceof Error ? error.message : 'Unknown error' }
+        );
       });
     }, this.SYNC_INTERVAL_MS);
   }
@@ -208,11 +204,15 @@ class AuditService {
       });
     } catch (error) {
       // Log the failure but don't throw - audit failures shouldn't break the app
-      logService.error("Failed to write audit log", "AuditService", {
-        action: entry.action,
-        resourceType: entry.resourceType,
-        error: error instanceof Error ? error.message : "Unknown error",
-      });
+      logService.error(
+        'Failed to write audit log',
+        'AuditService',
+        {
+          action: entry.action,
+          resourceType: entry.resourceType,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        }
+      );
     }
   }
 
@@ -231,10 +231,9 @@ class AuditService {
       resourceId?: string;
       metadata?: Record<string, unknown>;
     },
-    operation: () => Promise<T>,
+    operation: () => Promise<T>
   ): Promise<T> {
-    const { userId, sessionId, action, resourceType, resourceId, metadata } =
-      params;
+    const { userId, sessionId, action, resourceType, resourceId, metadata } = params;
 
     try {
       const result = await operation();
@@ -259,7 +258,7 @@ class AuditService {
         resourceId,
         metadata,
         success: false,
-        errorMessage: error instanceof Error ? error.message : "Unknown error",
+        errorMessage: error instanceof Error ? error.message : 'Unknown error',
       });
 
       throw error;
@@ -271,7 +270,7 @@ class AuditService {
    */
   private async writeToLocal(entry: AuditLogEntry): Promise<void> {
     if (!this.databaseService) {
-      throw new Error("AuditService not initialized - call initialize() first");
+      throw new Error('AuditService not initialized - call initialize() first');
     }
 
     await this.databaseService.insertAuditLog(entry);
@@ -299,9 +298,7 @@ class AuditService {
         entriesToSync = this.pendingSyncQueue.slice(0, this.SYNC_BATCH_SIZE);
       } else {
         // Check database for any unsynced entries
-        entriesToSync = await this.databaseService.getUnsyncedAuditLogs(
-          this.SYNC_BATCH_SIZE,
-        );
+        entriesToSync = await this.databaseService.getUnsyncedAuditLogs(this.SYNC_BATCH_SIZE);
       }
 
       if (entriesToSync.length === 0) {
@@ -312,23 +309,25 @@ class AuditService {
       await this.supabaseService.batchInsertAuditLogs(entriesToSync);
 
       // Mark as synced in local database
-      const ids = entriesToSync.map((e) => e.id);
+      const ids = entriesToSync.map(e => e.id);
       await this.databaseService.markAuditLogsSynced(ids);
 
       // Remove from queue
       this.pendingSyncQueue = this.pendingSyncQueue.filter(
-        (e) => !ids.includes(e.id),
+        e => !ids.includes(e.id)
       );
 
       logService.info(
         `Synced ${entriesToSync.length} audit logs to cloud`,
-        "AuditService",
+        'AuditService'
       );
     } catch (error) {
       // Will retry on next sync attempt
-      logService.warn("Failed to sync audit logs to cloud", "AuditService", {
-        error: error instanceof Error ? error.message : "Unknown error",
-      });
+      logService.warn(
+        'Failed to sync audit logs to cloud',
+        'AuditService',
+        { error: error instanceof Error ? error.message : 'Unknown error' }
+      );
     } finally {
       this.syncInProgress = false;
     }
@@ -346,32 +345,28 @@ class AuditService {
   /**
    * Sanitize metadata to remove sensitive information
    */
-  private sanitizeMetadata(
-    metadata: Record<string, unknown>,
-  ): Record<string, unknown> {
+  private sanitizeMetadata(metadata: Record<string, unknown>): Record<string, unknown> {
     const sanitized = { ...metadata };
 
     // List of sensitive keys that should never be logged
     const sensitiveKeys = [
-      "password",
-      "token",
-      "access_token",
-      "refresh_token",
-      "secret",
-      "key",
-      "api_key",
-      "apiKey",
-      "authorization",
-      "credential",
-      "credentials",
+      'password',
+      'token',
+      'access_token',
+      'refresh_token',
+      'secret',
+      'key',
+      'api_key',
+      'apiKey',
+      'authorization',
+      'credential',
+      'credentials',
     ];
 
     for (const key of Object.keys(sanitized)) {
       const lowerKey = key.toLowerCase();
-      if (
-        sensitiveKeys.some((sensitiveKey) => lowerKey.includes(sensitiveKey))
-      ) {
-        sanitized[key] = "[REDACTED]";
+      if (sensitiveKeys.some(sensitiveKey => lowerKey.includes(sensitiveKey))) {
+        sanitized[key] = '[REDACTED]';
       }
     }
 

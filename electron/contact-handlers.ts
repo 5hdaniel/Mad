@@ -3,13 +3,13 @@
 // This file contains contact handlers to be registered in main.js
 // ============================================
 
-import { ipcMain } from "electron";
-import type { IpcMainInvokeEvent } from "electron";
-import databaseService from "./services/databaseService";
-import { getContactNames } from "./services/contactsService";
-import auditService from "./services/auditService";
-import logService from "./services/logService";
-import type { Contact, Transaction } from "./types/models";
+import { ipcMain } from 'electron';
+import type { IpcMainInvokeEvent } from 'electron';
+import databaseService from './services/databaseService';
+import { getContactNames } from './services/contactsService';
+import auditService from './services/auditService';
+import logService from './services/logService';
+import type { Contact, Transaction } from './types/models';
 
 // Import validation utilities
 import {
@@ -19,7 +19,7 @@ import {
   validateContactData,
   validateString,
   sanitizeObject,
-} from "./utils/validation";
+} from './utils/validation';
 
 // Type definitions
 interface ContactResponse {
@@ -39,611 +39,480 @@ interface ContactResponse {
  */
 export function registerContactHandlers(): void {
   // Get all imported contacts for a user (local database only)
-  ipcMain.handle(
-    "contacts:get-all",
-    async (
-      event: IpcMainInvokeEvent,
-      userId: string,
-    ): Promise<ContactResponse> => {
-      try {
-        logService.info("Getting all imported contacts", "Contacts", {
-          userId,
-        });
+  ipcMain.handle('contacts:get-all', async (event: IpcMainInvokeEvent, userId: string): Promise<ContactResponse> => {
+    try {
+      logService.info('Getting all imported contacts', 'Contacts', { userId });
 
-        // Validate input
-        const validatedUserId = validateUserId(userId); // Validated, will throw if invalid
-        if (!validatedUserId) {
-          throw new ValidationError("User ID validation failed", "userId");
-        }
+      // Validate input
+      const validatedUserId = validateUserId(userId); // Validated, will throw if invalid
+      if (!validatedUserId) {
+        throw new ValidationError('User ID validation failed', 'userId');
+      }
 
-        // Get only imported contacts from database
-        const importedContacts =
-          await databaseService.getImportedContactsByUserId(validatedUserId);
+      // Get only imported contacts from database
+      const importedContacts = await databaseService.getImportedContactsByUserId(validatedUserId);
 
-        logService.info(
-          `Found ${importedContacts.length} imported contacts`,
-          "Contacts",
-          { userId },
-        );
+      logService.info(`Found ${importedContacts.length} imported contacts`, 'Contacts', { userId });
 
-        return {
-          success: true,
-          contacts: importedContacts,
-        };
-      } catch (error) {
-        logService.error("Get contacts failed", "Contacts", {
-          userId,
-          error: error instanceof Error ? error.message : "Unknown error",
-        });
-        if (error instanceof ValidationError) {
-          return {
-            success: false,
-            error: `Validation error: ${error.message}`,
-          };
-        }
+      return {
+        success: true,
+        contacts: importedContacts,
+      };
+    } catch (error) {
+      logService.error('Get contacts failed', 'Contacts', {
+        userId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      if (error instanceof ValidationError) {
         return {
           success: false,
-          error: error instanceof Error ? error.message : "Unknown error",
+          error: `Validation error: ${error.message}`,
         };
       }
-    },
-  );
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  });
 
   // Get available contacts for import (from external sources)
-  ipcMain.handle(
-    "contacts:get-available",
-    async (
-      event: IpcMainInvokeEvent,
-      userId: string,
-    ): Promise<ContactResponse> => {
-      try {
-        console.log(
-          "[Main] Getting available contacts for import for user:",
-          userId,
-        );
+  ipcMain.handle('contacts:get-available', async (event: IpcMainInvokeEvent, userId: string): Promise<ContactResponse> => {
+    try {
+      console.log('[Main] Getting available contacts for import for user:', userId);
 
-        // Validate input
-        const validatedUserId = validateUserId(userId); // Validated, will throw if invalid
-        if (!validatedUserId) {
-          throw new ValidationError("User ID validation failed", "userId");
-        }
+      // Validate input
+      const validatedUserId = validateUserId(userId); // Validated, will throw if invalid
+      if (!validatedUserId) {
+        throw new ValidationError('User ID validation failed', 'userId');
+      }
 
-        // Get contacts from macOS Contacts app
-        const { phoneToContactInfo, status } = await getContactNames();
+      // Get contacts from macOS Contacts app
+      const { phoneToContactInfo, status } = await getContactNames();
 
-        // Get already imported contact names/emails to filter them out
-        const importedContacts =
-          await databaseService.getImportedContactsByUserId(validatedUserId);
-        const importedNames = new Set(
-          importedContacts.map((c) => c.name?.toLowerCase()),
-        );
-        const importedEmails = new Set(
-          importedContacts.map((c) => c.email?.toLowerCase()).filter(Boolean),
-        );
+      // Get already imported contact names/emails to filter them out
+      const importedContacts = await databaseService.getImportedContactsByUserId(validatedUserId);
+      const importedNames = new Set(importedContacts.map(c => c.name?.toLowerCase()));
+      const importedEmails = new Set(importedContacts.map(c => c.email?.toLowerCase()).filter(Boolean));
 
-        // Convert Contacts app data to contact objects
-        const availableContacts: any[] = [];
-        const seenContacts = new Set<string>();
+      // Convert Contacts app data to contact objects
+      const availableContacts: any[] = [];
+      const seenContacts = new Set<string>();
 
-        if (phoneToContactInfo && Object.keys(phoneToContactInfo).length > 0) {
-          for (const [_phone, contactInfo] of Object.entries(
-            phoneToContactInfo,
-          )) {
-            // Use the contact name as unique key to avoid duplicates
-            // (same contact may have multiple phone numbers)
-            const nameLower = contactInfo.name?.toLowerCase();
-            const primaryEmail = contactInfo.emails?.[0]?.toLowerCase();
+      if (phoneToContactInfo && Object.keys(phoneToContactInfo).length > 0) {
+        for (const [_phone, contactInfo] of Object.entries(phoneToContactInfo)) {
+          // Use the contact name as unique key to avoid duplicates
+          // (same contact may have multiple phone numbers)
+          const nameLower = contactInfo.name?.toLowerCase();
+          const primaryEmail = contactInfo.emails?.[0]?.toLowerCase();
 
-            // Skip if already imported (by name or email)
-            if (
-              importedNames.has(nameLower) ||
-              (primaryEmail && importedEmails.has(primaryEmail))
-            ) {
-              continue;
-            }
+          // Skip if already imported (by name or email)
+          if (importedNames.has(nameLower) || (primaryEmail && importedEmails.has(primaryEmail))) {
+            continue;
+          }
 
-            if (!seenContacts.has(contactInfo.name)) {
-              seenContacts.add(contactInfo.name);
+          if (!seenContacts.has(contactInfo.name)) {
+            seenContacts.add(contactInfo.name);
 
-              availableContacts.push({
-                id: `contacts-app-${contactInfo.name}`, // Temporary ID for UI
-                name: contactInfo.name,
-                phone: contactInfo.phones?.[0] || null, // Primary phone
-                email: contactInfo.emails?.[0] || null, // Primary email
-                source: "contacts_app",
-                allPhones: contactInfo.phones || [],
-                allEmails: contactInfo.emails || [],
-              });
-            }
+            availableContacts.push({
+              id: `contacts-app-${contactInfo.name}`, // Temporary ID for UI
+              name: contactInfo.name,
+              phone: contactInfo.phones?.[0] || null, // Primary phone
+              email: contactInfo.emails?.[0] || null, // Primary email
+              source: 'contacts_app',
+              allPhones: contactInfo.phones || [],
+              allEmails: contactInfo.emails || [],
+            });
           }
         }
+      }
 
-        console.log(
-          `[Main] Found ${availableContacts.length} available contacts for import`,
-        );
+      console.log(`[Main] Found ${availableContacts.length} available contacts for import`);
 
-        return {
-          success: true,
-          contacts: availableContacts,
-          contactsStatus: status, // Include loading status
-        };
-      } catch (error) {
-        console.error("[Main] Get available contacts failed:", error);
-        if (error instanceof ValidationError) {
-          return {
-            success: false,
-            error: `Validation error: ${error.message}`,
-          };
-        }
+      return {
+        success: true,
+        contacts: availableContacts,
+        contactsStatus: status, // Include loading status
+      };
+    } catch (error) {
+      console.error('[Main] Get available contacts failed:', error);
+      if (error instanceof ValidationError) {
         return {
           success: false,
-          error: error instanceof Error ? error.message : "Unknown error",
+          error: `Validation error: ${error.message}`,
         };
       }
-    },
-  );
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  });
 
   // Import contacts from external sources
-  ipcMain.handle(
-    "contacts:import",
-    async (
-      event: IpcMainInvokeEvent,
-      userId: string,
-      contactsToImport: unknown[],
-    ): Promise<ContactResponse> => {
-      try {
-        console.log(
-          "[Main] Importing contacts for user:",
-          userId,
-          "count:",
-          contactsToImport.length,
-        );
+  ipcMain.handle('contacts:import', async (event: IpcMainInvokeEvent, userId: string, contactsToImport: unknown[]): Promise<ContactResponse> => {
+    try {
+      console.log('[Main] Importing contacts for user:', userId, 'count:', contactsToImport.length);
 
-        // Validate inputs
-        const validatedUserId = validateUserId(userId); // Validated, will throw if invalid
-        if (!validatedUserId) {
-          throw new ValidationError("User ID validation failed", "userId");
-        }
-
-        // Validate contacts array
-        if (!Array.isArray(contactsToImport)) {
-          throw new ValidationError(
-            "Contacts to import must be an array",
-            "contactsToImport",
-          );
-        }
-
-        if (contactsToImport.length === 0) {
-          throw new ValidationError(
-            "No contacts provided for import",
-            "contactsToImport",
-          );
-        }
-
-        if (contactsToImport.length > 1000) {
-          throw new ValidationError(
-            "Cannot import more than 1000 contacts at once",
-            "contactsToImport",
-          );
-        }
-
-        const importedContacts: Contact[] = [];
-
-        for (const contact of contactsToImport) {
-          // Validate each contact's data (basic validation)
-          const sanitizedContact = sanitizeObject(contact);
-          const validatedData = validateContactData(sanitizedContact, false);
-
-          const importedContact = await databaseService.createContact({
-            user_id: validatedUserId,
-            name: validatedData.name || "Unknown",
-            email: validatedData.email ?? undefined,
-            phone: validatedData.phone ?? undefined,
-            company: validatedData.company ?? undefined,
-            title: validatedData.title ?? undefined,
-            source: (sanitizedContact as any).source || "contacts_app",
-            is_imported: true,
-          });
-          importedContacts.push(importedContact);
-        }
-
-        console.log(
-          `[Main] Successfully imported ${importedContacts.length} contacts`,
-        );
-
-        return {
-          success: true,
-          contacts: importedContacts,
-        };
-      } catch (error) {
-        console.error("[Main] Import contacts failed:", error);
-        if (error instanceof ValidationError) {
-          return {
-            success: false,
-            error: `Validation error: ${error.message}`,
-          };
-        }
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : "Unknown error",
-        };
+      // Validate inputs
+      const validatedUserId = validateUserId(userId); // Validated, will throw if invalid
+      if (!validatedUserId) {
+        throw new ValidationError('User ID validation failed', 'userId');
       }
-    },
-  );
 
-  // Get contacts sorted by recent activity and address relevance
-  ipcMain.handle(
-    "contacts:get-sorted-by-activity",
-    async (
-      event: IpcMainInvokeEvent,
-      userId: string,
-      propertyAddress: string | null = null,
-    ): Promise<ContactResponse> => {
-      try {
-        console.log(
-          "[Main] Getting contacts sorted by activity for user:",
-          userId,
-          "address:",
-          propertyAddress,
-        );
-
-        // Validate inputs
-        const validatedUserId = validateUserId(userId); // Validated, will throw if invalid
-        if (!validatedUserId) {
-          throw new ValidationError("User ID validation failed", "userId");
-        }
-
-        // Validate propertyAddress (optional)
-        const validatedAddress = propertyAddress
-          ? validateString(propertyAddress, "propertyAddress", {
-              required: false,
-              maxLength: 500,
-            })
-          : undefined;
-
-        // Get only imported contacts sorted by activity
-        const importedContacts =
-          await databaseService.getContactsSortedByActivity(
-            validatedUserId,
-            validatedAddress ?? undefined,
-          );
-
-        console.log(
-          `[Main] Returning ${importedContacts.length} imported contacts sorted by activity`,
-        );
-
-        return {
-          success: true,
-          contacts: importedContacts,
-        };
-      } catch (error) {
-        console.error("[Main] Get sorted contacts failed:", error);
-        if (error instanceof ValidationError) {
-          return {
-            success: false,
-            error: `Validation error: ${error.message}`,
-          };
-        }
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : "Unknown error",
-        };
+      // Validate contacts array
+      if (!Array.isArray(contactsToImport)) {
+        throw new ValidationError('Contacts to import must be an array', 'contactsToImport');
       }
-    },
-  );
 
-  // Create new contact
-  ipcMain.handle(
-    "contacts:create",
-    async (
-      event: IpcMainInvokeEvent,
-      userId: string,
-      contactData: unknown,
-    ): Promise<ContactResponse> => {
-      try {
-        // Validate inputs
-        const validatedUserId = validateUserId(userId); // Validated, will throw if invalid
-        if (!validatedUserId) {
-          throw new ValidationError("User ID validation failed", "userId");
-        }
-        const validatedData = validateContactData(contactData, false);
+      if (contactsToImport.length === 0) {
+        throw new ValidationError('No contacts provided for import', 'contactsToImport');
+      }
 
-        const contact = await databaseService.createContact({
+      if (contactsToImport.length > 1000) {
+        throw new ValidationError('Cannot import more than 1000 contacts at once', 'contactsToImport');
+      }
+
+      const importedContacts: Contact[] = [];
+
+      for (const contact of contactsToImport) {
+        // Validate each contact's data (basic validation)
+        const sanitizedContact = sanitizeObject(contact);
+        const validatedData = validateContactData(sanitizedContact, false);
+
+        const importedContact = await databaseService.createContact({
           user_id: validatedUserId,
-          name: validatedData.name || "Unknown",
+          name: validatedData.name || 'Unknown',
           email: validatedData.email ?? undefined,
           phone: validatedData.phone ?? undefined,
           company: validatedData.company ?? undefined,
           title: validatedData.title ?? undefined,
-          source: "manual",
-          is_imported: false,
+          source: (sanitizedContact as any).source || 'contacts_app',
+          is_imported: true,
         });
+        importedContacts.push(importedContact);
+      }
 
-        // Audit log contact creation
-        await auditService.log({
-          userId: validatedUserId,
-          action: "CONTACT_CREATE",
-          resourceType: "CONTACT",
-          resourceId: contact.id,
-          metadata: { name: contact.name },
-          success: true,
-        });
+      console.log(`[Main] Successfully imported ${importedContacts.length} contacts`);
 
-        logService.info("Contact created", "Contacts", {
-          userId: validatedUserId,
-          contactId: contact.id,
-        });
-
-        return {
-          success: true,
-          contact,
-        };
-      } catch (error) {
-        logService.error("Create contact failed", "Contacts", {
-          error: error instanceof Error ? error.message : "Unknown error",
-        });
-        if (error instanceof ValidationError) {
-          return {
-            success: false,
-            error: `Validation error: ${error.message}`,
-          };
-        }
+      return {
+        success: true,
+        contacts: importedContacts,
+      };
+    } catch (error) {
+      console.error('[Main] Import contacts failed:', error);
+      if (error instanceof ValidationError) {
         return {
           success: false,
-          error: error instanceof Error ? error.message : "Unknown error",
+          error: `Validation error: ${error.message}`,
         };
       }
-    },
-  );
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  });
+
+  // Get contacts sorted by recent activity and address relevance
+  ipcMain.handle('contacts:get-sorted-by-activity', async (event: IpcMainInvokeEvent, userId: string, propertyAddress: string | null = null): Promise<ContactResponse> => {
+    try {
+      console.log('[Main] Getting contacts sorted by activity for user:', userId, 'address:', propertyAddress);
+
+      // Validate inputs
+      const validatedUserId = validateUserId(userId); // Validated, will throw if invalid
+      if (!validatedUserId) {
+        throw new ValidationError('User ID validation failed', 'userId');
+      }
+
+      // Validate propertyAddress (optional)
+      const validatedAddress = propertyAddress
+        ? validateString(propertyAddress, 'propertyAddress', { required: false, maxLength: 500 })
+        : undefined;
+
+      // Get only imported contacts sorted by activity
+      const importedContacts = await databaseService.getContactsSortedByActivity(validatedUserId, validatedAddress ?? undefined);
+
+      console.log(`[Main] Returning ${importedContacts.length} imported contacts sorted by activity`);
+
+      return {
+        success: true,
+        contacts: importedContacts,
+      };
+    } catch (error) {
+      console.error('[Main] Get sorted contacts failed:', error);
+      if (error instanceof ValidationError) {
+        return {
+          success: false,
+          error: `Validation error: ${error.message}`,
+        };
+      }
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  });
+
+  // Create new contact
+  ipcMain.handle('contacts:create', async (event: IpcMainInvokeEvent, userId: string, contactData: unknown): Promise<ContactResponse> => {
+    try {
+      // Validate inputs
+      const validatedUserId = validateUserId(userId); // Validated, will throw if invalid
+      if (!validatedUserId) {
+        throw new ValidationError('User ID validation failed', 'userId');
+      }
+      const validatedData = validateContactData(contactData, false);
+
+      const contact = await databaseService.createContact({
+        user_id: validatedUserId,
+        name: validatedData.name || 'Unknown',
+        email: validatedData.email ?? undefined,
+        phone: validatedData.phone ?? undefined,
+        company: validatedData.company ?? undefined,
+        title: validatedData.title ?? undefined,
+        source: 'manual',
+        is_imported: false,
+      });
+
+      // Audit log contact creation
+      await auditService.log({
+        userId: validatedUserId,
+        action: 'CONTACT_CREATE',
+        resourceType: 'CONTACT',
+        resourceId: contact.id,
+        metadata: { name: contact.name },
+        success: true,
+      });
+
+      logService.info('Contact created', 'Contacts', {
+        userId: validatedUserId,
+        contactId: contact.id,
+      });
+
+      return {
+        success: true,
+        contact,
+      };
+    } catch (error) {
+      logService.error('Create contact failed', 'Contacts', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      if (error instanceof ValidationError) {
+        return {
+          success: false,
+          error: `Validation error: ${error.message}`,
+        };
+      }
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  });
 
   // Update contact
-  ipcMain.handle(
-    "contacts:update",
-    async (
-      event: IpcMainInvokeEvent,
-      contactId: string,
-      updates: unknown,
-    ): Promise<ContactResponse> => {
-      try {
-        // Validate inputs
-        const validatedContactId = validateContactId(contactId); // Validated, will throw if invalid
-        if (!validatedContactId) {
-          throw new ValidationError(
-            "Contact ID validation failed",
-            "contactId",
-          );
-        }
-        const validatedUpdates = validateContactData(
-          sanitizeObject(updates || {}),
-          true,
-        );
+  ipcMain.handle('contacts:update', async (event: IpcMainInvokeEvent, contactId: string, updates: unknown): Promise<ContactResponse> => {
+    try {
+      // Validate inputs
+      const validatedContactId = validateContactId(contactId); // Validated, will throw if invalid
+      if (!validatedContactId) {
+        throw new ValidationError('Contact ID validation failed', 'contactId');
+      }
+      const validatedUpdates = validateContactData(sanitizeObject(updates || {}), true);
 
-        // Get contact before update for audit logging
-        const existingContact =
-          await databaseService.getContactById(validatedContactId);
-        const userId = existingContact?.user_id || "unknown";
+      // Get contact before update for audit logging
+      const existingContact = await databaseService.getContactById(validatedContactId);
+      const userId = existingContact?.user_id || 'unknown';
 
-        // Convert null to undefined for TypeScript strict mode
-        const updatesData = {
-          ...validatedUpdates,
-          name: validatedUpdates.name ?? undefined,
-          email: validatedUpdates.email ?? undefined,
-          phone: validatedUpdates.phone ?? undefined,
-          company: validatedUpdates.company ?? undefined,
-          title: validatedUpdates.title ?? undefined,
-        };
+      // Convert null to undefined for TypeScript strict mode
+      const updatesData = {
+        ...validatedUpdates,
+        name: validatedUpdates.name ?? undefined,
+        email: validatedUpdates.email ?? undefined,
+        phone: validatedUpdates.phone ?? undefined,
+        company: validatedUpdates.company ?? undefined,
+        title: validatedUpdates.title ?? undefined,
+      };
 
-        await databaseService.updateContact(validatedContactId, updatesData);
-        const contact =
-          await databaseService.getContactById(validatedContactId);
+      await databaseService.updateContact(validatedContactId, updatesData);
+      const contact = await databaseService.getContactById(validatedContactId);
 
-        // Audit log contact update
-        await auditService.log({
-          userId,
-          action: "CONTACT_UPDATE",
-          resourceType: "CONTACT",
-          resourceId: validatedContactId,
-          metadata: { updatedFields: Object.keys(validatedUpdates) },
-          success: true,
-        });
+      // Audit log contact update
+      await auditService.log({
+        userId,
+        action: 'CONTACT_UPDATE',
+        resourceType: 'CONTACT',
+        resourceId: validatedContactId,
+        metadata: { updatedFields: Object.keys(validatedUpdates) },
+        success: true,
+      });
 
-        logService.info("Contact updated", "Contacts", {
-          userId,
-          contactId: validatedContactId,
-        });
+      logService.info('Contact updated', 'Contacts', {
+        userId,
+        contactId: validatedContactId,
+      });
 
-        return {
-          success: true,
-          contact: contact || undefined,
-        };
-      } catch (error) {
-        logService.error("Update contact failed", "Contacts", {
-          contactId,
-          error: error instanceof Error ? error.message : "Unknown error",
-        });
-        if (error instanceof ValidationError) {
-          return {
-            success: false,
-            error: `Validation error: ${error.message}`,
-          };
-        }
+      return {
+        success: true,
+        contact: contact || undefined,
+      };
+    } catch (error) {
+      logService.error('Update contact failed', 'Contacts', {
+        contactId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      if (error instanceof ValidationError) {
         return {
           success: false,
-          error: error instanceof Error ? error.message : "Unknown error",
+          error: `Validation error: ${error.message}`,
         };
       }
-    },
-  );
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  });
 
   // Check if contact can be deleted (get associated transactions)
-  ipcMain.handle(
-    "contacts:checkCanDelete",
-    async (
-      event: IpcMainInvokeEvent,
-      contactId: string,
-    ): Promise<ContactResponse> => {
-      try {
-        console.log("[Main] Checking if contact can be deleted:", contactId);
+  ipcMain.handle('contacts:checkCanDelete', async (event: IpcMainInvokeEvent, contactId: string): Promise<ContactResponse> => {
+    try {
+      console.log('[Main] Checking if contact can be deleted:', contactId);
 
-        // Validate input
-        const validatedContactId = validateContactId(contactId); // Validated, will throw if invalid
-        if (!validatedContactId) {
-          throw new ValidationError(
-            "Contact ID validation failed",
-            "contactId",
-          );
-        }
+      // Validate input
+      const validatedContactId = validateContactId(contactId); // Validated, will throw if invalid
+      if (!validatedContactId) {
+        throw new ValidationError('Contact ID validation failed', 'contactId');
+      }
 
-        const transactions =
-          await databaseService.getTransactionsByContact(validatedContactId);
+      const transactions = await databaseService.getTransactionsByContact(validatedContactId);
 
-        return {
-          success: true,
-          canDelete: transactions.length === 0,
-          transactions: transactions,
-          count: transactions.length,
-        };
-      } catch (error) {
-        console.error("[Main] Check can delete contact failed:", error);
-        if (error instanceof ValidationError) {
-          return {
-            success: false,
-            error: `Validation error: ${error.message}`,
-          };
-        }
+      return {
+        success: true,
+        canDelete: transactions.length === 0,
+        transactions: transactions,
+        count: transactions.length
+      };
+    } catch (error) {
+      console.error('[Main] Check can delete contact failed:', error);
+      if (error instanceof ValidationError) {
         return {
           success: false,
-          error: error instanceof Error ? error.message : "Unknown error",
+          error: `Validation error: ${error.message}`,
         };
       }
-    },
-  );
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  });
 
   // Delete contact
-  ipcMain.handle(
-    "contacts:delete",
-    async (
-      event: IpcMainInvokeEvent,
-      contactId: string,
-    ): Promise<ContactResponse> => {
-      try {
-        // Validate input
-        const validatedContactId = validateContactId(contactId); // Validated, will throw if invalid
-        if (!validatedContactId) {
-          throw new ValidationError(
-            "Contact ID validation failed",
-            "contactId",
-          );
-        }
+  ipcMain.handle('contacts:delete', async (event: IpcMainInvokeEvent, contactId: string): Promise<ContactResponse> => {
+    try {
+      // Validate input
+      const validatedContactId = validateContactId(contactId); // Validated, will throw if invalid
+      if (!validatedContactId) {
+        throw new ValidationError('Contact ID validation failed', 'contactId');
+      }
 
-        // Get contact before delete for audit logging
-        const existingContact =
-          await databaseService.getContactById(validatedContactId);
-        const userId = existingContact?.user_id || "unknown";
-        const contactName = existingContact?.name || "unknown";
+      // Get contact before delete for audit logging
+      const existingContact = await databaseService.getContactById(validatedContactId);
+      const userId = existingContact?.user_id || 'unknown';
+      const contactName = existingContact?.name || 'unknown';
 
-        // Check if contact has associated transactions
-        const check =
-          await databaseService.getTransactionsByContact(validatedContactId);
-        if (check.length > 0) {
-          return {
-            success: false,
-            error: "Cannot delete contact with associated transactions",
-            canDelete: false,
-            transactions: check,
-            count: check.length,
-          };
-        }
-
-        await databaseService.deleteContact(validatedContactId);
-
-        // Audit log contact deletion
-        await auditService.log({
-          userId,
-          action: "CONTACT_DELETE",
-          resourceType: "CONTACT",
-          resourceId: validatedContactId,
-          metadata: { name: contactName },
-          success: true,
-        });
-
-        logService.info("Contact deleted", "Contacts", {
-          userId,
-          contactId: validatedContactId,
-        });
-
-        return {
-          success: true,
-        };
-      } catch (error) {
-        logService.error("Delete contact failed", "Contacts", {
-          contactId,
-          error: error instanceof Error ? error.message : "Unknown error",
-        });
-        if (error instanceof ValidationError) {
-          return {
-            success: false,
-            error: `Validation error: ${error.message}`,
-          };
-        }
+      // Check if contact has associated transactions
+      const check = await databaseService.getTransactionsByContact(validatedContactId);
+      if (check.length > 0) {
         return {
           success: false,
-          error: error instanceof Error ? error.message : "Unknown error",
+          error: 'Cannot delete contact with associated transactions',
+          canDelete: false,
+          transactions: check,
+          count: check.length
         };
       }
-    },
-  );
+
+      await databaseService.deleteContact(validatedContactId);
+
+      // Audit log contact deletion
+      await auditService.log({
+        userId,
+        action: 'CONTACT_DELETE',
+        resourceType: 'CONTACT',
+        resourceId: validatedContactId,
+        metadata: { name: contactName },
+        success: true,
+      });
+
+      logService.info('Contact deleted', 'Contacts', {
+        userId,
+        contactId: validatedContactId,
+      });
+
+      return {
+        success: true,
+      };
+    } catch (error) {
+      logService.error('Delete contact failed', 'Contacts', {
+        contactId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      if (error instanceof ValidationError) {
+        return {
+          success: false,
+          error: `Validation error: ${error.message}`,
+        };
+      }
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  });
 
   // Remove contact from local database (un-import)
-  ipcMain.handle(
-    "contacts:remove",
-    async (
-      event: IpcMainInvokeEvent,
-      contactId: string,
-    ): Promise<ContactResponse> => {
-      try {
-        console.log("[Main] Removing contact from local database:", contactId);
+  ipcMain.handle('contacts:remove', async (event: IpcMainInvokeEvent, contactId: string): Promise<ContactResponse> => {
+    try {
+      console.log('[Main] Removing contact from local database:', contactId);
 
-        // Validate input
-        const validatedContactId = validateContactId(contactId); // Validated, will throw if invalid
-        if (!validatedContactId) {
-          throw new ValidationError(
-            "Contact ID validation failed",
-            "contactId",
-          );
-        }
+      // Validate input
+      const validatedContactId = validateContactId(contactId); // Validated, will throw if invalid
+      if (!validatedContactId) {
+        throw new ValidationError('Contact ID validation failed', 'contactId');
+      }
 
-        // Check if contact has associated transactions
-        const check =
-          await databaseService.getTransactionsByContact(validatedContactId);
-        if (check.length > 0) {
-          return {
-            success: false,
-            error: "Cannot remove contact with associated transactions",
-            canDelete: false,
-            transactions: check,
-            count: check.length,
-          };
-        }
-
-        await databaseService.removeContact(validatedContactId);
-
-        return {
-          success: true,
-        };
-      } catch (error) {
-        console.error("[Main] Remove contact failed:", error);
-        if (error instanceof ValidationError) {
-          return {
-            success: false,
-            error: `Validation error: ${error.message}`,
-          };
-        }
+      // Check if contact has associated transactions
+      const check = await databaseService.getTransactionsByContact(validatedContactId);
+      if (check.length > 0) {
         return {
           success: false,
-          error: error instanceof Error ? error.message : "Unknown error",
+          error: 'Cannot remove contact with associated transactions',
+          canDelete: false,
+          transactions: check,
+          count: check.length
         };
       }
-    },
-  );
+
+      await databaseService.removeContact(validatedContactId);
+
+      return {
+        success: true,
+      };
+    } catch (error) {
+      console.error('[Main] Remove contact failed:', error);
+      if (error instanceof ValidationError) {
+        return {
+          success: false,
+          error: `Validation error: ${error.message}`,
+        };
+      }
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  });
 }

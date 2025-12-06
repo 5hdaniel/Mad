@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect } from 'react';
 
 interface UpdateInfo {
   version: string;
@@ -48,8 +48,7 @@ export default function UpdateNotification() {
       <div className="fixed bottom-4 right-4 bg-green-500 text-white p-4 rounded-lg shadow-lg max-w-sm z-50">
         <h3 className="font-bold text-lg mb-2">Update Ready!</h3>
         <p className="text-sm mb-3">
-          Version {updateInfo?.version} has been downloaded and is ready to
-          install.
+          Version {updateInfo?.version} has been downloaded and is ready to install.
         </p>
         <div className="flex gap-2">
           <button

@@ -3,16 +3,16 @@
  * Covers form validation, multi-step workflow, and transaction creation
  */
 
-import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import "@testing-library/jest-dom";
-import AuditTransactionModal from "../AuditTransactionModal";
-import { PlatformProvider } from "../../contexts/PlatformContext";
+import React from 'react';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import '@testing-library/jest-dom';
+import AuditTransactionModal from '../AuditTransactionModal';
+import { PlatformProvider } from '../../contexts/PlatformContext';
 
-describe("AuditTransactionModal", () => {
+describe('AuditTransactionModal', () => {
   const mockUserId = 123;
-  const mockProvider = "google";
+  const mockProvider = 'google';
   const mockOnClose = jest.fn();
   const mockOnSuccess = jest.fn();
 
@@ -23,18 +23,18 @@ describe("AuditTransactionModal", () => {
 
   const mockContacts = [
     {
-      id: "contact-1",
-      name: "John Client",
-      email: "john@example.com",
-      phone: "555-1234",
-      company: "Homebuyer Inc",
+      id: 'contact-1',
+      name: 'John Client',
+      email: 'john@example.com',
+      phone: '555-1234',
+      company: 'Homebuyer Inc',
     },
     {
-      id: "contact-2",
-      name: "Jane Agent",
-      email: "jane@realty.com",
-      phone: "555-5678",
-      company: "Top Realty",
+      id: 'contact-2',
+      name: 'Jane Agent',
+      email: 'jane@realty.com',
+      phone: '555-5678',
+      company: 'Top Realty',
     },
   ];
 
@@ -49,11 +49,11 @@ describe("AuditTransactionModal", () => {
     });
     window.api.address.getDetails.mockResolvedValue({
       success: true,
-      formatted_address: "123 Main St, City, ST 12345",
-      street: "123 Main St",
-      city: "City",
-      state_short: "ST",
-      zip: "12345",
+      formatted_address: '123 Main St, City, ST 12345',
+      street: '123 Main St',
+      city: 'City',
+      state_short: 'ST',
+      zip: '12345',
     });
     window.api.contacts.getAll.mockResolvedValue({
       success: true,
@@ -65,112 +65,104 @@ describe("AuditTransactionModal", () => {
     });
     window.api.transactions.createAudited.mockResolvedValue({
       success: true,
-      transaction: { id: "txn-new", property_address: "123 Main St" },
+      transaction: { id: 'txn-new', property_address: '123 Main St' },
     });
   });
 
-  describe("Rendering", () => {
-    it("should render modal with correct title", () => {
+  describe('Rendering', () => {
+    it('should render modal with correct title', () => {
       renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
           provider={mockProvider}
           onClose={mockOnClose}
           onSuccess={mockOnSuccess}
-        />,
+        />
       );
 
       expect(screen.getByText(/audit new transaction/i)).toBeInTheDocument();
     });
 
-    it("should show step 1 - address verification by default", () => {
+    it('should show step 1 - address verification by default', () => {
       renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
           provider={mockProvider}
           onClose={mockOnClose}
           onSuccess={mockOnSuccess}
-        />,
+        />
       );
 
       expect(screen.getByText(/step 1/i)).toBeInTheDocument();
-      expect(screen.getAllByText(/property address/i).length).toBeGreaterThan(
-        0,
-      );
+      expect(screen.getAllByText(/property address/i).length).toBeGreaterThan(0);
     });
 
-    it("should show transaction type options", () => {
+    it('should show transaction type options', () => {
       renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
           provider={mockProvider}
           onClose={mockOnClose}
           onSuccess={mockOnSuccess}
-        />,
+        />
       );
 
-      expect(
-        screen.getByRole("button", { name: /purchase/i }),
-      ).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: /sale/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /purchase/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /sale/i })).toBeInTheDocument();
     });
 
-    it("should show progress bar with 3 steps", () => {
+    it('should show progress bar with 3 steps', () => {
       renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
           provider={mockProvider}
           onClose={mockOnClose}
           onSuccess={mockOnSuccess}
-        />,
+        />
       );
 
       // Progress bar shows step numbers
-      expect(screen.getByText("1")).toBeInTheDocument();
-      expect(screen.getByText("2")).toBeInTheDocument();
-      expect(screen.getByText("3")).toBeInTheDocument();
+      expect(screen.getByText('1')).toBeInTheDocument();
+      expect(screen.getByText('2')).toBeInTheDocument();
+      expect(screen.getByText('3')).toBeInTheDocument();
     });
   });
 
-  describe("Form Validation - Step 1", () => {
-    it("should require property address", async () => {
+  describe('Form Validation - Step 1', () => {
+    it('should require property address', async () => {
       renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
           provider={mockProvider}
           onClose={mockOnClose}
           onSuccess={mockOnSuccess}
-        />,
+        />
       );
 
       // Try to continue without entering address
-      const continueButton = screen.getByRole("button", { name: /continue/i });
+      const continueButton = screen.getByRole('button', { name: /continue/i });
       await userEvent.click(continueButton);
 
       // Should show error
-      expect(
-        screen.getByText(/property address is required/i),
-      ).toBeInTheDocument();
+      expect(screen.getByText(/property address is required/i)).toBeInTheDocument();
     });
 
-    it("should allow proceeding when address is entered", async () => {
+    it('should allow proceeding when address is entered', async () => {
       renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
           provider={mockProvider}
           onClose={mockOnClose}
           onSuccess={mockOnSuccess}
-        />,
+        />
       );
 
       // Enter address
-      const addressInput = screen.getByPlaceholderText(
-        /enter property address/i,
-      );
-      await userEvent.type(addressInput, "123 Main Street");
+      const addressInput = screen.getByPlaceholderText(/enter property address/i)
+      await userEvent.type(addressInput, '123 Main Street');
 
       // Click continue
-      const continueButton = screen.getByRole("button", { name: /continue/i });
+      const continueButton = screen.getByRole('button', { name: /continue/i });
       await userEvent.click(continueButton);
 
       // Should move to step 2
@@ -179,83 +171,77 @@ describe("AuditTransactionModal", () => {
       });
     });
 
-    it("should clear error when valid address is entered", async () => {
+    it('should clear error when valid address is entered', async () => {
       renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
           provider={mockProvider}
           onClose={mockOnClose}
           onSuccess={mockOnSuccess}
-        />,
+        />
       );
 
       // Try to continue without address (trigger error)
-      const continueButton = screen.getByRole("button", { name: /continue/i });
+      const continueButton = screen.getByRole('button', { name: /continue/i });
       await userEvent.click(continueButton);
 
-      expect(
-        screen.getByText(/property address is required/i),
-      ).toBeInTheDocument();
+      expect(screen.getByText(/property address is required/i)).toBeInTheDocument();
 
       // Now enter address and try again
-      const addressInput = screen.getByPlaceholderText(
-        /enter property address/i,
-      );
-      await userEvent.type(addressInput, "456 Oak Avenue");
+      const addressInput = screen.getByPlaceholderText(/enter property address/i)
+      await userEvent.type(addressInput, '456 Oak Avenue');
       await userEvent.click(continueButton);
 
       // Error should be cleared, moved to step 2
       await waitFor(() => {
-        expect(
-          screen.queryByText(/property address is required/i),
-        ).not.toBeInTheDocument();
+        expect(screen.queryByText(/property address is required/i)).not.toBeInTheDocument();
       });
     });
   });
 
-  describe("Transaction Type Selection", () => {
-    it("should default to purchase type", () => {
+  describe('Transaction Type Selection', () => {
+    it('should default to purchase type', () => {
       renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
           provider={mockProvider}
           onClose={mockOnClose}
           onSuccess={mockOnSuccess}
-        />,
+        />
       );
 
-      const purchaseButton = screen.getByRole("button", { name: /purchase/i });
+      const purchaseButton = screen.getByRole('button', { name: /purchase/i });
       // Purchase button should be highlighted (has specific styling)
-      expect(purchaseButton).toHaveClass("bg-indigo-500");
+      expect(purchaseButton).toHaveClass('bg-indigo-500');
     });
 
-    it("should allow switching to sale type", async () => {
+    it('should allow switching to sale type', async () => {
       renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
           provider={mockProvider}
           onClose={mockOnClose}
           onSuccess={mockOnSuccess}
-        />,
+        />
       );
 
-      const saleButton = screen.getByRole("button", { name: /sale/i });
+      const saleButton = screen.getByRole('button', { name: /sale/i });
       await userEvent.click(saleButton);
 
-      expect(saleButton).toHaveClass("bg-indigo-500");
+      expect(saleButton).toHaveClass('bg-indigo-500');
     });
   });
 
-  describe("Address Autocomplete", () => {
-    it("should show address suggestions when typing", async () => {
+  describe('Address Autocomplete', () => {
+    it('should show address suggestions when typing', async () => {
       window.api.address.getSuggestions.mockResolvedValue({
         success: true,
         suggestions: [
           {
-            place_id: "place-1",
-            description: "123 Main Street, City, ST",
-            main_text: "123 Main Street",
-            secondary_text: "City, ST",
+            place_id: 'place-1',
+            description: '123 Main Street, City, ST',
+            main_text: '123 Main Street',
+            secondary_text: 'City, ST',
           },
         ],
       });
@@ -266,57 +252,51 @@ describe("AuditTransactionModal", () => {
           provider={mockProvider}
           onClose={mockOnClose}
           onSuccess={mockOnSuccess}
-        />,
+        />
       );
 
-      const addressInput = screen.getByPlaceholderText(
-        /enter property address/i,
-      );
-      await userEvent.type(addressInput, "123 Main");
+      const addressInput = screen.getByPlaceholderText(/enter property address/i)
+      await userEvent.type(addressInput, '123 Main');
 
       await waitFor(() => {
         expect(window.api.address.getSuggestions).toHaveBeenCalled();
       });
     });
 
-    it("should not fetch suggestions for short queries", async () => {
+    it('should not fetch suggestions for short queries', async () => {
       renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
           provider={mockProvider}
           onClose={mockOnClose}
           onSuccess={mockOnSuccess}
-        />,
+        />
       );
 
-      const addressInput = screen.getByPlaceholderText(
-        /enter property address/i,
-      );
-      await userEvent.type(addressInput, "12");
+      const addressInput = screen.getByPlaceholderText(/enter property address/i)
+      await userEvent.type(addressInput, '12');
 
       // Should not call API for queries under 4 characters
       expect(window.api.address.getSuggestions).not.toHaveBeenCalled();
     });
   });
 
-  describe("Multi-Step Navigation", () => {
-    it("should navigate to step 2 after completing step 1", async () => {
+  describe('Multi-Step Navigation', () => {
+    it('should navigate to step 2 after completing step 1', async () => {
       renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
           provider={mockProvider}
           onClose={mockOnClose}
           onSuccess={mockOnSuccess}
-        />,
+        />
       );
 
       // Complete step 1
-      const addressInput = screen.getByPlaceholderText(
-        /enter property address/i,
-      );
-      await userEvent.type(addressInput, "123 Main Street");
+      const addressInput = screen.getByPlaceholderText(/enter property address/i)
+      await userEvent.type(addressInput, '123 Main Street');
 
-      const continueButton = screen.getByRole("button", { name: /continue/i });
+      const continueButton = screen.getByRole('button', { name: /continue/i });
       await userEvent.click(continueButton);
 
       // Should show step 2
@@ -325,22 +305,20 @@ describe("AuditTransactionModal", () => {
       });
     });
 
-    it("should allow going back to step 1 from step 2", async () => {
+    it('should allow going back to step 1 from step 2', async () => {
       renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
           provider={mockProvider}
           onClose={mockOnClose}
           onSuccess={mockOnSuccess}
-        />,
+        />
       );
 
       // Go to step 2
-      const addressInput = screen.getByPlaceholderText(
-        /enter property address/i,
-      );
-      await userEvent.type(addressInput, "123 Main Street");
-      const continueButton = screen.getByRole("button", { name: /continue/i });
+      const addressInput = screen.getByPlaceholderText(/enter property address/i)
+      await userEvent.type(addressInput, '123 Main Street');
+      const continueButton = screen.getByRole('button', { name: /continue/i });
       await userEvent.click(continueButton);
 
       await waitFor(() => {
@@ -348,7 +326,7 @@ describe("AuditTransactionModal", () => {
       });
 
       // Go back
-      const backButton = screen.getByRole("button", { name: /back/i });
+      const backButton = screen.getByRole('button', { name: /back/i });
       await userEvent.click(backButton);
 
       // Should show step 1
@@ -357,70 +335,62 @@ describe("AuditTransactionModal", () => {
       });
     });
 
-    it("should show back button only on steps 2 and 3", async () => {
+    it('should show back button only on steps 2 and 3', async () => {
       renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
           provider={mockProvider}
           onClose={mockOnClose}
           onSuccess={mockOnSuccess}
-        />,
+        />
       );
 
       // Step 1 - no back button
-      expect(
-        screen.queryByRole("button", { name: /← back/i }),
-      ).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /← back/i })).not.toBeInTheDocument();
 
       // Go to step 2
-      const addressInput = screen.getByPlaceholderText(
-        /enter property address/i,
-      );
-      await userEvent.type(addressInput, "123 Main Street");
-      const continueButton = screen.getByRole("button", { name: /continue/i });
+      const addressInput = screen.getByPlaceholderText(/enter property address/i)
+      await userEvent.type(addressInput, '123 Main Street');
+      const continueButton = screen.getByRole('button', { name: /continue/i });
       await userEvent.click(continueButton);
 
       // Step 2 - back button should be visible
       await waitFor(() => {
-        expect(
-          screen.getByRole("button", { name: /back/i }),
-        ).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /back/i })).toBeInTheDocument();
       });
     });
   });
 
-  describe("Cancel and Close", () => {
-    it("should call onClose when cancel button is clicked", async () => {
+  describe('Cancel and Close', () => {
+    it('should call onClose when cancel button is clicked', async () => {
       renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
           provider={mockProvider}
           onClose={mockOnClose}
           onSuccess={mockOnSuccess}
-        />,
+        />
       );
 
-      const cancelButton = screen.getByRole("button", { name: /cancel/i });
+      const cancelButton = screen.getByRole('button', { name: /cancel/i });
       await userEvent.click(cancelButton);
 
       expect(mockOnClose).toHaveBeenCalled();
     });
 
-    it("should call onClose when X button is clicked", async () => {
+    it('should call onClose when X button is clicked', async () => {
       renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
           provider={mockProvider}
           onClose={mockOnClose}
           onSuccess={mockOnSuccess}
-        />,
+        />
       );
 
       // X button is the close button in the header
-      const closeButtons = screen.getAllByRole("button");
-      const xButton = closeButtons.find((btn) =>
-        btn.querySelector('svg path[d*="M6 18L18 6"]'),
-      );
+      const closeButtons = screen.getAllByRole('button');
+      const xButton = closeButtons.find((btn) => btn.querySelector('svg path[d*="M6 18L18 6"]'));
       if (xButton) {
         await userEvent.click(xButton);
         expect(mockOnClose).toHaveBeenCalled();
@@ -428,8 +398,8 @@ describe("AuditTransactionModal", () => {
     });
   });
 
-  describe("Transaction Creation", () => {
-    it("should call createAudited API on final submit", async () => {
+  describe('Transaction Creation', () => {
+    it('should call createAudited API on final submit', async () => {
       // Mock SPECIFIC_ROLES constant
       window.api.contacts.getSortedByActivity.mockResolvedValue({
         success: true,
@@ -442,15 +412,13 @@ describe("AuditTransactionModal", () => {
           provider={mockProvider}
           onClose={mockOnClose}
           onSuccess={mockOnSuccess}
-        />,
+        />
       );
 
       // Step 1: Enter address
-      const addressInput = screen.getByPlaceholderText(
-        /enter property address/i,
-      );
-      await userEvent.type(addressInput, "123 Main Street");
-      await userEvent.click(screen.getByRole("button", { name: /continue/i }));
+      const addressInput = screen.getByPlaceholderText(/enter property address/i)
+      await userEvent.type(addressInput, '123 Main Street');
+      await userEvent.click(screen.getByRole('button', { name: /continue/i }));
 
       // Step 2: Should require client
       await waitFor(() => {
@@ -458,13 +426,10 @@ describe("AuditTransactionModal", () => {
       });
     });
 
-    it("should show loading state while creating transaction", async () => {
+    it('should show loading state while creating transaction', async () => {
       // Make createAudited slow
       window.api.transactions.createAudited.mockImplementation(
-        () =>
-          new Promise((resolve) =>
-            setTimeout(() => resolve({ success: true, transaction: {} }), 1000),
-          ),
+        () => new Promise((resolve) => setTimeout(() => resolve({ success: true, transaction: {} }), 1000))
       );
 
       renderWithProvider(
@@ -473,25 +438,23 @@ describe("AuditTransactionModal", () => {
           provider={mockProvider}
           onClose={mockOnClose}
           onSuccess={mockOnSuccess}
-        />,
+        />
       );
 
       // Navigate through steps
-      const addressInput = screen.getByPlaceholderText(
-        /enter property address/i,
-      );
-      await userEvent.type(addressInput, "123 Main Street");
-      await userEvent.click(screen.getByRole("button", { name: /continue/i }));
+      const addressInput = screen.getByPlaceholderText(/enter property address/i)
+      await userEvent.type(addressInput, '123 Main Street');
+      await userEvent.click(screen.getByRole('button', { name: /continue/i }));
 
       await waitFor(() => {
         expect(screen.getByText(/step 2/i)).toBeInTheDocument();
       });
     });
 
-    it("should show error when transaction creation fails", async () => {
+    it('should show error when transaction creation fails', async () => {
       window.api.transactions.createAudited.mockResolvedValue({
         success: false,
-        error: "Database error: transaction creation failed",
+        error: 'Database error: transaction creation failed',
       });
 
       renderWithProvider(
@@ -500,15 +463,13 @@ describe("AuditTransactionModal", () => {
           provider={mockProvider}
           onClose={mockOnClose}
           onSuccess={mockOnSuccess}
-        />,
+        />
       );
 
       // Enter address and go to step 2
-      const addressInput = screen.getByPlaceholderText(
-        /enter property address/i,
-      );
-      await userEvent.type(addressInput, "123 Main Street");
-      await userEvent.click(screen.getByRole("button", { name: /continue/i }));
+      const addressInput = screen.getByPlaceholderText(/enter property address/i)
+      await userEvent.type(addressInput, '123 Main Street');
+      await userEvent.click(screen.getByRole('button', { name: /continue/i }));
 
       await waitFor(() => {
         expect(screen.getByText(/step 2/i)).toBeInTheDocument();
@@ -516,41 +477,37 @@ describe("AuditTransactionModal", () => {
     });
   });
 
-  describe("Input Sanitization", () => {
-    it("should handle special characters in address input", async () => {
+  describe('Input Sanitization', () => {
+    it('should handle special characters in address input', async () => {
       renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
           provider={mockProvider}
           onClose={mockOnClose}
           onSuccess={mockOnSuccess}
-        />,
+        />
       );
 
-      const addressInput = screen.getByPlaceholderText(
-        /enter property address/i,
-      );
-      await userEvent.type(addressInput, "123 Main St. #4B, City-Town, ST");
+      const addressInput = screen.getByPlaceholderText(/enter property address/i)
+      await userEvent.type(addressInput, '123 Main St. #4B, City-Town, ST');
 
-      expect(addressInput).toHaveValue("123 Main St. #4B, City-Town, ST");
+      expect(addressInput).toHaveValue('123 Main St. #4B, City-Town, ST');
     });
 
-    it("should trim whitespace from address", async () => {
+    it('should trim whitespace from address', async () => {
       renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
           provider={mockProvider}
           onClose={mockOnClose}
           onSuccess={mockOnSuccess}
-        />,
+        />
       );
 
-      const addressInput = screen.getByPlaceholderText(
-        /enter property address/i,
-      );
-      await userEvent.type(addressInput, "   123 Main Street   ");
+      const addressInput = screen.getByPlaceholderText(/enter property address/i)
+      await userEvent.type(addressInput, '   123 Main Street   ');
 
-      await userEvent.click(screen.getByRole("button", { name: /continue/i }));
+      await userEvent.click(screen.getByRole('button', { name: /continue/i }));
 
       // Should proceed (whitespace trimmed)
       await waitFor(() => {
@@ -559,15 +516,15 @@ describe("AuditTransactionModal", () => {
     });
   });
 
-  describe("API Integration", () => {
-    it("should initialize address API on mount", async () => {
+  describe('API Integration', () => {
+    it('should initialize address API on mount', async () => {
       renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
           provider={mockProvider}
           onClose={mockOnClose}
           onSuccess={mockOnSuccess}
-        />,
+        />
       );
 
       await waitFor(() => {
@@ -575,7 +532,7 @@ describe("AuditTransactionModal", () => {
       });
     });
 
-    it("should have all required APIs available", () => {
+    it('should have all required APIs available', () => {
       expect(window.api.address.initialize).toBeDefined();
       expect(window.api.address.getSuggestions).toBeDefined();
       expect(window.api.address.getDetails).toBeDefined();
@@ -585,46 +542,38 @@ describe("AuditTransactionModal", () => {
     });
   });
 
-  describe("Accessibility", () => {
-    it("should have accessible form labels", () => {
+  describe('Accessibility', () => {
+    it('should have accessible form labels', () => {
       renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
           provider={mockProvider}
           onClose={mockOnClose}
           onSuccess={mockOnSuccess}
-        />,
+        />
       );
 
       // Address input should have a label text
-      expect(screen.getAllByText(/property address/i).length).toBeGreaterThan(
-        0,
-      );
+      expect(screen.getAllByText(/property address/i).length).toBeGreaterThan(0);
 
       // Transaction type should have a label
       expect(screen.getByText(/transaction type/i)).toBeInTheDocument();
     });
 
-    it("should have accessible buttons", () => {
+    it('should have accessible buttons', () => {
       renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
           provider={mockProvider}
           onClose={mockOnClose}
           onSuccess={mockOnSuccess}
-        />,
+        />
       );
 
-      expect(
-        screen.getByRole("button", { name: /continue/i }),
-      ).toBeInTheDocument();
-      expect(
-        screen.getByRole("button", { name: /cancel/i }),
-      ).toBeInTheDocument();
-      expect(
-        screen.getByRole("button", { name: /purchase/i }),
-      ).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: /sale/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /continue/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /cancel/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /purchase/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /sale/i })).toBeInTheDocument();
     });
   });
 });

@@ -1,6 +1,6 @@
-import React from "react";
-import { SyncProgressBar } from "./SyncProgressBar";
-import type { BackupProgress, SyncPhase } from "./types";
+import React from 'react';
+import { SyncProgressBar } from './SyncProgressBar';
+import type { BackupProgress, SyncPhase } from './types';
 
 interface SyncStatusProps {
   progress: BackupProgress;
@@ -8,15 +8,12 @@ interface SyncStatusProps {
 }
 
 const phaseLabels: Record<SyncPhase, string> = {
-  preparing: "Preparing sync...",
-  transferring: "Transferring data...",
-  finishing: "Almost done...",
+  preparing: 'Preparing sync...',
+  transferring: 'Transferring data...',
+  finishing: 'Almost done...'
 };
 
-export const SyncStatus: React.FC<SyncStatusProps> = ({
-  progress,
-  onCancel,
-}) => {
+export const SyncStatus: React.FC<SyncStatusProps> = ({ progress, onCancel }) => {
   return (
     <div className="sync-status">
       <div className="sync-icon-container mb-4">
@@ -42,7 +39,9 @@ export const SyncStatus: React.FC<SyncStatusProps> = ({
         </svg>
       </div>
 
-      <h3 className="text-lg font-medium mb-2">Syncing Your iPhone</h3>
+      <h3 className="text-lg font-medium mb-2">
+        Syncing Your iPhone
+      </h3>
 
       <div className="w-full max-w-xs mb-4">
         <SyncProgressBar

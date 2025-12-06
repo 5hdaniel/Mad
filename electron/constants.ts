@@ -4,22 +4,20 @@
  */
 
 // Date/Time Constants
-export const MAC_EPOCH: number = new Date("2001-01-01T00:00:00Z").getTime();
+export const MAC_EPOCH: number = new Date('2001-01-01T00:00:00Z').getTime();
 export const FIVE_YEARS_IN_MS: number = 5 * 365 * 24 * 60 * 60 * 1000;
 
 // Database Constants
 export const MIN_CONTACT_RECORD_COUNT: number = 10;
-export const CONTACTS_BASE_DIR: string =
-  "Library/Application Support/AddressBook";
-export const DEFAULT_CONTACTS_DB: string =
-  "Library/Application Support/AddressBook/AddressBook-v22.abcddb";
-export const MESSAGES_DB_PATH: string = "Library/Messages/chat.db";
+export const CONTACTS_BASE_DIR: string = 'Library/Application Support/AddressBook';
+export const DEFAULT_CONTACTS_DB: string = 'Library/Application Support/AddressBook/AddressBook-v22.abcddb';
+export const MESSAGES_DB_PATH: string = 'Library/Messages/chat.db';
 
 // Message Text Parsing Constants
 export const MAX_MESSAGE_TEXT_LENGTH: number = 10000;
 export const MIN_MESSAGE_TEXT_LENGTH: number = 1;
 export const MIN_CLEANED_TEXT_LENGTH: number = 2;
-export const STREAMTYPED_MARKER: string = "streamtyped";
+export const STREAMTYPED_MARKER: string = 'streamtyped';
 export const STREAMTYPED_OFFSET: number = 11; // Length of 'streamtyped'
 
 // Regular Expressions
@@ -44,15 +42,15 @@ export const REGEX_PATTERNS: Record<string, RegExp> = {
 
   // Leading/trailing symbols
   LEADING_SYMBOLS: /^[^\w\s]+/,
-  TRAILING_SYMBOLS: /[^\w\s]+$/,
+  TRAILING_SYMBOLS: /[^\w\s]+$/
 };
 
 // Fallback Messages
 export const FALLBACK_MESSAGES: Record<string, string> = {
-  UNABLE_TO_EXTRACT: "[Message text - unable to extract from rich format]",
-  PARSING_ERROR: "[Message text - parsing error]",
-  ATTACHMENT: "[Attachment - Photo/Video/File]",
-  REACTION_OR_SYSTEM: "[Reaction or system message]",
+  UNABLE_TO_EXTRACT: '[Message text - unable to extract from rich format]',
+  PARSING_ERROR: '[Message text - parsing error]',
+  ATTACHMENT: '[Attachment - Photo/Video/File]',
+  REACTION_OR_SYSTEM: '[Reaction or system message]'
 };
 
 // Window Configuration Interface
@@ -67,10 +65,10 @@ export interface WindowConfig {
 export const WINDOW_CONFIG: WindowConfig = {
   DEFAULT_WIDTH: 1200,
   DEFAULT_HEIGHT: 800,
-  TITLE_BAR_STYLE: "hiddenInset",
-  BACKGROUND_COLOR: "#ffffff",
+  TITLE_BAR_STYLE: 'hiddenInset',
+  BACKGROUND_COLOR: '#ffffff'
 };
 
 // Development
-export const DEV_SERVER_URL: string = "http://localhost:5173";
+export const DEV_SERVER_URL: string = 'http://localhost:5173';
 export const UPDATE_CHECK_DELAY: number = 5000; // 5 seconds after window loads
