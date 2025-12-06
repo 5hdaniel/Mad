@@ -150,7 +150,7 @@ class GmailFetchService {
         pageCount++;
         console.log(`[GmailFetch] Fetching page ${pageCount}...`);
 
-        const response = await this.gmail.users.messages.list({
+        const response: any = await this.gmail!.users.messages.list({
           userId: 'me',
           q: searchQuery.trim(),
           maxResults: Math.min(100, maxResults - allMessages.length), // Fetch up to 100 per page
