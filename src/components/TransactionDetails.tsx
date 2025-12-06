@@ -42,6 +42,7 @@ function TransactionDetails({
   const [activeTab, setActiveTab] = useState<"details" | "contacts">("details");
   const [unlinkingCommId, setUnlinkingCommId] = useState<string | null>(null);
   const [showUnlinkConfirm, setShowUnlinkConfirm] = useState<Communication | null>(null);
+  const [viewingEmail, setViewingEmail] = useState<Communication | null>(null);
 
   useEffect(() => {
     loadDetails();
@@ -300,7 +301,8 @@ function TransactionDetails({
                       {communications.map((comm) => (
                         <div
                           key={comm.id}
-                          className="bg-gray-50 border border-gray-200 rounded-lg p-4 group"
+                          className="bg-gray-50 border border-gray-200 rounded-lg p-4 cursor-pointer hover:bg-gray-100 hover:border-gray-300 transition-colors"
+                          onClick={() => setViewingEmail(comm)}
                         >
                           <div className="flex items-start justify-between mb-2">
                             <h5 className="font-semibold text-gray-900 flex-1 pr-4">
@@ -313,9 +315,12 @@ function TransactionDetails({
                                   : "Unknown date"}
                               </span>
                               <button
-                                onClick={() => setShowUnlinkConfirm(comm)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setShowUnlinkConfirm(comm);
+                                }}
                                 disabled={unlinkingCommId === comm.id}
-                                className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md"
+                                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
                                 title="Remove this email from transaction"
                               >
                                 {unlinkingCommId === comm.id ? (
@@ -614,6 +619,102 @@ function TransactionDetails({
                   "Remove Email"
                 )}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Full Email View Modal */}
+      {viewingEmail && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[70] p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[85vh] flex flex-col">
+            {/* Email Header */}
+            <div className="flex-shrink-0 bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-4 rounded-t-xl">
+              <div className="flex items-start justify-between">
+                <div className="flex-1 pr-4">
+                  <h3 className="text-lg font-bold text-white">
+                    {viewingEmail.subject || "(No Subject)"}
+                  </h3>
+                  <p className="text-blue-100 text-sm mt-1">
+                    {viewingEmail.sent_at
+                      ? new Date(viewingEmail.sent_at).toLocaleString()
+                      : "Unknown date"}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setViewingEmail(null)}
+                  className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-all"
+                >
+                  <svg
+                    className="w-6 h-6"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* Email Metadata */}
+            <div className="flex-shrink-0 px-6 py-4 border-b border-gray-200 bg-gray-50">
+              <div className="space-y-2">
+                <div className="flex items-start gap-2">
+                  <span className="text-sm font-medium text-gray-500 w-16">From:</span>
+                  <span className="text-sm text-gray-900">{viewingEmail.sender || "Unknown"}</span>
+                </div>
+                {viewingEmail.recipients && (
+                  <div className="flex items-start gap-2">
+                    <span className="text-sm font-medium text-gray-500 w-16">To:</span>
+                    <span className="text-sm text-gray-900">{viewingEmail.recipients}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Email Body */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {viewingEmail.body_plain ? (
+                <div className="prose prose-sm max-w-none">
+                  <pre className="whitespace-pre-wrap font-sans text-sm text-gray-700 leading-relaxed">
+                    {viewingEmail.body_plain}
+                  </pre>
+                </div>
+              ) : (
+                <p className="text-gray-500 italic text-center py-8">
+                  No email content available
+                </p>
+              )}
+            </div>
+
+            {/* Footer Actions */}
+            <div className="flex-shrink-0 px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-xl">
+              <div className="flex items-center justify-between">
+                <button
+                  onClick={() => {
+                    setViewingEmail(null);
+                    setShowUnlinkConfirm(viewingEmail);
+                  }}
+                  className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg font-medium transition-all flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                  </svg>
+                  Remove from Transaction
+                </button>
+                <button
+                  onClick={() => setViewingEmail(null)}
+                  className="px-4 py-2 bg-gray-600 text-white hover:bg-gray-700 rounded-lg font-semibold transition-all"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>
