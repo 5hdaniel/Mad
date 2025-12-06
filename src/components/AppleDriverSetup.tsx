@@ -33,12 +33,11 @@ function getDriversAPI(): DriversAPI | null {
   return (window.electron as any)?.drivers as DriversAPI | null;
 }
 
-// Windows + iPhone setup steps (includes driver installation)
-const WINDOWS_IPHONE_SETUP_STEPS = [
-  { id: 1, label: "Sign In" },
-  { id: 2, label: "Phone Type" },
-  { id: 3, label: "Install Tools" },
-  { id: 4, label: "Connect Email" },
+// Windows setup steps (shared with PhoneTypeSelection for consistency)
+const WINDOWS_SETUP_STEPS = [
+  { id: 1, label: "Phone Type" },
+  { id: 2, label: "Install Tools" },
+  { id: 3, label: "Connect Email" },
 ];
 
 /**
@@ -47,7 +46,7 @@ const WINDOWS_IPHONE_SETUP_STEPS = [
 function SetupProgressIndicator({ currentStep }: { currentStep: number }) {
   return (
     <div className="flex items-center justify-center gap-1 mb-6">
-      {WINDOWS_IPHONE_SETUP_STEPS.map((step, index) => (
+      {WINDOWS_SETUP_STEPS.map((step, index) => (
         <React.Fragment key={step.id}>
           <div className="flex flex-col items-center">
             <div
@@ -83,7 +82,7 @@ function SetupProgressIndicator({ currentStep }: { currentStep: number }) {
               {step.label}
             </span>
           </div>
-          {index < WINDOWS_IPHONE_SETUP_STEPS.length - 1 && (
+          {index < WINDOWS_SETUP_STEPS.length - 1 && (
             <div
               className={`w-6 h-0.5 mb-5 transition-all ${
                 step.id < currentStep ? "bg-green-500" : "bg-gray-200"
@@ -249,7 +248,7 @@ function AppleDriverSetup({ onComplete, onSkip, onBack }: AppleDriverSetupProps)
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex flex-col">
       {/* Header with Progress Indicator */}
       <div className="w-full p-4 flex justify-center">
-        <SetupProgressIndicator currentStep={3} />
+        <SetupProgressIndicator currentStep={2} />
       </div>
 
       {/* Centered Content */}

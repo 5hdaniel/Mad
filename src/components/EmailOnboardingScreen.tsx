@@ -25,7 +25,7 @@ interface EmailOnboardingScreenProps {
 }
 
 // Setup steps for progress indicator - platform specific
-// macOS: 4-step flow (Sign In happens before onboarding)
+// macOS: 4-step flow
 const MACOS_SETUP_STEPS = [
   { id: 1, label: "Phone Type" },
   { id: 2, label: "Secure Storage" },
@@ -33,8 +33,16 @@ const MACOS_SETUP_STEPS = [
   { id: 4, label: "Permissions" },
 ];
 
-// Windows: Simplified 2-step flow (no Secure Storage or Permissions needed)
-const WINDOWS_SETUP_STEPS = [
+// Windows: Steps vary based on phone type
+// iPhone: 3-step flow (with driver installation)
+const WINDOWS_IPHONE_SETUP_STEPS = [
+  { id: 1, label: "Phone Type" },
+  { id: 2, label: "Install Tools" },
+  { id: 3, label: "Connect Email" },
+];
+
+// Windows: Android users skip driver installation
+const WINDOWS_ANDROID_SETUP_STEPS = [
   { id: 1, label: "Phone Type" },
   { id: 2, label: "Connect Email" },
 ];
@@ -160,10 +168,27 @@ function EmailOnboardingScreen({
   const primaryProvider = isPrimaryGoogle ? "google" : "microsoft";
   const secondaryProvider = isPrimaryGoogle ? "microsoft" : "google";
 
-  // Current step differs by platform (Windows: step 2, macOS: step 3)
-  // Sign In is step 0 (happens before onboarding)
-  const currentStep = isWindows ? 2 : 3;
-  const steps = isWindows ? WINDOWS_SETUP_STEPS : MACOS_SETUP_STEPS;
+  // Determine steps and current step based on platform and phone type
+  // Windows: Steps depend on whether it's iPhone (with driver install) or Android
+  // macOS: Always 4-step flow
+  let steps;
+  let currentStep;
+
+  if (isWindows) {
+    if (selectedPhoneType === "iphone") {
+      // Windows + iPhone: 3-step flow (Phone Type → Install Tools → Connect Email)
+      steps = WINDOWS_IPHONE_SETUP_STEPS;
+      currentStep = 3; // Currently on Connect Email step
+    } else {
+      // Windows + Android: 2-step flow (Phone Type → Connect Email)
+      steps = WINDOWS_ANDROID_SETUP_STEPS;
+      currentStep = 2; // Currently on Connect Email step
+    }
+  } else {
+    // macOS: Always 4-step flow
+    steps = MACOS_SETUP_STEPS;
+    currentStep = 3; // Currently on Connect Email step
+  }
 
   // Navigation handlers
   const handleBackStep = (): void => {

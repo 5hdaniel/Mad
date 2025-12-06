@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { usePlatform } from "../contexts/PlatformContext";
 
 // Setup steps for progress indicator - platform specific
-// macOS: 4-step flow (Sign In happens before onboarding)
+// macOS: 4-step flow
 const MACOS_SETUP_STEPS = [
   { id: 1, label: "Phone Type" },
   { id: 2, label: "Secure Storage" },
@@ -10,10 +10,11 @@ const MACOS_SETUP_STEPS = [
   { id: 4, label: "Permissions" },
 ];
 
-// Windows: Simplified 2-step flow (no Secure Storage or Permissions needed)
+// Windows: 3-step flow (with driver installation for iPhone users)
 const WINDOWS_SETUP_STEPS = [
   { id: 1, label: "Phone Type" },
-  { id: 2, label: "Connect Email" },
+  { id: 2, label: "Install Tools" },
+  { id: 3, label: "Connect Email" },
 ];
 
 /**
