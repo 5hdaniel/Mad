@@ -534,8 +534,8 @@ function App() {
 
   const handleSelectAndroid = (): void => {
     setSelectedPhoneType("android");
-    // Don't set hasSelectedPhoneType yet - show coming soon screen first
-    setCurrentStep("android-coming-soon");
+    // Android users go directly to email onboarding (no driver setup needed)
+    setHasSelectedPhoneType(true);
   };
 
   const handlePhoneTypeSelectionBack = (): void => {
@@ -1051,7 +1051,6 @@ function App() {
             onSelectIPhone={handleSelectIPhone}
             onSelectAndroid={handleSelectAndroid}
             selectedType={selectedPhoneType}
-            onBack={handlePhoneTypeSelectionBack}
           />
         )}
 

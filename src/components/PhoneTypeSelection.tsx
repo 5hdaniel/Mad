@@ -85,7 +85,6 @@ interface PhoneTypeSelectionProps {
   onSelectIPhone: () => void;
   onSelectAndroid: () => void;
   selectedType?: "iphone" | "android" | null;
-  onBack?: () => void;
 }
 
 /**
@@ -97,7 +96,6 @@ function PhoneTypeSelection({
   onSelectIPhone,
   onSelectAndroid,
   selectedType,
-  onBack,
 }: PhoneTypeSelectionProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { isWindows } = usePlatform();
@@ -267,36 +265,6 @@ function PhoneTypeSelection({
               </p>
             </div>
           </div>
-
-          {/* Navigation Buttons */}
-          {onBack && (
-            <div className="flex items-center justify-start gap-3 pt-2 border-t border-gray-200">
-              <button
-                onClick={onBack}
-                disabled={isSubmitting}
-                className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
-                  isSubmitting
-                    ? "text-gray-400 cursor-not-allowed bg-gray-100"
-                    : "text-gray-700 hover:bg-gray-100"
-                }`}
-              >
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M15 19l-7-7 7-7"
-                  />
-                </svg>
-                <span>Back</span>
-              </button>
-            </div>
-          )}
         </div>
       </div>
     </div>
