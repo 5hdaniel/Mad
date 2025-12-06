@@ -388,10 +388,7 @@ describe("Transactions", () => {
       await userEvent.click(scanButton);
 
       // Auto-detect now calls scan without provider (auto-detects connected providers)
-      expect(window.api.transactions.scan).toHaveBeenCalledWith(
-        mockUserId,
-        {},
-      );
+      expect(window.api.transactions.scan).toHaveBeenCalledWith(mockUserId, {});
     });
 
     it("should disable scan button while scanning", async () => {

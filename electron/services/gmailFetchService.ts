@@ -2,6 +2,7 @@ import { google, gmail_v1, Auth } from "googleapis";
 // NOTE: tokenEncryptionService removed - using session-only OAuth
 // Tokens stored in encrypted database, no additional keychain encryption needed
 import databaseService from "./databaseService";
+import logService from "./logService";
 import { OAuthToken } from "../types/models";
 
 /**
@@ -100,7 +101,7 @@ class GmailFetchService {
 
       // Handle token refresh (session-only, no encryption needed)
       oauth2Client.on("tokens", async (tokens) => {
-        console.log("[GmailFetch] Tokens refreshed");
+        logService.info("Tokens refreshed", "GmailFetch");
         if (tokens.refresh_token) {
           // Update refresh token in database (no encryption)
           await databaseService.updateOAuthToken(tokenRecord.id, {
@@ -122,10 +123,10 @@ class GmailFetchService {
       this.oauth2Client = oauth2Client;
       this.gmail = google.gmail({ version: "v1", auth: oauth2Client });
 
-      console.log("[GmailFetch] Initialized successfully");
+      logService.info("Initialized successfully", "GmailFetch");
       return true;
     } catch (error) {
-      console.error("[GmailFetch] Initialization failed:", error);
+      logService.error("Initialization failed", "GmailFetch", { error });
       throw error;
     }
   }
@@ -160,7 +161,7 @@ class GmailFetchService {
         searchQuery += ` before:${beforeDate}`;
       }
 
-      console.log("[GmailFetch] Searching emails with query:", searchQuery);
+      logService.info("Searching emails", "GmailFetch", { query: searchQuery });
 
       const allMessages: gmail_v1.Schema$Message[] = [];
       let nextPageToken: string | undefined = undefined;
@@ -179,7 +180,7 @@ class GmailFetchService {
       // Paginate through all results
       do {
         pageCount++;
-        console.log(`[GmailFetch] Fetching page ${pageCount}...`);
+        logService.debug(`Fetching page ${pageCount}`, "GmailFetch");
 
         const response: { data: gmail_v1.Schema$ListMessagesResponse } =
           await this.gmail.users.messages.list({
@@ -192,12 +193,16 @@ class GmailFetchService {
         // Get estimated total from first response
         if (pageCount === 1 && response.data.resultSizeEstimate) {
           estimatedTotal = response.data.resultSizeEstimate;
-          console.log(`[GmailFetch] Estimated total emails: ${estimatedTotal}`);
+          logService.info(
+            `Estimated total emails: ${estimatedTotal}`,
+            "GmailFetch",
+          );
         }
 
         const messages = response.data.messages || [];
-        console.log(
-          `[GmailFetch] Page ${pageCount}: Found ${messages.length} messages`,
+        logService.debug(
+          `Page ${pageCount}: Found ${messages.length} messages`,
+          "GmailFetch",
         );
 
         allMessages.push(...messages);
@@ -231,7 +236,10 @@ class GmailFetchService {
         }
       } while (nextPageToken);
 
-      console.log(`[GmailFetch] Total messages found: ${allMessages.length}`);
+      logService.info(
+        `Total messages found: ${allMessages.length}`,
+        "GmailFetch",
+      );
 
       // Fetch full message details for each (in batches to avoid overwhelming the API)
       const fullMessages: ParsedEmail[] = [];
@@ -261,7 +269,7 @@ class GmailFetchService {
 
       return fullMessages;
     } catch (error) {
-      console.error("[GmailFetch] Search emails failed:", error);
+      logService.error("Search emails failed", "GmailFetch", { error });
       throw error;
     }
   }
@@ -286,7 +294,9 @@ class GmailFetchService {
       const message = response.data;
       return this._parseMessage(message);
     } catch (error) {
-      console.error(`[GmailFetch] Failed to get message ${messageId}:`, error);
+      logService.error(`Failed to get message ${messageId}`, "GmailFetch", {
+        error,
+      });
       throw error;
     }
   }
@@ -397,7 +407,7 @@ class GmailFetchService {
 
       return Buffer.from(response.data.data || "", "base64");
     } catch (error) {
-      console.error(`[GmailFetch] Failed to get attachment:`, error);
+      logService.error("Failed to get attachment", "GmailFetch", { error });
       throw error;
     }
   }
@@ -418,7 +428,7 @@ class GmailFetchService {
 
       return response.data.emailAddress || "";
     } catch (error) {
-      console.error("[GmailFetch] Failed to get user email:", error);
+      logService.error("Failed to get user email", "GmailFetch", { error });
       throw error;
     }
   }

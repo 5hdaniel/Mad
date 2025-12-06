@@ -2,6 +2,7 @@ import axios, { AxiosRequestConfig } from "axios";
 // NOTE: tokenEncryptionService removed - using session-only OAuth
 // Tokens stored in encrypted database, no additional keychain encryption needed
 import databaseService from "./databaseService";
+import logService from "./logService";
 import { OAuthToken } from "../types/models";
 
 /**
@@ -131,10 +132,10 @@ class OutlookFetchService {
       // Session-only OAuth: tokens stored unencrypted in encrypted database
       this.accessToken = tokenRecord.access_token || "";
 
-      console.log("[OutlookFetch] Initialized successfully");
+      logService.info("Initialized successfully", "OutlookFetch");
       return true;
     } catch (error) {
-      console.error("[OutlookFetch] Initialization failed:", error);
+      logService.error("Initialization failed", "OutlookFetch", { error });
       throw error;
     }
   }
@@ -167,7 +168,10 @@ class OutlookFetchService {
     } catch (error: any) {
       // Handle token expiration
       if (error.response && error.response.status === 401) {
-        console.error("[OutlookFetch] Access token expired, need to refresh");
+        logService.error(
+          "Access token expired, need to refresh",
+          "OutlookFetch",
+        );
         // TODO: Implement token refresh logic
       }
       throw error;
@@ -216,7 +220,7 @@ class OutlookFetchService {
       const selectFields =
         "$select=id,subject,from,toRecipients,ccRecipients,bccRecipients,receivedDateTime,sentDateTime,hasAttachments,body,bodyPreview,conversationId";
 
-      console.log("[OutlookFetch] Searching emails");
+      logService.info("Searching emails", "OutlookFetch");
 
       // First, get the total count of matching emails
       let estimatedTotal = 0;
@@ -228,10 +232,14 @@ class OutlookFetchService {
           GraphApiResponse<GraphMessage>
         >(`/me/messages?${countParams}`);
         estimatedTotal = countData["@odata.count"] || 0;
-        console.log(`[OutlookFetch] Estimated total emails: ${estimatedTotal}`);
+        logService.info(
+          `Estimated total emails: ${estimatedTotal}`,
+          "OutlookFetch",
+        );
       } catch {
-        console.log(
-          "[OutlookFetch] Could not get email count, progress will be estimated",
+        logService.debug(
+          "Could not get email count, progress will be estimated",
+          "OutlookFetch",
         );
       }
 
@@ -262,8 +270,9 @@ class OutlookFetchService {
           .filter(Boolean)
           .join("&");
 
-        console.log(
-          `[OutlookFetch] Fetching page ${pageCount} (skip=${skip})...`,
+        logService.debug(
+          `Fetching page ${pageCount} (skip=${skip})`,
+          "OutlookFetch",
         );
 
         const data = await this._graphRequest<GraphApiResponse<GraphMessage>>(
@@ -271,8 +280,9 @@ class OutlookFetchService {
         );
         const messages = data.value || [];
 
-        console.log(
-          `[OutlookFetch] Page ${pageCount}: Found ${messages.length} messages`,
+        logService.debug(
+          `Page ${pageCount}: Found ${messages.length} messages`,
+          "OutlookFetch",
         );
 
         allMessages.push(...messages);
@@ -299,14 +309,17 @@ class OutlookFetchService {
         }
       } while (allMessages.length < maxResults);
 
-      console.log(`[OutlookFetch] Total messages found: ${allMessages.length}`);
+      logService.info(
+        `Total messages found: ${allMessages.length}`,
+        "OutlookFetch",
+      );
 
       // Parse messages
       return allMessages
         .slice(0, maxResults)
         .map((msg) => this._parseMessage(msg));
     } catch (error) {
-      console.error("[OutlookFetch] Search emails failed:", error);
+      logService.error("Search emails failed", "OutlookFetch", { error });
       throw error;
     }
   }
@@ -323,10 +336,9 @@ class OutlookFetchService {
       );
       return this._parseMessage(data);
     } catch (error) {
-      console.error(
-        `[OutlookFetch] Failed to get message ${messageId}:`,
+      logService.error(`Failed to get message ${messageId}`, "OutlookFetch", {
         error,
-      );
+      });
       throw error;
     }
   }
@@ -393,7 +405,7 @@ class OutlookFetchService {
       );
       return data.value || [];
     } catch (error) {
-      console.error(`[OutlookFetch] Failed to get attachments:`, error);
+      logService.error("Failed to get attachments", "OutlookFetch", { error });
       throw error;
     }
   }
@@ -419,7 +431,7 @@ class OutlookFetchService {
 
       throw new Error("No attachment data found");
     } catch (error) {
-      console.error(`[OutlookFetch] Failed to get attachment:`, error);
+      logService.error("Failed to get attachment", "OutlookFetch", { error });
       throw error;
     }
   }
@@ -436,7 +448,7 @@ class OutlookFetchService {
       }>("/me");
       return data.mail || data.userPrincipalName || "";
     } catch (error) {
-      console.error("[OutlookFetch] Failed to get user email:", error);
+      logService.error("Failed to get user email", "OutlookFetch", { error });
       throw error;
     }
   }
@@ -451,7 +463,7 @@ class OutlookFetchService {
         await this._graphRequest<GraphApiResponse<any>>("/me/mailFolders");
       return data.value || [];
     } catch (error) {
-      console.error("[OutlookFetch] Failed to get folders:", error);
+      logService.error("Failed to get folders", "OutlookFetch", { error });
       throw error;
     }
   }

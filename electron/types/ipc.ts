@@ -383,9 +383,7 @@ export interface WindowApi {
       authUrl?: string;
       error?: string;
     }>;
-    googleCompleteLogin: (
-      code: string,
-    ) => Promise<{
+    googleCompleteLogin: (code: string) => Promise<{
       success: boolean;
       user?: User;
       sessionToken?: string;
@@ -398,9 +396,7 @@ export interface WindowApi {
       authUrl?: string;
       error?: string;
     }>;
-    microsoftCompleteLogin: (
-      code: string,
-    ) => Promise<{
+    microsoftCompleteLogin: (code: string) => Promise<{
       success: boolean;
       user?: User;
       sessionToken?: string;
@@ -439,9 +435,7 @@ export interface WindowApi {
       userId: string,
     ) => Promise<{ success: boolean; error?: string }>;
     // Complete pending login after keychain setup (login-first flow)
-    completePendingLogin: (
-      oauthData: unknown,
-    ) => Promise<{
+    completePendingLogin: (oauthData: unknown) => Promise<{
       success: boolean;
       user?: User;
       sessionToken?: string;
@@ -471,9 +465,7 @@ export interface WindowApi {
     checkMicrosoftConnection: (
       userId: string,
     ) => Promise<{ connected: boolean; email?: string; error?: string }>;
-    checkAllConnections: (
-      userId: string,
-    ) => Promise<{
+    checkAllConnections: (userId: string) => Promise<{
       success: boolean;
       google?: { connected: boolean; email?: string };
       microsoft?: { connected: boolean; email?: string };
@@ -538,9 +530,7 @@ export interface WindowApi {
 
   // User preference methods (stored in local database)
   user: {
-    getPhoneType: (
-      userId: string,
-    ) => Promise<{
+    getPhoneType: (userId: string) => Promise<{
       success: boolean;
       phoneType: "iphone" | "android" | null;
       error?: string;
@@ -563,9 +553,7 @@ export interface WindowApi {
     getAvailable: (
       userId: string,
     ) => Promise<{ success: boolean; contacts?: Contact[]; error?: string }>;
-    checkCanDelete: (
-      contactId: string,
-    ) => Promise<{
+    checkCanDelete: (contactId: string) => Promise<{
       canDelete: boolean;
       transactionCount?: number;
       error?: string;
@@ -592,9 +580,7 @@ export interface WindowApi {
 
   // Transaction methods
   transactions: {
-    getAll: (
-      userId: string,
-    ) => Promise<{
+    getAll: (userId: string) => Promise<{
       success: boolean;
       transactions?: Transaction[];
       error?: string;
@@ -669,9 +655,7 @@ export interface WindowApi {
       suggestions?: Array<{ description: string; placeId: string }>;
       error?: string;
     }>;
-    getDetails: (
-      placeId: string,
-    ) => Promise<{
+    getDetails: (placeId: string) => Promise<{
       success: boolean;
       address?: {
         formatted_address?: string;
@@ -809,9 +793,7 @@ export interface WindowApi {
     cleanup: (
       keepCount?: number,
     ) => Promise<{ success: boolean; error?: string }>;
-    checkEncryption: (
-      udid: string,
-    ) => Promise<{
+    checkEncryption: (udid: string) => Promise<{
       success: boolean;
       isEncrypted?: boolean;
       needsPassword?: boolean;

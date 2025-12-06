@@ -139,15 +139,24 @@ describe("OutlookFetchService", () => {
     });
 
     it("should respect maxResults parameter", async () => {
-      mockAxios.mockResolvedValue({ data: { value: [] } });
+      // Create mock messages
+      const mockMessages = Array.from({ length: 100 }, (_, i) => ({
+        id: `msg-${i}`,
+        subject: `Test ${i}`,
+        conversationId: `conv-${i}`,
+        from: { emailAddress: { address: "test@example.com" } },
+        toRecipients: [],
+        receivedDateTime: "2024-01-01T00:00:00Z",
+        sentDateTime: "2024-01-01T00:00:00Z",
+        hasAttachments: false,
+      }));
+      mockAxios.mockResolvedValue({ data: { value: mockMessages } });
 
-      await outlookFetchService.searchEmails({ maxResults: 50 });
+      // Request only 50 results
+      const results = await outlookFetchService.searchEmails({ maxResults: 50 });
 
-      expect(mockAxios).toHaveBeenCalledWith(
-        expect.objectContaining({
-          url: expect.stringContaining("$top=50"),
-        }),
-      );
+      // Should return only 50 results even though 100 were fetched
+      expect(results).toHaveLength(50);
     });
 
     it("should handle empty search results", async () => {

@@ -196,9 +196,7 @@ function App() {
           // Check onboarding status
           // Type assertion needed as preload API types are inferred from electron
           const authApi = window.api.auth as typeof window.api.auth & {
-            checkEmailOnboarding: (
-              userId: string,
-            ) => Promise<{
+            checkEmailOnboarding: (userId: string) => Promise<{
               success: boolean;
               completed: boolean;
               error?: string;
@@ -242,9 +240,7 @@ function App() {
         try {
           // Type assertion for the user API
           const userApi = window.api.user as {
-            getPhoneType: (
-              userId: string,
-            ) => Promise<{
+            getPhoneType: (userId: string) => Promise<{
               success: boolean;
               phoneType: "iphone" | "android" | null;
               error?: string;

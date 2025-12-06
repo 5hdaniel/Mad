@@ -277,12 +277,10 @@ describe("SupabaseService", () => {
           update: jest.fn().mockReturnThis(),
           eq: jest.fn().mockReturnThis(),
           select: jest.fn().mockReturnThis(),
-          single: jest
-            .fn()
-            .mockResolvedValue({
-              data: null,
-              error: { message: "Update failed" },
-            }),
+          single: jest.fn().mockResolvedValue({
+            data: null,
+            error: { message: "Update failed" },
+          }),
         };
         mockSupabaseClient.from.mockReturnValue(query);
 
@@ -669,12 +667,10 @@ describe("SupabaseService", () => {
 
       it("should handle sync failure gracefully", async () => {
         const errorQuery = {
-          upsert: jest
-            .fn()
-            .mockResolvedValue({
-              data: null,
-              error: { message: "Sync failed" },
-            }),
+          upsert: jest.fn().mockResolvedValue({
+            data: null,
+            error: { message: "Sync failed" },
+          }),
         };
         mockSupabaseClient.from.mockReturnValue(errorQuery);
 
@@ -820,12 +816,10 @@ describe("SupabaseService", () => {
         ];
 
         const errorQuery = {
-          upsert: jest
-            .fn()
-            .mockResolvedValue({
-              data: null,
-              error: { message: "Insert failed" },
-            }),
+          upsert: jest.fn().mockResolvedValue({
+            data: null,
+            error: { message: "Insert failed" },
+          }),
         };
         mockSupabaseClient.from.mockReturnValue(errorQuery);
 
