@@ -131,9 +131,9 @@ function Profile({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-purple-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
+        <div className="relative z-10 bg-gradient-to-r from-blue-500 to-purple-600 px-6 py-4 flex items-center justify-between rounded-t-xl flex-shrink-0">
           <h2 className="text-xl font-bold text-white">Account</h2>
           <button
             onClick={onClose}
@@ -155,8 +155,9 @@ function Profile({
           </button>
         </div>
 
-        {/* User Info */}
-        <div className="p-6">
+        {/* User Info - Scrollable area with inset scrollbar */}
+        <div className="flex-1 min-h-0 overflow-hidden px-2">
+          <div className="h-full overflow-y-auto px-4 py-6">
           {/* Avatar and Name */}
           <div className="flex items-center mb-6">
             {user.avatar_url ? (
@@ -356,6 +357,7 @@ function Profile({
               </div>
             </div>
           )}
+          </div>
         </div>
       </div>
     </div>
