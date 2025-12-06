@@ -505,9 +505,9 @@ describe('App', () => {
       renderApp();
 
       await waitFor(() => {
-        // Should show email onboarding screen, not dashboard
-        // Use heading role to find the main title
-        expect(screen.getByRole('heading', { name: /Connect Your Email/i })).toBeInTheDocument();
+        // Should show email onboarding screen (starts at phone type selection step)
+        // The EmailOnboardingScreen always starts at step 1 regardless of prior state
+        expect(screen.getByRole('heading', { name: /Select Your Phone Type/i })).toBeInTheDocument();
       });
     });
 

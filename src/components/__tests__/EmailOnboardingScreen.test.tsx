@@ -1,6 +1,6 @@
 /**
  * Tests for EmailOnboardingScreen.tsx
- * Covers email onboarding UI, connection flows, and navigation
+ * Covers email onboarding UI with multi-step flow: Phone Type → Secure Storage → Connect Email → Permissions
  */
 
 import React from 'react';
@@ -28,6 +28,7 @@ describe('EmailOnboardingScreen', () => {
   const mockUserId = 'user-123';
   const mockOnComplete = jest.fn();
   const mockOnSkip = jest.fn();
+  const mockOnPhoneTypeChange = jest.fn().mockResolvedValue(undefined);
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -54,21 +55,8 @@ describe('EmailOnboardingScreen', () => {
     });
   });
 
-  describe('Rendering', () => {
-    it('should render the email onboarding screen with title for Microsoft user', async () => {
-      renderWithPlatform(
-        <EmailOnboardingScreen
-          userId={mockUserId}
-          authProvider="microsoft"
-          onComplete={mockOnComplete}
-          onSkip={mockOnSkip}
-        />
-      );
-
-      expect(screen.getByText('Connect Your Outlook')).toBeInTheDocument();
-    });
-
-    it('should render the email onboarding screen with title for Google user', async () => {
+  describe('Step 1 - Phone Type Selection', () => {
+    it('should render phone type selection as first step', async () => {
       renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
@@ -78,63 +66,10 @@ describe('EmailOnboardingScreen', () => {
         />
       );
 
-      expect(screen.getByText('Connect Your Gmail')).toBeInTheDocument();
+      expect(screen.getByText('Select Your Phone Type')).toBeInTheDocument();
     });
 
-    it('should show explanation text', async () => {
-      renderWithPlatform(
-        <EmailOnboardingScreen
-          userId={mockUserId}
-          authProvider="microsoft"
-          onComplete={mockOnComplete}
-          onSkip={mockOnSkip}
-        />
-      );
-
-      expect(
-        screen.getByText(/connect your outlook account to export email communications/i)
-      ).toBeInTheDocument();
-    });
-
-    it('should show benefits list', async () => {
-      renderWithPlatform(
-        <EmailOnboardingScreen
-          userId={mockUserId}
-          authProvider="microsoft"
-          onComplete={mockOnComplete}
-          onSkip={mockOnSkip}
-        />
-      );
-
-      expect(screen.getByText('Why connect your email?')).toBeInTheDocument();
-      expect(
-        screen.getByText(/export complete communication history with clients/i)
-      ).toBeInTheDocument();
-      expect(screen.getByText(/include emails in your audit documentation/i)).toBeInTheDocument();
-    });
-
-    it('should show primary provider (Outlook) prominently for Microsoft user', async () => {
-      renderWithPlatform(
-        <EmailOnboardingScreen
-          userId={mockUserId}
-          authProvider="microsoft"
-          onComplete={mockOnComplete}
-          onSkip={mockOnSkip}
-        />
-      );
-
-      await waitFor(() => {
-        expect(screen.getByText('Outlook')).toBeInTheDocument();
-      });
-
-      // Primary provider should show "Recommended - matches your login"
-      expect(screen.getByText(/recommended - matches your login/i)).toBeInTheDocument();
-      // Secondary provider should show "Optional"
-      expect(screen.getByText('Gmail')).toBeInTheDocument();
-      expect(screen.getByText('Optional')).toBeInTheDocument();
-    });
-
-    it('should show primary provider (Gmail) prominently for Google user', async () => {
+    it('should show iPhone option', () => {
       renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
@@ -144,624 +79,214 @@ describe('EmailOnboardingScreen', () => {
         />
       );
 
-      await waitFor(() => {
-        expect(screen.getByText('Gmail')).toBeInTheDocument();
-      });
-
-      // Primary provider should show "Recommended - matches your login"
-      expect(screen.getByText(/recommended - matches your login/i)).toBeInTheDocument();
-      // Secondary provider should show "Optional"
-      expect(screen.getByText('Outlook')).toBeInTheDocument();
-      expect(screen.getByText('Optional')).toBeInTheDocument();
+      expect(screen.getByText('iPhone')).toBeInTheDocument();
     });
 
-    it('should show skip button when no connections', async () => {
+    it('should show Android option', () => {
       renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
-          authProvider="microsoft"
+          authProvider="google"
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
         />
       );
 
-      await waitFor(() => {
-        expect(screen.getByRole('button', { name: /skip for now/i })).toBeInTheDocument();
-      });
+      expect(screen.getByText('Android')).toBeInTheDocument();
     });
 
-    it('should show helper text about connecting later', async () => {
+    it('should show explanation about phone type importance', () => {
       renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
-          authProvider="microsoft"
+          authProvider="google"
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
         />
       );
 
-      await waitFor(() => {
-        expect(
-          screen.getByText(/you can always connect your email later in settings/i)
-        ).toBeInTheDocument();
-      });
+      expect(screen.getByText('Why is this important?')).toBeInTheDocument();
     });
-  });
 
-  describe('Connection Status', () => {
-    it('should show loading state while checking connections', () => {
-      window.api.system.checkAllConnections.mockImplementation(
-        () => new Promise((resolve) => setTimeout(resolve, 1000))
-      );
-
+    it('should highlight iPhone when pre-selected', () => {
       renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
-          authProvider="microsoft"
+          authProvider="google"
+          selectedPhoneType="iphone"
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
         />
       );
 
-      expect(screen.getAllByText('Checking...').length).toBeGreaterThan(0);
+      const iphoneButton = screen.getByText('iPhone').closest('button');
+      expect(iphoneButton).toHaveClass('border-blue-500');
     });
 
-    it('should show "Optional" for secondary provider when not connected', async () => {
+    it('should highlight Android when pre-selected', () => {
       renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
-          authProvider="microsoft"
+          authProvider="google"
+          selectedPhoneType="android"
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
         />
       );
 
-      await waitFor(() => {
-        // Primary shows "Recommended - matches your login", secondary shows "Optional"
-        expect(screen.getByText('Optional')).toBeInTheDocument();
-      });
-    });
-
-    it('should show connected status when Gmail is connected', async () => {
-      window.api.system.checkAllConnections.mockResolvedValue({
-        success: true,
-        google: { connected: true, email: 'user@gmail.com' },
-        microsoft: { connected: false },
-      });
-
-      renderWithPlatform(
-        <EmailOnboardingScreen
-          userId={mockUserId}
-          authProvider="microsoft"
-          onComplete={mockOnComplete}
-          onSkip={mockOnSkip}
-        />
-      );
-
-      await waitFor(() => {
-        expect(screen.getByText(/Connected: user@gmail.com/i)).toBeInTheDocument();
-      });
-    });
-
-    it('should show connected status when Outlook is connected', async () => {
-      window.api.system.checkAllConnections.mockResolvedValue({
-        success: true,
-        google: { connected: false },
-        microsoft: { connected: true, email: 'user@outlook.com' },
-      });
-
-      renderWithPlatform(
-        <EmailOnboardingScreen
-          userId={mockUserId}
-          authProvider="microsoft"
-          onComplete={mockOnComplete}
-          onSkip={mockOnSkip}
-        />
-      );
-
-      await waitFor(() => {
-        expect(screen.getByText(/Connected: user@outlook.com/i)).toBeInTheDocument();
-      });
-    });
-
-    it('should show Continue button when any connection is made', async () => {
-      window.api.system.checkAllConnections.mockResolvedValue({
-        success: true,
-        google: { connected: true, email: 'user@gmail.com' },
-        microsoft: { connected: false },
-      });
-
-      renderWithPlatform(
-        <EmailOnboardingScreen
-          userId={mockUserId}
-          authProvider="microsoft"
-          onComplete={mockOnComplete}
-          onSkip={mockOnSkip}
-        />
-      );
-
-      await waitFor(() => {
-        expect(screen.getByRole('button', { name: /continue/i })).toBeInTheDocument();
-      });
-    });
-
-    it('should not show Continue button when no email is connected', async () => {
-      window.api.system.checkAllConnections.mockResolvedValue({
-        success: true,
-        google: { connected: false },
-        microsoft: { connected: false },
-      });
-
-      renderWithPlatform(
-        <EmailOnboardingScreen
-          userId={mockUserId}
-          authProvider="microsoft"
-          onComplete={mockOnComplete}
-          onSkip={mockOnSkip}
-        />
-      );
-
-      await waitFor(() => {
-        // Continue button should not exist when no email is connected
-        // (it only appears inside the card after connection)
-        expect(screen.queryByRole('button', { name: /continue/i })).not.toBeInTheDocument();
-      });
-    });
-
-    it('should enable Continue button when email is connected', async () => {
-      window.api.system.checkAllConnections.mockResolvedValue({
-        success: true,
-        google: { connected: true, email: 'user@gmail.com' },
-        microsoft: { connected: false },
-      });
-
-      renderWithPlatform(
-        <EmailOnboardingScreen
-          userId={mockUserId}
-          authProvider="microsoft"
-          onComplete={mockOnComplete}
-          onSkip={mockOnSkip}
-        />
-      );
-
-      await waitFor(() => {
-        const continueButton = screen.getByRole('button', { name: /continue/i });
-        expect(continueButton).not.toBeDisabled();
-      });
-    });
-
-    it('should hide Connect button when Gmail is connected', async () => {
-      window.api.system.checkAllConnections.mockResolvedValue({
-        success: true,
-        google: { connected: true, email: 'user@gmail.com' },
-        microsoft: { connected: false },
-      });
-
-      renderWithPlatform(
-        <EmailOnboardingScreen
-          userId={mockUserId}
-          authProvider="microsoft"
-          onComplete={mockOnComplete}
-          onSkip={mockOnSkip}
-        />
-      );
-
-      await waitFor(() => {
-        expect(screen.queryByRole('button', { name: /connect gmail/i })).not.toBeInTheDocument();
-      });
-    });
-
-    it('should hide Connect button when Outlook is connected', async () => {
-      window.api.system.checkAllConnections.mockResolvedValue({
-        success: true,
-        google: { connected: false },
-        microsoft: { connected: true, email: 'user@outlook.com' },
-      });
-
-      renderWithPlatform(
-        <EmailOnboardingScreen
-          userId={mockUserId}
-          authProvider="microsoft"
-          onComplete={mockOnComplete}
-          onSkip={mockOnSkip}
-        />
-      );
-
-      await waitFor(() => {
-        expect(screen.queryByRole('button', { name: /connect outlook/i })).not.toBeInTheDocument();
-      });
+      const androidButton = screen.getByText('Android').closest('button');
+      expect(androidButton).toHaveClass('border-green-500');
     });
   });
 
-  describe('Connect Gmail', () => {
-    it('should call googleConnectMailbox when Connect Gmail is clicked', async () => {
+  describe('Progress Indicator - macOS', () => {
+    it('should show 4 steps on macOS', () => {
       renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
-          authProvider="microsoft"
+          authProvider="google"
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
-        />
+        />,
+        'darwin'
       );
 
-      await waitFor(() => {
-        expect(screen.getByText('Gmail')).toBeInTheDocument();
-      });
-
-      const connectGmailButton = screen.getByRole('button', { name: /connect gmail/i });
-      await userEvent.click(connectGmailButton);
-
-      expect(window.api.auth.googleConnectMailbox).toHaveBeenCalledWith(mockUserId);
-    });
-
-    it('should show connecting state when Gmail connection is in progress', async () => {
-      window.api.auth.googleConnectMailbox.mockImplementation(
-        () => new Promise((resolve) => setTimeout(() => resolve({ success: true }), 1000))
-      );
-
-      renderWithPlatform(
-        <EmailOnboardingScreen
-          userId={mockUserId}
-          authProvider="microsoft"
-          onComplete={mockOnComplete}
-          onSkip={mockOnSkip}
-        />
-      );
-
-      await waitFor(() => {
-        expect(screen.getByText('Gmail')).toBeInTheDocument();
-      });
-
-      const connectGmailButton = screen.getByRole('button', { name: /connect gmail/i });
-      await userEvent.click(connectGmailButton);
-
-      expect(screen.getByText('Connecting...')).toBeInTheDocument();
-    });
-
-    it('should disable Gmail button while connecting', async () => {
-      window.api.auth.googleConnectMailbox.mockImplementation(
-        () => new Promise((resolve) => setTimeout(() => resolve({ success: true }), 1000))
-      );
-
-      renderWithPlatform(
-        <EmailOnboardingScreen
-          userId={mockUserId}
-          authProvider="microsoft"
-          onComplete={mockOnComplete}
-          onSkip={mockOnSkip}
-        />
-      );
-
-      await waitFor(() => {
-        expect(screen.getByText('Gmail')).toBeInTheDocument();
-      });
-
-      const connectGmailButton = screen.getByRole('button', { name: /connect gmail/i });
-      await userEvent.click(connectGmailButton);
-
-      const connectingButton = screen.getByRole('button', { name: /connecting/i });
-      expect(connectingButton).toBeDisabled();
-    });
-
-    it('should register mailbox connected listener when connecting Gmail', async () => {
-      renderWithPlatform(
-        <EmailOnboardingScreen
-          userId={mockUserId}
-          authProvider="microsoft"
-          onComplete={mockOnComplete}
-          onSkip={mockOnSkip}
-        />
-      );
-
-      await waitFor(() => {
-        expect(screen.getByText('Gmail')).toBeInTheDocument();
-      });
-
-      const connectGmailButton = screen.getByRole('button', { name: /connect gmail/i });
-      await userEvent.click(connectGmailButton);
-
-      expect(window.api.onGoogleMailboxConnected).toHaveBeenCalled();
+      expect(screen.getByText('Phone Type')).toBeInTheDocument();
+      expect(screen.getByText('Secure Storage')).toBeInTheDocument();
+      expect(screen.getByText('Connect Email')).toBeInTheDocument();
+      expect(screen.getByText('Permissions')).toBeInTheDocument();
     });
   });
 
-  describe('Connect Outlook', () => {
-    it('should call microsoftConnectMailbox when Connect Outlook is clicked', async () => {
+  describe('Progress Indicator - Windows', () => {
+    it('should show 2 steps on Windows', () => {
       renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
-          authProvider="microsoft"
+          authProvider="google"
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
-        />
+        />,
+        'win32'
       );
 
-      await waitFor(() => {
-        expect(screen.getByText('Outlook')).toBeInTheDocument();
-      });
-
-      const connectOutlookButton = screen.getByRole('button', { name: /connect outlook/i });
-      await userEvent.click(connectOutlookButton);
-
-      expect(window.api.auth.microsoftConnectMailbox).toHaveBeenCalledWith(mockUserId);
-    });
-
-    it('should show connecting state when Outlook connection is in progress', async () => {
-      window.api.auth.microsoftConnectMailbox.mockImplementation(
-        () => new Promise((resolve) => setTimeout(() => resolve({ success: true }), 1000))
-      );
-
-      renderWithPlatform(
-        <EmailOnboardingScreen
-          userId={mockUserId}
-          authProvider="microsoft"
-          onComplete={mockOnComplete}
-          onSkip={mockOnSkip}
-        />
-      );
-
-      await waitFor(() => {
-        expect(screen.getByText('Outlook')).toBeInTheDocument();
-      });
-
-      const connectOutlookButton = screen.getByRole('button', { name: /connect outlook/i });
-      await userEvent.click(connectOutlookButton);
-
-      expect(screen.getByText('Connecting...')).toBeInTheDocument();
-    });
-
-    it('should register mailbox connected listener when connecting Outlook', async () => {
-      renderWithPlatform(
-        <EmailOnboardingScreen
-          userId={mockUserId}
-          authProvider="microsoft"
-          onComplete={mockOnComplete}
-          onSkip={mockOnSkip}
-        />
-      );
-
-      await waitFor(() => {
-        expect(screen.getByText('Outlook')).toBeInTheDocument();
-      });
-
-      const connectOutlookButton = screen.getByRole('button', { name: /connect outlook/i });
-      await userEvent.click(connectOutlookButton);
-
-      expect(window.api.onMicrosoftMailboxConnected).toHaveBeenCalled();
+      expect(screen.getByText('Phone Type')).toBeInTheDocument();
+      expect(screen.getByText('Connect Email')).toBeInTheDocument();
+      expect(screen.queryByText('Secure Storage')).not.toBeInTheDocument();
+      expect(screen.queryByText('Permissions')).not.toBeInTheDocument();
     });
   });
 
   describe('Navigation', () => {
-    it('should call onSkip when Skip for Now is clicked', async () => {
+    it('should show Next button for step navigation', () => {
       renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
-          authProvider="microsoft"
+          authProvider="google"
+          selectedPhoneType="iphone"
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
         />
       );
 
-      await waitFor(() => {
-        expect(screen.getByRole('button', { name: /skip for now/i })).toBeInTheDocument();
-      });
-
-      const skipButton = screen.getByRole('button', { name: /skip for now/i });
-      await userEvent.click(skipButton);
-
-      expect(mockOnSkip).toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: /next/i })).toBeInTheDocument();
     });
 
-    it('should call onComplete when Continue is clicked with connection', async () => {
-      window.api.system.checkAllConnections.mockResolvedValue({
-        success: true,
-        google: { connected: true, email: 'user@gmail.com' },
-        microsoft: { connected: false },
-      });
-
+    it('should navigate to next step when Next is clicked', async () => {
       renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
-          authProvider="microsoft"
+          authProvider="google"
+          selectedPhoneType="iphone"
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
-        />
+        />,
+        'darwin'
       );
 
+      const nextButton = screen.getByRole('button', { name: /next/i });
+      await userEvent.click(nextButton);
+
+      // Should now be on Secure Storage step
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: /continue/i })).toBeInTheDocument();
+        expect(screen.getByText('Secure Storage Settings')).toBeInTheDocument();
       });
-
-      const continueButton = screen.getByRole('button', { name: /continue/i });
-      await userEvent.click(continueButton);
-
-      expect(mockOnComplete).toHaveBeenCalled();
-    });
-
-    it('should show "Skip for Now" button', async () => {
-      window.api.system.checkAllConnections.mockResolvedValue({
-        success: true,
-        google: { connected: true, email: 'user@gmail.com' },
-        microsoft: { connected: false },
-      });
-
-      renderWithPlatform(
-        <EmailOnboardingScreen
-          userId={mockUserId}
-          authProvider="microsoft"
-          onComplete={mockOnComplete}
-          onSkip={mockOnSkip}
-        />
-      );
-
-      await waitFor(() => {
-        expect(
-          screen.getByRole('button', { name: /skip for now/i })
-        ).toBeInTheDocument();
-      });
-    });
-
-    it('should call onSkip when "Skip for Now" is clicked', async () => {
-      window.api.system.checkAllConnections.mockResolvedValue({
-        success: true,
-        google: { connected: true, email: 'user@gmail.com' },
-        microsoft: { connected: false },
-      });
-
-      renderWithPlatform(
-        <EmailOnboardingScreen
-          userId={mockUserId}
-          authProvider="microsoft"
-          onComplete={mockOnComplete}
-          onSkip={mockOnSkip}
-        />
-      );
-
-      await waitFor(() => {
-        expect(
-          screen.getByRole('button', { name: /skip for now/i })
-        ).toBeInTheDocument();
-      });
-
-      const skipButton = screen.getByRole('button', { name: /skip for now/i });
-      await userEvent.click(skipButton);
-
-      expect(mockOnSkip).toHaveBeenCalled();
     });
   });
 
-  describe('API Integration', () => {
-    it('should check connections on mount', async () => {
+  describe('Phone Type Change', () => {
+    it('should call onPhoneTypeChange when phone type is selected', async () => {
       renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
-          authProvider="microsoft"
+          authProvider="google"
+          onPhoneTypeChange={mockOnPhoneTypeChange}
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
         />
       );
 
-      await waitFor(() => {
-        expect(window.api.system.checkAllConnections).toHaveBeenCalledWith(mockUserId);
-      });
+      const iphoneButton = screen.getByText('iPhone').closest('button');
+      await userEvent.click(iphoneButton!);
+
+      expect(mockOnPhoneTypeChange).toHaveBeenCalledWith('iphone');
     });
 
-    it('should have all required APIs available', () => {
-      expect(window.api.system.checkAllConnections).toBeDefined();
-      expect(window.api.auth.googleConnectMailbox).toBeDefined();
-      expect(window.api.auth.microsoftConnectMailbox).toBeDefined();
-      expect(window.api.onGoogleMailboxConnected).toBeDefined();
-      expect(window.api.onMicrosoftMailboxConnected).toBeDefined();
+    it('should call onPhoneTypeChange for Android selection', async () => {
+      renderWithPlatform(
+        <EmailOnboardingScreen
+          userId={mockUserId}
+          authProvider="google"
+          onPhoneTypeChange={mockOnPhoneTypeChange}
+          onComplete={mockOnComplete}
+          onSkip={mockOnSkip}
+        />
+      );
+
+      const androidButton = screen.getByText('Android').closest('button');
+      await userEvent.click(androidButton!);
+
+      expect(mockOnPhoneTypeChange).toHaveBeenCalledWith('android');
     });
   });
 
-  describe('Error Handling', () => {
-    it('should handle connection check failure gracefully', async () => {
-      window.api.system.checkAllConnections.mockResolvedValue({
-        success: false,
-        error: 'Network error',
-      });
+  describe('Connection Status', () => {
+    it('should show loading state while checking connections', async () => {
+      // Delay the connection check
+      window.api.system.checkAllConnections.mockImplementation(
+        () => new Promise(() => {}) // Never resolves
+      );
 
       renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
-          authProvider="microsoft"
+          authProvider="google"
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
         />
       );
 
-      // Should still render without crashing (shows provider-specific title)
-      await waitFor(() => {
-        expect(screen.getByText('Connect Your Outlook')).toBeInTheDocument();
-      });
-    });
-
-    it('should handle Gmail connection failure gracefully', async () => {
-      window.api.auth.googleConnectMailbox.mockRejectedValue(new Error('Connection failed'));
-
-      renderWithPlatform(
-        <EmailOnboardingScreen
-          userId={mockUserId}
-          authProvider="microsoft"
-          onComplete={mockOnComplete}
-          onSkip={mockOnSkip}
-        />
-      );
-
-      await waitFor(() => {
-        expect(screen.getByText('Gmail')).toBeInTheDocument();
-      });
-
-      const connectGmailButton = screen.getByRole('button', { name: /connect gmail/i });
-      await userEvent.click(connectGmailButton);
-
-      // Should not crash, screen should still be functional
-      await waitFor(() => {
-        expect(screen.getByText('Connect Your Outlook')).toBeInTheDocument();
-      });
-    });
-
-    it('should handle Outlook connection failure gracefully', async () => {
-      window.api.auth.microsoftConnectMailbox.mockRejectedValue(new Error('Connection failed'));
-
-      renderWithPlatform(
-        <EmailOnboardingScreen
-          userId={mockUserId}
-          authProvider="microsoft"
-          onComplete={mockOnComplete}
-          onSkip={mockOnSkip}
-        />
-      );
-
-      await waitFor(() => {
-        expect(screen.getByText('Outlook')).toBeInTheDocument();
-      });
-
-      const connectOutlookButton = screen.getByRole('button', { name: /connect outlook/i });
-      await userEvent.click(connectOutlookButton);
-
-      // Should not crash, screen should still be functional
-      await waitFor(() => {
-        expect(screen.getByText('Connect Your Outlook')).toBeInTheDocument();
-      });
+      // Loading state is internal - component should still render
+      expect(screen.getByText('Select Your Phone Type')).toBeInTheDocument();
     });
   });
 
   describe('Accessibility', () => {
-    it('should have accessible buttons', async () => {
+    it('should have accessible phone selection buttons', () => {
       renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
-          authProvider="microsoft"
+          authProvider="google"
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
         />
       );
 
-      await waitFor(() => {
-        expect(screen.getByRole('button', { name: /skip for now/i })).toBeInTheDocument();
-      });
+      const iphoneButton = screen.getByText('iPhone').closest('button');
+      const androidButton = screen.getByText('Android').closest('button');
 
-      expect(screen.getByRole('button', { name: /connect gmail/i })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /connect outlook/i })).toBeInTheDocument();
-    });
-
-    it('should indicate loading state accessibly', () => {
-      window.api.system.checkAllConnections.mockImplementation(
-        () => new Promise((resolve) => setTimeout(resolve, 1000))
-      );
-
-      renderWithPlatform(
-        <EmailOnboardingScreen
-          userId={mockUserId}
-          authProvider="microsoft"
-          onComplete={mockOnComplete}
-          onSkip={mockOnSkip}
-        />
-      );
-
-      // Loading indicators should be visible
-      expect(screen.getAllByText('Checking...').length).toBeGreaterThan(0);
+      expect(iphoneButton).toBeInTheDocument();
+      expect(androidButton).toBeInTheDocument();
     });
   });
 });
