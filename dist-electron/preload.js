@@ -507,6 +507,27 @@ electron_1.contextBridge.exposeInMainWorld('api', {
     },
     /**
      * ============================================
+     * USER PREFERENCES METHODS
+     * ============================================
+     * User-specific preferences stored in local database
+     */
+    user: {
+        /**
+         * Gets user's mobile phone type preference
+         * @param {string} userId - User ID to get phone type for
+         * @returns {Promise<{success: boolean, phoneType: 'iphone' | 'android' | null, error?: string}>} Phone type result
+         */
+        getPhoneType: (userId) => electron_1.ipcRenderer.invoke('user:get-phone-type', userId),
+        /**
+         * Sets user's mobile phone type preference
+         * @param {string} userId - User ID to set phone type for
+         * @param {string} phoneType - Phone type ('iphone' | 'android')
+         * @returns {Promise<{success: boolean, error?: string}>} Set result
+         */
+        setPhoneType: (userId, phoneType) => electron_1.ipcRenderer.invoke('user:set-phone-type', userId, phoneType),
+    },
+    /**
+     * ============================================
      * EVENT LISTENERS
      * ============================================
      * Subscribe to asynchronous events from the main process
@@ -1139,5 +1160,39 @@ electron_1.contextBridge.exposeInMainWorld('electron', {
         const listener = (_, progress) => callback(progress);
         electron_1.ipcRenderer.on('export-progress', listener);
         return () => electron_1.ipcRenderer.removeListener('export-progress', listener);
-    }
+    },
+    /**
+     * ============================================
+     * APPLE DRIVER METHODS (Windows only - Legacy)
+     * ============================================
+     * Detects and installs Apple Mobile Device Support drivers
+     */
+    drivers: {
+        /**
+         * Check if Apple Mobile Device Support drivers are installed
+         * @returns {Promise<{installed: boolean, version?: string, serviceRunning: boolean, error?: string}>}
+         */
+        checkApple: () => electron_1.ipcRenderer.invoke('drivers:check-apple'),
+        /**
+         * Check if bundled Apple drivers are available in the app
+         * @returns {Promise<{hasBundled: boolean}>}
+         */
+        hasBundled: () => electron_1.ipcRenderer.invoke('drivers:has-bundled'),
+        /**
+         * Install Apple Mobile Device Support drivers
+         * IMPORTANT: Only call after user has given consent
+         * @returns {Promise<{success: boolean, cancelled?: boolean, error?: string, rebootRequired?: boolean}>}
+         */
+        installApple: () => electron_1.ipcRenderer.invoke('drivers:install-apple'),
+        /**
+         * Open iTunes in Microsoft Store for manual installation
+         * @returns {Promise<{success: boolean, error?: string}>}
+         */
+        openITunesStore: () => electron_1.ipcRenderer.invoke('drivers:open-itunes-store'),
+        /**
+         * Check if a driver update is available
+         * @returns {Promise<{updateAvailable: boolean, installedVersion?: string, bundledVersion?: string}>}
+         */
+        checkUpdate: () => electron_1.ipcRenderer.invoke('drivers:check-update'),
+    },
 });

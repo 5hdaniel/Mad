@@ -86,16 +86,32 @@ class GmailFetchService {
                 searchQuery += ` before:${beforeDate}`;
             }
             console.log('[GmailFetch] Searching emails with query:', searchQuery);
-            // Search for messages
-            const response = await this.gmail.users.messages.list({
-                userId: 'me',
-                q: searchQuery.trim(),
-                maxResults: maxResults,
-            });
-            const messages = response.data.messages || [];
-            console.log(`[GmailFetch] Found ${messages.length} messages`);
+            const allMessages = [];
+            let nextPageToken = undefined;
+            let pageCount = 0;
+            const maxPages = Math.ceil(maxResults / 100); // Paginate in batches of 100
+            // Paginate through all results
+            do {
+                pageCount++;
+                console.log(`[GmailFetch] Fetching page ${pageCount}...`);
+                const response = await this.gmail.users.messages.list({
+                    userId: 'me',
+                    q: searchQuery.trim(),
+                    maxResults: Math.min(100, maxResults - allMessages.length), // Fetch up to 100 per page
+                    pageToken: nextPageToken,
+                });
+                const messages = response.data.messages || [];
+                console.log(`[GmailFetch] Page ${pageCount}: Found ${messages.length} messages`);
+                allMessages.push(...messages);
+                nextPageToken = response.data.nextPageToken;
+                // Stop if we've reached the requested maxResults or no more pages
+                if (allMessages.length >= maxResults || !nextPageToken) {
+                    break;
+                }
+            } while (nextPageToken);
+            console.log(`[GmailFetch] Total messages found: ${allMessages.length}`);
             // Fetch full message details for each
-            const fullMessages = await Promise.all(messages.map(msg => this.getEmailById(msg.id)));
+            const fullMessages = await Promise.all(allMessages.map(msg => this.getEmailById(msg.id)));
             return fullMessages;
         }
         catch (error) {

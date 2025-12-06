@@ -33,8 +33,10 @@ class TransactionExtractorService {
             ],
         };
         this.patterns = {
-            // Address patterns
-            address: /\b\d+\s+[A-Z][a-z]+\s+(?:Street|St|Avenue|Ave|Road|Rd|Drive|Dr|Lane|Ln|Way|Court|Ct|Boulevard|Blvd|Place|Pl|Circle|Cir)[,\s]+[A-Z][a-z]+[,\s]+[A-Z]{2}\s+\d{5}(?:-\d{4})?\b/gi,
+            // Address patterns - Multiple patterns for flexibility
+            // Pattern 1: Full address with ZIP (most confident)
+            // Format: 123 Main Street, San Francisco, CA 94102
+            address: /\b\d+\s+[A-Za-z\s\-\.]+?\s+(?:Street|St|Avenue|Ave|Road|Rd|Drive|Dr|Lane|Ln|Way|Court|Ct|Boulevard|Blvd|Place|Pl|Circle|Cir|Parkway|Pkwy|Trail|Ter|Crescent|Hill|Freeway|Path|Route|Rte|Square|Turnpike|Vista|Viaduct|Cove|Dale|Ridge|View|Walk|Wood|Drive|Court)[,\s]+[A-Za-z\s]+?[,\s]+[A-Z]{2}[\s,]+\d{5}(?:-\d{4})?\b/gi,
             // Money amounts
             money: /\$\s?(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)/g,
             largeAmount: /\$\s?(\d{1,3}(?:,\d{3})+(?:\.\d{2})?)/g, // For property prices
@@ -279,7 +281,15 @@ class TransactionExtractorService {
      * @private
      */
     _extractAddresses(text) {
-        const matches = text.match(this.patterns.address) || [];
+        // Try primary pattern first (with ZIP)
+        let matches = text.match(this.patterns.address) || [];
+        // If no addresses found, try fallback pattern (without ZIP)
+        if (matches.length === 0) {
+            // Fallback: Address without ZIP code
+            // Format: 123 Main Street, San Francisco, CA
+            const fallbackPattern = /\b\d+\s+[A-Za-z\s\-\.]+?\s+(?:Street|St|Avenue|Ave|Road|Rd|Drive|Dr|Lane|Ln|Way|Court|Ct|Boulevard|Blvd|Place|Pl|Circle|Cir|Parkway|Pkwy|Trail|Ter|Crescent|Hill|Freeway|Path|Route|Rte|Square|Turnpike|Vista|Viaduct|Cove|Dale|Ridge|View|Walk|Wood|Drive|Court)[,\s]+[A-Za-z\s]+?[,\s]+[A-Z]{2}\b/gi;
+            matches = text.match(fallbackPattern) || [];
+        }
         // Remove duplicates and return
         return [...new Set(matches)].map(addr => addr.trim());
     }

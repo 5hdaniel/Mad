@@ -67,10 +67,17 @@ If you're seeing this error:
 // Guard to prevent multiple concurrent initializations
 let isInitializing = false;
 let initializationComplete = false;
+let handlersRegistered = false;
 /**
  * Register all system and permission-related IPC handlers
  */
 function registerSystemHandlers() {
+    // Prevent double registration (can happen during hot-reload or app reactivation)
+    if (handlersRegistered) {
+        logService_1.default.warn('System handlers already registered, skipping duplicate registration', 'SystemHandlers');
+        return;
+    }
+    handlersRegistered = true;
     // ===== SECURE STORAGE (KEYCHAIN) SETUP =====
     /**
      * Get secure storage status without triggering keychain prompt
@@ -526,12 +533,14 @@ function registerSystemHandlers() {
             // Validate inputs (both optional)
             const validatedUserId = userId ? (0, validation_1.validateUserId)(userId) : null;
             const validatedProvider = provider ? (0, validation_1.validateProvider)(provider) : null;
+            // Skip permission checks on Windows (macOS-only features)
+            const isMacOS = os_1.default.platform() === 'darwin';
             const [permissions, connection, contactsLoading] = await Promise.all([
-                permissionService.checkAllPermissions(),
+                isMacOS ? permissionService.checkAllPermissions() : { allGranted: true, permissions: {}, errors: [] },
                 validatedUserId && validatedProvider ? (validatedProvider === 'google'
                     ? connectionStatusService.checkGoogleConnection(validatedUserId)
                     : connectionStatusService.checkMicrosoftConnection(validatedUserId)) : null,
-                permissionService.checkContactsLoading(),
+                isMacOS ? permissionService.checkContactsLoading() : { canLoadContacts: true, contactCount: 0 },
             ]);
             const issues = [];
             // Add permission issues
@@ -664,6 +673,60 @@ function registerSystemHandlers() {
                 success: false,
                 error: errorMessage,
             };
+        }
+    });
+    // ===== USER PHONE TYPE PREFERENCES =====
+    /**
+     * Get user's mobile phone type preference
+     * @param userId - User ID to get phone type for
+     * @returns Phone type ('iphone' | 'android' | null)
+     */
+    electron_1.ipcMain.handle('user:get-phone-type', async (event, userId) => {
+        try {
+            const validatedUserId = (0, validation_1.validateUserId)(userId);
+            // validateUserId throws when required (default), so validatedUserId is never null here
+            const user = await databaseService_1.default.getUserById(validatedUserId);
+            if (!user) {
+                return { success: true, phoneType: null };
+            }
+            return {
+                success: true,
+                phoneType: user.mobile_phone_type
+            };
+        }
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            logService_1.default.error('Failed to get user phone type', 'SystemHandlers', { error: errorMessage });
+            if (error instanceof validation_1.ValidationError) {
+                return { success: false, phoneType: null, error: `Validation error: ${error.message}` };
+            }
+            return { success: false, phoneType: null, error: errorMessage };
+        }
+    });
+    /**
+     * Set user's mobile phone type preference
+     * @param userId - User ID to set phone type for
+     * @param phoneType - Phone type to set ('iphone' | 'android')
+     */
+    electron_1.ipcMain.handle('user:set-phone-type', async (event, userId, phoneType) => {
+        try {
+            const validatedUserId = (0, validation_1.validateUserId)(userId);
+            // Validate phone type
+            if (phoneType !== 'iphone' && phoneType !== 'android') {
+                return { success: false, error: 'Invalid phone type. Must be "iphone" or "android"' };
+            }
+            // validateUserId throws when required (default), so validatedUserId is never null here
+            await databaseService_1.default.updateUser(validatedUserId, { mobile_phone_type: phoneType });
+            logService_1.default.info(`Updated phone type for user ${validatedUserId} to ${phoneType}`, 'SystemHandlers');
+            return { success: true };
+        }
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            logService_1.default.error('Failed to set user phone type', 'SystemHandlers', { error: errorMessage });
+            if (error instanceof validation_1.ValidationError) {
+                return { success: false, error: `Validation error: ${error.message}` };
+            }
+            return { success: false, error: errorMessage };
         }
     });
     /**

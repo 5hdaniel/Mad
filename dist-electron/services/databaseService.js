@@ -295,6 +295,10 @@ class DatabaseService {
                 await logService_1.default.debug('Adding email_onboarding_completed_at column to users_local', 'DatabaseService');
                 this._run(`ALTER TABLE users_local ADD COLUMN email_onboarding_completed_at DATETIME`);
             }
+            if (!userColumns.some(col => col.name === 'mobile_phone_type')) {
+                await logService_1.default.debug('Adding mobile_phone_type column to users_local', 'DatabaseService');
+                this._run(`ALTER TABLE users_local ADD COLUMN mobile_phone_type TEXT`);
+            }
             // Migration 2: Add new transaction columns
             await logService_1.default.debug('Running Migration 2: Transaction columns', 'DatabaseService');
             const transactionColumns = this._all(`PRAGMA table_info(transactions)`);
@@ -656,6 +660,7 @@ class DatabaseService {
             'terms_version_accepted',
             'privacy_policy_version_accepted',
             'email_onboarding_completed_at',
+            'mobile_phone_type',
         ];
         const fields = [];
         const values = [];
