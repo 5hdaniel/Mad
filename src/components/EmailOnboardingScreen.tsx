@@ -53,13 +53,12 @@ const WINDOWS_ANDROID_SETUP_STEPS = [
 function SetupProgressIndicator({
   currentStep,
   navigationStep,
-  isWindows,
+  steps,
 }: {
   currentStep: number;
   navigationStep: number;
-  isWindows: boolean;
+  steps: Array<{ id: number; label: string }>;
 }) {
-  const steps = isWindows ? WINDOWS_SETUP_STEPS : MACOS_SETUP_STEPS;
   return (
     <div className="mb-8">
       {/* Circles and connecting lines */}
@@ -376,7 +375,7 @@ function EmailOnboardingScreen({
         <SetupProgressIndicator
           currentStep={currentStep}
           navigationStep={navigationStep}
-          isWindows={isWindows}
+          steps={steps}
         />
 
         {/* Conditional Content Based on Navigation Step */}
