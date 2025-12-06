@@ -400,12 +400,6 @@ function EmailOnboardingScreen({ userId, authProvider, onComplete, onSkip }: Ema
               >
                 Enable Secure Storage
               </button>
-              <button
-                onClick={handleNextStep}
-                className="w-full px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-900 text-sm font-semibold rounded-lg transition-all"
-              >
-                Skip for Now
-              </button>
             </div>
           </>
         )}
