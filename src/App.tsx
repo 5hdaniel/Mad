@@ -202,7 +202,6 @@ function App() {
                 const driverStatus = await drivers.checkApple();
                 if (!driverStatus.installed || !driverStatus.serviceRunning) {
                   // Drivers not installed or service not running - need setup
-                  console.log('[App] iPhone selected but Apple drivers not ready, showing setup');
                   setNeedsDriverSetup(true);
                   setHasSelectedPhoneType(false); // Don't skip driver setup
                 } else {
@@ -437,6 +436,23 @@ function App() {
         setHasSelectedPhoneType(true);
         // selectedPhoneType is already 'android' from handleSelectAndroid
         // Continue to email onboarding (flow will be handled by useEffect)
+      } else {
+        console.error('[App] Failed to save phone type:', result.error);
+      }
+    } catch (error) {
+      console.error('[App] Error saving phone type:', error);
+    }
+  };
+
+  // Handle phone type change during email onboarding (saves to DB without changing current step)
+  const handlePhoneTypeChange = async (phoneType: 'iphone' | 'android'): Promise<void> => {
+    if (!currentUser?.id) return;
+
+    try {
+      const userApi = window.api.user as { setPhoneType: (userId: string, phoneType: 'iphone' | 'android') => Promise<{ success: boolean; error?: string }> };
+      const result = await userApi.setPhoneType(currentUser.id, phoneType);
+      if (result.success) {
+        setSelectedPhoneType(phoneType);
       } else {
         console.error('[App] Failed to save phone type:', result.error);
       }
@@ -838,6 +854,7 @@ function App() {
           <PhoneTypeSelection
             onSelectIPhone={handleSelectIPhone}
             onSelectAndroid={handleSelectAndroid}
+            selectedType={selectedPhoneType}
           />
         )}
 
@@ -859,6 +876,8 @@ function App() {
           <EmailOnboardingScreen
             userId={currentUser.id}
             authProvider={authProvider}
+            selectedPhoneType={selectedPhoneType}
+            onPhoneTypeChange={handlePhoneTypeChange}
             onComplete={handleEmailOnboardingComplete}
             onSkip={handleEmailOnboardingSkip}
           />

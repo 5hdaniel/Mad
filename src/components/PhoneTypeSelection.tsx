@@ -2,20 +2,18 @@ import React, { useState } from 'react';
 import { usePlatform } from '../contexts/PlatformContext';
 
 // Setup steps for progress indicator - platform specific
-// macOS: Full 5-step flow with Secure Storage and Permissions
+// macOS: 4-step flow (Sign In happens before onboarding)
 const MACOS_SETUP_STEPS = [
-  { id: 1, label: 'Sign In' },
-  { id: 2, label: 'Phone Type' },
-  { id: 3, label: 'Secure Storage' },
-  { id: 4, label: 'Connect Email' },
-  { id: 5, label: 'Permissions' },
+  { id: 1, label: 'Phone Type' },
+  { id: 2, label: 'Secure Storage' },
+  { id: 3, label: 'Connect Email' },
+  { id: 4, label: 'Permissions' },
 ];
 
-// Windows: Simplified 3-step flow (no Secure Storage or Permissions needed)
+// Windows: Simplified 2-step flow (no Secure Storage or Permissions needed)
 const WINDOWS_SETUP_STEPS = [
-  { id: 1, label: 'Sign In' },
-  { id: 2, label: 'Phone Type' },
-  { id: 3, label: 'Connect Email' },
+  { id: 1, label: 'Phone Type' },
+  { id: 2, label: 'Connect Email' },
 ];
 
 /**
@@ -67,6 +65,7 @@ type PhoneType = 'iphone' | 'android' | null;
 interface PhoneTypeSelectionProps {
   onSelectIPhone: () => void;
   onSelectAndroid: () => void;
+  selectedType?: 'iphone' | 'android' | null;
 }
 
 /**
@@ -74,28 +73,25 @@ interface PhoneTypeSelectionProps {
  * Asks users what type of phone they use for their real estate business.
  * This appears right after terms acceptance in the onboarding flow.
  */
-function PhoneTypeSelection({ onSelectIPhone, onSelectAndroid }: PhoneTypeSelectionProps) {
-  const [selectedType, setSelectedType] = useState<PhoneType>(null);
+function PhoneTypeSelection({ onSelectIPhone, onSelectAndroid, selectedType }: PhoneTypeSelectionProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { isWindows } = usePlatform();
 
-  const handleContinue = async () => {
-    if (!selectedType) return;
-
+  const handleSelectIPhone = async () => {
     setIsSubmitting(true);
+    onSelectIPhone();
+  };
 
-    if (selectedType === 'iphone') {
-      onSelectIPhone();
-    } else {
-      onSelectAndroid();
-    }
+  const handleSelectAndroid = async () => {
+    setIsSubmitting(true);
+    onSelectAndroid();
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center p-4">
       <div className="max-w-xl w-full">
         {/* Progress Indicator */}
-        <SetupProgressIndicator currentStep={2} isWindows={isWindows} />
+        <SetupProgressIndicator currentStep={1} isWindows={isWindows} />
 
         {/* Main Card */}
         <div className="bg-white rounded-2xl shadow-xl p-8">
@@ -118,11 +114,12 @@ function PhoneTypeSelection({ onSelectIPhone, onSelectAndroid }: PhoneTypeSelect
           <div className="grid grid-cols-2 gap-4 mb-8">
             {/* iPhone Option */}
             <button
-              onClick={() => setSelectedType('iphone')}
-              className={`relative p-6 rounded-xl border-2 transition-all duration-200 text-left ${
+              onClick={handleSelectIPhone}
+              disabled={isSubmitting}
+              className={`relative p-6 rounded-xl border-2 transition-all duration-200 text-left disabled:opacity-50 disabled:cursor-not-allowed ${
                 selectedType === 'iphone'
                   ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200'
-                  : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                  : 'border-gray-200 hover:border-blue-400 hover:bg-blue-50'
               }`}
             >
               {/* Checkmark for selected */}
@@ -151,11 +148,12 @@ function PhoneTypeSelection({ onSelectIPhone, onSelectAndroid }: PhoneTypeSelect
 
             {/* Android Option */}
             <button
-              onClick={() => setSelectedType('android')}
-              className={`relative p-6 rounded-xl border-2 transition-all duration-200 text-left ${
+              onClick={handleSelectAndroid}
+              disabled={isSubmitting}
+              className={`relative p-6 rounded-xl border-2 transition-all duration-200 text-left disabled:opacity-50 disabled:cursor-not-allowed ${
                 selectedType === 'android'
                   ? 'border-green-500 bg-green-50 ring-2 ring-green-200'
-                  : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                  : 'border-gray-200 hover:border-green-400 hover:bg-green-50'
               }`}
             >
               {/* Checkmark for selected */}
@@ -184,7 +182,7 @@ function PhoneTypeSelection({ onSelectIPhone, onSelectAndroid }: PhoneTypeSelect
           </div>
 
           {/* Info Box */}
-          <div className="bg-gray-50 rounded-lg p-4 mb-6">
+          <div className="bg-gray-50 rounded-lg p-4">
             <div className="flex items-start gap-3">
               <svg className="w-5 h-5 text-gray-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -194,26 +192,6 @@ function PhoneTypeSelection({ onSelectIPhone, onSelectAndroid }: PhoneTypeSelect
               </p>
             </div>
           </div>
-
-          {/* Continue Button */}
-          <button
-            onClick={handleContinue}
-            disabled={!selectedType || isSubmitting}
-            className={`w-full py-3 px-4 rounded-lg font-semibold transition-all ${
-              selectedType && !isSubmitting
-                ? 'bg-blue-500 text-white hover:bg-blue-600 shadow-md hover:shadow-lg'
-                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-            }`}
-          >
-            {isSubmitting ? (
-              <span className="flex items-center justify-center gap-2">
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                Loading...
-              </span>
-            ) : (
-              'Continue'
-            )}
-          </button>
         </div>
       </div>
     </div>
