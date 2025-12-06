@@ -22,6 +22,7 @@ interface FetchProgress {
   total: number;
   estimatedTotal?: number;
   percentage: number;
+  hasEstimate?: boolean;
 }
 
 interface ProgressUpdate {
@@ -282,9 +283,13 @@ class TransactionService {
                 if (this.scanCancelled) {
                   throw new Error("Scan cancelled by user");
                 }
+                // Only show count details if we have a real estimate
+                const message = fetchProgress.hasEstimate
+                  ? `${providerPrefix}Fetching emails... ${fetchProgress.fetched} of ${fetchProgress.total} (${fetchProgress.percentage}%)`
+                  : `${providerPrefix}Fetching emails... ${fetchProgress.fetched} found`;
                 onProgress({
                   step: "fetching",
-                  message: `${providerPrefix}Fetching emails... ${fetchProgress.fetched} of ${fetchProgress.total} (${fetchProgress.percentage}%)`,
+                  message,
                   fetchProgress,
                 });
               }

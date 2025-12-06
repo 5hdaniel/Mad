@@ -173,7 +173,8 @@ function Transactions({ userId, provider, onClose }: TransactionsProps) {
   const stopScan = async () => {
     try {
       await window.api.transactions.cancelScan(userId);
-      setScanProgress({ step: "cancelled", message: "Scan stopped" });
+      // Clear progress immediately - no need to show "Scan stopped" message
+      setScanProgress(null);
     } catch (err) {
       console.error("Failed to stop scan:", err);
     }

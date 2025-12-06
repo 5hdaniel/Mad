@@ -45,6 +45,7 @@ interface FetchProgress {
   total: number;
   estimatedTotal?: number;
   percentage: number;
+  hasEstimate: boolean;
 }
 
 /**
@@ -168,15 +169,6 @@ class GmailFetchService {
       let pageCount = 0;
       let estimatedTotal = 0;
 
-      // Report initial progress
-      if (onProgress) {
-        onProgress({
-          fetched: 0,
-          total: maxResults,
-          percentage: 0,
-        });
-      }
-
       // Paginate through all results
       do {
         pageCount++;
@@ -209,22 +201,15 @@ class GmailFetchService {
 
         // Report progress
         if (onProgress) {
-          const targetTotal = Math.min(
-            estimatedTotal || maxResults,
-            maxResults,
-          );
-          const percentage =
-            targetTotal > 0
-              ? Math.min(
-                  100,
-                  Math.round((allMessages.length / targetTotal) * 100),
-                )
-              : 0;
+          // Gmail's resultSizeEstimate is often very inaccurate, so during the
+          // message list scan phase, never show "X of Y" format - just show count.
+          // The real total will be known after scanning completes (Phase 2).
           onProgress({
             fetched: allMessages.length,
-            total: targetTotal,
+            total: allMessages.length,
             estimatedTotal,
-            percentage,
+            percentage: 0,
+            hasEstimate: false, // Don't trust Gmail's estimate during scan
           });
         }
 
@@ -263,6 +248,7 @@ class GmailFetchService {
             total: allMessages.length,
             estimatedTotal,
             percentage,
+            hasEstimate: true, // At this point we have the actual count
           });
         }
       }

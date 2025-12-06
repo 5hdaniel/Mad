@@ -58,6 +58,7 @@ interface FetchProgress {
   total: number;
   estimatedTotal?: number;
   percentage: number;
+  hasEstimate: boolean;
 }
 
 /**
@@ -290,22 +291,15 @@ class OutlookFetchService {
         );
       }
 
-      const targetTotal = Math.min(estimatedTotal || maxResults, maxResults);
+      const hasEstimate = estimatedTotal > 0;
+      const targetTotal = hasEstimate
+        ? Math.min(estimatedTotal, maxResults)
+        : maxResults;
 
       const allMessages: GraphMessage[] = [];
       let skip = 0;
       let pageCount = 0;
       const pageSize = 100; // Fetch 100 per page
-
-      // Report initial progress
-      if (onProgress) {
-        onProgress({
-          fetched: 0,
-          total: targetTotal,
-          estimatedTotal,
-          percentage: 0,
-        });
-      }
 
       // Paginate through all results
       do {
@@ -338,15 +332,16 @@ class OutlookFetchService {
         // Report progress
         if (onProgress) {
           const fetched = allMessages.length;
-          const percentage =
-            targetTotal > 0
-              ? Math.min(100, Math.round((fetched / targetTotal) * 100))
-              : 0;
+          const currentTotal = hasEstimate ? targetTotal : fetched;
+          const percentage = hasEstimate
+            ? Math.min(100, Math.round((fetched / targetTotal) * 100))
+            : 0;
           onProgress({
             fetched,
-            total: targetTotal,
+            total: currentTotal,
             estimatedTotal,
             percentage,
+            hasEstimate,
           });
         }
 
