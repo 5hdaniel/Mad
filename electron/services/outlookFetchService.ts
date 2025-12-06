@@ -184,20 +184,42 @@ class OutlookFetchService {
 
       const filterString = filters.length > 0 ? `$filter=${filters.join(' and ')}` : '';
       const selectFields = '$select=id,subject,from,toRecipients,ccRecipients,bccRecipients,receivedDateTime,sentDateTime,hasAttachments,body,bodyPreview,conversationId';
-      const top = `$top=${maxResults}`;
-
-      const queryParams = [selectFields, top, filterString].filter(Boolean).join('&');
 
       console.log('[OutlookFetch] Searching emails');
 
-      // Fetch messages
-      const data = await this._graphRequest<GraphApiResponse<GraphMessage>>(`/me/messages?${queryParams}`);
-      const messages = data.value || [];
+      const allMessages: GraphMessage[] = [];
+      let skip = 0;
+      let pageCount = 0;
+      const pageSize = 100; // Fetch 100 per page
 
-      console.log(`[OutlookFetch] Found ${messages.length} messages`);
+      // Paginate through all results
+      do {
+        pageCount++;
+        const top = `$top=${pageSize}`;
+        const skipParam = skip > 0 ? `$skip=${skip}` : '';
+
+        const queryParams = [selectFields, top, skipParam, filterString].filter(Boolean).join('&');
+
+        console.log(`[OutlookFetch] Fetching page ${pageCount} (skip=${skip})...`);
+
+        const data = await this._graphRequest<GraphApiResponse<GraphMessage>>(`/me/messages?${queryParams}`);
+        const messages = data.value || [];
+
+        console.log(`[OutlookFetch] Page ${pageCount}: Found ${messages.length} messages`);
+
+        allMessages.push(...messages);
+        skip += pageSize;
+
+        // Stop if we got fewer results than a full page or reached maxResults
+        if (messages.length < pageSize || allMessages.length >= maxResults) {
+          break;
+        }
+      } while (allMessages.length < maxResults);
+
+      console.log(`[OutlookFetch] Total messages found: ${allMessages.length}`);
 
       // Parse messages
-      return messages.map(msg => this._parseMessage(msg));
+      return allMessages.slice(0, maxResults).map(msg => this._parseMessage(msg));
     } catch (error) {
       console.error('[OutlookFetch] Search emails failed:', error);
       throw error;
