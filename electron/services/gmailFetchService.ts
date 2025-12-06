@@ -201,22 +201,15 @@ class GmailFetchService {
 
         // Report progress
         if (onProgress) {
-          const hasEstimate = estimatedTotal > 0;
-          const targetTotal = hasEstimate
-            ? Math.min(estimatedTotal, maxResults)
-            : allMessages.length;
-          const percentage = hasEstimate
-            ? Math.min(
-                100,
-                Math.round((allMessages.length / targetTotal) * 100),
-              )
-            : 0;
+          // Gmail's resultSizeEstimate is often very inaccurate, so during the
+          // message list scan phase, never show "X of Y" format - just show count.
+          // The real total will be known after scanning completes (Phase 2).
           onProgress({
             fetched: allMessages.length,
-            total: targetTotal,
+            total: allMessages.length,
             estimatedTotal,
-            percentage,
-            hasEstimate,
+            percentage: 0,
+            hasEstimate: false, // Don't trust Gmail's estimate during scan
           });
         }
 
