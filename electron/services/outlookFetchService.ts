@@ -58,6 +58,7 @@ interface FetchProgress {
   total: number;
   estimatedTotal?: number;
   percentage: number;
+  hasEstimate: boolean;
 }
 
 /**

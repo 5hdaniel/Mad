@@ -45,6 +45,7 @@ interface FetchProgress {
   total: number;
   estimatedTotal?: number;
   percentage: number;
+  hasEstimate: boolean;
 }
 
 /**
@@ -254,6 +255,7 @@ class GmailFetchService {
             total: allMessages.length,
             estimatedTotal,
             percentage,
+            hasEstimate: true, // At this point we have the actual count
           });
         }
       }
