@@ -45,6 +45,16 @@ describe("Settings", () => {
     window.api.onMicrosoftMailboxDisconnected.mockReturnValue(jest.fn());
   });
 
+  // Helper to get the export format combobox (has PDF option)
+  const getExportFormatSelect = () => {
+    const selects = screen.getAllByRole("combobox");
+    return selects.find((select) =>
+      Array.from(select.querySelectorAll("option")).some(
+        (opt) => opt.value === "pdf"
+      )
+    ) as HTMLSelectElement;
+  };
+
   describe("Rendering", () => {
     it("should render settings modal with title", async () => {
       render(<Settings userId={mockUserId} onClose={mockOnClose} />);
@@ -248,7 +258,7 @@ describe("Settings", () => {
         expect(screen.getByText("Default Format")).toBeInTheDocument();
       });
 
-      const select = screen.getByRole("combobox");
+      const select = getExportFormatSelect();
       expect(select).toBeInTheDocument();
     });
 
@@ -256,7 +266,7 @@ describe("Settings", () => {
       render(<Settings userId={mockUserId} onClose={mockOnClose} />);
 
       await waitFor(() => {
-        const select = screen.getByRole("combobox");
+        const select = getExportFormatSelect();
         expect(select).toBeInTheDocument();
       });
 
@@ -279,7 +289,7 @@ describe("Settings", () => {
       render(<Settings userId={mockUserId} onClose={mockOnClose} />);
 
       await waitFor(() => {
-        const select = screen.getByRole("combobox");
+        const select = getExportFormatSelect();
         expect(select).toHaveValue("excel");
       });
     });
@@ -288,10 +298,10 @@ describe("Settings", () => {
       render(<Settings userId={mockUserId} onClose={mockOnClose} />);
 
       await waitFor(() => {
-        expect(screen.getByRole("combobox")).toBeInTheDocument();
+        expect(getExportFormatSelect()).toBeInTheDocument();
       });
 
-      const select = screen.getByRole("combobox");
+      const select = getExportFormatSelect();
       await userEvent.selectOptions(select, "csv");
 
       expect(window.api.preferences.update).toHaveBeenCalledWith(mockUserId, {
@@ -306,7 +316,7 @@ describe("Settings", () => {
 
       render(<Settings userId={mockUserId} onClose={mockOnClose} />);
 
-      const select = screen.getByRole("combobox");
+      const select = getExportFormatSelect();
       expect(select).toBeDisabled();
     });
   });
@@ -453,7 +463,7 @@ describe("Settings", () => {
 
       // Should still render with default values
       await waitFor(() => {
-        const select = screen.getByRole("combobox");
+        const select = getExportFormatSelect();
         expect(select).toHaveValue("pdf"); // Default value
       });
     });
@@ -467,10 +477,10 @@ describe("Settings", () => {
       render(<Settings userId={mockUserId} onClose={mockOnClose} />);
 
       await waitFor(() => {
-        expect(screen.getByRole("combobox")).toBeInTheDocument();
+        expect(getExportFormatSelect()).toBeInTheDocument();
       });
 
-      const select = screen.getByRole("combobox");
+      const select = getExportFormatSelect();
       await userEvent.selectOptions(select, "json");
 
       // Should not crash, preference update fails silently
@@ -483,11 +493,11 @@ describe("Settings", () => {
       render(<Settings userId={mockUserId} onClose={mockOnClose} />);
 
       await waitFor(() => {
-        expect(screen.getByRole("combobox")).toBeInTheDocument();
+        expect(getExportFormatSelect()).toBeInTheDocument();
       });
 
       // Export format select should be accessible
-      const select = screen.getByRole("combobox");
+      const select = getExportFormatSelect();
       expect(select).toBeInTheDocument();
     });
 
