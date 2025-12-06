@@ -1,8 +1,8 @@
-import { promises as fs } from 'fs';
-import path from 'path';
-import { app } from 'electron';
-import type { User, OAuthProvider, Subscription } from '../types/models';
-import logService from './logService';
+import { promises as fs } from "fs";
+import path from "path";
+import { app } from "electron";
+import type { User, OAuthProvider, Subscription } from "../types/models";
+import logService from "./logService";
 
 // ============================================
 // TYPES & INTERFACES
@@ -32,7 +32,7 @@ class SessionService {
 
   private getSessionFilePath(): string {
     if (!this.sessionFilePath) {
-      this.sessionFilePath = path.join(app.getPath('userData'), 'session.json');
+      this.sessionFilePath = path.join(app.getPath("userData"), "session.json");
     }
     return this.sessionFilePath;
   }
@@ -47,17 +47,19 @@ class SessionService {
       const data: SessionData = {
         ...sessionData,
         createdAt: sessionData.createdAt || now,
-        savedAt: now
+        savedAt: now,
       };
-      await fs.writeFile(this.getSessionFilePath(), JSON.stringify(data, null, 2), 'utf8');
-      await logService.info('Session saved successfully', 'SessionService');
+      await fs.writeFile(
+        this.getSessionFilePath(),
+        JSON.stringify(data, null, 2),
+        "utf8",
+      );
+      await logService.info("Session saved successfully", "SessionService");
       return true;
     } catch (error) {
-      await logService.error(
-        'Error saving session',
-        'SessionService',
-        { error: error instanceof Error ? error.message : 'Unknown error' }
-      );
+      await logService.error("Error saving session", "SessionService", {
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
       return false;
     }
   }
@@ -68,28 +70,26 @@ class SessionService {
    */
   async loadSession(): Promise<SessionData | null> {
     try {
-      const data = await fs.readFile(this.getSessionFilePath(), 'utf8');
+      const data = await fs.readFile(this.getSessionFilePath(), "utf8");
       const session: SessionData = JSON.parse(data);
 
       // Check if session is expired (absolute timeout)
       if (session.expiresAt && Date.now() > session.expiresAt) {
-        await logService.info('Session expired, clearing...', 'SessionService');
+        await logService.info("Session expired, clearing...", "SessionService");
         await this.clearSession();
         return null;
       }
 
-      await logService.info('Session loaded successfully', 'SessionService');
+      await logService.info("Session loaded successfully", "SessionService");
       return session;
     } catch (error: any) {
-      if (error.code === 'ENOENT') {
-        await logService.info('No existing session found', 'SessionService');
+      if (error.code === "ENOENT") {
+        await logService.info("No existing session found", "SessionService");
         return null;
       }
-      await logService.error(
-        'Error loading session',
-        'SessionService',
-        { error: error instanceof Error ? error.message : 'Unknown error' }
-      );
+      await logService.error("Error loading session", "SessionService", {
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
       return null;
     }
   }
@@ -100,18 +100,16 @@ class SessionService {
   async clearSession(): Promise<boolean> {
     try {
       await fs.unlink(this.getSessionFilePath());
-      await logService.info('Session cleared successfully', 'SessionService');
+      await logService.info("Session cleared successfully", "SessionService");
       return true;
     } catch (error: any) {
-      if (error.code === 'ENOENT') {
+      if (error.code === "ENOENT") {
         // File doesn't exist, that's fine
         return true;
       }
-      await logService.error(
-        'Error clearing session',
-        'SessionService',
-        { error: error instanceof Error ? error.message : 'Unknown error' }
-      );
+      await logService.error("Error clearing session", "SessionService", {
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
       return false;
     }
   }
@@ -132,24 +130,22 @@ class SessionService {
     try {
       const currentSession = await this.loadSession();
       if (!currentSession) {
-        await logService.error('No session to update', 'SessionService');
+        await logService.error("No session to update", "SessionService");
         return false;
       }
 
       const updatedSession: SessionData = {
         ...currentSession,
         ...updates,
-        savedAt: Date.now()
+        savedAt: Date.now(),
       };
 
       await this.saveSession(updatedSession);
       return true;
     } catch (error) {
-      await logService.error(
-        'Error updating session',
-        'SessionService',
-        { error: error instanceof Error ? error.message : 'Unknown error' }
-      );
+      await logService.error("Error updating session", "SessionService", {
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
       return false;
     }
   }

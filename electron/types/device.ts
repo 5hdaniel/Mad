@@ -26,7 +26,7 @@ export interface iOSDevice {
  */
 export interface DeviceEvent {
   /** Type of device event */
-  type: 'connected' | 'disconnected';
+  type: "connected" | "disconnected";
   /** The device that triggered the event */
   device: iOSDevice;
 }

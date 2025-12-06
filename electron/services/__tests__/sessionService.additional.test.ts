@@ -3,11 +3,11 @@
  * Tests for edge cases and branch coverage
  */
 
-import sessionService from '../sessionService';
-import { promises as fs } from 'fs';
+import sessionService from "../sessionService";
+import { promises as fs } from "fs";
 
 // Mock fs module
-jest.mock('fs', () => ({
+jest.mock("fs", () => ({
   promises: {
     writeFile: jest.fn(),
     readFile: jest.fn(),
@@ -16,7 +16,7 @@ jest.mock('fs', () => ({
 }));
 
 // Mock logService
-jest.mock('../logService', () => ({
+jest.mock("../logService", () => ({
   info: jest.fn(),
   error: jest.fn(),
   warn: jest.fn(),
@@ -24,15 +24,15 @@ jest.mock('../logService', () => ({
 
 const mockFs = fs as jest.Mocked<typeof fs>;
 
-describe('SessionService - Additional Tests', () => {
+describe("SessionService - Additional Tests", () => {
   const mockSession = {
     user: {
-      id: 'user-123',
-      email: 'test@example.com',
-      name: 'Test User',
+      id: "user-123",
+      email: "test@example.com",
+      name: "Test User",
     },
-    sessionToken: 'token-abc',
-    provider: 'google' as const,
+    sessionToken: "token-abc",
+    provider: "google" as const,
     expiresAt: Date.now() + 86400000, // 24 hours from now
     createdAt: Date.now(),
   };
@@ -41,8 +41,8 @@ describe('SessionService - Additional Tests', () => {
     jest.clearAllMocks();
   });
 
-  describe('saveSession', () => {
-    it('should save session successfully', async () => {
+  describe("saveSession", () => {
+    it("should save session successfully", async () => {
       mockFs.writeFile.mockResolvedValue(undefined);
 
       const result = await sessionService.saveSession(mockSession);
@@ -51,29 +51,32 @@ describe('SessionService - Additional Tests', () => {
       expect(mockFs.writeFile).toHaveBeenCalled();
     });
 
-    it('should return false on write error', async () => {
-      mockFs.writeFile.mockRejectedValue(new Error('Disk full'));
+    it("should return false on write error", async () => {
+      mockFs.writeFile.mockRejectedValue(new Error("Disk full"));
 
       const result = await sessionService.saveSession(mockSession);
 
       expect(result).toBe(false);
     });
 
-    it('should set createdAt if not provided', async () => {
+    it("should set createdAt if not provided", async () => {
       mockFs.writeFile.mockResolvedValue(undefined);
 
-      const sessionWithoutCreatedAt = { ...mockSession, createdAt: undefined as any };
+      const sessionWithoutCreatedAt = {
+        ...mockSession,
+        createdAt: undefined as any,
+      };
       await sessionService.saveSession(sessionWithoutCreatedAt);
 
       const writeCall = mockFs.writeFile.mock.calls[0];
       const savedData = JSON.parse(writeCall[1] as string);
       expect(savedData.createdAt).toBeDefined();
-      expect(typeof savedData.createdAt).toBe('number');
+      expect(typeof savedData.createdAt).toBe("number");
     });
   });
 
-  describe('loadSession', () => {
-    it('should load valid session', async () => {
+  describe("loadSession", () => {
+    it("should load valid session", async () => {
       mockFs.readFile.mockResolvedValue(JSON.stringify(mockSession));
 
       const result = await sessionService.loadSession();
@@ -81,7 +84,7 @@ describe('SessionService - Additional Tests', () => {
       expect(result).toEqual(mockSession);
     });
 
-    it('should return null for expired session', async () => {
+    it("should return null for expired session", async () => {
       const expiredSession = {
         ...mockSession,
         expiresAt: Date.now() - 1000, // Expired 1 second ago
@@ -95,9 +98,9 @@ describe('SessionService - Additional Tests', () => {
       expect(mockFs.unlink).toHaveBeenCalled(); // Should clear expired session
     });
 
-    it('should return null when no session file exists', async () => {
-      const error: NodeJS.ErrnoException = new Error('File not found');
-      error.code = 'ENOENT';
+    it("should return null when no session file exists", async () => {
+      const error: NodeJS.ErrnoException = new Error("File not found");
+      error.code = "ENOENT";
       mockFs.readFile.mockRejectedValue(error);
 
       const result = await sessionService.loadSession();
@@ -105,15 +108,15 @@ describe('SessionService - Additional Tests', () => {
       expect(result).toBeNull();
     });
 
-    it('should return null on other read errors', async () => {
-      mockFs.readFile.mockRejectedValue(new Error('Permission denied'));
+    it("should return null on other read errors", async () => {
+      mockFs.readFile.mockRejectedValue(new Error("Permission denied"));
 
       const result = await sessionService.loadSession();
 
       expect(result).toBeNull();
     });
 
-    it('should handle session without expiresAt', async () => {
+    it("should handle session without expiresAt", async () => {
       const sessionNoExpiry = { ...mockSession, expiresAt: undefined };
       mockFs.readFile.mockResolvedValue(JSON.stringify(sessionNoExpiry));
 
@@ -123,8 +126,8 @@ describe('SessionService - Additional Tests', () => {
     });
   });
 
-  describe('clearSession', () => {
-    it('should clear session successfully', async () => {
+  describe("clearSession", () => {
+    it("should clear session successfully", async () => {
       mockFs.unlink.mockResolvedValue(undefined);
 
       const result = await sessionService.clearSession();
@@ -132,9 +135,9 @@ describe('SessionService - Additional Tests', () => {
       expect(result).toBe(true);
     });
 
-    it('should return true when file does not exist', async () => {
-      const error: NodeJS.ErrnoException = new Error('File not found');
-      error.code = 'ENOENT';
+    it("should return true when file does not exist", async () => {
+      const error: NodeJS.ErrnoException = new Error("File not found");
+      error.code = "ENOENT";
       mockFs.unlink.mockRejectedValue(error);
 
       const result = await sessionService.clearSession();
@@ -142,8 +145,8 @@ describe('SessionService - Additional Tests', () => {
       expect(result).toBe(true);
     });
 
-    it('should return false on other delete errors', async () => {
-      mockFs.unlink.mockRejectedValue(new Error('Permission denied'));
+    it("should return false on other delete errors", async () => {
+      mockFs.unlink.mockRejectedValue(new Error("Permission denied"));
 
       const result = await sessionService.clearSession();
 
@@ -151,8 +154,8 @@ describe('SessionService - Additional Tests', () => {
     });
   });
 
-  describe('hasValidSession', () => {
-    it('should return true when valid session exists', async () => {
+  describe("hasValidSession", () => {
+    it("should return true when valid session exists", async () => {
       mockFs.readFile.mockResolvedValue(JSON.stringify(mockSession));
 
       const result = await sessionService.hasValidSession();
@@ -160,9 +163,9 @@ describe('SessionService - Additional Tests', () => {
       expect(result).toBe(true);
     });
 
-    it('should return false when no session exists', async () => {
-      const error: NodeJS.ErrnoException = new Error('File not found');
-      error.code = 'ENOENT';
+    it("should return false when no session exists", async () => {
+      const error: NodeJS.ErrnoException = new Error("File not found");
+      error.code = "ENOENT";
       mockFs.readFile.mockRejectedValue(error);
 
       const result = await sessionService.hasValidSession();
@@ -171,39 +174,39 @@ describe('SessionService - Additional Tests', () => {
     });
   });
 
-  describe('updateSession', () => {
-    it('should update existing session', async () => {
+  describe("updateSession", () => {
+    it("should update existing session", async () => {
       mockFs.readFile.mockResolvedValue(JSON.stringify(mockSession));
       mockFs.writeFile.mockResolvedValue(undefined);
 
       const result = await sessionService.updateSession({
-        sessionToken: 'new-token',
+        sessionToken: "new-token",
       });
 
       expect(result).toBe(true);
       const writeCall = mockFs.writeFile.mock.calls[0];
       const savedData = JSON.parse(writeCall[1] as string);
-      expect(savedData.sessionToken).toBe('new-token');
+      expect(savedData.sessionToken).toBe("new-token");
     });
 
-    it('should return false when no session to update', async () => {
-      const error: NodeJS.ErrnoException = new Error('File not found');
-      error.code = 'ENOENT';
+    it("should return false when no session to update", async () => {
+      const error: NodeJS.ErrnoException = new Error("File not found");
+      error.code = "ENOENT";
       mockFs.readFile.mockRejectedValue(error);
 
       const result = await sessionService.updateSession({
-        sessionToken: 'new-token',
+        sessionToken: "new-token",
       });
 
       expect(result).toBe(false);
     });
 
-    it('should call saveSession when updating', async () => {
+    it("should call saveSession when updating", async () => {
       mockFs.readFile.mockResolvedValue(JSON.stringify(mockSession));
       mockFs.writeFile.mockResolvedValue(undefined);
 
       const result = await sessionService.updateSession({
-        sessionToken: 'new-token',
+        sessionToken: "new-token",
       });
 
       expect(result).toBe(true);
@@ -211,8 +214,8 @@ describe('SessionService - Additional Tests', () => {
     });
   });
 
-  describe('getSessionExpirationMs', () => {
-    it('should return 24 hours in milliseconds', () => {
+  describe("getSessionExpirationMs", () => {
+    it("should return 24 hours in milliseconds", () => {
       const result = sessionService.getSessionExpirationMs();
 
       expect(result).toBe(24 * 60 * 60 * 1000);

@@ -1,7 +1,11 @@
-import React, { useEffect } from 'react';
-import Joyride from 'react-joyride';
-import { useTour } from '../hooks/useTour';
-import { getDashboardTourSteps, JOYRIDE_STYLES, JOYRIDE_LOCALE } from '../config/tourSteps';
+import React, { useEffect } from "react";
+import Joyride from "react-joyride";
+import { useTour } from "../hooks/useTour";
+import {
+  getDashboardTourSteps,
+  JOYRIDE_STYLES,
+  JOYRIDE_LOCALE,
+} from "../config/tourSteps";
 
 interface DashboardActionProps {
   onAuditNew: () => void;
@@ -18,9 +22,20 @@ interface DashboardActionProps {
  * Main landing screen after login
  * Provides three primary actions: Start New Audit, Browse Transactions, and Manage Contacts
  */
-function Dashboard({ onAuditNew, onViewTransactions, onManageContacts, onTourStateChange, showSetupPrompt, onContinueSetup, onDismissSetupPrompt }: DashboardActionProps) {
+function Dashboard({
+  onAuditNew,
+  onViewTransactions,
+  onManageContacts,
+  onTourStateChange,
+  showSetupPrompt,
+  onContinueSetup,
+  onDismissSetupPrompt,
+}: DashboardActionProps) {
   // Initialize the onboarding tour for first-time users
-  const { runTour, handleJoyrideCallback } = useTour(true, 'hasSeenDashboardTour');
+  const { runTour, handleJoyrideCallback } = useTour(
+    true,
+    "hasSeenDashboardTour",
+  );
 
   // Notify parent component when tour state changes
   useEffect(() => {
@@ -50,13 +65,27 @@ function Dashboard({ onAuditNew, onViewTransactions, onManageContacts, onTourSta
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center">
-                  <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  <svg
+                    className="w-5 h-5 text-amber-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                    />
                   </svg>
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold text-amber-900">Complete your account setup</h3>
-                  <p className="text-xs text-amber-700">Connect your email to export communications with your audits</p>
+                  <h3 className="text-sm font-semibold text-amber-900">
+                    Complete your account setup
+                  </h3>
+                  <p className="text-xs text-amber-700">
+                    Connect your email to export communications with your audits
+                  </p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -72,8 +101,18 @@ function Dashboard({ onAuditNew, onViewTransactions, onManageContacts, onTourSta
                     className="p-2 text-amber-600 hover:text-amber-800 hover:bg-amber-100 rounded-lg transition-colors"
                     title="Dismiss"
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M6 18L18 6M6 6l12 12"
+                      />
                     </svg>
                   </button>
                 )}
@@ -102,8 +141,18 @@ function Dashboard({ onAuditNew, onViewTransactions, onManageContacts, onTourSta
           >
             <div className="absolute top-6 right-6">
               <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all">
-                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <svg
+                  className="w-8 h-8 text-white"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
                 </svg>
               </div>
             </div>
@@ -116,8 +165,18 @@ function Dashboard({ onAuditNew, onViewTransactions, onManageContacts, onTourSta
 
             <div className="mt-6 flex items-center gap-2 text-blue-600 font-semibold group-hover:gap-4 transition-all">
               <span>Start Audit</span>
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 5l7 7-7 7"
+                />
               </svg>
             </div>
           </button>
@@ -130,8 +189,18 @@ function Dashboard({ onAuditNew, onViewTransactions, onManageContacts, onTourSta
           >
             <div className="absolute top-6 right-6">
               <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-teal-600 rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all">
-                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                <svg
+                  className="w-8 h-8 text-white"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                  />
                 </svg>
               </div>
             </div>
@@ -144,8 +213,18 @@ function Dashboard({ onAuditNew, onViewTransactions, onManageContacts, onTourSta
 
             <div className="mt-6 flex items-center gap-2 text-green-600 font-semibold group-hover:gap-4 transition-all">
               <span>View All</span>
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 5l7 7-7 7"
+                />
               </svg>
             </div>
           </button>
@@ -160,15 +239,37 @@ function Dashboard({ onAuditNew, onViewTransactions, onManageContacts, onTourSta
           >
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl flex items-center justify-center shadow-lg">
-                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                <svg
+                  className="w-6 h-6 text-white"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                  />
                 </svg>
               </div>
               <div className="flex-1">
-                <h3 className="text-lg font-bold text-gray-900 mb-1">Manage Contacts</h3>
+                <h3 className="text-lg font-bold text-gray-900 mb-1">
+                  Manage Contacts
+                </h3>
               </div>
-              <svg className="w-5 h-5 text-purple-600 group-hover:translate-x-2 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              <svg
+                className="w-5 h-5 text-purple-600 group-hover:translate-x-2 transition-transform"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 5l7 7-7 7"
+                />
               </svg>
             </div>
           </button>

@@ -8,24 +8,31 @@
  * - Moving tour configuration to separate file
  * - Extracting utility functions
  */
-import React, { useState } from 'react';
-import Joyride from 'react-joyride';
+import React, { useState } from "react";
+import Joyride from "react-joyride";
 
 // Custom hooks
-import { useConversations, type Conversation } from '../../hooks/useConversations';
-import { useSelection } from '../../hooks/useSelection';
-import { useTour } from '../../hooks/useTour';
+import {
+  useConversations,
+  type Conversation,
+} from "../../hooks/useConversations";
+import { useSelection } from "../../hooks/useSelection";
+import { useTour } from "../../hooks/useTour";
 
 // Subcomponents
-import { SearchBar } from './SearchBar';
-import { SelectionControls } from './SelectionControls';
-import { ExportButtons } from './ExportButtons';
-import { ConversationCard } from './ConversationCard';
-import { ContactInfoModal } from './ContactInfoModal';
+import { SearchBar } from "./SearchBar";
+import { SelectionControls } from "./SelectionControls";
+import { ExportButtons } from "./ExportButtons";
+import { ConversationCard } from "./ConversationCard";
+import { ContactInfoModal } from "./ContactInfoModal";
 
 // Configuration and utilities
-import { getExportTourSteps, JOYRIDE_STYLES, JOYRIDE_LOCALE } from '../../config/tourSteps';
-import { formatMessageDate } from '../../utils/dateFormatters';
+import {
+  getExportTourSteps,
+  JOYRIDE_STYLES,
+  JOYRIDE_LOCALE,
+} from "../../config/tourSteps";
+import { formatMessageDate } from "../../utils/dateFormatters";
 
 interface ContactInfo {
   name: string;
@@ -50,17 +57,22 @@ function ConversationList({
   onExportComplete,
   onOutlookExport,
   onConnectOutlook,
-  outlookConnected
+  outlookConnected,
 }: ConversationListProps) {
   // State management using custom hooks
   const { conversations, isLoading, error, reload } = useConversations();
   const selection = useSelection();
-  const tour = useTour(conversations.length > 0 && !isLoading, 'hasSeenExportTour');
+  const tour = useTour(
+    conversations.length > 0 && !isLoading,
+    "hasSeenExportTour",
+  );
 
   // Local state
   const [isExporting, setIsExporting] = useState<boolean>(false);
-  const [searchTerm, setSearchTerm] = useState<string>('');
-  const [contactInfoModal, setContactInfoModal] = useState<ContactInfo | null>(null);
+  const [searchTerm, setSearchTerm] = useState<string>("");
+  const [contactInfoModal, setContactInfoModal] = useState<ContactInfo | null>(
+    null,
+  );
   const [showOnlySelected, setShowOnlySelected] = useState<boolean>(false);
 
   // Filter conversations based on search and selection
@@ -77,19 +89,21 @@ function ConversationList({
   // Export handlers
   const handleExport = async (): Promise<void> => {
     if (selection.count === 0) {
-      alert('Please select at least one contact to export');
+      alert("Please select at least one contact to export");
       return;
     }
 
     setIsExporting(true);
 
     try {
-      const result = await window.electron.exportConversations(Array.from(selection.selectedIds));
+      const result = await window.electron.exportConversations(
+        Array.from(selection.selectedIds),
+      );
 
       if (result.success) {
         onExportComplete(result);
       } else if (!result.canceled) {
-        alert(result.error || 'Export failed');
+        alert(result.error || "Export failed");
       }
     } catch (err) {
       alert((err as Error).message);
@@ -100,7 +114,7 @@ function ConversationList({
 
   const handleOutlookExport = (): void => {
     if (selection.count === 0) {
-      alert('Please select at least one contact to export');
+      alert("Please select at least one contact to export");
       return;
     }
 
@@ -127,11 +141,23 @@ function ConversationList({
       <div className="flex items-center justify-center min-h-full py-8">
         <div className="max-w-md mx-auto p-8 bg-white rounded-lg shadow-lg text-center">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-red-100 rounded-full mb-4">
-            <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            <svg
+              className="w-8 h-8 text-red-600"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
             </svg>
           </div>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">Error Loading Contacts</h2>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">
+            Error Loading Contacts
+          </h2>
           <p className="text-gray-600 mb-6">{error}</p>
           <button
             onClick={reload}
@@ -162,7 +188,9 @@ function ConversationList({
 
       {/* Header */}
       <div className="bg-white border-b border-gray-200 p-6">
-        <h1 className="text-2xl font-bold text-gray-900 mb-4">Select Contacts for Export</h1>
+        <h1 className="text-2xl font-bold text-gray-900 mb-4">
+          Select Contacts for Export
+        </h1>
 
         {/* Search and Selection Controls */}
         <div className="flex gap-4 mb-4">
@@ -216,23 +244,35 @@ function ConversationList({
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-3">
-            {filteredConversations.map((conversation: Conversation, index: number) => (
-              <ConversationCard
-                key={conversation.id || `contact-${conversation.name}-${conversation.contactId}`}
-                conversation={conversation}
-                isSelected={selection.isSelected(conversation.id)}
-                onToggle={selection.toggleSelection}
-                onViewInfo={setContactInfoModal}
-                formatDate={formatMessageDate as (date: Date | string | number) => string}
-                isFirstCard={index === 0}
-              />
-            ))}
+            {filteredConversations.map(
+              (conversation: Conversation, index: number) => (
+                <ConversationCard
+                  key={
+                    conversation.id ||
+                    `contact-${conversation.name}-${conversation.contactId}`
+                  }
+                  conversation={conversation}
+                  isSelected={selection.isSelected(conversation.id)}
+                  onToggle={selection.toggleSelection}
+                  onViewInfo={setContactInfoModal}
+                  formatDate={
+                    formatMessageDate as (
+                      date: Date | string | number,
+                    ) => string
+                  }
+                  isFirstCard={index === 0}
+                />
+              ),
+            )}
           </div>
         )}
       </div>
 
       {/* Contact Info Modal */}
-      <ContactInfoModal contact={contactInfoModal} onClose={() => setContactInfoModal(null)} />
+      <ContactInfoModal
+        contact={contactInfoModal}
+        onClose={() => setContactInfoModal(null)}
+      />
     </div>
   );
 }

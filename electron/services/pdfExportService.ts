@@ -1,7 +1,7 @@
-import { BrowserWindow, app } from 'electron';
-import path from 'path';
-import fs from 'fs/promises';
-import { Transaction, Communication } from '../types/models';
+import { BrowserWindow, app } from "electron";
+import path from "path";
+import fs from "fs/promises";
+import { Transaction, Communication } from "../types/models";
 
 /**
  * PDF Export Service
@@ -25,10 +25,13 @@ class PDFExportService {
   async generateTransactionPDF(
     transaction: Transaction,
     communications: Communication[],
-    outputPath: string
+    outputPath: string,
   ): Promise<string> {
     try {
-      console.log('[PDF Export] Generating PDF for transaction:', transaction.id);
+      console.log(
+        "[PDF Export] Generating PDF for transaction:",
+        transaction.id,
+      );
 
       // Create HTML content
       const html = this._generateHTML(transaction, communications);
@@ -45,16 +48,18 @@ class PDFExportService {
       });
 
       // Load HTML content
-      await this.exportWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+      await this.exportWindow.loadURL(
+        `data:text/html;charset=utf-8,${encodeURIComponent(html)}`,
+      );
 
       // Wait for page to fully render
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
       // Generate PDF
       const pdfData = await this.exportWindow.webContents.printToPDF({
         printBackground: true,
         landscape: false,
-        pageSize: 'Letter',
+        pageSize: "Letter",
       });
 
       // Save PDF
@@ -64,10 +69,10 @@ class PDFExportService {
       this.exportWindow.close();
       this.exportWindow = null;
 
-      console.log('[PDF Export] PDF generated successfully:', outputPath);
+      console.log("[PDF Export] PDF generated successfully:", outputPath);
       return outputPath;
     } catch (error) {
-      console.error('[PDF Export] Failed to generate PDF:', error);
+      console.error("[PDF Export] Failed to generate PDF:", error);
       if (this.exportWindow) {
         this.exportWindow.close();
         this.exportWindow = null;
@@ -80,35 +85,40 @@ class PDFExportService {
    * Generate HTML for PDF
    * @private
    */
-  private _generateHTML(transaction: Transaction, communications: Communication[]): string {
+  private _generateHTML(
+    transaction: Transaction,
+    communications: Communication[],
+  ): string {
     const formatCurrency = (amount?: number | null): string => {
-      if (!amount) return 'N/A';
-      return new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: 'USD',
+      if (!amount) return "N/A";
+      return new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: "USD",
         minimumFractionDigits: 0,
       }).format(amount);
     };
 
     const formatDate = (dateString?: string | Date | null): string => {
-      if (!dateString) return 'N/A';
-      const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
-      return date.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
+      if (!dateString) return "N/A";
+      const date =
+        typeof dateString === "string" ? new Date(dateString) : dateString;
+      return date.toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
       });
     };
 
     const formatDateTime = (dateString: string | Date): string => {
-      if (!dateString) return 'N/A';
-      const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
-      return date.toLocaleString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
+      if (!dateString) return "N/A";
+      const date =
+        typeof dateString === "string" ? new Date(dateString) : dateString;
+      return date.toLocaleString("en-US", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
       });
     };
 
@@ -293,7 +303,7 @@ class PDFExportService {
   <!-- Property Info -->
   <div class="property-info">
     <h2>Property Information</h2>
-    <div class="address">${transaction.property_address || 'N/A'}</div>
+    <div class="address">${transaction.property_address || "N/A"}</div>
   </div>
 
   <!-- Transaction Details -->
@@ -301,7 +311,7 @@ class PDFExportService {
     <div class="detail-card">
       <div class="label">Transaction Type</div>
       <div class="value">
-        ${transaction.transaction_type ? `<span class="badge badge-${transaction.transaction_type}">${transaction.transaction_type === 'purchase' ? 'Purchase' : 'Sale'}</span>` : 'N/A'}
+        ${transaction.transaction_type ? `<span class="badge badge-${transaction.transaction_type}">${transaction.transaction_type === "purchase" ? "Purchase" : "Sale"}</span>` : "N/A"}
       </div>
     </div>
 
@@ -346,20 +356,20 @@ class PDFExportService {
         <div class="communication">
           <div class="meta">
             <span>${formatDateTime(comm.sent_at as string)}</span>
-            ${comm.has_attachments ? '<span>📎 Has Attachments</span>' : ''}
+            ${comm.has_attachments ? "<span>📎 Has Attachments</span>" : ""}
           </div>
-          <div class="subject">${comm.subject || '(No Subject)'}</div>
-          <div class="from">From: ${comm.sender || 'Unknown'}</div>
-          ${comm.recipients ? `<div class="from">To: ${comm.recipients}</div>` : ''}
+          <div class="subject">${comm.subject || "(No Subject)"}</div>
+          <div class="from">From: ${comm.sender || "Unknown"}</div>
+          ${comm.recipients ? `<div class="from">To: ${comm.recipients}</div>` : ""}
           ${
             comm.body_plain
-              ? `<div class="body">${comm.body_plain.substring(0, 500).replace(/</g, '&lt;').replace(/>/g, '&gt;')}${comm.body_plain.length > 500 ? '...' : ''}</div>`
-              : ''
+              ? `<div class="body">${comm.body_plain.substring(0, 500).replace(/</g, "&lt;").replace(/>/g, "&gt;")}${comm.body_plain.length > 500 ? "..." : ""}</div>`
+              : ""
           }
         </div>
-      `
+      `,
         )
-        .join('')}
+        .join("")}
     </div>
   </div>
 
@@ -368,7 +378,7 @@ class PDFExportService {
     <h3>Extraction Details</h3>
     <div class="detail-card">
       <div class="label">Confidence Score</div>
-      <div class="value">${transaction.extraction_confidence || 'N/A'}%</div>
+      <div class="value">${transaction.extraction_confidence || "N/A"}%</div>
     </div>
     <div class="detail-card" style="margin-top: 12px;">
       <div class="label">Date Range</div>
@@ -392,8 +402,8 @@ class PDFExportService {
    * Get default export path for a transaction
    */
   getDefaultExportPath(transaction: Transaction): string {
-    const downloadsPath = app.getPath('downloads');
-    const fileName = `Transaction_${transaction.property_address?.replace(/[^a-z0-9]/gi, '_')}_${Date.now()}.pdf`;
+    const downloadsPath = app.getPath("downloads");
+    const fileName = `Transaction_${transaction.property_address?.replace(/[^a-z0-9]/gi, "_")}_${Date.now()}.pdf`;
     return path.join(downloadsPath, fileName);
   }
 }

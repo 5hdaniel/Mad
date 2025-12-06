@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from "react";
 
-import type { OAuthProvider } from '../../electron/types/models';
+import type { OAuthProvider } from "../../electron/types/models";
 
 interface SystemHealthMonitorProps {
   userId: string;
@@ -9,7 +9,7 @@ interface SystemHealthMonitorProps {
 }
 
 interface SystemIssue {
-  severity?: 'error' | 'warning' | 'info';
+  severity?: "error" | "warning" | "info";
   title?: string;
   message?: string;
   userMessage?: string;
@@ -29,7 +29,11 @@ interface SystemIssue {
  * - Shows dismissible notifications
  * - Provides action buttons to fix issues
  */
-function SystemHealthMonitor({ userId, provider, hidden = false }: SystemHealthMonitorProps) {
+function SystemHealthMonitor({
+  userId,
+  provider,
+  hidden = false,
+}: SystemHealthMonitorProps) {
   const [issues, setIssues] = useState<SystemIssue[]>([]);
   const [dismissed, setDismissed] = useState(new Set<number>());
   const checkingRef = useRef(false);
@@ -47,7 +51,7 @@ function SystemHealthMonitor({ userId, provider, hidden = false }: SystemHealthM
         setIssues(result.issues as SystemIssue[]);
       }
     } catch (error) {
-      console.error('[SystemHealthMonitor] System health check failed:', error);
+      console.error("[SystemHealthMonitor] System health check failed:", error);
     } finally {
       checkingRef.current = false;
     }
@@ -69,67 +73,79 @@ function SystemHealthMonitor({ userId, provider, hidden = false }: SystemHealthM
     };
   }, [checkSystemHealth]);
 
-
   const handleDismiss = (issueIndex: number) => {
     setDismissed((prev) => new Set([...prev, issueIndex]));
   };
 
   const handleAction = async (issue: SystemIssue, issueIndex: number) => {
     switch (issue.actionHandler) {
-      case 'open-system-settings':
+      case "open-system-settings":
         if (window.api?.system?.openPrivacyPane) {
-          await window.api.system.openPrivacyPane('fullDiskAccess');
+          await window.api.system.openPrivacyPane("fullDiskAccess");
         }
         break;
 
-      case 'connect-google':
-      case 'reconnect-google':
+      case "connect-google":
+      case "reconnect-google":
         // Trigger Google mailbox connection
         try {
           const result = await window.api.auth.googleConnectMailbox(userId);
           if (result.success) {
             // Auth popup window opens automatically and will close when done
             // Listen for connection completion
-            const cleanup = window.api.onGoogleMailboxConnected(async (connectionResult) => {
-              if (connectionResult.success) {
-                await checkSystemHealth();
-              }
-              if (cleanup) cleanup(); // Clean up listener after handling the event
-            });
+            const cleanup = window.api.onGoogleMailboxConnected(
+              async (connectionResult) => {
+                if (connectionResult.success) {
+                  await checkSystemHealth();
+                }
+                if (cleanup) cleanup(); // Clean up listener after handling the event
+              },
+            );
           }
         } catch (error) {
-          console.error('[SystemHealthMonitor] Google mailbox connection failed:', error);
+          console.error(
+            "[SystemHealthMonitor] Google mailbox connection failed:",
+            error,
+          );
         }
         break;
 
-      case 'connect-microsoft':
-      case 'reconnect-microsoft':
+      case "connect-microsoft":
+      case "reconnect-microsoft":
         // Trigger Microsoft mailbox connection
         try {
           const result = await window.api.auth.microsoftConnectMailbox(userId);
           if (result.success) {
             // Auth popup window opens automatically and will close when done
             // Listen for connection completion
-            const cleanup = window.api.onMicrosoftMailboxConnected((connectionResult) => {
-              if (connectionResult.success) {
-                checkSystemHealth();
-                handleDismiss(issueIndex);
-              }
-              cleanup(); // Remove listener
-            });
+            const cleanup = window.api.onMicrosoftMailboxConnected(
+              (connectionResult) => {
+                if (connectionResult.success) {
+                  checkSystemHealth();
+                  handleDismiss(issueIndex);
+                }
+                cleanup(); // Remove listener
+              },
+            );
           }
         } catch (error) {
-          console.error('[SystemHealthMonitor] Microsoft mailbox connection failed:', error);
+          console.error(
+            "[SystemHealthMonitor] Microsoft mailbox connection failed:",
+            error,
+          );
         }
         break;
 
-      case 'retry':
+      case "retry":
         await checkSystemHealth();
         handleDismiss(issueIndex);
         break;
 
       default:
-        console.warn('[SystemHealthMonitor] Unknown action handler:', issue.actionHandler);
+        console.warn(
+          "[SystemHealthMonitor] Unknown action handler:",
+          issue.actionHandler,
+        );
     }
   };
 
@@ -141,28 +157,34 @@ function SystemHealthMonitor({ userId, provider, hidden = false }: SystemHealthM
   }
 
   return (
-    <div className="fixed top-16 right-4 z-50 space-y-3" style={{ maxWidth: '420px' }}>
+    <div
+      className="fixed top-16 right-4 z-50 space-y-3"
+      style={{ maxWidth: "420px" }}
+    >
       {visibleIssues.map((issue, _index) => {
-        const originalIndex = issues.findIndex((i, idx) => i === issue && !dismissed.has(idx));
-        const severity: 'error' | 'warning' | 'info' = issue.severity || 'warning';
+        const originalIndex = issues.findIndex(
+          (i, idx) => i === issue && !dismissed.has(idx),
+        );
+        const severity: "error" | "warning" | "info" =
+          issue.severity || "warning";
 
         // Severity styling
-        const severityClasses: Record<'error' | 'warning' | 'info', string> = {
-          error: 'bg-red-50 border-red-200',
-          warning: 'bg-yellow-50 border-yellow-200',
-          info: 'bg-blue-50 border-blue-200',
+        const severityClasses: Record<"error" | "warning" | "info", string> = {
+          error: "bg-red-50 border-red-200",
+          warning: "bg-yellow-50 border-yellow-200",
+          info: "bg-blue-50 border-blue-200",
         };
 
-        const iconClasses: Record<'error' | 'warning' | 'info', string> = {
-          error: 'text-red-600',
-          warning: 'text-yellow-600',
-          info: 'text-blue-600',
+        const iconClasses: Record<"error" | "warning" | "info", string> = {
+          error: "text-red-600",
+          warning: "text-yellow-600",
+          info: "text-blue-600",
         };
 
-        const buttonClasses: Record<'error' | 'warning' | 'info', string> = {
-          error: 'bg-red-600 hover:bg-red-700',
-          warning: 'bg-yellow-600 hover:bg-yellow-700',
-          info: 'bg-blue-600 hover:bg-blue-700',
+        const buttonClasses: Record<"error" | "warning" | "info", string> = {
+          error: "bg-red-600 hover:bg-red-700",
+          warning: "bg-yellow-600 hover:bg-yellow-700",
+          info: "bg-blue-600 hover:bg-blue-700",
         };
 
         return (
@@ -173,8 +195,13 @@ function SystemHealthMonitor({ userId, provider, hidden = false }: SystemHealthM
             <div className="flex items-start gap-3">
               {/* Icon */}
               <div className={`flex-shrink-0 ${iconClasses[severity]}`}>
-                {severity === 'error' && (
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                {severity === "error" && (
+                  <svg
+                    className="w-6 h-6"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
                     <path
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -183,8 +210,13 @@ function SystemHealthMonitor({ userId, provider, hidden = false }: SystemHealthM
                     />
                   </svg>
                 )}
-                {severity === 'warning' && (
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                {severity === "warning" && (
+                  <svg
+                    className="w-6 h-6"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
                     <path
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -193,8 +225,13 @@ function SystemHealthMonitor({ userId, provider, hidden = false }: SystemHealthM
                     />
                   </svg>
                 )}
-                {severity === 'info' && (
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                {severity === "info" && (
+                  <svg
+                    className="w-6 h-6"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
                     <path
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -215,8 +252,12 @@ function SystemHealthMonitor({ userId, provider, hidden = false }: SystemHealthM
                 </p>
                 {issue.details && (
                   <details className="text-xs text-gray-600 mb-2">
-                    <summary className="cursor-pointer hover:text-gray-800">Technical details</summary>
-                    <p className="mt-1 font-mono bg-gray-100 p-2 rounded">{issue.details}</p>
+                    <summary className="cursor-pointer hover:text-gray-800">
+                      Technical details
+                    </summary>
+                    <p className="mt-1 font-mono bg-gray-100 p-2 rounded">
+                      {issue.details}
+                    </p>
                   </details>
                 )}
 
@@ -244,8 +285,18 @@ function SystemHealthMonitor({ userId, provider, hidden = false }: SystemHealthM
                 onClick={() => handleDismiss(originalIndex)}
                 className="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
                 </svg>
               </button>
             </div>

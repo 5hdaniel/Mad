@@ -3,8 +3,8 @@
  * Extends the global Window interface with Electron IPC APIs
  */
 
-import type { GetConversationsResult } from './hooks/useConversations';
-import type { iOSDevice, BackupProgress } from './types/iphone';
+import type { GetConversationsResult } from "./hooks/useConversations";
+import type { iOSDevice, BackupProgress } from "./types/iphone";
 
 /**
  * iOS Device information from libimobiledevice
@@ -30,7 +30,7 @@ interface iOSDeviceInfo {
  */
 interface ElectronAPI {
   // Platform detection
-  platform: 'darwin' | 'win32' | 'linux' | string;
+  platform: "darwin" | "win32" | "linux" | string;
 
   // App Info
   getAppInfo: () => Promise<{ version: string; name: string }>;
@@ -47,7 +47,9 @@ interface ElectronAPI {
   // Conversations (iMessage)
   getConversations: () => Promise<GetConversationsResult>;
   getMessages: (chatId: string) => Promise<unknown[]>;
-  exportConversations: (conversationIds: string[]) => Promise<{ success: boolean; exportPath?: string }>;
+  exportConversations: (
+    conversationIds: string[],
+  ) => Promise<{ success: boolean; exportPath?: string }>;
 
   // Transactions
   transactions: {
@@ -56,7 +58,9 @@ interface ElectronAPI {
     update: (id: string, data: unknown) => Promise<{ success: boolean }>;
     delete: (id: string) => Promise<{ success: boolean }>;
   };
-  onTransactionScanProgress: (callback: (progress: unknown) => void) => () => void;
+  onTransactionScanProgress: (
+    callback: (progress: unknown) => void,
+  ) => () => void;
 
   // File System
   openFolder: (folderPath: string) => Promise<{ success: boolean }>;
@@ -72,18 +76,26 @@ interface ElectronAPI {
   outlookAuthenticate: () => Promise<{ success: boolean; error?: string }>;
   outlookIsAuthenticated: () => Promise<boolean>;
   outlookGetUserEmail: () => Promise<string | null>;
-  outlookExportEmails: (contacts: Array<{
-    name: string;
-    chatId?: string;
-    emails?: string[];
-    phones?: string[];
-  }>) => Promise<{ success: boolean; error?: string; canceled?: boolean; exportPath?: string; results?: Array<{
-    contactName: string;
+  outlookExportEmails: (
+    contacts: Array<{
+      name: string;
+      chatId?: string;
+      emails?: string[];
+      phones?: string[];
+    }>,
+  ) => Promise<{
     success: boolean;
-    textMessageCount: number;
-    emailCount?: number;
-    error: string | null;
-  }> }>;
+    error?: string;
+    canceled?: boolean;
+    exportPath?: string;
+    results?: Array<{
+      contactName: string;
+      success: boolean;
+      textMessageCount: number;
+      emailCount?: number;
+      error: string | null;
+    }>;
+  }>;
   outlookSignout: () => Promise<{ success: boolean }>;
   onDeviceCode: (callback: (info: unknown) => void) => () => void;
   onExportProgress: (callback: (progress: unknown) => void) => () => void;
@@ -92,7 +104,9 @@ interface ElectronAPI {
   device?: {
     startDetection: () => void;
     stopDetection: () => void;
-    onConnected: (callback: (device: iOSDevice) => void) => (() => void) | undefined;
+    onConnected: (
+      callback: (device: iOSDevice) => void,
+    ) => (() => void) | undefined;
     onDisconnected: (callback: () => void) => (() => void) | undefined;
   };
 
@@ -107,7 +121,9 @@ interface ElectronAPI {
       error?: string;
     }>;
     cancel: () => Promise<void>;
-    onProgress: (callback: (progress: BackupProgress) => void) => (() => void) | undefined;
+    onProgress: (
+      callback: (progress: BackupProgress) => void,
+    ) => (() => void) | undefined;
   };
 
   // Apple Driver Management (Windows only)
@@ -145,7 +161,11 @@ interface ElectronAPI {
  */
 interface MainAPI {
   auth: {
-    googleLogin: () => Promise<{ success: boolean; authUrl?: string; error?: string }>;
+    googleLogin: () => Promise<{
+      success: boolean;
+      authUrl?: string;
+      error?: string;
+    }>;
     googleCompleteLogin: (code: string) => Promise<{
       success: boolean;
       user?: unknown;
@@ -154,11 +174,24 @@ interface MainAPI {
       isNewUser?: boolean;
       error?: string;
     }>;
-    googleConnectMailbox: (userId: string) => Promise<{ success: boolean; error?: string }>;
-    microsoftLogin: () => Promise<{ success: boolean; authUrl?: string; scopes?: string[]; error?: string }>;
-    microsoftConnectMailbox: (userId: string) => Promise<{ success: boolean; error?: string }>;
-    logout: (sessionToken: string) => Promise<{ success: boolean; error?: string }>;
-    validateSession: (sessionToken: string) => Promise<{ valid: boolean; user?: unknown; error?: string }>;
+    googleConnectMailbox: (
+      userId: string,
+    ) => Promise<{ success: boolean; error?: string }>;
+    microsoftLogin: () => Promise<{
+      success: boolean;
+      authUrl?: string;
+      scopes?: string[];
+      error?: string;
+    }>;
+    microsoftConnectMailbox: (
+      userId: string,
+    ) => Promise<{ success: boolean; error?: string }>;
+    logout: (
+      sessionToken: string,
+    ) => Promise<{ success: boolean; error?: string }>;
+    validateSession: (
+      sessionToken: string,
+    ) => Promise<{ valid: boolean; user?: unknown; error?: string }>;
     getCurrentUser: () => Promise<{
       success: boolean;
       user?: unknown;
@@ -168,9 +201,15 @@ interface MainAPI {
       isNewUser?: boolean;
       error?: string;
     }>;
-    acceptTerms: (userId: string) => Promise<{ success: boolean; user?: unknown; error?: string }>;
-    completeEmailOnboarding: (userId: string) => Promise<{ success: boolean; error?: string }>;
-    checkEmailOnboarding: (userId: string) => Promise<{ success: boolean; completed: boolean; error?: string }>;
+    acceptTerms: (
+      userId: string,
+    ) => Promise<{ success: boolean; user?: unknown; error?: string }>;
+    completeEmailOnboarding: (
+      userId: string,
+    ) => Promise<{ success: boolean; error?: string }>;
+    checkEmailOnboarding: (
+      userId: string,
+    ) => Promise<{ success: boolean; completed: boolean; error?: string }>;
     // Complete pending login after keychain setup
     completePendingLogin: (oauthData: unknown) => Promise<{
       success: boolean;
@@ -214,7 +253,10 @@ interface MainAPI {
       microsoft?: { connected: boolean; email?: string };
       error?: string;
     }>;
-    healthCheck: (userId: string, provider: string) => Promise<{
+    healthCheck: (
+      userId: string,
+      provider: string,
+    ) => Promise<{
       healthy: boolean;
       issues?: Array<{
         severity?: string;
@@ -227,18 +269,32 @@ interface MainAPI {
       }>;
     }>;
     openPrivacyPane: (pane: string) => Promise<void>;
-    contactSupport: (errorDetails?: string) => Promise<{ success: boolean; error?: string }>;
-    getDiagnostics: () => Promise<{ success: boolean; diagnostics?: string; error?: string }>;
+    contactSupport: (
+      errorDetails?: string,
+    ) => Promise<{ success: boolean; error?: string }>;
+    getDiagnostics: () => Promise<{
+      success: boolean;
+      diagnostics?: string;
+      error?: string;
+    }>;
   };
   device: {
     /** Lists all currently connected iOS devices */
-    list: () => Promise<{ success: boolean; devices?: iOSDeviceInfo[]; error?: string }>;
+    list: () => Promise<{
+      success: boolean;
+      devices?: iOSDeviceInfo[];
+      error?: string;
+    }>;
     /** Starts device detection polling */
     startDetection: () => Promise<{ success: boolean; error?: string }>;
     /** Stops device detection polling */
     stopDetection: () => Promise<{ success: boolean; error?: string }>;
     /** Checks if libimobiledevice tools are available */
-    checkAvailability: () => Promise<{ success: boolean; available?: boolean; error?: string }>;
+    checkAvailability: () => Promise<{
+      success: boolean;
+      available?: boolean;
+      error?: string;
+    }>;
     /** Subscribes to device connected events */
     onConnected: (callback: (device: iOSDeviceInfo) => void) => () => void;
     /** Subscribes to device disconnected events */
@@ -246,14 +302,50 @@ interface MainAPI {
   };
 
   // Event listeners for login completion
-  onGoogleLoginComplete: (callback: (result: { success: boolean; user?: unknown; sessionToken?: string; subscription?: unknown; isNewUser?: boolean; error?: string }) => void) => () => void;
-  onGoogleLoginPending: (callback: (result: { success: boolean; pendingLogin?: boolean; oauthData?: unknown; error?: string }) => void) => () => void;
+  onGoogleLoginComplete: (
+    callback: (result: {
+      success: boolean;
+      user?: unknown;
+      sessionToken?: string;
+      subscription?: unknown;
+      isNewUser?: boolean;
+      error?: string;
+    }) => void,
+  ) => () => void;
+  onGoogleLoginPending: (
+    callback: (result: {
+      success: boolean;
+      pendingLogin?: boolean;
+      oauthData?: unknown;
+      error?: string;
+    }) => void,
+  ) => () => void;
   onGoogleLoginCancelled: (callback: () => void) => () => void;
-  onMicrosoftLoginComplete: (callback: (result: { success: boolean; user?: unknown; sessionToken?: string; subscription?: unknown; isNewUser?: boolean; error?: string }) => void) => () => void;
-  onMicrosoftLoginPending: (callback: (result: { success: boolean; pendingLogin?: boolean; oauthData?: unknown; error?: string }) => void) => () => void;
+  onMicrosoftLoginComplete: (
+    callback: (result: {
+      success: boolean;
+      user?: unknown;
+      sessionToken?: string;
+      subscription?: unknown;
+      isNewUser?: boolean;
+      error?: string;
+    }) => void,
+  ) => () => void;
+  onMicrosoftLoginPending: (
+    callback: (result: {
+      success: boolean;
+      pendingLogin?: boolean;
+      oauthData?: unknown;
+      error?: string;
+    }) => void,
+  ) => () => void;
   onMicrosoftLoginCancelled: (callback: () => void) => () => void;
-  onGoogleMailboxConnected: (callback: (result: { success: boolean }) => void) => () => void;
-  onMicrosoftMailboxConnected: (callback: (result: { success: boolean }) => void) => () => void;
+  onGoogleMailboxConnected: (
+    callback: (result: { success: boolean }) => void,
+  ) => () => void;
+  onMicrosoftMailboxConnected: (
+    callback: (result: { success: boolean }) => void,
+  ) => () => void;
   onGoogleMailboxCancelled: (callback: () => void) => () => void;
   onMicrosoftMailboxCancelled: (callback: () => void) => () => void;
 
@@ -276,7 +368,7 @@ interface MainAPI {
       isRunning: boolean;
       currentDeviceUdid: string | null;
       progress: {
-        phase: 'preparing' | 'transferring' | 'finishing' | 'extracting';
+        phase: "preparing" | "transferring" | "finishing" | "extracting";
         percentComplete: number;
         currentFile: string | null;
         filesTransferred: number;
@@ -324,7 +416,10 @@ interface MainAPI {
     }>;
 
     /** Verify a backup password */
-    verifyPassword?: (backupPath: string, password: string) => Promise<{
+    verifyPassword?: (
+      backupPath: string,
+      password: string,
+    ) => Promise<{
       success: boolean;
       valid?: boolean;
       error?: string;
@@ -341,49 +436,58 @@ interface MainAPI {
     cancel: () => Promise<{ success: boolean }>;
 
     /** List all existing backups */
-    list: () => Promise<Array<{
-      path: string;
-      deviceUdid: string;
-      createdAt: Date;
-      size: number;
-      isEncrypted: boolean;
-      iosVersion: string | null;
-      deviceName: string | null;
-    }>>;
+    list: () => Promise<
+      Array<{
+        path: string;
+        deviceUdid: string;
+        createdAt: Date;
+        size: number;
+        isEncrypted: boolean;
+        iosVersion: string | null;
+        deviceName: string | null;
+      }>
+    >;
 
     /** Delete a specific backup */
-    delete: (backupPath: string) => Promise<{ success: boolean; error?: string }>;
+    delete: (
+      backupPath: string,
+    ) => Promise<{ success: boolean; error?: string }>;
 
     /** Clean up old backups */
-    cleanup: (keepCount?: number) => Promise<{ success: boolean; error?: string }>;
+    cleanup: (
+      keepCount?: number,
+    ) => Promise<{ success: boolean; error?: string }>;
 
     /** Subscribe to backup progress updates */
-    onProgress: (callback: (progress: {
-      phase: 'preparing' | 'transferring' | 'finishing' | 'extracting';
-      percentComplete: number;
-      currentFile: string | null;
-      filesTransferred: number;
-      totalFiles: number | null;
-      bytesTransferred: number;
-      totalBytes: number | null;
-      estimatedTimeRemaining: number | null;
-    }) => void) => () => void;
+    onProgress: (
+      callback: (progress: {
+        phase: "preparing" | "transferring" | "finishing" | "extracting";
+        percentComplete: number;
+        currentFile: string | null;
+        filesTransferred: number;
+        totalFiles: number | null;
+        bytesTransferred: number;
+        totalBytes: number | null;
+        estimatedTimeRemaining: number | null;
+      }) => void,
+    ) => () => void;
 
     /** Subscribe to backup completion events */
-    onComplete: (callback: (result: {
-      success: boolean;
-      backupPath: string | null;
-      error: string | null;
-      duration: number;
-      deviceUdid: string;
-      isIncremental: boolean;
-      backupSize: number;
-    }) => void) => () => void;
+    onComplete: (
+      callback: (result: {
+        success: boolean;
+        backupPath: string | null;
+        error: string | null;
+        duration: number;
+        deviceUdid: string;
+        isIncremental: boolean;
+        backupSize: number;
+      }) => void,
+    ) => () => void;
 
     /** Subscribe to backup error events */
     onError: (callback: (error: { message: string }) => void) => () => void;
   };
-
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [key: string]: any; // Allow other properties for backwards compatibility

@@ -6,7 +6,7 @@
  */
 
 // Mock better-sqlite3-multiple-ciphers before any imports
-jest.mock('better-sqlite3-multiple-ciphers', () => {
+jest.mock("better-sqlite3-multiple-ciphers", () => {
   return jest.fn().mockImplementation(() => ({
     prepare: jest.fn().mockReturnValue({
       all: jest.fn().mockReturnValue([]),
@@ -18,26 +18,31 @@ jest.mock('better-sqlite3-multiple-ciphers', () => {
 });
 
 // Mock electron modules
-jest.mock('electron', () => ({
+jest.mock("electron", () => ({
   app: {
     isPackaged: false,
-    getPath: jest.fn().mockReturnValue('/tmp'),
+    getPath: jest.fn().mockReturnValue("/tmp"),
   },
 }));
 
-jest.mock('electron-log', () => ({
+jest.mock("electron-log", () => ({
   info: jest.fn(),
   error: jest.fn(),
   warn: jest.fn(),
   debug: jest.fn(),
 }));
 
-import { SyncOrchestrator, SyncPhase, SyncProgress, SyncResult } from '../syncOrchestrator';
+import {
+  SyncOrchestrator,
+  SyncPhase,
+  SyncProgress,
+  SyncResult,
+} from "../syncOrchestrator";
 
 // Enable mock mode for testing
-process.env.MOCK_DEVICE = 'true';
+process.env.MOCK_DEVICE = "true";
 
-describe('SyncOrchestrator', () => {
+describe("SyncOrchestrator", () => {
   let orchestrator: SyncOrchestrator;
 
   beforeEach(() => {
@@ -49,32 +54,32 @@ describe('SyncOrchestrator', () => {
     orchestrator.removeAllListeners();
   });
 
-  describe('initialization', () => {
-    it('should create an orchestrator instance', () => {
+  describe("initialization", () => {
+    it("should create an orchestrator instance", () => {
       expect(orchestrator).toBeDefined();
       expect(orchestrator.getStatus().isRunning).toBe(false);
-      expect(orchestrator.getStatus().phase).toBe('idle');
+      expect(orchestrator.getStatus().phase).toBe("idle");
     });
 
-    it('should emit events', () => {
-      expect(typeof orchestrator.on).toBe('function');
-      expect(typeof orchestrator.emit).toBe('function');
+    it("should emit events", () => {
+      expect(typeof orchestrator.on).toBe("function");
+      expect(typeof orchestrator.emit).toBe("function");
     });
   });
 
-  describe('getStatus', () => {
-    it('should return initial status', () => {
+  describe("getStatus", () => {
+    it("should return initial status", () => {
       const status = orchestrator.getStatus();
 
       expect(status.isRunning).toBe(false);
-      expect(status.phase).toBe('idle');
+      expect(status.phase).toBe("idle");
     });
   });
 
-  describe('device detection', () => {
-    it('should start device detection', () => {
+  describe("device detection", () => {
+    it("should start device detection", () => {
       const startSpy = jest.fn();
-      orchestrator.on('device-connected', startSpy);
+      orchestrator.on("device-connected", startSpy);
 
       orchestrator.startDeviceDetection(5000);
 
@@ -82,7 +87,7 @@ describe('SyncOrchestrator', () => {
       // This is tested indirectly through the connected event
     });
 
-    it('should stop device detection', () => {
+    it("should stop device detection", () => {
       orchestrator.startDeviceDetection();
       orchestrator.stopDeviceDetection();
 
@@ -90,39 +95,39 @@ describe('SyncOrchestrator', () => {
       expect(true).toBe(true);
     });
 
-    it('should get connected devices', () => {
+    it("should get connected devices", () => {
       const devices = orchestrator.getConnectedDevices();
       expect(Array.isArray(devices)).toBe(true);
     });
   });
 
-  describe('sync operation', () => {
-    it('should reject starting sync when already running', async () => {
+  describe("sync operation", () => {
+    it("should reject starting sync when already running", async () => {
       // Start a sync but don't await it
-      const syncPromise = orchestrator.sync({ udid: 'test-udid' });
+      const syncPromise = orchestrator.sync({ udid: "test-udid" });
 
       // Immediately try to start another sync
-      const result = await orchestrator.sync({ udid: 'test-udid-2' });
+      const result = await orchestrator.sync({ udid: "test-udid-2" });
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain('already in progress');
+      expect(result.error).toContain("already in progress");
 
       // Clean up the first sync
       orchestrator.cancel();
       await syncPromise;
     });
 
-    it('should emit progress events during sync', async () => {
+    it("should emit progress events during sync", async () => {
       const progressEvents: SyncProgress[] = [];
 
-      orchestrator.on('progress', (progress: SyncProgress) => {
+      orchestrator.on("progress", (progress: SyncProgress) => {
         progressEvents.push(progress);
       });
 
       // This will fail in mock mode without full mock implementation,
       // but we can test the event emission
       try {
-        await orchestrator.sync({ udid: 'mock-udid' });
+        await orchestrator.sync({ udid: "mock-udid" });
       } catch {
         // Expected to fail without full mocks
       }
@@ -131,27 +136,27 @@ describe('SyncOrchestrator', () => {
       // In a full test environment with mocks, we'd expect more
     });
 
-    it('should emit phase change events', async () => {
+    it("should emit phase change events", async () => {
       const phases: SyncPhase[] = [];
 
-      orchestrator.on('phase', (phase: SyncPhase) => {
+      orchestrator.on("phase", (phase: SyncPhase) => {
         phases.push(phase);
       });
 
       try {
-        await orchestrator.sync({ udid: 'mock-udid' });
+        await orchestrator.sync({ udid: "mock-udid" });
       } catch {
         // Expected to fail without full mocks
       }
 
       // Should have started with backup phase
       if (phases.length > 0) {
-        expect(phases[0]).toBe('backup');
+        expect(phases[0]).toBe("backup");
       }
     });
 
-    it('should handle cancellation', async () => {
-      const syncPromise = orchestrator.sync({ udid: 'test-udid' });
+    it("should handle cancellation", async () => {
+      const syncPromise = orchestrator.sync({ udid: "test-udid" });
 
       // Cancel immediately
       orchestrator.cancel();
@@ -164,11 +169,11 @@ describe('SyncOrchestrator', () => {
     });
   });
 
-  describe('error handling', () => {
-    it('should return error result on failure', async () => {
+  describe("error handling", () => {
+    it("should return error result on failure", async () => {
       // Try to sync with invalid udid in non-mock mode would fail
       // In mock mode, we test the error result structure
-      const result = await orchestrator.sync({ udid: '' });
+      const result = await orchestrator.sync({ udid: "" });
 
       if (!result.success) {
         expect(result.error).toBeDefined();
@@ -178,14 +183,14 @@ describe('SyncOrchestrator', () => {
       }
     });
 
-    it('should emit error events', (done) => {
-      orchestrator.on('error', (error: Error) => {
+    it("should emit error events", (done) => {
+      orchestrator.on("error", (error: Error) => {
         expect(error).toBeDefined();
         done();
       });
 
       // Try to trigger an error
-      orchestrator.sync({ udid: '' }).catch(() => {
+      orchestrator.sync({ udid: "" }).catch(() => {
         // Expected
       });
 
@@ -197,44 +202,44 @@ describe('SyncOrchestrator', () => {
     });
   });
 
-  describe('result structure', () => {
-    it('should return proper result structure on success', async () => {
+  describe("result structure", () => {
+    it("should return proper result structure on success", async () => {
       try {
-        const result = await orchestrator.sync({ udid: 'mock-udid' });
+        const result = await orchestrator.sync({ udid: "mock-udid" });
 
-        expect(result).toHaveProperty('success');
-        expect(result).toHaveProperty('messages');
-        expect(result).toHaveProperty('contacts');
-        expect(result).toHaveProperty('conversations');
-        expect(result).toHaveProperty('error');
-        expect(result).toHaveProperty('duration');
+        expect(result).toHaveProperty("success");
+        expect(result).toHaveProperty("messages");
+        expect(result).toHaveProperty("contacts");
+        expect(result).toHaveProperty("conversations");
+        expect(result).toHaveProperty("error");
+        expect(result).toHaveProperty("duration");
 
         expect(Array.isArray(result.messages)).toBe(true);
         expect(Array.isArray(result.contacts)).toBe(true);
         expect(Array.isArray(result.conversations)).toBe(true);
-        expect(typeof result.duration).toBe('number');
+        expect(typeof result.duration).toBe("number");
       } catch {
         // Expected to fail without full mocks
       }
     });
 
-    it('should return proper result structure on failure', async () => {
-      const result = await orchestrator.sync({ udid: '' });
+    it("should return proper result structure on failure", async () => {
+      const result = await orchestrator.sync({ udid: "" });
 
-      expect(result).toHaveProperty('success');
-      expect(result).toHaveProperty('messages');
-      expect(result).toHaveProperty('contacts');
-      expect(result).toHaveProperty('conversations');
-      expect(result).toHaveProperty('error');
-      expect(result).toHaveProperty('duration');
+      expect(result).toHaveProperty("success");
+      expect(result).toHaveProperty("messages");
+      expect(result).toHaveProperty("contacts");
+      expect(result).toHaveProperty("conversations");
+      expect(result).toHaveProperty("error");
+      expect(result).toHaveProperty("duration");
     });
   });
 
-  describe('encrypted backup handling', () => {
-    it('should emit password-required for encrypted backups', (done) => {
+  describe("encrypted backup handling", () => {
+    it("should emit password-required for encrypted backups", (done) => {
       let passwordRequested = false;
 
-      orchestrator.on('password-required', () => {
+      orchestrator.on("password-required", () => {
         passwordRequested = true;
         done();
       });
@@ -249,10 +254,10 @@ describe('SyncOrchestrator', () => {
       }, 1000);
     });
 
-    it('should accept password for encrypted backup', async () => {
+    it("should accept password for encrypted backup", async () => {
       const result = await orchestrator.sync({
-        udid: 'mock-udid',
-        password: 'test-password',
+        udid: "mock-udid",
+        password: "test-password",
       });
 
       // Should not fail due to missing password
@@ -260,16 +265,16 @@ describe('SyncOrchestrator', () => {
     });
   });
 
-  describe('progress calculation', () => {
-    it('should calculate overall progress correctly', async () => {
+  describe("progress calculation", () => {
+    it("should calculate overall progress correctly", async () => {
       const progressValues: number[] = [];
 
-      orchestrator.on('progress', (progress: SyncProgress) => {
+      orchestrator.on("progress", (progress: SyncProgress) => {
         progressValues.push(progress.overallProgress);
       });
 
       try {
-        await orchestrator.sync({ udid: 'mock-udid' });
+        await orchestrator.sync({ udid: "mock-udid" });
       } catch {
         // Expected
       }
@@ -284,23 +289,25 @@ describe('SyncOrchestrator', () => {
   });
 });
 
-describe('SyncOrchestrator E2E Flow', () => {
+describe("SyncOrchestrator E2E Flow", () => {
   // Note: These tests require proper mock setup or real device
 
-  it('should complete full sync flow with mock device', async () => {
+  it("should complete full sync flow with mock device", async () => {
     const orchestrator = new SyncOrchestrator();
     const phases: SyncPhase[] = [];
 
-    orchestrator.on('phase', (phase: SyncPhase) => {
+    orchestrator.on("phase", (phase: SyncPhase) => {
       phases.push(phase);
     });
 
     try {
-      const result = await orchestrator.sync({ udid: '00000000-0000000000000000' });
+      const result = await orchestrator.sync({
+        udid: "00000000-0000000000000000",
+      });
 
       if (result.success) {
         // Verify all phases were visited
-        expect(phases).toContain('backup');
+        expect(phases).toContain("backup");
         // Other phases depend on mock implementation
       }
     } catch {
@@ -310,17 +317,17 @@ describe('SyncOrchestrator E2E Flow', () => {
     orchestrator.removeAllListeners();
   });
 
-  it('should handle device disconnection during sync', async () => {
+  it("should handle device disconnection during sync", async () => {
     const orchestrator = new SyncOrchestrator();
     let disconnectionHandled = false;
 
-    orchestrator.on('device-disconnected', () => {
+    orchestrator.on("device-disconnected", () => {
       disconnectionHandled = true;
       orchestrator.cancel();
     });
 
     // Start sync
-    const syncPromise = orchestrator.sync({ udid: 'mock-udid' });
+    const syncPromise = orchestrator.sync({ udid: "mock-udid" });
 
     // Simulate disconnection would require mock device service
     // For now just verify the handler is set up
@@ -331,11 +338,11 @@ describe('SyncOrchestrator E2E Flow', () => {
     orchestrator.removeAllListeners();
   });
 
-  it('should clean up resources on completion', async () => {
+  it("should clean up resources on completion", async () => {
     const orchestrator = new SyncOrchestrator();
 
     try {
-      await orchestrator.sync({ udid: 'mock-udid' });
+      await orchestrator.sync({ udid: "mock-udid" });
     } catch {
       // Expected
     }

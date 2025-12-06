@@ -3,14 +3,21 @@
  * Handles loading and resolving contacts from macOS Contacts database
  */
 
-import path from 'path';
-import fs from 'fs/promises';
-import sqlite3 from 'sqlite3';
-import { promisify } from 'util';
-import { exec } from 'child_process';
+import path from "path";
+import fs from "fs/promises";
+import sqlite3 from "sqlite3";
+import { promisify } from "util";
+import { exec } from "child_process";
 
-const { normalizePhoneNumber, formatPhoneNumber } = require('../utils/phoneUtils');
-const { MIN_CONTACT_RECORD_COUNT, CONTACTS_BASE_DIR, DEFAULT_CONTACTS_DB } = require('../constants');
+const {
+  normalizePhoneNumber,
+  formatPhoneNumber,
+} = require("../utils/phoneUtils");
+const {
+  MIN_CONTACT_RECORD_COUNT,
+  CONTACTS_BASE_DIR,
+  DEFAULT_CONTACTS_DB,
+} = require("../constants");
 
 // ============================================
 // TYPES
@@ -91,12 +98,17 @@ async function getContactNames(): Promise<ContactNamesResult> {
     const execPromise = promisify(exec);
 
     try {
-      const { stdout } = await execPromise(`find "${baseDir}" -name "*.abcddb" 2>/dev/null`);
-      const dbFiles = stdout.trim().split('\n').filter((f) => f);
+      const { stdout } = await execPromise(
+        `find "${baseDir}" -name "*.abcddb" 2>/dev/null`,
+      );
+      const dbFiles = stdout
+        .trim()
+        .split("\n")
+        .filter((f) => f);
 
       if (dbFiles.length === 0) {
-        console.warn('[ContactsService] No .abcddb files found in', baseDir);
-        lastError = new Error('No contacts database files found');
+        console.warn("[ContactsService] No .abcddb files found in", baseDir);
+        lastError = new Error("No contacts database files found");
       }
 
       // Try each database and count records
@@ -104,17 +116,21 @@ async function getContactNames(): Promise<ContactNamesResult> {
         attemptedPaths.push(dbPath);
         try {
           const db = new sqlite3.Database(dbPath, sqlite3.OPEN_READONLY);
-          const dbAll = promisify(db.all.bind(db)) as (sql: string) => Promise<any[]>;
+          const dbAll = promisify(db.all.bind(db)) as (
+            sql: string,
+          ) => Promise<any[]>;
           const dbClose = promisify(db.close.bind(db));
 
           const recordCount = await dbAll(
-            `SELECT COUNT(*) as count FROM ZABCDRECORD WHERE Z_ENT IS NOT NULL;`
+            `SELECT COUNT(*) as count FROM ZABCDRECORD WHERE Z_ENT IS NOT NULL;`,
           );
           await dbClose();
 
           // If this database has sufficient records, use it
           if (recordCount[0].count > MIN_CONTACT_RECORD_COUNT) {
-            console.log(`[ContactsService] Successfully loaded contacts from ${dbPath}`);
+            console.log(
+              `[ContactsService] Successfully loaded contacts from ${dbPath}`,
+            );
             const result = await loadContactsFromDatabase(dbPath);
             const contactCount = Object.keys(result.contactMap).length;
             return {
@@ -127,28 +143,42 @@ async function getContactNames(): Promise<ContactNamesResult> {
             };
           } else {
             console.warn(
-              `[ContactsService] Database ${dbPath} has insufficient records (${recordCount[0].count})`
+              `[ContactsService] Database ${dbPath} has insufficient records (${recordCount[0].count})`,
             );
           }
         } catch (err) {
-          console.error(`[ContactsService] Failed to read database ${dbPath}:`, (err as Error).message);
+          console.error(
+            `[ContactsService] Failed to read database ${dbPath}:`,
+            (err as Error).message,
+          );
           lastError = err as Error;
         }
       }
     } catch (err) {
-      console.error('[ContactsService] Error finding database files:', (err as Error).message);
+      console.error(
+        "[ContactsService] Error finding database files:",
+        (err as Error).message,
+      );
       lastError = err as Error;
     }
 
     // Fallback to default path
-    const defaultPath = path.join(process.env.HOME as string, DEFAULT_CONTACTS_DB);
+    const defaultPath = path.join(
+      process.env.HOME as string,
+      DEFAULT_CONTACTS_DB,
+    );
     attemptedPaths.push(defaultPath);
-    console.log('[ContactsService] Attempting fallback to default path:', defaultPath);
+    console.log(
+      "[ContactsService] Attempting fallback to default path:",
+      defaultPath,
+    );
     const result = await loadContactsFromDatabase(defaultPath);
     const contactCount = Object.keys(result.contactMap).length;
 
     if (contactCount > 0) {
-      console.log(`[ContactsService] Successfully loaded ${contactCount} contacts from fallback path`);
+      console.log(
+        `[ContactsService] Successfully loaded ${contactCount} contacts from fallback path`,
+      );
       return {
         ...result,
         status: {
@@ -158,10 +188,13 @@ async function getContactNames(): Promise<ContactNamesResult> {
         },
       };
     } else {
-      throw new Error('No contacts could be loaded from any database');
+      throw new Error("No contacts could be loaded from any database");
     }
   } catch (error) {
-    console.error('[ContactsService] Error accessing contacts database:', error);
+    console.error(
+      "[ContactsService] Error accessing contacts database:",
+      error,
+    );
     return {
       contactMap,
       phoneToContactInfo,
@@ -171,8 +204,9 @@ async function getContactNames(): Promise<ContactNamesResult> {
         error: (error as Error).message,
         lastError: lastError?.message,
         attemptedPaths,
-        userMessage: 'Could not load contacts from Contacts app',
-        action: 'Grant Full Disk Access in System Settings > Privacy & Security > Full Disk Access',
+        userMessage: "Could not load contacts from Contacts app",
+        action:
+          "Grant Full Disk Access in System Settings > Privacy & Security > Full Disk Access",
       },
     };
   }
@@ -182,7 +216,7 @@ async function getContactNames(): Promise<ContactNamesResult> {
  * Load contacts from a specific database file
  */
 async function loadContactsFromDatabase(
-  contactsDbPath: string
+  contactsDbPath: string,
 ): Promise<{ contactMap: ContactMap; phoneToContactInfo: PhoneToContactInfo }> {
   const contactMap: ContactMap = {};
   const phoneToContactInfo: PhoneToContactInfo = {};
@@ -192,7 +226,7 @@ async function loadContactsFromDatabase(
   } catch (error) {
     console.error(
       `[ContactsService] Cannot access database at ${contactsDbPath}:`,
-      (error as Error).message
+      (error as Error).message,
     );
     return { contactMap, phoneToContactInfo };
   }
@@ -232,16 +266,23 @@ async function loadContactsFromDatabase(
     await dbClose();
 
     console.log(
-      `[ContactsService] Loaded ${contactsResult.length} contact records, ${phonesResult.length} phones, ${emailsResult.length} emails`
+      `[ContactsService] Loaded ${contactsResult.length} contact records, ${phonesResult.length} phones, ${emailsResult.length} emails`,
     );
 
     // Build person map
-    const personMap = buildPersonMap(contactsResult, phonesResult, emailsResult);
+    const personMap = buildPersonMap(
+      contactsResult,
+      phonesResult,
+      emailsResult,
+    );
 
     // Build lookup maps
     buildContactMaps(personMap, contactMap, phoneToContactInfo);
   } catch (error) {
-    console.error('[ContactsService] Error accessing contacts database:', error);
+    console.error(
+      "[ContactsService] Error accessing contacts database:",
+      error,
+    );
     throw error;
   }
 
@@ -254,13 +295,17 @@ async function loadContactsFromDatabase(
 function buildPersonMap(
   contactsResult: DatabaseRow[],
   phonesResult: PhoneRow[],
-  emailsResult: EmailRow[]
+  emailsResult: EmailRow[],
 ): PersonMap {
   const personMap: PersonMap = {};
 
   // Create person entries with display names
   contactsResult.forEach((person) => {
-    const displayName = buildDisplayName(person.first_name, person.last_name, person.organization);
+    const displayName = buildDisplayName(
+      person.first_name,
+      person.last_name,
+      person.organization,
+    );
 
     if (displayName) {
       personMap[person.person_id] = {
@@ -294,11 +339,11 @@ function buildPersonMap(
 function buildDisplayName(
   firstName?: string,
   lastName?: string,
-  organization?: string
+  organization?: string,
 ): string {
-  const first = firstName || '';
-  const last = lastName || '';
-  const org = organization || '';
+  const first = firstName || "";
+  const last = lastName || "";
+  const org = organization || "";
 
   if (first && last) {
     return `${first} ${last}`;
@@ -310,7 +355,7 @@ function buildDisplayName(
     return last;
   }
 
-  return '';
+  return "";
 }
 
 /**
@@ -319,7 +364,7 @@ function buildDisplayName(
 function buildContactMaps(
   personMap: PersonMap,
   contactMap: ContactMap,
-  phoneToContactInfo: PhoneToContactInfo
+  phoneToContactInfo: PhoneToContactInfo,
 ): void {
   Object.values(personMap).forEach((person) => {
     // Map phone numbers to name and full contact info
@@ -355,7 +400,7 @@ function resolveContactName(
   contactId: string,
   chatIdentifier: string,
   displayName: string | undefined,
-  contactMap: ContactMap
+  contactMap: ContactMap,
 ): string {
   // If we have a display_name from Messages, use it
   if (displayName) return displayName;
@@ -374,7 +419,7 @@ function resolveContactName(
     }
 
     // If not found and number has country code 1, try without it
-    if (normalized && normalized.startsWith('1') && normalized.length === 11) {
+    if (normalized && normalized.startsWith("1") && normalized.length === 11) {
       const withoutCountryCode = normalized.substring(1);
       if (contactMap[withoutCountryCode]) {
         return contactMap[withoutCountryCode];
@@ -400,7 +445,7 @@ function resolveContactName(
     }
 
     // If not found and number has country code 1, try without it
-    if (normalized && normalized.startsWith('1') && normalized.length === 11) {
+    if (normalized && normalized.startsWith("1") && normalized.length === 11) {
       const withoutCountryCode = normalized.substring(1);
       if (contactMap[withoutCountryCode]) {
         return contactMap[withoutCountryCode];
@@ -409,7 +454,7 @@ function resolveContactName(
   }
 
   // Final fallback: format and show the phone/email nicely
-  const fallbackValue = contactId || chatIdentifier || 'Unknown';
+  const fallbackValue = contactId || chatIdentifier || "Unknown";
   return formatPhoneNumber(fallbackValue);
 }
 

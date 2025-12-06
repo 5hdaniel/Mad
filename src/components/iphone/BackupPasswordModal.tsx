@@ -1,5 +1,5 @@
-import React, { useState, useCallback, useEffect } from 'react';
-import type { BackupPasswordModalProps } from '../../types/iphone';
+import React, { useState, useCallback, useEffect } from "react";
+import type { BackupPasswordModalProps } from "../../types/iphone";
 
 /**
  * BackupPasswordModal Component
@@ -14,12 +14,12 @@ export const BackupPasswordModal: React.FC<BackupPasswordModalProps> = ({
   error,
   isLoading = false,
 }) => {
-  const [password, setPassword] = useState('');
+  const [password, setPassword] = useState("");
 
   // Clear password when modal closes
   useEffect(() => {
     if (!isOpen) {
-      setPassword('');
+      setPassword("");
     }
   }, [isOpen]);
 
@@ -31,17 +31,17 @@ export const BackupPasswordModal: React.FC<BackupPasswordModalProps> = ({
         onSubmit(password);
       }
     },
-    [password, isLoading, onSubmit]
+    [password, isLoading, onSubmit],
   );
 
   // Handle keyboard events
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.key === 'Escape' && !isLoading) {
+      if (e.key === "Escape" && !isLoading) {
         onCancel();
       }
     },
-    [isLoading, onCancel]
+    [isLoading, onCancel],
   );
 
   if (!isOpen) return null;
@@ -54,7 +54,9 @@ export const BackupPasswordModal: React.FC<BackupPasswordModalProps> = ({
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
         {/* Header */}
         <div className="bg-gradient-to-r from-amber-500 to-orange-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
-          <h2 className="text-xl font-bold text-white">Backup Password Required</h2>
+          <h2 className="text-xl font-bold text-white">
+            Backup Password Required
+          </h2>
           <button
             onClick={onCancel}
             disabled={isLoading}
@@ -144,15 +146,16 @@ export const BackupPasswordModal: React.FC<BackupPasswordModalProps> = ({
                   <span>Verifying...</span>
                 </>
               ) : (
-                'Continue'
+                "Continue"
               )}
             </button>
           </div>
 
           {/* Help Text */}
           <p className="text-xs text-gray-500 mt-4 text-center">
-            This is the password you set when enabling &quot;Encrypt iPhone backup&quot;
-            in iTunes or Finder. It&apos;s different from your iPhone passcode.
+            This is the password you set when enabling &quot;Encrypt iPhone
+            backup&quot; in iTunes or Finder. It&apos;s different from your
+            iPhone passcode.
           </p>
         </form>
       </div>

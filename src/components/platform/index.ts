@@ -10,6 +10,6 @@ export {
   WindowsOnly,
   LinuxOnly,
   DesktopOnly,
-} from './PlatformOnly';
+} from "./PlatformOnly";
 
-export { FeatureGate } from './FeatureGate';
+export { FeatureGate } from "./FeatureGate";
