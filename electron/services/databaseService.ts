@@ -1917,50 +1917,54 @@ class DatabaseService implements IDatabaseService {
    * Get all transactions for a user
    */
   async getTransactions(filters?: TransactionFilters): Promise<Transaction[]> {
-    let sql = "SELECT * FROM transactions WHERE 1=1";
+    // Use subquery to compute actual email count from communications table
+    // This overrides the stored total_communications_count to ensure accuracy
+    let sql = `SELECT t.*,
+               (SELECT COUNT(*) FROM communications c WHERE c.transaction_id = t.id) as total_communications_count
+               FROM transactions t WHERE 1=1`;
     const params: any[] = [];
 
     if (filters?.user_id) {
-      sql += " AND user_id = ?";
+      sql += " AND t.user_id = ?";
       params.push(filters.user_id);
     }
 
     if (filters?.transaction_type) {
-      sql += " AND transaction_type = ?";
+      sql += " AND t.transaction_type = ?";
       params.push(filters.transaction_type);
     }
 
     if (filters?.transaction_status) {
-      sql += " AND transaction_status = ?";
+      sql += " AND t.transaction_status = ?";
       params.push(filters.transaction_status);
     }
 
     if (filters?.status) {
-      sql += " AND status = ?";
+      sql += " AND t.status = ?";
       params.push(filters.status);
     }
 
     if (filters?.export_status) {
-      sql += " AND export_status = ?";
+      sql += " AND t.export_status = ?";
       params.push(filters.export_status);
     }
 
     if (filters?.start_date) {
-      sql += " AND closing_date >= ?";
+      sql += " AND t.closing_date >= ?";
       params.push(filters.start_date);
     }
 
     if (filters?.end_date) {
-      sql += " AND closing_date <= ?";
+      sql += " AND t.closing_date <= ?";
       params.push(filters.end_date);
     }
 
     if (filters?.property_address) {
-      sql += " AND property_address LIKE ?";
+      sql += " AND t.property_address LIKE ?";
       params.push(`%${filters.property_address}%`);
     }
 
-    sql += " ORDER BY created_at DESC";
+    sql += " ORDER BY t.created_at DESC";
 
     return this._all<Transaction>(sql, params);
   }
