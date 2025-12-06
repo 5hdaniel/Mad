@@ -6,26 +6,26 @@
  * with additional utilities for the backup service.
  */
 
-import path from 'path';
-import { app } from 'electron';
-import log from 'electron-log';
+import path from "path";
+import { app } from "electron";
+import log from "electron-log";
 
 /**
  * List of required executable names for libimobiledevice functionality
  */
 export const REQUIRED_EXECUTABLES = [
-  'idevice_id',
-  'ideviceinfo',
-  'idevicebackup2',
+  "idevice_id",
+  "ideviceinfo",
+  "idevicebackup2",
 ] as const;
 
-export type LibimobiledeviceExecutable = typeof REQUIRED_EXECUTABLES[number];
+export type LibimobiledeviceExecutable = (typeof REQUIRED_EXECUTABLES)[number];
 
 /**
  * Check if running in mock mode for development without actual device
  */
 export function isMockMode(): boolean {
-  return process.env.MOCK_DEVICE === 'true';
+  return process.env.MOCK_DEVICE === "true";
 }
 
 /**
@@ -34,17 +34,17 @@ export function isMockMode(): boolean {
  * @throws Error if not running on Windows
  */
 export function getLibimobiledevicePath(): string {
-  if (process.platform !== 'win32') {
-    throw new Error('libimobiledevice binaries only available on Windows');
+  if (process.platform !== "win32") {
+    throw new Error("libimobiledevice binaries only available on Windows");
   }
 
   const isDev = !app.isPackaged;
 
   if (isDev) {
-    return path.join(__dirname, '../../resources/win/libimobiledevice');
+    return path.join(__dirname, "../../resources/win/libimobiledevice");
   }
 
-  return path.join(process.resourcesPath, 'win/libimobiledevice');
+  return path.join(process.resourcesPath, "win/libimobiledevice");
 }
 
 /**
@@ -65,16 +65,19 @@ export function getExecutablePath(name: string): string {
  * @returns True if binaries directory exists and contains expected files
  */
 export function areBinariesAvailable(): boolean {
-  if (process.platform !== 'win32') {
+  if (process.platform !== "win32") {
     return false;
   }
 
   try {
     const basePath = getLibimobiledevicePath();
-    const fs = require('fs');
+    const fs = require("fs");
     return fs.existsSync(basePath);
   } catch (error) {
-    log.error('[libimobiledeviceService] Error checking binaries availability:', error);
+    log.error(
+      "[libimobiledeviceService] Error checking binaries availability:",
+      error,
+    );
     return false;
   }
 }
@@ -86,7 +89,7 @@ export function areBinariesAvailable(): boolean {
  * @returns Command string suitable for spawn/exec
  */
 export function getCommand(name: string): string {
-  if (process.platform === 'win32') {
+  if (process.platform === "win32") {
     try {
       return getExecutablePath(name);
     } catch {
@@ -108,7 +111,7 @@ export function canUseLibimobiledevice(): boolean {
     return true;
   }
 
-  if (process.platform === 'win32') {
+  if (process.platform === "win32") {
     return areBinariesAvailable();
   }
 

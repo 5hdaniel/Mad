@@ -5,9 +5,9 @@
  * Use these for platform-specific UI elements.
  */
 
-import React, { ReactNode } from 'react';
-import { usePlatform } from '../../contexts/PlatformContext';
-import { Platform } from '../../utils/platform';
+import React, { ReactNode } from "react";
+import { usePlatform } from "../../contexts/PlatformContext";
+import { Platform } from "../../utils/platform";
 
 interface PlatformOnlyProps {
   /** List of platforms where children should be rendered */
@@ -52,7 +52,7 @@ interface ConvenienceProps {
  * </MacOSOnly>
  */
 export const MacOSOnly: React.FC<ConvenienceProps> = (props) => (
-  <PlatformOnly platforms={['macos']} {...props} />
+  <PlatformOnly platforms={["macos"]} {...props} />
 );
 
 /**
@@ -63,7 +63,7 @@ export const MacOSOnly: React.FC<ConvenienceProps> = (props) => (
  * </WindowsOnly>
  */
 export const WindowsOnly: React.FC<ConvenienceProps> = (props) => (
-  <PlatformOnly platforms={['windows']} {...props} />
+  <PlatformOnly platforms={["windows"]} {...props} />
 );
 
 /**
@@ -74,7 +74,7 @@ export const WindowsOnly: React.FC<ConvenienceProps> = (props) => (
  * </LinuxOnly>
  */
 export const LinuxOnly: React.FC<ConvenienceProps> = (props) => (
-  <PlatformOnly platforms={['linux']} {...props} />
+  <PlatformOnly platforms={["linux"]} {...props} />
 );
 
 /**
@@ -85,5 +85,5 @@ export const LinuxOnly: React.FC<ConvenienceProps> = (props) => (
  * </DesktopOnly>
  */
 export const DesktopOnly: React.FC<ConvenienceProps> = (props) => (
-  <PlatformOnly platforms={['macos', 'windows', 'linux']} {...props} />
+  <PlatformOnly platforms={["macos", "windows", "linux"]} {...props} />
 );

@@ -1,4 +1,4 @@
-import React from 'react';
+import React from "react";
 
 interface CancelSyncModalProps {
   isOpen: boolean;
@@ -9,7 +9,7 @@ interface CancelSyncModalProps {
 export const CancelSyncModal: React.FC<CancelSyncModalProps> = ({
   isOpen,
   onConfirm,
-  onCancel
+  onCancel,
 }) => {
   if (!isOpen) return null;
 
@@ -18,8 +18,8 @@ export const CancelSyncModal: React.FC<CancelSyncModalProps> = ({
       <div className="modal-content bg-white rounded-lg p-6 max-w-sm mx-4 shadow-xl">
         <h2 className="text-lg font-semibold mb-2">Cancel Sync?</h2>
         <p className="text-gray-600 mb-4">
-          The sync is still in progress. If you cancel now, no data
-          will be saved and you'll need to start over.
+          The sync is still in progress. If you cancel now, no data will be
+          saved and you'll need to start over.
         </p>
         <div className="modal-actions flex gap-2 justify-end">
           <button

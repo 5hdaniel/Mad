@@ -3,7 +3,7 @@
  * Provides centralized configuration management with type safety
  */
 
-import type { Theme } from '../types/models';
+import type { Theme } from "../types/models";
 
 /**
  * Configuration object structure
@@ -18,7 +18,7 @@ interface Config {
 export interface AppConfig {
   theme?: Theme;
   autoUpdate?: boolean;
-  logLevel?: 'debug' | 'info' | 'warn' | 'error';
+  logLevel?: "debug" | "info" | "warn" | "error";
   dataDirectory?: string;
   maxLogFiles?: number;
   enableTelemetry?: boolean;
@@ -47,9 +47,9 @@ export class ConfigService {
    */
   private loadDefaultConfig(): Config {
     return {
-      theme: 'auto' as Theme,
+      theme: "auto" as Theme,
       autoUpdate: true,
-      logLevel: 'info',
+      logLevel: "info",
       maxLogFiles: 10,
       enableTelemetry: false,
     };

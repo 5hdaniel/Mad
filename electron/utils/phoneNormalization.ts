@@ -18,15 +18,15 @@
  */
 export function normalizePhoneNumber(phone: string): string {
   // Remove all non-digit characters
-  let digits = phone.replace(/\D/g, '');
+  let digits = phone.replace(/\D/g, "");
 
   // Handle US numbers (10 digits without country code)
   if (digits.length === 10) {
-    digits = '1' + digits;
+    digits = "1" + digits;
   }
 
   // Return with + prefix (E.164-ish format)
-  return '+' + digits;
+  return "+" + digits;
 }
 
 /**
@@ -68,7 +68,7 @@ export function phoneNumbersMatch(a: string, b: string): boolean {
  */
 export function isPhoneNumber(handle: string): boolean {
   // If it contains @, it's likely an email
-  if (handle.includes('@')) {
+  if (handle.includes("@")) {
     return false;
   }
 
@@ -88,7 +88,7 @@ export function isPhoneNumber(handle: string): boolean {
  * @returns Only the digit characters
  */
 export function extractDigits(phone: string): string {
-  return phone.replace(/\D/g, '');
+  return phone.replace(/\D/g, "");
 }
 
 /**

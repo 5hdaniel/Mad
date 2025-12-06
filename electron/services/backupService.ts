@@ -10,14 +10,14 @@
  * This service uses --skip-apps to reduce backup size by ~40%.
  */
 
-import { spawn, ChildProcess } from 'child_process';
-import { EventEmitter } from 'events';
-import path from 'path';
-import { app } from 'electron';
-import { promises as fs } from 'fs';
-import log from 'electron-log';
-import { getCommand, isMockMode } from './libimobiledeviceService';
-import { backupDecryptionService } from './backupDecryptionService';
+import { spawn, ChildProcess } from "child_process";
+import { EventEmitter } from "events";
+import path from "path";
+import { app } from "electron";
+import { promises as fs } from "fs";
+import log from "electron-log";
+import { getCommand, isMockMode } from "./libimobiledeviceService";
+import { backupDecryptionService } from "./backupDecryptionService";
 import {
   BackupProgress,
   BackupResult,
@@ -26,8 +26,8 @@ import {
   BackupInfo,
   BackupStatus,
   BackupEncryptionInfo,
-  BackupErrorCode
-} from '../types/backup';
+  BackupErrorCode,
+} from "../types/backup";
 
 /**
  * Service for managing iPhone backups via idevicebackup2
@@ -62,12 +62,12 @@ export class BackupService extends EventEmitter {
       supportsSkipApps: true,
       supportsEncryption: true,
       availableDomains: [
-        'HomeDomain',
-        'CameraRollDomain',
-        'AppDomain',
-        'MediaDomain',
-        'SystemPreferencesDomain'
-      ]
+        "HomeDomain",
+        "CameraRollDomain",
+        "AppDomain",
+        "MediaDomain",
+        "SystemPreferencesDomain",
+      ],
     };
   }
 
@@ -78,50 +78,53 @@ export class BackupService extends EventEmitter {
    */
   async checkEncryptionStatus(udid: string): Promise<BackupEncryptionInfo> {
     try {
-      const ideviceinfo = getCommand('ideviceinfo');
+      const ideviceinfo = getCommand("ideviceinfo");
 
       return new Promise((resolve) => {
-        const proc = spawn(ideviceinfo, ['-u', udid, '-k', 'WillEncrypt']);
-        let output = '';
-        let errorOutput = '';
+        const proc = spawn(ideviceinfo, ["-u", udid, "-k", "WillEncrypt"]);
+        let output = "";
+        let errorOutput = "";
 
-        proc.stdout?.on('data', (data) => {
+        proc.stdout?.on("data", (data) => {
           output += data.toString();
         });
 
-        proc.stderr?.on('data', (data) => {
+        proc.stderr?.on("data", (data) => {
           errorOutput += data.toString();
         });
 
-        proc.on('close', (code) => {
+        proc.on("close", (code) => {
           if (code === 0) {
-            const willEncrypt = output.trim().toLowerCase() === 'true';
+            const willEncrypt = output.trim().toLowerCase() === "true";
             resolve({
               isEncrypted: willEncrypt,
-              needsPassword: willEncrypt
+              needsPassword: willEncrypt,
             });
           } else {
-            log.warn('[BackupService] Could not determine encryption status:', errorOutput);
+            log.warn(
+              "[BackupService] Could not determine encryption status:",
+              errorOutput,
+            );
             resolve({
               isEncrypted: false,
-              needsPassword: false
+              needsPassword: false,
             });
           }
         });
 
-        proc.on('error', (error) => {
-          log.error('[BackupService] Error checking encryption status:', error);
+        proc.on("error", (error) => {
+          log.error("[BackupService] Error checking encryption status:", error);
           resolve({
             isEncrypted: false,
-            needsPassword: false
+            needsPassword: false,
           });
         });
       });
     } catch (error) {
-      log.error('[BackupService] Exception checking encryption status:', error);
+      log.error("[BackupService] Exception checking encryption status:", error);
       return {
         isEncrypted: false,
-        needsPassword: false
+        needsPassword: false,
       };
     }
   }
@@ -133,7 +136,7 @@ export class BackupService extends EventEmitter {
     return {
       isRunning: this.isRunning,
       currentDeviceUdid: this.currentDeviceUdid,
-      progress: this.lastProgress
+      progress: this.lastProgress,
     };
   }
 
@@ -148,7 +151,7 @@ export class BackupService extends EventEmitter {
    */
   async startBackup(options: BackupOptions): Promise<BackupResult> {
     if (this.isRunning) {
-      throw new Error('Backup already in progress');
+      throw new Error("Backup already in progress");
     }
 
     // Check encryption status (TASK-007)
@@ -156,18 +159,18 @@ export class BackupService extends EventEmitter {
 
     if (encryptionInfo.isEncrypted && !options.password) {
       // Emit event to signal UI should prompt for password
-      this.emit('password-required', { udid: options.udid });
+      this.emit("password-required", { udid: options.udid });
 
       return {
         success: false,
         backupPath: null,
-        error: 'Backup password required',
-        errorCode: 'PASSWORD_REQUIRED' as BackupErrorCode,
+        error: "Backup password required",
+        errorCode: "PASSWORD_REQUIRED" as BackupErrorCode,
         duration: 0,
         deviceUdid: options.udid,
         isIncremental: false,
         backupSize: 0,
-        isEncrypted: true
+        isEncrypted: true,
       };
     }
 
@@ -177,7 +180,7 @@ export class BackupService extends EventEmitter {
     }
 
     const backupPath = options.outputDir || this.getDefaultBackupPath();
-    const idevicebackup2 = getCommand('idevicebackup2');
+    const idevicebackup2 = getCommand("idevicebackup2");
 
     // Ensure backup directory exists
     await fs.mkdir(backupPath, { recursive: true });
@@ -189,56 +192,56 @@ export class BackupService extends EventEmitter {
     // Build command arguments
     const args = this.buildBackupArgs(options, backupPath);
 
-    log.info('[BackupService] Starting backup with args:', args);
-    log.info('[BackupService] Backup path:', backupPath);
+    log.info("[BackupService] Starting backup with args:", args);
+    log.info("[BackupService] Backup path:", backupPath);
 
     return new Promise((resolve) => {
       this.isRunning = true;
       this.currentDeviceUdid = options.udid;
       this.startTime = Date.now();
       this.lastProgress = {
-        phase: 'preparing',
+        phase: "preparing",
         percentComplete: 0,
         currentFile: null,
         filesTransferred: 0,
         totalFiles: null,
         bytesTransferred: 0,
         totalBytes: null,
-        estimatedTimeRemaining: null
+        estimatedTimeRemaining: null,
       };
-      this.emit('progress', this.lastProgress);
+      this.emit("progress", this.lastProgress);
 
       this.currentProcess = spawn(idevicebackup2, args, {
-        stdio: ['pipe', 'pipe', 'pipe']
+        stdio: ["pipe", "pipe", "pipe"],
       });
 
-      let stdoutBuffer = '';
-      let stderrBuffer = '';
+      let stdoutBuffer = "";
+      let stderrBuffer = "";
 
-      this.currentProcess.stdout?.on('data', (data: Buffer) => {
+      this.currentProcess.stdout?.on("data", (data: Buffer) => {
         const output = data.toString();
         stdoutBuffer += output;
-        log.debug('[BackupService] stdout:', output);
+        log.debug("[BackupService] stdout:", output);
 
         const progress = this.parseProgress(output);
         if (progress) {
           this.lastProgress = progress;
-          this.emit('progress', progress);
+          this.emit("progress", progress);
         }
       });
 
-      this.currentProcess.stderr?.on('data', (data: Buffer) => {
+      this.currentProcess.stderr?.on("data", (data: Buffer) => {
         const output = data.toString();
         stderrBuffer += output;
-        log.warn('[BackupService] stderr:', output);
+        log.warn("[BackupService] stderr:", output);
       });
 
-      this.currentProcess.on('error', (error: Error) => {
-        log.error('[BackupService] Process error:', error);
-        this.emit('error', error);
+      this.currentProcess.on("error", (error: Error) => {
+        log.error("[BackupService] Process error:", error);
+        this.emit("error", error);
       });
 
-      this.currentProcess.on('close', async (code: number | null) => {
+      this.currentProcess.on("close", async (code: number | null) => {
         const duration = Date.now() - this.startTime;
         this.isRunning = false;
         this.currentProcess = null;
@@ -250,42 +253,46 @@ export class BackupService extends EventEmitter {
 
         if (success) {
           backupSize = await this.calculateBackupSize(deviceBackupPath);
-          log.info(`[BackupService] Backup completed successfully in ${duration}ms, size: ${backupSize} bytes`);
+          log.info(
+            `[BackupService] Backup completed successfully in ${duration}ms, size: ${backupSize} bytes`,
+          );
 
           // Handle encrypted backup decryption (TASK-007)
           if (encryptionInfo.isEncrypted && options.password) {
             this.lastProgress = {
-              phase: 'decrypting',
+              phase: "decrypting",
               percentComplete: 95,
               currentFile: null,
               filesTransferred: 0,
               totalFiles: null,
               bytesTransferred: backupSize,
               totalBytes: backupSize,
-              estimatedTimeRemaining: 30
+              estimatedTimeRemaining: 30,
             };
-            this.emit('progress', this.lastProgress);
+            this.emit("progress", this.lastProgress);
 
-            const decryptionResult = await backupDecryptionService.decryptBackup(
-              deviceBackupPath,
-              options.password
-            );
+            const decryptionResult =
+              await backupDecryptionService.decryptBackup(
+                deviceBackupPath,
+                options.password,
+              );
 
             if (!decryptionResult.success) {
               const result: BackupResult = {
                 success: false,
                 backupPath: deviceBackupPath,
-                error: decryptionResult.error || 'Decryption failed',
-                errorCode: decryptionResult.error === 'Incorrect password'
-                  ? 'INCORRECT_PASSWORD' as BackupErrorCode
-                  : 'DECRYPTION_FAILED' as BackupErrorCode,
+                error: decryptionResult.error || "Decryption failed",
+                errorCode:
+                  decryptionResult.error === "Incorrect password"
+                    ? ("INCORRECT_PASSWORD" as BackupErrorCode)
+                    : ("DECRYPTION_FAILED" as BackupErrorCode),
                 duration: Date.now() - this.startTime,
                 deviceUdid: options.udid,
                 isIncremental: previousBackupExists && !options.forceFullBackup,
                 backupSize,
-                isEncrypted: true
+                isEncrypted: true,
               };
-              this.emit('complete', result);
+              this.emit("complete", result);
               resolve(result);
               return;
             }
@@ -295,32 +302,34 @@ export class BackupService extends EventEmitter {
           }
         } else {
           log.error(`[BackupService] Backup failed with code ${code}`);
-          log.error('[BackupService] stderr:', stderrBuffer);
+          log.error("[BackupService] stderr:", stderrBuffer);
         }
 
         const result: BackupResult = {
           success,
           backupPath: success ? finalBackupPath : null,
-          error: success ? null : `Backup failed with code ${code}: ${stderrBuffer}`,
+          error: success
+            ? null
+            : `Backup failed with code ${code}: ${stderrBuffer}`,
           duration: Date.now() - this.startTime,
           deviceUdid: options.udid,
           isIncremental: previousBackupExists && !options.forceFullBackup,
           backupSize,
-          isEncrypted: encryptionInfo.isEncrypted
+          isEncrypted: encryptionInfo.isEncrypted,
         };
 
         this.lastProgress = {
-          phase: 'finishing',
+          phase: "finishing",
           percentComplete: success ? 100 : 0,
           currentFile: null,
           filesTransferred: 0,
           totalFiles: null,
           bytesTransferred: backupSize,
           totalBytes: backupSize,
-          estimatedTimeRemaining: 0
+          estimatedTimeRemaining: 0,
         };
-        this.emit('progress', this.lastProgress);
-        this.emit('complete', result);
+        this.emit("progress", this.lastProgress);
+        this.emit("complete", result);
 
         resolve(result);
       });
@@ -332,13 +341,13 @@ export class BackupService extends EventEmitter {
    */
   cancelBackup(): void {
     if (this.currentProcess) {
-      log.info('[BackupService] Cancelling backup');
-      this.currentProcess.kill('SIGTERM');
+      log.info("[BackupService] Cancelling backup");
+      this.currentProcess.kill("SIGTERM");
 
       // Give it a moment, then force kill if needed
       setTimeout(() => {
         if (this.currentProcess) {
-          this.currentProcess.kill('SIGKILL');
+          this.currentProcess.kill("SIGKILL");
         }
       }, 5000);
 
@@ -352,24 +361,27 @@ export class BackupService extends EventEmitter {
    * Note: We use --skip-apps to reduce backup size since we only need
    * messages and contacts which are in HomeDomain.
    */
-  private buildBackupArgs(options: BackupOptions, backupPath: string): string[] {
+  private buildBackupArgs(
+    options: BackupOptions,
+    backupPath: string,
+  ): string[] {
     const args: string[] = [];
 
     // Target device by UDID
-    args.push('-u', options.udid);
+    args.push("-u", options.udid);
 
     // Command: backup
-    args.push('backup');
+    args.push("backup");
 
     // Skip apps to reduce backup size (recommended for our use case)
     // This removes AppDomain which can be 10-30 GB
     if (options.skipApps !== false) {
-      args.push('--skip-apps');
+      args.push("--skip-apps");
     }
 
     // Force full backup if requested (otherwise incremental)
     if (options.forceFullBackup) {
-      args.push('--full');
+      args.push("--full");
     }
 
     // Backup destination path
@@ -392,14 +404,14 @@ export class BackupService extends EventEmitter {
     if (filesMatch) {
       const filesTransferred = parseInt(filesMatch[1], 10);
       return {
-        phase: 'transferring',
+        phase: "transferring",
         percentComplete: Math.min(filesTransferred / 100, 99), // Estimate
         currentFile: null,
         filesTransferred,
         totalFiles: null,
         bytesTransferred: 0,
         totalBytes: null,
-        estimatedTimeRemaining: null
+        estimatedTimeRemaining: null,
       };
     }
 
@@ -408,41 +420,41 @@ export class BackupService extends EventEmitter {
     if (percentMatch) {
       const percent = parseFloat(percentMatch[1]);
       return {
-        phase: 'transferring',
+        phase: "transferring",
         percentComplete: percent,
         currentFile: null,
         filesTransferred: 0,
         totalFiles: null,
         bytesTransferred: 0,
         totalBytes: null,
-        estimatedTimeRemaining: this.estimateTimeRemaining(percent)
+        estimatedTimeRemaining: this.estimateTimeRemaining(percent),
       };
     }
 
     // Check for phase indicators
-    if (output.includes('Receiving files')) {
+    if (output.includes("Receiving files")) {
       return {
-        phase: 'transferring',
+        phase: "transferring",
         percentComplete: 5,
         currentFile: null,
         filesTransferred: 0,
         totalFiles: null,
         bytesTransferred: 0,
         totalBytes: null,
-        estimatedTimeRemaining: null
+        estimatedTimeRemaining: null,
       };
     }
 
-    if (output.includes('Finishing')) {
+    if (output.includes("Finishing")) {
       return {
-        phase: 'finishing',
+        phase: "finishing",
         percentComplete: 95,
         currentFile: null,
         filesTransferred: 0,
         totalFiles: null,
         bytesTransferred: 0,
         totalBytes: null,
-        estimatedTimeRemaining: 30
+        estimatedTimeRemaining: 30,
       };
     }
 
@@ -468,7 +480,7 @@ export class BackupService extends EventEmitter {
    * Get the default backup path in app's userData folder
    */
   private getDefaultBackupPath(): string {
-    return path.join(app.getPath('userData'), 'Backups');
+    return path.join(app.getPath("userData"), "Backups");
   }
 
   /**
@@ -476,7 +488,7 @@ export class BackupService extends EventEmitter {
    */
   private async calculateBackupSize(backupPath: string): Promise<number> {
     try {
-      if (!await this.pathExists(backupPath)) {
+      if (!(await this.pathExists(backupPath))) {
         return 0;
       }
 
@@ -495,7 +507,7 @@ export class BackupService extends EventEmitter {
 
       return totalSize;
     } catch (error) {
-      log.error('[BackupService] Error calculating backup size:', error);
+      log.error("[BackupService] Error calculating backup size:", error);
       return 0;
     }
   }
@@ -520,7 +532,7 @@ export class BackupService extends EventEmitter {
     const backups: BackupInfo[] = [];
 
     try {
-      if (!await this.pathExists(backupPath)) {
+      if (!(await this.pathExists(backupPath))) {
         return backups;
       }
 
@@ -536,7 +548,7 @@ export class BackupService extends EventEmitter {
         }
       }
     } catch (error) {
-      log.error('[BackupService] Error listing backups:', error);
+      log.error("[BackupService] Error listing backups:", error);
     }
 
     return backups;
@@ -545,7 +557,10 @@ export class BackupService extends EventEmitter {
   /**
    * Get information about a specific backup
    */
-  private async getBackupInfo(backupPath: string, udid: string): Promise<BackupInfo | null> {
+  private async getBackupInfo(
+    backupPath: string,
+    udid: string,
+  ): Promise<BackupInfo | null> {
     try {
       const stats = await fs.stat(backupPath);
       const size = await this.calculateBackupSize(backupPath);
@@ -555,17 +570,23 @@ export class BackupService extends EventEmitter {
       let iosVersion: string | null = null;
       let isEncrypted = false;
 
-      const infoPlistPath = path.join(backupPath, 'Info.plist');
+      const infoPlistPath = path.join(backupPath, "Info.plist");
       if (await this.pathExists(infoPlistPath)) {
         // Basic parsing - in production, use a proper plist parser
-        const content = await fs.readFile(infoPlistPath, 'utf8');
-        const deviceNameMatch = content.match(/<key>Device Name<\/key>\s*<string>([^<]+)<\/string>/);
-        const versionMatch = content.match(/<key>Product Version<\/key>\s*<string>([^<]+)<\/string>/);
-        const encryptedMatch = content.match(/<key>IsEncrypted<\/key>\s*<(true|false)/);
+        const content = await fs.readFile(infoPlistPath, "utf8");
+        const deviceNameMatch = content.match(
+          /<key>Device Name<\/key>\s*<string>([^<]+)<\/string>/,
+        );
+        const versionMatch = content.match(
+          /<key>Product Version<\/key>\s*<string>([^<]+)<\/string>/,
+        );
+        const encryptedMatch = content.match(
+          /<key>IsEncrypted<\/key>\s*<(true|false)/,
+        );
 
         if (deviceNameMatch) deviceName = deviceNameMatch[1];
         if (versionMatch) iosVersion = versionMatch[1];
-        if (encryptedMatch) isEncrypted = encryptedMatch[1] === 'true';
+        if (encryptedMatch) isEncrypted = encryptedMatch[1] === "true";
       }
 
       return {
@@ -575,10 +596,10 @@ export class BackupService extends EventEmitter {
         size,
         isEncrypted,
         iosVersion,
-        deviceName
+        deviceName,
       };
     } catch (error) {
-      log.error('[BackupService] Error getting backup info:', error);
+      log.error("[BackupService] Error getting backup info:", error);
       return null;
     }
   }
@@ -587,21 +608,21 @@ export class BackupService extends EventEmitter {
    * Delete a backup for a specific device
    */
   async deleteBackup(backupPath: string): Promise<void> {
-    log.info('[BackupService] Deleting backup:', backupPath);
+    log.info("[BackupService] Deleting backup:", backupPath);
 
-    if (!await this.pathExists(backupPath)) {
-      log.warn('[BackupService] Backup path does not exist:', backupPath);
+    if (!(await this.pathExists(backupPath))) {
+      log.warn("[BackupService] Backup path does not exist:", backupPath);
       return;
     }
 
     // Validate path is within our backup directory for safety
     const defaultPath = this.getDefaultBackupPath();
     if (!backupPath.startsWith(defaultPath)) {
-      throw new Error('Cannot delete backup outside of backup directory');
+      throw new Error("Cannot delete backup outside of backup directory");
     }
 
     await fs.rm(backupPath, { recursive: true, force: true });
-    log.info('[BackupService] Backup deleted successfully');
+    log.info("[BackupService] Backup deleted successfully");
   }
 
   /**
@@ -622,11 +643,16 @@ export class BackupService extends EventEmitter {
     // For each device, keep only the most recent backups
     for (const [udid, deviceBackups] of byDevice) {
       // Sort by date, newest first
-      deviceBackups.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      deviceBackups.sort(
+        (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+      );
 
       // Delete older backups
       for (let i = keepCount; i < deviceBackups.length; i++) {
-        log.info(`[BackupService] Cleaning up old backup for device ${udid}:`, deviceBackups[i].path);
+        log.info(
+          `[BackupService] Cleaning up old backup for device ${udid}:`,
+          deviceBackups[i].path,
+        );
         await this.deleteBackup(deviceBackups[i].path);
       }
     }
@@ -637,14 +663,17 @@ export class BackupService extends EventEmitter {
    * @param backupPath Path to the backup
    */
   async cleanupDecryptedFiles(backupPath: string): Promise<void> {
-    const decryptedPath = path.join(backupPath, 'decrypted');
+    const decryptedPath = path.join(backupPath, "decrypted");
     await backupDecryptionService.cleanup(decryptedPath);
   }
 
   /**
    * Verify a backup password without performing full backup (TASK-007)
    */
-  async verifyBackupPassword(backupPath: string, password: string): Promise<boolean> {
+  async verifyBackupPassword(
+    backupPath: string,
+    password: string,
+  ): Promise<boolean> {
     return backupDecryptionService.verifyPassword(backupPath, password);
   }
 
@@ -652,36 +681,40 @@ export class BackupService extends EventEmitter {
    * Mock backup for development without actual device
    */
   private async mockBackup(options: BackupOptions): Promise<BackupResult> {
-    log.info('[BackupService] Running mock backup');
+    log.info("[BackupService] Running mock backup");
 
     this.isRunning = true;
     this.currentDeviceUdid = options.udid;
     this.startTime = Date.now();
 
     // Simulate progress
-    const phases: Array<{ phase: BackupProgress['phase']; percent: number; delay: number }> = [
-      { phase: 'preparing', percent: 0, delay: 500 },
-      { phase: 'transferring', percent: 10, delay: 500 },
-      { phase: 'transferring', percent: 30, delay: 500 },
-      { phase: 'transferring', percent: 50, delay: 500 },
-      { phase: 'transferring', percent: 70, delay: 500 },
-      { phase: 'transferring', percent: 90, delay: 500 },
-      { phase: 'finishing', percent: 100, delay: 500 }
+    const phases: Array<{
+      phase: BackupProgress["phase"];
+      percent: number;
+      delay: number;
+    }> = [
+      { phase: "preparing", percent: 0, delay: 500 },
+      { phase: "transferring", percent: 10, delay: 500 },
+      { phase: "transferring", percent: 30, delay: 500 },
+      { phase: "transferring", percent: 50, delay: 500 },
+      { phase: "transferring", percent: 70, delay: 500 },
+      { phase: "transferring", percent: 90, delay: 500 },
+      { phase: "finishing", percent: 100, delay: 500 },
     ];
 
     for (const step of phases) {
-      await new Promise(resolve => setTimeout(resolve, step.delay));
+      await new Promise((resolve) => setTimeout(resolve, step.delay));
       this.lastProgress = {
         phase: step.phase,
         percentComplete: step.percent,
-        currentFile: step.phase === 'transferring' ? 'mock_file.dat' : null,
+        currentFile: step.phase === "transferring" ? "mock_file.dat" : null,
         filesTransferred: Math.floor(step.percent * 10),
         totalFiles: 1000,
         bytesTransferred: step.percent * 1024 * 1024,
         totalBytes: 100 * 1024 * 1024,
-        estimatedTimeRemaining: Math.max(0, (100 - step.percent) / 10)
+        estimatedTimeRemaining: Math.max(0, (100 - step.percent) / 10),
       };
-      this.emit('progress', this.lastProgress);
+      this.emit("progress", this.lastProgress);
     }
 
     this.isRunning = false;
@@ -694,10 +727,10 @@ export class BackupService extends EventEmitter {
       duration: Date.now() - this.startTime,
       deviceUdid: options.udid,
       isIncremental: false,
-      backupSize: 100 * 1024 * 1024 // 100 MB mock
+      backupSize: 100 * 1024 * 1024, // 100 MB mock
     };
 
-    this.emit('complete', result);
+    this.emit("complete", result);
     return result;
   }
 }

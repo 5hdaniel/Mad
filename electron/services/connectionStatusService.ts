@@ -3,19 +3,19 @@
  * Monitor OAuth connections to Google and Microsoft
  */
 
-import databaseService from './databaseService';
-import googleAuthService from './googleAuthService';
-import microsoftAuthService from './microsoftAuthService';
-import { OAuthToken } from '../types/models';
+import databaseService from "./databaseService";
+import googleAuthService from "./googleAuthService";
+import microsoftAuthService from "./microsoftAuthService";
+import { OAuthToken } from "../types/models";
 
 /**
  * Connection error types
  */
 type ConnectionErrorType =
-  | 'NOT_CONNECTED'
-  | 'TOKEN_EXPIRED'
-  | 'TOKEN_REFRESH_FAILED'
-  | 'CONNECTION_CHECK_FAILED';
+  | "NOT_CONNECTED"
+  | "TOKEN_EXPIRED"
+  | "TOKEN_REFRESH_FAILED"
+  | "CONNECTION_CHECK_FAILED";
 
 /**
  * Connection error details
@@ -57,7 +57,7 @@ interface FormattedUserError {
   action: string;
   actionHandler: string;
   details?: string;
-  severity: 'info' | 'warning';
+  severity: "info" | "warning";
 }
 
 class ConnectionStatusService {
@@ -78,20 +78,26 @@ class ConnectionStatusService {
    * @param userId
    * @returns Connection status
    */
-  async checkGoogleConnection(userId: string): Promise<ProviderConnectionStatus> {
+  async checkGoogleConnection(
+    userId: string,
+  ): Promise<ProviderConnectionStatus> {
     try {
       // Get Google auth token from database
-      const token: OAuthToken | null = await databaseService.getOAuthToken(userId, 'google', 'mailbox');
+      const token: OAuthToken | null = await databaseService.getOAuthToken(
+        userId,
+        "google",
+        "mailbox",
+      );
 
       if (!token || !token.access_token) {
         this.connectionStatus.google = {
           connected: false,
           lastCheck: Date.now(),
           error: {
-            type: 'NOT_CONNECTED',
-            userMessage: 'Gmail is not connected',
-            action: 'Connect your Gmail account to access emails',
-            actionHandler: 'connect-google',
+            type: "NOT_CONNECTED",
+            userMessage: "Gmail is not connected",
+            action: "Connect your Gmail account to access emails",
+            actionHandler: "connect-google",
           },
         };
         return this.connectionStatus.google;
@@ -103,11 +109,16 @@ class ConnectionStatusService {
 
       if (tokenExpiry < now) {
         // Token expired - try to refresh
-        console.log('[ConnectionStatus] Google token expired, attempting refresh...');
+        console.log(
+          "[ConnectionStatus] Google token expired, attempting refresh...",
+        );
         try {
-          const refreshResult = await googleAuthService.refreshAccessToken(userId);
+          const refreshResult =
+            await googleAuthService.refreshAccessToken(userId);
           if (refreshResult.success) {
-            console.log('[ConnectionStatus] Google token refreshed successfully');
+            console.log(
+              "[ConnectionStatus] Google token refreshed successfully",
+            );
             this.connectionStatus.google = {
               connected: true,
               lastCheck: Date.now(),
@@ -116,10 +127,16 @@ class ConnectionStatusService {
             };
             return this.connectionStatus.google;
           } else {
-            console.error('[ConnectionStatus] Google token refresh failed:', refreshResult.error);
+            console.error(
+              "[ConnectionStatus] Google token refresh failed:",
+              refreshResult.error,
+            );
           }
         } catch (refreshError: any) {
-          console.error('[ConnectionStatus] Google token refresh error:', refreshError);
+          console.error(
+            "[ConnectionStatus] Google token refresh error:",
+            refreshError,
+          );
         }
 
         // Refresh failed, mark as expired
@@ -127,11 +144,11 @@ class ConnectionStatusService {
           connected: false,
           lastCheck: Date.now(),
           error: {
-            type: 'TOKEN_REFRESH_FAILED',
-            userMessage: 'Gmail connection expired',
-            action: 'Reconnect your Gmail account',
-            actionHandler: 'reconnect-google',
-            details: 'Failed to refresh authentication token',
+            type: "TOKEN_REFRESH_FAILED",
+            userMessage: "Gmail connection expired",
+            action: "Reconnect your Gmail account",
+            actionHandler: "reconnect-google",
+            details: "Failed to refresh authentication token",
           },
         };
         return this.connectionStatus.google;
@@ -146,16 +163,19 @@ class ConnectionStatusService {
       };
       return this.connectionStatus.google;
     } catch (error: any) {
-      console.error('[ConnectionStatus] Error checking Google connection:', error);
+      console.error(
+        "[ConnectionStatus] Error checking Google connection:",
+        error,
+      );
 
       this.connectionStatus.google = {
         connected: false,
         lastCheck: Date.now(),
         error: {
-          type: 'CONNECTION_CHECK_FAILED',
-          userMessage: 'Could not verify Gmail connection',
-          action: 'Check your Gmail connection',
-          actionHandler: 'reconnect-google',
+          type: "CONNECTION_CHECK_FAILED",
+          userMessage: "Could not verify Gmail connection",
+          action: "Check your Gmail connection",
+          actionHandler: "reconnect-google",
           details: error.message,
         },
       };
@@ -168,20 +188,26 @@ class ConnectionStatusService {
    * @param userId
    * @returns Connection status
    */
-  async checkMicrosoftConnection(userId: string): Promise<ProviderConnectionStatus> {
+  async checkMicrosoftConnection(
+    userId: string,
+  ): Promise<ProviderConnectionStatus> {
     try {
       // Get Microsoft auth token from database
-      const token: OAuthToken | null = await databaseService.getOAuthToken(userId, 'microsoft', 'mailbox');
+      const token: OAuthToken | null = await databaseService.getOAuthToken(
+        userId,
+        "microsoft",
+        "mailbox",
+      );
 
       if (!token || !token.access_token) {
         this.connectionStatus.microsoft = {
           connected: false,
           lastCheck: Date.now(),
           error: {
-            type: 'NOT_CONNECTED',
-            userMessage: 'Outlook is not connected',
-            action: 'Connect your Outlook account to access emails',
-            actionHandler: 'connect-microsoft',
+            type: "NOT_CONNECTED",
+            userMessage: "Outlook is not connected",
+            action: "Connect your Outlook account to access emails",
+            actionHandler: "connect-microsoft",
           },
         };
         return this.connectionStatus.microsoft;
@@ -193,11 +219,16 @@ class ConnectionStatusService {
 
       if (tokenExpiry < now) {
         // Token expired - try to refresh
-        console.log('[ConnectionStatus] Microsoft token expired, attempting refresh...');
+        console.log(
+          "[ConnectionStatus] Microsoft token expired, attempting refresh...",
+        );
         try {
-          const refreshResult = await microsoftAuthService.refreshAccessToken(userId);
+          const refreshResult =
+            await microsoftAuthService.refreshAccessToken(userId);
           if (refreshResult.success) {
-            console.log('[ConnectionStatus] Microsoft token refreshed successfully');
+            console.log(
+              "[ConnectionStatus] Microsoft token refreshed successfully",
+            );
             this.connectionStatus.microsoft = {
               connected: true,
               lastCheck: Date.now(),
@@ -206,10 +237,16 @@ class ConnectionStatusService {
             };
             return this.connectionStatus.microsoft;
           } else {
-            console.error('[ConnectionStatus] Microsoft token refresh failed:', refreshResult.error);
+            console.error(
+              "[ConnectionStatus] Microsoft token refresh failed:",
+              refreshResult.error,
+            );
           }
         } catch (refreshError: any) {
-          console.error('[ConnectionStatus] Microsoft token refresh error:', refreshError);
+          console.error(
+            "[ConnectionStatus] Microsoft token refresh error:",
+            refreshError,
+          );
         }
 
         // Refresh failed, mark as expired
@@ -217,11 +254,11 @@ class ConnectionStatusService {
           connected: false,
           lastCheck: Date.now(),
           error: {
-            type: 'TOKEN_REFRESH_FAILED',
-            userMessage: 'Outlook connection expired',
-            action: 'Reconnect your Outlook account',
-            actionHandler: 'reconnect-microsoft',
-            details: 'Failed to refresh authentication token',
+            type: "TOKEN_REFRESH_FAILED",
+            userMessage: "Outlook connection expired",
+            action: "Reconnect your Outlook account",
+            actionHandler: "reconnect-microsoft",
+            details: "Failed to refresh authentication token",
           },
         };
         return this.connectionStatus.microsoft;
@@ -236,16 +273,19 @@ class ConnectionStatusService {
       };
       return this.connectionStatus.microsoft;
     } catch (error: any) {
-      console.error('[ConnectionStatus] Error checking Microsoft connection:', error);
+      console.error(
+        "[ConnectionStatus] Error checking Microsoft connection:",
+        error,
+      );
 
       this.connectionStatus.microsoft = {
         connected: false,
         lastCheck: Date.now(),
         error: {
-          type: 'CONNECTION_CHECK_FAILED',
-          userMessage: 'Could not verify Outlook connection',
-          action: 'Check your Outlook connection',
-          actionHandler: 'reconnect-microsoft',
+          type: "CONNECTION_CHECK_FAILED",
+          userMessage: "Could not verify Outlook connection",
+          action: "Check your Outlook connection",
+          actionHandler: "reconnect-microsoft",
           details: error.message,
         },
       };
@@ -293,9 +333,11 @@ class ConnectionStatusService {
       google: this.connectionStatus.google,
       microsoft: this.connectionStatus.microsoft,
       allConnected:
-        this.connectionStatus.google.connected && this.connectionStatus.microsoft.connected,
+        this.connectionStatus.google.connected &&
+        this.connectionStatus.microsoft.connected,
       anyConnected:
-        this.connectionStatus.google.connected || this.connectionStatus.microsoft.connected,
+        this.connectionStatus.google.connected ||
+        this.connectionStatus.microsoft.connected,
     };
   }
 
@@ -316,12 +358,13 @@ class ConnectionStatusService {
    */
   formatUserError(error: ConnectionError): FormattedUserError {
     return {
-      title: error.type === 'NOT_CONNECTED' ? 'Not Connected' : 'Connection Lost',
+      title:
+        error.type === "NOT_CONNECTED" ? "Not Connected" : "Connection Lost",
       message: error.userMessage,
       action: error.action,
       actionHandler: error.actionHandler,
       details: error.details,
-      severity: error.type === 'NOT_CONNECTED' ? 'info' : 'warning',
+      severity: error.type === "NOT_CONNECTED" ? "info" : "warning",
     };
   }
 }

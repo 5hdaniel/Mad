@@ -3,14 +3,14 @@
  * Handles session validity checks including idle timeout and absolute timeout
  */
 
-import logService from './logService';
+import logService from "./logService";
 
 /**
  * Session validity check result
  */
 export interface SessionValidityResult {
   valid: boolean;
-  reason?: 'expired' | 'idle' | 'invalid';
+  reason?: "expired" | "idle" | "invalid";
 }
 
 /**
@@ -58,7 +58,7 @@ class SessionSecurityService {
    */
   async checkSessionValidity(
     session: SessionData,
-    sessionToken?: string
+    sessionToken?: string,
   ): Promise<SessionValidityResult> {
     const now = Date.now();
 
@@ -68,12 +68,12 @@ class SessionSecurityService {
 
     if (sessionAge > this.SESSION_TIMEOUT_MS) {
       await logService.info(
-        'Session expired due to age',
-        'SessionSecurityService',
+        "Session expired due to age",
+        "SessionSecurityService",
         {
           sessionAge: Math.round(sessionAge / 1000 / 60), // minutes
-          maxAge: Math.round(this.SESSION_TIMEOUT_MS / 1000 / 60) // minutes
-        }
+          maxAge: Math.round(this.SESSION_TIMEOUT_MS / 1000 / 60), // minutes
+        },
       );
 
       // Clean up activity tracking
@@ -81,7 +81,7 @@ class SessionSecurityService {
         this.lastActivityMap.delete(sessionToken);
       }
 
-      return { valid: false, reason: 'expired' };
+      return { valid: false, reason: "expired" };
     }
 
     // Check idle timeout (30 minutes of inactivity)
@@ -93,18 +93,18 @@ class SessionSecurityService {
 
         if (idleTime > this.IDLE_TIMEOUT_MS) {
           await logService.info(
-            'Session expired due to inactivity',
-            'SessionSecurityService',
+            "Session expired due to inactivity",
+            "SessionSecurityService",
             {
               idleTime: Math.round(idleTime / 1000 / 60), // minutes
-              maxIdleTime: Math.round(this.IDLE_TIMEOUT_MS / 1000 / 60) // minutes
-            }
+              maxIdleTime: Math.round(this.IDLE_TIMEOUT_MS / 1000 / 60), // minutes
+            },
           );
 
           // Clean up activity tracking
           this.lastActivityMap.delete(sessionToken);
 
-          return { valid: false, reason: 'idle' };
+          return { valid: false, reason: "idle" };
         }
       } else {
         // First activity tracking for this session
@@ -117,15 +117,15 @@ class SessionSecurityService {
 
         if (idleTime > this.IDLE_TIMEOUT_MS) {
           await logService.info(
-            'Session expired due to inactivity (from database timestamp)',
-            'SessionSecurityService',
+            "Session expired due to inactivity (from database timestamp)",
+            "SessionSecurityService",
             {
               idleTime: Math.round(idleTime / 1000 / 60), // minutes
-              maxIdleTime: Math.round(this.IDLE_TIMEOUT_MS / 1000 / 60) // minutes
-            }
+              maxIdleTime: Math.round(this.IDLE_TIMEOUT_MS / 1000 / 60), // minutes
+            },
           );
 
-          return { valid: false, reason: 'idle' };
+          return { valid: false, reason: "idle" };
         }
 
         // Initialize activity tracking

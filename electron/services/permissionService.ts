@@ -3,10 +3,10 @@
  * Centralized permission checking and error handling
  */
 
-import { promises as fs } from 'fs';
-import path from 'path';
-import os from 'os';
-import logService from './logService';
+import { promises as fs } from "fs";
+import path from "path";
+import os from "os";
+import logService from "./logService";
 
 interface PermissionResult {
   hasPermission: boolean;
@@ -80,10 +80,10 @@ class PermissionService {
    */
   async checkFullDiskAccess(): Promise<PermissionResult> {
     // Windows/Linux: Full Disk Access is macOS-only, skip this check
-    if (os.platform() !== 'darwin') {
+    if (os.platform() !== "darwin") {
       logService.info(
         `Skipping Full Disk Access check on ${os.platform()} (macOS-only feature)`,
-        'PermissionService'
+        "PermissionService",
       );
       return {
         hasPermission: true,
@@ -91,7 +91,10 @@ class PermissionService {
     }
 
     try {
-      const messagesDbPath = path.join(process.env.HOME!, 'Library/Messages/chat.db');
+      const messagesDbPath = path.join(
+        process.env.HOME!,
+        "Library/Messages/chat.db",
+      );
       await fs.access(messagesDbPath, fs.constants.R_OK);
 
       this.permissionCache.fullDiskAccess = true;
@@ -107,9 +110,11 @@ class PermissionService {
       return {
         hasPermission: false,
         error: (error as Error).message,
-        errorCode: 'FULL_DISK_ACCESS_DENIED',
-        userMessage: 'Full Disk Access permission is required to read iMessages.',
-        action: 'Please grant Full Disk Access in System Settings > Privacy & Security > Full Disk Access',
+        errorCode: "FULL_DISK_ACCESS_DENIED",
+        userMessage:
+          "Full Disk Access permission is required to read iMessages.",
+        action:
+          "Please grant Full Disk Access in System Settings > Privacy & Security > Full Disk Access",
       };
     }
   }
@@ -120,10 +125,10 @@ class PermissionService {
    */
   async checkContactsPermission(): Promise<PermissionResult> {
     // Windows/Linux: Contacts app is macOS-only, skip this check
-    if (os.platform() !== 'darwin') {
+    if (os.platform() !== "darwin") {
       logService.info(
         `Skipping Contacts permission check on ${os.platform()} (macOS-only feature)`,
-        'PermissionService'
+        "PermissionService",
       );
       return {
         hasPermission: true,
@@ -133,7 +138,7 @@ class PermissionService {
     try {
       const contactsDbPath = path.join(
         process.env.HOME!,
-        'Library/Application Support/AddressBook/Sources'
+        "Library/Application Support/AddressBook/Sources",
       );
       await fs.access(contactsDbPath, fs.constants.R_OK);
 
@@ -150,10 +155,11 @@ class PermissionService {
       return {
         hasPermission: false,
         error: (error as Error).message,
-        errorCode: 'CONTACTS_ACCESS_DENIED',
-        userMessage: 'Contacts permission is required to match phone numbers to names.',
+        errorCode: "CONTACTS_ACCESS_DENIED",
+        userMessage:
+          "Contacts permission is required to match phone numbers to names.",
         action:
-          'Full Disk Access in System Settings > Privacy & Security > Full Disk Access will grant access to Contacts',
+          "Full Disk Access in System Settings > Privacy & Security > Full Disk Access will grant access to Contacts",
       };
     }
   }
@@ -165,10 +171,10 @@ class PermissionService {
    */
   async checkContactsLoading(): Promise<ContactsLoadingResult> {
     // Windows/Linux: Contacts app is macOS-only, skip this check
-    if (os.platform() !== 'darwin') {
+    if (os.platform() !== "darwin") {
       logService.info(
         `Skipping Contacts loading check on ${os.platform()} (macOS-only feature)`,
-        'PermissionService'
+        "PermissionService",
       );
       return {
         canLoadContacts: true,
@@ -178,7 +184,7 @@ class PermissionService {
 
     try {
       // Import contactsService here to avoid circular dependencies
-      const { getContactNames } = await import('./contactsService');
+      const { getContactNames } = await import("./contactsService");
 
       const result = await getContactNames();
 
@@ -187,31 +193,36 @@ class PermissionService {
           canLoadContacts: false,
           contactCount: 0,
           error: {
-            type: 'CONTACTS_LOADING_FAILED',
-            title: 'Cannot Load Contacts',
-            message: result.status.userMessage || 'Could not load contacts from Contacts app',
-            details: result.status.error || result.status.lastError || 'Unknown error',
-            action: result.status.action || 'Grant Full Disk Access',
-            actionHandler: 'open-system-settings',
-            severity: 'error',
+            type: "CONTACTS_LOADING_FAILED",
+            title: "Cannot Load Contacts",
+            message:
+              result.status.userMessage ||
+              "Could not load contacts from Contacts app",
+            details:
+              result.status.error || result.status.lastError || "Unknown error",
+            action: result.status.action || "Grant Full Disk Access",
+            actionHandler: "open-system-settings",
+            severity: "error",
           },
         };
       }
 
-      const contactCount = result.status?.contactCount || Object.keys(result.contactMap).length;
+      const contactCount =
+        result.status?.contactCount || Object.keys(result.contactMap).length;
 
       if (contactCount === 0) {
         return {
           canLoadContacts: false,
           contactCount: 0,
           error: {
-            type: 'NO_CONTACTS_FOUND',
-            title: 'No Contacts Found',
-            message: 'No contacts were found in your Contacts app. You may need to grant Full Disk Access.',
-            details: 'Contact database exists but contains no contacts',
-            action: 'Open System Settings',
-            actionHandler: 'open-system-settings',
-            severity: 'warning',
+            type: "NO_CONTACTS_FOUND",
+            title: "No Contacts Found",
+            message:
+              "No contacts were found in your Contacts app. You may need to grant Full Disk Access.",
+            details: "Contact database exists but contains no contacts",
+            action: "Open System Settings",
+            actionHandler: "open-system-settings",
+            severity: "warning",
           },
         };
       }
@@ -221,19 +232,22 @@ class PermissionService {
         contactCount,
       };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      logService.error('Contacts loading check failed', 'PermissionService', { error: errorMessage });
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+      logService.error("Contacts loading check failed", "PermissionService", {
+        error: errorMessage,
+      });
       return {
         canLoadContacts: false,
         contactCount: 0,
         error: {
-          type: 'CONTACTS_CHECK_FAILED',
-          title: 'Contacts Check Failed',
-          message: 'Could not verify contacts access',
+          type: "CONTACTS_CHECK_FAILED",
+          title: "Contacts Check Failed",
+          message: "Could not verify contacts access",
           details: (error as Error).message,
-          action: 'Grant Full Disk Access',
-          actionHandler: 'open-system-settings',
-          severity: 'error',
+          action: "Grant Full Disk Access",
+          actionHandler: "open-system-settings",
+          severity: "error",
         },
       };
     }
@@ -311,54 +325,54 @@ class PermissionService {
     const errorMessage = error.message.toLowerCase();
 
     // Full Disk Access errors
-    if (errorMessage.includes('eacces') || errorMessage.includes('eperm')) {
+    if (errorMessage.includes("eacces") || errorMessage.includes("eperm")) {
       return {
-        type: 'PERMISSION_DENIED',
-        title: 'Permission Required',
+        type: "PERMISSION_DENIED",
+        title: "Permission Required",
         message:
-          'Magic Audit needs Full Disk Access to read your iMessages and Contacts.',
+          "Magic Audit needs Full Disk Access to read your iMessages and Contacts.",
         details: error.message,
-        action: 'Open System Settings',
-        actionHandler: 'open-system-settings',
-        severity: 'error',
+        action: "Open System Settings",
+        actionHandler: "open-system-settings",
+        severity: "error",
       };
     }
 
     // File not found (Messages database)
-    if (errorMessage.includes('enoent') && errorMessage.includes('messages')) {
+    if (errorMessage.includes("enoent") && errorMessage.includes("messages")) {
       return {
-        type: 'MESSAGES_NOT_FOUND',
-        title: 'Messages Database Not Found',
+        type: "MESSAGES_NOT_FOUND",
+        title: "Messages Database Not Found",
         message:
-          'Could not find the iMessages database. Make sure Messages app is configured.',
+          "Could not find the iMessages database. Make sure Messages app is configured.",
         details: error.message,
-        action: 'Open Messages App',
-        actionHandler: 'open-messages-app',
-        severity: 'warning',
+        action: "Open Messages App",
+        actionHandler: "open-messages-app",
+        severity: "warning",
       };
     }
 
     // Generic database error
-    if (errorMessage.includes('sqlite') || errorMessage.includes('database')) {
+    if (errorMessage.includes("sqlite") || errorMessage.includes("database")) {
       return {
-        type: 'DATABASE_ERROR',
-        title: 'Database Error',
-        message: 'An error occurred while accessing the database.',
+        type: "DATABASE_ERROR",
+        title: "Database Error",
+        message: "An error occurred while accessing the database.",
         details: error.message,
-        action: 'Check Console Logs',
-        severity: 'error',
+        action: "Check Console Logs",
+        severity: "error",
       };
     }
 
     // Generic permission error
     return {
-      type: 'UNKNOWN_ERROR',
-      title: 'An Error Occurred',
-      message: 'Something went wrong. Please try again.',
+      type: "UNKNOWN_ERROR",
+      title: "An Error Occurred",
+      message: "Something went wrong. Please try again.",
       details: error.message,
-      action: 'Retry',
-      actionHandler: 'retry',
-      severity: 'error',
+      action: "Retry",
+      actionHandler: "retry",
+      severity: "error",
     };
   }
 }

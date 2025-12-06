@@ -2,7 +2,7 @@
  * SearchBar Component
  * Provides search input for filtering contacts
  */
-import React from 'react';
+import React from "react";
 
 interface SearchBarProps {
   value: string;
