@@ -538,6 +538,17 @@ function App() {
     setCurrentStep("android-coming-soon");
   };
 
+  const handlePhoneTypeSelectionBack = (): void => {
+    // Go back from phone type selection - reset phone type
+    setSelectedPhoneType(null);
+    setCurrentStep("login");
+  };
+
+  const handleAppleDriverSetupBack = (): void => {
+    // Go back from driver setup to phone type selection
+    setCurrentStep("phone-type-selection");
+  };
+
   const handleAndroidGoBack = (): void => {
     // Go back to phone type selection
     setSelectedPhoneType(null);
@@ -1040,6 +1051,7 @@ function App() {
             onSelectIPhone={handleSelectIPhone}
             onSelectAndroid={handleSelectAndroid}
             selectedType={selectedPhoneType}
+            onBack={handlePhoneTypeSelectionBack}
           />
         )}
 
@@ -1054,6 +1066,7 @@ function App() {
           <AppleDriverSetup
             onComplete={handleAppleDriverSetupComplete}
             onSkip={handleAppleDriverSetupSkip}
+            onBack={handleAppleDriverSetupBack}
           />
         )}
 
