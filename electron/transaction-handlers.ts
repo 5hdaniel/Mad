@@ -694,6 +694,57 @@ export const registerTransactionHandlers = (
     },
   );
 
+  // Unlink communication (email) from transaction
+  ipcMain.handle(
+    "transactions:unlink-communication",
+    async (
+      event: IpcMainInvokeEvent,
+      communicationId: string,
+      reason?: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        logService.info("Unlinking communication from transaction", "Transactions", {
+          communicationId,
+          reason,
+        });
+
+        // Validate communication ID (using same format as contact ID)
+        if (
+          !communicationId ||
+          typeof communicationId !== "string" ||
+          communicationId.trim().length === 0
+        ) {
+          return {
+            success: false,
+            error: "Invalid communication ID",
+          };
+        }
+
+        await transactionService.unlinkCommunication(
+          communicationId.trim(),
+          reason,
+        );
+
+        logService.info("Communication unlinked successfully", "Transactions", {
+          communicationId,
+        });
+
+        return {
+          success: true,
+        };
+      } catch (error) {
+        logService.error("Unlink communication failed", "Transactions", {
+          communicationId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
   // Re-analyze property (rescan emails for specific address)
   ipcMain.handle(
     "transactions:reanalyze",

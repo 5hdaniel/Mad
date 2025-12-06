@@ -496,6 +496,7 @@ class TransactionService {
 
   /**
    * Save communications to database and link to transaction
+   * Skips emails that have been previously ignored/unlinked by the user
    * @private
    */
   private async _saveCommunications(
@@ -519,6 +520,27 @@ class TransactionService {
           : typeof analyzed.date === "string"
             ? analyzed.date
             : new Date().toISOString();
+
+      // Check if this email was previously ignored by the user
+      const isIgnored = await databaseService.isEmailIgnoredByUser(
+        userId,
+        analyzed.from || "",
+        analyzed.subject || "",
+        sentAt,
+      );
+
+      if (isIgnored) {
+        await logService.debug(
+          "Skipping previously ignored email",
+          "TransactionService._saveCommunications",
+          {
+            subject: analyzed.subject,
+            from: analyzed.from,
+            sentAt,
+          },
+        );
+        continue;
+      }
 
       const commData: Partial<NewCommunication> = {
         user_id: userId,
@@ -793,6 +815,66 @@ class TransactionService {
    */
   async deleteTransaction(transactionId: string): Promise<void> {
     await databaseService.deleteTransaction(transactionId);
+  }
+
+  /**
+   * Unlink a communication (email) from a transaction
+   * This adds the email to the ignored list and removes it from the transaction
+   */
+  async unlinkCommunication(
+    communicationId: string,
+    reason?: string,
+  ): Promise<void> {
+    // Get the communication details first
+    const communication =
+      await databaseService.getCommunicationById(communicationId);
+
+    if (!communication) {
+      throw new Error("Communication not found");
+    }
+
+    if (!communication.transaction_id) {
+      throw new Error("Communication is not linked to a transaction");
+    }
+
+    // Add to ignored communications list
+    await databaseService.addIgnoredCommunication({
+      user_id: communication.user_id,
+      transaction_id: communication.transaction_id,
+      email_subject: communication.subject,
+      email_sender: communication.sender,
+      email_sent_at:
+        communication.sent_at instanceof Date
+          ? communication.sent_at.toISOString()
+          : communication.sent_at,
+      email_thread_id: communication.email_thread_id,
+      original_communication_id: communicationId,
+      reason: reason || "Manually unlinked by user",
+    });
+
+    // Delete the communication from the database
+    await databaseService.deleteCommunication(communicationId);
+
+    // Update the transaction's communication count
+    const transaction = await databaseService.getTransactionById(
+      communication.transaction_id,
+    );
+    if (transaction) {
+      const newCount = Math.max(0, (transaction.total_communications_count || 0) - 1);
+      await databaseService.updateTransaction(communication.transaction_id, {
+        total_communications_count: newCount,
+      });
+    }
+
+    await logService.info(
+      "Communication unlinked from transaction",
+      "TransactionService.unlinkCommunication",
+      {
+        communicationId,
+        transactionId: communication.transaction_id,
+        reason,
+      },
+    );
   }
 
   /**
