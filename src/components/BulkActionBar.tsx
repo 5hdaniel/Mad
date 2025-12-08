@@ -13,6 +13,7 @@ interface BulkActionBarProps {
   onBulkDelete: () => void;
   onBulkExport: () => void;
   onBulkStatusChange: (status: "active" | "closed") => void;
+  onClose: () => void;
   isDeleting?: boolean;
   isExporting?: boolean;
   isUpdating?: boolean;
@@ -26,26 +27,24 @@ export function BulkActionBar({
   onBulkDelete,
   onBulkExport,
   onBulkStatusChange,
+  onClose,
   isDeleting = false,
   isExporting = false,
   isUpdating = false,
 }: BulkActionBarProps) {
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const isProcessing = isDeleting || isExporting || isUpdating;
-
-  if (selectedCount === 0) {
-    return null;
-  }
+  const hasSelection = selectedCount > 0;
 
   return (
     <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50">
       <div className="bg-gray-900 text-white rounded-xl shadow-2xl px-6 py-4 flex items-center gap-4">
         {/* Selection Info */}
         <div className="flex items-center gap-3 pr-4 border-r border-gray-700">
-          <div className="flex items-center justify-center w-10 h-10 bg-blue-500 rounded-full">
+          <div className={`flex items-center justify-center w-10 h-10 rounded-full ${hasSelection ? 'bg-blue-500' : 'bg-gray-600'}`}>
             <span className="font-bold text-lg">{selectedCount}</span>
           </div>
-          <div className="text-sm">
+          <div className="text-sm whitespace-nowrap">
             <p className="font-medium">
               {selectedCount} selected
             </p>
@@ -61,15 +60,15 @@ export function BulkActionBar({
             <button
               onClick={onSelectAll}
               disabled={isProcessing}
-              className="px-3 py-2 text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors disabled:opacity-50"
+              className="px-3 py-2 text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors disabled:opacity-50 whitespace-nowrap"
             >
               Select All
             </button>
           )}
           <button
             onClick={onDeselectAll}
-            disabled={isProcessing}
-            className="px-3 py-2 text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors disabled:opacity-50"
+            disabled={isProcessing || !hasSelection}
+            className="px-3 py-2 text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors disabled:opacity-50 whitespace-nowrap"
           >
             Deselect All
           </button>
@@ -80,8 +79,8 @@ export function BulkActionBar({
           {/* Export Button */}
           <button
             onClick={onBulkExport}
-            disabled={isProcessing}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={isProcessing || !hasSelection}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
           >
             {isExporting ? (
               <>
@@ -91,7 +90,7 @@ export function BulkActionBar({
             ) : (
               <>
                 <svg
-                  className="w-5 h-5"
+                  className="w-5 h-5 flex-shrink-0"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -112,8 +111,8 @@ export function BulkActionBar({
           <div className="relative">
             <button
               onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-              disabled={isProcessing}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={isProcessing || !hasSelection}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
             >
               {isUpdating ? (
                 <>
@@ -123,7 +122,7 @@ export function BulkActionBar({
               ) : (
                 <>
                   <svg
-                    className="w-5 h-5"
+                    className="w-5 h-5 flex-shrink-0"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -135,9 +134,9 @@ export function BulkActionBar({
                       d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
                     />
                   </svg>
-                  <span>Change Status</span>
+                  <span>Status</span>
                   <svg
-                    className="w-4 h-4"
+                    className="w-4 h-4 flex-shrink-0"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -154,16 +153,16 @@ export function BulkActionBar({
             </button>
 
             {/* Status Dropdown Menu */}
-            {showStatusDropdown && !isProcessing && (
+            {showStatusDropdown && !isProcessing && hasSelection && (
               <div className="absolute bottom-full mb-2 left-0 bg-gray-800 rounded-lg shadow-xl border border-gray-700 py-2 min-w-[160px]">
                 <button
                   onClick={() => {
                     onBulkStatusChange("active");
                     setShowStatusDropdown(false);
                   }}
-                  className="w-full px-4 py-2 text-left text-sm hover:bg-gray-700 flex items-center gap-2"
+                  className="w-full px-4 py-2 text-left text-sm hover:bg-gray-700 flex items-center gap-2 whitespace-nowrap"
                 >
-                  <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                  <span className="w-2 h-2 bg-green-500 rounded-full flex-shrink-0"></span>
                   Mark as Active
                 </button>
                 <button
@@ -171,9 +170,9 @@ export function BulkActionBar({
                     onBulkStatusChange("closed");
                     setShowStatusDropdown(false);
                   }}
-                  className="w-full px-4 py-2 text-left text-sm hover:bg-gray-700 flex items-center gap-2"
+                  className="w-full px-4 py-2 text-left text-sm hover:bg-gray-700 flex items-center gap-2 whitespace-nowrap"
                 >
-                  <span className="w-2 h-2 bg-gray-500 rounded-full"></span>
+                  <span className="w-2 h-2 bg-gray-500 rounded-full flex-shrink-0"></span>
                   Mark as Closed
                 </button>
               </div>
@@ -183,8 +182,8 @@ export function BulkActionBar({
           {/* Delete Button */}
           <button
             onClick={onBulkDelete}
-            disabled={isProcessing}
-            className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={isProcessing || !hasSelection}
+            className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
           >
             {isDeleting ? (
               <>
@@ -194,7 +193,7 @@ export function BulkActionBar({
             ) : (
               <>
                 <svg
-                  className="w-5 h-5"
+                  className="w-5 h-5 flex-shrink-0"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -214,9 +213,10 @@ export function BulkActionBar({
 
         {/* Close Button */}
         <button
-          onClick={onDeselectAll}
+          onClick={onClose}
           disabled={isProcessing}
           className="ml-2 p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors disabled:opacity-50"
+          title="Exit bulk edit mode"
         >
           <svg
             className="w-5 h-5"

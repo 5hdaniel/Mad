@@ -255,9 +255,19 @@ function Transactions({ userId, provider, onClose }: TransactionsProps) {
   // Toggle selection mode
   const handleToggleSelectionMode = () => {
     if (selectionMode) {
+      // Exiting selection mode - deselect all and close
       deselectAll();
+      setSelectionMode(false);
+    } else {
+      // Entering selection mode
+      setSelectionMode(true);
     }
-    setSelectionMode(!selectionMode);
+  };
+
+  // Close bulk edit mode (called by X button)
+  const handleCloseBulkEdit = () => {
+    deselectAll();
+    setSelectionMode(false);
   };
 
   // Handle transaction card click (either select or open details)
@@ -494,7 +504,7 @@ function Transactions({ userId, provider, onClose }: TransactionsProps) {
             </svg>
           </div>
 
-          {/* Select/Edit Mode Button */}
+          {/* Bulk Edit Mode Button */}
           <button
             onClick={handleToggleSelectionMode}
             className={`px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 ${
@@ -516,7 +526,7 @@ function Transactions({ userId, provider, onClose }: TransactionsProps) {
                 d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
               />
             </svg>
-            {selectionMode ? "Cancel Select" : "Select"}
+            {selectionMode ? "Exit Bulk Edit" : "Bulk Edit"}
           </button>
 
           {/* Audit New Transaction Button */}
@@ -968,6 +978,7 @@ function Transactions({ userId, provider, onClose }: TransactionsProps) {
           onBulkDelete={() => setShowBulkDeleteConfirm(true)}
           onBulkExport={() => setShowBulkExportModal(true)}
           onBulkStatusChange={handleBulkStatusChange}
+          onClose={handleCloseBulkEdit}
           isDeleting={isBulkDeleting}
           isExporting={isBulkExporting}
           isUpdating={isBulkUpdating}
