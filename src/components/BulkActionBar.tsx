@@ -51,19 +51,17 @@ export function BulkActionBar({
 
         {/* Selection Actions */}
         <div className="flex items-center gap-2 pr-4 border-r border-gray-700">
-          {selectedCount < totalCount && (
-            <button
-              onClick={onSelectAll}
-              disabled={isProcessing}
-              className="px-3 py-2 text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors disabled:opacity-50 whitespace-nowrap"
-            >
-              Select All
-            </button>
-          )}
+          <button
+            onClick={onSelectAll}
+            disabled={isProcessing || selectedCount >= totalCount}
+            className="px-3 py-2 text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+          >
+            Select All
+          </button>
           <button
             onClick={onDeselectAll}
             disabled={isProcessing || !hasSelection}
-            className="px-3 py-2 text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors disabled:opacity-50 whitespace-nowrap"
+            className="px-3 py-2 text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
           >
             Deselect All
           </button>
