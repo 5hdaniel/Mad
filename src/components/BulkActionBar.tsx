@@ -44,13 +44,8 @@ export function BulkActionBar({
           <div className={`flex items-center justify-center w-10 h-10 rounded-full ${hasSelection ? 'bg-blue-500' : 'bg-gray-600'}`}>
             <span className="font-bold text-lg">{selectedCount}</span>
           </div>
-          <div className="text-sm whitespace-nowrap">
-            <p className="font-medium">
-              {selectedCount} selected
-            </p>
-            <p className="text-gray-400 text-xs">
-              of {totalCount} transactions
-            </p>
+          <div className="text-sm whitespace-nowrap text-gray-400">
+            of {totalCount}
           </div>
         </div>
 
