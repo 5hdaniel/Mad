@@ -5,7 +5,7 @@
  * This keeps modal logic centralized and separate from routing.
  */
 
-import React from "react";
+import React, { useCallback } from "react";
 import Profile from "../components/Profile";
 import Settings from "../components/Settings";
 import Transactions from "../components/Transactions";
@@ -13,84 +13,63 @@ import Contacts from "../components/Contacts";
 import WelcomeTerms from "../components/WelcomeTerms";
 import AuditTransactionModal from "../components/AuditTransactionModal";
 import MoveAppPrompt from "../components/MoveAppPrompt";
-import type { PendingOAuthData } from "../components/Login";
-import type { Subscription, ModalState } from "./state/types";
+import type { AppStateMachine } from "./state/types";
 
 interface AppModalsProps {
-  // Modal visibility state
-  modalState: ModalState;
-
-  // User state
-  currentUser: {
-    id: string;
-    email: string;
-    display_name?: string;
-    avatar_url?: string;
-  } | null;
-  authProvider: string | null;
-  subscription: Subscription | undefined;
-
-  // Pending data for terms modal
-  pendingOAuthData: PendingOAuthData | null;
-  needsTermsAcceptance: boolean;
-
-  // Move app state
-  appPath: string;
-
-  // Modal handlers
-  onCloseProfile: () => void;
-  onCloseSettings: () => void;
-  onCloseTransactions: () => void;
-  onCloseContacts: () => void;
-  onCloseAuditTransaction: () => void;
-
-  // Profile actions
-  onLogout: () => Promise<void>;
-  onViewTransactions: () => void;
-  onOpenSettings: () => void;
-
-  // Audit transaction actions
-  onAuditTransactionSuccess: () => void;
-
-  // Terms actions
-  onAcceptTerms: () => Promise<void>;
-  onDeclineTerms: () => Promise<void>;
-
-  // Move app actions
-  onDismissMovePrompt: () => void;
-  onNotNowMovePrompt: () => void;
+  app: AppStateMachine;
 }
 
-export function AppModals({
-  modalState,
-  currentUser,
-  authProvider,
-  subscription,
-  pendingOAuthData,
-  needsTermsAcceptance,
-  appPath,
-  onCloseProfile,
-  onCloseSettings,
-  onCloseTransactions,
-  onCloseContacts,
-  onCloseAuditTransaction,
-  onLogout,
-  onViewTransactions,
-  onOpenSettings,
-  onAuditTransactionSuccess,
-  onAcceptTerms,
-  onDeclineTerms,
-  onDismissMovePrompt,
-  onNotNowMovePrompt,
-}: AppModalsProps) {
+export function AppModals({ app }: AppModalsProps) {
+  const {
+    // Modal state
+    modalState,
+
+    // User state
+    currentUser,
+    authProvider,
+    subscription,
+
+    // Pending data for terms modal
+    pendingOAuthData,
+    needsTermsAcceptance,
+
+    // Move app state
+    appPath,
+
+    // Semantic modal transitions
+    closeProfile,
+    closeSettings,
+    closeTransactions,
+    closeContacts,
+    closeAuditTransaction,
+    openSettings,
+    openTransactions,
+
+    // Auth handlers
+    handleLogout,
+
+    // Terms handlers
+    handleAcceptTerms,
+    handleDeclineTerms,
+
+    // Move app handlers
+    handleDismissMovePrompt,
+    handleNotNowMovePrompt,
+  } = app;
+
+  // Compound action: close audit transaction modal and open transactions
+  const handleAuditTransactionSuccess = useCallback(() => {
+    closeAuditTransaction();
+    openTransactions();
+  }, [closeAuditTransaction, openTransactions]);
   return (
     <>
       {/* Move App Prompt */}
       {modalState.showMoveAppPrompt && (
         <MoveAppPrompt
           appPath={appPath}
-          onDismiss={onDismissMovePrompt}
-          onNotNow={onNotNowMovePrompt}
+          onDismiss={handleDismissMovePrompt}
+          onNotNow={handleNotNowMovePrompt}
         />
       )}
 
@@ -100,10 +79,10 @@ export function AppModals({
           user={currentUser}
           provider={authProvider}
           subscription={subscription}
-          onLogout={onLogout}
-          onClose={onCloseProfile}
-          onViewTransactions={onViewTransactions}
-          onOpenSettings={onOpenSettings}
+          onLogout={handleLogout}
+          onClose={closeProfile}
+          onViewTransactions={openTransactions}
+          onOpenSettings={openSettings}
         />
       )}
 
@@ -111,7 +90,7 @@ export function AppModals({
       {modalState.showSettings && currentUser && (
         <Settings
           userId={currentUser.id}
-          onClose={onCloseSettings}
+          onClose={closeSettings}
         />
       )}
 
@@ -120,7 +99,7 @@ export function AppModals({
         <Transactions
           userId={currentUser.id}
           provider={authProvider}
-          onClose={onCloseTransactions}
+          onClose={closeTransactions}
         />
       )}
 
@@ -128,7 +107,7 @@ export function AppModals({
       {modalState.showContacts && currentUser && (
         <Contacts
           userId={currentUser.id}
-          onClose={onCloseContacts}
+          onClose={closeContacts}
         />
       )}
 
@@ -146,8 +125,8 @@ export function AppModals({
                 }
               : { id: "", email: "" })
           }
-          onAccept={onAcceptTerms}
-          onDecline={onDeclineTerms}
+          onAccept={handleAcceptTerms}
+          onDecline={handleDeclineTerms}
         />
       )}
 
@@ -156,8 +135,8 @@ export function AppModals({
         <AuditTransactionModal
           userId={currentUser.id as any}
           provider={authProvider}
-          onClose={onCloseAuditTransaction}
-          onSuccess={onAuditTransactionSuccess}
+          onClose={closeAuditTransaction}
+          onSuccess={handleAuditTransactionSuccess}
         />
       )}
     </>

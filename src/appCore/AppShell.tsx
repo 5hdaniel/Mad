@@ -9,43 +9,27 @@
  */
 
 import React from "react";
-import type { AppStep } from "./state/types";
+import type { AppStateMachine } from "./state/types";
 
 interface AppShellProps {
-  currentStep: AppStep;
-  isAuthenticated: boolean;
-  currentUser: {
-    id: string;
-    email: string;
-    display_name?: string;
-    avatar_url?: string;
-  } | null;
-  isOnline: boolean;
-  isChecking: boolean;
-  connectionError: string | null;
-  showVersion: boolean;
-  onShowProfile: () => void;
-  onRetryConnection: () => void;
-  onToggleVersion: () => void;
-  onCloseVersion: () => void;
-  getPageTitle: () => string;
+  app: AppStateMachine;
   children: React.ReactNode;
 }
 
-export function AppShell({
-  currentStep,
-  isAuthenticated,
-  currentUser,
-  isOnline,
-  isChecking,
-  showVersion,
-  onShowProfile,
-  onRetryConnection,
-  onToggleVersion,
-  onCloseVersion,
-  getPageTitle,
-  children,
-}: AppShellProps) {
+export function AppShell({ app, children }: AppShellProps) {
+  const {
+    currentStep,
+    isAuthenticated,
+    currentUser,
+    isOnline,
+    isChecking,
+    modalState,
+    openProfile,
+    toggleVersion,
+    closeVersion,
+    handleRetryConnection,
+    getPageTitle,
+  } = app;
   return (
     <div className="h-screen flex flex-col bg-gray-50 overflow-hidden">
       {/* Title Bar - Hide on login screen */}
@@ -58,7 +42,7 @@ export function AppShell({
           {/* User Menu Button */}
           {isAuthenticated && currentUser && (
             <button
-              onClick={onShowProfile}
+              onClick={openProfile}
               className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 hover:from-blue-500 hover:to-purple-600 flex items-center justify-center text-white text-sm font-bold shadow-md transition-all hover:shadow-lg"
               title={`${currentUser.display_name || currentUser.email} - Click for account settings`}
               data-tour="profile-button"
@@ -111,7 +95,7 @@ export function AppShell({
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={onRetryConnection}
+                onClick={handleRetryConnection}
                 disabled={isChecking}
                 className="px-3 py-1.5 text-xs font-medium text-yellow-800 bg-yellow-200 hover:bg-yellow-300 rounded-md transition-colors disabled:opacity-50"
               >
@@ -138,7 +122,7 @@ export function AppShell({
 
         {/* Version Info Button - Bottom Left */}
         <button
-          onClick={onToggleVersion}
+          onClick={toggleVersion}
           className="fixed bottom-4 left-4 w-8 h-8 bg-gray-200 hover:bg-gray-300 rounded-full flex items-center justify-center text-gray-600 hover:text-gray-800 transition-all shadow-md z-50"
           title="Version Info"
         >
@@ -158,12 +142,12 @@ export function AppShell({
         </button>
 
         {/* Version Info Popup */}
-        {showVersion && (
+        {modalState.showVersion && (
           <div className="fixed bottom-16 left-4 bg-white rounded-lg shadow-xl border border-gray-200 p-4 z-50 min-w-64">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-gray-900">App Info</h3>
               <button
-                onClick={onCloseVersion}
+                onClick={closeVersion}
                 className="text-gray-400 hover:text-gray-600"
               >
                 <svg

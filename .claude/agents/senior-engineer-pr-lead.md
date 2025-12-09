@@ -207,6 +207,57 @@ src/
 
 **Note:** `useAppStateMachine.ts` may temporarily exceed 300 lines during refactoring, but treat this as a staging area. As the product grows, break it down into feature-focused flows in `state/flows/`.
 
+### State Machine API Patterns
+
+The app state machine should expose a **typed interface with semantic methods**, not raw state + setters.
+
+**DO: Expose semantic transitions**
+```typescript
+export interface AppStateMachine {
+  // State (read-only from consumer perspective)
+  currentStep: AppStep;
+  isAuthenticated: boolean;
+  currentUser: User | null;
+  modalState: { showProfile: boolean; showSettings: boolean; /* ... */ };
+
+  // Semantic transitions (verbs, not setters)
+  openProfile(): void;
+  closeProfile(): void;
+  goToStep(step: AppStep): void;
+  completeExport(result: ExportResult): void;
+  handleLoginSuccess(data: LoginData): void;
+}
+```
+
+**DON'T: Expose raw setters**
+```typescript
+// ❌ Bad - leaks internal state shape
+const state = useAppStateMachine();
+state.setShowProfile(true);
+state.setCurrentStep("email-onboarding");
+```
+
+**Pass state machine object to child components:**
+```tsx
+// ✅ Good - single typed API object
+<AppRouter app={app} />
+<AppModals app={app} />
+
+// ❌ Bad - prop drilling dozens of individual values
+<AppRouter
+  currentStep={state.currentStep}
+  setCurrentStep={state.setCurrentStep}
+  isAuthenticated={state.isAuthenticated}
+  // ... 40 more props
+/>
+```
+
+**Benefits:**
+- Components depend on typed interface, not internal state shape
+- Easier to evolve (rename/add props without changing callsites)
+- Prevents components from becoming mini-god-objects with arbitrary state mutation
+- Clear mental model: "state machine exposes verbs; components call them"
+
 ### DO / DO NOT Guardrails
 
 **You WILL:**

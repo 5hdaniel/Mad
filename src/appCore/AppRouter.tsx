@@ -6,7 +6,7 @@
  */
 
 import React from "react";
-import Login, { PendingOAuthData } from "../components/Login";
+import Login from "../components/Login";
 import MicrosoftLogin from "../components/MicrosoftLogin";
 import EmailOnboardingScreen from "../components/EmailOnboardingScreen";
 import PermissionsScreen from "../components/PermissionsScreen";
@@ -19,182 +19,106 @@ import OfflineFallback from "../components/OfflineFallback";
 import PhoneTypeSelection from "../components/PhoneTypeSelection";
 import AndroidComingSoon from "../components/AndroidComingSoon";
 import AppleDriverSetup from "../components/AppleDriverSetup";
-import type {
-  AppStep,
-  AppExportResult,
-  OutlookExportResults,
-  PendingOnboardingData,
-  PendingEmailTokens,
-  Conversation,
-  Subscription,
-} from "./state/types";
+import type { AppStateMachine, OutlookExportResults } from "./state/types";
 
 interface AppRouterProps {
-  // Navigation state
-  currentStep: AppStep;
-
-  // Platform state
-  isMacOS: boolean;
-  isWindows: boolean;
-
-  // Network state
-  isOnline: boolean;
-  isChecking: boolean;
-  connectionError: string | null;
-
-  // Auth state
-  isAuthenticated: boolean;
-  currentUser: {
-    id: string;
-    email: string;
-    display_name?: string;
-    avatar_url?: string;
-  } | null;
-  authProvider: string | null;
-  pendingOAuthData: PendingOAuthData | null;
-  pendingOnboardingData: PendingOnboardingData;
-  pendingEmailTokens: PendingEmailTokens | null;
-
-  // Secure storage state
-  isInitializingDatabase: boolean;
-  skipKeychainExplanation: boolean;
-
-  // Phone type state
-  selectedPhoneType: "iphone" | "android" | null;
-
-  // Permissions state
-  hasPermissions: boolean;
-
-  // Email state
-  hasEmailConnected: boolean;
-  showSetupPromptDismissed: boolean;
-
-  // Export state
-  exportResult: AppExportResult | null;
-  conversations: Conversation[];
-  selectedConversationIds: Set<string>;
-  outlookConnected: boolean;
-
-  // Auth handlers
-  onLoginSuccess: (
-    user: {
-      id: string;
-      email: string;
-      display_name?: string;
-      avatar_url?: string;
-    },
-    token: string,
-    provider: string,
-    subscriptionData: Subscription | undefined,
-    isNewUser: boolean,
-  ) => void;
-  onLoginPending: (oauthData: PendingOAuthData) => void;
-
-  // Phone type handlers
-  onSelectIPhone: () => Promise<void>;
-  onSelectAndroid: () => void;
-  onAndroidGoBack: () => void;
-  onAndroidContinueWithEmail: () => Promise<void>;
-
-  // Driver setup handlers
-  onAppleDriverSetupComplete: () => void;
-  onAppleDriverSetupSkip: () => void;
-
-  // Email onboarding handlers
-  onEmailOnboardingComplete: (emailTokens?: PendingEmailTokens) => Promise<void>;
-  onEmailOnboardingSkip: () => Promise<void>;
-  onEmailOnboardingBack: () => void;
-
-  // Keychain handlers
-  onKeychainExplanationContinue: (dontShowAgain: boolean) => Promise<void>;
-  onKeychainBack: () => void;
-
-  // Microsoft handlers
-  onMicrosoftLogin: (userInfo: unknown) => void;
-  onMicrosoftSkip: () => void;
-  onConnectOutlook: () => void;
-
-  // Permission handlers
-  onPermissionsGranted: () => void;
-  onCheckPermissions: () => Promise<void>;
-
-  // Dashboard handlers
-  onAuditNew: () => void;
-  onViewTransactions: () => void;
-  onManageContacts: () => void;
-  onTourStateChange: (active: boolean) => void;
-  onContinueSetup: () => void;
-  onDismissSetupPrompt: () => void;
-
-  // Export handlers
-  onExportComplete: (result: unknown) => void;
-  onOutlookExport: (selectedIds: Set<string>) => Promise<void>;
-  onOutlookCancel: () => void;
-  onStartOver: () => void;
-
-  // Network handlers
-  onRetryConnection: () => Promise<void>;
-
-  // Step setter for outlook export results
-  setCurrentStep: (step: AppStep) => void;
-  setExportResult: (result: AppExportResult | null) => void;
+  app: AppStateMachine;
 }
 
-export function AppRouter({
-  currentStep,
-  isMacOS,
-  isWindows,
-  isOnline,
-  isChecking,
-  connectionError,
-  isAuthenticated,
-  currentUser,
-  authProvider,
-  pendingOAuthData,
-  pendingOnboardingData,
-  pendingEmailTokens,
-  isInitializingDatabase,
-  skipKeychainExplanation,
-  selectedPhoneType,
-  hasPermissions: _hasPermissions,
-  hasEmailConnected,
-  showSetupPromptDismissed,
-  exportResult,
-  conversations,
-  selectedConversationIds,
-  outlookConnected,
-  onLoginSuccess,
-  onLoginPending,
-  onSelectIPhone,
-  onSelectAndroid,
-  onAndroidGoBack,
-  onAndroidContinueWithEmail,
-  onAppleDriverSetupComplete,
-  onAppleDriverSetupSkip,
-  onEmailOnboardingComplete,
-  onEmailOnboardingSkip,
-  onEmailOnboardingBack,
-  onKeychainExplanationContinue,
-  onKeychainBack,
-  onMicrosoftLogin,
-  onMicrosoftSkip,
-  onConnectOutlook,
-  onPermissionsGranted,
-  onCheckPermissions,
-  onAuditNew,
-  onViewTransactions,
-  onManageContacts,
-  onTourStateChange,
-  onContinueSetup,
-  onDismissSetupPrompt,
-  onExportComplete,
-  onOutlookExport,
-  onOutlookCancel,
-  onStartOver,
-  onRetryConnection,
-  setCurrentStep,
-  setExportResult,
-}: AppRouterProps) {
+export function AppRouter({ app }: AppRouterProps) {
+  const {
+    // Navigation state
+    currentStep,
+
+    // Platform state
+    isMacOS,
+    isWindows,
+
+    // Network state
+    isOnline,
+    isChecking,
+    connectionError,
+
+    // Auth state
+    isAuthenticated,
+    currentUser,
+    authProvider,
+    pendingOAuthData,
+    pendingOnboardingData,
+    pendingEmailTokens,
+
+    // Secure storage state
+    isInitializingDatabase,
+    skipKeychainExplanation,
+
+    // Phone type state
+    selectedPhoneType,
+
+    // Email state
+    hasEmailConnected,
+    showSetupPromptDismissed,
+
+    // Export state
+    exportResult,
+    conversations,
+    selectedConversationIds,
+    outlookConnected,
+
+    // Auth handlers
+    handleLoginSuccess,
+    handleLoginPending,
+
+    // Phone type handlers
+    handleSelectIPhone,
+    handleSelectAndroid,
+    handleAndroidGoBack,
+    handleAndroidContinueWithEmail,
+
+    // Driver setup handlers
+    handleAppleDriverSetupComplete,
+    handleAppleDriverSetupSkip,
+
+    // Email onboarding handlers
+    handleEmailOnboardingComplete,
+    handleEmailOnboardingSkip,
+    handleEmailOnboardingBack,
+
+    // Keychain handlers
+    handleKeychainExplanationContinue,
+    handleKeychainBack,
+
+    // Microsoft handlers
+    handleMicrosoftLogin,
+    handleMicrosoftSkip,
+    handleConnectOutlook,
+
+    // Permission handlers
+    handlePermissionsGranted,
+    checkPermissions,
+
+    // Export handlers
+    handleExportComplete,
+    handleOutlookExport,
+    handleOutlookCancel,
+    handleStartOver,
+    setExportResult,
+
+    // Network handlers
+    handleRetryConnection,
+
+    // Semantic modal transitions
+    openAuditTransaction,
+    openTransactions,
+    openContacts,
+
+    // Navigation transitions
+    goToStep,
+    goToEmailOnboarding,
+
+    // UI handlers
+    handleDismissSetupPrompt,
+    setIsTourActive,
+  } = app;
   // Loading state
   if (currentStep === "loading") {
     return (
@@ -235,15 +159,15 @@ export function AppRouter({
           isOffline={true}
           isRetrying={isChecking}
           error={connectionError}
-          onRetry={onRetryConnection}
+          onRetry={handleRetryConnection}
           mode="fullscreen"
         />
       );
     }
     return (
       <Login
-        onLoginSuccess={onLoginSuccess}
-        onLoginPending={onLoginPending}
+        onLoginSuccess={handleLoginSuccess}
+        onLoginPending={handleLoginPending}
       />
     );
   }
@@ -252,8 +176,8 @@ export function AppRouter({
   if (currentStep === "keychain-explanation" && isMacOS) {
     return (
       <KeychainExplanation
-        onContinue={onKeychainExplanationContinue}
-        onBack={onKeychainBack}
+        onContinue={handleKeychainExplanationContinue}
+        onBack={handleKeychainBack}
         isLoading={isInitializingDatabase}
         hasPendingLogin={!!pendingOAuthData}
         skipExplanation={skipKeychainExplanation}
@@ -265,8 +189,8 @@ export function AppRouter({
   if (currentStep === "phone-type-selection") {
     return (
       <PhoneTypeSelection
-        onSelectIPhone={onSelectIPhone}
-        onSelectAndroid={onSelectAndroid}
+        onSelectIPhone={handleSelectIPhone}
+        onSelectAndroid={handleSelectAndroid}
         selectedType={selectedPhoneType || pendingOnboardingData.phoneType}
       />
     );
@@ -276,8 +200,8 @@ export function AppRouter({
   if (currentStep === "android-coming-soon") {
     return (
       <AndroidComingSoon
-        onGoBack={onAndroidGoBack}
-        onContinueWithEmail={onAndroidContinueWithEmail}
+        onGoBack={handleAndroidGoBack}
+        onContinueWithEmail={handleAndroidContinueWithEmail}
       />
     );
   }
@@ -286,8 +210,8 @@ export function AppRouter({
   if (currentStep === "apple-driver-setup" && isWindows) {
     return (
       <AppleDriverSetup
-        onComplete={onAppleDriverSetupComplete}
-        onSkip={onAppleDriverSetupSkip}
+        onComplete={handleAppleDriverSetupComplete}
+        onSkip={handleAppleDriverSetupSkip}
       />
     );
   }
@@ -304,9 +228,9 @@ export function AppRouter({
         authProvider={
           (authProvider || pendingOAuthData?.provider) as "google" | "microsoft"
         }
-        onComplete={onEmailOnboardingComplete}
-        onSkip={onEmailOnboardingSkip}
-        onBack={onEmailOnboardingBack}
+        onComplete={handleEmailOnboardingComplete}
+        onSkip={handleEmailOnboardingSkip}
+        onBack={handleEmailOnboardingBack}
         isPreDbFlow={!!pendingOAuthData && !isAuthenticated}
         emailHint={pendingOAuthData?.userInfo.email || currentUser?.email}
         existingPendingTokens={pendingEmailTokens}
@@ -318,8 +242,8 @@ export function AppRouter({
   if (currentStep === "microsoft-login") {
     return (
       <MicrosoftLogin
-        onLoginComplete={onMicrosoftLogin}
-        onSkip={onMicrosoftSkip}
+        onLoginComplete={handleMicrosoftLogin}
+        onSkip={handleMicrosoftSkip}
       />
     );
   }
@@ -328,8 +252,8 @@ export function AppRouter({
   if (currentStep === "permissions" && isMacOS) {
     return (
       <PermissionsScreen
-        onPermissionsGranted={onPermissionsGranted}
-        onCheckAgain={onCheckPermissions}
+        onPermissionsGranted={handlePermissionsGranted}
+        onCheckAgain={checkPermissions}
       />
     );
   }
@@ -338,13 +262,13 @@ export function AppRouter({
   if (currentStep === "dashboard") {
     return (
       <Dashboard
-        onAuditNew={onAuditNew}
-        onViewTransactions={onViewTransactions}
-        onManageContacts={onManageContacts}
-        onTourStateChange={onTourStateChange}
+        onAuditNew={openAuditTransaction}
+        onViewTransactions={openTransactions}
+        onManageContacts={openContacts}
+        onTourStateChange={setIsTourActive}
         showSetupPrompt={!hasEmailConnected && !showSetupPromptDismissed}
-        onContinueSetup={onContinueSetup}
-        onDismissSetupPrompt={onDismissSetupPrompt}
+        onContinueSetup={goToEmailOnboarding}
+        onDismissSetupPrompt={handleDismissSetupPrompt}
       />
     );
   }
@@ -353,9 +277,9 @@ export function AppRouter({
   if (currentStep === "contacts") {
     return (
       <ConversationList
-        onExportComplete={onExportComplete}
-        onOutlookExport={onOutlookExport}
-        onConnectOutlook={onConnectOutlook}
+        onExportComplete={handleExportComplete}
+        onOutlookExport={handleOutlookExport}
+        onConnectOutlook={handleConnectOutlook}
         outlookConnected={outlookConnected}
       />
     );
@@ -379,16 +303,16 @@ export function AppRouter({
           } else {
             setExportResult(null);
           }
-          setCurrentStep("complete");
+          goToStep("complete");
         }}
-        onCancel={onOutlookCancel}
+        onCancel={handleOutlookCancel}
       />
     );
   }
 
   // Export complete
   if (currentStep === "complete" && exportResult) {
-    return <ExportComplete result={exportResult} onStartOver={onStartOver} />;
+    return <ExportComplete result={exportResult} onStartOver={handleStartOver} />;
   }
 
   // Fallback - should not reach here

@@ -5,6 +5,5 @@
  */
 
 export { useAppStateMachine } from "./useAppStateMachine";
-export type { AppStateMachine } from "./useAppStateMachine";
 export * from "./types";
 export * from "./flows";
