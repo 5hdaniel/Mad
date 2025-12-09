@@ -253,7 +253,9 @@ export interface AppStateMachine {
   // EMAIL ONBOARDING HANDLERS
   // ============================================
 
-  handleEmailOnboardingComplete: (emailTokens?: PendingEmailTokens) => Promise<void>;
+  handleEmailOnboardingComplete: (
+    emailTokens?: PendingEmailTokens,
+  ) => Promise<void>;
   handleEmailOnboardingSkip: () => Promise<void>;
   handleEmailOnboardingBack: () => void;
 

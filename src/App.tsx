@@ -12,7 +12,13 @@
  * eliminating prop drilling and providing semantic methods instead of raw setters.
  */
 
-import { AppShell, AppRouter, AppModals, BackgroundServices, useAppStateMachine } from "./appCore";
+import {
+  AppShell,
+  AppRouter,
+  AppModals,
+  BackgroundServices,
+  useAppStateMachine,
+} from "./appCore";
 
 function App() {
   const app = useAppStateMachine();

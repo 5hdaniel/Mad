@@ -88,10 +88,7 @@ export function AppModals({ app }: AppModalsProps) {
 
       {/* Settings Modal */}
       {modalState.showSettings && currentUser && (
-        <Settings
-          userId={currentUser.id}
-          onClose={closeSettings}
-        />
+        <Settings userId={currentUser.id} onClose={closeSettings} />
       )}
 
       {/* Transactions View */}
@@ -105,10 +102,7 @@ export function AppModals({ app }: AppModalsProps) {
 
       {/* Contacts View */}
       {modalState.showContacts && currentUser && (
-        <Contacts
-          userId={currentUser.id}
-          onClose={closeContacts}
-        />
+        <Contacts userId={currentUser.id} onClose={closeContacts} />
       )}
 
       {/* Welcome Terms Modal (New Users Only) */}

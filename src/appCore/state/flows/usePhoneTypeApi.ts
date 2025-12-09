@@ -30,7 +30,8 @@ export function usePhoneTypeApi({
   userId,
   isWindows,
 }: UsePhoneTypeApiOptions): UsePhoneTypeApiReturn {
-  const [hasSelectedPhoneType, setHasSelectedPhoneType] = useState<boolean>(false);
+  const [hasSelectedPhoneType, setHasSelectedPhoneType] =
+    useState<boolean>(false);
   const [selectedPhoneType, setSelectedPhoneType] = useState<PhoneType>(null);
   const [isLoadingPhoneType, setIsLoadingPhoneType] = useState<boolean>(true);
   const [needsDriverSetup, setNeedsDriverSetup] = useState<boolean>(false);
@@ -66,7 +67,10 @@ export function usePhoneTypeApi({
                   setHasSelectedPhoneType(true);
                 }
               } catch (driverError) {
-                console.error("[usePhoneTypeApi] Failed to check driver status:", driverError);
+                console.error(
+                  "[usePhoneTypeApi] Failed to check driver status:",
+                  driverError,
+                );
                 setNeedsDriverSetup(true);
                 setHasSelectedPhoneType(false);
               }
@@ -100,7 +104,9 @@ export function usePhoneTypeApi({
   }, [userId, isWindows]);
 
   // Save phone type to database
-  const savePhoneType = async (phoneType: "iphone" | "android"): Promise<boolean> => {
+  const savePhoneType = async (
+    phoneType: "iphone" | "android",
+  ): Promise<boolean> => {
     if (!userId) return false;
 
     try {
@@ -115,7 +121,10 @@ export function usePhoneTypeApi({
         setSelectedPhoneType(phoneType);
         return true;
       } else {
-        console.error("[usePhoneTypeApi] Failed to save phone type:", result.error);
+        console.error(
+          "[usePhoneTypeApi] Failed to save phone type:",
+          result.error,
+        );
         return false;
       }
     } catch (error) {

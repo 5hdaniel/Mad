@@ -67,13 +67,18 @@ export function useSecureStorage({
   onNewUserFlowSet,
   onNeedsDriverSetup,
 }: UseSecureStorageOptions): UseSecureStorageReturn {
-  const [hasSecureStorageSetup, setHasSecureStorageSetup] = useState<boolean>(true); // Default true for returning users
-  const [isCheckingSecureStorage, setIsCheckingSecureStorage] = useState<boolean>(true);
-  const [isDatabaseInitialized, setIsDatabaseInitialized] = useState<boolean>(false);
-  const [isInitializingDatabase, setIsInitializingDatabase] = useState<boolean>(false);
-  const [skipKeychainExplanation, setSkipKeychainExplanation] = useState<boolean>(() => {
-    return localStorage.getItem("skipKeychainExplanation") === "true";
-  });
+  const [hasSecureStorageSetup, setHasSecureStorageSetup] =
+    useState<boolean>(true); // Default true for returning users
+  const [isCheckingSecureStorage, setIsCheckingSecureStorage] =
+    useState<boolean>(true);
+  const [isDatabaseInitialized, setIsDatabaseInitialized] =
+    useState<boolean>(false);
+  const [isInitializingDatabase, setIsInitializingDatabase] =
+    useState<boolean>(false);
+  const [skipKeychainExplanation, setSkipKeychainExplanation] =
+    useState<boolean>(() => {
+      return localStorage.getItem("skipKeychainExplanation") === "true";
+    });
 
   // Check if encryption key store exists on app load
   // This is a file existence check that does NOT trigger keychain prompts
@@ -90,11 +95,17 @@ export function useSecureStorage({
             await window.api.system.initializeSecureStorage();
             setIsDatabaseInitialized(true);
           } catch (dbError) {
-            console.error("[useSecureStorage] Failed to initialize Windows database on startup:", dbError);
+            console.error(
+              "[useSecureStorage] Failed to initialize Windows database on startup:",
+              dbError,
+            );
           }
         }
       } catch (error) {
-        console.error("[useSecureStorage] Failed to check key store existence:", error);
+        console.error(
+          "[useSecureStorage] Failed to check key store existence:",
+          error,
+        );
         setHasSecureStorageSetup(false);
       } finally {
         setIsCheckingSecureStorage(false);
@@ -127,9 +138,16 @@ export function useSecureStorage({
 
             // Complete login with pending OAuth data
             try {
-              const loginResult = await window.api.auth.completePendingLogin(pendingOAuthData);
-              if (loginResult.success && loginResult.user && loginResult.sessionToken) {
-                const subscriptionData = loginResult.subscription as Subscription | undefined;
+              const loginResult =
+                await window.api.auth.completePendingLogin(pendingOAuthData);
+              if (
+                loginResult.success &&
+                loginResult.user &&
+                loginResult.sessionToken
+              ) {
+                const subscriptionData = loginResult.subscription as
+                  | Subscription
+                  | undefined;
                 const user = loginResult.user as {
                   id: string;
                   email: string;
@@ -148,7 +166,10 @@ export function useSecureStorage({
                         phoneType: "iphone" | "android",
                       ) => Promise<{ success: boolean; error?: string }>;
                     };
-                    await userApi.setPhoneType(userId, pendingOnboardingData.phoneType);
+                    await userApi.setPhoneType(
+                      userId,
+                      pendingOnboardingData.phoneType,
+                    );
                     onPhoneTypeSet(true);
 
                     // Check if Windows + iPhone needs driver setup
@@ -158,32 +179,48 @@ export function useSecureStorage({
                       if (drivers) {
                         try {
                           const driverStatus = await drivers.checkApple();
-                          if (!driverStatus.installed || !driverStatus.serviceRunning) {
+                          if (
+                            !driverStatus.installed ||
+                            !driverStatus.serviceRunning
+                          ) {
                             onNeedsDriverSetup(true);
                           }
                         } catch (driverError) {
-                          console.error("[useSecureStorage] Failed to check driver status:", driverError);
+                          console.error(
+                            "[useSecureStorage] Failed to check driver status:",
+                            driverError,
+                          );
                           onNeedsDriverSetup(true);
                         }
                       }
                     }
                   } catch (phoneError) {
-                    console.error("[useSecureStorage] Failed to persist phone type:", phoneError);
+                    console.error(
+                      "[useSecureStorage] Failed to persist phone type:",
+                      phoneError,
+                    );
                   }
                 }
 
                 // Mark email onboarding as complete
                 if (pendingOnboardingData.emailConnected) {
                   try {
-                    const authApi = window.api.auth as typeof window.api.auth & {
+                    const authApi = window.api
+                      .auth as typeof window.api.auth & {
                       completeEmailOnboarding: (
                         userId: string,
                       ) => Promise<{ success: boolean; error?: string }>;
                     };
                     await authApi.completeEmailOnboarding(userId);
-                    onEmailOnboardingComplete(true, pendingOnboardingData.emailProvider !== null);
+                    onEmailOnboardingComplete(
+                      true,
+                      pendingOnboardingData.emailProvider !== null,
+                    );
                   } catch (emailError) {
-                    console.error("[useSecureStorage] Failed to persist email onboarding:", emailError);
+                    console.error(
+                      "[useSecureStorage] Failed to persist email onboarding:",
+                      emailError,
+                    );
                   }
                 }
 
@@ -198,7 +235,10 @@ export function useSecureStorage({
                     });
                     onPendingEmailTokensClear();
                   } catch (tokenError) {
-                    console.error("[useSecureStorage] Failed to persist pending email tokens:", tokenError);
+                    console.error(
+                      "[useSecureStorage] Failed to persist pending email tokens:",
+                      tokenError,
+                    );
                   }
                 }
 
@@ -214,11 +254,17 @@ export function useSecureStorage({
                 onPendingOAuthClear();
               }
             } catch (loginError) {
-              console.error("[useSecureStorage] Failed to complete pending login:", loginError);
+              console.error(
+                "[useSecureStorage] Failed to complete pending login:",
+                loginError,
+              );
             }
           }
         } catch (error) {
-          console.error("[useSecureStorage] Failed to initialize Windows database:", error);
+          console.error(
+            "[useSecureStorage] Failed to initialize Windows database:",
+            error,
+          );
         } finally {
           setIsInitializingDatabase(false);
         }
@@ -261,9 +307,16 @@ export function useSecureStorage({
           // If we have pending OAuth data, complete the login now
           if (pendingOAuthData) {
             try {
-              const loginResult = await window.api.auth.completePendingLogin(pendingOAuthData);
-              if (loginResult.success && loginResult.user && loginResult.sessionToken) {
-                const subscriptionData = loginResult.subscription as Subscription | undefined;
+              const loginResult =
+                await window.api.auth.completePendingLogin(pendingOAuthData);
+              if (
+                loginResult.success &&
+                loginResult.user &&
+                loginResult.sessionToken
+              ) {
+                const subscriptionData = loginResult.subscription as
+                  | Subscription
+                  | undefined;
                 const user = loginResult.user as {
                   id: string;
                   email: string;
@@ -282,25 +335,38 @@ export function useSecureStorage({
                         phoneType: "iphone" | "android",
                       ) => Promise<{ success: boolean; error?: string }>;
                     };
-                    await userApi.setPhoneType(userId, pendingOnboardingData.phoneType);
+                    await userApi.setPhoneType(
+                      userId,
+                      pendingOnboardingData.phoneType,
+                    );
                     onPhoneTypeSet(true);
                   } catch (phoneError) {
-                    console.error("[useSecureStorage] Failed to persist phone type:", phoneError);
+                    console.error(
+                      "[useSecureStorage] Failed to persist phone type:",
+                      phoneError,
+                    );
                   }
                 }
 
                 // Mark email onboarding as complete if done during pre-DB
                 if (pendingOnboardingData.emailConnected) {
                   try {
-                    const authApi = window.api.auth as typeof window.api.auth & {
+                    const authApi = window.api
+                      .auth as typeof window.api.auth & {
                       completeEmailOnboarding: (
                         userId: string,
                       ) => Promise<{ success: boolean; error?: string }>;
                     };
                     await authApi.completeEmailOnboarding(userId);
-                    onEmailOnboardingComplete(true, pendingOnboardingData.emailProvider !== null);
+                    onEmailOnboardingComplete(
+                      true,
+                      pendingOnboardingData.emailProvider !== null,
+                    );
                   } catch (emailError) {
-                    console.error("[useSecureStorage] Failed to persist email onboarding:", emailError);
+                    console.error(
+                      "[useSecureStorage] Failed to persist email onboarding:",
+                      emailError,
+                    );
                   }
                 }
 
@@ -316,7 +382,10 @@ export function useSecureStorage({
                     onEmailOnboardingComplete(true, true);
                     onPendingEmailTokensClear();
                   } catch (tokenError) {
-                    console.error("[useSecureStorage] Failed to persist email tokens:", tokenError);
+                    console.error(
+                      "[useSecureStorage] Failed to persist email tokens:",
+                      tokenError,
+                    );
                   }
                 }
 
@@ -332,23 +401,35 @@ export function useSecureStorage({
                 );
                 return true;
               } else {
-                console.error("[useSecureStorage] Failed to complete pending login:", loginResult.error);
+                console.error(
+                  "[useSecureStorage] Failed to complete pending login:",
+                  loginResult.error,
+                );
                 onPendingOAuthClear();
                 return false;
               }
             } catch (error) {
-              console.error("[useSecureStorage] Error completing pending login:", error);
+              console.error(
+                "[useSecureStorage] Error completing pending login:",
+                error,
+              );
               onPendingOAuthClear();
               return false;
             }
           }
           return true;
         } else {
-          console.error("[useSecureStorage] Database initialization failed:", result.error);
+          console.error(
+            "[useSecureStorage] Database initialization failed:",
+            result.error,
+          );
           return false;
         }
       } catch (error) {
-        console.error("[useSecureStorage] Database initialization error:", error);
+        console.error(
+          "[useSecureStorage] Database initialization error:",
+          error,
+        );
         return false;
       } finally {
         setIsInitializingDatabase(false);
