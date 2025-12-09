@@ -8,46 +8,26 @@
 import React from "react";
 import UpdateNotification from "../components/UpdateNotification";
 import SystemHealthMonitor from "../components/SystemHealthMonitor";
-import type { AppStep } from "./state/types";
+import type { AppStateMachine } from "./state/types";
 
 // OAuthProvider type to match SystemHealthMonitor expectations
 type OAuthProvider = "google" | "microsoft";
 
 interface BackgroundServicesProps {
-  // Auth state
-  isAuthenticated: boolean;
-  currentUser: {
-    id: string;
-    email: string;
-    display_name?: string;
-    avatar_url?: string;
-  } | null;
-  authProvider: string | null;
-
-  // Navigation state
-  currentStep: AppStep;
-
-  // Permissions state
-  hasPermissions: boolean;
-
-  // Email state
-  hasEmailConnected: boolean;
-
-  // UI state
-  isTourActive: boolean;
-  needsTermsAcceptance: boolean;
+  app: AppStateMachine;
 }
 
-export function BackgroundServices({
-  isAuthenticated,
-  currentUser,
-  authProvider,
-  currentStep,
-  hasPermissions,
-  hasEmailConnected,
-  isTourActive,
-  needsTermsAcceptance,
-}: BackgroundServicesProps) {
+export function BackgroundServices({ app }: BackgroundServicesProps) {
+  const {
+    isAuthenticated,
+    currentUser,
+    authProvider,
+    currentStep,
+    hasPermissions,
+    hasEmailConnected,
+    isTourActive,
+    needsTermsAcceptance,
+  } = app;
   return (
     <>
       {/* Update Notification */}

@@ -12,9 +12,14 @@
  * Central state machine for the application.
  * Orchestrates all application state, navigation, and business logic.
  * Uses specialized flow hooks for domain-specific state management.
+ *
+ * Returns a typed AppStateMachine interface with:
+ * - Read-only state properties
+ * - Semantic transition methods (openProfile, closeProfile, etc.)
+ * - Handler methods for complex operations
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth, useNetwork, usePlatform } from "../../contexts";
 import { useSecureStorage } from "./flows/useSecureStorage";
 import { useEmailOnboardingApi } from "./flows/useEmailOnboardingApi";
@@ -26,7 +31,7 @@ import type {
   PendingEmailTokens,
   Conversation,
   Subscription,
-  ModalState,
+  AppStateMachine,
 } from "./types";
 import type { PendingOAuthData } from "../../components/Login";
 
@@ -37,156 +42,6 @@ const DEFAULT_PENDING_ONBOARDING: PendingOnboardingData = {
   emailConnected: false,
   emailProvider: null,
 };
-
-export interface AppStateMachine {
-  // Navigation state
-  currentStep: AppStep;
-  setCurrentStep: (step: AppStep) => void;
-
-  // Auth state (from context)
-  isAuthenticated: boolean;
-  isAuthLoading: boolean;
-  currentUser: {
-    id: string;
-    email: string;
-    display_name?: string;
-    avatar_url?: string;
-  } | null;
-  sessionToken: string | null;
-  authProvider: string | null;
-  subscription: Subscription | undefined;
-  needsTermsAcceptance: boolean;
-
-  // Network state (from context)
-  isOnline: boolean;
-  isChecking: boolean;
-  connectionError: string | null;
-
-  // Platform state (from context)
-  isMacOS: boolean;
-  isWindows: boolean;
-
-  // Permissions state
-  hasPermissions: boolean;
-
-  // Secure storage state
-  hasSecureStorageSetup: boolean;
-  isCheckingSecureStorage: boolean;
-  isDatabaseInitialized: boolean;
-  isInitializingDatabase: boolean;
-  skipKeychainExplanation: boolean;
-
-  // Email onboarding state
-  hasCompletedEmailOnboarding: boolean;
-  hasEmailConnected: boolean;
-  isCheckingEmailOnboarding: boolean;
-
-  // Phone type state
-  hasSelectedPhoneType: boolean;
-  selectedPhoneType: "iphone" | "android" | null;
-  isLoadingPhoneType: boolean;
-  needsDriverSetup: boolean;
-
-  // New user flow state
-  isNewUserFlow: boolean;
-
-  // Pending data (pre-DB flow)
-  pendingOAuthData: PendingOAuthData | null;
-  pendingOnboardingData: PendingOnboardingData;
-  pendingEmailTokens: PendingEmailTokens | null;
-
-  // Export state
-  exportResult: AppExportResult | null;
-  conversations: Conversation[];
-  selectedConversationIds: Set<string>;
-  outlookConnected: boolean;
-
-  // Modal state
-  modalState: ModalState;
-
-  // UI state
-  showSetupPromptDismissed: boolean;
-  isTourActive: boolean;
-  appPath: string;
-
-  // Auth handlers
-  handleLoginSuccess: (
-    user: {
-      id: string;
-      email: string;
-      display_name?: string;
-      avatar_url?: string;
-    },
-    token: string,
-    provider: string,
-    subscriptionData: Subscription | undefined,
-    isNewUser: boolean,
-  ) => void;
-  handleLoginPending: (oauthData: PendingOAuthData) => void;
-  handleLogout: () => Promise<void>;
-
-  // Terms handlers
-  handleAcceptTerms: () => Promise<void>;
-  handleDeclineTerms: () => Promise<void>;
-
-  // Phone type handlers
-  handleSelectIPhone: () => Promise<void>;
-  handleSelectAndroid: () => void;
-  handleAndroidGoBack: () => void;
-  handleAndroidContinueWithEmail: () => Promise<void>;
-  handlePhoneTypeChange: (phoneType: "iphone" | "android") => Promise<void>;
-  handleAppleDriverSetupComplete: () => void;
-  handleAppleDriverSetupSkip: () => void;
-
-  // Email onboarding handlers
-  handleEmailOnboardingComplete: (emailTokens?: PendingEmailTokens) => Promise<void>;
-  handleEmailOnboardingSkip: () => Promise<void>;
-  handleEmailOnboardingBack: () => void;
-
-  // Keychain/secure storage handlers
-  handleKeychainExplanationContinue: (dontShowAgain: boolean) => Promise<void>;
-  handleKeychainBack: () => void;
-
-  // Permission handlers
-  handlePermissionsGranted: () => void;
-  checkPermissions: () => Promise<void>;
-
-  // Export handlers
-  handleExportComplete: (result: unknown) => void;
-  handleOutlookExport: (selectedIds: Set<string>) => Promise<void>;
-  handleOutlookCancel: () => void;
-  handleStartOver: () => void;
-
-  // Microsoft handlers
-  handleMicrosoftLogin: (userInfo: unknown) => void;
-  handleMicrosoftSkip: () => void;
-  handleConnectOutlook: () => void;
-
-  // Network handlers
-  handleRetryConnection: () => Promise<void>;
-
-  // Modal handlers
-  setShowProfile: (show: boolean) => void;
-  setShowSettings: (show: boolean) => void;
-  setShowTransactions: (show: boolean) => void;
-  setShowContacts: (show: boolean) => void;
-  setShowAuditTransaction: (show: boolean) => void;
-  setShowVersion: (show: boolean) => void;
-  setShowMoveAppPrompt: (show: boolean) => void;
-  setShowTermsModal: (show: boolean) => void;
-
-  // UI handlers
-  handleDismissSetupPrompt: () => void;
-  setIsTourActive: (active: boolean) => void;
-  handleDismissMovePrompt: () => void;
-  handleNotNowMovePrompt: () => void;
-
-  // State setters (for components that need direct access)
-  setExportResult: (result: AppExportResult | null) => void;
-
-  // Utility
-  getPageTitle: () => string;
-}
 
 export function useAppStateMachine(): AppStateMachine {
   // ============================================
@@ -734,12 +589,70 @@ export function useAppStateMachine(): AppStateMachine {
   };
 
   // ============================================
+  // SEMANTIC MODAL METHODS
+  // ============================================
+  const openProfile = useCallback(() => setShowProfile(true), []);
+  const closeProfile = useCallback(() => setShowProfile(false), []);
+
+  const openSettings = useCallback(() => setShowSettings(true), []);
+  const closeSettings = useCallback(() => setShowSettings(false), []);
+
+  const openTransactions = useCallback(() => setShowTransactions(true), []);
+  const closeTransactions = useCallback(() => setShowTransactions(false), []);
+
+  const openContacts = useCallback(() => setShowContacts(true), []);
+  const closeContacts = useCallback(() => setShowContacts(false), []);
+
+  const openAuditTransaction = useCallback(() => setShowAuditTransaction(true), []);
+  const closeAuditTransaction = useCallback(() => setShowAuditTransaction(false), []);
+
+  const toggleVersion = useCallback(() => setShowVersion((prev) => !prev), []);
+  const closeVersion = useCallback(() => setShowVersion(false), []);
+
+  const openTermsModal = useCallback(() => setShowTermsModal(true), []);
+  const closeTermsModal = useCallback(() => setShowTermsModal(false), []);
+
+  const openMoveAppPrompt = useCallback(() => setShowMoveAppPrompt(true), []);
+  const closeMoveAppPrompt = useCallback(() => setShowMoveAppPrompt(false), []);
+
+  // ============================================
+  // NAVIGATION METHODS
+  // ============================================
+  const goToStep = useCallback((step: AppStep) => setCurrentStep(step), []);
+  const goToEmailOnboarding = useCallback(() => setCurrentStep("email-onboarding"), []);
+
+  // ============================================
+  // MEMOIZED MODAL STATE
+  // ============================================
+  const modalState = useMemo(
+    () => ({
+      showProfile,
+      showSettings,
+      showTransactions,
+      showContacts,
+      showAuditTransaction,
+      showVersion,
+      showMoveAppPrompt,
+      showTermsModal,
+    }),
+    [
+      showProfile,
+      showSettings,
+      showTransactions,
+      showContacts,
+      showAuditTransaction,
+      showVersion,
+      showMoveAppPrompt,
+      showTermsModal,
+    ],
+  );
+
+  // ============================================
   // RETURN STATE MACHINE
   // ============================================
   return {
     // Navigation state
     currentStep,
-    setCurrentStep,
 
     // Auth state
     isAuthenticated,
@@ -794,22 +707,35 @@ export function useAppStateMachine(): AppStateMachine {
     selectedConversationIds,
     outlookConnected,
 
-    // Modal state
-    modalState: {
-      showProfile,
-      showSettings,
-      showTransactions,
-      showContacts,
-      showAuditTransaction,
-      showVersion,
-      showMoveAppPrompt,
-      showTermsModal,
-    },
+    // Modal state (grouped)
+    modalState,
 
     // UI state
     showSetupPromptDismissed,
     isTourActive,
     appPath,
+
+    // Semantic modal transitions
+    openProfile,
+    closeProfile,
+    openSettings,
+    closeSettings,
+    openTransactions,
+    closeTransactions,
+    openContacts,
+    closeContacts,
+    openAuditTransaction,
+    closeAuditTransaction,
+    toggleVersion,
+    closeVersion,
+    openTermsModal,
+    closeTermsModal,
+    openMoveAppPrompt,
+    closeMoveAppPrompt,
+
+    // Navigation transitions
+    goToStep,
+    goToEmailOnboarding,
 
     // Auth handlers
     handleLoginSuccess,
@@ -847,6 +773,7 @@ export function useAppStateMachine(): AppStateMachine {
     handleOutlookExport,
     handleOutlookCancel,
     handleStartOver,
+    setExportResult,
 
     // Microsoft handlers
     handleMicrosoftLogin,
@@ -856,24 +783,11 @@ export function useAppStateMachine(): AppStateMachine {
     // Network handlers
     handleRetryConnection,
 
-    // Modal handlers
-    setShowProfile,
-    setShowSettings,
-    setShowTransactions,
-    setShowContacts,
-    setShowAuditTransaction,
-    setShowVersion,
-    setShowMoveAppPrompt,
-    setShowTermsModal,
-
     // UI handlers
     handleDismissSetupPrompt,
     setIsTourActive,
     handleDismissMovePrompt,
     handleNotNowMovePrompt,
-
-    // State setters
-    setExportResult,
 
     // Utility
     getPageTitle,
