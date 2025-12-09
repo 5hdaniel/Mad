@@ -25,9 +25,11 @@ interface UseEmailOnboardingApiReturn {
 export function useEmailOnboardingApi({
   userId,
 }: UseEmailOnboardingApiOptions): UseEmailOnboardingApiReturn {
-  const [hasCompletedEmailOnboarding, setHasCompletedEmailOnboarding] = useState<boolean>(true); // Default true to avoid flicker
+  const [hasCompletedEmailOnboarding, setHasCompletedEmailOnboarding] =
+    useState<boolean>(true); // Default true to avoid flicker
   const [hasEmailConnected, setHasEmailConnected] = useState<boolean>(true); // Default true to avoid flicker
-  const [isCheckingEmailOnboarding, setIsCheckingEmailOnboarding] = useState<boolean>(true);
+  const [isCheckingEmailOnboarding, setIsCheckingEmailOnboarding] =
+    useState<boolean>(true);
 
   // Check if user has completed email onboarding and has email connected
   useEffect(() => {
@@ -49,7 +51,8 @@ export function useEmailOnboardingApi({
           }
 
           // Check if any email is connected
-          const connectionResult = await window.api.system.checkAllConnections(userId);
+          const connectionResult =
+            await window.api.system.checkAllConnections(userId);
           if (connectionResult.success) {
             const hasConnection =
               connectionResult.google?.connected === true ||
@@ -57,7 +60,10 @@ export function useEmailOnboardingApi({
             setHasEmailConnected(hasConnection);
           }
         } catch (error) {
-          console.error("[useEmailOnboardingApi] Failed to check email status:", error);
+          console.error(
+            "[useEmailOnboardingApi] Failed to check email status:",
+            error,
+          );
         } finally {
           setIsCheckingEmailOnboarding(false);
         }
@@ -81,7 +87,10 @@ export function useEmailOnboardingApi({
         await authApi.completeEmailOnboarding(userId);
         setHasCompletedEmailOnboarding(true);
       } catch (error) {
-        console.error("[useEmailOnboardingApi] Failed to complete email onboarding:", error);
+        console.error(
+          "[useEmailOnboardingApi] Failed to complete email onboarding:",
+          error,
+        );
       }
     }
   };

@@ -312,7 +312,9 @@ export function AppRouter({ app }: AppRouterProps) {
 
   // Export complete
   if (currentStep === "complete" && exportResult) {
-    return <ExportComplete result={exportResult} onStartOver={handleStartOver} />;
+    return (
+      <ExportComplete result={exportResult} onStartOver={handleStartOver} />
+    );
   }
 
   // Fallback - should not reach here

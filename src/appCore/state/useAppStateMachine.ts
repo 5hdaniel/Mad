@@ -77,14 +77,22 @@ export function useAppStateMachine(): AppStateMachine {
   const [currentStep, setCurrentStep] = useState<AppStep>("loading");
   const [hasPermissions, setHasPermissions] = useState<boolean>(false);
   const [outlookConnected, setOutlookConnected] = useState<boolean>(false);
-  const [exportResult, setExportResult] = useState<AppExportResult | null>(null);
+  const [exportResult, setExportResult] = useState<AppExportResult | null>(
+    null,
+  );
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [selectedConversationIds, setSelectedConversationIds] = useState<Set<string>>(new Set());
+  const [selectedConversationIds, setSelectedConversationIds] = useState<
+    Set<string>
+  >(new Set());
   const [isNewUserFlow, setIsNewUserFlow] = useState<boolean>(false);
-  const [pendingOAuthData, setPendingOAuthData] = useState<PendingOAuthData | null>(null);
-  const [pendingOnboardingData, setPendingOnboardingData] = useState<PendingOnboardingData>(DEFAULT_PENDING_ONBOARDING);
-  const [pendingEmailTokens, setPendingEmailTokens] = useState<PendingEmailTokens | null>(null);
-  const [showSetupPromptDismissed, setShowSetupPromptDismissed] = useState<boolean>(false);
+  const [pendingOAuthData, setPendingOAuthData] =
+    useState<PendingOAuthData | null>(null);
+  const [pendingOnboardingData, setPendingOnboardingData] =
+    useState<PendingOnboardingData>(DEFAULT_PENDING_ONBOARDING);
+  const [pendingEmailTokens, setPendingEmailTokens] =
+    useState<PendingEmailTokens | null>(null);
+  const [showSetupPromptDismissed, setShowSetupPromptDismissed] =
+    useState<boolean>(false);
   const [isTourActive, setIsTourActive] = useState<boolean>(false);
   const [appPath, setAppPath] = useState<string>("");
 
@@ -93,7 +101,8 @@ export function useAppStateMachine(): AppStateMachine {
   const [showSettings, setShowSettings] = useState<boolean>(false);
   const [showTransactions, setShowTransactions] = useState<boolean>(false);
   const [showContacts, setShowContacts] = useState<boolean>(false);
-  const [showAuditTransaction, setShowAuditTransaction] = useState<boolean>(false);
+  const [showAuditTransaction, setShowAuditTransaction] =
+    useState<boolean>(false);
   const [showVersion, setShowVersion] = useState<boolean>(false);
   const [showMoveAppPrompt, setShowMoveAppPrompt] = useState<boolean>(false);
   const [showTermsModal, setShowTermsModal] = useState<boolean>(false);
@@ -137,7 +146,8 @@ export function useAppStateMachine(): AppStateMachine {
     isAuthenticated,
     login,
     onPendingOAuthClear: () => setPendingOAuthData(null),
-    onPendingOnboardingClear: () => setPendingOnboardingData(DEFAULT_PENDING_ONBOARDING),
+    onPendingOnboardingClear: () =>
+      setPendingOnboardingData(DEFAULT_PENDING_ONBOARDING),
     onPendingEmailTokensClear: () => setPendingEmailTokens(null),
     onPhoneTypeSet: setHasSelectedPhoneType,
     onEmailOnboardingComplete: (completed, connected) => {
@@ -183,7 +193,11 @@ export function useAppStateMachine(): AppStateMachine {
         }
 
         // Step 4: All pre-DB onboarding complete - now initialize database
-        if (isMacOS && currentStep !== "email-onboarding" && currentStep !== "phone-type-selection") {
+        if (
+          isMacOS &&
+          currentStep !== "email-onboarding" &&
+          currentStep !== "phone-type-selection"
+        ) {
           setCurrentStep("keychain-explanation");
         }
         return;
@@ -312,12 +326,20 @@ export function useAppStateMachine(): AppStateMachine {
             error?: string;
           }>;
         };
-        const result = await authApi.acceptTermsToSupabase(pendingOAuthData.cloudUser.id);
+        const result = await authApi.acceptTermsToSupabase(
+          pendingOAuthData.cloudUser.id,
+        );
         if (result.success) {
-          setPendingOnboardingData((prev) => ({ ...prev, termsAccepted: true }));
+          setPendingOnboardingData((prev) => ({
+            ...prev,
+            termsAccepted: true,
+          }));
           setShowTermsModal(false);
         } else {
-          console.error("[useAppStateMachine] Failed to save terms to Supabase:", result.error);
+          console.error(
+            "[useAppStateMachine] Failed to save terms to Supabase:",
+            result.error,
+          );
         }
         return;
       }
@@ -389,7 +411,9 @@ export function useAppStateMachine(): AppStateMachine {
     }
   };
 
-  const handlePhoneTypeChange = async (phoneType: "iphone" | "android"): Promise<void> => {
+  const handlePhoneTypeChange = async (
+    phoneType: "iphone" | "android",
+  ): Promise<void> => {
     if (pendingOAuthData && !isAuthenticated) {
       setSelectedPhoneType(phoneType);
       setPendingOnboardingData((prev) => ({ ...prev, phoneType }));
@@ -415,7 +439,9 @@ export function useAppStateMachine(): AppStateMachine {
   // ============================================
   // EMAIL ONBOARDING HANDLERS
   // ============================================
-  const handleEmailOnboardingComplete = async (emailTokens?: PendingEmailTokens): Promise<void> => {
+  const handleEmailOnboardingComplete = async (
+    emailTokens?: PendingEmailTokens,
+  ): Promise<void> => {
     if (pendingOAuthData && !isAuthenticated) {
       if (emailTokens) {
         setPendingEmailTokens(emailTokens);
@@ -467,7 +493,9 @@ export function useAppStateMachine(): AppStateMachine {
   // ============================================
   // KEYCHAIN HANDLERS
   // ============================================
-  const handleKeychainExplanationContinue = async (dontShowAgain: boolean): Promise<void> => {
+  const handleKeychainExplanationContinue = async (
+    dontShowAgain: boolean,
+  ): Promise<void> => {
     await initializeSecureStorage(dontShowAgain);
   };
 
@@ -491,7 +519,9 @@ export function useAppStateMachine(): AppStateMachine {
     setCurrentStep("complete");
   };
 
-  const handleOutlookExport = async (selectedIds: Set<string>): Promise<void> => {
+  const handleOutlookExport = async (
+    selectedIds: Set<string>,
+  ): Promise<void> => {
     if (conversations.length === 0) {
       const result = await window.electron.getConversations();
       if (result.success && result.conversations) {
@@ -543,7 +573,9 @@ export function useAppStateMachine(): AppStateMachine {
   const handleRetryConnection = useCallback(async () => {
     const online = await checkConnection();
     if (!online) {
-      setConnectionError("Unable to connect. Please check your internet connection.");
+      setConnectionError(
+        "Unable to connect. Please check your internet connection.",
+      );
     }
   }, [checkConnection, setConnectionError]);
 
@@ -603,8 +635,14 @@ export function useAppStateMachine(): AppStateMachine {
   const openContacts = useCallback(() => setShowContacts(true), []);
   const closeContacts = useCallback(() => setShowContacts(false), []);
 
-  const openAuditTransaction = useCallback(() => setShowAuditTransaction(true), []);
-  const closeAuditTransaction = useCallback(() => setShowAuditTransaction(false), []);
+  const openAuditTransaction = useCallback(
+    () => setShowAuditTransaction(true),
+    [],
+  );
+  const closeAuditTransaction = useCallback(
+    () => setShowAuditTransaction(false),
+    [],
+  );
 
   const toggleVersion = useCallback(() => setShowVersion((prev) => !prev), []);
   const closeVersion = useCallback(() => setShowVersion(false), []);
@@ -619,7 +657,10 @@ export function useAppStateMachine(): AppStateMachine {
   // NAVIGATION METHODS
   // ============================================
   const goToStep = useCallback((step: AppStep) => setCurrentStep(step), []);
-  const goToEmailOnboarding = useCallback(() => setCurrentStep("email-onboarding"), []);
+  const goToEmailOnboarding = useCallback(
+    () => setCurrentStep("email-onboarding"),
+    [],
+  );
 
   // ============================================
   // MEMOIZED MODAL STATE
