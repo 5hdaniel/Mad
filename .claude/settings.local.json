@@ -26,7 +26,12 @@
       "Bash(gh pr merge:*)",
       "Bash(gh pr view:*)",
       "Bash(git pull:*)",
-      "Bash(git rebase:*)"
+      "Bash(git rebase:*)",
+      "Bash(npx electron-rebuild)",
+      "Bash(npm install)",
+      "Bash(npx electron:*)",
+      "Bash(node --version:*)",
+      "Bash(npx electron-rebuild:*)"
     ],
     "deny": [],
     "ask": []
