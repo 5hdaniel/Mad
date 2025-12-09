@@ -1,8 +1,8 @@
-import path from 'path';
-import fs from 'fs/promises';
-import { app } from 'electron';
-import pdfExportService from './pdfExportService';
-import { Transaction, Communication } from '../types/models';
+import path from "path";
+import fs from "fs/promises";
+import { app } from "electron";
+import pdfExportService from "./pdfExportService";
+import { Transaction, Communication } from "../types/models";
 
 /**
  * Enhanced Export Service
@@ -15,8 +15,8 @@ import { Transaction, Communication } from '../types/models';
  */
 
 interface ExportOptions {
-  contentType?: 'text' | 'email' | 'both';
-  exportFormat?: 'pdf' | 'excel' | 'csv' | 'json' | 'txt_eml';
+  contentType?: "text" | "email" | "both";
+  exportFormat?: "pdf" | "excel" | "csv" | "json" | "txt_eml";
   representationStartDate?: string;
   closingDate?: string;
 }
@@ -34,17 +34,17 @@ class EnhancedExportService {
   async exportTransaction(
     transaction: Transaction,
     communications: Communication[],
-    options: ExportOptions = {}
+    options: ExportOptions = {},
   ): Promise<string> {
     const {
-      contentType = 'both',
-      exportFormat = 'pdf',
+      contentType = "both",
+      exportFormat = "pdf",
       representationStartDate,
       closingDate,
     } = options;
 
     try {
-      console.log('[Enhanced Export] Starting export:', {
+      console.log("[Enhanced Export] Starting export:", {
         format: exportFormat,
         contentType,
         transactionId: transaction.id,
@@ -55,14 +55,14 @@ class EnhancedExportService {
       let filteredComms = this._filterCommunicationsByDate(
         communications,
         representationStartDate,
-        closingDate
+        closingDate,
       );
 
       // IMPORTANT: Verify address relevance to prevent cross-transaction contamination
       // This ensures that contacts working on multiple transactions don't get mixed emails
       filteredComms = this._filterByAddressRelevance(
         filteredComms,
-        transaction.property_address
+        transaction.property_address,
       );
 
       // Filter by content type
@@ -76,33 +76,37 @@ class EnhancedExportService {
       });
 
       console.log(
-        `[Enhanced Export] Filtered to ${filteredComms.length} communications (verified address relevance)`
+        `[Enhanced Export] Filtered to ${filteredComms.length} communications (verified address relevance)`,
       );
 
       // Export based on format
       let exportPath: string;
       switch (exportFormat) {
-        case 'pdf':
+        case "pdf":
           exportPath = await this._exportPDF(transaction, filteredComms);
           break;
-        case 'excel':
-        case 'csv':
-          exportPath = await this._exportCSV(transaction, filteredComms, exportFormat);
+        case "excel":
+        case "csv":
+          exportPath = await this._exportCSV(
+            transaction,
+            filteredComms,
+            exportFormat,
+          );
           break;
-        case 'json':
+        case "json":
           exportPath = await this._exportJSON(transaction, filteredComms);
           break;
-        case 'txt_eml':
+        case "txt_eml":
           exportPath = await this._exportTxtEml(transaction, filteredComms);
           break;
         default:
           throw new Error(`Unknown export format: ${exportFormat}`);
       }
 
-      console.log('[Enhanced Export] Export complete:', exportPath);
+      console.log("[Enhanced Export] Export complete:", exportPath);
       return exportPath;
     } catch (error) {
-      console.error('[Enhanced Export] Export failed:', error);
+      console.error("[Enhanced Export] Export failed:", error);
       throw error;
     }
   }
@@ -114,7 +118,7 @@ class EnhancedExportService {
   private _filterCommunicationsByDate(
     communications: Communication[],
     startDate?: string,
-    endDate?: string
+    endDate?: string,
   ): Communication[] {
     if (!startDate && !endDate) {
       return communications;
@@ -137,18 +141,18 @@ class EnhancedExportService {
    */
   private _filterByContentType(
     communications: Communication[],
-    contentType: 'text' | 'email' | 'both'
+    contentType: "text" | "email" | "both",
   ): Communication[] {
-    if (contentType === 'both') {
+    if (contentType === "both") {
       return communications;
     }
 
-    if (contentType === 'email') {
-      return communications.filter((c) => c.communication_type === 'email');
+    if (contentType === "email") {
+      return communications.filter((c) => c.communication_type === "email");
     }
 
-    if (contentType === 'text') {
-      return communications.filter((c) => c.communication_type === 'text');
+    if (contentType === "text") {
+      return communications.filter((c) => c.communication_type === "text");
     }
 
     return communications;
@@ -162,10 +166,12 @@ class EnhancedExportService {
    */
   private _filterByAddressRelevance(
     communications: Communication[],
-    propertyAddress?: string
+    propertyAddress?: string,
   ): Communication[] {
     if (!propertyAddress) {
-      console.warn('[Enhanced Export] No property address provided, skipping address verification');
+      console.warn(
+        "[Enhanced Export] No property address provided, skipping address verification",
+      );
       return communications;
     }
 
@@ -175,8 +181,8 @@ class EnhancedExportService {
 
     return communications.filter((comm) => {
       // Check subject and body for address references
-      const subject = (comm.subject || '').toLowerCase();
-      const body = (comm.body_plain || comm.body || '').toLowerCase();
+      const subject = (comm.subject || "").toLowerCase();
+      const body = (comm.body_plain || comm.body || "").toLowerCase();
       const combinedContent = `${subject} ${body}`;
 
       // Check if ANY part of the address is mentioned in the communication
@@ -193,23 +199,31 @@ class EnhancedExportService {
       // (These might have been extracted during email scanning)
       if (comm.parties_involved) {
         const parties = comm.parties_involved.toLowerCase();
-        if (addressParts.some((part) => part.length >= 3 && parties.includes(part))) {
+        if (
+          addressParts.some(
+            (part) => part.length >= 3 && parties.includes(part),
+          )
+        ) {
           return true;
         }
       }
 
       if (comm.keywords_detected) {
         const keywords = Array.isArray(comm.keywords_detected)
-          ? comm.keywords_detected.join(' ').toLowerCase()
+          ? comm.keywords_detected.join(" ").toLowerCase()
           : (comm.keywords_detected as string).toLowerCase();
-        if (addressParts.some((part) => part.length >= 3 && keywords.includes(part))) {
+        if (
+          addressParts.some(
+            (part) => part.length >= 3 && keywords.includes(part),
+          )
+        ) {
           return true;
         }
       }
 
       // Log filtered out emails for debugging
       console.log(
-        `[Enhanced Export] Filtered out email (no address match): "${comm.subject}" from ${comm.sender}`
+        `[Enhanced Export] Filtered out email (no address match): "${comm.subject}" from ${comm.sender}`,
       );
       return false;
     });
@@ -220,7 +234,7 @@ class EnhancedExportService {
    * @private
    */
   private _normalizeAddress(address: string): string {
-    return address.toLowerCase().replace(/\s+/g, ' ').trim();
+    return address.toLowerCase().replace(/\s+/g, " ").trim();
   }
 
   /**
@@ -234,7 +248,7 @@ class EnhancedExportService {
 
     // Remove common separators and split
     const words = normalizedAddress
-      .replace(/[,\.]/g, ' ')
+      .replace(/[,\.]/g, " ")
       .split(/\s+/)
       .filter((w) => w.length > 0);
 
@@ -258,17 +272,20 @@ class EnhancedExportService {
    * Export as PDF using existing PDF export service
    * @private
    */
-  private async _exportPDF(transaction: Transaction, communications: Communication[]): Promise<string> {
-    const downloadsPath = app.getPath('downloads');
+  private async _exportPDF(
+    transaction: Transaction,
+    communications: Communication[],
+  ): Promise<string> {
+    const downloadsPath = app.getPath("downloads");
     const fileName = this._sanitizeFileName(
-      `Transaction_${transaction.property_address}_${Date.now()}.pdf`
+      `Transaction_${transaction.property_address}_${Date.now()}.pdf`,
     );
     const outputPath = path.join(downloadsPath, fileName);
 
     return await pdfExportService.generateTransactionPDF(
       transaction,
       communications,
-      outputPath
+      outputPath,
     );
   }
 
@@ -279,35 +296,35 @@ class EnhancedExportService {
   private async _exportCSV(
     transaction: Transaction,
     communications: Communication[],
-    format: 'excel' | 'csv'
+    format: "excel" | "csv",
   ): Promise<string> {
-    const downloadsPath = app.getPath('downloads');
-    const ext = format === 'excel' ? 'xlsx' : 'csv';
+    const downloadsPath = app.getPath("downloads");
+    const ext = format === "excel" ? "xlsx" : "csv";
     const fileName = this._sanitizeFileName(
-      `Transaction_${transaction.property_address}_${Date.now()}.${ext}`
+      `Transaction_${transaction.property_address}_${Date.now()}.${ext}`,
     );
     const outputPath = path.join(downloadsPath, fileName);
 
     // Create CSV content
     const headers = [
-      'Date',
-      'Type',
-      'From',
-      'To',
-      'Subject',
-      'Body Preview',
-      'Has Attachments',
-      'Attachment Count',
+      "Date",
+      "Type",
+      "From",
+      "To",
+      "Subject",
+      "Body Preview",
+      "Has Attachments",
+      "Attachment Count",
     ];
 
     const rows = communications.map((comm) => [
       new Date(comm.sent_at as string).toLocaleString(),
-      comm.communication_type || 'email',
-      comm.sender || '',
-      comm.recipients || '',
-      comm.subject || '',
-      (comm.body_plain || '').substring(0, 200).replace(/"/g, '""'),
-      comm.has_attachments ? 'Yes' : 'No',
+      comm.communication_type || "email",
+      comm.sender || "",
+      comm.recipients || "",
+      comm.subject || "",
+      (comm.body_plain || "").substring(0, 200).replace(/"/g, '""'),
+      comm.has_attachments ? "Yes" : "No",
       comm.attachment_count || 0,
     ]);
 
@@ -318,22 +335,22 @@ class EnhancedExportService {
       `Representation Start: ${
         transaction.representation_start_date
           ? new Date(transaction.representation_start_date).toLocaleDateString()
-          : 'N/A'
+          : "N/A"
       }`,
       `Closing Date: ${
         transaction.closing_date
           ? new Date(transaction.closing_date).toLocaleDateString()
-          : 'N/A'
+          : "N/A"
       }`,
       `Total Communications: ${communications.length}`,
-      '',
-      headers.map((h) => `"${h}"`).join(','),
-      ...rows.map((row) => row.map((cell) => `"${cell}"`).join(',')),
+      "",
+      headers.map((h) => `"${h}"`).join(","),
+      ...rows.map((row) => row.map((cell) => `"${cell}"`).join(",")),
     ];
 
-    const csvContent = csvLines.join('\n');
+    const csvContent = csvLines.join("\n");
 
-    await fs.writeFile(outputPath, csvContent, 'utf8');
+    await fs.writeFile(outputPath, csvContent, "utf8");
 
     return outputPath;
   }
@@ -342,10 +359,13 @@ class EnhancedExportService {
    * Export as JSON
    * @private
    */
-  private async _exportJSON(transaction: Transaction, communications: Communication[]): Promise<string> {
-    const downloadsPath = app.getPath('downloads');
+  private async _exportJSON(
+    transaction: Transaction,
+    communications: Communication[],
+  ): Promise<string> {
+    const downloadsPath = app.getPath("downloads");
     const fileName = this._sanitizeFileName(
-      `Transaction_${transaction.property_address}_${Date.now()}.json`
+      `Transaction_${transaction.property_address}_${Date.now()}.json`,
     );
     const outputPath = path.join(downloadsPath, fileName);
 
@@ -384,7 +404,7 @@ class EnhancedExportService {
       })),
     };
 
-    await fs.writeFile(outputPath, JSON.stringify(exportData, null, 2), 'utf8');
+    await fs.writeFile(outputPath, JSON.stringify(exportData, null, 2), "utf8");
 
     return outputPath;
   }
@@ -394,45 +414,58 @@ class EnhancedExportService {
    * Creates: {address}_{client}/emails/ and texts/
    * @private
    */
-  private async _exportTxtEml(transaction: Transaction, communications: Communication[]): Promise<string> {
-    const downloadsPath = app.getPath('downloads');
+  private async _exportTxtEml(
+    transaction: Transaction,
+    communications: Communication[],
+  ): Promise<string> {
+    const downloadsPath = app.getPath("downloads");
     const folderName = this._sanitizeFileName(
-      `${transaction.property_address}_Export_${Date.now()}`
+      `${transaction.property_address}_Export_${Date.now()}`,
     );
     const basePath = path.join(downloadsPath, folderName);
 
     // Create folder structure
     await fs.mkdir(basePath, { recursive: true });
-    const emailsPath = path.join(basePath, 'emails');
-    const textsPath = path.join(basePath, 'texts');
+    const emailsPath = path.join(basePath, "emails");
+    const textsPath = path.join(basePath, "texts");
     await fs.mkdir(emailsPath, { recursive: true });
     await fs.mkdir(textsPath, { recursive: true });
 
     // Export emails as .eml files
-    const emails = communications.filter((c) => c.communication_type === 'email');
+    const emails = communications.filter(
+      (c) => c.communication_type === "email",
+    );
     for (let i = 0; i < emails.length; i++) {
       const email = emails[i];
       const emlContent = this._createEMLContent(email);
       const emlFileName = this._sanitizeFileName(
-        `${i + 1}_${email.subject || 'no_subject'}.eml`
+        `${i + 1}_${email.subject || "no_subject"}.eml`,
       );
-      await fs.writeFile(path.join(emailsPath, emlFileName), emlContent, 'utf8');
+      await fs.writeFile(
+        path.join(emailsPath, emlFileName),
+        emlContent,
+        "utf8",
+      );
     }
 
     // Export texts as .txt files
-    const texts = communications.filter((c) => c.communication_type === 'text');
+    const texts = communications.filter((c) => c.communication_type === "text");
     for (let i = 0; i < texts.length; i++) {
       const text = texts[i];
       const txtContent = this._createTextContent(text);
       const txtFileName = this._sanitizeFileName(
-        `${i + 1}_${new Date(text.sent_at as string).toISOString().split('T')[0]}.txt`
+        `${i + 1}_${new Date(text.sent_at as string).toISOString().split("T")[0]}.txt`,
       );
-      await fs.writeFile(path.join(textsPath, txtFileName), txtContent, 'utf8');
+      await fs.writeFile(path.join(textsPath, txtFileName), txtContent, "utf8");
     }
 
     // Create summary.txt
     const summaryContent = this._createSummary(transaction, communications);
-    await fs.writeFile(path.join(basePath, 'SUMMARY.txt'), summaryContent, 'utf8');
+    await fs.writeFile(
+      path.join(basePath, "SUMMARY.txt"),
+      summaryContent,
+      "utf8",
+    );
 
     return basePath;
   }
@@ -444,26 +477,26 @@ class EnhancedExportService {
   private _createEMLContent(email: Communication): string {
     const lines: string[] = [];
 
-    lines.push(`From: ${email.sender || 'Unknown'}`);
+    lines.push(`From: ${email.sender || "Unknown"}`);
     if (email.recipients) lines.push(`To: ${email.recipients}`);
     if (email.cc) lines.push(`Cc: ${email.cc}`);
     if (email.bcc) lines.push(`Bcc: ${email.bcc}`);
-    lines.push(`Subject: ${email.subject || '(No Subject)'}`);
+    lines.push(`Subject: ${email.subject || "(No Subject)"}`);
     lines.push(
       `Date: ${
-        email.sent_at ? new Date(email.sent_at as string).toUTCString() : 'Unknown'
-      }`
+        email.sent_at
+          ? new Date(email.sent_at as string).toUTCString()
+          : "Unknown"
+      }`,
     );
     if (email.has_attachments) {
-      lines.push(
-        `X-Attachments: ${email.attachment_count || 0} attachment(s)`
-      );
+      lines.push(`X-Attachments: ${email.attachment_count || 0} attachment(s)`);
     }
-    lines.push('Content-Type: text/plain; charset=utf-8');
-    lines.push('');
-    lines.push(email.body_plain || email.body || '(No content)');
+    lines.push("Content-Type: text/plain; charset=utf-8");
+    lines.push("");
+    lines.push(email.body_plain || email.body || "(No content)");
 
-    return lines.join('\r\n');
+    return lines.join("\r\n");
   }
 
   /**
@@ -473,78 +506,79 @@ class EnhancedExportService {
   private _createTextContent(text: Communication): string {
     const lines: string[] = [];
 
-    lines.push('=== TEXT MESSAGE ===');
-    lines.push(`From: ${text.sender || 'Unknown'}`);
-    lines.push(`To: ${text.recipients || 'Unknown'}`);
+    lines.push("=== TEXT MESSAGE ===");
+    lines.push(`From: ${text.sender || "Unknown"}`);
+    lines.push(`To: ${text.recipients || "Unknown"}`);
     lines.push(
-      `Date: ${text.sent_at ? new Date(text.sent_at as string).toLocaleString() : 'Unknown'}`
+      `Date: ${text.sent_at ? new Date(text.sent_at as string).toLocaleString() : "Unknown"}`,
     );
-    lines.push('');
-    lines.push(text.body_plain || text.body || '(No content)');
+    lines.push("");
+    lines.push(text.body_plain || text.body || "(No content)");
 
-    return lines.join('\n');
+    return lines.join("\n");
   }
 
   /**
    * Create summary file
    * @private
    */
-  private _createSummary(transaction: Transaction, communications: Communication[]): string {
+  private _createSummary(
+    transaction: Transaction,
+    communications: Communication[],
+  ): string {
     const lines: string[] = [];
 
-    lines.push('========================================');
-    lines.push('  TRANSACTION EXPORT SUMMARY');
-    lines.push('========================================');
-    lines.push('');
+    lines.push("========================================");
+    lines.push("  TRANSACTION EXPORT SUMMARY");
+    lines.push("========================================");
+    lines.push("");
     lines.push(`Property Address: ${transaction.property_address}`);
-    lines.push(
-      `Transaction Type: ${transaction.transaction_type || 'N/A'}`
-    );
-    lines.push(`Status: ${transaction.status || 'N/A'}`);
-    lines.push('');
+    lines.push(`Transaction Type: ${transaction.transaction_type || "N/A"}`);
+    lines.push(`Status: ${transaction.status || "N/A"}`);
+    lines.push("");
     lines.push(
       `Representation Start Date: ${
         transaction.representation_start_date
           ? new Date(transaction.representation_start_date).toLocaleDateString()
-          : 'N/A'
-      }`
+          : "N/A"
+      }`,
     );
     lines.push(
       `Closing Date: ${
         transaction.closing_date
           ? new Date(transaction.closing_date).toLocaleDateString()
-          : 'N/A'
-      }`
+          : "N/A"
+      }`,
     );
-    lines.push('');
+    lines.push("");
     lines.push(
       `Sale Price: ${
         transaction.sale_price
-          ? new Intl.NumberFormat('en-US', {
-              style: 'currency',
-              currency: 'USD',
+          ? new Intl.NumberFormat("en-US", {
+              style: "currency",
+              currency: "USD",
             }).format(transaction.sale_price)
-          : 'N/A'
-      }`
+          : "N/A"
+      }`,
     );
-    lines.push('');
+    lines.push("");
     lines.push(`Total Communications Exported: ${communications.length}`);
     lines.push(
       `  - Emails: ${
-        communications.filter((c) => c.communication_type === 'email').length
-      }`
+        communications.filter((c) => c.communication_type === "email").length
+      }`,
     );
     lines.push(
       `  - Texts: ${
-        communications.filter((c) => c.communication_type === 'text').length
-      }`
+        communications.filter((c) => c.communication_type === "text").length
+      }`,
     );
-    lines.push('');
+    lines.push("");
     lines.push(`Export Date: ${new Date().toLocaleString()}`);
-    lines.push('');
-    lines.push('========================================');
+    lines.push("");
+    lines.push("========================================");
 
-    return lines.join('\n');
+    return lines.join("\n");
   }
 
   /**
@@ -553,8 +587,8 @@ class EnhancedExportService {
    */
   private _sanitizeFileName(name: string): string {
     return name
-      .replace(/[^a-z0-9_\-\.]/gi, '_')
-      .replace(/_+/g, '_')
+      .replace(/[^a-z0-9_\-\.]/gi, "_")
+      .replace(/_+/g, "_")
       .substring(0, 200);
   }
 }

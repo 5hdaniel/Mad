@@ -3,17 +3,17 @@
  * Tests iPhone device detection, sync functionality, and error handling
  */
 
-import { renderHook } from '@testing-library/react';
-import { useIPhoneSync } from '../useIPhoneSync';
+import { renderHook } from "@testing-library/react";
+import { useIPhoneSync } from "../useIPhoneSync";
 
-describe('useIPhoneSync', () => {
+describe("useIPhoneSync", () => {
   let consoleErrorSpy: jest.SpyInstance;
   let consoleWarnSpy: jest.SpyInstance;
 
   beforeEach(() => {
     // Setup console spies
-    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
-    consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
+    consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
+    consoleWarnSpy = jest.spyOn(console, "warn").mockImplementation();
 
     // Setup basic window.api mock
     (window as any).api = {
@@ -38,43 +38,43 @@ describe('useIPhoneSync', () => {
     consoleWarnSpy.mockRestore();
   });
 
-  describe('initialization', () => {
-    it('should start with default state', () => {
+  describe("initialization", () => {
+    it("should start with default state", () => {
       const { result } = renderHook(() => useIPhoneSync());
 
       expect(result.current.isConnected).toBe(false);
       expect(result.current.device).toBeNull();
-      expect(result.current.syncStatus).toBe('idle');
+      expect(result.current.syncStatus).toBe("idle");
       expect(result.current.progress).toBeNull();
       expect(result.current.error).toBeNull();
       expect(result.current.needsPassword).toBe(false);
     });
 
-    it('should provide all required hook methods', () => {
+    it("should provide all required hook methods", () => {
       const { result } = renderHook(() => useIPhoneSync());
 
-      expect(typeof result.current.startSync).toBe('function');
-      expect(typeof result.current.submitPassword).toBe('function');
-      expect(typeof result.current.cancelSync).toBe('function');
+      expect(typeof result.current.startSync).toBe("function");
+      expect(typeof result.current.submitPassword).toBe("function");
+      expect(typeof result.current.cancelSync).toBe("function");
     });
 
-    it('should start device detection on mount', () => {
+    it("should start device detection on mount", () => {
       renderHook(() => useIPhoneSync());
 
-      expect((window.api.device.startDetection as jest.Mock)).toHaveBeenCalled();
+      expect(window.api.device.startDetection as jest.Mock).toHaveBeenCalled();
     });
 
-    it('should stop detection on unmount', () => {
+    it("should stop detection on unmount", () => {
       const { unmount } = renderHook(() => useIPhoneSync());
 
       unmount();
 
-      expect((window.api.device.stopDetection as jest.Mock)).toHaveBeenCalled();
+      expect(window.api.device.stopDetection as jest.Mock).toHaveBeenCalled();
     });
   });
 
-  describe('API unavailable scenarios', () => {
-    it('should handle missing device API gracefully', () => {
+  describe("API unavailable scenarios", () => {
+    it("should handle missing device API gracefully", () => {
       (window as any).api = {};
 
       const { result } = renderHook(() => useIPhoneSync());
@@ -83,7 +83,7 @@ describe('useIPhoneSync', () => {
       expect(result.current.device).toBeNull();
     });
 
-    it('should handle missing backup API gracefully', () => {
+    it("should handle missing backup API gracefully", () => {
       (window as any).api = {
         device: {
           startDetection: jest.fn(),
@@ -96,10 +96,10 @@ describe('useIPhoneSync', () => {
       const { result } = renderHook(() => useIPhoneSync());
 
       expect(result.current).toBeDefined();
-      expect(typeof result.current.startSync).toBe('function');
+      expect(typeof result.current.startSync).toBe("function");
     });
 
-    it('should handle completely missing window.api', () => {
+    it("should handle completely missing window.api", () => {
       delete (window as any).api;
 
       const { result } = renderHook(() => useIPhoneSync());
@@ -109,24 +109,24 @@ describe('useIPhoneSync', () => {
     });
   });
 
-  describe('error logging', () => {
-    it('should log error when starting sync without device', async () => {
+  describe("error logging", () => {
+    it("should log error when starting sync without device", async () => {
       const { result } = renderHook(() => useIPhoneSync());
 
       await result.current.startSync();
 
       expect(consoleErrorSpy).toHaveBeenCalledWith(
-        '[useIPhoneSync] Cannot start sync: No device connected'
+        "[useIPhoneSync] Cannot start sync: No device connected",
       );
     });
 
-    it('should log error when submitting password without device', async () => {
+    it("should log error when submitting password without device", async () => {
       const { result } = renderHook(() => useIPhoneSync());
 
-      await result.current.submitPassword('test-password');
+      await result.current.submitPassword("test-password");
 
       expect(consoleErrorSpy).toHaveBeenCalledWith(
-        '[useIPhoneSync] Cannot submit password: No device connected'
+        "[useIPhoneSync] Cannot submit password: No device connected",
       );
     });
   });

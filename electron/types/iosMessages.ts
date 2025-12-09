@@ -15,7 +15,7 @@ export interface iOSMessage {
   date: Date;
   dateRead: Date | null;
   dateDelivered: Date | null;
-  service: 'iMessage' | 'SMS';
+  service: "iMessage" | "SMS";
   attachments: iOSAttachment[];
 }
 

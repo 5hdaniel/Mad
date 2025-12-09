@@ -1,14 +1,22 @@
-import React, { useState } from 'react';
-import { SPECIFIC_ROLES, ROLE_TO_CATEGORY, AUDIT_WORKFLOW_STEPS } from '../constants/contactRoles';
-import { filterRolesByTransactionType, getTransactionTypeContext, getRoleDisplayName } from '../utils/transactionRoleUtils';
-import ContactSelectModal from './ContactSelectModal';
-import type { Contact, Transaction } from '../../electron/types/models';
-import { usePlatform } from '../contexts/PlatformContext';
+import React, { useState } from "react";
+import {
+  SPECIFIC_ROLES,
+  ROLE_TO_CATEGORY,
+  AUDIT_WORKFLOW_STEPS,
+} from "../constants/contactRoles";
+import {
+  filterRolesByTransactionType,
+  getTransactionTypeContext,
+  getRoleDisplayName,
+} from "../utils/transactionRoleUtils";
+import ContactSelectModal from "./ContactSelectModal";
+import type { Contact, Transaction } from "../../electron/types/models";
+import { usePlatform } from "../contexts/PlatformContext";
 
 // Type definitions
 interface AuditTransactionModalProps {
   userId: number;
-  provider: string;
+  provider?: string; // Optional - not currently used
   onClose: () => void;
   onSuccess: (transaction: Transaction) => void;
 }
@@ -91,7 +99,12 @@ interface RoleConfig {
  * Audit Transaction Modal
  * Comprehensive transaction creation with address verification and contact assignment
  */
-function AuditTransactionModal({ userId, provider: _provider, onClose, onSuccess }: AuditTransactionModalProps): React.ReactElement {
+function AuditTransactionModal({
+  userId,
+  provider: _provider,
+  onClose,
+  onSuccess,
+}: AuditTransactionModalProps): React.ReactElement {
   const { isMacOS, isWindows } = usePlatform();
   const [step, setStep] = useState<number>(1); // 1: Address, 2: Client & Agents, 3: Professional Services
   const [loading, setLoading] = useState<boolean>(false);
@@ -99,22 +112,28 @@ function AuditTransactionModal({ userId, provider: _provider, onClose, onSuccess
 
   // Step 1: Address Data
   const [addressData, setAddressData] = useState<AddressData>({
-    property_address: '',
-    property_street: '',
-    property_city: '',
-    property_state: '',
-    property_zip: '',
+    property_address: "",
+    property_street: "",
+    property_city: "",
+    property_state: "",
+    property_zip: "",
     property_coordinates: null,
-    transaction_type: 'purchase',
+    transaction_type: "purchase",
   });
 
   // Step 2-3: Contact Assignments
-  const [contactAssignments, setContactAssignments] = useState<ContactAssignments>({});
+  const [contactAssignments, setContactAssignments] =
+    useState<ContactAssignments>({});
   // Structure: { [specific_role]: [{ contactId, isPrimary, notes }] }
 
-  const [showAddressAutocomplete, setShowAddressAutocomplete] = useState<boolean>(false);
-  const [addressSuggestions, setAddressSuggestions] = useState<AddressSuggestion[]>([]);
-  const [sessionToken] = React.useState<string>(() => `session_${Date.now()}_${Math.random()}`);
+  const [showAddressAutocomplete, setShowAddressAutocomplete] =
+    useState<boolean>(false);
+  const [addressSuggestions, setAddressSuggestions] = useState<
+    AddressSuggestion[]
+  >([]);
+  const [sessionToken] = React.useState<string>(
+    () => `session_${Date.now()}_${Math.random()}`,
+  );
 
   /**
    * Initialize Google Places API (if available)
@@ -126,9 +145,12 @@ function AuditTransactionModal({ userId, provider: _provider, onClose, onSuccess
         // If no API key, address verification will gracefully degrade
         try {
           // Initialize with empty string - backend will use environment variable
-          await window.api.address.initialize('');
+          await window.api.address.initialize("");
         } catch (error: unknown) {
-          console.warn('[AuditTransaction] Address verification not available:', error);
+          console.warn(
+            "[AuditTransaction] Address verification not available:",
+            error,
+          );
         }
       }
     };
@@ -143,8 +165,15 @@ function AuditTransactionModal({ userId, provider: _provider, onClose, onSuccess
 
     if (value.length > 3 && window.api?.address?.getSuggestions) {
       try {
-        const result = await window.api.address.getSuggestions(value, sessionToken);
-        if (result.success && result.suggestions && result.suggestions.length > 0) {
+        const result = await window.api.address.getSuggestions(
+          value,
+          sessionToken,
+        );
+        if (
+          result.success &&
+          result.suggestions &&
+          result.suggestions.length > 0
+        ) {
           setAddressSuggestions(result.suggestions);
           setShowAddressAutocomplete(true);
         } else {
@@ -152,7 +181,10 @@ function AuditTransactionModal({ userId, provider: _provider, onClose, onSuccess
           setShowAddressAutocomplete(false);
         }
       } catch (error: unknown) {
-        console.error('[AuditTransaction] Failed to fetch address suggestions:', error);
+        console.error(
+          "[AuditTransaction] Failed to fetch address suggestions:",
+          error,
+        );
         setShowAddressAutocomplete(false);
       }
     } else {
@@ -164,45 +196,61 @@ function AuditTransactionModal({ userId, provider: _provider, onClose, onSuccess
   /**
    * Select address from autocomplete
    */
-  const selectAddress = async (suggestion: AddressSuggestion): Promise<void> => {
+  const selectAddress = async (
+    suggestion: AddressSuggestion,
+  ): Promise<void> => {
     if (!window.api?.address?.getDetails) {
       // Fallback if API not available
       setAddressData({
         ...addressData,
-        property_address: suggestion.formatted_address || suggestion.description || '',
+        property_address:
+          suggestion.formatted_address || suggestion.description || "",
       });
       setShowAddressAutocomplete(false);
       return;
     }
 
     try {
-      const placeId = suggestion.place_id || suggestion.placeId || '';
-      const result: AddressDetailsResult = await window.api.address.getDetails(placeId);
+      const placeId = suggestion.place_id || suggestion.placeId || "";
+      const result: AddressDetailsResult =
+        await window.api.address.getDetails(placeId);
       if (result.success) {
         // API returns { success, address: {...} } - extract from address object
         const addr: AddressDetails = result.address || {};
         setAddressData({
           ...addressData,
-          property_address: addr.formatted_address || result.formatted_address || suggestion.formatted_address || suggestion.description || '',
-          property_street: addr.street || result.street || '',
-          property_city: addr.city || result.city || '',
-          property_state: addr.state_short || addr.state || result.state_short || result.state || '',
-          property_zip: addr.zip || result.zip || '',
+          property_address:
+            addr.formatted_address ||
+            result.formatted_address ||
+            suggestion.formatted_address ||
+            suggestion.description ||
+            "",
+          property_street: addr.street || result.street || "",
+          property_city: addr.city || result.city || "",
+          property_state:
+            addr.state_short ||
+            addr.state ||
+            result.state_short ||
+            result.state ||
+            "",
+          property_zip: addr.zip || result.zip || "",
           property_coordinates: addr.coordinates || result.coordinates || null,
         });
       } else {
         // Fallback
         setAddressData({
           ...addressData,
-          property_address: suggestion.formatted_address || suggestion.description || '',
+          property_address:
+            suggestion.formatted_address || suggestion.description || "",
         });
       }
     } catch (error: unknown) {
-      console.error('[AuditTransaction] Failed to get address details:', error);
+      console.error("[AuditTransaction] Failed to get address details:", error);
       // Fallback
       setAddressData({
         ...addressData,
-        property_address: suggestion.formatted_address || suggestion.description || '',
+        property_address:
+          suggestion.formatted_address || suggestion.description || "",
       });
     }
     setShowAddressAutocomplete(false);
@@ -211,11 +259,18 @@ function AuditTransactionModal({ userId, provider: _provider, onClose, onSuccess
   /**
    * Assign contact to a role
    */
-  const assignContact = (role: string, contactId: string, isPrimary: boolean = false, notes: string = ''): void => {
+  const assignContact = (
+    role: string,
+    contactId: string,
+    isPrimary: boolean = false,
+    notes: string = "",
+  ): void => {
     const existing = contactAssignments[role] || [];
 
     // Find if this contact is already assigned
-    const existingIndex = existing.findIndex((c: ContactAssignment) => c.contactId === contactId);
+    const existingIndex = existing.findIndex(
+      (c: ContactAssignment) => c.contactId === contactId,
+    );
 
     if (existingIndex !== -1) {
       // Update existing assignment
@@ -236,7 +291,9 @@ function AuditTransactionModal({ userId, provider: _provider, onClose, onSuccess
    */
   const removeContact = (role: string, contactId: string): void => {
     const existing = contactAssignments[role] || [];
-    const filtered = existing.filter((c: ContactAssignment) => c.contactId !== contactId);
+    const filtered = existing.filter(
+      (c: ContactAssignment) => c.contactId !== contactId,
+    );
     setContactAssignments({ ...contactAssignments, [role]: filtered });
   };
 
@@ -247,15 +304,18 @@ function AuditTransactionModal({ userId, provider: _provider, onClose, onSuccess
     if (step === 1) {
       // Validate address
       if (!addressData.property_address.trim()) {
-        setError('Property address is required');
+        setError("Property address is required");
         return;
       }
       setError(null);
       setStep(2);
     } else if (step === 2) {
       // Validate required contacts (client is required)
-      if (!contactAssignments[SPECIFIC_ROLES.CLIENT] || contactAssignments[SPECIFIC_ROLES.CLIENT].length === 0) {
-        setError('Client contact is required');
+      if (
+        !contactAssignments[SPECIFIC_ROLES.CLIENT] ||
+        contactAssignments[SPECIFIC_ROLES.CLIENT].length === 0
+      ) {
+        setError("Client contact is required");
         return;
       }
       setError(null);
@@ -288,31 +348,36 @@ function AuditTransactionModal({ userId, provider: _provider, onClose, onSuccess
 
     try {
       // Prepare contact assignments for API
-      const assignments = Object.entries(contactAssignments).flatMap(([role, contacts]: [string, ContactAssignment[]]) =>
-        contacts.map((contact: ContactAssignment) => ({
-          role: role,
-          role_category: ROLE_TO_CATEGORY[role],
-          contact_id: contact.contactId,
-          is_primary: contact.isPrimary ? 1 : 0,
-          notes: contact.notes || null,
-        }))
+      const assignments = Object.entries(contactAssignments).flatMap(
+        ([role, contacts]: [string, ContactAssignment[]]) =>
+          contacts.map((contact: ContactAssignment) => ({
+            role: role,
+            role_category: ROLE_TO_CATEGORY[role],
+            contact_id: contact.contactId,
+            is_primary: contact.isPrimary ? 1 : 0,
+            notes: contact.notes || null,
+          })),
       );
 
       // Call API to create audited transaction
-      const result = await window.api.transactions.createAudited(userId.toString(), {
-        ...addressData,
-        contact_assignments: assignments,
-      });
+      const result = await window.api.transactions.createAudited(
+        userId.toString(),
+        {
+          ...addressData,
+          contact_assignments: assignments,
+        },
+      );
 
       if (result.success && result.transaction) {
         onSuccess(result.transaction);
         onClose(); // Close modal immediately after success
       } else {
-        setError(result.error || 'Failed to create transaction');
+        setError(result.error || "Failed to create transaction");
         setLoading(false); // Only reset loading on error
       }
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to create transaction';
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to create transaction";
       setError(errorMessage);
       setLoading(false); // Only reset loading on error
     }
@@ -324,19 +389,31 @@ function AuditTransactionModal({ userId, provider: _provider, onClose, onSuccess
         {/* Header */}
         <div className="flex-shrink-0 bg-gradient-to-r from-indigo-500 to-purple-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
           <div>
-            <h2 className="text-xl font-bold text-white">Audit New Transaction</h2>
+            <h2 className="text-xl font-bold text-white">
+              Audit New Transaction
+            </h2>
             <p className="text-indigo-100 text-sm">
-              {step === 1 && 'Step 1: Verify Property Address'}
-              {step === 2 && 'Step 2: Assign Client & Agents'}
-              {step === 3 && 'Step 3: Assign Professional Services'}
+              {step === 1 && "Step 1: Verify Property Address"}
+              {step === 2 && "Step 2: Assign Client & Agents"}
+              {step === 3 && "Step 3: Assign Professional Services"}
             </p>
           </div>
           <button
             onClick={onClose}
             className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-all"
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            <svg
+              className="w-6 h-6"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
             </svg>
           </button>
         </div>
@@ -349,17 +426,17 @@ function AuditTransactionModal({ userId, provider: _provider, onClose, onSuccess
                 <div
                   className={`w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center text-sm sm:text-base font-semibold transition-all ${
                     s < step
-                      ? 'bg-green-500 text-white'
+                      ? "bg-green-500 text-white"
                       : s === step
-                      ? 'bg-indigo-500 text-white'
-                      : 'bg-gray-300 text-gray-600'
+                        ? "bg-indigo-500 text-white"
+                        : "bg-gray-300 text-gray-600"
                   }`}
                 >
-                  {s < step ? '✓' : s}
+                  {s < step ? "✓" : s}
                 </div>
                 {s < 3 && (
                   <div
-                    className={`flex-1 h-1 transition-all ${s < step ? 'bg-green-500' : 'bg-gray-300'}`}
+                    className={`flex-1 h-1 transition-all ${s < step ? "bg-green-500" : "bg-gray-300"}`}
                   ></div>
                 )}
               </React.Fragment>
@@ -380,7 +457,9 @@ function AuditTransactionModal({ userId, provider: _provider, onClose, onSuccess
             <AddressVerificationStep
               addressData={addressData}
               onAddressChange={handleAddressChange}
-              onTransactionTypeChange={(type) => setAddressData({ ...addressData, transaction_type: type })}
+              onTransactionTypeChange={(type) =>
+                setAddressData({ ...addressData, transaction_type: type })
+              }
               showAutocomplete={showAddressAutocomplete}
               suggestions={addressSuggestions}
               onSelectSuggestion={selectAddress}
@@ -435,8 +514,8 @@ function AuditTransactionModal({ userId, provider: _provider, onClose, onSuccess
               disabled={loading}
               className={`px-6 py-2 rounded-lg font-semibold transition-all ${
                 loading
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white hover:from-indigo-600 hover:to-purple-700 shadow-md hover:shadow-lg'
+                  ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                  : "bg-gradient-to-r from-indigo-500 to-purple-600 text-white hover:from-indigo-600 hover:to-purple-700 shadow-md hover:shadow-lg"
               }`}
             >
               {loading ? (
@@ -445,9 +524,9 @@ function AuditTransactionModal({ userId, provider: _provider, onClose, onSuccess
                   Creating...
                 </span>
               ) : step === 3 ? (
-                'Create Transaction'
+                "Create Transaction"
               ) : (
-                'Continue →'
+                "Continue →"
               )}
             </button>
           </div>
@@ -487,23 +566,33 @@ function AddressVerificationStep({
           <input
             type="text"
             value={addressData.property_address}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => onAddressChange(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+              onAddressChange(e.target.value)
+            }
             placeholder="Enter property address..."
             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             autoComplete="off"
           />
           {showAutocomplete && suggestions.length > 0 && (
             <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-              {suggestions.map((suggestion: AddressSuggestion, index: number) => (
-                <button
-                  key={suggestion.place_id || suggestion.placeId || index}
-                  onClick={() => onSelectSuggestion(suggestion)}
-                  className="w-full text-left px-4 py-2 hover:bg-indigo-50 transition-colors border-b border-gray-100 last:border-b-0"
-                >
-                  <p className="font-medium text-gray-900">{suggestion.main_text || suggestion.description || 'Address'}</p>
-                  <p className="text-xs text-gray-500">{suggestion.secondary_text || ''}</p>
-                </button>
-              ))}
+              {suggestions.map(
+                (suggestion: AddressSuggestion, index: number) => (
+                  <button
+                    key={suggestion.place_id || suggestion.placeId || index}
+                    onClick={() => onSelectSuggestion(suggestion)}
+                    className="w-full text-left px-4 py-2 hover:bg-indigo-50 transition-colors border-b border-gray-100 last:border-b-0"
+                  >
+                    <p className="font-medium text-gray-900">
+                      {suggestion.main_text ||
+                        suggestion.description ||
+                        "Address"}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {suggestion.secondary_text || ""}
+                    </p>
+                  </button>
+                ),
+              )}
             </div>
           )}
         </div>
@@ -518,21 +607,21 @@ function AddressVerificationStep({
         </label>
         <div className="grid grid-cols-2 gap-3">
           <button
-            onClick={() => onTransactionTypeChange('purchase')}
+            onClick={() => onTransactionTypeChange("purchase")}
             className={`px-4 py-3 rounded-lg font-medium transition-all ${
-              addressData.transaction_type === 'purchase'
-                ? 'bg-indigo-500 text-white shadow-md'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              addressData.transaction_type === "purchase"
+                ? "bg-indigo-500 text-white shadow-md"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
             }`}
           >
             Purchase
           </button>
           <button
-            onClick={() => onTransactionTypeChange('sale')}
+            onClick={() => onTransactionTypeChange("sale")}
             className={`px-4 py-3 rounded-lg font-medium transition-all ${
-              addressData.transaction_type === 'sale'
-                ? 'bg-indigo-500 text-white shadow-md'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              addressData.transaction_type === "sale"
+                ? "bg-indigo-500 text-white shadow-md"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
             }`}
           >
             Sale
@@ -542,13 +631,26 @@ function AddressVerificationStep({
 
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <div className="flex items-start gap-2">
-          <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          <svg
+            className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
           </svg>
           <div>
-            <p className="text-sm font-medium text-blue-900">Address Verification</p>
+            <p className="text-sm font-medium text-blue-900">
+              Address Verification
+            </p>
             <p className="text-xs text-blue-700 mt-1">
-              We'll verify the address using Google Places API to ensure accuracy for reports and exports.
+              We'll verify the address using Google Places API to ensure
+              accuracy for reports and exports.
             </p>
           </div>
         </div>
@@ -563,24 +665,45 @@ function AddressVerificationStep({
 interface ContactAssignmentStepProps {
   stepConfig: StepConfig;
   contactAssignments: ContactAssignments;
-  onAssignContact: (role: string, contactId: string, isPrimary: boolean, notes: string) => void;
+  onAssignContact: (
+    role: string,
+    contactId: string,
+    isPrimary: boolean,
+    notes: string,
+  ) => void;
   onRemoveContact: (role: string, contactId: string) => void;
   userId: number;
   transactionType: string;
   propertyAddress: string;
 }
 
-function ContactAssignmentStep({ stepConfig, contactAssignments, onAssignContact, onRemoveContact, userId, transactionType, propertyAddress }: ContactAssignmentStepProps): React.ReactElement {
+function ContactAssignmentStep({
+  stepConfig,
+  contactAssignments,
+  onAssignContact,
+  onRemoveContact,
+  userId,
+  transactionType,
+  propertyAddress,
+}: ContactAssignmentStepProps): React.ReactElement {
   // Filter roles based on transaction type
-  const filteredRoles = filterRolesByTransactionType(stepConfig.roles, transactionType as 'purchase' | 'sale', stepConfig.title);
-  const context = getTransactionTypeContext(transactionType as 'purchase' | 'sale');
+  const filteredRoles = filterRolesByTransactionType(
+    stepConfig.roles,
+    transactionType as "purchase" | "sale",
+    stepConfig.title,
+  );
+  const context = getTransactionTypeContext(
+    transactionType as "purchase" | "sale",
+  );
 
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-semibold text-gray-900 mb-1">{stepConfig.title}</h3>
+        <h3 className="text-lg font-semibold text-gray-900 mb-1">
+          {stepConfig.title}
+        </h3>
         <p className="text-sm text-gray-600 mb-4">{stepConfig.description}</p>
-        {stepConfig.title === 'Client & Agents' && (
+        {stepConfig.title === "Client & Agents" && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
             <p className="text-xs text-blue-800">
               <strong>{context.title}</strong>
@@ -617,19 +740,35 @@ interface RoleAssignmentProps {
   required: boolean;
   multiple: boolean;
   assignments: ContactAssignment[];
-  onAssign: (role: string, contactId: string, isPrimary: boolean, notes: string) => void;
+  onAssign: (
+    role: string,
+    contactId: string,
+    isPrimary: boolean,
+    notes: string,
+  ) => void;
   onRemove: (role: string, contactId: string) => void;
   userId: number;
   propertyAddress: string;
   transactionType: string;
 }
 
-function RoleAssignment({ role, required, multiple, assignments, onAssign, onRemove, userId, propertyAddress, transactionType }: RoleAssignmentProps): React.ReactElement {
+function RoleAssignment({
+  role,
+  required,
+  multiple,
+  assignments,
+  onAssign,
+  onRemove,
+  userId,
+  propertyAddress,
+  transactionType,
+}: RoleAssignmentProps): React.ReactElement {
   const { isMacOS, isWindows } = usePlatform();
   const [contacts, setContacts] = React.useState<Contact[]>([]);
   const [loading, setLoading] = React.useState<boolean>(true);
   const [error, setError] = React.useState<ErrorState | null>(null);
-  const [showContactSelect, setShowContactSelect] = React.useState<boolean>(false);
+  const [showContactSelect, setShowContactSelect] =
+    React.useState<boolean>(false);
 
   React.useEffect(() => {
     loadContacts();
@@ -642,7 +781,10 @@ function RoleAssignment({ role, required, multiple, assignments, onAssign, onRem
     try {
       // Use sorted API when property address is available, otherwise use regular API
       const result = propertyAddress
-        ? await window.api.contacts.getSortedByActivity(userId.toString(), propertyAddress)
+        ? await window.api.contacts.getSortedByActivity(
+            userId.toString(),
+            propertyAddress,
+          )
         : await window.api.contacts.getAll(userId.toString());
 
       if (result.success) {
@@ -651,49 +793,51 @@ function RoleAssignment({ role, required, multiple, assignments, onAssign, onRem
         // If no contacts returned, check if it's a permission issue
         if (!result.contacts || result.contacts.length === 0) {
           setError({
-            type: 'no_contacts',
+            type: "no_contacts",
             message: isMacOS
-              ? 'No contacts found. Make sure you have Full Disk Access enabled and have imported your emails.'
+              ? "No contacts found. Make sure you have Full Disk Access enabled and have imported your emails."
               : isWindows
-              ? 'No contacts found. Make sure you have imported your emails and synced your iPhone messages.'
-              : 'No contacts found. Make sure you have imported your emails.',
+                ? "No contacts found. Make sure you have imported your emails and synced your iPhone messages."
+                : "No contacts found. Make sure you have imported your emails.",
             action: isMacOS
-              ? 'Check permissions in System Settings > Privacy & Security > Full Disk Access'
+              ? "Check permissions in System Settings > Privacy & Security > Full Disk Access"
               : isWindows
-              ? 'Connect your iPhone via USB and create a backup to sync contacts and messages'
-              : 'Import your emails',
+                ? "Connect your iPhone via USB and create a backup to sync contacts and messages"
+                : "Import your emails",
           });
         }
       } else {
         // API returned error
         setError({
-          type: 'api_error',
+          type: "api_error",
           message: isMacOS
-            ? (result.error || 'Failed to load contacts. This may be due to missing permissions.')
+            ? result.error ||
+              "Failed to load contacts. This may be due to missing permissions."
             : isWindows
-            ? (result.error || 'Failed to load contacts. Connect your iPhone to sync contacts.')
-            : (result.error || 'Failed to load contacts.'),
+              ? result.error ||
+                "Failed to load contacts. Connect your iPhone to sync contacts."
+              : result.error || "Failed to load contacts.",
           action: isMacOS
-            ? 'Please check Full Disk Access permission in System Settings'
+            ? "Please check Full Disk Access permission in System Settings"
             : isWindows
-            ? 'Connect your iPhone via USB and create a backup'
-            : 'Check your connection',
+              ? "Connect your iPhone via USB and create a backup"
+              : "Check your connection",
         });
       }
     } catch (err: unknown) {
-      console.error('Failed to load contacts:', err);
+      console.error("Failed to load contacts:", err);
       setError({
-        type: 'exception',
+        type: "exception",
         message: isMacOS
-          ? 'Unable to load contacts. Please check your permissions.'
+          ? "Unable to load contacts. Please check your permissions."
           : isWindows
-          ? 'Unable to load contacts. Please sync your iPhone backup.'
-          : 'Unable to load contacts.',
+            ? "Unable to load contacts. Please sync your iPhone backup."
+            : "Unable to load contacts.",
         action: isMacOS
-          ? 'Open System Settings and enable Full Disk Access for this app'
+          ? "Open System Settings and enable Full Disk Access for this app"
           : isWindows
-          ? 'Connect your iPhone via USB and create a backup'
-          : 'Try again',
+            ? "Connect your iPhone via USB and create a backup"
+            : "Try again",
       });
     } finally {
       setLoading(false);
@@ -703,7 +847,7 @@ function RoleAssignment({ role, required, multiple, assignments, onAssign, onRem
   const handleContactsSelected = (selectedContacts: Contact[]): void => {
     selectedContacts.forEach((contact: Contact, index: number) => {
       const isPrimary = assignments.length === 0 && index === 0; // First contact is primary
-      onAssign(role, contact.id, isPrimary, '');
+      onAssign(role, contact.id, isPrimary, "");
     });
     setShowContactSelect(false);
   };
@@ -713,10 +857,14 @@ function RoleAssignment({ role, required, multiple, assignments, onAssign, onRem
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <label className="text-sm font-medium text-gray-900">
-            {getRoleDisplayName(role, transactionType as 'purchase' | 'sale')}
+            {getRoleDisplayName(role, transactionType as "purchase" | "sale")}
           </label>
-          {required && <span className="text-xs text-red-500 font-semibold">*</span>}
-          {multiple && <span className="text-xs text-gray-500">(can assign multiple)</span>}
+          {required && (
+            <span className="text-xs text-red-500 font-semibold">*</span>
+          )}
+          {multiple && (
+            <span className="text-xs text-gray-500">(can assign multiple)</span>
+          )}
         </div>
       </div>
 
@@ -724,16 +872,28 @@ function RoleAssignment({ role, required, multiple, assignments, onAssign, onRem
       {error && (
         <div className="mb-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
           <div className="flex items-start gap-2">
-            <svg className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            <svg
+              className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+              />
             </svg>
             <div className="flex-1">
-              <p className="text-sm font-medium text-yellow-900">{error.message}</p>
+              <p className="text-sm font-medium text-yellow-900">
+                {error.message}
+              </p>
               <p className="text-xs text-yellow-700 mt-1">{error.action}</p>
               <button
                 onClick={async () => {
                   if (window.api?.system?.openPrivacyPane) {
-                    await window.api.system.openPrivacyPane('fullDiskAccess');
+                    await window.api.system.openPrivacyPane("fullDiskAccess");
                   }
                 }}
                 className="mt-2 text-xs font-medium text-yellow-800 hover:text-yellow-900 underline"
@@ -757,13 +917,26 @@ function RoleAssignment({ role, required, multiple, assignments, onAssign, onRem
       {assignments.length > 0 && (
         <div className="mb-3 space-y-2">
           {assignments.map((assignment: ContactAssignment, index: number) => {
-            const contact = contacts.find((c: Contact) => c.id === assignment.contactId);
+            const contact = contacts.find(
+              (c: Contact) => c.id === assignment.contactId,
+            );
             return (
-              <div key={index} className="bg-white border border-gray-200 rounded-lg p-3 flex items-center justify-between">
+              <div
+                key={index}
+                className="bg-white border border-gray-200 rounded-lg p-3 flex items-center justify-between"
+              >
                 <div className="flex-1">
-                  <p className="font-medium text-gray-900">{contact?.name || 'Unknown Contact'}</p>
-                  {contact?.email && <p className="text-xs text-gray-500">{contact.email}</p>}
-                  {assignment.notes && <p className="text-xs text-gray-600 mt-1">{assignment.notes}</p>}
+                  <p className="font-medium text-gray-900">
+                    {contact?.name || "Unknown Contact"}
+                  </p>
+                  {contact?.email && (
+                    <p className="text-xs text-gray-500">{contact.email}</p>
+                  )}
+                  {assignment.notes && (
+                    <p className="text-xs text-gray-600 mt-1">
+                      {assignment.notes}
+                    </p>
+                  )}
                   {assignment.isPrimary && (
                     <span className="inline-block mt-1 text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded">
                       Primary
@@ -774,8 +947,18 @@ function RoleAssignment({ role, required, multiple, assignments, onAssign, onRem
                   onClick={() => onRemove(role, assignment.contactId)}
                   className="text-red-500 hover:text-red-700 transition-colors"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
                   </svg>
                 </button>
               </div>
@@ -788,17 +971,27 @@ function RoleAssignment({ role, required, multiple, assignments, onAssign, onRem
       {!loading && (multiple || assignments.length === 0) && (
         <button
           onClick={() => setShowContactSelect(true)}
-          disabled={error !== null && error.type !== 'no_contacts'}
+          disabled={error !== null && error.type !== "no_contacts"}
           className={`w-full px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${
-            error !== null && error.type !== 'no_contacts'
-              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              : 'bg-indigo-500 text-white hover:bg-indigo-600'
+            error !== null && error.type !== "no_contacts"
+              ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+              : "bg-indigo-500 text-white hover:bg-indigo-600"
           }`}
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+          <svg
+            className="w-5 h-5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+            />
           </svg>
-          {multiple ? 'Select Contacts' : 'Select Contact'}
+          {multiple ? "Select Contacts" : "Select Contact"}
         </button>
       )}
 
@@ -806,7 +999,11 @@ function RoleAssignment({ role, required, multiple, assignments, onAssign, onRem
       {showContactSelect && (
         <ContactSelectModal
           contacts={contacts as unknown as never[]}
-          excludeIds={assignments.map((a: ContactAssignment) => a.contactId) as unknown as never[]}
+          excludeIds={
+            assignments.map(
+              (a: ContactAssignment) => a.contactId,
+            ) as unknown as never[]
+          }
           multiple={multiple}
           onSelect={handleContactsSelected as unknown as never}
           onClose={() => setShowContactSelect(false)}

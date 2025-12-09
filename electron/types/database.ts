@@ -16,7 +16,7 @@ import type {
   TransactionFilters,
   CommunicationFilters,
   ContactFilters,
-} from './models';
+} from "./models";
 
 // ============================================
 // DATABASE QUERY RESULTS
@@ -46,7 +46,7 @@ export interface PaginatedResult<T> {
  */
 export interface SortOptions {
   field: string;
-  direction: 'ASC' | 'DESC';
+  direction: "ASC" | "DESC";
 }
 
 /**
@@ -115,25 +115,46 @@ export interface IDatabaseService {
   createTransaction(transactionData: NewTransaction): Promise<Transaction>;
   getTransactionById(transactionId: string): Promise<Transaction | null>;
   getTransactions(filters?: TransactionFilters): Promise<Transaction[]>;
-  getTransactionWithContacts(transactionId: string): Promise<TransactionWithContacts | null>;
-  updateTransaction(transactionId: string, updates: Partial<Transaction>): Promise<void>;
+  getTransactionWithContacts(
+    transactionId: string,
+  ): Promise<TransactionWithContacts | null>;
+  updateTransaction(
+    transactionId: string,
+    updates: Partial<Transaction>,
+  ): Promise<void>;
   deleteTransaction(transactionId: string): Promise<void>;
 
   // Communication operations
-  createCommunication(communicationData: NewCommunication): Promise<Communication>;
+  createCommunication(
+    communicationData: NewCommunication,
+  ): Promise<Communication>;
   getCommunicationById(communicationId: string): Promise<Communication | null>;
   getCommunications(filters?: CommunicationFilters): Promise<Communication[]>;
-  getCommunicationsByTransaction(transactionId: string): Promise<Communication[]>;
-  updateCommunication(communicationId: string, updates: Partial<Communication>): Promise<void>;
+  getCommunicationsByTransaction(
+    transactionId: string,
+  ): Promise<Communication[]>;
+  updateCommunication(
+    communicationId: string,
+    updates: Partial<Communication>,
+  ): Promise<void>;
   deleteCommunication(communicationId: string): Promise<void>;
 
   // Transaction-Contact operations
-  linkContactToTransaction(transactionId: string, contactId: string, role?: string): Promise<void>;
-  unlinkContactFromTransaction(transactionId: string, contactId: string): Promise<void>;
+  linkContactToTransaction(
+    transactionId: string,
+    contactId: string,
+    role?: string,
+  ): Promise<void>;
+  unlinkContactFromTransaction(
+    transactionId: string,
+    contactId: string,
+  ): Promise<void>;
   getTransactionContacts(transactionId: string): Promise<Contact[]>;
 
   // Feedback operations
-  saveFeedback(feedbackData: Omit<UserFeedback, 'id' | 'created_at'>): Promise<UserFeedback>;
+  saveFeedback(
+    feedbackData: Omit<UserFeedback, "id" | "created_at">,
+  ): Promise<UserFeedback>;
   getFeedbackByTransaction(transactionId: string): Promise<UserFeedback[]>;
 
   // Utility operations
@@ -157,7 +178,9 @@ export interface IValidationService {
   validateUUID(uuid: string): ValidationResult;
   validateTransaction(transactionData: Partial<Transaction>): ValidationResult;
   validateContact(contactData: Partial<Contact>): ValidationResult;
-  validateCommunication(communicationData: Partial<Communication>): ValidationResult;
+  validateCommunication(
+    communicationData: Partial<Communication>,
+  ): ValidationResult;
 }
 
 // ============================================
@@ -165,7 +188,7 @@ export interface IValidationService {
 // ============================================
 
 export interface ExportOptions {
-  format: 'pdf' | 'csv' | 'json' | 'txt_eml' | 'excel';
+  format: "pdf" | "csv" | "json" | "txt_eml" | "excel";
   includeAttachments?: boolean;
   dateRange?: {
     start: Date | string;
@@ -198,7 +221,7 @@ export interface ExportResult {
 // ============================================
 
 export interface ExtractionResult {
-  transaction_type?: 'purchase' | 'sale';
+  transaction_type?: "purchase" | "sale";
   closing_date?: Date | string;
   mutual_acceptance_date?: Date | string;
   representation_start_date?: Date | string;
@@ -249,10 +272,10 @@ export class DatabaseError extends Error {
   constructor(
     message: string,
     public code?: string,
-    public details?: unknown
+    public details?: unknown,
   ) {
     super(message);
-    this.name = 'DatabaseError';
+    this.name = "DatabaseError";
   }
 }
 
@@ -260,10 +283,10 @@ export class ValidationError extends Error {
   constructor(
     message: string,
     public field?: string,
-    public value?: unknown
+    public value?: unknown,
   ) {
     super(message);
-    this.name = 'ValidationError';
+    this.name = "ValidationError";
   }
 }
 
@@ -271,9 +294,9 @@ export class NotFoundError extends Error {
   constructor(
     message: string,
     public resourceType?: string,
-    public resourceId?: string
+    public resourceId?: string,
   ) {
     super(message);
-    this.name = 'NotFoundError';
+    this.name = "NotFoundError";
   }
 }

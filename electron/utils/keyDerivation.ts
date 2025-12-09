@@ -4,7 +4,7 @@
  * for database encryption
  */
 
-import crypto from 'crypto';
+import crypto from "crypto";
 
 /**
  * Key derivation configuration
@@ -24,7 +24,7 @@ export const DEFAULT_KEY_CONFIG: KeyDerivationConfig = {
   saltLength: 32,
   keyLength: 32,
   iterations: 100000,
-  digest: 'sha512',
+  digest: "sha512",
 };
 
 /**
@@ -45,7 +45,7 @@ export interface DerivedKey {
 export function deriveKey(
   password: string,
   salt?: Buffer,
-  config: KeyDerivationConfig = DEFAULT_KEY_CONFIG
+  config: KeyDerivationConfig = DEFAULT_KEY_CONFIG,
 ): DerivedKey {
   const actualSalt = salt || crypto.randomBytes(config.saltLength);
 
@@ -54,7 +54,7 @@ export function deriveKey(
     actualSalt,
     config.iterations,
     config.keyLength,
-    config.digest
+    config.digest,
   );
 
   return { key, salt: actualSalt };
@@ -70,7 +70,7 @@ export function deriveKey(
 export function deriveKeyAsync(
   password: string,
   salt?: Buffer,
-  config: KeyDerivationConfig = DEFAULT_KEY_CONFIG
+  config: KeyDerivationConfig = DEFAULT_KEY_CONFIG,
 ): Promise<DerivedKey> {
   return new Promise((resolve, reject) => {
     const actualSalt = salt || crypto.randomBytes(config.saltLength);
@@ -87,7 +87,7 @@ export function deriveKeyAsync(
         } else {
           resolve({ key, salt: actualSalt });
         }
-      }
+      },
     );
   });
 }
@@ -107,7 +107,7 @@ export function generateRandomKey(length: number = 32): Buffer {
  * @returns {string} Random key as hex string
  */
 export function generateRandomKeyHex(length: number = 32): string {
-  return crypto.randomBytes(length).toString('hex');
+  return crypto.randomBytes(length).toString("hex");
 }
 
 /**
@@ -116,7 +116,7 @@ export function generateRandomKeyHex(length: number = 32): string {
  * @returns {Buffer} Key as buffer
  */
 export function hexToBuffer(hexKey: string): Buffer {
-  return Buffer.from(hexKey, 'hex');
+  return Buffer.from(hexKey, "hex");
 }
 
 /**
@@ -125,7 +125,7 @@ export function hexToBuffer(hexKey: string): Buffer {
  * @returns {string} Key as hex string
  */
 export function bufferToHex(buffer: Buffer): string {
-  return buffer.toString('hex');
+  return buffer.toString("hex");
 }
 
 /**
@@ -138,9 +138,12 @@ export function bufferToHex(buffer: Buffer): string {
 export function verifyKeyIntegrity(
   key: Buffer,
   data: Buffer,
-  signature: Buffer
+  signature: Buffer,
 ): boolean {
-  const expectedSignature = crypto.createHmac('sha256', key).update(data).digest();
+  const expectedSignature = crypto
+    .createHmac("sha256", key)
+    .update(data)
+    .digest();
   return crypto.timingSafeEqual(expectedSignature, signature);
 }
 
@@ -151,7 +154,7 @@ export function verifyKeyIntegrity(
  * @returns {Buffer} HMAC signature
  */
 export function createKeySignature(key: Buffer, data: Buffer): Buffer {
-  return crypto.createHmac('sha256', key).update(data).digest();
+  return crypto.createHmac("sha256", key).update(data).digest();
 }
 
 /**
@@ -175,9 +178,9 @@ export function secureCompare(a: Buffer, b: Buffer): boolean {
  */
 export function validateKeyStrength(
   key: string | Buffer,
-  minBits: number = 256
+  minBits: number = 256,
 ): boolean {
-  const keyBuffer = typeof key === 'string' ? Buffer.from(key, 'hex') : key;
+  const keyBuffer = typeof key === "string" ? Buffer.from(key, "hex") : key;
   const keyBits = keyBuffer.length * 8;
   return keyBits >= minBits;
 }
@@ -209,7 +212,7 @@ export function formatKeyForSQLCipher(key: string): string {
  * @returns {string} Short identifier for the key
  */
 export function getKeyIdentifier(key: string | Buffer): string {
-  const keyBuffer = typeof key === 'string' ? Buffer.from(key, 'hex') : key;
-  const hash = crypto.createHash('sha256').update(keyBuffer).digest('hex');
+  const keyBuffer = typeof key === "string" ? Buffer.from(key, "hex") : key;
+  const hash = crypto.createHash("sha256").update(keyBuffer).digest("hex");
   return hash.substring(0, 8);
 }

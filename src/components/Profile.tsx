@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import type { Subscription } from '../../electron/types/models';
+import React, { useState, useEffect } from "react";
+import type { Subscription } from "../../electron/types/models";
 
 interface User {
   id: string;
@@ -48,12 +48,12 @@ function Profile({
   onLogout,
   onClose,
   onViewTransactions: _onViewTransactions,
-  onOpenSettings
+  onOpenSettings,
 }: ProfileProps) {
   const [showConfirmLogout, setShowConfirmLogout] = useState<boolean>(false);
   const [emailConnections, setEmailConnections] = useState<EmailConnections>({
     google: { connected: false, email: null },
-    microsoft: { connected: false, email: null }
+    microsoft: { connected: false, email: null },
   });
 
   const handleLogoutClick = (): void => {
@@ -77,21 +77,21 @@ function Profile({
       try {
         const [googleStatus, microsoftStatus] = await Promise.all([
           window.api.system.checkGoogleConnection(user.id),
-          window.api.system.checkMicrosoftConnection(user.id)
+          window.api.system.checkMicrosoftConnection(user.id),
         ]);
 
         setEmailConnections({
           google: {
             connected: googleStatus?.connected || false,
-            email: googleStatus?.email || null
+            email: googleStatus?.email || null,
           },
           microsoft: {
             connected: microsoftStatus?.connected || false,
-            email: microsoftStatus?.email || null
-          }
+            email: microsoftStatus?.email || null,
+          },
         });
       } catch (error) {
-        console.error('Error checking email connections:', error);
+        console.error("Error checking email connections:", error);
       }
     };
 
@@ -99,26 +99,26 @@ function Profile({
   }, [user?.id]);
 
   const getProviderDisplay = (): ProviderDisplayInfo => {
-    if (provider === 'google') {
+    if (provider === "google") {
       return {
-        name: 'Google',
-        color: 'text-blue-600',
-        bgColor: 'bg-blue-50',
-        borderColor: 'border-blue-200',
+        name: "Google",
+        color: "text-blue-600",
+        bgColor: "bg-blue-50",
+        borderColor: "border-blue-200",
       };
-    } else if (provider === 'microsoft') {
+    } else if (provider === "microsoft") {
       return {
-        name: 'Microsoft',
-        color: 'text-purple-600',
-        bgColor: 'bg-purple-50',
-        borderColor: 'border-purple-200',
+        name: "Microsoft",
+        color: "text-purple-600",
+        bgColor: "bg-purple-50",
+        borderColor: "border-purple-200",
       };
     }
     return {
       name: provider,
-      color: 'text-gray-600',
-      bgColor: 'bg-gray-50',
-      borderColor: 'border-gray-200',
+      color: "text-gray-600",
+      bgColor: "bg-gray-50",
+      borderColor: "border-gray-200",
     };
   };
 
@@ -131,22 +131,33 @@ function Profile({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-purple-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
+        <div className="relative z-10 bg-gradient-to-r from-blue-500 to-purple-600 px-6 py-4 flex items-center justify-between rounded-t-xl flex-shrink-0">
           <h2 className="text-xl font-bold text-white">Account</h2>
           <button
             onClick={onClose}
             className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-all"
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            <svg
+              className="w-6 h-6"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
             </svg>
           </button>
         </div>
 
-        {/* User Info */}
-        <div className="p-6">
+        {/* User Info - Scrollable area with inset scrollbar */}
+        <div className="flex-1 min-h-0 overflow-hidden px-2">
+          <div className="h-full overflow-y-auto px-4 py-6">
           {/* Avatar and Name */}
           <div className="flex items-center mb-6">
             {user.avatar_url ? (
@@ -157,18 +168,28 @@ function Profile({
               />
             ) : (
               <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white text-2xl font-bold">
-                {user.display_name?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || '?'}
+                {user.display_name?.[0]?.toUpperCase() ||
+                  user.email?.[0]?.toUpperCase() ||
+                  "?"}
               </div>
             )}
             <div className="ml-4 flex-1">
-              <h3 className="text-lg font-semibold text-gray-900">{user.display_name || 'User'}</h3>
+              <h3 className="text-lg font-semibold text-gray-900">
+                {user.display_name || "User"}
+              </h3>
               <p className="text-sm text-gray-600">{user.email}</p>
             </div>
           </div>
 
           {/* Provider Badge */}
-          <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full ${providerInfo.bgColor} ${providerInfo.borderColor} border mb-4`}>
-            <svg className={`w-4 h-4 ${providerInfo.color}`} fill="currentColor" viewBox="0 0 24 24">
+          <div
+            className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full ${providerInfo.bgColor} ${providerInfo.borderColor} border mb-4`}
+          >
+            <svg
+              className={`w-4 h-4 ${providerInfo.color}`}
+              fill="currentColor"
+              viewBox="0 0 24 24"
+            >
               <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
             </svg>
             <span className={`text-sm font-medium ${providerInfo.color}`}>
@@ -181,13 +202,20 @@ function Profile({
             {/* Gmail Connection Status */}
             {emailConnections.google.connected && (
               <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-50 border-green-200 border">
-                <svg className="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 24 24">
+                <svg
+                  className="w-4 h-4 text-green-600"
+                  fill="currentColor"
+                  viewBox="0 0 24 24"
+                >
                   <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z" />
                 </svg>
                 <span className="text-sm font-medium text-green-700">
                   Gmail
                   {emailConnections.google.email && (
-                    <span className="text-green-600 font-normal"> ({emailConnections.google.email})</span>
+                    <span className="text-green-600 font-normal">
+                      {" "}
+                      ({emailConnections.google.email})
+                    </span>
                   )}
                 </span>
               </div>
@@ -196,13 +224,20 @@ function Profile({
             {/* Outlook Connection Status */}
             {emailConnections.microsoft.connected && (
               <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-50 border-blue-200 border">
-                <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 24 24">
+                <svg
+                  className="w-4 h-4 text-blue-600"
+                  fill="currentColor"
+                  viewBox="0 0 24 24"
+                >
                   <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z" />
                 </svg>
                 <span className="text-sm font-medium text-blue-700">
                   Outlook
                   {emailConnections.microsoft.email && (
-                    <span className="text-blue-600 font-normal"> ({emailConnections.microsoft.email})</span>
+                    <span className="text-blue-600 font-normal">
+                      {" "}
+                      ({emailConnections.microsoft.email})
+                    </span>
                   )}
                 </span>
               </div>
@@ -213,25 +248,30 @@ function Profile({
           {subscription && (
             <div className="bg-gray-50 rounded-lg p-4 mb-6 border border-gray-200">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-gray-700">Subscription</span>
-                <span className={`text-xs px-2 py-1 rounded-full ${
-                  subscription.status === 'active'
-                    ? 'bg-green-100 text-green-700'
-                    : subscription.status === 'trial'
-                    ? 'bg-blue-100 text-blue-700'
-                    : 'bg-gray-100 text-gray-700'
-                }`}>
-                  {subscription.status || 'Unknown'}
+                <span className="text-sm font-medium text-gray-700">
+                  Subscription
+                </span>
+                <span
+                  className={`text-xs px-2 py-1 rounded-full ${
+                    subscription.status === "active"
+                      ? "bg-green-100 text-green-700"
+                      : subscription.status === "trial"
+                        ? "bg-blue-100 text-blue-700"
+                        : "bg-gray-100 text-gray-700"
+                  }`}
+                >
+                  {subscription.status || "Unknown"}
                 </span>
               </div>
               <p className="text-sm text-gray-600 capitalize">
-                {subscription.tier || 'Free'} Plan
+                {subscription.tier || "Free"} Plan
               </p>
-              {subscription.isTrial && subscription.trialDaysRemaining !== undefined && (
-                <p className="text-xs text-gray-500 mt-1">
-                  Trial: {subscription.trialDaysRemaining} days remaining
-                </p>
-              )}
+              {subscription.isTrial &&
+                subscription.trialDaysRemaining !== undefined && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Trial: {subscription.trialDaysRemaining} days remaining
+                  </p>
+                )}
             </div>
           )}
 
@@ -265,9 +305,24 @@ function Profile({
             className="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-4 rounded-lg transition-all shadow-md hover:shadow-lg mb-3"
           >
             <div className="flex items-center justify-center gap-2">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                />
               </svg>
               Settings
             </div>
@@ -302,6 +357,7 @@ function Profile({
               </div>
             </div>
           )}
+          </div>
         </div>
       </div>
     </div>

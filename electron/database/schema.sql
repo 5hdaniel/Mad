@@ -267,6 +267,33 @@ CREATE TABLE IF NOT EXISTS communications (
 );
 
 -- ============================================
+-- IGNORED COMMUNICATIONS (User-unlinked emails)
+-- ============================================
+-- Tracks emails that users have manually unlinked from transactions
+-- These emails won't be re-added during future auto scans
+CREATE TABLE IF NOT EXISTS ignored_communications (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  transaction_id TEXT NOT NULL,
+
+  -- Email identification (using multiple fields to uniquely identify an email)
+  email_subject TEXT,
+  email_sender TEXT,
+  email_sent_at DATETIME,
+  email_thread_id TEXT,
+
+  -- Original communication reference (may be null if comm was deleted)
+  original_communication_id TEXT,
+
+  -- Tracking
+  ignored_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  reason TEXT, -- Optional reason for unlinking
+
+  FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE,
+  FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE CASCADE
+);
+
+-- ============================================
 -- EXTRACTED TRANSACTION DATA (Audit Trail)
 -- ============================================
 CREATE TABLE IF NOT EXISTS extracted_transaction_data (
@@ -311,6 +338,9 @@ CREATE INDEX IF NOT EXISTS idx_communications_user_id ON communications(user_id)
 CREATE INDEX IF NOT EXISTS idx_communications_transaction_id ON communications(transaction_id);
 CREATE INDEX IF NOT EXISTS idx_communications_sent_at ON communications(sent_at);
 CREATE INDEX IF NOT EXISTS idx_extracted_data_transaction_id ON extracted_transaction_data(transaction_id);
+CREATE INDEX IF NOT EXISTS idx_ignored_communications_user_id ON ignored_communications(user_id);
+CREATE INDEX IF NOT EXISTS idx_ignored_communications_transaction_id ON ignored_communications(transaction_id);
+CREATE INDEX IF NOT EXISTS idx_ignored_communications_email ON ignored_communications(email_sender, email_subject, email_sent_at);
 
 -- ============================================
 -- TRIGGERS (Auto-update timestamps)
