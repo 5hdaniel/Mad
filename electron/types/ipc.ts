@@ -671,7 +671,7 @@ export interface WindowApi {
     }>;
     bulkUpdateStatus: (
       transactionIds: string[],
-      status: string,
+      status: "active" | "closed",
     ) => Promise<{
       success: boolean;
       updatedCount?: number;
