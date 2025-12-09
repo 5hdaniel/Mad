@@ -3,6 +3,12 @@ import AuditTransactionModal from "./AuditTransactionModal";
 import ExportModal from "./ExportModal";
 import ContactSelectModal from "./ContactSelectModal";
 import {
+  BulkActionBar,
+  BulkDeleteConfirmModal,
+  BulkExportModal,
+} from "./BulkActionBar";
+import { useSelection } from "../hooks/useSelection";
+import {
   ROLE_TO_CATEGORY,
   AUDIT_WORKFLOW_STEPS,
 } from "../constants/contactRoles";
@@ -99,6 +105,27 @@ function Transactions({ userId, provider, onClose }: TransactionsProps) {
     null,
   );
 
+  // Selection state for bulk operations
+  const {
+    selectedIds,
+    toggleSelection,
+    selectAll,
+    deselectAll,
+    isSelected,
+    count: selectedCount,
+  } = useSelection();
+
+  // Bulk action state
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+  const [showBulkExportModal, setShowBulkExportModal] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [isBulkExporting, setIsBulkExporting] = useState(false);
+  const [isBulkUpdating, setIsBulkUpdating] = useState(false);
+  const [bulkActionSuccess, setBulkActionSuccess] = useState<string | null>(
+    null,
+  );
+  const [selectionMode, setSelectionMode] = useState(false);
+
   useEffect(() => {
     loadTransactions();
 
@@ -173,7 +200,8 @@ function Transactions({ userId, provider, onClose }: TransactionsProps) {
   const stopScan = async () => {
     try {
       await window.api.transactions.cancelScan(userId);
-      setScanProgress({ step: "cancelled", message: "Scan stopped" });
+      // Clear scan progress immediately without showing a message
+      setScanProgress(null);
     } catch (err) {
       console.error("Failed to stop scan:", err);
     }
@@ -225,6 +253,154 @@ function Transactions({ userId, provider, onClose }: TransactionsProps) {
     setTimeout(() => setQuickExportSuccess(null), 5000);
     // Reload transactions to update export status
     loadTransactions();
+  };
+
+  // Toggle selection mode
+  const handleToggleSelectionMode = () => {
+    if (selectionMode) {
+      // Exiting selection mode - deselect all and close
+      deselectAll();
+      setSelectionMode(false);
+    } else {
+      // Entering selection mode
+      setSelectionMode(true);
+    }
+  };
+
+  // Close bulk edit mode (called by X button)
+  const handleCloseBulkEdit = () => {
+    deselectAll();
+    setSelectionMode(false);
+  };
+
+  // Handle transaction card click (either select or open details)
+  const handleTransactionClick = (transaction: Transaction) => {
+    if (selectionMode) {
+      toggleSelection(transaction.id);
+    } else {
+      setSelectedTransaction(transaction);
+    }
+  };
+
+  // Handle checkbox click separately to prevent event bubbling
+  const handleCheckboxClick = (e: React.MouseEvent, transactionId: string) => {
+    e.stopPropagation();
+    toggleSelection(transactionId);
+  };
+
+  // Bulk delete handler
+  const handleBulkDelete = async () => {
+    if (selectedCount === 0) return;
+
+    setIsBulkDeleting(true);
+    try {
+      const result = await window.api.transactions.bulkDelete(
+        Array.from(selectedIds),
+      );
+
+      if (result.success) {
+        setBulkActionSuccess(
+          `Successfully deleted ${result.deletedCount || selectedCount} transaction${(result.deletedCount || selectedCount) > 1 ? "s" : ""}`,
+        );
+        deselectAll();
+        setSelectionMode(false);
+        await loadTransactions();
+      } else {
+        setError(result.error || "Failed to delete transactions");
+      }
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to delete transactions";
+      setError(errorMessage);
+    } finally {
+      setIsBulkDeleting(false);
+      setShowBulkDeleteConfirm(false);
+      setTimeout(() => setBulkActionSuccess(null), 5000);
+    }
+  };
+
+  // Bulk export handler
+  const handleBulkExport = async (format: string) => {
+    if (selectedCount === 0) return;
+
+    setIsBulkExporting(true);
+    try {
+      // Export each selected transaction
+      const selectedTransactionIds = Array.from(selectedIds);
+      let successCount = 0;
+      const errors: string[] = [];
+
+      for (const transactionId of selectedTransactionIds) {
+        try {
+          const result = await window.api.transactions.exportEnhanced(
+            transactionId,
+            { exportFormat: format },
+          );
+          if (result.success) {
+            successCount++;
+          } else {
+            errors.push(result.error || `Failed to export transaction`);
+          }
+        } catch (err) {
+          errors.push(err instanceof Error ? err.message : "Export failed");
+        }
+      }
+
+      if (successCount > 0) {
+        setBulkActionSuccess(
+          `Successfully exported ${successCount} transaction${successCount > 1 ? "s" : ""}${errors.length > 0 ? ` (${errors.length} failed)` : ""}`,
+        );
+        deselectAll();
+        setSelectionMode(false);
+        await loadTransactions();
+      } else {
+        setError("Failed to export transactions");
+      }
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to export transactions";
+      setError(errorMessage);
+    } finally {
+      setIsBulkExporting(false);
+      setShowBulkExportModal(false);
+      setTimeout(() => setBulkActionSuccess(null), 5000);
+    }
+  };
+
+  // Bulk status change handler
+  const handleBulkStatusChange = async (status: "active" | "closed") => {
+    if (selectedCount === 0) return;
+
+    setIsBulkUpdating(true);
+    try {
+      const result = await window.api.transactions.bulkUpdateStatus(
+        Array.from(selectedIds),
+        status,
+      );
+
+      if (result.success) {
+        setBulkActionSuccess(
+          `Successfully updated ${result.updatedCount || selectedCount} transaction${(result.updatedCount || selectedCount) > 1 ? "s" : ""} to ${status}`,
+        );
+        deselectAll();
+        setSelectionMode(false);
+        await loadTransactions();
+      } else {
+        setError(result.error || "Failed to update transactions");
+      }
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to update transactions";
+      setError(errorMessage);
+    } finally {
+      setIsBulkUpdating(false);
+      setTimeout(() => setBulkActionSuccess(null), 5000);
+    }
+  };
+
+  // Handle select all for filtered transactions
+  const handleSelectAll = () => {
+    selectAll(filteredTransactions);
   };
 
   return (
@@ -328,6 +504,31 @@ function Transactions({ userId, provider, onClose }: TransactionsProps) {
               />
             </svg>
           </div>
+
+          {/* Bulk Edit Mode Button */}
+          <button
+            onClick={handleToggleSelectionMode}
+            className={`px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 ${
+              selectionMode
+                ? "bg-purple-500 text-white hover:bg-purple-600 shadow-md"
+                : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+            }`}
+          >
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
+              />
+            </svg>
+            {selectionMode ? "Exit Bulk Edit" : "Bulk Edit"}
+          </button>
 
           {/* Audit New Transaction Button */}
           <button
@@ -490,6 +691,32 @@ function Transactions({ userId, provider, onClose }: TransactionsProps) {
             </div>
           </div>
         )}
+
+        {/* Bulk Action Success */}
+        {bulkActionSuccess && (
+          <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+            <div className="flex items-start gap-2">
+              <svg
+                className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-green-900">
+                  {bulkActionSuccess}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Transactions List */}
@@ -553,10 +780,45 @@ function Transactions({ userId, provider, onClose }: TransactionsProps) {
             {filteredTransactions.map((transaction: Transaction) => (
               <div
                 key={transaction.id}
-                className="bg-white border-2 border-gray-200 rounded-xl p-6 hover:border-blue-400 hover:shadow-xl transition-all cursor-pointer transform hover:scale-[1.01]"
-                onClick={() => setSelectedTransaction(transaction)}
+                className={`bg-white border-2 rounded-xl p-6 transition-all cursor-pointer transform hover:scale-[1.01] ${
+                  selectionMode && isSelected(transaction.id)
+                    ? "border-purple-500 bg-purple-50 shadow-lg"
+                    : "border-gray-200 hover:border-blue-400 hover:shadow-xl"
+                }`}
+                onClick={() => handleTransactionClick(transaction)}
               >
                 <div className="flex items-start justify-between gap-4">
+                  {/* Selection Checkbox */}
+                  {selectionMode && (
+                    <div
+                      className="flex-shrink-0 mt-1"
+                      onClick={(e) => handleCheckboxClick(e, transaction.id)}
+                    >
+                      <div
+                        className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all ${
+                          isSelected(transaction.id)
+                            ? "bg-purple-500 border-purple-500"
+                            : "border-gray-300 hover:border-purple-400"
+                        }`}
+                      >
+                        {isSelected(transaction.id) && (
+                          <svg
+                            className="w-4 h-4 text-white"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={3}
+                              d="M5 13l4 4L19 7"
+                            />
+                          </svg>
+                        )}
+                      </div>
+                    </div>
+                  )}
                   <div className="flex-1">
                     <h3 className="font-semibold text-gray-900 mb-1">
                       {transaction.property_address}
@@ -706,6 +968,43 @@ function Transactions({ userId, provider, onClose }: TransactionsProps) {
           onExportComplete={handleQuickExportComplete}
         />
       )}
+
+      {/* Bulk Action Bar */}
+      {selectionMode && (
+        <BulkActionBar
+          selectedCount={selectedCount}
+          totalCount={filteredTransactions.length}
+          onSelectAll={handleSelectAll}
+          onDeselectAll={deselectAll}
+          onBulkDelete={() => setShowBulkDeleteConfirm(true)}
+          onBulkExport={() => setShowBulkExportModal(true)}
+          onBulkStatusChange={handleBulkStatusChange}
+          onClose={handleCloseBulkEdit}
+          isDeleting={isBulkDeleting}
+          isExporting={isBulkExporting}
+          isUpdating={isBulkUpdating}
+        />
+      )}
+
+      {/* Bulk Delete Confirmation Modal */}
+      {showBulkDeleteConfirm && (
+        <BulkDeleteConfirmModal
+          selectedCount={selectedCount}
+          onConfirm={handleBulkDelete}
+          onCancel={() => setShowBulkDeleteConfirm(false)}
+          isDeleting={isBulkDeleting}
+        />
+      )}
+
+      {/* Bulk Export Modal */}
+      {showBulkExportModal && (
+        <BulkExportModal
+          selectedCount={selectedCount}
+          onConfirm={handleBulkExport}
+          onCancel={() => setShowBulkExportModal(false)}
+          isExporting={isBulkExporting}
+        />
+      )}
     </div>
   );
 }
@@ -736,6 +1035,10 @@ function TransactionDetails({
   const [showEditModal, setShowEditModal] = useState<boolean>(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<"details" | "contacts">("details");
+  const [unlinkingCommId, setUnlinkingCommId] = useState<string | null>(null);
+  const [showUnlinkConfirm, setShowUnlinkConfirm] =
+    useState<Communication | null>(null);
+  const [viewingEmail, setViewingEmail] = useState<Communication | null>(null);
 
   useEffect(() => {
     loadDetails();
@@ -758,6 +1061,29 @@ function TransactionDetails({
       console.error("Failed to load details:", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleUnlinkCommunication = async (
+    comm: Communication,
+  ): Promise<void> => {
+    try {
+      setUnlinkingCommId(comm.id);
+      const result = await window.api.transactions.unlinkCommunication(comm.id);
+
+      if (result.success) {
+        // Remove the communication from the local state
+        setCommunications((prev) => prev.filter((c) => c.id !== comm.id));
+        setShowUnlinkConfirm(null);
+      } else {
+        console.error("Failed to unlink communication:", result.error);
+        alert("Failed to unlink email. Please try again.");
+      }
+    } catch (err) {
+      console.error("Failed to unlink communication:", err);
+      alert("Failed to unlink email. Please try again.");
+    } finally {
+      setUnlinkingCommId(null);
     }
   };
 
@@ -995,17 +1321,65 @@ function TransactionDetails({
                       {communications.map((comm: Communication) => (
                         <div
                           key={comm.id}
-                          className="bg-gray-50 border border-gray-200 rounded-lg p-4"
+                          className="bg-gray-50 border border-gray-200 rounded-lg p-4 cursor-pointer hover:bg-gray-100 hover:border-gray-300 transition-colors"
+                          onClick={() => setViewingEmail(comm)}
                         >
                           <div className="flex items-start justify-between mb-2">
-                            <h5 className="font-semibold text-gray-900">
+                            <h5 className="font-semibold text-gray-900 flex-1 pr-4">
                               {comm.subject || "(No Subject)"}
                             </h5>
-                            <span className="text-xs text-gray-500">
-                              {comm.sent_at
-                                ? new Date(comm.sent_at).toLocaleDateString()
-                                : "Unknown date"}
-                            </span>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              <span className="text-xs text-gray-500">
+                                {comm.sent_at
+                                  ? new Date(comm.sent_at).toLocaleDateString()
+                                  : "Unknown date"}
+                              </span>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setShowUnlinkConfirm(comm);
+                                }}
+                                disabled={unlinkingCommId === comm.id}
+                                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
+                                title="Remove this email from transaction"
+                              >
+                                {unlinkingCommId === comm.id ? (
+                                  <svg
+                                    className="w-4 h-4 animate-spin"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <circle
+                                      className="opacity-25"
+                                      cx="12"
+                                      cy="12"
+                                      r="10"
+                                      stroke="currentColor"
+                                      strokeWidth="4"
+                                    ></circle>
+                                    <path
+                                      className="opacity-75"
+                                      fill="currentColor"
+                                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                    ></path>
+                                  </svg>
+                                ) : (
+                                  <svg
+                                    className="w-4 h-4"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
+                                    />
+                                  </svg>
+                                )}
+                              </button>
+                            </div>
                           </div>
                           <p className="text-sm text-gray-600 mb-2">
                             From: {comm.sender || "Unknown"}
@@ -1236,6 +1610,193 @@ function TransactionDetails({
               >
                 Delete Transaction
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Unlink Email Confirmation */}
+      {showUnlinkConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[70] p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0">
+                <svg
+                  className="w-6 h-6 text-orange-600"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
+                  />
+                </svg>
+              </div>
+              <h3 className="text-lg font-bold text-gray-900">
+                Remove Email from Transaction?
+              </h3>
+            </div>
+            <p className="text-sm text-gray-600 mb-2">
+              Are you sure this email is not related to this transaction?
+            </p>
+            <div className="bg-gray-50 rounded-lg p-3 mb-4">
+              <p className="text-sm font-medium text-gray-900 truncate">
+                {showUnlinkConfirm.subject || "(No Subject)"}
+              </p>
+              <p className="text-xs text-gray-600 mt-1">
+                From: {showUnlinkConfirm.sender || "Unknown"}
+              </p>
+            </div>
+            <p className="text-sm text-gray-600 mb-6">
+              This email will be removed from this transaction and won&apos;t be
+              re-added during future email scans.
+            </p>
+            <div className="flex items-center gap-3 justify-end">
+              <button
+                onClick={() => setShowUnlinkConfirm(null)}
+                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg font-medium transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleUnlinkCommunication(showUnlinkConfirm)}
+                disabled={unlinkingCommId === showUnlinkConfirm.id}
+                className="px-4 py-2 bg-orange-600 text-white hover:bg-orange-700 rounded-lg font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {unlinkingCommId === showUnlinkConfirm.id ? (
+                  <>
+                    <svg
+                      className="w-4 h-4 animate-spin"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      ></circle>
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
+                    </svg>
+                    Removing...
+                  </>
+                ) : (
+                  "Remove Email"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Full Email View Modal */}
+      {viewingEmail && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[70] p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[85vh] flex flex-col">
+            {/* Email Header */}
+            <div className="flex-shrink-0 bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-4 rounded-t-xl">
+              <div className="flex items-start justify-between">
+                <div className="flex-1 pr-4">
+                  <h3 className="text-lg font-bold text-white">
+                    {viewingEmail.subject || "(No Subject)"}
+                  </h3>
+                  <p className="text-blue-100 text-sm mt-1">
+                    {viewingEmail.sent_at
+                      ? new Date(viewingEmail.sent_at).toLocaleString()
+                      : "Unknown date"}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setViewingEmail(null)}
+                  className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-all"
+                >
+                  <svg
+                    className="w-6 h-6"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* Email Metadata */}
+            <div className="flex-shrink-0 px-6 py-4 border-b border-gray-200 bg-gray-50">
+              <div className="space-y-2">
+                <div className="flex items-start gap-2">
+                  <span className="text-sm font-medium text-gray-500 w-16">
+                    From:
+                  </span>
+                  <span className="text-sm text-gray-900">
+                    {viewingEmail.sender || "Unknown"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Email Body */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {viewingEmail.body_plain ? (
+                <div className="prose prose-sm max-w-none">
+                  <pre className="whitespace-pre-wrap font-sans text-sm text-gray-700 leading-relaxed">
+                    {viewingEmail.body_plain}
+                  </pre>
+                </div>
+              ) : (
+                <p className="text-gray-500 italic text-center py-8">
+                  No email content available
+                </p>
+              )}
+            </div>
+
+            {/* Footer Actions */}
+            <div className="flex-shrink-0 px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-xl">
+              <div className="flex items-center justify-between">
+                <button
+                  onClick={() => {
+                    setViewingEmail(null);
+                    setShowUnlinkConfirm(viewingEmail);
+                  }}
+                  className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg font-medium transition-all flex items-center gap-2"
+                >
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
+                    />
+                  </svg>
+                  Remove from Transaction
+                </button>
+                <button
+                  onClick={() => setViewingEmail(null)}
+                  className="px-4 py-2 bg-gray-600 text-white hover:bg-gray-700 rounded-lg font-semibold transition-all"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>

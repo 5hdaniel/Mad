@@ -87,7 +87,7 @@ function ExportModal({
       // Export with the selected format (PDF or DOCX)
       const result = await window.api.transactions.exportEnhanced(
         transaction.id,
-        exportFormat,
+        { exportFormat },
       );
 
       if (result.success) {

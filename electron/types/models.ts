@@ -288,6 +288,31 @@ export interface ExtractedTransactionData {
 }
 
 // ============================================
+// IGNORED COMMUNICATION MODELS
+// ============================================
+
+export interface IgnoredCommunication {
+  id: string;
+  user_id: string;
+  transaction_id: string;
+
+  // Email identification
+  email_subject?: string;
+  email_sender?: string;
+  email_sent_at?: Date | string;
+  email_thread_id?: string;
+
+  // Original communication reference
+  original_communication_id?: string;
+
+  // Tracking
+  ignored_at: Date | string;
+  reason?: string;
+}
+
+export type NewIgnoredCommunication = Omit<IgnoredCommunication, "id" | "ignored_at">;
+
+// ============================================
 // FEEDBACK MODELS
 // ============================================
 

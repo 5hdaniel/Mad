@@ -5,6 +5,7 @@
 
 import type { GetConversationsResult } from "./hooks/useConversations";
 import type { iOSDevice, BackupProgress } from "./types/iphone";
+import type { Transaction } from "../electron/types/models";
 
 /**
  * iOS Device information from libimobiledevice
@@ -219,6 +220,25 @@ interface MainAPI {
       isNewUser?: boolean;
       error?: string;
     }>;
+    // Pre-DB mailbox connection (returns tokens instead of saving to DB)
+    googleConnectMailboxPending: (
+      emailHint?: string,
+    ) => Promise<{ success: boolean; error?: string }>;
+    microsoftConnectMailboxPending: (
+      emailHint?: string,
+    ) => Promise<{ success: boolean; error?: string }>;
+    // Save pending mailbox tokens after DB initialization
+    savePendingMailboxTokens: (data: {
+      userId: string;
+      provider: "google" | "microsoft";
+      email: string;
+      tokens: {
+        access_token: string;
+        refresh_token: string | null;
+        expires_at: string;
+        scopes: string;
+      };
+    }) => Promise<{ success: boolean; error?: string }>;
   };
   system: {
     getSecureStorageStatus: () => Promise<{
@@ -348,6 +368,36 @@ interface MainAPI {
   ) => () => void;
   onGoogleMailboxCancelled: (callback: () => void) => () => void;
   onMicrosoftMailboxCancelled: (callback: () => void) => () => void;
+
+  // Pre-DB mailbox connection events (for collecting tokens before DB init)
+  onGoogleMailboxPendingConnected: (
+    callback: (result: {
+      success: boolean;
+      email?: string;
+      tokens?: {
+        access_token: string;
+        refresh_token: string | null;
+        expires_at: string;
+        scopes: string;
+      };
+      error?: string;
+    }) => void,
+  ) => () => void;
+  onGoogleMailboxPendingCancelled: (callback: () => void) => () => void;
+  onMicrosoftMailboxPendingConnected: (
+    callback: (result: {
+      success: boolean;
+      email?: string;
+      tokens?: {
+        access_token: string;
+        refresh_token: string | null;
+        expires_at: string;
+        scopes: string;
+      };
+      error?: string;
+    }) => void,
+  ) => () => void;
+  onMicrosoftMailboxPendingCancelled: (callback: () => void) => () => void;
 
   /**
    * Backup API for iPhone data extraction
@@ -488,6 +538,131 @@ interface MainAPI {
     /** Subscribe to backup error events */
     onError: (callback: (error: { message: string }) => void) => () => void;
   };
+
+  // Transactions API
+  transactions: {
+    getAll: (
+      userId: string,
+    ) => Promise<{
+      success: boolean;
+      transactions?: Transaction[];
+      error?: string;
+    }>;
+    scan: (
+      userId: string,
+      options?: Record<string, unknown>,
+    ) => Promise<{
+      success: boolean;
+      transactionsFound?: number;
+      emailsScanned?: number;
+      error?: string;
+    }>;
+    cancelScan: (
+      userId: string,
+    ) => Promise<{ success: boolean; cancelled?: boolean; error?: string }>;
+    create: (
+      userId: string,
+      transactionData: Record<string, unknown>,
+    ) => Promise<{
+      success: boolean;
+      transaction?: Record<string, unknown>;
+      error?: string;
+    }>;
+    createAudited: (
+      userId: string,
+      transactionData: Record<string, unknown>,
+    ) => Promise<{
+      success: boolean;
+      transaction?: Record<string, unknown>;
+      error?: string;
+    }>;
+    getDetails: (transactionId: string) => Promise<{
+      success: boolean;
+      transaction?: Record<string, unknown>;
+      error?: string;
+    }>;
+    getWithContacts: (transactionId: string) => Promise<{
+      success: boolean;
+      transaction?: Record<string, unknown>;
+      contacts?: Array<Record<string, unknown>>;
+      error?: string;
+    }>;
+    update: (
+      transactionId: string,
+      updates: Record<string, unknown>,
+    ) => Promise<{
+      success: boolean;
+      transaction?: Record<string, unknown>;
+      error?: string;
+    }>;
+    delete: (transactionId: string) => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
+    assignContact: (
+      transactionId: string,
+      contactId: string,
+      role: string,
+      roleCategory: string,
+      isPrimary: boolean,
+      notes?: string,
+    ) => Promise<{ success: boolean; error?: string }>;
+    removeContact: (
+      transactionId: string,
+      contactId: string,
+    ) => Promise<{ success: boolean; error?: string }>;
+    unlinkCommunication: (
+      communicationId: string,
+      reason?: string,
+    ) => Promise<{ success: boolean; error?: string }>;
+    reanalyze: (
+      userId: string,
+      provider: string,
+      propertyAddress: string,
+      dateRange: { start: string; end: string },
+    ) => Promise<{
+      success: boolean;
+      newCount?: number;
+      updatedCount?: number;
+      error?: string;
+    }>;
+    exportPDF: (
+      transactionId: string,
+      outputPath: string,
+    ) => Promise<{
+      success: boolean;
+      filePath?: string;
+      error?: string;
+    }>;
+    exportEnhanced: (
+      transactionId: string,
+      options: Record<string, unknown>,
+    ) => Promise<{
+      success: boolean;
+      filePath?: string;
+      error?: string;
+    }>;
+    bulkDelete: (transactionIds: string[]) => Promise<{
+      success: boolean;
+      deletedCount?: number;
+      errors?: string[];
+      error?: string;
+    }>;
+    bulkUpdateStatus: (
+      transactionIds: string[],
+      status: string,
+    ) => Promise<{
+      success: boolean;
+      updatedCount?: number;
+      errors?: string[];
+      error?: string;
+    }>;
+  };
+
+  // Transaction scan progress event
+  onTransactionScanProgress: (
+    callback: (progress: { step: string; message: string }) => void,
+  ) => () => void;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [key: string]: any; // Allow other properties for backwards compatibility

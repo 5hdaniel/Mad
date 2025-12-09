@@ -19,12 +19,12 @@ interface AppInfo {
 }
 
 // Setup steps for progress indicator - macOS only (this screen doesn't show on Windows)
+// Secure Storage moved after Connect Email
 const MACOS_SETUP_STEPS = [
-  { id: 1, label: "Sign In" },
-  { id: 2, label: "Phone Type" },
+  { id: 1, label: "Phone Type" },
+  { id: 2, label: "Connect Email" },
   { id: 3, label: "Secure Storage" },
-  { id: 4, label: "Connect Email" },
-  { id: 5, label: "Permissions" },
+  { id: 4, label: "Permissions" },
 ];
 
 /**
@@ -188,7 +188,7 @@ function PermissionsScreen({
       <div className="flex items-center justify-center min-h-full py-8">
         <div className="max-w-2xl mx-auto p-8 bg-white rounded-lg shadow-lg">
           {/* Setup Progress Indicator */}
-          <SetupProgressIndicator currentStep={5} />
+          <SetupProgressIndicator currentStep={4} />
 
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-20 h-20 bg-primary/10 rounded-full mb-6">
@@ -280,7 +280,7 @@ function PermissionsScreen({
     <div className="flex items-center justify-center min-h-full py-8">
       <div className="max-w-2xl mx-auto p-8 bg-white rounded-lg shadow-lg">
         {/* Setup Progress Indicator */}
-        <SetupProgressIndicator currentStep={5} />
+        <SetupProgressIndicator currentStep={4} />
 
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-primary/10 rounded-full mb-4">

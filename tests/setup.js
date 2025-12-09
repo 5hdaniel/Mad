@@ -40,6 +40,11 @@ if (typeof window !== 'undefined') {
       checkEmailOnboarding: jest.fn(),
       completeEmailOnboarding: jest.fn(),
       completePendingLogin: jest.fn(),
+      // Pre-DB mailbox connection methods
+      googleConnectMailboxPending: jest.fn(),
+      microsoftConnectMailboxPending: jest.fn(),
+      savePendingMailboxTokens: jest.fn(),
+      acceptTermsToSupabase: jest.fn(),
     },
     transactions: {
       getAll: jest.fn(),
@@ -51,6 +56,9 @@ if (typeof window !== 'undefined') {
       getDetails: jest.fn(),
       assignContact: jest.fn(),
       removeContact: jest.fn(),
+      exportEnhanced: jest.fn(),
+      bulkDelete: jest.fn(),
+      bulkUpdateStatus: jest.fn(),
     },
     contacts: {
       getAll: jest.fn(),
@@ -99,6 +107,18 @@ if (typeof window !== 'undefined') {
     onGoogleMailboxDisconnected: jest.fn(() => jest.fn()),
     onMicrosoftMailboxDisconnected: jest.fn(() => jest.fn()),
     onMicrosoftLoginComplete: jest.fn(() => jest.fn()),
+    onGoogleMailboxCancelled: jest.fn(() => jest.fn()),
+    onMicrosoftMailboxCancelled: jest.fn(() => jest.fn()),
+    // Pre-DB mailbox connection event listeners
+    onGoogleMailboxPendingConnected: jest.fn(() => jest.fn()),
+    onMicrosoftMailboxPendingConnected: jest.fn(() => jest.fn()),
+    onGoogleMailboxPendingCancelled: jest.fn(() => jest.fn()),
+    onMicrosoftMailboxPendingCancelled: jest.fn(() => jest.fn()),
+    onGoogleLoginComplete: jest.fn(() => jest.fn()),
+    onGoogleLoginPending: jest.fn(() => jest.fn()),
+    onGoogleLoginCancelled: jest.fn(() => jest.fn()),
+    onMicrosoftLoginPending: jest.fn(() => jest.fn()),
+    onMicrosoftLoginCancelled: jest.fn(() => jest.fn()),
   };
 
   // Mock electron for tests

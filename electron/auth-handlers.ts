@@ -2167,6 +2167,474 @@ const handleCompletePendingLogin = async (
   }
 };
 
+/**
+ * Pre-DB Microsoft mailbox connection
+ * Used during onboarding before database is initialized.
+ * Does OAuth flow and returns tokens to renderer for temporary storage.
+ */
+const handleMicrosoftConnectMailboxPending = async (
+  mainWindow: BrowserWindow | null,
+  emailHint?: string,
+): Promise<LoginStartResponse> => {
+  try {
+    await logService.info(
+      "Starting Microsoft mailbox connection (pre-DB mode)",
+      "AuthHandlers",
+    );
+
+    // Start auth flow - returns authUrl and a promise for the code
+    const { authUrl, codePromise, codeVerifier, scopes: _scopes } =
+      await microsoftAuthService.authenticateForMailbox(emailHint);
+
+    await logService.info(
+      "Opening mailbox auth URL in popup window (pre-DB mode)",
+      "AuthHandlers",
+    );
+
+    // Create popup window for auth
+    const authWindow = new BrowserWindow({
+      width: 500,
+      height: 700,
+      show: true,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        webSecurity: false,
+        allowRunningInsecureContent: true,
+      },
+      autoHideMenuBar: true,
+      title: "Connect Microsoft Mailbox",
+    });
+
+    authWindow.show();
+    authWindow.focus();
+
+    // Strip CSP headers
+    const filter = {
+      urls: [
+        "*://*.microsoftonline.com/*",
+        "*://*.msauth.net/*",
+        "*://*.msftauth.net/*",
+      ],
+    };
+    authWindow.webContents.session.webRequest.onHeadersReceived(
+      filter,
+      (
+        details: OnHeadersReceivedListenerDetails,
+        callback: (response: HeadersReceivedResponse) => void,
+      ) => {
+        const responseHeaders = details.responseHeaders || {};
+        delete responseHeaders["content-security-policy"];
+        delete responseHeaders["content-security-policy-report-only"];
+        delete responseHeaders["x-content-security-policy"];
+        callback({ responseHeaders });
+      },
+    );
+
+    authWindow.loadURL(authUrl);
+
+    let authCompleted = false;
+
+    authWindow.on("closed", () => {
+      if (!authCompleted) {
+        microsoftAuthService.stopLocalServer();
+        logService.info(
+          "Microsoft mailbox auth window closed by user (pre-DB mode)",
+          "AuthHandlers",
+        );
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("microsoft:mailbox-pending-cancelled");
+        }
+      }
+    });
+
+    // Intercept callback URL
+    const handleMailboxCallbackUrl = (callbackUrl: string) => {
+      const parsedUrl = new URL(callbackUrl);
+      const code = parsedUrl.searchParams.get("code");
+      const error = parsedUrl.searchParams.get("error");
+      const errorDescription = parsedUrl.searchParams.get("error_description");
+
+      if (error) {
+        microsoftAuthService.rejectCodeDirectly(errorDescription || error);
+        authCompleted = true;
+        if (authWindow && !authWindow.isDestroyed()) {
+          authWindow.close();
+        }
+      } else if (code) {
+        microsoftAuthService.resolveCodeDirectly(code);
+        authCompleted = true;
+        if (authWindow && !authWindow.isDestroyed()) {
+          authWindow.close();
+        }
+      }
+    };
+
+    authWindow.webContents.on(
+      "will-navigate",
+      (event: ElectronEvent, url: string) => {
+        if (url.startsWith("http://localhost:3000/callback")) {
+          event.preventDefault();
+          handleMailboxCallbackUrl(url);
+        }
+      },
+    );
+
+    authWindow.webContents.on(
+      "will-redirect",
+      (event: ElectronEvent, url: string) => {
+        if (url.startsWith("http://localhost:3000/callback")) {
+          event.preventDefault();
+          handleMailboxCallbackUrl(url);
+        }
+      },
+    );
+
+    // Process in background
+    setTimeout(async () => {
+      try {
+        const timeoutMs = 120000;
+        const codeWithTimeout = Promise.race([
+          codePromise,
+          new Promise<never>((_, reject) =>
+            setTimeout(
+              () => reject(new Error("Authentication timed out")),
+              timeoutMs,
+            ),
+          ),
+        ]);
+
+        const code = await codeWithTimeout;
+        authCompleted = true;
+
+        // Exchange code for tokens
+        const tokens = await microsoftAuthService.exchangeCodeForTokens(
+          code,
+          codeVerifier,
+        );
+
+        // Get user info
+        const userInfo = await microsoftAuthService.getUserInfo(
+          tokens.access_token,
+        );
+
+        const expiresAt = new Date(
+          Date.now() + tokens.expires_in * 1000,
+        ).toISOString();
+
+        await logService.info(
+          "Microsoft mailbox connection completed (pre-DB mode) - returning tokens",
+          "AuthHandlers",
+          { email: userInfo.email },
+        );
+
+        // Send tokens back to renderer for temporary storage (NOT saved to DB)
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("microsoft:mailbox-pending-connected", {
+            success: true,
+            email: userInfo.email,
+            tokens: {
+              access_token: tokens.access_token,
+              refresh_token: tokens.refresh_token || null,
+              expires_at: expiresAt,
+              scopes: tokens.scope,
+            },
+          });
+        }
+      } catch (error) {
+        await logService.error(
+          "Microsoft mailbox connection failed (pre-DB mode)",
+          "AuthHandlers",
+          { error: error instanceof Error ? error.message : "Unknown error" },
+        );
+
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("microsoft:mailbox-pending-connected", {
+            success: false,
+            error: error instanceof Error ? error.message : "Unknown error",
+          });
+        }
+      }
+    }, 0);
+
+    return { success: true };
+  } catch (error) {
+    await logService.error(
+      "Microsoft mailbox connection failed (pre-DB mode)",
+      "AuthHandlers",
+      { error: error instanceof Error ? error.message : "Unknown error" },
+    );
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+};
+
+/**
+ * Pre-DB Google mailbox connection
+ * Used during onboarding before database is initialized.
+ * Does OAuth flow and returns tokens to renderer for temporary storage.
+ */
+const handleGoogleConnectMailboxPending = async (
+  mainWindow: BrowserWindow | null,
+  emailHint?: string,
+): Promise<LoginStartResponse> => {
+  try {
+    await logService.info(
+      "Starting Google mailbox connection (pre-DB mode)",
+      "AuthHandlers",
+    );
+
+    // Start auth flow
+    const { authUrl, codePromise, scopes: _scopes } =
+      await googleAuthService.authenticateForMailbox(emailHint);
+
+    await logService.info(
+      "Opening Google mailbox auth URL in popup window (pre-DB mode)",
+      "AuthHandlers",
+    );
+
+    // Create popup window for auth
+    const authWindow = new BrowserWindow({
+      width: 500,
+      height: 700,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        webSecurity: false,
+        allowRunningInsecureContent: true,
+      },
+      autoHideMenuBar: true,
+      title: "Connect to Gmail",
+    });
+
+    // Strip CSP headers
+    const filter = {
+      urls: [
+        "*://*.google.com/*",
+        "*://*.googleapis.com/*",
+        "*://*.gstatic.com/*",
+        "*://*.googleusercontent.com/*",
+      ],
+    };
+    authWindow.webContents.session.webRequest.onHeadersReceived(
+      filter,
+      (
+        details: OnHeadersReceivedListenerDetails,
+        callback: (response: HeadersReceivedResponse) => void,
+      ) => {
+        const responseHeaders = details.responseHeaders || {};
+        delete responseHeaders["content-security-policy"];
+        delete responseHeaders["content-security-policy-report-only"];
+        delete responseHeaders["x-content-security-policy"];
+        callback({ responseHeaders });
+      },
+    );
+
+    authWindow.loadURL(authUrl);
+
+    let authCompleted = false;
+
+    authWindow.on("closed", () => {
+      if (!authCompleted) {
+        googleAuthService.stopLocalServer();
+        logService.info(
+          "Google mailbox auth window closed by user (pre-DB mode)",
+          "AuthHandlers",
+        );
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("google:mailbox-pending-cancelled");
+        }
+      }
+    });
+
+    // Intercept callback URL
+    const handleMailboxCallbackUrl = (callbackUrl: string) => {
+      const parsedUrl = new URL(callbackUrl);
+      const code = parsedUrl.searchParams.get("code");
+      const error = parsedUrl.searchParams.get("error");
+      const errorDescription = parsedUrl.searchParams.get("error_description");
+
+      if (error) {
+        googleAuthService.rejectCodeDirectly(errorDescription || error);
+        authCompleted = true;
+        if (authWindow && !authWindow.isDestroyed()) {
+          authWindow.close();
+        }
+      } else if (code) {
+        googleAuthService.resolveCodeDirectly(code);
+        authCompleted = true;
+        if (authWindow && !authWindow.isDestroyed()) {
+          authWindow.close();
+        }
+      }
+    };
+
+    authWindow.webContents.on(
+      "will-navigate",
+      (event: ElectronEvent, url: string) => {
+        if (url.startsWith("http://localhost:3000/callback")) {
+          event.preventDefault();
+          handleMailboxCallbackUrl(url);
+        }
+      },
+    );
+
+    authWindow.webContents.on(
+      "will-redirect",
+      (event: ElectronEvent, url: string) => {
+        if (url.startsWith("http://localhost:3000/callback")) {
+          event.preventDefault();
+          handleMailboxCallbackUrl(url);
+        }
+      },
+    );
+
+    // Process in background
+    setTimeout(async () => {
+      try {
+        const timeoutMs = 120000;
+        const codeWithTimeout = Promise.race([
+          codePromise,
+          new Promise<never>((_, reject) =>
+            setTimeout(
+              () => reject(new Error("Authentication timed out")),
+              timeoutMs,
+            ),
+          ),
+        ]);
+
+        const code = await codeWithTimeout;
+        authCompleted = true;
+
+        // Exchange code for tokens (returns { tokens, userInfo })
+        const result = await googleAuthService.exchangeCodeForTokens(code);
+        const { tokens, userInfo } = result;
+
+        await logService.info(
+          "Google mailbox connection completed (pre-DB mode) - returning tokens",
+          "AuthHandlers",
+          { email: userInfo.email },
+        );
+
+        // Send tokens back to renderer for temporary storage (NOT saved to DB)
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("google:mailbox-pending-connected", {
+            success: true,
+            email: userInfo.email,
+            tokens: {
+              access_token: tokens.access_token,
+              refresh_token: tokens.refresh_token || null,
+              expires_at: tokens.expires_at || new Date(Date.now() + 3600000).toISOString(),
+              scopes: Array.isArray(tokens.scopes)
+                ? tokens.scopes.join(" ")
+                : "",
+            },
+          });
+        }
+      } catch (error) {
+        await logService.error(
+          "Google mailbox connection failed (pre-DB mode)",
+          "AuthHandlers",
+          { error: error instanceof Error ? error.message : "Unknown error" },
+        );
+
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("google:mailbox-pending-connected", {
+            success: false,
+            error: error instanceof Error ? error.message : "Unknown error",
+          });
+        }
+      }
+    }, 0);
+
+    return { success: true };
+  } catch (error) {
+    await logService.error(
+      "Google mailbox connection failed (pre-DB mode)",
+      "AuthHandlers",
+      { error: error instanceof Error ? error.message : "Unknown error" },
+    );
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+};
+
+/**
+ * Save pending mailbox tokens after database is initialized
+ * Called after keychain setup to persist tokens that were collected during pre-DB onboarding
+ */
+const handleSavePendingMailboxTokens = async (
+  _event: IpcMainInvokeEvent,
+  data: {
+    userId: string;
+    provider: "google" | "microsoft";
+    email: string;
+    tokens: {
+      access_token: string;
+      refresh_token: string | null;
+      expires_at: string;
+      scopes: string;
+    };
+  },
+): Promise<AuthResponse> => {
+  try {
+    await logService.info(
+      `Saving pending ${data.provider} mailbox tokens`,
+      "AuthHandlers",
+      { userId: data.userId, email: data.email },
+    );
+
+    // Validate userId
+    const validatedUserId = validateUserId(data.userId)!;
+
+    // Save the mailbox token
+    await databaseService.saveOAuthToken(
+      validatedUserId,
+      data.provider,
+      "mailbox",
+      {
+        access_token: data.tokens.access_token,
+        refresh_token: data.tokens.refresh_token ?? undefined,
+        token_expires_at: data.tokens.expires_at,
+        scopes_granted: data.tokens.scopes,
+        connected_email_address: data.email,
+        mailbox_connected: true,
+      },
+    );
+
+    await logService.info(
+      `Pending ${data.provider} mailbox tokens saved successfully`,
+      "AuthHandlers",
+      { userId: data.userId },
+    );
+
+    // Audit log
+    await auditService.log({
+      userId: validatedUserId,
+      action: "MAILBOX_CONNECT",
+      resourceType: "MAILBOX",
+      metadata: { provider: data.provider, email: data.email, pending: true },
+      success: true,
+    });
+
+    return { success: true };
+  } catch (error) {
+    await logService.error(
+      "Failed to save pending mailbox tokens",
+      "AuthHandlers",
+      { error: error instanceof Error ? error.message : "Unknown error" },
+    );
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+};
+
 // Disconnect mailbox (remove OAuth token for mailbox purpose)
 const handleDisconnectMailbox = async (
   mainWindow: BrowserWindow | null,
@@ -2277,6 +2745,21 @@ export const registerAuthHandlers = (
   // Used when OAuth succeeds but database wasn't initialized yet
   ipcMain.handle("auth:complete-pending-login", handleCompletePendingLogin);
 
+  // Pre-DB Mailbox Connection (returns tokens instead of saving to DB)
+  ipcMain.handle(
+    "auth:google:connect-mailbox-pending",
+    (event, emailHint?: string) =>
+      handleGoogleConnectMailboxPending(mainWindow, emailHint),
+  );
+  ipcMain.handle(
+    "auth:microsoft:connect-mailbox-pending",
+    (event, emailHint?: string) =>
+      handleMicrosoftConnectMailboxPending(mainWindow, emailHint),
+  );
+
+  // Save pending mailbox tokens (after DB is initialized)
+  ipcMain.handle("auth:save-pending-mailbox-tokens", handleSavePendingMailboxTokens);
+
   // Logout
   ipcMain.handle(
     "auth:logout",
@@ -2373,6 +2856,57 @@ export const registerAuthHandlers = (
         await logService.error("Accept terms failed", "AuthHandlers", {
           error: error instanceof Error ? error.message : "Unknown error",
         });
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // Accept terms directly to Supabase (pre-DB onboarding flow)
+  // Used when user accepts terms before local database is initialized
+  ipcMain.handle(
+    "auth:accept-terms-to-supabase",
+    async (
+      _event,
+      userId: string,
+    ): Promise<{ success: boolean; error?: string }> => {
+      try {
+        // Validate input
+        const validatedUserId = validateUserId(userId)!;
+
+        // Save directly to Supabase (cloud)
+        await supabaseService.syncTermsAcceptance(
+          validatedUserId,
+          CURRENT_TERMS_VERSION,
+          CURRENT_PRIVACY_POLICY_VERSION,
+        );
+
+        await logService.info(
+          "Terms accepted to Supabase (pre-DB flow)",
+          "AuthHandlers",
+          {
+            version: CURRENT_TERMS_VERSION,
+            userId: validatedUserId,
+          },
+        );
+
+        return { success: true };
+      } catch (error) {
+        await logService.error(
+          "Accept terms to Supabase failed",
+          "AuthHandlers",
+          {
+            error: error instanceof Error ? error.message : "Unknown error",
+          },
+        );
         if (error instanceof ValidationError) {
           return {
             success: false,
