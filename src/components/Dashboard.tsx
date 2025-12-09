@@ -275,21 +275,6 @@ function Dashboard({
           </button>
         </div>
 
-        {/* Quick Stats (Optional - can be populated later) */}
-        <div className="mt-12 grid grid-cols-3 gap-6">
-          <div className="bg-white bg-opacity-60 backdrop-blur rounded-xl p-6 text-center">
-            <div className="text-3xl font-bold text-blue-600 mb-1">—</div>
-            <div className="text-sm text-gray-600">Active Transactions</div>
-          </div>
-          <div className="bg-white bg-opacity-60 backdrop-blur rounded-xl p-6 text-center">
-            <div className="text-3xl font-bold text-green-600 mb-1">—</div>
-            <div className="text-sm text-gray-600">Completed Audits</div>
-          </div>
-          <div className="bg-white bg-opacity-60 backdrop-blur rounded-xl p-6 text-center">
-            <div className="text-3xl font-bold text-purple-600 mb-1">—</div>
-            <div className="text-sm text-gray-600">Total Transactions</div>
-          </div>
-        </div>
       </div>
     </div>
   );
