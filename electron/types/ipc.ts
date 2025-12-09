@@ -663,7 +663,9 @@ export interface WindowApi {
       communicationId: string,
       reason?: string,
     ) => Promise<{ success: boolean; error?: string }>;
-    bulkDelete: (transactionIds: string[]) => Promise<{
+    bulkDelete: (
+      transactionIds: string[],
+    ) => Promise<{
       success: boolean;
       deletedCount?: number;
       errors?: string[];
