@@ -33,6 +33,8 @@ import type {
   OAuthPurpose,
   IDatabaseService,
   QueryResult,
+  IgnoredCommunication,
+  NewIgnoredCommunication,
 } from "../types";
 
 import { DatabaseError, NotFoundError } from "../types";
@@ -2374,6 +2376,137 @@ class DatabaseService implements IDatabaseService {
   async deleteCommunication(communicationId: string): Promise<void> {
     const sql = "DELETE FROM communications WHERE id = ?";
     this._run(sql, [communicationId]);
+  }
+
+  // ============================================
+  // IGNORED COMMUNICATION OPERATIONS
+  // ============================================
+
+  /**
+   * Add a communication to the ignored list for a transaction
+   * This prevents the email from being re-added during future scans
+   */
+  async addIgnoredCommunication(
+    data: NewIgnoredCommunication,
+  ): Promise<IgnoredCommunication> {
+    const id = crypto.randomUUID();
+
+    const sql = `
+      INSERT INTO ignored_communications (
+        id, user_id, transaction_id, email_subject, email_sender,
+        email_sent_at, email_thread_id, original_communication_id, reason
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+
+    const params = [
+      id,
+      data.user_id,
+      data.transaction_id,
+      data.email_subject || null,
+      data.email_sender || null,
+      data.email_sent_at || null,
+      data.email_thread_id || null,
+      data.original_communication_id || null,
+      data.reason || null,
+    ];
+
+    this._run(sql, params);
+
+    const ignoredComm = this._get<IgnoredCommunication>(
+      "SELECT * FROM ignored_communications WHERE id = ?",
+      [id],
+    );
+
+    if (!ignoredComm) {
+      throw new DatabaseError("Failed to create ignored communication record");
+    }
+
+    return ignoredComm;
+  }
+
+  /**
+   * Get all ignored communications for a transaction
+   */
+  async getIgnoredCommunicationsByTransaction(
+    transactionId: string,
+  ): Promise<IgnoredCommunication[]> {
+    const sql = `
+      SELECT * FROM ignored_communications
+      WHERE transaction_id = ?
+      ORDER BY ignored_at DESC
+    `;
+    return this._all<IgnoredCommunication>(sql, [transactionId]);
+  }
+
+  /**
+   * Get all ignored communications for a user
+   */
+  async getIgnoredCommunicationsByUser(
+    userId: string,
+  ): Promise<IgnoredCommunication[]> {
+    const sql = `
+      SELECT * FROM ignored_communications
+      WHERE user_id = ?
+      ORDER BY ignored_at DESC
+    `;
+    return this._all<IgnoredCommunication>(sql, [userId]);
+  }
+
+  /**
+   * Check if a communication is ignored for a transaction
+   * Uses email sender, subject, and sent_at to identify the email
+   */
+  async isEmailIgnoredForTransaction(
+    transactionId: string,
+    emailSender: string,
+    emailSubject: string,
+    emailSentAt: string,
+  ): Promise<boolean> {
+    const sql = `
+      SELECT id FROM ignored_communications
+      WHERE transaction_id = ?
+        AND email_sender = ?
+        AND email_subject = ?
+        AND email_sent_at = ?
+      LIMIT 1
+    `;
+    const result = this._get(sql, [
+      transactionId,
+      emailSender,
+      emailSubject,
+      emailSentAt,
+    ]);
+    return !!result;
+  }
+
+  /**
+   * Check if a communication is ignored for any transaction of a user
+   * Used during email scanning to filter out previously ignored emails
+   */
+  async isEmailIgnoredByUser(
+    userId: string,
+    emailSender: string,
+    emailSubject: string,
+    emailSentAt: string,
+  ): Promise<boolean> {
+    const sql = `
+      SELECT id FROM ignored_communications
+      WHERE user_id = ?
+        AND email_sender = ?
+        AND email_subject = ?
+        AND email_sent_at = ?
+      LIMIT 1
+    `;
+    const result = this._get(sql, [userId, emailSender, emailSubject, emailSentAt]);
+    return !!result;
+  }
+
+  /**
+   * Remove an ignored communication (re-allow it to be linked)
+   */
+  async removeIgnoredCommunication(ignoredCommId: string): Promise<void> {
+    const sql = "DELETE FROM ignored_communications WHERE id = ?";
+    this._run(sql, [ignoredCommId]);
   }
 
   /**

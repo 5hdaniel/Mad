@@ -312,6 +312,20 @@ contextBridge.exposeInMainWorld("api", {
       ),
 
     /**
+     * Unlinks a communication (email) from a transaction
+     * The email will be added to an ignored list and won't be re-added during future scans
+     * @param {string} communicationId - Communication ID to unlink
+     * @param {string} reason - Optional reason for unlinking
+     * @returns {Promise<{success: boolean, error?: string}>} Unlink result
+     */
+    unlinkCommunication: (communicationId: string, reason?: string) =>
+      ipcRenderer.invoke(
+        "transactions:unlink-communication",
+        communicationId,
+        reason,
+      ),
+
+    /**
      * Re-analyzes emails for a specific property and date range
      * @param {string} userId - User ID
      * @param {string} provider - Email provider (google or microsoft)
