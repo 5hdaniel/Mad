@@ -893,6 +893,204 @@ export const registerTransactionHandlers = (
     },
   );
 
+  // Bulk delete transactions
+  ipcMain.handle(
+    "transactions:bulk-delete",
+    async (
+      event: IpcMainInvokeEvent,
+      transactionIds: string[],
+    ): Promise<TransactionResponse> => {
+      try {
+        logService.info("Starting bulk delete", "Transactions", {
+          count: transactionIds?.length || 0,
+        });
+
+        // Validate input
+        if (!Array.isArray(transactionIds) || transactionIds.length === 0) {
+          throw new ValidationError(
+            "Transaction IDs must be a non-empty array",
+            "transactionIds",
+          );
+        }
+
+        // Validate each transaction ID
+        const validatedIds: string[] = [];
+        for (const id of transactionIds) {
+          const validatedId = validateTransactionId(id);
+          if (!validatedId) {
+            throw new ValidationError(
+              `Invalid transaction ID: ${id}`,
+              "transactionIds",
+            );
+          }
+          validatedIds.push(validatedId);
+        }
+
+        // Delete each transaction
+        let deletedCount = 0;
+        const errors: string[] = [];
+
+        for (const transactionId of validatedIds) {
+          try {
+            // Get transaction before delete for audit logging
+            const existingTransaction =
+              await transactionService.getTransactionDetails(transactionId);
+            const userId = existingTransaction?.user_id || "unknown";
+            const propertyAddress =
+              existingTransaction?.property_address || "unknown";
+
+            await transactionService.deleteTransaction(transactionId);
+
+            // Audit log transaction deletion
+            await auditService.log({
+              userId,
+              action: "TRANSACTION_DELETE",
+              resourceType: "TRANSACTION",
+              resourceId: transactionId,
+              metadata: { propertyAddress, bulkOperation: true },
+              success: true,
+            });
+
+            deletedCount++;
+          } catch (err) {
+            errors.push(
+              `Failed to delete ${transactionId}: ${err instanceof Error ? err.message : "Unknown error"}`,
+            );
+          }
+        }
+
+        logService.info("Bulk delete completed", "Transactions", {
+          deletedCount,
+          errorCount: errors.length,
+        });
+
+        return {
+          success: errors.length === 0,
+          deletedCount,
+          errors: errors.length > 0 ? errors : undefined,
+        };
+      } catch (error) {
+        logService.error("Bulk delete failed", "Transactions", {
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // Bulk update transaction status
+  ipcMain.handle(
+    "transactions:bulk-update-status",
+    async (
+      event: IpcMainInvokeEvent,
+      transactionIds: string[],
+      status: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        logService.info("Starting bulk status update", "Transactions", {
+          count: transactionIds?.length || 0,
+          status,
+        });
+
+        // Validate input
+        if (!Array.isArray(transactionIds) || transactionIds.length === 0) {
+          throw new ValidationError(
+            "Transaction IDs must be a non-empty array",
+            "transactionIds",
+          );
+        }
+
+        // Validate status
+        if (!status || !["active", "closed"].includes(status)) {
+          throw new ValidationError(
+            "Status must be 'active' or 'closed'",
+            "status",
+          );
+        }
+
+        // Validate each transaction ID
+        const validatedIds: string[] = [];
+        for (const id of transactionIds) {
+          const validatedId = validateTransactionId(id);
+          if (!validatedId) {
+            throw new ValidationError(
+              `Invalid transaction ID: ${id}`,
+              "transactionIds",
+            );
+          }
+          validatedIds.push(validatedId);
+        }
+
+        // Update each transaction
+        let updatedCount = 0;
+        const errors: string[] = [];
+
+        for (const transactionId of validatedIds) {
+          try {
+            // Get transaction before update for audit logging
+            const existingTransaction =
+              await transactionService.getTransactionDetails(transactionId);
+            const userId = existingTransaction?.user_id || "unknown";
+
+            await transactionService.updateTransaction(transactionId, {
+              status: status as "active" | "closed",
+            });
+
+            // Audit log transaction update
+            await auditService.log({
+              userId,
+              action: "TRANSACTION_UPDATE",
+              resourceType: "TRANSACTION",
+              resourceId: transactionId,
+              metadata: { updatedFields: ["status"], newStatus: status, bulkOperation: true },
+              success: true,
+            });
+
+            updatedCount++;
+          } catch (err) {
+            errors.push(
+              `Failed to update ${transactionId}: ${err instanceof Error ? err.message : "Unknown error"}`,
+            );
+          }
+        }
+
+        logService.info("Bulk status update completed", "Transactions", {
+          updatedCount,
+          errorCount: errors.length,
+        });
+
+        return {
+          success: errors.length === 0,
+          updatedCount,
+          errors: errors.length > 0 ? errors : undefined,
+        };
+      } catch (error) {
+        logService.error("Bulk status update failed", "Transactions", {
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
   // Enhanced export with options
   ipcMain.handle(
     "transactions:export-enhanced",

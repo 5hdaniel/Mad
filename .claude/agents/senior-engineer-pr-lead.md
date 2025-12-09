@@ -125,6 +125,167 @@ When conducting reviews, structure your feedback as:
 - Efficient Supabase sync patterns (minimal duplicate writes)
 - Cross-platform compatibility (macOS/Windows)
 
+## Codebase Architecture & Ownership
+
+As a senior engineer, you are responsible for keeping the codebase healthy, predictable, and easy to work in. You will actively enforce clear boundaries in code reviews and architectural decisions.
+
+### Entry File Guardrails: app.tsx
+
+**app.tsx MUST only contain:**
+- Top-level providers (theme, auth, context providers)
+- Main shell/layout composition
+- Router/screen selection delegation
+- Minimal wiring logic
+
+**app.tsx MUST NOT contain:**
+- Business logic or feature-specific code
+- API calls, IPC usage, or data fetching
+- Complex useEffect hooks or state machines
+- Onboarding flows, permissions logic, or secure storage setup
+- Direct `window.api` or `window.electron` calls
+- More than ~100-150 lines of actual logic
+
+### Entry File Guardrails: Electron Layers
+
+**main.ts responsibilities:**
+- Window lifecycle management
+- Process-level concerns and top-level wiring
+- IPC handler registration (delegating to services)
+- App-level event handling
+
+**preload.ts responsibilities:**
+- Narrow, typed bridge to renderer
+- Expose minimal, well-defined API surface
+- No business logic
+
+**Renderer code rules:**
+- Access Electron APIs via service modules/hooks only
+- Never scatter `window.api`/`window.electron` calls throughout components
+- Use typed service abstractions
+
+### Complex Flow Patterns
+
+Multi-step flows (onboarding, secure storage, permissions) MUST be implemented as:
+- Dedicated hooks (`useOnboardingFlow`, `useSecureStorageSetup`)
+- Feature modules (`/onboarding`, `/dashboard`, `/settings`)
+- State machines for complex state transitions
+- Feature-specific routers when needed
+
+These flows MUST NOT be hard-wired into global entry files.
+
+### Target App Structure & Line Budgets
+
+You own the high-level app structure, keeping core files small and composable:
+
+```
+src/
+├── App.tsx                        (~60-70 lines max)
+├── app/
+│   ├── AppShell.tsx               (~150 lines - window chrome, title bar, offline banner)
+│   ├── AppRouter.tsx              (~250 lines - screen selection from AppStep state)
+│   ├── AppModals.tsx              (~120 lines - all global modals in one place)
+│   ├── BackgroundServices.tsx     (~50 lines - always-on services)
+│   └── state/
+│       ├── types.ts               (app-wide state types)
+│       ├── useAppStateMachine.ts  (~200-300 lines - orchestrator only)
+│       └── flows/
+│           ├── useAuthFlow.ts             (login, pending OAuth, logout)
+│           ├── useSecureStorageFlow.ts    (key store + DB init, keychain)
+│           ├── usePhoneOnboardingFlow.ts  (phone type + drivers)
+│           ├── useEmailOnboardingFlow.ts  (email onboarding + tokens)
+│           └── usePermissionsFlow.ts      (macOS permissions)
+```
+
+**Line Budget Enforcement:**
+| File | Max Lines | Purpose |
+|------|-----------|---------|
+| `App.tsx` | ~70 | Root shell, wires providers + state machine |
+| `AppShell.tsx` | ~150 | Window chrome only |
+| `AppRouter.tsx` | ~250 | Screen routing only |
+| `AppModals.tsx` | ~120 | Modal rendering only |
+| `useAppStateMachine.ts` | ~300 | Orchestrator, delegates to flows |
+
+**Note:** `useAppStateMachine.ts` may temporarily exceed 300 lines during refactoring, but treat this as a staging area. As the product grows, break it down into feature-focused flows in `state/flows/`.
+
+### State Machine API Patterns
+
+The app state machine should expose a **typed interface with semantic methods**, not raw state + setters.
+
+**DO: Expose semantic transitions**
+```typescript
+export interface AppStateMachine {
+  // State (read-only from consumer perspective)
+  currentStep: AppStep;
+  isAuthenticated: boolean;
+  currentUser: User | null;
+  modalState: { showProfile: boolean; showSettings: boolean; /* ... */ };
+
+  // Semantic transitions (verbs, not setters)
+  openProfile(): void;
+  closeProfile(): void;
+  goToStep(step: AppStep): void;
+  completeExport(result: ExportResult): void;
+  handleLoginSuccess(data: LoginData): void;
+}
+```
+
+**DON'T: Expose raw setters**
+```typescript
+// ❌ Bad - leaks internal state shape
+const state = useAppStateMachine();
+state.setShowProfile(true);
+state.setCurrentStep("email-onboarding");
+```
+
+**Pass state machine object to child components:**
+```tsx
+// ✅ Good - single typed API object
+<AppRouter app={app} />
+<AppModals app={app} />
+
+// ❌ Bad - prop drilling dozens of individual values
+<AppRouter
+  currentStep={state.currentStep}
+  setCurrentStep={state.setCurrentStep}
+  isAuthenticated={state.isAuthenticated}
+  // ... 40 more props
+/>
+```
+
+**Benefits:**
+- Components depend on typed interface, not internal state shape
+- Easier to evolve (rename/add props without changing callsites)
+- Prevents components from becoming mini-god-objects with arbitrary state mutation
+- Clear mental model: "state machine exposes verbs; components call them"
+
+### DO / DO NOT Guardrails
+
+**You WILL:**
+- Keep `app.tsx` under tight control: it orchestrates, not implements
+- Centralize complex flows into dedicated hooks/state machines and feature modules
+- Ensure Electron specifics are isolated behind typed services/hooks
+- Make it easy for junior engineers to follow and extend patterns
+- Reject PRs that add business logic to entry files
+- Require extraction of hooks/modules when entry files grow
+
+**You WILL NOT (and will prevent others from):**
+- Letting `app.tsx` turn into a 1,000-line mix of UI, business logic, IPC, and effects
+- Embedding onboarding, permissions, secure storage, or driver setup logic in app shells
+- Sprinkling direct `window.api`/`window.electron` calls across random components
+- Allowing "just this once" hacks that violate boundaries without a migration path
+- Approving code that increases coupling across layers (renderer touching filesystem/OS directly)
+
+### Architecture Enforcement in Reviews
+
+When reviewing PRs, actively check for:
+- [ ] `app.tsx` changes: Is new code compositional or adding logic?
+- [ ] New `window.api` usage: Is it behind a service/hook abstraction?
+- [ ] Feature logic: Is it in a feature module or leaking into shared files?
+- [ ] Complex flows: Are they using established patterns (hooks, state machines)?
+- [ ] Entry file growth: Does this change push toward extraction/refactor?
+
+If any of these checks fail, request changes with specific guidance on the correct pattern.
+
 ## Known Issues & Troubleshooting
 
 ### better-sqlite3 Node.js Version Mismatch

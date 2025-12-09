@@ -368,6 +368,23 @@ contextBridge.exposeInMainWorld("api", {
         transactionId,
         options,
       ),
+
+    /**
+     * Bulk deletes multiple transactions
+     * @param {string[]} transactionIds - Array of transaction IDs to delete
+     * @returns {Promise<{success: boolean, deletedCount?: number, errors?: string[], error?: string}>} Bulk deletion result
+     */
+    bulkDelete: (transactionIds: string[]) =>
+      ipcRenderer.invoke("transactions:bulk-delete", transactionIds),
+
+    /**
+     * Bulk updates status for multiple transactions
+     * @param {string[]} transactionIds - Array of transaction IDs to update
+     * @param {string} status - New status ('active' or 'closed')
+     * @returns {Promise<{success: boolean, updatedCount?: number, errors?: string[], error?: string}>} Bulk update result
+     */
+    bulkUpdateStatus: (transactionIds: string[], status: string) =>
+      ipcRenderer.invoke("transactions:bulk-update-status", transactionIds, status),
   },
 
   /**

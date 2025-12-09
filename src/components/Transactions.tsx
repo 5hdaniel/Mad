@@ -3,6 +3,12 @@ import AuditTransactionModal from "./AuditTransactionModal";
 import ExportModal from "./ExportModal";
 import ContactSelectModal from "./ContactSelectModal";
 import {
+  BulkActionBar,
+  BulkDeleteConfirmModal,
+  BulkExportModal,
+} from "./BulkActionBar";
+import { useSelection } from "../hooks/useSelection";
+import {
   ROLE_TO_CATEGORY,
   AUDIT_WORKFLOW_STEPS,
 } from "../constants/contactRoles";
@@ -98,6 +104,25 @@ function Transactions({ userId, provider, onClose }: TransactionsProps) {
   const [quickExportSuccess, setQuickExportSuccess] = useState<string | null>(
     null,
   );
+
+  // Selection state for bulk operations
+  const {
+    selectedIds,
+    toggleSelection,
+    selectAll,
+    deselectAll,
+    isSelected,
+    count: selectedCount,
+  } = useSelection();
+
+  // Bulk action state
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+  const [showBulkExportModal, setShowBulkExportModal] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [isBulkExporting, setIsBulkExporting] = useState(false);
+  const [isBulkUpdating, setIsBulkUpdating] = useState(false);
+  const [bulkActionSuccess, setBulkActionSuccess] = useState<string | null>(null);
+  const [selectionMode, setSelectionMode] = useState(false);
 
   useEffect(() => {
     loadTransactions();
@@ -228,6 +253,156 @@ function Transactions({ userId, provider, onClose }: TransactionsProps) {
     loadTransactions();
   };
 
+  // Toggle selection mode
+  const handleToggleSelectionMode = () => {
+    if (selectionMode) {
+      // Exiting selection mode - deselect all and close
+      deselectAll();
+      setSelectionMode(false);
+    } else {
+      // Entering selection mode
+      setSelectionMode(true);
+    }
+  };
+
+  // Close bulk edit mode (called by X button)
+  const handleCloseBulkEdit = () => {
+    deselectAll();
+    setSelectionMode(false);
+  };
+
+  // Handle transaction card click (either select or open details)
+  const handleTransactionClick = (transaction: Transaction) => {
+    if (selectionMode) {
+      toggleSelection(transaction.id);
+    } else {
+      setSelectedTransaction(transaction);
+    }
+  };
+
+  // Handle checkbox click separately to prevent event bubbling
+  const handleCheckboxClick = (e: React.MouseEvent, transactionId: string) => {
+    e.stopPropagation();
+    toggleSelection(transactionId);
+  };
+
+  // Bulk delete handler
+  const handleBulkDelete = async () => {
+    if (selectedCount === 0) return;
+
+    setIsBulkDeleting(true);
+    try {
+      const result = await (window.api.transactions as any).bulkDelete(
+        Array.from(selectedIds),
+      );
+
+      if (result.success) {
+        setBulkActionSuccess(
+          `Successfully deleted ${result.deletedCount || selectedCount} transaction${(result.deletedCount || selectedCount) > 1 ? "s" : ""}`,
+        );
+        deselectAll();
+        setSelectionMode(false);
+        await loadTransactions();
+      } else {
+        setError(result.error || "Failed to delete transactions");
+      }
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to delete transactions";
+      setError(errorMessage);
+    } finally {
+      setIsBulkDeleting(false);
+      setShowBulkDeleteConfirm(false);
+      setTimeout(() => setBulkActionSuccess(null), 5000);
+    }
+  };
+
+  // Bulk export handler
+  const handleBulkExport = async (format: string) => {
+    if (selectedCount === 0) return;
+
+    setIsBulkExporting(true);
+    try {
+      // Export each selected transaction
+      const selectedTransactionIds = Array.from(selectedIds);
+      let successCount = 0;
+      const errors: string[] = [];
+
+      for (const transactionId of selectedTransactionIds) {
+        try {
+          const result = await window.api.transactions.exportEnhanced(
+            transactionId,
+            format,
+          );
+          if (result.success) {
+            successCount++;
+          } else {
+            errors.push(result.error || `Failed to export transaction`);
+          }
+        } catch (err) {
+          errors.push(
+            err instanceof Error ? err.message : "Export failed",
+          );
+        }
+      }
+
+      if (successCount > 0) {
+        setBulkActionSuccess(
+          `Successfully exported ${successCount} transaction${successCount > 1 ? "s" : ""}${errors.length > 0 ? ` (${errors.length} failed)` : ""}`,
+        );
+        deselectAll();
+        setSelectionMode(false);
+        await loadTransactions();
+      } else {
+        setError("Failed to export transactions");
+      }
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to export transactions";
+      setError(errorMessage);
+    } finally {
+      setIsBulkExporting(false);
+      setShowBulkExportModal(false);
+      setTimeout(() => setBulkActionSuccess(null), 5000);
+    }
+  };
+
+  // Bulk status change handler
+  const handleBulkStatusChange = async (status: "active" | "closed") => {
+    if (selectedCount === 0) return;
+
+    setIsBulkUpdating(true);
+    try {
+      const result = await (window.api.transactions as any).bulkUpdateStatus(
+        Array.from(selectedIds),
+        status,
+      );
+
+      if (result.success) {
+        setBulkActionSuccess(
+          `Successfully updated ${result.updatedCount || selectedCount} transaction${(result.updatedCount || selectedCount) > 1 ? "s" : ""} to ${status}`,
+        );
+        deselectAll();
+        setSelectionMode(false);
+        await loadTransactions();
+      } else {
+        setError(result.error || "Failed to update transactions");
+      }
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to update transactions";
+      setError(errorMessage);
+    } finally {
+      setIsBulkUpdating(false);
+      setTimeout(() => setBulkActionSuccess(null), 5000);
+    }
+  };
+
+  // Handle select all for filtered transactions
+  const handleSelectAll = () => {
+    selectAll(filteredTransactions);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex flex-col">
       {/* Header */}
@@ -329,6 +504,31 @@ function Transactions({ userId, provider, onClose }: TransactionsProps) {
               />
             </svg>
           </div>
+
+          {/* Bulk Edit Mode Button */}
+          <button
+            onClick={handleToggleSelectionMode}
+            className={`px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 ${
+              selectionMode
+                ? "bg-purple-500 text-white hover:bg-purple-600 shadow-md"
+                : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+            }`}
+          >
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
+              />
+            </svg>
+            {selectionMode ? "Exit Bulk Edit" : "Bulk Edit"}
+          </button>
 
           {/* Audit New Transaction Button */}
           <button
@@ -491,6 +691,32 @@ function Transactions({ userId, provider, onClose }: TransactionsProps) {
             </div>
           </div>
         )}
+
+        {/* Bulk Action Success */}
+        {bulkActionSuccess && (
+          <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+            <div className="flex items-start gap-2">
+              <svg
+                className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-green-900">
+                  {bulkActionSuccess}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Transactions List */}
@@ -554,10 +780,45 @@ function Transactions({ userId, provider, onClose }: TransactionsProps) {
             {filteredTransactions.map((transaction: Transaction) => (
               <div
                 key={transaction.id}
-                className="bg-white border-2 border-gray-200 rounded-xl p-6 hover:border-blue-400 hover:shadow-xl transition-all cursor-pointer transform hover:scale-[1.01]"
-                onClick={() => setSelectedTransaction(transaction)}
+                className={`bg-white border-2 rounded-xl p-6 transition-all cursor-pointer transform hover:scale-[1.01] ${
+                  selectionMode && isSelected(transaction.id)
+                    ? "border-purple-500 bg-purple-50 shadow-lg"
+                    : "border-gray-200 hover:border-blue-400 hover:shadow-xl"
+                }`}
+                onClick={() => handleTransactionClick(transaction)}
               >
                 <div className="flex items-start justify-between gap-4">
+                  {/* Selection Checkbox */}
+                  {selectionMode && (
+                    <div
+                      className="flex-shrink-0 mt-1"
+                      onClick={(e) => handleCheckboxClick(e, transaction.id)}
+                    >
+                      <div
+                        className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all ${
+                          isSelected(transaction.id)
+                            ? "bg-purple-500 border-purple-500"
+                            : "border-gray-300 hover:border-purple-400"
+                        }`}
+                      >
+                        {isSelected(transaction.id) && (
+                          <svg
+                            className="w-4 h-4 text-white"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={3}
+                              d="M5 13l4 4L19 7"
+                            />
+                          </svg>
+                        )}
+                      </div>
+                    </div>
+                  )}
                   <div className="flex-1">
                     <h3 className="font-semibold text-gray-900 mb-1">
                       {transaction.property_address}
@@ -705,6 +966,43 @@ function Transactions({ userId, provider, onClose }: TransactionsProps) {
           userId={quickExportTransaction.user_id}
           onClose={() => setQuickExportTransaction(null)}
           onExportComplete={handleQuickExportComplete}
+        />
+      )}
+
+      {/* Bulk Action Bar */}
+      {selectionMode && (
+        <BulkActionBar
+          selectedCount={selectedCount}
+          totalCount={filteredTransactions.length}
+          onSelectAll={handleSelectAll}
+          onDeselectAll={deselectAll}
+          onBulkDelete={() => setShowBulkDeleteConfirm(true)}
+          onBulkExport={() => setShowBulkExportModal(true)}
+          onBulkStatusChange={handleBulkStatusChange}
+          onClose={handleCloseBulkEdit}
+          isDeleting={isBulkDeleting}
+          isExporting={isBulkExporting}
+          isUpdating={isBulkUpdating}
+        />
+      )}
+
+      {/* Bulk Delete Confirmation Modal */}
+      {showBulkDeleteConfirm && (
+        <BulkDeleteConfirmModal
+          selectedCount={selectedCount}
+          onConfirm={handleBulkDelete}
+          onCancel={() => setShowBulkDeleteConfirm(false)}
+          isDeleting={isBulkDeleting}
+        />
+      )}
+
+      {/* Bulk Export Modal */}
+      {showBulkExportModal && (
+        <BulkExportModal
+          selectedCount={selectedCount}
+          onConfirm={handleBulkExport}
+          onCancel={() => setShowBulkExportModal(false)}
+          isExporting={isBulkExporting}
         />
       )}
     </div>

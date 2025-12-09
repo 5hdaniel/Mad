@@ -57,6 +57,8 @@ interface ElectronAPI {
     getAll: () => Promise<unknown[]>;
     update: (id: string, data: unknown) => Promise<{ success: boolean }>;
     delete: (id: string) => Promise<{ success: boolean }>;
+    bulkDelete: (transactionIds: string[]) => Promise<{ success: boolean; deletedCount?: number; error?: string }>;
+    bulkUpdateStatus: (transactionIds: string[], status: string) => Promise<{ success: boolean; updatedCount?: number; error?: string }>;
   };
   onTransactionScanProgress: (
     callback: (progress: unknown) => void,
@@ -537,6 +539,33 @@ interface MainAPI {
     /** Subscribe to backup error events */
     onError: (callback: (error: { message: string }) => void) => () => void;
   };
+
+  // Transactions API
+  transactions: {
+    getAll: (userId: string) => Promise<{
+      success: boolean;
+      transactions?: unknown[];
+      error?: string;
+    }>;
+    scan: (userId: string, options?: Record<string, unknown>) => Promise<{
+      success: boolean;
+      transactionsFound?: number;
+      emailsScanned?: number;
+      error?: string;
+    }>;
+    cancelScan: (userId: string) => Promise<{ success: boolean; error?: string }>;
+    create: (userId: string, data: unknown) => Promise<{ success: boolean; transaction?: unknown; error?: string }>;
+    update: (transactionId: string, data: unknown) => Promise<{ success: boolean; transaction?: unknown; error?: string }>;
+    delete: (transactionId: string) => Promise<{ success: boolean; error?: string }>;
+    bulkDelete: (transactionIds: string[]) => Promise<{ success: boolean; deletedCount?: number; error?: string }>;
+    bulkUpdateStatus: (transactionIds: string[], status: string) => Promise<{ success: boolean; updatedCount?: number; error?: string }>;
+    exportEnhanced: (options: unknown) => Promise<{ success: boolean; exportPath?: string; error?: string }>;
+    get: (transactionId: string) => Promise<{ success: boolean; transaction?: unknown; error?: string }>;
+    getCommunications: (transactionId: string) => Promise<{ success: boolean; communications?: unknown[]; error?: string }>;
+    getContacts: (transactionId: string) => Promise<{ success: boolean; contacts?: unknown[]; error?: string }>;
+    unlinkCommunication: (communicationId: string, reason?: string) => Promise<{ success: boolean; error?: string }>;
+  };
+  onTransactionScanProgress: (callback: (progress: unknown) => void) => () => void;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [key: string]: any; // Allow other properties for backwards compatibility
