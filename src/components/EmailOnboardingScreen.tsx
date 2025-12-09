@@ -345,7 +345,7 @@ function EmailOnboardingScreen({
   const secondaryInfo = providerInfo[secondaryProvider];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-8">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-start justify-center pt-8 px-8 pb-8">
       <div className="max-w-lg w-full bg-white rounded-2xl shadow-xl p-8">
         {/* Progress Indicator */}
         <SetupProgressIndicator

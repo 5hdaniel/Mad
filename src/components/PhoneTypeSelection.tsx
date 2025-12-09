@@ -110,7 +110,7 @@ function PhoneTypeSelection({
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-start justify-center pt-8 px-4 pb-4">
       <div className="max-w-xl w-full">
         {/* Progress Indicator */}
         <SetupProgressIndicator currentStep={1} isWindows={isWindows} />

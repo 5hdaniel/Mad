@@ -100,7 +100,7 @@ function KeychainExplanation({
   // Simple waiting mode - for returning users who checked "Don't show again"
   if (skipExplanation && !hasPendingLogin) {
     return (
-      <div className="fixed inset-0 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 z-50 flex items-center justify-center p-6">
+      <div className="fixed inset-0 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 z-50 flex items-start justify-center pt-8 px-6 pb-6">
         <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden">
           <div className="p-8 text-center">
             <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -164,7 +164,7 @@ function KeychainExplanation({
 
   // Full explanation mode
   return (
-    <div className="fixed inset-0 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 z-50 flex items-center justify-center p-6">
+    <div className="fixed inset-0 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 z-50 flex items-start justify-center pt-8 px-6 pb-6">
       <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
         {/* Progress Indicator */}
         <div className="bg-gray-50 px-6 pt-5 pb-3 border-b border-gray-100">

@@ -182,7 +182,7 @@ function SecureStorageSetup({ onComplete, onRetry }: SecureStorageSetupProps) {
   const platformText = getPlatformSpecificText();
 
   return (
-    <div className="fixed inset-0 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 z-50 flex items-center justify-center p-6">
+    <div className="fixed inset-0 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 z-50 flex items-start justify-center pt-8 px-6 pb-6">
       <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden">
         {/* Header */}
         <div className="bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-6">
