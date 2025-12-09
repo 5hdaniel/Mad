@@ -621,12 +621,11 @@ function EmailOnboardingScreen({
                 </svg>
               </div>
               <h2 className="text-2xl font-bold text-gray-900 mb-3">
-                Connect Your {primaryInfo.name}
+                Connect your E-Mail
               </h2>
               <p className="text-gray-600">
-                Connect your {primaryInfo.name} account to export email
-                communications alongside text messages for complete audit
-                trails.
+                Connect your Email Provider to export email communications
+                alongside text messages for complete audit trails.
               </p>
             </div>
 
