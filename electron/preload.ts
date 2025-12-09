@@ -114,6 +114,15 @@ contextBridge.exposeInMainWorld("api", {
       ipcRenderer.invoke("auth:accept-terms", userId),
 
     /**
+     * Accept terms directly to Supabase (pre-DB onboarding flow)
+     * Used when user accepts terms before local database is initialized
+     * @param {string} userId - User ID accepting terms
+     * @returns {Promise<{success: boolean, error?: string}>} Acceptance result
+     */
+    acceptTermsToSupabase: (userId: string) =>
+      ipcRenderer.invoke("auth:accept-terms-to-supabase", userId),
+
+    /**
      * Marks email onboarding as completed for a user
      * @param {string} userId - User ID completing email onboarding
      * @returns {Promise<{success: boolean, error?: string}>} Completion result
@@ -137,6 +146,41 @@ contextBridge.exposeInMainWorld("api", {
      */
     completePendingLogin: (oauthData: any) =>
       ipcRenderer.invoke("auth:complete-pending-login", oauthData),
+
+    /**
+     * Pre-DB Google mailbox connection (returns tokens instead of saving to DB)
+     * Used during onboarding before database is initialized
+     * @param {string} emailHint - Optional email hint for pre-filling the login
+     * @returns {Promise<{success: boolean, error?: string}>} Connection initiation result
+     */
+    googleConnectMailboxPending: (emailHint?: string) =>
+      ipcRenderer.invoke("auth:google:connect-mailbox-pending", emailHint),
+
+    /**
+     * Pre-DB Microsoft mailbox connection (returns tokens instead of saving to DB)
+     * Used during onboarding before database is initialized
+     * @param {string} emailHint - Optional email hint for pre-filling the login
+     * @returns {Promise<{success: boolean, error?: string}>} Connection initiation result
+     */
+    microsoftConnectMailboxPending: (emailHint?: string) =>
+      ipcRenderer.invoke("auth:microsoft:connect-mailbox-pending", emailHint),
+
+    /**
+     * Saves pending mailbox tokens after database is initialized
+     * @param {Object} data - Token data including userId, provider, email, and tokens
+     * @returns {Promise<{success: boolean, error?: string}>} Save result
+     */
+    savePendingMailboxTokens: (data: {
+      userId: string;
+      provider: "google" | "microsoft";
+      email: string;
+      tokens: {
+        access_token: string;
+        refresh_token: string | null;
+        expires_at: string;
+        scopes: string;
+      };
+    }) => ipcRenderer.invoke("auth:save-pending-mailbox-tokens", data),
   },
 
   /**
@@ -857,6 +901,60 @@ contextBridge.exposeInMainWorld("api", {
     ipcRenderer.on("microsoft:mailbox-cancelled", listener);
     return () =>
       ipcRenderer.removeListener("microsoft:mailbox-cancelled", listener);
+  },
+
+  /**
+   * Listens for pre-DB Google mailbox connection events (returns tokens)
+   * @param {Function} callback - Callback function to handle connection result with tokens
+   * @returns {Function} Cleanup function to remove listener
+   */
+  onGoogleMailboxPendingConnected: (callback: (result: any) => void) => {
+    const listener = (_: IpcRendererEvent, result: any) => callback(result);
+    ipcRenderer.on("google:mailbox-pending-connected", listener);
+    return () =>
+      ipcRenderer.removeListener("google:mailbox-pending-connected", listener);
+  },
+
+  /**
+   * Listens for pre-DB Google mailbox connection cancelled events
+   * @param {Function} callback - Callback function to handle cancellation
+   * @returns {Function} Cleanup function to remove listener
+   */
+  onGoogleMailboxPendingCancelled: (callback: () => void) => {
+    const listener = () => callback();
+    ipcRenderer.on("google:mailbox-pending-cancelled", listener);
+    return () =>
+      ipcRenderer.removeListener("google:mailbox-pending-cancelled", listener);
+  },
+
+  /**
+   * Listens for pre-DB Microsoft mailbox connection events (returns tokens)
+   * @param {Function} callback - Callback function to handle connection result with tokens
+   * @returns {Function} Cleanup function to remove listener
+   */
+  onMicrosoftMailboxPendingConnected: (callback: (result: any) => void) => {
+    const listener = (_: IpcRendererEvent, result: any) => callback(result);
+    ipcRenderer.on("microsoft:mailbox-pending-connected", listener);
+    return () =>
+      ipcRenderer.removeListener(
+        "microsoft:mailbox-pending-connected",
+        listener,
+      );
+  },
+
+  /**
+   * Listens for pre-DB Microsoft mailbox connection cancelled events
+   * @param {Function} callback - Callback function to handle cancellation
+   * @returns {Function} Cleanup function to remove listener
+   */
+  onMicrosoftMailboxPendingCancelled: (callback: () => void) => {
+    const listener = () => callback();
+    ipcRenderer.on("microsoft:mailbox-pending-cancelled", listener);
+    return () =>
+      ipcRenderer.removeListener(
+        "microsoft:mailbox-pending-cancelled",
+        listener,
+      );
   },
 
   /**

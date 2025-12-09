@@ -22,7 +22,7 @@ describe("KeychainExplanation", () => {
 
       expect(screen.getByText("Secure Storage Setup")).toBeInTheDocument();
       expect(
-        screen.getByText("Protect your data with Keychain"),
+        screen.getByText("Protect your data with macOS Keychain"),
       ).toBeInTheDocument();
     });
 
@@ -102,29 +102,32 @@ describe("KeychainExplanation", () => {
   });
 
   describe("Progress Indicator", () => {
-    it("should show 4 setup steps in full explanation mode", () => {
+    it("should show 4 setup steps in full explanation mode (macOS)", () => {
       render(<KeychainExplanation onContinue={mockOnContinue} />);
 
-      expect(screen.getByText("Sign In")).toBeInTheDocument();
-      expect(screen.getByText("Secure Storage")).toBeInTheDocument();
+      // macOS flow: Phone Type -> Connect Email -> Secure Storage -> Permissions
+      expect(screen.getByText("Phone Type")).toBeInTheDocument();
       expect(screen.getByText("Connect Email")).toBeInTheDocument();
+      expect(screen.getByText("Secure Storage")).toBeInTheDocument();
       expect(screen.getByText("Permissions")).toBeInTheDocument();
     });
 
-    it("should highlight step 2 (Secure Storage) as current step", () => {
+    it("should highlight step 3 (Secure Storage) as current step", () => {
       render(<KeychainExplanation onContinue={mockOnContinue} />);
 
-      // Step 2 text should have the highlighted style class
+      // Step 3 (Secure Storage) should have the highlighted style class
       const secureStorageLabel = screen.getByText("Secure Storage");
       expect(secureStorageLabel).toHaveClass("text-blue-600", "font-medium");
     });
 
-    it("should show step 1 (Sign In) as completed", () => {
+    it("should show steps 1-2 as completed (Phone Type, Connect Email)", () => {
       render(<KeychainExplanation onContinue={mockOnContinue} />);
 
-      // Step 1 should show a checkmark (completed state)
-      const signInLabel = screen.getByText("Sign In");
-      expect(signInLabel).not.toHaveClass("text-blue-600");
+      // Steps 1 and 2 should be completed (not highlighted as current)
+      const phoneTypeLabel = screen.getByText("Phone Type");
+      const connectEmailLabel = screen.getByText("Connect Email");
+      expect(phoneTypeLabel).not.toHaveClass("text-blue-600");
+      expect(connectEmailLabel).not.toHaveClass("text-blue-600");
     });
   });
 
@@ -183,7 +186,7 @@ describe("KeychainExplanation", () => {
         />,
       );
 
-      expect(screen.queryByText("Sign In")).not.toBeInTheDocument();
+      expect(screen.queryByText("Phone Type")).not.toBeInTheDocument();
       expect(screen.queryByText("Secure Storage")).not.toBeInTheDocument();
     });
 
@@ -198,7 +201,7 @@ describe("KeychainExplanation", () => {
 
       // Should show full explanation for new users
       expect(screen.getByText("Secure Storage Setup")).toBeInTheDocument();
-      expect(screen.getByText("Sign In")).toBeInTheDocument();
+      expect(screen.getByText("Phone Type")).toBeInTheDocument();
     });
 
     it("should show Continue button in simple waiting mode", () => {
