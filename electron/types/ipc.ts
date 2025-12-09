@@ -443,6 +443,25 @@ export interface WindowApi {
       isNewUser?: boolean;
       error?: string;
     }>;
+    // Pre-DB mailbox connection (returns tokens instead of saving to DB)
+    googleConnectMailboxPending: (
+      emailHint?: string,
+    ) => Promise<{ success: boolean; error?: string }>;
+    microsoftConnectMailboxPending: (
+      emailHint?: string,
+    ) => Promise<{ success: boolean; error?: string }>;
+    // Save pending mailbox tokens after DB initialization
+    savePendingMailboxTokens: (data: {
+      userId: string;
+      provider: "google" | "microsoft";
+      email: string;
+      tokens: {
+        access_token: string;
+        refresh_token: string | null;
+        expires_at: string;
+        scopes: string;
+      };
+    }) => Promise<{ success: boolean; error?: string }>;
   };
 
   // System methods
@@ -908,6 +927,35 @@ export interface WindowApi {
   onMicrosoftMailboxDisconnected: (
     callback: (result: { success: boolean }) => void,
   ) => () => void;
+  // Pre-DB mailbox connection events (for collecting tokens before DB init)
+  onGoogleMailboxPendingConnected: (
+    callback: (result: {
+      success: boolean;
+      email?: string;
+      tokens?: {
+        access_token: string;
+        refresh_token: string | null;
+        expires_at: string;
+        scopes: string;
+      };
+      error?: string;
+    }) => void,
+  ) => () => void;
+  onGoogleMailboxPendingCancelled: (callback: () => void) => () => void;
+  onMicrosoftMailboxPendingConnected: (
+    callback: (result: {
+      success: boolean;
+      email?: string;
+      tokens?: {
+        access_token: string;
+        refresh_token: string | null;
+        expires_at: string;
+        scopes: string;
+      };
+      error?: string;
+    }) => void,
+  ) => () => void;
+  onMicrosoftMailboxPendingCancelled: (callback: () => void) => () => void;
   onGoogleLoginComplete: (
     callback: (result: {
       success: boolean;

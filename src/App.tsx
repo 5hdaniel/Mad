@@ -72,6 +72,18 @@ interface PendingOnboardingData {
   emailProvider: "google" | "microsoft" | null;
 }
 
+// Pending email token data for pre-DB flow
+interface PendingEmailTokens {
+  provider: "google" | "microsoft";
+  email: string;
+  tokens: {
+    access_token: string;
+    refresh_token: string | null;
+    expires_at: string;
+    scopes: string;
+  };
+}
+
 function App() {
   // Auth state from context
   const {
@@ -159,6 +171,8 @@ function App() {
       emailConnected: false,
       emailProvider: null,
     }); // Onboarding data collected before DB init
+  const [pendingEmailTokens, setPendingEmailTokens] =
+    useState<PendingEmailTokens | null>(null); // Email OAuth tokens collected before DB init
   const [showTermsModal, setShowTermsModal] = useState<boolean>(false); // Show terms during pre-DB onboarding
 
   // Check if encryption key store exists on app load
@@ -414,6 +428,30 @@ function App() {
                   }
                 }
 
+                // Persist pending email tokens (if user connected email during pre-DB onboarding)
+                if (pendingEmailTokens) {
+                  try {
+                    console.log(
+                      "[App] Persisting pending email tokens for",
+                      pendingEmailTokens.provider,
+                    );
+                    await window.api.auth.savePendingMailboxTokens({
+                      userId,
+                      provider: pendingEmailTokens.provider,
+                      email: pendingEmailTokens.email,
+                      tokens: pendingEmailTokens.tokens,
+                    });
+                    console.log("[App] Pending email tokens persisted successfully");
+                    // Clear pending tokens after successful save
+                    setPendingEmailTokens(null);
+                  } catch (tokenError) {
+                    console.error(
+                      "[App] Failed to persist pending email tokens:",
+                      tokenError,
+                    );
+                  }
+                }
+
                 // Clear pending onboarding data
                 setPendingOnboardingData({
                   termsAccepted: false,
@@ -475,23 +513,28 @@ function App() {
           return;
         }
 
-        // Step 2: Phone type selection (stored in memory)
+        // Step 2: Phone type selection (separate screen)
         if (!pendingOnboardingData.phoneType) {
           setShowTermsModal(false);
           setCurrentStep("phone-type-selection");
           return;
         }
 
-        // Step 3: Email onboarding (stored in memory)
+        // Step 3: Email onboarding (after phone type is selected)
+        // Only auto-navigate if not already on an earlier step (user may have navigated back)
         if (!pendingOnboardingData.emailConnected) {
-          setCurrentStep("email-onboarding");
+          if (currentStep !== "phone-type-selection") {
+            setShowTermsModal(false);
+            setCurrentStep("email-onboarding");
+          }
           return;
         }
 
         // Step 4: All pre-DB onboarding complete - now initialize database
         // macOS: Show keychain explanation screen
         // Windows: Auto-initialize database (handled by separate useEffect)
-        if (isMacOS) {
+        // Note: Only auto-advance if not on an earlier step (user may have navigated back)
+        if (isMacOS && currentStep !== "email-onboarding" && currentStep !== "phone-type-selection") {
           setCurrentStep("keychain-explanation");
         }
         return;
@@ -503,6 +546,7 @@ function App() {
         // (These checks require DB access, so only run post-authentication)
         if (!isCheckingEmailOnboarding && !isLoadingPhoneType) {
           if (!hasSelectedPhoneType && !needsDriverSetup) {
+            // Phone type selection is a separate screen
             setCurrentStep("phone-type-selection");
           } else if (needsDriverSetup && isWindows) {
             setCurrentStep("apple-driver-setup");
@@ -535,6 +579,7 @@ function App() {
     needsDriverSetup,
     isWindows,
     isMacOS,
+    currentStep, // Include to ensure checks against currentStep use fresh value
   ]);
 
   useEffect(() => {
@@ -630,7 +675,9 @@ function App() {
     if (pendingOAuthData && !isAuthenticated) {
       setSelectedPhoneType("iphone");
       setPendingOnboardingData((prev: PendingOnboardingData) => ({ ...prev, phoneType: "iphone" }));
-      // Navigation will be handled by useEffect
+      // Explicitly navigate to email onboarding (can't rely on useEffect
+      // when emailConnected might already be true from previous step)
+      setCurrentStep("email-onboarding");
       return;
     }
 
@@ -647,13 +694,15 @@ function App() {
       const result = await userApi.setPhoneType(currentUser.id, "iphone");
       if (result.success) {
         setSelectedPhoneType("iphone");
+        setHasSelectedPhoneType(true);
         // On Windows, show Apple driver setup before continuing
         // On macOS, drivers are bundled with the OS
         if (isWindows) {
           setCurrentStep("apple-driver-setup");
         } else {
-          setHasSelectedPhoneType(true);
-          // Continue to email onboarding (flow will be handled by useEffect)
+          // Explicitly navigate to email onboarding (can't rely on useEffect
+          // when hasSelectedPhoneType is already true from previous session)
+          setCurrentStep("email-onboarding");
         }
       } else {
         console.error("[App] Failed to save phone type:", result.error);
@@ -667,7 +716,8 @@ function App() {
   const handleAppleDriverSetupComplete = (): void => {
     setNeedsDriverSetup(false);
     setHasSelectedPhoneType(true);
-    // Continue to email onboarding (flow will be handled by useEffect)
+    // Explicitly navigate to email onboarding
+    setCurrentStep("email-onboarding");
   };
 
   // Handle Apple driver setup skip (Windows only)
@@ -675,7 +725,8 @@ function App() {
     // User chose to skip - they can set up drivers later
     setNeedsDriverSetup(false);
     setHasSelectedPhoneType(true);
-    // Continue to email onboarding (flow will be handled by useEffect)
+    // Explicitly navigate to email onboarding
+    setCurrentStep("email-onboarding");
   };
 
   const handleSelectAndroid = (): void => {
@@ -685,8 +736,9 @@ function App() {
   };
 
   const handleAndroidGoBack = (): void => {
-    // Go back to phone type selection
+    // Go back to phone type selection screen
     setSelectedPhoneType(null);
+    setPendingOnboardingData((prev: PendingOnboardingData) => ({ ...prev, phoneType: null }));
     setCurrentStep("phone-type-selection");
   };
 
@@ -694,7 +746,8 @@ function App() {
     // PRE-DB FLOW: Store in memory
     if (pendingOAuthData && !isAuthenticated) {
       setPendingOnboardingData((prev: PendingOnboardingData) => ({ ...prev, phoneType: "android" }));
-      // Navigation will be handled by useEffect
+      // Explicitly navigate to email onboarding
+      setCurrentStep("email-onboarding");
       return;
     }
 
@@ -712,7 +765,8 @@ function App() {
       if (result.success) {
         setHasSelectedPhoneType(true);
         // selectedPhoneType is already 'android' from handleSelectAndroid
-        // Continue to email onboarding (flow will be handled by useEffect)
+        // Explicitly navigate to email onboarding
+        setCurrentStep("email-onboarding");
       } else {
         console.error("[App] Failed to save phone type:", result.error);
       }
@@ -751,6 +805,15 @@ function App() {
     } catch (error) {
       console.error("[App] Error saving phone type:", error);
     }
+  };
+
+  // Back navigation handlers
+  const handleEmailOnboardingBack = (): void => {
+    setCurrentStep("phone-type-selection");
+  };
+
+  const handleKeychainBack = (): void => {
+    setCurrentStep("email-onboarding");
   };
 
   const handleLogout = async (): Promise<void> => {
@@ -833,6 +896,25 @@ function App() {
                   setHasEmailConnected(pendingOnboardingData.emailProvider !== null);
                 } catch (emailError) {
                   console.error("[App] Failed to persist email onboarding:", emailError);
+                }
+              }
+
+              // Persist pending email tokens to database (pre-DB email connection)
+              if (pendingEmailTokens) {
+                try {
+                  console.log("[App] Persisting pending email tokens for:", pendingEmailTokens.email);
+                  await window.api.auth.savePendingMailboxTokens({
+                    userId,
+                    provider: pendingEmailTokens.provider,
+                    email: pendingEmailTokens.email,
+                    tokens: pendingEmailTokens.tokens,
+                  });
+                  setHasEmailConnected(true);
+                  setHasCompletedEmailOnboarding(true);
+                  setPendingEmailTokens(null);
+                  console.log("[App] Email tokens persisted successfully");
+                } catch (tokenError) {
+                  console.error("[App] Failed to persist email tokens:", tokenError);
                 }
               }
 
@@ -937,15 +1019,24 @@ function App() {
     }
   };
 
-  const handleEmailOnboardingComplete = async () => {
+  const handleEmailOnboardingComplete = async (
+    emailTokens?: PendingEmailTokens,
+  ) => {
     // PRE-DB FLOW: Store in memory, then proceed to keychain/DB init
     if (pendingOAuthData && !isAuthenticated) {
+      // Store pending email tokens if provided
+      if (emailTokens) {
+        setPendingEmailTokens(emailTokens);
+      }
       setPendingOnboardingData((prev: PendingOnboardingData) => ({
         ...prev,
-        emailConnected: true,
-        emailProvider: pendingOAuthData.provider,
+        emailConnected: !!emailTokens,
+        emailProvider: emailTokens?.provider || null,
       }));
-      // Navigation will be handled by useEffect - will show keychain-explanation (Mac) or auto-init DB (Windows)
+      // Explicitly navigate to keychain (macOS) or let Windows auto-init
+      if (isMacOS) {
+        setCurrentStep("keychain-explanation");
+      }
       return;
     }
 
@@ -967,7 +1058,10 @@ function App() {
         ...prev,
         emailConnected: true, // Allow proceeding, but emailProvider stays null
       }));
-      // Navigation will be handled by useEffect
+      // Explicitly navigate to keychain (macOS) or let Windows auto-init
+      if (isMacOS) {
+        setCurrentStep("keychain-explanation");
+      }
       return;
     }
 
@@ -1215,6 +1309,7 @@ function App() {
         {currentStep === "keychain-explanation" && isMacOS && (
           <KeychainExplanation
             onContinue={handleKeychainExplanationContinue}
+            onBack={handleKeychainBack}
             isLoading={isInitializingDatabase}
             hasPendingLogin={!!pendingOAuthData}
             skipExplanation={skipKeychainExplanation}
@@ -1225,7 +1320,7 @@ function App() {
           <PhoneTypeSelection
             onSelectIPhone={handleSelectIPhone}
             onSelectAndroid={handleSelectAndroid}
-            selectedType={selectedPhoneType}
+            selectedType={selectedPhoneType || pendingOnboardingData.phoneType}
           />
         )}
 
@@ -1254,12 +1349,14 @@ function App() {
                   | "google"
                   | "microsoft"
               }
-              selectedPhoneType={
-                selectedPhoneType || pendingOnboardingData.phoneType
-              }
-              onPhoneTypeChange={handlePhoneTypeChange}
               onComplete={handleEmailOnboardingComplete}
               onSkip={handleEmailOnboardingSkip}
+              onBack={handleEmailOnboardingBack}
+              isPreDbFlow={!!pendingOAuthData && !isAuthenticated}
+              emailHint={
+                pendingOAuthData?.userInfo.email || currentUser?.email
+              }
+              existingPendingTokens={pendingEmailTokens}
             />
           )}
 
