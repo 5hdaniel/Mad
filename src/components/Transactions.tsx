@@ -292,7 +292,7 @@ function Transactions({ userId, provider, onClose }: TransactionsProps) {
 
     setIsBulkDeleting(true);
     try {
-      const result = await window.api.transactions.bulkDelete(
+      const result = await (window.api.transactions as any).bulkDelete(
         Array.from(selectedIds),
       );
 
@@ -373,7 +373,7 @@ function Transactions({ userId, provider, onClose }: TransactionsProps) {
 
     setIsBulkUpdating(true);
     try {
-      const result = await window.api.transactions.bulkUpdateStatus(
+      const result = await (window.api.transactions as any).bulkUpdateStatus(
         Array.from(selectedIds),
         status,
       );
