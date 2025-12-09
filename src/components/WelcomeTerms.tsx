@@ -1,8 +1,10 @@
 import React, { useState } from "react";
-import type { User } from "../../electron/types/models";
 
 interface WelcomeTermsProps {
-  user: User;
+  user: {
+    display_name?: string;
+    email?: string;
+  };
   onAccept: () => Promise<void>;
   onDecline: () => void;
 }
