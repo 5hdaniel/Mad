@@ -93,16 +93,20 @@ export function AppModals({ app }: AppModalsProps) {
 
       {/* Transactions View */}
       {modalState.showTransactions && currentUser && authProvider && (
-        <Transactions
-          userId={currentUser.id}
-          provider={authProvider}
-          onClose={closeTransactions}
-        />
+        <div className="fixed inset-0 z-[60]">
+          <Transactions
+            userId={currentUser.id}
+            provider={authProvider}
+            onClose={closeTransactions}
+          />
+        </div>
       )}
 
       {/* Contacts View */}
       {modalState.showContacts && currentUser && (
-        <Contacts userId={currentUser.id} onClose={closeContacts} />
+        <div className="fixed inset-0 z-[60]">
+          <Contacts userId={currentUser.id} onClose={closeContacts} />
+        </div>
       )}
 
       {/* Welcome Terms Modal (New Users Only) */}
