@@ -64,9 +64,8 @@ function EmailOnboardingScreen({
     google: null,
     microsoft: null,
   });
-  const [loadingConnections, setLoadingConnections] = useState<boolean>(
-    !isPreDbFlow,
-  );
+  const [loadingConnections, setLoadingConnections] =
+    useState<boolean>(!isPreDbFlow);
   const [connectingProvider, setConnectingProvider] = useState<string | null>(
     null,
   );
@@ -148,9 +147,8 @@ function EmailOnboardingScreen({
       });
 
       // Start the pre-DB connection flow
-      const result = await window.api.auth.googleConnectMailboxPending(
-        emailHint,
-      );
+      const result =
+        await window.api.auth.googleConnectMailboxPending(emailHint);
       if (!result.success) {
         console.error(
           "[EmailOnboarding] Failed to start Google pending connection:",
@@ -208,9 +206,8 @@ function EmailOnboardingScreen({
       });
 
       // Start the pre-DB connection flow
-      const result = await window.api.auth.microsoftConnectMailboxPending(
-        emailHint,
-      );
+      const result =
+        await window.api.auth.microsoftConnectMailboxPending(emailHint);
       if (!result.success) {
         console.error(
           "[EmailOnboarding] Failed to start Microsoft pending connection:",

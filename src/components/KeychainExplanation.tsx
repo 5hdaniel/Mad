@@ -171,7 +171,8 @@ function KeychainExplanation({
         {isLoading ? (
           <div className="text-center py-4">
             <p className="text-gray-500 text-sm">
-              A system dialog should appear. If you don't see it, check behind this window.
+              A system dialog should appear. If you don't see it, check behind
+              this window.
             </p>
           </div>
         ) : (
@@ -194,8 +195,8 @@ function KeychainExplanation({
                   />
                 </svg>
                 <p className="text-sm text-blue-700">
-                  Click <strong>"Always Allow"</strong> on the system dialog
-                  to avoid entering your password each time.
+                  Click <strong>"Always Allow"</strong> on the system dialog to
+                  avoid entering your password each time.
                 </p>
               </div>
             </div>

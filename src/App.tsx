@@ -388,7 +388,10 @@ function App() {
                         phoneType: "iphone" | "android",
                       ) => Promise<{ success: boolean; error?: string }>;
                     };
-                    await userApi.setPhoneType(userId, pendingOnboardingData.phoneType);
+                    await userApi.setPhoneType(
+                      userId,
+                      pendingOnboardingData.phoneType,
+                    );
                     setHasSelectedPhoneType(true);
 
                     // Check if Windows + iPhone needs driver setup
@@ -398,33 +401,48 @@ function App() {
                       if (drivers) {
                         try {
                           const driverStatus = await drivers.checkApple();
-                          if (!driverStatus.installed || !driverStatus.serviceRunning) {
+                          if (
+                            !driverStatus.installed ||
+                            !driverStatus.serviceRunning
+                          ) {
                             setNeedsDriverSetup(true);
                           }
                         } catch (driverError) {
-                          console.error("[App] Failed to check driver status:", driverError);
+                          console.error(
+                            "[App] Failed to check driver status:",
+                            driverError,
+                          );
                           setNeedsDriverSetup(true);
                         }
                       }
                     }
                   } catch (phoneError) {
-                    console.error("[App] Failed to persist phone type:", phoneError);
+                    console.error(
+                      "[App] Failed to persist phone type:",
+                      phoneError,
+                    );
                   }
                 }
 
                 // Mark email onboarding as complete
                 if (pendingOnboardingData.emailConnected) {
                   try {
-                    const authApi = window.api.auth as typeof window.api.auth & {
+                    const authApi = window.api
+                      .auth as typeof window.api.auth & {
                       completeEmailOnboarding: (
                         userId: string,
                       ) => Promise<{ success: boolean; error?: string }>;
                     };
                     await authApi.completeEmailOnboarding(userId);
                     setHasCompletedEmailOnboarding(true);
-                    setHasEmailConnected(pendingOnboardingData.emailProvider !== null);
+                    setHasEmailConnected(
+                      pendingOnboardingData.emailProvider !== null,
+                    );
                   } catch (emailError) {
-                    console.error("[App] Failed to persist email onboarding:", emailError);
+                    console.error(
+                      "[App] Failed to persist email onboarding:",
+                      emailError,
+                    );
                   }
                 }
 
@@ -441,7 +459,9 @@ function App() {
                       email: pendingEmailTokens.email,
                       tokens: pendingEmailTokens.tokens,
                     });
-                    console.log("[App] Pending email tokens persisted successfully");
+                    console.log(
+                      "[App] Pending email tokens persisted successfully",
+                    );
                     // Clear pending tokens after successful save
                     setPendingEmailTokens(null);
                   } catch (tokenError) {
@@ -497,10 +517,7 @@ function App() {
   // Handle auth state changes to update navigation
   // NEW FLOW: Login → Terms → Phone → Email → Keychain/DB → Permissions → Dashboard
   useEffect(() => {
-    if (
-      !isAuthLoading &&
-      !isCheckingSecureStorage
-    ) {
+    if (!isAuthLoading && !isCheckingSecureStorage) {
       // PRE-DB FLOW: OAuth succeeded but database not initialized yet
       // Collect onboarding data in memory, then initialize DB at the end
       if (pendingOAuthData && !isAuthenticated) {
@@ -534,7 +551,11 @@ function App() {
         // macOS: Show keychain explanation screen
         // Windows: Auto-initialize database (handled by separate useEffect)
         // Note: Only auto-advance if not on an earlier step (user may have navigated back)
-        if (isMacOS && currentStep !== "email-onboarding" && currentStep !== "phone-type-selection") {
+        if (
+          isMacOS &&
+          currentStep !== "email-onboarding" &&
+          currentStep !== "phone-type-selection"
+        ) {
           setCurrentStep("keychain-explanation");
         }
         return;
@@ -637,10 +658,16 @@ function App() {
         );
         if (result.success) {
           // Update pending onboarding data
-          setPendingOnboardingData((prev: PendingOnboardingData) => ({ ...prev, termsAccepted: true }));
+          setPendingOnboardingData((prev: PendingOnboardingData) => ({
+            ...prev,
+            termsAccepted: true,
+          }));
           setShowTermsModal(false);
         } else {
-          console.error("[App] Failed to save terms to Supabase:", result.error);
+          console.error(
+            "[App] Failed to save terms to Supabase:",
+            result.error,
+          );
         }
         return;
       }
@@ -674,7 +701,10 @@ function App() {
     // PRE-DB FLOW: Store in memory, will be persisted after DB init
     if (pendingOAuthData && !isAuthenticated) {
       setSelectedPhoneType("iphone");
-      setPendingOnboardingData((prev: PendingOnboardingData) => ({ ...prev, phoneType: "iphone" }));
+      setPendingOnboardingData((prev: PendingOnboardingData) => ({
+        ...prev,
+        phoneType: "iphone",
+      }));
       // Explicitly navigate to email onboarding (can't rely on useEffect
       // when emailConnected might already be true from previous step)
       setCurrentStep("email-onboarding");
@@ -738,14 +768,20 @@ function App() {
   const handleAndroidGoBack = (): void => {
     // Go back to phone type selection screen
     setSelectedPhoneType(null);
-    setPendingOnboardingData((prev: PendingOnboardingData) => ({ ...prev, phoneType: null }));
+    setPendingOnboardingData((prev: PendingOnboardingData) => ({
+      ...prev,
+      phoneType: null,
+    }));
     setCurrentStep("phone-type-selection");
   };
 
   const handleAndroidContinueWithEmail = async (): Promise<void> => {
     // PRE-DB FLOW: Store in memory
     if (pendingOAuthData && !isAuthenticated) {
-      setPendingOnboardingData((prev: PendingOnboardingData) => ({ ...prev, phoneType: "android" }));
+      setPendingOnboardingData((prev: PendingOnboardingData) => ({
+        ...prev,
+        phoneType: "android",
+      }));
       // Explicitly navigate to email onboarding
       setCurrentStep("email-onboarding");
       return;
@@ -782,7 +818,10 @@ function App() {
     // PRE-DB FLOW: Store in memory
     if (pendingOAuthData && !isAuthenticated) {
       setSelectedPhoneType(phoneType);
-      setPendingOnboardingData((prev: PendingOnboardingData) => ({ ...prev, phoneType }));
+      setPendingOnboardingData((prev: PendingOnboardingData) => ({
+        ...prev,
+        phoneType,
+      }));
       return;
     }
 
@@ -876,10 +915,16 @@ function App() {
                       phoneType: "iphone" | "android",
                     ) => Promise<{ success: boolean; error?: string }>;
                   };
-                  await userApi.setPhoneType(userId, pendingOnboardingData.phoneType);
+                  await userApi.setPhoneType(
+                    userId,
+                    pendingOnboardingData.phoneType,
+                  );
                   setHasSelectedPhoneType(true);
                 } catch (phoneError) {
-                  console.error("[App] Failed to persist phone type:", phoneError);
+                  console.error(
+                    "[App] Failed to persist phone type:",
+                    phoneError,
+                  );
                 }
               }
 
@@ -893,16 +938,24 @@ function App() {
                   };
                   await authApi.completeEmailOnboarding(userId);
                   setHasCompletedEmailOnboarding(true);
-                  setHasEmailConnected(pendingOnboardingData.emailProvider !== null);
+                  setHasEmailConnected(
+                    pendingOnboardingData.emailProvider !== null,
+                  );
                 } catch (emailError) {
-                  console.error("[App] Failed to persist email onboarding:", emailError);
+                  console.error(
+                    "[App] Failed to persist email onboarding:",
+                    emailError,
+                  );
                 }
               }
 
               // Persist pending email tokens to database (pre-DB email connection)
               if (pendingEmailTokens) {
                 try {
-                  console.log("[App] Persisting pending email tokens for:", pendingEmailTokens.email);
+                  console.log(
+                    "[App] Persisting pending email tokens for:",
+                    pendingEmailTokens.email,
+                  );
                   await window.api.auth.savePendingMailboxTokens({
                     userId,
                     provider: pendingEmailTokens.provider,
@@ -914,7 +967,10 @@ function App() {
                   setPendingEmailTokens(null);
                   console.log("[App] Email tokens persisted successfully");
                 } catch (tokenError) {
-                  console.error("[App] Failed to persist email tokens:", tokenError);
+                  console.error(
+                    "[App] Failed to persist email tokens:",
+                    tokenError,
+                  );
                 }
               }
 
@@ -1353,9 +1409,7 @@ function App() {
               onSkip={handleEmailOnboardingSkip}
               onBack={handleEmailOnboardingBack}
               isPreDbFlow={!!pendingOAuthData && !isAuthenticated}
-              emailHint={
-                pendingOAuthData?.userInfo.email || currentUser?.email
-              }
+              emailHint={pendingOAuthData?.userInfo.email || currentUser?.email}
               existingPendingTokens={pendingEmailTokens}
             />
           )}

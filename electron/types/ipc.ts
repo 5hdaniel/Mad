@@ -645,7 +645,7 @@ export interface WindowApi {
     ) => Promise<{ success: boolean; error?: string }>;
     exportEnhanced: (
       transactionId: string,
-      format: string,
+      options?: { exportFormat?: string; includeContacts?: boolean; includeEmails?: boolean; includeSummary?: boolean },
     ) => Promise<{ success: boolean; path?: string; error?: string }>;
     assignContact: (
       transactionId: string,
@@ -663,6 +663,21 @@ export interface WindowApi {
       communicationId: string,
       reason?: string,
     ) => Promise<{ success: boolean; error?: string }>;
+    bulkDelete: (transactionIds: string[]) => Promise<{
+      success: boolean;
+      deletedCount?: number;
+      errors?: string[];
+      error?: string;
+    }>;
+    bulkUpdateStatus: (
+      transactionIds: string[],
+      status: string,
+    ) => Promise<{
+      success: boolean;
+      updatedCount?: number;
+      errors?: string[];
+      error?: string;
+    }>;
   };
 
   // Address lookup methods

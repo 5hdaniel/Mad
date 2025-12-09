@@ -41,7 +41,9 @@ export function BulkActionBar({
       <div className="bg-gray-900 text-white rounded-xl shadow-2xl px-6 py-4 flex items-center gap-4">
         {/* Selection Info */}
         <div className="flex items-center gap-3 pr-4 border-r border-gray-700">
-          <div className={`flex items-center justify-center w-10 h-10 rounded-full ${hasSelection ? 'bg-blue-500' : 'bg-gray-600'}`}>
+          <div
+            className={`flex items-center justify-center w-10 h-10 rounded-full ${hasSelection ? "bg-blue-500" : "bg-gray-600"}`}
+          >
             <span className="font-bold text-lg">{selectedCount}</span>
           </div>
           <div className="text-sm whitespace-nowrap text-gray-400">
@@ -301,7 +303,9 @@ export function BulkDeleteConfirmModal({
                 Deleting...
               </>
             ) : (
-              <>Delete {selectedCount} Transaction{selectedCount > 1 ? "s" : ""}</>
+              <>
+                Delete {selectedCount} Transaction{selectedCount > 1 ? "s" : ""}
+              </>
             )}
           </button>
         </div>
@@ -358,7 +362,8 @@ export function BulkExportModal({
         </div>
 
         <p className="text-sm text-gray-600 mb-4">
-          Select an export format for the selected transactions. Each transaction will be exported as a separate file.
+          Select an export format for the selected transactions. Each
+          transaction will be exported as a separate file.
         </p>
 
         <div className="mb-6">
@@ -432,7 +437,9 @@ export function BulkExportModal({
                 Exporting...
               </>
             ) : (
-              <>Export {selectedCount} Transaction{selectedCount > 1 ? "s" : ""}</>
+              <>
+                Export {selectedCount} Transaction{selectedCount > 1 ? "s" : ""}
+              </>
             )}
           </button>
         </div>

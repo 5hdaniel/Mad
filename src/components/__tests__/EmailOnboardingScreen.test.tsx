@@ -291,9 +291,7 @@ describe("EmailOnboardingScreen", () => {
       });
       await userEvent.click(connectButton);
 
-      expect(
-        window.api.auth.googleConnectMailboxPending,
-      ).toHaveBeenCalled();
+      expect(window.api.auth.googleConnectMailboxPending).toHaveBeenCalled();
     });
 
     it("should restore pending tokens when navigating back", () => {
@@ -320,7 +318,9 @@ describe("EmailOnboardingScreen", () => {
       );
 
       // Should show connected state for Gmail
-      expect(screen.getByText(/Connected: test@gmail.com/i)).toBeInTheDocument();
+      expect(
+        screen.getByText(/Connected: test@gmail.com/i),
+      ).toBeInTheDocument();
     });
   });
 
@@ -401,7 +401,9 @@ describe("EmailOnboardingScreen", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByText(/Connected: user@gmail.com/i)).toBeInTheDocument();
+        expect(
+          screen.getByText(/Connected: user@gmail.com/i),
+        ).toBeInTheDocument();
       });
     });
 
