@@ -640,6 +640,10 @@ export interface WindowApi {
       transactionId: string,
       contactId: string,
     ) => Promise<{ success: boolean; error?: string }>;
+    unlinkCommunication: (
+      communicationId: string,
+      reason?: string,
+    ) => Promise<{ success: boolean; error?: string }>;
   };
 
   // Address lookup methods
