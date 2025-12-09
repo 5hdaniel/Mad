@@ -26,6 +26,8 @@ export interface PendingOAuthData {
     subscription_tier?: string;
     trial_ends_at?: string;
     email?: string;
+    terms_accepted_at?: string;
+    privacy_policy_accepted_at?: string;
   };
   subscription?: { tier?: string; status?: string; trial_ends_at?: string };
 }

@@ -114,6 +114,15 @@ contextBridge.exposeInMainWorld("api", {
       ipcRenderer.invoke("auth:accept-terms", userId),
 
     /**
+     * Accept terms directly to Supabase (pre-DB onboarding flow)
+     * Used when user accepts terms before local database is initialized
+     * @param {string} userId - User ID accepting terms
+     * @returns {Promise<{success: boolean, error?: string}>} Acceptance result
+     */
+    acceptTermsToSupabase: (userId: string) =>
+      ipcRenderer.invoke("auth:accept-terms-to-supabase", userId),
+
+    /**
      * Marks email onboarding as completed for a user
      * @param {string} userId - User ID completing email onboarding
      * @returns {Promise<{success: boolean, error?: string}>} Completion result

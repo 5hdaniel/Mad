@@ -7,11 +7,11 @@ interface KeychainExplanationProps {
   skipExplanation?: boolean; // True when user previously checked "Don't show again"
 }
 
-// Setup steps for progress indicator
+// Setup steps for progress indicator - Secure Storage is now step 3 (after Connect Email)
 const SETUP_STEPS = [
-  { id: 1, label: "Sign In" },
-  { id: 2, label: "Secure Storage" },
-  { id: 3, label: "Connect Email" },
+  { id: 1, label: "Phone Type" },
+  { id: 2, label: "Connect Email" },
+  { id: 3, label: "Secure Storage" },
   { id: 4, label: "Permissions" },
 ];
 
@@ -168,7 +168,7 @@ function KeychainExplanation({
       <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
         {/* Progress Indicator */}
         <div className="bg-gray-50 px-6 pt-5 pb-3 border-b border-gray-100">
-          <SetupProgressIndicator currentStep={2} />
+          <SetupProgressIndicator currentStep={3} />
         </div>
 
         {/* Header */}

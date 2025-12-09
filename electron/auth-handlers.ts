@@ -2387,6 +2387,57 @@ export const registerAuthHandlers = (
     },
   );
 
+  // Accept terms directly to Supabase (pre-DB onboarding flow)
+  // Used when user accepts terms before local database is initialized
+  ipcMain.handle(
+    "auth:accept-terms-to-supabase",
+    async (
+      _event,
+      userId: string,
+    ): Promise<{ success: boolean; error?: string }> => {
+      try {
+        // Validate input
+        const validatedUserId = validateUserId(userId)!;
+
+        // Save directly to Supabase (cloud)
+        await supabaseService.syncTermsAcceptance(
+          validatedUserId,
+          CURRENT_TERMS_VERSION,
+          CURRENT_PRIVACY_POLICY_VERSION,
+        );
+
+        await logService.info(
+          "Terms accepted to Supabase (pre-DB flow)",
+          "AuthHandlers",
+          {
+            version: CURRENT_TERMS_VERSION,
+            userId: validatedUserId,
+          },
+        );
+
+        return { success: true };
+      } catch (error) {
+        await logService.error(
+          "Accept terms to Supabase failed",
+          "AuthHandlers",
+          {
+            error: error instanceof Error ? error.message : "Unknown error",
+          },
+        );
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
   // Complete email onboarding
   ipcMain.handle(
     "auth:complete-email-onboarding",

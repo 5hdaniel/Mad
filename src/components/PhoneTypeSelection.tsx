@@ -2,11 +2,11 @@ import React, { useState } from "react";
 import { usePlatform } from "../contexts/PlatformContext";
 
 // Setup steps for progress indicator - platform specific
-// macOS: 4-step flow (Sign In happens before onboarding)
+// macOS: 4-step flow - Secure Storage moved after Connect Email
 const MACOS_SETUP_STEPS = [
   { id: 1, label: "Phone Type" },
-  { id: 2, label: "Secure Storage" },
-  { id: 3, label: "Connect Email" },
+  { id: 2, label: "Connect Email" },
+  { id: 3, label: "Secure Storage" },
   { id: 4, label: "Permissions" },
 ];
 
