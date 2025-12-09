@@ -38,7 +38,9 @@ export interface ErrorProps {
 // ============================================
 
 export interface TransactionListProps
-  extends BaseComponentProps, LoadingProps, ErrorProps {
+  extends BaseComponentProps,
+    LoadingProps,
+    ErrorProps {
   transactions: Transaction[];
   selectedTransactionId?: string;
   onSelectTransaction?: (transaction: Transaction) => void;
@@ -47,7 +49,9 @@ export interface TransactionListProps
 }
 
 export interface TransactionDetailsProps
-  extends BaseComponentProps, LoadingProps, ErrorProps {
+  extends BaseComponentProps,
+    LoadingProps,
+    ErrorProps {
   transaction: Transaction | null;
   contacts?: Contact[];
   communications?: Communication[];
@@ -84,7 +88,9 @@ export interface TransactionCardProps extends BaseComponentProps {
 // ============================================
 
 export interface ContactListProps
-  extends BaseComponentProps, LoadingProps, ErrorProps {
+  extends BaseComponentProps,
+    LoadingProps,
+    ErrorProps {
   contacts: Contact[];
   selectedContactId?: string;
   onSelectContact?: (contact: Contact) => void;
@@ -93,7 +99,9 @@ export interface ContactListProps
 }
 
 export interface ContactDetailsProps
-  extends BaseComponentProps, LoadingProps, ErrorProps {
+  extends BaseComponentProps,
+    LoadingProps,
+    ErrorProps {
   contact: Contact | null;
   transactions?: Transaction[];
   onUpdateContact?: (contactId: string, updates: Partial<Contact>) => void;
@@ -120,7 +128,9 @@ export interface ContactCardProps extends BaseComponentProps {
 // ============================================
 
 export interface ConversationListProps
-  extends BaseComponentProps, LoadingProps, ErrorProps {
+  extends BaseComponentProps,
+    LoadingProps,
+    ErrorProps {
   communications: Communication[];
   selectedCommunicationId?: string;
   onSelectCommunication?: (communication: Communication) => void;

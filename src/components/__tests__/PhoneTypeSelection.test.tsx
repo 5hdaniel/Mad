@@ -68,9 +68,7 @@ describe("PhoneTypeSelection", () => {
         />,
       );
 
-      expect(
-        screen.getByText(/why is this important\?/i),
-      ).toBeInTheDocument();
+      expect(screen.getByText(/why is this important\?/i)).toBeInTheDocument();
     });
 
     it("should show iPhone option", () => {
@@ -109,7 +107,9 @@ describe("PhoneTypeSelection", () => {
         />,
       );
 
-      expect(screen.getByRole("button", { name: /continue/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /continue/i }),
+      ).toBeInTheDocument();
     });
 
     it("should have Continue button disabled when no selection made", () => {
@@ -319,7 +319,9 @@ describe("PhoneTypeSelection", () => {
         />,
       );
 
-      expect(screen.getByRole("button", { name: /continue/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /continue/i }),
+      ).toBeInTheDocument();
     });
   });
 

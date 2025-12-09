@@ -645,7 +645,7 @@ export interface WindowApi {
     ) => Promise<{ success: boolean; error?: string }>;
     exportEnhanced: (
       transactionId: string,
-      format: string,
+      options?: { exportFormat?: string; includeContacts?: boolean; includeEmails?: boolean; includeSummary?: boolean },
     ) => Promise<{ success: boolean; path?: string; error?: string }>;
     assignContact: (
       transactionId: string,

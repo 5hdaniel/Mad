@@ -22,9 +22,9 @@ function PhoneTypeSelection({
   selectedType,
 }: PhoneTypeSelectionProps) {
   // Local selection state - allows changing selection before continuing
-  const [localSelection, setLocalSelection] = useState<"iphone" | "android" | null>(
-    selectedType || null
-  );
+  const [localSelection, setLocalSelection] = useState<
+    "iphone" | "android" | null
+  >(selectedType || null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { isWindows } = usePlatform();
 
@@ -49,7 +49,10 @@ function PhoneTypeSelection({
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-start justify-center pt-12 px-8 pb-8">
       <div className="max-w-lg w-full bg-white rounded-2xl shadow-xl p-8">
         {/* Progress Indicator */}
-        <SetupProgressIndicator currentStep={CURRENT_STEP} isWindows={isWindows} />
+        <SetupProgressIndicator
+          currentStep={CURRENT_STEP}
+          isWindows={isWindows}
+        />
 
         {/* Phone Type Step */}
         <div className="text-center mb-8">

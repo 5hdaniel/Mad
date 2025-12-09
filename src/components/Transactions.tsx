@@ -121,7 +121,9 @@ function Transactions({ userId, provider, onClose }: TransactionsProps) {
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [isBulkExporting, setIsBulkExporting] = useState(false);
   const [isBulkUpdating, setIsBulkUpdating] = useState(false);
-  const [bulkActionSuccess, setBulkActionSuccess] = useState<string | null>(null);
+  const [bulkActionSuccess, setBulkActionSuccess] = useState<string | null>(
+    null,
+  );
   const [selectionMode, setSelectionMode] = useState(false);
 
   useEffect(() => {
@@ -198,7 +200,7 @@ function Transactions({ userId, provider, onClose }: TransactionsProps) {
   const stopScan = async () => {
     try {
       await window.api.transactions.cancelScan(userId);
-      // Clear progress immediately - no need to show "Scan stopped" message
+      // Clear scan progress immediately without showing a message
       setScanProgress(null);
     } catch (err) {
       console.error("Failed to stop scan:", err);
@@ -332,7 +334,7 @@ function Transactions({ userId, provider, onClose }: TransactionsProps) {
         try {
           const result = await window.api.transactions.exportEnhanced(
             transactionId,
-            format,
+            { exportFormat: format },
           );
           if (result.success) {
             successCount++;
@@ -340,9 +342,7 @@ function Transactions({ userId, provider, onClose }: TransactionsProps) {
             errors.push(result.error || `Failed to export transaction`);
           }
         } catch (err) {
-          errors.push(
-            err instanceof Error ? err.message : "Export failed",
-          );
+          errors.push(err instanceof Error ? err.message : "Export failed");
         }
       }
 
@@ -1036,7 +1036,8 @@ function TransactionDetails({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<"details" | "contacts">("details");
   const [unlinkingCommId, setUnlinkingCommId] = useState<string | null>(null);
-  const [showUnlinkConfirm, setShowUnlinkConfirm] = useState<Communication | null>(null);
+  const [showUnlinkConfirm, setShowUnlinkConfirm] =
+    useState<Communication | null>(null);
   const [viewingEmail, setViewingEmail] = useState<Communication | null>(null);
 
   useEffect(() => {
@@ -1063,7 +1064,9 @@ function TransactionDetails({
     }
   };
 
-  const handleUnlinkCommunication = async (comm: Communication): Promise<void> => {
+  const handleUnlinkCommunication = async (
+    comm: Communication,
+  ): Promise<void> => {
     try {
       setUnlinkingCommId(comm.id);
       const result = await window.api.transactions.unlinkCommunication(comm.id);
@@ -1341,13 +1344,38 @@ function TransactionDetails({
                                 title="Remove this email from transaction"
                               >
                                 {unlinkingCommId === comm.id ? (
-                                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                  <svg
+                                    className="w-4 h-4 animate-spin"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <circle
+                                      className="opacity-25"
+                                      cx="12"
+                                      cy="12"
+                                      r="10"
+                                      stroke="currentColor"
+                                      strokeWidth="4"
+                                    ></circle>
+                                    <path
+                                      className="opacity-75"
+                                      fill="currentColor"
+                                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                    ></path>
                                   </svg>
                                 ) : (
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                                  <svg
+                                    className="w-4 h-4"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
+                                    />
                                   </svg>
                                 )}
                               </button>
@@ -1640,9 +1668,24 @@ function TransactionDetails({
               >
                 {unlinkingCommId === showUnlinkConfirm.id ? (
                   <>
-                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    <svg
+                      className="w-4 h-4 animate-spin"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      ></circle>
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
                     </svg>
                     Removing...
                   </>
@@ -1697,8 +1740,12 @@ function TransactionDetails({
             <div className="flex-shrink-0 px-6 py-4 border-b border-gray-200 bg-gray-50">
               <div className="space-y-2">
                 <div className="flex items-start gap-2">
-                  <span className="text-sm font-medium text-gray-500 w-16">From:</span>
-                  <span className="text-sm text-gray-900">{viewingEmail.sender || "Unknown"}</span>
+                  <span className="text-sm font-medium text-gray-500 w-16">
+                    From:
+                  </span>
+                  <span className="text-sm text-gray-900">
+                    {viewingEmail.sender || "Unknown"}
+                  </span>
                 </div>
               </div>
             </div>
@@ -1728,8 +1775,18 @@ function TransactionDetails({
                   }}
                   className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg font-medium transition-all flex items-center gap-2"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
+                    />
                   </svg>
                   Remove from Transaction
                 </button>

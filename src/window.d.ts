@@ -5,6 +5,7 @@
 
 import type { GetConversationsResult } from "./hooks/useConversations";
 import type { iOSDevice, BackupProgress } from "./types/iphone";
+import type { Transaction } from "../electron/types/models";
 
 /**
  * iOS Device information from libimobiledevice
@@ -542,30 +543,143 @@ interface MainAPI {
 
   // Transactions API
   transactions: {
-    getAll: (userId: string) => Promise<{
+    getAll: (
+      userId: string,
+    ) => Promise<{
       success: boolean;
-      transactions?: unknown[];
+      transactions?: Transaction[];
       error?: string;
     }>;
-    scan: (userId: string, options?: Record<string, unknown>) => Promise<{
+    scan: (
+      userId: string,
+      options?: Record<string, unknown>,
+    ) => Promise<{
       success: boolean;
       transactionsFound?: number;
       emailsScanned?: number;
       error?: string;
     }>;
-    cancelScan: (userId: string) => Promise<{ success: boolean; error?: string }>;
-    create: (userId: string, data: unknown) => Promise<{ success: boolean; transaction?: unknown; error?: string }>;
-    update: (transactionId: string, data: unknown) => Promise<{ success: boolean; transaction?: unknown; error?: string }>;
-    delete: (transactionId: string) => Promise<{ success: boolean; error?: string }>;
-    bulkDelete: (transactionIds: string[]) => Promise<{ success: boolean; deletedCount?: number; error?: string }>;
-    bulkUpdateStatus: (transactionIds: string[], status: string) => Promise<{ success: boolean; updatedCount?: number; error?: string }>;
-    exportEnhanced: (options: unknown) => Promise<{ success: boolean; exportPath?: string; error?: string }>;
-    get: (transactionId: string) => Promise<{ success: boolean; transaction?: unknown; error?: string }>;
-    getCommunications: (transactionId: string) => Promise<{ success: boolean; communications?: unknown[]; error?: string }>;
-    getContacts: (transactionId: string) => Promise<{ success: boolean; contacts?: unknown[]; error?: string }>;
-    unlinkCommunication: (communicationId: string, reason?: string) => Promise<{ success: boolean; error?: string }>;
+    cancelScan: (
+      userId: string,
+    ) => Promise<{ success: boolean; cancelled?: boolean; error?: string }>;
+    create: (
+      userId: string,
+      transactionData: Record<string, unknown>,
+    ) => Promise<{
+      success: boolean;
+      transaction?: Record<string, unknown>;
+      error?: string;
+    }>;
+    createAudited: (
+      userId: string,
+      transactionData: Record<string, unknown>,
+    ) => Promise<{
+      success: boolean;
+      transaction?: Record<string, unknown>;
+      error?: string;
+    }>;
+    get: (transactionId: string) => Promise<{
+      success: boolean;
+      transaction?: Record<string, unknown>;
+      error?: string;
+    }>;
+    getDetails: (transactionId: string) => Promise<{
+      success: boolean;
+      transaction?: Record<string, unknown>;
+      error?: string;
+    }>;
+    getWithContacts: (transactionId: string) => Promise<{
+      success: boolean;
+      transaction?: Record<string, unknown>;
+      contacts?: Array<Record<string, unknown>>;
+      error?: string;
+    }>;
+    getCommunications: (transactionId: string) => Promise<{
+      success: boolean;
+      communications?: unknown[];
+      error?: string;
+    }>;
+    getContacts: (transactionId: string) => Promise<{
+      success: boolean;
+      contacts?: unknown[];
+      error?: string;
+    }>;
+    update: (
+      transactionId: string,
+      updates: Record<string, unknown>,
+    ) => Promise<{
+      success: boolean;
+      transaction?: Record<string, unknown>;
+      error?: string;
+    }>;
+    delete: (transactionId: string) => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
+    assignContact: (
+      transactionId: string,
+      contactId: string,
+      role: string,
+      roleCategory: string,
+      isPrimary: boolean,
+      notes?: string,
+    ) => Promise<{ success: boolean; error?: string }>;
+    removeContact: (
+      transactionId: string,
+      contactId: string,
+    ) => Promise<{ success: boolean; error?: string }>;
+    unlinkCommunication: (
+      communicationId: string,
+      reason?: string,
+    ) => Promise<{ success: boolean; error?: string }>;
+    reanalyze: (
+      userId: string,
+      provider: string,
+      propertyAddress: string,
+      dateRange: { start: string; end: string },
+    ) => Promise<{
+      success: boolean;
+      newCount?: number;
+      updatedCount?: number;
+      error?: string;
+    }>;
+    exportPDF: (
+      transactionId: string,
+      outputPath: string,
+    ) => Promise<{
+      success: boolean;
+      filePath?: string;
+      error?: string;
+    }>;
+    exportEnhanced: (
+      transactionId: string,
+      options: Record<string, unknown>,
+    ) => Promise<{
+      success: boolean;
+      filePath?: string;
+      error?: string;
+    }>;
+    bulkDelete: (transactionIds: string[]) => Promise<{
+      success: boolean;
+      deletedCount?: number;
+      errors?: string[];
+      error?: string;
+    }>;
+    bulkUpdateStatus: (
+      transactionIds: string[],
+      status: string,
+    ) => Promise<{
+      success: boolean;
+      updatedCount?: number;
+      errors?: string[];
+      error?: string;
+    }>;
   };
-  onTransactionScanProgress: (callback: (progress: unknown) => void) => () => void;
+
+  // Transaction scan progress event
+  onTransactionScanProgress: (
+    callback: (progress: { step: string; message: string }) => void,
+  ) => () => void;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [key: string]: any; // Allow other properties for backwards compatibility

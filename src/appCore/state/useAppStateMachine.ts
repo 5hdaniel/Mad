@@ -163,6 +163,7 @@ export function useAppStateMachine(): AppStateMachine {
   // ============================================
 
   // Handle auth state changes to update navigation
+  // IMPORTANT: Guards prevent infinite loops by only updating state when values differ
   useEffect(() => {
     if (!isAuthLoading && !isCheckingSecureStorage) {
       // PRE-DB FLOW: OAuth succeeded but database not initialized yet
@@ -171,23 +172,26 @@ export function useAppStateMachine(): AppStateMachine {
 
         // Step 1: New users must accept terms first (shows as modal)
         if (isNewUser && !pendingOnboardingData.termsAccepted) {
-          setShowTermsModal(true);
-          setCurrentStep("phone-type-selection");
+          if (!showTermsModal) setShowTermsModal(true);
+          if (currentStep !== "phone-type-selection")
+            setCurrentStep("phone-type-selection");
           return;
         }
 
         // Step 2: Phone type selection (separate screen)
         if (!pendingOnboardingData.phoneType) {
-          setShowTermsModal(false);
-          setCurrentStep("phone-type-selection");
+          if (showTermsModal) setShowTermsModal(false);
+          if (currentStep !== "phone-type-selection")
+            setCurrentStep("phone-type-selection");
           return;
         }
 
         // Step 3: Email onboarding (after phone type is selected)
         if (!pendingOnboardingData.emailConnected) {
           if (currentStep !== "phone-type-selection") {
-            setShowTermsModal(false);
-            setCurrentStep("email-onboarding");
+            if (showTermsModal) setShowTermsModal(false);
+            if (currentStep !== "email-onboarding")
+              setCurrentStep("email-onboarding");
           }
           return;
         }
@@ -196,7 +200,8 @@ export function useAppStateMachine(): AppStateMachine {
         if (
           isMacOS &&
           currentStep !== "email-onboarding" &&
-          currentStep !== "phone-type-selection"
+          currentStep !== "phone-type-selection" &&
+          currentStep !== "keychain-explanation"
         ) {
           setCurrentStep("keychain-explanation");
         }
@@ -207,19 +212,22 @@ export function useAppStateMachine(): AppStateMachine {
       if (isAuthenticated && !needsTermsAcceptance) {
         if (!isCheckingEmailOnboarding && !isLoadingPhoneType) {
           if (!hasSelectedPhoneType && !needsDriverSetup) {
-            setCurrentStep("phone-type-selection");
+            if (currentStep !== "phone-type-selection")
+              setCurrentStep("phone-type-selection");
           } else if (needsDriverSetup && isWindows) {
-            setCurrentStep("apple-driver-setup");
+            if (currentStep !== "apple-driver-setup")
+              setCurrentStep("apple-driver-setup");
           } else if (!hasCompletedEmailOnboarding || !hasEmailConnected) {
-            setCurrentStep("email-onboarding");
+            if (currentStep !== "email-onboarding")
+              setCurrentStep("email-onboarding");
           } else if (hasPermissions) {
-            setCurrentStep("dashboard");
+            if (currentStep !== "dashboard") setCurrentStep("dashboard");
           } else {
-            setCurrentStep("permissions");
+            if (currentStep !== "permissions") setCurrentStep("permissions");
           }
         }
       } else if (!isAuthenticated && !pendingOAuthData) {
-        setCurrentStep("login");
+        if (currentStep !== "login") setCurrentStep("login");
       }
     }
   }, [
@@ -239,6 +247,7 @@ export function useAppStateMachine(): AppStateMachine {
     isWindows,
     isMacOS,
     currentStep,
+    showTermsModal,
   ]);
 
   // Initial permission and app location check
