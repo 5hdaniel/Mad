@@ -14,7 +14,6 @@ import Settings from "./components/Settings";
 import Transactions from "./components/Transactions";
 import Contacts from "./components/Contacts";
 import WelcomeTerms from "./components/WelcomeTerms";
-import SecureStorageSetup from "./components/SecureStorageSetup";
 import KeychainExplanation from "./components/KeychainExplanation";
 import Dashboard from "./components/Dashboard";
 import AuditTransactionModal from "./components/AuditTransactionModal";
@@ -30,7 +29,6 @@ import type { Subscription } from "../electron/types/models";
 type AppStep =
   | "loading"
   | "login"
-  | "secure-storage-setup"
   | "keychain-explanation"
   | "phone-type-selection"
   | "android-coming-soon"
@@ -604,15 +602,6 @@ function App() {
     setCurrentStep("login");
   };
 
-  const handleSecureStorageComplete = () => {
-    // Mark secure storage as set up and database as initialized
-    // Note: Database is now initialized inside initializeSecureStorage handler
-    // to consolidate keychain prompts into a single operation
-    setHasSecureStorageSetup(true);
-    setIsDatabaseInitialized(true);
-    // Navigation will be handled by useEffect - will go to login (new flow) or email-onboarding
-  };
-
   // Handler for keychain explanation screen
   // This is shown in two scenarios:
   // 1. Returning user: Before login, to authorize keychain access
@@ -687,23 +676,6 @@ function App() {
     } finally {
       setIsInitializingDatabase(false);
     }
-  };
-
-  const handleSecureStorageRetry = () => {
-    // Re-check if key store exists (triggers a fresh check after user may have authorized keychain)
-    setIsCheckingSecureStorage(true);
-    window.api.system
-      .hasEncryptionKeyStore()
-      .then((result) => {
-        setHasSecureStorageSetup(result.hasKeyStore);
-      })
-      .catch((error) => {
-        console.error("[App] Failed to re-check key store existence:", error);
-        setHasSecureStorageSetup(false);
-      })
-      .finally(() => {
-        setIsCheckingSecureStorage(false);
-      });
   };
 
   const checkPermissions = async (): Promise<void> => {
@@ -864,8 +836,6 @@ function App() {
     switch (currentStep) {
       case "login":
         return "Welcome";
-      case "secure-storage-setup":
-        return "Secure Storage";
       case "email-onboarding":
         return "Connect Email";
       case "microsoft-login":
@@ -1018,13 +988,6 @@ function App() {
             onLoginPending={handleLoginPending}
           />
         ) : null}
-
-        {currentStep === "secure-storage-setup" && (
-          <SecureStorageSetup
-            onComplete={handleSecureStorageComplete}
-            onRetry={handleSecureStorageRetry}
-          />
-        )}
 
         {currentStep === "keychain-explanation" && isMacOS && (
           <KeychainExplanation

@@ -188,8 +188,7 @@ app.whenReady().then(async () => {
   setupContentSecurityPolicy();
 
   // Database initialization is now ALWAYS deferred to the renderer process
-  // This allows us to show an explanation screen before the keychain prompt
-  // for both new users (SecureStorageSetup) and returning users (KeychainExplanation)
+  // This allows us to show an explanation screen (KeychainExplanation) before the keychain prompt
   //
   // The renderer will call 'system:initialize-secure-storage' which handles:
   // 1. Database initialization (triggers keychain prompt)
