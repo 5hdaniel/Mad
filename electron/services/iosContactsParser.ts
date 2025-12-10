@@ -15,8 +15,8 @@ import path from "path";
 import log from "electron-log";
 import type {
   iOSContact,
-  ContactPhone,
-  ContactEmail,
+  iOSContactPhone,
+  iOSContactEmail,
   ContactLookupResult,
   RawContactRow,
   RawMultiValueRow,
@@ -228,8 +228,8 @@ export class iOSContactsParser {
     row: RawContactRow,
     multiValues: RawMultiValueRow[],
   ): iOSContact {
-    const phoneNumbers: ContactPhone[] = [];
-    const emails: ContactEmail[] = [];
+    const phoneNumbers: iOSContactPhone[] = [];
+    const emails: iOSContactEmail[] = [];
 
     for (const mv of multiValues) {
       if (mv.property === ABMultiValuePropertyType.PHONE) {

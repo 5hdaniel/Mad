@@ -58,7 +58,8 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
     if (syncApi) {
       // Device connected via sync API
       if (syncApi.onDeviceConnected) {
-        const unsub = syncApi.onDeviceConnected((connectedDevice) => {
+        const unsub = syncApi.onDeviceConnected((device: unknown) => {
+          const connectedDevice = device as iOSDevice;
           const mappedDevice: iOSDevice = {
             udid: connectedDevice.udid,
             name: connectedDevice.name,
@@ -142,7 +143,15 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
 
       // Sync complete event
       if (syncApi.onComplete) {
-        const unsub = syncApi.onComplete((result) => {
+        interface SyncResultType {
+          success: boolean;
+          messages?: unknown[];
+          contacts?: unknown[];
+          conversations?: unknown[];
+          error?: string;
+        }
+        const unsub = syncApi.onComplete((data: unknown) => {
+          const result = data as SyncResultType;
           console.log("[useIPhoneSync] Sync complete:", {
             messages: result.messages?.length ?? 0,
             contacts: result.contacts?.length ?? 0,

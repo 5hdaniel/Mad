@@ -6,9 +6,9 @@
  */
 
 /**
- * Phone number entry from a contact
+ * Phone number entry from an iOS contact
  */
-export interface ContactPhone {
+export interface iOSContactPhone {
   /** Label for the phone number (e.g., "mobile", "home", "work") */
   label: string;
   /** Raw phone number as stored in the database */
@@ -18,9 +18,9 @@ export interface ContactPhone {
 }
 
 /**
- * Email address entry from a contact
+ * Email address entry from an iOS contact
  */
-export interface ContactEmail {
+export interface iOSContactEmail {
   /** Label for the email address (e.g., "home", "work") */
   label: string;
   /** Email address */
@@ -40,9 +40,9 @@ export interface iOSContact {
   /** Organization name, or null if not set */
   organization: string | null;
   /** All phone numbers associated with this contact */
-  phoneNumbers: ContactPhone[];
+  phoneNumbers: iOSContactPhone[];
   /** All email addresses associated with this contact */
-  emails: ContactEmail[];
+  emails: iOSContactEmail[];
   /** Computed display name: "First Last", Organization, or "Unknown" */
   displayName: string;
 }

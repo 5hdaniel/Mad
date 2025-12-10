@@ -180,7 +180,7 @@ export interface Contact {
   user_id: string;
 
   // Display Info
-  display_name: string;
+  display_name?: string; // Optional for backwards compat - use name as fallback
   company?: string;
   title?: string;
 
@@ -190,13 +190,23 @@ export interface Contact {
   // Engagement Metrics (for CRM/Relationship Agent)
   last_inbound_at?: Date | string;
   last_outbound_at?: Date | string;
-  total_messages: number;
+  total_messages?: number; // Optional for backwards compat
   tags?: string; // JSON array: ["VIP", "past_client", "lead"]
 
   // Metadata
   metadata?: string; // JSON
   created_at: Date | string;
   updated_at: Date | string;
+
+  // ========== Legacy Fields (backwards compatibility) ==========
+  /** @deprecated Use display_name instead */
+  name?: string;
+  /** @deprecated Use ContactEmail child table instead */
+  email?: string;
+  /** @deprecated Use ContactPhone child table instead */
+  phone?: string;
+  /** @deprecated Derive from source field instead */
+  is_imported?: boolean;
 }
 
 export interface ContactEmail {
@@ -297,6 +307,42 @@ export interface Message {
   metadata?: string; // JSON
 
   created_at: Date | string;
+
+  // ========== Legacy Fields (backwards compatibility) ==========
+  /** @deprecated Use channel instead */
+  communication_type?: string;
+  /** @deprecated Use channel_account_id instead */
+  source?: string;
+  /** @deprecated Use thread_id instead */
+  email_thread_id?: string;
+  /** @deprecated Use participants JSON instead */
+  sender?: string;
+  /** @deprecated Use participants JSON instead */
+  recipients?: string;
+  /** @deprecated Use participants JSON instead */
+  cc?: string;
+  /** @deprecated Use participants JSON instead */
+  bcc?: string;
+  /** @deprecated Use body_html instead */
+  body?: string;
+  /** @deprecated Use body_text instead */
+  body_plain?: string;
+  /** @deprecated Query Attachment table instead */
+  attachment_count?: number;
+  /** @deprecated Moved to Attachment table */
+  attachment_metadata?: string;
+  /** @deprecated Use metadata JSON instead */
+  keywords_detected?: string;
+  /** @deprecated Use participants_flat instead */
+  parties_involved?: string;
+  /** @deprecated Use stage_hint instead */
+  communication_category?: string;
+  /** @deprecated Use classification_confidence instead */
+  relevance_score?: number;
+  /** @deprecated Use is_transaction_related instead */
+  is_compliance_related?: boolean;
+  /** @deprecated Use is_false_positive instead */
+  flagged_for_review?: boolean;
 }
 
 // ============================================
@@ -397,6 +443,34 @@ export interface Transaction {
   metadata?: string; // JSON
   created_at: Date | string;
   updated_at: Date | string;
+
+  // ========== Legacy Fields (backwards compatibility) ==========
+  /** @deprecated Use status instead */
+  transaction_status?: string;
+  /** @deprecated Use closed_at instead */
+  closing_date?: Date | string;
+  /** @deprecated Use started_at instead */
+  representation_start_date?: Date | string;
+  /** @deprecated Use confidence_score instead */
+  extraction_confidence?: number;
+  /** @deprecated Use message_count instead */
+  total_communications_count?: number;
+  /** @deprecated Query messages table instead */
+  first_communication_date?: Date | string;
+  /** @deprecated Use last_activity_at instead */
+  last_communication_date?: Date | string;
+  /** @deprecated Use metadata JSON instead */
+  closing_date_verified?: boolean;
+  /** @deprecated Use message_count instead */
+  communications_scanned?: number;
+  /** @deprecated Use metadata JSON instead */
+  offer_count?: number;
+  /** @deprecated Use metadata JSON instead */
+  failed_offers_count?: number;
+  /** @deprecated Use confidence_score instead */
+  representation_start_confidence?: number;
+  /** @deprecated Use confidence_score instead */
+  closing_date_confidence?: number;
 }
 
 // ============================================
@@ -570,6 +644,8 @@ export interface TransactionFilters {
   start_date?: Date | string;
   end_date?: Date | string;
   property_address?: string;
+  /** @deprecated Use status instead */
+  transaction_status?: string;
 }
 
 export interface MessageFilters {
@@ -581,6 +657,8 @@ export interface MessageFilters {
   start_date?: Date | string;
   end_date?: Date | string;
   has_attachments?: boolean;
+  /** @deprecated Use channel instead */
+  communication_type?: string;
 }
 
 export interface ContactFilters {
@@ -588,6 +666,8 @@ export interface ContactFilters {
   source?: ContactSource;
   has_email?: boolean;
   has_phone?: boolean;
+  /** @deprecated Derive from source field instead */
+  is_imported?: boolean;
 }
 
 export interface AttachmentFilters {
