@@ -8,6 +8,28 @@ import type { iOSDevice, BackupProgress } from "./types/iphone";
 import type { Transaction } from "../electron/types/models";
 
 /**
+ * Sync progress information
+ */
+interface SyncProgress {
+  phase: string;
+  phaseProgress: number;
+  overallProgress: number;
+  message?: string;
+}
+
+/**
+ * Sync operation result
+ */
+interface SyncResult {
+  success: boolean;
+  messages: unknown[];
+  contacts: unknown[];
+  conversations: unknown[];
+  error?: string;
+  duration: number;
+}
+
+/**
  * iOS Device information from libimobiledevice
  */
 interface iOSDeviceInfo {
@@ -321,6 +343,57 @@ interface MainAPI {
     onConnected: (callback: (device: iOSDeviceInfo) => void) => () => void;
     /** Subscribes to device disconnected events */
     onDisconnected: (callback: (device: iOSDeviceInfo) => void) => () => void;
+  };
+
+  /**
+   * Sync API for iPhone message/contact synchronization
+   */
+  sync: {
+    /** Start a sync operation */
+    start: (options: {
+      udid: string;
+      password?: string;
+      forceFullBackup?: boolean;
+    }) => Promise<SyncResult>;
+
+    /** Cancel current sync operation */
+    cancel: () => Promise<{ success: boolean }>;
+
+    /** Get current sync status */
+    getStatus: () => Promise<{
+      isRunning: boolean;
+      phase: string;
+    }>;
+
+    /** Get connected devices */
+    getDevices: () => Promise<iOSDeviceInfo[]>;
+
+    /** Start device detection polling */
+    startDetection: (intervalMs?: number) => Promise<{ success: boolean }>;
+
+    /** Stop device detection polling */
+    stopDetection: () => Promise<{ success: boolean }>;
+
+    /** Subscribe to sync progress updates */
+    onProgress: (callback: (progress: SyncProgress) => void) => () => void;
+
+    /** Subscribe to sync phase changes */
+    onPhase: (callback: (phase: string) => void) => () => void;
+
+    /** Subscribe to device connected events */
+    onDeviceConnected: (callback: (device: iOSDeviceInfo) => void) => () => void;
+
+    /** Subscribe to device disconnected events */
+    onDeviceDisconnected: (callback: (device: iOSDeviceInfo) => void) => () => void;
+
+    /** Subscribe to password required events */
+    onPasswordRequired: (callback: () => void) => () => void;
+
+    /** Subscribe to sync error events */
+    onError: (callback: (error: { message: string }) => void) => () => void;
+
+    /** Subscribe to sync completion events */
+    onComplete: (callback: (result: SyncResult) => void) => () => void;
   };
 
   // Event listeners for login completion
