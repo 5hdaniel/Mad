@@ -165,10 +165,19 @@ npm rebuild better-sqlite3-multiple-ciphers
 npx electron-rebuild
 ```
 
+## Key Documentation
+
+| Document | Location | Purpose |
+|----------|----------|---------|
+| **PR SOP** | `.claude/docs/PR-SOP.md` | Complete PR checklist (all phases) |
+| **Senior Engineer** | `.claude/agents/senior-engineer-pr-lead.md` | Architecture standards, advanced reviews |
+| **This Guide** | `CLAUDE.md` | Quick start, branching, workflow |
+
 ## Getting Help
 
+- **PR preparation/review**: Follow `.claude/docs/PR-SOP.md`
 - **Architecture questions**: Use the senior-engineer-pr-lead agent
-- **PR reviews**: Use the senior-engineer-pr-lead agent
+- **Complex PR reviews**: Use the senior-engineer-pr-lead agent
 - **Code exploration**: Use the Explore agent
 
 ## Quick Reference
