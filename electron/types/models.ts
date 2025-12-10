@@ -1,25 +1,79 @@
 /**
  * Core Data Models for Magic Audit
+ * Version: 2.0 (LLM + Agent Ready)
  * These types represent the main entities in the application
  */
 
 // ============================================
-// ENUMS
+// ENUMS & TYPE ALIASES
 // ============================================
 
+// Auth & User
 export type OAuthProvider = "google" | "microsoft";
 export type OAuthPurpose = "authentication" | "mailbox";
 export type SubscriptionTier = "free" | "pro" | "enterprise";
 export type SubscriptionStatus = "trial" | "active" | "cancelled" | "expired";
 export type Theme = "light" | "dark" | "auto";
-export type ContactSource = "manual" | "email" | "contacts_app";
-export type TransactionType = "purchase" | "sale";
-export type TransactionStatus = "completed" | "pending";
-export type Status = "active" | "closed";
+
+// Contacts
+export type ContactSource = "manual" | "email" | "sms" | "contacts_app" | "inferred";
+export type ContactInfoSource = "import" | "manual" | "inferred";
+
+// Messages
+export type MessageChannel = "email" | "sms" | "imessage";
+export type MessageDirection = "inbound" | "outbound";
+export type ClassificationMethod = "pattern" | "llm" | "user";
+export type FalsePositiveReason = "signature" | "promotional" | "unrelated" | "other";
+
+// Transactions
+export type TransactionType = "purchase" | "sale" | "other";
+export type TransactionStatus = "active" | "closed" | "archived";
+export type TransactionStage =
+  | "intro"
+  | "showing"
+  | "offer"
+  | "inspections"
+  | "escrow"
+  | "closing"
+  | "post_closing";
+
+// Participants
+export type ParticipantRole =
+  | "buyer"
+  | "seller"
+  | "buyer_agent"
+  | "listing_agent"
+  | "lender"
+  | "loan_officer"
+  | "escrow_officer"
+  | "title_officer"
+  | "inspector"
+  | "appraiser"
+  | "attorney"
+  | "tc"
+  | "other"
+  | "unknown";
+
+// Export & Audit
 export type ExportStatus = "not_exported" | "exported" | "re_export_needed";
 export type ExportFormat = "pdf" | "csv" | "json" | "txt_eml" | "excel";
+export type AuditPackageFormat = "pdf" | "zip" | "json" | "excel";
+
+// Feedback
+export type ClassificationFeedbackType =
+  | "message_relevance"
+  | "transaction_link"
+  | "document_type"
+  | "contact_role"
+  | "stage_hint";
+
+// Legacy types (for backwards compatibility during migration)
+/** @deprecated Use MessageChannel instead */
 export type CommunicationType = "email" | "text" | "imessage";
+/** @deprecated Use ClassificationFeedbackType instead */
 export type FeedbackType = "correction" | "confirmation" | "rejection";
+/** @deprecated Use TransactionStatus instead */
+export type Status = "active" | "closed";
 
 // ============================================
 // USER MODELS
@@ -125,36 +179,164 @@ export interface Contact {
   id: string;
   user_id: string;
 
-  // Contact Information
-  name: string;
-  email?: string;
-  phone?: string;
+  // Display Info
+  display_name: string;
   company?: string;
   title?: string;
 
   // Source
   source: ContactSource;
 
-  // Import tracking
-  is_imported: boolean;
+  // Engagement Metrics (for CRM/Relationship Agent)
+  last_inbound_at?: Date | string;
+  last_outbound_at?: Date | string;
+  total_messages: number;
+  tags?: string; // JSON array: ["VIP", "past_client", "lead"]
 
   // Metadata
+  metadata?: string; // JSON
   created_at: Date | string;
   updated_at: Date | string;
-  last_interaction_at?: Date | string;
 }
 
-export interface TransactionContact {
+export interface ContactEmail {
   id: string;
-  transaction_id: string;
   contact_id: string;
-  role?: string;
-  role_category?: string;
-  specific_role?: string;
+
+  email: string;
   is_primary: boolean;
-  notes?: string;
+  label?: string; // work, personal, etc.
+  source?: ContactInfoSource;
+
   created_at: Date | string;
-  updated_at: Date | string;
+}
+
+export interface ContactPhone {
+  id: string;
+  contact_id: string;
+
+  phone_e164: string; // Normalized: +14155550000
+  phone_display?: string; // Display format: (415) 555-0000
+  is_primary: boolean;
+  label?: string; // mobile, home, work, etc.
+  source?: ContactInfoSource;
+
+  created_at: Date | string;
+}
+
+// Contact with all related data (for UI display)
+export interface ContactWithDetails extends Contact {
+  emails: ContactEmail[];
+  phones: ContactPhone[];
+}
+
+// ============================================
+// MESSAGE MODELS
+// ============================================
+
+// Participants JSON structure
+export interface MessageParticipants {
+  from: string;
+  to: string[];
+  cc?: string[];
+  bcc?: string[];
+}
+
+export interface Message {
+  id: string;
+  user_id: string;
+
+  // Channel/Source Info
+  channel_account_id?: string;
+  external_id?: string; // Provider ID (Gmail, Outlook, iMessage)
+
+  // Type & Direction
+  channel?: MessageChannel;
+  direction?: MessageDirection;
+
+  // Content
+  subject?: string;
+  body_html?: string;
+  body_text?: string; // Normalized plain text - what LLMs see
+
+  // Participants
+  participants?: string; // JSON: MessageParticipants
+  participants_flat?: string; // Denormalized for search
+
+  // Threading
+  thread_id?: string;
+
+  // Timestamps
+  sent_at?: Date | string;
+  received_at?: Date | string;
+
+  // Attachments
+  has_attachments: boolean;
+
+  // Classification Results
+  is_transaction_related?: boolean; // null = not classified
+  classification_confidence?: number; // 0.0 - 1.0
+  classification_method?: ClassificationMethod;
+  classified_at?: Date | string;
+
+  // False Positive Tracking
+  is_false_positive: boolean;
+  false_positive_reason?: FalsePositiveReason;
+
+  // Stage Hint (for future timeline features)
+  stage_hint?: TransactionStage;
+  stage_hint_source?: ClassificationMethod;
+  stage_hint_confidence?: number;
+
+  // Transaction Link
+  transaction_id?: string;
+  transaction_link_confidence?: number;
+  transaction_link_source?: ClassificationMethod;
+
+  // Metadata
+  metadata?: string; // JSON
+
+  created_at: Date | string;
+}
+
+// ============================================
+// ATTACHMENT MODELS
+// ============================================
+
+export type DocumentType =
+  | "offer"
+  | "inspection"
+  | "disclosure"
+  | "contract"
+  | "appraisal"
+  | "amendment"
+  | "addendum"
+  | "title"
+  | "closing"
+  | "other";
+
+export interface Attachment {
+  id: string;
+  message_id: string;
+
+  // File Info
+  filename: string;
+  mime_type?: string;
+  file_size_bytes?: number;
+  storage_path?: string;
+
+  // Extracted Content (for LLMs)
+  text_content?: string; // OCR / extracted text
+
+  // Document Classification
+  document_type?: DocumentType;
+  document_type_confidence?: number;
+  document_type_source?: ClassificationMethod;
+
+  // Analysis Results (JSON)
+  analysis_metadata?: string;
+
+  created_at: Date | string;
 }
 
 // ============================================
@@ -171,101 +353,158 @@ export interface Transaction {
   property_city?: string;
   property_state?: string;
   property_zip?: string;
-  property_coordinates?: string;
+  property_coordinates?: string; // JSON: {"lat": ..., "lng": ...}
 
-  // Transaction Details
+  // Transaction Type & Status
   transaction_type?: TransactionType;
-  transaction_status: TransactionStatus;
-  status: Status;
-  closing_date?: Date | string;
-  representation_start_date?: Date | string;
-  closing_date_verified: boolean;
-  representation_start_confidence?: number;
-  closing_date_confidence?: number;
+  status: TransactionStatus;
 
-  // Contact Associations
-  buyer_agent_id?: string;
-  seller_agent_id?: string;
-  escrow_officer_id?: string;
-  inspector_id?: string;
-  other_contacts?: string; // JSON array of contact IDs
+  // Key Dates
+  started_at?: Date | string;
+  closed_at?: Date | string;
+  last_activity_at?: Date | string;
 
-  // Metadata
-  created_at: Date | string;
-  updated_at: Date | string;
+  // Confidence
+  confidence_score?: number;
+
+  // Stage (for future timeline/agent features)
+  stage?: TransactionStage;
+  stage_source?: ClassificationMethod | "import";
+  stage_confidence?: number;
+  stage_updated_at?: Date | string;
+
+  // Financial Data
+  listing_price?: number;
+  sale_price?: number;
+  earnest_money_amount?: number;
+
+  // Key Dates (auto-extracted)
+  mutual_acceptance_date?: Date | string;
+  inspection_deadline?: Date | string;
+  financing_deadline?: Date | string;
+  closing_deadline?: Date | string;
+
+  // Stats
+  message_count: number;
+  attachment_count: number;
 
   // Export Tracking
   export_status: ExportStatus;
-  export_format?: ExportFormat;
   export_count: number;
-  last_exported_on?: Date | string;
-  export_generated_at?: Date | string; // Deprecated
+  last_exported_at?: Date | string;
 
-  // Extraction Stats
-  communications_scanned: number;
-  extraction_confidence?: number;
-
-  // Auto-Extracted Data
-  first_communication_date?: Date | string;
-  last_communication_date?: Date | string;
-  total_communications_count: number;
-  mutual_acceptance_date?: Date | string;
-  earnest_money_amount?: number;
-  earnest_money_delivered_date?: Date | string;
-  listing_price?: number;
-  sale_price?: number;
-  other_parties?: string;
-  offer_count: number;
-  failed_offers_count: number;
-  key_dates?: string;
+  // Metadata
+  metadata?: string; // JSON
+  created_at: Date | string;
+  updated_at: Date | string;
 }
 
 // ============================================
-// COMMUNICATION MODELS
+// TRANSACTION PARTICIPANT MODELS
 // ============================================
 
-export interface Communication {
+export interface TransactionParticipant {
+  id: string;
+  transaction_id: string;
+  contact_id: string;
+
+  // Role
+  role?: ParticipantRole;
+
+  // Confidence & Source
+  confidence?: number;
+  role_source?: ClassificationMethod;
+
+  is_primary: boolean;
+  notes?: string;
+
+  created_at: Date | string;
+  updated_at: Date | string;
+}
+
+// Participant with contact details (for UI display)
+export interface TransactionParticipantWithContact extends TransactionParticipant {
+  contact: Contact;
+}
+
+// ============================================
+// AUDIT PACKAGE MODELS
+// ============================================
+
+export interface AuditPackage {
+  id: string;
+  transaction_id: string;
+  user_id: string;
+
+  // Package Info
+  generated_at: Date | string;
+  format?: AuditPackageFormat;
+  storage_path?: string;
+
+  // Content Summary
+  message_count?: number;
+  attachment_count?: number;
+  date_range_start?: Date | string;
+  date_range_end?: Date | string;
+
+  // LLM-Generated Summary
+  summary?: string;
+
+  // Quality Score
+  completeness_score?: number; // 0.0 - 1.0
+
+  // Version tracking
+  version: number;
+
+  // Metadata
+  metadata?: string; // JSON
+}
+
+// ============================================
+// STAGE HISTORY MODELS
+// ============================================
+
+export interface TransactionStageHistory {
+  id: string;
+  transaction_id: string;
+
+  stage: TransactionStage;
+  source?: ClassificationMethod;
+  confidence?: number;
+  changed_at: Date | string;
+
+  // What triggered this change
+  trigger_message_id?: string;
+}
+
+// ============================================
+// CLASSIFICATION FEEDBACK MODELS
+// ============================================
+
+export interface ClassificationFeedback {
   id: string;
   user_id: string;
+
+  // What was corrected
+  message_id?: string;
+  attachment_id?: string;
   transaction_id?: string;
+  contact_id?: string;
 
-  // Communication Metadata
-  communication_type?: CommunicationType;
-  source?: string;
-  email_thread_id?: string;
+  // Feedback Type
+  feedback_type: ClassificationFeedbackType;
 
-  // Participants
-  sender?: string;
-  recipients?: string;
-  cc?: string;
-  bcc?: string;
-
-  // Content
-  subject?: string;
-  body?: string;
-  body_plain?: string;
-
-  // Timestamps
-  sent_at?: Date | string;
-  received_at?: Date | string;
-
-  // Attachments
-  has_attachments: boolean;
-  attachment_count: number;
-  attachment_metadata?: string;
-
-  // Analysis
-  keywords_detected?: string;
-  parties_involved?: string;
-  communication_category?: string;
-  flagged_for_review: boolean;
-  is_compliance_related: boolean;
-
-  // Linking
-  relevance_score?: number;
+  // Values
+  original_value?: string;
+  corrected_value?: string;
+  reason?: string;
 
   created_at: Date | string;
 }
+
+// ============================================
+// EXTRACTED DATA MODELS
+// ============================================
 
 export interface ExtractedTransactionData {
   id: string;
@@ -276,8 +515,8 @@ export interface ExtractedTransactionData {
   field_value?: string;
 
   // Source
-  source_communication_id?: string;
-  extraction_method?: string;
+  source_message_id?: string;
+  extraction_method?: ClassificationMethod;
   confidence_score?: number;
 
   // Verification
@@ -288,34 +527,107 @@ export interface ExtractedTransactionData {
 }
 
 // ============================================
-// IGNORED COMMUNICATION MODELS
+// UTILITY TYPES
 // ============================================
 
-export interface IgnoredCommunication {
-  id: string;
-  user_id: string;
-  transaction_id: string;
+// Type for creating new records (omit auto-generated fields)
+export type NewUser = Omit<User, "id" | "created_at" | "updated_at">;
+export type NewContact = Omit<Contact, "id" | "created_at" | "updated_at" | "total_messages"> & {
+  total_messages?: number;
+};
+export type NewContactEmail = Omit<ContactEmail, "id" | "created_at">;
+export type NewContactPhone = Omit<ContactPhone, "id" | "created_at">;
+export type NewMessage = Omit<Message, "id" | "created_at">;
+export type NewAttachment = Omit<Attachment, "id" | "created_at">;
+export type NewTransaction = Omit<Transaction, "id" | "created_at" | "updated_at" | "message_count" | "attachment_count"> & {
+  message_count?: number;
+  attachment_count?: number;
+};
+export type NewTransactionParticipant = Omit<TransactionParticipant, "id" | "created_at" | "updated_at">;
+export type NewAuditPackage = Omit<AuditPackage, "id" | "generated_at" | "version"> & {
+  version?: number;
+};
+export type NewClassificationFeedback = Omit<ClassificationFeedback, "id" | "created_at">;
 
-  // Email identification
-  email_subject?: string;
-  email_sender?: string;
-  email_sent_at?: Date | string;
-  email_thread_id?: string;
+// Type for updating records (all fields optional except id)
+export type UpdateUser = Partial<Omit<User, "id">> & { id: string };
+export type UpdateContact = Partial<Omit<Contact, "id">> & { id: string };
+export type UpdateMessage = Partial<Omit<Message, "id">> & { id: string };
+export type UpdateAttachment = Partial<Omit<Attachment, "id">> & { id: string };
+export type UpdateTransaction = Partial<Omit<Transaction, "id">> & { id: string };
+export type UpdateTransactionParticipant = Partial<Omit<TransactionParticipant, "id">> & { id: string };
 
-  // Original communication reference
-  original_communication_id?: string;
+// ============================================
+// FILTER TYPES
+// ============================================
 
-  // Tracking
-  ignored_at: Date | string;
-  reason?: string;
+export interface TransactionFilters {
+  user_id?: string;
+  transaction_type?: TransactionType;
+  status?: TransactionStatus;
+  stage?: TransactionStage;
+  export_status?: ExportStatus;
+  start_date?: Date | string;
+  end_date?: Date | string;
+  property_address?: string;
 }
 
-export type NewIgnoredCommunication = Omit<IgnoredCommunication, "id" | "ignored_at">;
+export interface MessageFilters {
+  user_id?: string;
+  transaction_id?: string;
+  channel?: MessageChannel;
+  direction?: MessageDirection;
+  is_transaction_related?: boolean;
+  start_date?: Date | string;
+  end_date?: Date | string;
+  has_attachments?: boolean;
+}
+
+export interface ContactFilters {
+  user_id?: string;
+  source?: ContactSource;
+  has_email?: boolean;
+  has_phone?: boolean;
+}
+
+export interface AttachmentFilters {
+  message_id?: string;
+  document_type?: DocumentType;
+  has_text_content?: boolean;
+}
 
 // ============================================
-// FEEDBACK MODELS
+// LEGACY TYPES (Backwards Compatibility)
 // ============================================
 
+/**
+ * @deprecated Use Message instead. This alias exists for backwards compatibility.
+ */
+export type Communication = Message;
+
+/**
+ * @deprecated Use NewMessage instead.
+ */
+export type NewCommunication = NewMessage;
+
+/**
+ * @deprecated Use UpdateMessage instead.
+ */
+export type UpdateCommunication = UpdateMessage;
+
+/**
+ * @deprecated Use MessageFilters instead.
+ */
+export type CommunicationFilters = MessageFilters;
+
+/**
+ * @deprecated Use TransactionParticipant instead.
+ */
+export type TransactionContact = TransactionParticipant;
+
+/**
+ * @deprecated Use ClassificationFeedback instead.
+ */
 export interface UserFeedback {
   id: string;
   user_id: string;
@@ -327,54 +639,4 @@ export interface UserFeedback {
   corrected_value?: string;
   feedback_text?: string;
   created_at: Date | string;
-}
-
-// ============================================
-// UTILITY TYPES
-// ============================================
-
-// Type for creating new records (omit auto-generated fields)
-export type NewUser = Omit<User, "id" | "created_at" | "updated_at">;
-export type NewContact = Omit<Contact, "id" | "created_at" | "updated_at">;
-export type NewTransaction = Omit<
-  Transaction,
-  "id" | "created_at" | "updated_at"
->;
-export type NewCommunication = Omit<Communication, "id" | "created_at">;
-
-// Type for updating records (all fields optional except id)
-export type UpdateUser = Partial<Omit<User, "id">> & { id: string };
-export type UpdateContact = Partial<Omit<Contact, "id">> & { id: string };
-export type UpdateTransaction = Partial<Omit<Transaction, "id">> & {
-  id: string;
-};
-export type UpdateCommunication = Partial<Omit<Communication, "id">> & {
-  id: string;
-};
-
-// Filters for querying
-export interface TransactionFilters {
-  user_id?: string;
-  transaction_type?: TransactionType;
-  transaction_status?: TransactionStatus;
-  status?: Status;
-  export_status?: ExportStatus;
-  start_date?: Date | string;
-  end_date?: Date | string;
-  property_address?: string;
-}
-
-export interface CommunicationFilters {
-  user_id?: string;
-  transaction_id?: string;
-  communication_type?: CommunicationType;
-  start_date?: Date | string;
-  end_date?: Date | string;
-  has_attachments?: boolean;
-}
-
-export interface ContactFilters {
-  user_id?: string;
-  source?: ContactSource;
-  is_imported?: boolean;
 }
