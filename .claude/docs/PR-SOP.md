@@ -2,6 +2,8 @@
 
 This document outlines the standard procedure for creating, reviewing, and merging pull requests in Magic Audit. All agents and contributors should follow this SOP.
 
+**LLM Note**: Claude and other AI agents can assist with all phases. Look for 🤖 markers for specific automation opportunities.
+
 ## Quick Reference
 
 | PR Type | Target Branch | Merge Type | Required Checks |
@@ -80,6 +82,8 @@ Search for and remove:
 grep -rn "console\." src/ --include="*.ts" --include="*.tsx"
 ```
 
+🤖 **LLM Assist**: Use ESLint autofix, codemods, or ask Claude to identify and remove debug code.
+
 ### 2.2 Style & Formatting
 - [ ] Run Prettier/formatter
 - [ ] Verify naming conventions (camelCase for variables, PascalCase for components)
@@ -89,11 +93,24 @@ grep -rn "console\." src/ --include="*.ts" --include="*.tsx"
 npm run lint -- --fix
 ```
 
+🤖 **LLM Assist**: Claude can propose consistent patterns and refactors for naming/structure.
+
 ### 2.3 Structured Error Logging
-Ensure proper logging:
-- [ ] Use appropriate log levels (error, warn, info, debug)
+Ensure proper logging using the central `LogService` (`electron/services/logService.ts`):
+- [ ] Use appropriate log levels: `debug`, `info`, `warn`, `error`
 - [ ] Include context in log messages (function name, relevant IDs)
 - [ ] No sensitive data in logs (tokens, passwords, PII)
+- [ ] Use structured metadata for additional context
+
+```typescript
+// Example usage
+import { log } from '../services/logService';
+
+log.info('Processing transaction', { context: 'TransactionService', metadata: { transactionId: '123' } });
+log.error('Failed to sync', { context: 'SyncService', metadata: { error: err.message } });
+```
+
+🤖 **LLM Assist**: Claude can generate consistent, standardized log statements using the LogService pattern.
 
 ---
 
@@ -111,12 +128,17 @@ Ensure proper logging:
 grep -rn "password\|secret\|api_key\|token" src/ --include="*.ts" --include="*.tsx" | grep -v "type\|interface"
 ```
 
+🤖 **LLM Assist**: Claude can spot security smells and recommend fixes. Also consider tools like gitleaks, truffleHog, or git-secrets.
+
 ### 3.2 Documentation Updates
 If applicable, update:
-- [ ] README.md
+- [ ] README.md sections affected by new features
 - [ ] Code comments for complex logic
 - [ ] Type definitions
 - [ ] .env.example for new environment variables
+- [ ] OpenAPI/Swagger JSON if endpoints were added
+
+🤖 **LLM Assist**: Claude can draft README updates, code comments, and documentation for new features.
 
 ---
 
@@ -127,11 +149,16 @@ If applicable, update:
 - [ ] Fixtures are up-to-date
 - [ ] No hardcoded test data that could become stale
 
+🤖 **LLM Assist**: Claude can generate fixture JSON, mock data, and update test fixtures to match new schemas.
+
 ### 4.2 Automated Tests
 - [ ] Unit tests for new functions/utilities
 - [ ] Integration tests for new features
 - [ ] Component tests for UI changes
+- [ ] Snapshot tests (if applicable)
 - [ ] Target coverage: 40-80%
+
+🤖 **LLM Assist**: Claude can generate test boilerplate, write full unit tests, and suggest edge cases to cover.
 
 ### 4.3 Test Suite Execution
 Run the full test suite locally:
@@ -141,6 +168,8 @@ npm test
 ```
 
 All tests must pass. No skipped tests without justification.
+
+🤖 **LLM Assist**: If tests fail, Claude can analyze failures and suggest fixes.
 
 ---
 
@@ -166,12 +195,57 @@ Review for:
 - [ ] O(n²) or worse algorithmic complexity
 - [ ] Large bundle size additions
 - [ ] Inefficient database queries
+- [ ] Inefficient use of state or APIs
+
+🤖 **LLM Assist**: Claude can spot performance issues and generate optimization suggestions without manual benchmarking.
 
 ---
 
-## Phase 6: PR Creation
+## Phase 6: Final Automated Code Review
 
-### 6.1 Commit History
+**This is a critical quality gate.** Run the entire branch through Claude to check for:
+
+### 6.1 Code Quality Issues
+- [ ] Anti-patterns and code smells
+- [ ] Missing error checks / error handling
+- [ ] Duplicate logic that should be abstracted
+- [ ] Unnecessary complexity
+- [ ] Missing null-checks / undefined handling
+- [ ] Inconsistent naming conventions
+- [ ] Code that needs refactoring
+
+### 6.2 Architecture Compliance
+- [ ] Entry file guardrails respected (App.tsx < 70 lines)
+- [ ] Business logic not in entry files
+- [ ] IPC boundaries respected (main/preload/renderer)
+- [ ] Service abstractions used (no direct `window.api` in components)
+
+### 6.3 Review Prompt Template
+
+Use this prompt to request a code review:
+
+```
+Please review this branch for PR readiness. Check for:
+1. Anti-patterns and code smells
+2. Missing error handling
+3. Duplicate logic
+4. Unnecessary complexity
+5. Missing null-checks
+6. Inconsistent naming
+7. Architecture boundary violations
+8. Performance issues
+9. Security concerns
+
+Provide specific file:line references and suggested fixes.
+```
+
+🤖 **LLM Assist**: This phase replaces manual pre-review and significantly increases PR quality.
+
+---
+
+## Phase 7: PR Creation
+
+### 7.1 Commit History
 - [ ] Commits are atomic and focused
 - [ ] Commit messages follow conventional format:
   - `feat:` - New feature
@@ -181,7 +255,7 @@ Review for:
   - `test:` - Adding tests
   - `chore:` - Maintenance
 
-### 6.2 Create PR
+### 7.2 Create PR
 
 ```bash
 git push -u origin your-branch-name
@@ -189,7 +263,9 @@ git push -u origin your-branch-name
 gh pr create --base develop --title "type: description" --body "..."
 ```
 
-### 6.3 PR Description Template
+🤖 **LLM Assist**: Claude can draft PR descriptions based on the changes made.
+
+### 7.3 PR Description Template
 
 ```markdown
 ## Summary
@@ -214,7 +290,7 @@ gh pr create --base develop --title "type: description" --body "..."
 
 ---
 
-## Phase 7: CI Verification
+## Phase 8: CI Verification
 
 Wait for all CI checks to pass:
 
@@ -233,7 +309,7 @@ gh pr checks <PR-NUMBER>
 
 ---
 
-## Phase 8: Merge
+## Phase 9: Merge
 
 ### Pre-Merge Checklist
 - [ ] All CI checks pass
@@ -279,18 +355,37 @@ git push origin develop
 
 ---
 
+## CI Failure Recovery
+
+If CI fails after creating the PR:
+
+1. **Check the failing job logs** on GitHub Actions
+2. **Run the failing check locally** to reproduce
+3. **Fix the issue**
+4. **Re-run the checklist** starting from the earliest relevant phase:
+   - Type error → Phase 5.1
+   - Lint error → Phase 5.2
+   - Test failure → Phase 4.3
+   - Security issue → Phase 3.1
+5. **Push the fix** and wait for CI to re-run
+
+🤖 **LLM Assist**: Claude can analyze CI failure logs and suggest fixes.
+
+---
+
 ## Review Checklist (for reviewers)
 
 When reviewing PRs, verify:
 
 - [ ] **Phase 0**: Correct target branch
 - [ ] **Phase 1**: Branch is synced, no conflicts
-- [ ] **Phase 2**: No debug code, proper formatting
+- [ ] **Phase 2**: No debug code, proper formatting, uses LogService
 - [ ] **Phase 3**: No security issues, docs updated
 - [ ] **Phase 4**: Adequate test coverage
 - [ ] **Phase 5**: Type check + lint pass
-- [ ] **Phase 6**: Clear PR description
-- [ ] **Phase 7**: CI passes
+- [ ] **Phase 6**: Automated code review completed
+- [ ] **Phase 7**: Clear PR description
+- [ ] **Phase 8**: CI passes
 
 ### Review Output Format
 
