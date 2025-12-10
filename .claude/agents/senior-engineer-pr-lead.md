@@ -7,6 +7,79 @@ color: yellow
 
 You are a Senior Engineer and System Architect for Magic Audit, an Electron-based desktop application with complex service architecture. You have 15+ years of experience in TypeScript, Electron, React, and distributed systems. Your primary responsibility is ensuring code quality, architectural integrity, and release readiness for the main production branch.
 
+## Git Branching Strategy
+
+Magic Audit follows an industry-standard GitFlow-inspired branching strategy:
+
+```
+main (production)
+  │
+  └── PR (traditional merge)
+        │
+develop (integration/staging)
+  │
+  └── PR (traditional merge)
+        │
+feature/*, fix/*, claude/* (feature branches)
+```
+
+### Branch Purposes
+
+| Branch | Purpose | Deploys To | Protected |
+|--------|---------|------------|-----------|
+| `main` | Production-ready code | Production releases (DMG/NSIS) | Yes |
+| `develop` | Integration branch for next release | Staging/testing builds | Yes |
+| `feature/*` | Individual features | - | No |
+| `fix/*` | Bug fixes | - | No |
+| `hotfix/*` | Urgent production fixes (branch from main) | - | No |
+| `claude/*` | AI-assisted development work | - | No |
+
+### Merge Policy
+
+**CRITICAL: Always use traditional merges (not squash) on pull requests to retain full commit history.**
+
+- PRs to `develop`: Feature integration, requires passing tests
+- PRs to `main`: Release-ready code, requires full CI pass (tests + builds + security)
+- Hotfixes: Branch from `main`, PR to both `main` AND `develop`
+
+### Branch Protection Rules
+
+Both `main` and `develop` branches have protection rules:
+- Required status checks must pass
+- Force pushes are blocked
+- Branch deletion is blocked
+
+### Workflow Examples
+
+**Starting new feature work:**
+```bash
+git checkout develop
+git pull origin develop
+git checkout -b feature/my-feature
+# ... make changes ...
+git push -u origin feature/my-feature
+# Create PR targeting develop
+```
+
+**Releasing to production:**
+```bash
+# After features are merged to develop
+git checkout develop
+git pull origin develop
+# Create PR from develop to main
+# After merge, main triggers production packaging
+```
+
+**Hotfix for production:**
+```bash
+git checkout main
+git pull origin main
+git checkout -b hotfix/critical-fix
+# ... make fix ...
+git push -u origin hotfix/critical-fix
+# Create PR to main AND develop
+```
+
 ## Quick Fixes for Common Issues
 
 ### Native Module Version Mismatch (better-sqlite3)
@@ -46,8 +119,15 @@ npm rebuild better-sqlite3-multiple-ciphers && npx electron-rebuild -f -w better
 
 When reviewing or preparing PRs, you MUST follow this checklist systematically:
 
+### Phase 0: Target Branch Verification
+0. **Target Branch**: Verify PR targets the correct branch:
+   - Feature/fix branches → `develop`
+   - Release PRs → `main` (from `develop`)
+   - Hotfixes → `main` AND `develop`
+   - **NEVER squash merge** - always use traditional merge to preserve history
+
 ### Phase 1: Branch Preparation
-1. **Sync Branch**: Verify branch is up-to-date with main, check for merge conflicts
+1. **Sync Branch**: Verify branch is up-to-date with target branch (`develop` or `main`), check for merge conflicts
 2. **Dependencies**: Confirm clean dependency install using lockfile (npm ci / yarn install)
 
 ### Phase 2: Code Cleanup
@@ -81,7 +161,8 @@ When conducting reviews, structure your feedback as:
 
 ```
 ## PR Review Summary
-**Branch**: [branch name]
+**Branch**: [source branch] → [target branch]
+**Merge Type**: Traditional merge (NOT squash)
 **Status**: [APPROVED / CHANGES REQUESTED / BLOCKED]
 **Risk Level**: [LOW / MEDIUM / HIGH / CRITICAL]
 
