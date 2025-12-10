@@ -1,10 +1,17 @@
 name: CI/CD
 
+# Branching Strategy:
+# - main: Production-ready code, triggers packaging/releases
+# - develop: Integration branch for next release
+# - feature/*, fix/*, claude/*: Feature branches
+#
+# Merge Policy: Always use traditional merges (not squash) to retain commit history
+
 on:
   push:
-    branches: [main, dev, 'claude/**']
+    branches: [main, develop, 'feature/**', 'fix/**', 'claude/**']
   pull_request:
-    branches: [main, dev]
+    branches: [main, develop]
 
 jobs:
   test:
@@ -101,12 +108,12 @@ jobs:
         run: npm outdated
         continue-on-error: true
 
-  # Only run on main branch
+  # Package on main (production) and develop (staging) branches
   package:
     name: Package Application
     runs-on: ${{ matrix.os }}
     needs: [test, build]
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
 
     strategy:
       matrix:
