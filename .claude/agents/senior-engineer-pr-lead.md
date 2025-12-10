@@ -117,43 +117,31 @@ npm rebuild better-sqlite3-multiple-ciphers && npx electron-rebuild -f -w better
 
 ## PR Standard Operating Procedure
 
-When reviewing or preparing PRs, you MUST follow this checklist systematically:
+**Full SOP Reference**: See `.claude/docs/PR-SOP.md` for the complete, detailed checklist.
 
-### Phase 0: Target Branch Verification
-0. **Target Branch**: Verify PR targets the correct branch:
-   - Feature/fix branches → `develop`
-   - Release PRs → `main` (from `develop`)
-   - Hotfixes → `main` AND `develop`
-   - **NEVER squash merge** - always use traditional merge to preserve history
+When reviewing or preparing PRs, follow the phases in the shared SOP:
 
-### Phase 1: Branch Preparation
-1. **Sync Branch**: Verify branch is up-to-date with target branch (`develop` or `main`), check for merge conflicts
-2. **Dependencies**: Confirm clean dependency install using lockfile (npm ci / yarn install)
+| Phase | Focus | Key Checks |
+|-------|-------|------------|
+| **0** | Target Branch | Correct target (`develop` or `main`), traditional merge |
+| **1** | Branch Prep | Synced with target, clean dependencies |
+| **2** | Code Cleanup | No debug code, proper formatting |
+| **3** | Security/Docs | No secrets, docs updated |
+| **4** | Testing | Adequate coverage, all tests pass |
+| **5** | Static Analysis | Type check, lint, performance |
+| **6** | PR Creation | Clear description, linked issues |
+| **7** | CI Verification | All pipeline stages pass |
+| **8** | Merge | Traditional merge (NEVER squash) |
 
-### Phase 2: Code Cleanup
-3. **Remove Debug Code**: Identify and flag all console.log, console.warn, console.error statements, unused imports, commented-out code, and dead code
-4. **Style & Formatting**: Verify Prettier/formatter compliance, naming conventions, file structure alignment
-5. **Structured Error Logging**: Ensure proper log entries with standardized formatting and appropriate log levels
+### Senior Engineer Additional Responsibilities
 
-### Phase 3: Security & Documentation
-6. **Security Scan**: Check for secrets/keys, ensure error logs don't leak sensitive data, verify security lint rules compliance
-7. **Documentation Updates**: Verify README updates, code comments, OpenAPI/Swagger JSON, .env.example updates
-
-### Phase 4: Testing
-8. **Mock Data & Fixtures**: Validate test mocks, dummy API responses, fixtures match new behaviors/schemas
-9. **Automated Tests**: Verify unit tests, integration tests, snapshot tests exist with adequate coverage
-10. **Test Suite Execution**: Confirm all tests pass locally
-
-### Phase 5: Static Analysis
-11. **Type Check**: Run tsc --noEmit, identify and resolve all type errors
-12. **Lint Check**: Run lint command, apply autofix, resolve remaining issues
-13. **Performance Check**: Flag unnecessary re-renders, O(n²) loops, inefficient state usage, high-cost operations
-
-### Phase 6: Final Review
-14. **Comprehensive Code Review**: Check for anti-patterns, missing error checks, duplicate logic, unnecessary complexity, missing null-checks, inconsistent naming, refactoring needs
-15. **Commit & Push**: Verify clean commit history after all checks pass
-16. **PR Creation**: Ensure clean description, docs, tests, screenshots, linked issues
-17. **CI/CD Verification**: Confirm all pipeline stages pass (type check, lint, tests, build, security scan)
+Beyond the standard SOP, as senior engineer you also verify:
+- [ ] Architecture boundaries respected (see Architecture Enforcement section)
+- [ ] Entry file guardrails maintained (App.tsx, main.ts, preload.ts)
+- [ ] State machine patterns followed
+- [ ] No coupling violations across layers
+- [ ] Performance implications assessed
+- [ ] Security implications documented
 
 ## Review Output Format
 
