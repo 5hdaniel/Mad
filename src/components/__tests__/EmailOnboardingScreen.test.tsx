@@ -34,6 +34,8 @@ describe("EmailOnboardingScreen", () => {
   const mockOnComplete = jest.fn();
   const mockOnSkip = jest.fn();
   const mockOnBack = jest.fn();
+  const mockOnPhoneTypeChange = jest.fn().mockResolvedValue(undefined);
+  const defaultPhoneType: "iphone" | "android" | null = "iphone";
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -80,8 +82,11 @@ describe("EmailOnboardingScreen", () => {
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="google"
+          selectedPhoneType={defaultPhoneType}
+          onPhoneTypeChange={mockOnPhoneTypeChange}
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
+          onBack={mockOnBack}
         />,
       );
 
@@ -93,8 +98,11 @@ describe("EmailOnboardingScreen", () => {
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="google"
+          selectedPhoneType={defaultPhoneType}
+          onPhoneTypeChange={mockOnPhoneTypeChange}
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
+          onBack={mockOnBack}
         />,
       );
 
@@ -107,8 +115,11 @@ describe("EmailOnboardingScreen", () => {
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="microsoft"
+          selectedPhoneType={defaultPhoneType}
+          onPhoneTypeChange={mockOnPhoneTypeChange}
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
+          onBack={mockOnBack}
         />,
       );
 
@@ -121,8 +132,11 @@ describe("EmailOnboardingScreen", () => {
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="google"
+          selectedPhoneType={defaultPhoneType}
+          onPhoneTypeChange={mockOnPhoneTypeChange}
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
+          onBack={mockOnBack}
         />,
       );
 
@@ -136,8 +150,11 @@ describe("EmailOnboardingScreen", () => {
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="google"
+          selectedPhoneType={defaultPhoneType}
+          onPhoneTypeChange={mockOnPhoneTypeChange}
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
+          onBack={mockOnBack}
         />,
         "darwin",
       );
@@ -155,8 +172,11 @@ describe("EmailOnboardingScreen", () => {
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="google"
+          selectedPhoneType={defaultPhoneType}
+          onPhoneTypeChange={mockOnPhoneTypeChange}
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
+          onBack={mockOnBack}
         />,
         "win32",
       );
@@ -169,11 +189,13 @@ describe("EmailOnboardingScreen", () => {
   });
 
   describe("Navigation", () => {
-    it("should show Back button when onBack is provided", () => {
+    it("should show Back button", () => {
       renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="google"
+          selectedPhoneType={defaultPhoneType}
+          onPhoneTypeChange={mockOnPhoneTypeChange}
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
           onBack={mockOnBack}
@@ -183,16 +205,20 @@ describe("EmailOnboardingScreen", () => {
       expect(screen.getByRole("button", { name: /back/i })).toBeInTheDocument();
     });
 
-    // TODO: onBack prop defined in interface but not wired up in component
-    it.skip("should call onBack when Back button is clicked", async () => {
+    it("should call onBack when Back button is clicked at step 1", async () => {
+      // Render on macOS where navigationStep starts at 1 (Phone Type)
+      // so clicking Back calls onBack() to exit the component
       renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="google"
+          selectedPhoneType={defaultPhoneType}
+          onPhoneTypeChange={mockOnPhoneTypeChange}
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
           onBack={mockOnBack}
         />,
+        "darwin",
       );
 
       const backButton = screen.getByRole("button", { name: /back/i });
@@ -206,8 +232,11 @@ describe("EmailOnboardingScreen", () => {
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="google"
+          selectedPhoneType={defaultPhoneType}
+          onPhoneTypeChange={mockOnPhoneTypeChange}
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
+          onBack={mockOnBack}
         />,
       );
 
@@ -219,8 +248,11 @@ describe("EmailOnboardingScreen", () => {
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="google"
+          selectedPhoneType={defaultPhoneType}
+          onPhoneTypeChange={mockOnPhoneTypeChange}
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
+          onBack={mockOnBack}
         />,
       );
 
@@ -237,8 +269,11 @@ describe("EmailOnboardingScreen", () => {
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="google"
+          selectedPhoneType={defaultPhoneType}
+          onPhoneTypeChange={mockOnPhoneTypeChange}
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
+          onBack={mockOnBack}
         />,
       );
 
@@ -252,8 +287,11 @@ describe("EmailOnboardingScreen", () => {
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="microsoft"
+          selectedPhoneType={defaultPhoneType}
+          onPhoneTypeChange={mockOnPhoneTypeChange}
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
+          onBack={mockOnBack}
         />,
       );
 
@@ -267,8 +305,11 @@ describe("EmailOnboardingScreen", () => {
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="google"
+          selectedPhoneType={defaultPhoneType}
+          onPhoneTypeChange={mockOnPhoneTypeChange}
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
+          onBack={mockOnBack}
         />,
       );
 
@@ -284,8 +325,11 @@ describe("EmailOnboardingScreen", () => {
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="google"
+          selectedPhoneType={defaultPhoneType}
+          onPhoneTypeChange={mockOnPhoneTypeChange}
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
+          onBack={mockOnBack}
           isPreDbFlow={true}
         />,
       );
@@ -315,8 +359,11 @@ describe("EmailOnboardingScreen", () => {
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="google"
+          selectedPhoneType={defaultPhoneType}
+          onPhoneTypeChange={mockOnPhoneTypeChange}
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
+          onBack={mockOnBack}
           isPreDbFlow={true}
           existingPendingTokens={existingTokens}
         />,
@@ -340,8 +387,11 @@ describe("EmailOnboardingScreen", () => {
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="google"
+          selectedPhoneType={defaultPhoneType}
+          onPhoneTypeChange={mockOnPhoneTypeChange}
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
+          onBack={mockOnBack}
           isPreDbFlow={false}
         />,
       );
@@ -356,8 +406,11 @@ describe("EmailOnboardingScreen", () => {
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="google"
+          selectedPhoneType={defaultPhoneType}
+          onPhoneTypeChange={mockOnPhoneTypeChange}
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
+          onBack={mockOnBack}
           isPreDbFlow={true}
         />,
       );
@@ -378,8 +431,11 @@ describe("EmailOnboardingScreen", () => {
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="google"
+          selectedPhoneType={defaultPhoneType}
+          onPhoneTypeChange={mockOnPhoneTypeChange}
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
+          onBack={mockOnBack}
         />,
       );
 
@@ -401,8 +457,11 @@ describe("EmailOnboardingScreen", () => {
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="google"
+          selectedPhoneType={defaultPhoneType}
+          onPhoneTypeChange={mockOnPhoneTypeChange}
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
+          onBack={mockOnBack}
         />,
       );
 
@@ -424,8 +483,11 @@ describe("EmailOnboardingScreen", () => {
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="google"
+          selectedPhoneType={defaultPhoneType}
+          onPhoneTypeChange={mockOnPhoneTypeChange}
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
+          onBack={mockOnBack}
         />,
       );
 
@@ -448,8 +510,11 @@ describe("EmailOnboardingScreen", () => {
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="google"
+          selectedPhoneType={defaultPhoneType}
+          onPhoneTypeChange={mockOnPhoneTypeChange}
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
+          onBack={mockOnBack}
         />,
       );
 
@@ -463,8 +528,11 @@ describe("EmailOnboardingScreen", () => {
         <EmailOnboardingScreen
           userId={mockUserId}
           authProvider="google"
+          selectedPhoneType={defaultPhoneType}
+          onPhoneTypeChange={mockOnPhoneTypeChange}
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
+          onBack={mockOnBack}
         />,
       );
 

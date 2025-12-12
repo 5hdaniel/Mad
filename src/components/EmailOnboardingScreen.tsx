@@ -19,11 +19,11 @@ interface ConnectionResult {
 interface EmailOnboardingScreenProps {
   userId: string;
   authProvider: "google" | "microsoft";
-  selectedPhoneType?: "iphone" | "android" | null;
-  onPhoneTypeChange?: (phoneType: "iphone" | "android") => Promise<void>;
+  selectedPhoneType: "iphone" | "android" | null;
+  onPhoneTypeChange: (phoneType: "iphone" | "android") => Promise<void>;
   onComplete: (emailTokens?: PendingEmailTokens) => void | Promise<void>;
   onSkip: () => void | Promise<void>;
-  onBack?: () => void;
+  onBack: () => void;
   isPreDbFlow?: boolean;
   emailHint?: string;
   existingPendingTokens?: PendingEmailTokens | null;
