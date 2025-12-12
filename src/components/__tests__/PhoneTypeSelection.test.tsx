@@ -2,9 +2,8 @@
  * Tests for PhoneTypeSelection.tsx
  * Covers phone type selection UI, platform-specific progress bars, and navigation
  *
- * The component uses a two-step flow:
- * 1. Select phone type (sets local state, shows selection visually)
- * 2. Click Continue button to proceed (calls onSelectIPhone/onSelectAndroid)
+ * The component uses a single-click flow:
+ * - Clicking a phone card immediately calls onSelectIPhone/onSelectAndroid
  */
 
 import React from "react";
@@ -57,10 +56,10 @@ describe("PhoneTypeSelection", () => {
         />,
       );
 
-      expect(screen.getByText("Select Your Phone Type")).toBeInTheDocument();
+      expect(screen.getByText("What phone do you use?")).toBeInTheDocument();
     });
 
-    it("should show explanation text", () => {
+    it("should show explanation text about syncing", () => {
       renderWithPlatform(
         <PhoneTypeSelection
           onSelectIPhone={mockOnSelectIPhone}
@@ -68,7 +67,9 @@ describe("PhoneTypeSelection", () => {
         />,
       );
 
-      expect(screen.getByText(/why is this important\?/i)).toBeInTheDocument();
+      expect(
+        screen.getByText(/magic audit can sync your text messages/i),
+      ).toBeInTheDocument();
     });
 
     it("should show iPhone option", () => {
@@ -99,7 +100,7 @@ describe("PhoneTypeSelection", () => {
       ).toBeInTheDocument();
     });
 
-    it("should show Continue button", () => {
+    it("should show privacy info box", () => {
       renderWithPlatform(
         <PhoneTypeSelection
           onSelectIPhone={mockOnSelectIPhone}
@@ -108,25 +109,13 @@ describe("PhoneTypeSelection", () => {
       );
 
       expect(
-        screen.getByRole("button", { name: /continue/i }),
+        screen.getByText(/your phone data stays private and secure/i),
       ).toBeInTheDocument();
-    });
-
-    it("should have Continue button disabled when no selection made", () => {
-      renderWithPlatform(
-        <PhoneTypeSelection
-          onSelectIPhone={mockOnSelectIPhone}
-          onSelectAndroid={mockOnSelectAndroid}
-        />,
-      );
-
-      const continueButton = screen.getByRole("button", { name: /continue/i });
-      expect(continueButton).toBeDisabled();
     });
   });
 
   describe("Phone Selection Flow", () => {
-    it("should enable Continue button after selecting iPhone", async () => {
+    it("should call onSelectIPhone when iPhone card is clicked", async () => {
       renderWithPlatform(
         <PhoneTypeSelection
           onSelectIPhone={mockOnSelectIPhone}
@@ -136,30 +125,12 @@ describe("PhoneTypeSelection", () => {
 
       const iphoneButton = screen.getByText("iPhone").closest("button");
       await userEvent.click(iphoneButton!);
-
-      const continueButton = screen.getByRole("button", { name: /continue/i });
-      expect(continueButton).not.toBeDisabled();
-    });
-
-    it("should call onSelectIPhone when Continue is clicked after selecting iPhone", async () => {
-      renderWithPlatform(
-        <PhoneTypeSelection
-          onSelectIPhone={mockOnSelectIPhone}
-          onSelectAndroid={mockOnSelectAndroid}
-        />,
-      );
-
-      const iphoneButton = screen.getByText("iPhone").closest("button");
-      await userEvent.click(iphoneButton!);
-
-      const continueButton = screen.getByRole("button", { name: /continue/i });
-      await userEvent.click(continueButton);
 
       expect(mockOnSelectIPhone).toHaveBeenCalledTimes(1);
       expect(mockOnSelectAndroid).not.toHaveBeenCalled();
     });
 
-    it("should enable Continue button after selecting Android", async () => {
+    it("should call onSelectAndroid when Android card is clicked", async () => {
       renderWithPlatform(
         <PhoneTypeSelection
           onSelectIPhone={mockOnSelectIPhone}
@@ -169,30 +140,12 @@ describe("PhoneTypeSelection", () => {
 
       const androidButton = screen.getByText("Android").closest("button");
       await userEvent.click(androidButton!);
-
-      const continueButton = screen.getByRole("button", { name: /continue/i });
-      expect(continueButton).not.toBeDisabled();
-    });
-
-    it("should call onSelectAndroid when Continue is clicked after selecting Android", async () => {
-      renderWithPlatform(
-        <PhoneTypeSelection
-          onSelectIPhone={mockOnSelectIPhone}
-          onSelectAndroid={mockOnSelectAndroid}
-        />,
-      );
-
-      const androidButton = screen.getByText("Android").closest("button");
-      await userEvent.click(androidButton!);
-
-      const continueButton = screen.getByRole("button", { name: /continue/i });
-      await userEvent.click(continueButton);
 
       expect(mockOnSelectAndroid).toHaveBeenCalledTimes(1);
       expect(mockOnSelectIPhone).not.toHaveBeenCalled();
     });
 
-    it("should allow changing selection before clicking Continue", async () => {
+    it("should disable buttons while submitting", async () => {
       renderWithPlatform(
         <PhoneTypeSelection
           onSelectIPhone={mockOnSelectIPhone}
@@ -200,26 +153,11 @@ describe("PhoneTypeSelection", () => {
         />,
       );
 
-      // First select iPhone
       const iphoneButton = screen.getByText("iPhone").closest("button");
       await userEvent.click(iphoneButton!);
 
-      // iPhone should be selected
-      expect(iphoneButton).toHaveClass("border-blue-500");
-
-      // Then switch to Android
-      const androidButton = screen.getByText("Android").closest("button");
-      await userEvent.click(androidButton!);
-
-      // Android should now be selected
-      expect(androidButton).toHaveClass("border-green-500");
-
-      // Click Continue should call Android handler
-      const continueButton = screen.getByRole("button", { name: /continue/i });
-      await userEvent.click(continueButton);
-
-      expect(mockOnSelectAndroid).toHaveBeenCalledTimes(1);
-      expect(mockOnSelectIPhone).not.toHaveBeenCalled();
+      // After clicking, button should be disabled (isSubmitting = true)
+      expect(iphoneButton).toBeDisabled();
     });
   });
 
@@ -234,8 +172,8 @@ describe("PhoneTypeSelection", () => {
       );
 
       expect(screen.getByText("Phone Type")).toBeInTheDocument();
-      expect(screen.getByText("Connect Email")).toBeInTheDocument();
       expect(screen.getByText("Secure Storage")).toBeInTheDocument();
+      expect(screen.getByText("Connect Email")).toBeInTheDocument();
       expect(screen.getByText("Permissions")).toBeInTheDocument();
     });
 
@@ -255,7 +193,7 @@ describe("PhoneTypeSelection", () => {
   });
 
   describe("Progress Indicator - Windows", () => {
-    it("should show 2 steps on Windows (no Secure Storage or Permissions)", () => {
+    it("should show 3 steps on Windows with Install Tools instead of Permissions", () => {
       renderWithPlatform(
         <PhoneTypeSelection
           onSelectIPhone={mockOnSelectIPhone}
@@ -266,8 +204,9 @@ describe("PhoneTypeSelection", () => {
 
       expect(screen.getByText("Phone Type")).toBeInTheDocument();
       expect(screen.getByText("Connect Email")).toBeInTheDocument();
+      expect(screen.getByText("Install Tools")).toBeInTheDocument();
 
-      // Secure Storage and Permissions should NOT be present
+      // macOS-only steps should NOT be present
       expect(screen.queryByText("Secure Storage")).not.toBeInTheDocument();
       expect(screen.queryByText("Permissions")).not.toBeInTheDocument();
     });
@@ -310,110 +249,10 @@ describe("PhoneTypeSelection", () => {
       const androidButton = screen.getByText("Android").closest("button");
       expect(androidButton).toBeInTheDocument();
     });
-
-    it("should have accessible Continue button", () => {
-      renderWithPlatform(
-        <PhoneTypeSelection
-          onSelectIPhone={mockOnSelectIPhone}
-          onSelectAndroid={mockOnSelectAndroid}
-        />,
-      );
-
-      expect(
-        screen.getByRole("button", { name: /continue/i }),
-      ).toBeInTheDocument();
-    });
   });
 
   describe("Visual Feedback", () => {
-    it("should show blue border when iPhone is selected", async () => {
-      renderWithPlatform(
-        <PhoneTypeSelection
-          onSelectIPhone={mockOnSelectIPhone}
-          onSelectAndroid={mockOnSelectAndroid}
-        />,
-      );
-
-      const iphoneButton = screen.getByText("iPhone").closest("button");
-      await userEvent.click(iphoneButton!);
-
-      expect(iphoneButton).toHaveClass(
-        "border-blue-500",
-        "bg-blue-50",
-        "ring-2",
-        "ring-blue-200",
-      );
-    });
-
-    it("should show green border when Android is selected", async () => {
-      renderWithPlatform(
-        <PhoneTypeSelection
-          onSelectIPhone={mockOnSelectIPhone}
-          onSelectAndroid={mockOnSelectAndroid}
-        />,
-      );
-
-      const androidButton = screen.getByText("Android").closest("button");
-      await userEvent.click(androidButton!);
-
-      expect(androidButton).toHaveClass(
-        "border-green-500",
-        "bg-green-50",
-        "ring-2",
-        "ring-green-200",
-      );
-    });
-
-    it("should show Continue button in green when selection is made", async () => {
-      renderWithPlatform(
-        <PhoneTypeSelection
-          onSelectIPhone={mockOnSelectIPhone}
-          onSelectAndroid={mockOnSelectAndroid}
-        />,
-      );
-
-      const iphoneButton = screen.getByText("iPhone").closest("button");
-      await userEvent.click(iphoneButton!);
-
-      const continueButton = screen.getByRole("button", { name: /continue/i });
-      expect(continueButton).toHaveClass("bg-green-500");
-    });
-
-    it("should show checkmark when iPhone is selected", async () => {
-      renderWithPlatform(
-        <PhoneTypeSelection
-          onSelectIPhone={mockOnSelectIPhone}
-          onSelectAndroid={mockOnSelectAndroid}
-        />,
-      );
-
-      const iphoneButton = screen.getByText("iPhone").closest("button");
-      await userEvent.click(iphoneButton!);
-
-      // The checkmark SVG should appear within the iPhone button
-      const checkmarks = iphoneButton?.querySelectorAll("svg");
-      // Should have Apple logo SVG + checkmark SVG when selected
-      expect(checkmarks?.length).toBeGreaterThan(1);
-    });
-
-    it("should show checkmark when Android is selected", async () => {
-      renderWithPlatform(
-        <PhoneTypeSelection
-          onSelectIPhone={mockOnSelectIPhone}
-          onSelectAndroid={mockOnSelectAndroid}
-        />,
-      );
-
-      const androidButton = screen.getByText("Android").closest("button");
-      await userEvent.click(androidButton!);
-
-      // The checkmark SVG should appear within the Android button
-      const checkmarks = androidButton?.querySelectorAll("svg");
-      // Should have Android logo SVG + checkmark SVG when selected
-      expect(checkmarks?.length).toBeGreaterThan(1);
-    });
-
-    it("should pre-select based on selectedType prop", () => {
+    it("should show blue border when iPhone is pre-selected", () => {
       renderWithPlatform(
         <PhoneTypeSelection
           onSelectIPhone={mockOnSelectIPhone}
@@ -423,11 +262,62 @@ describe("PhoneTypeSelection", () => {
       );
 
       const iphoneButton = screen.getByText("iPhone").closest("button");
-      expect(iphoneButton).toHaveClass("border-blue-500");
+      expect(iphoneButton).toHaveClass(
+        "border-blue-500",
+        "bg-blue-50",
+        "ring-2",
+        "ring-blue-200",
+      );
+    });
 
-      // Continue button should be enabled
-      const continueButton = screen.getByRole("button", { name: /continue/i });
-      expect(continueButton).not.toBeDisabled();
+    it("should show green border when Android is pre-selected", () => {
+      renderWithPlatform(
+        <PhoneTypeSelection
+          onSelectIPhone={mockOnSelectIPhone}
+          onSelectAndroid={mockOnSelectAndroid}
+          selectedType="android"
+        />,
+      );
+
+      const androidButton = screen.getByText("Android").closest("button");
+      expect(androidButton).toHaveClass(
+        "border-green-500",
+        "bg-green-50",
+        "ring-2",
+        "ring-green-200",
+      );
+    });
+
+    it("should show checkmark when iPhone is pre-selected", () => {
+      renderWithPlatform(
+        <PhoneTypeSelection
+          onSelectIPhone={mockOnSelectIPhone}
+          onSelectAndroid={mockOnSelectAndroid}
+          selectedType="iphone"
+        />,
+      );
+
+      const iphoneButton = screen.getByText("iPhone").closest("button");
+      // The checkmark SVG should appear within the iPhone button
+      const checkmarks = iphoneButton?.querySelectorAll("svg");
+      // Should have Apple logo SVG + checkmark SVG when selected
+      expect(checkmarks?.length).toBeGreaterThan(1);
+    });
+
+    it("should show checkmark when Android is pre-selected", () => {
+      renderWithPlatform(
+        <PhoneTypeSelection
+          onSelectIPhone={mockOnSelectIPhone}
+          onSelectAndroid={mockOnSelectAndroid}
+          selectedType="android"
+        />,
+      );
+
+      const androidButton = screen.getByText("Android").closest("button");
+      // The checkmark SVG should appear within the Android button
+      const checkmarks = androidButton?.querySelectorAll("svg");
+      // Should have Android logo SVG + checkmark SVG when selected
+      expect(checkmarks?.length).toBeGreaterThan(1);
     });
   });
 });

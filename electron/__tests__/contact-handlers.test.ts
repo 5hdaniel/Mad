@@ -224,6 +224,7 @@ describe("Contact Handlers", () => {
 
     it("should import contacts successfully", async () => {
       mockDatabaseService.createContact.mockImplementation(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         async (data: any) => ({
           id: `contact-${data.name}`,
           ...data,
