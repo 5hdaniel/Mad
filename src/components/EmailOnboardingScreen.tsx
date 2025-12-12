@@ -151,6 +151,7 @@ function EmailOnboardingScreen({
   onBack,
   isPreDbFlow = false,
   emailHint,
+  existingPendingTokens,
 }: EmailOnboardingScreenProps) {
   const { isWindows } = usePlatform();
 
@@ -162,6 +163,13 @@ function EmailOnboardingScreen({
   const [connectingProvider, setConnectingProvider] = useState<string | null>(
     null,
   );
+  // Store pending tokens collected during this screen (when using pending API)
+  // We can only store one at a time - the most recent connection
+  const [pendingTokens, setPendingTokens] = useState<PendingEmailTokens | null>(
+    existingPendingTokens || null,
+  );
+  // Also track if we connected via regular (non-pending) API
+  const [connectedViaRegularApi, setConnectedViaRegularApi] = useState(false);
   // Start navigation at the current step for this screen
   // On Windows: currentStep is 2 (Connect Email), so start navigation at 2
   // On macOS: varies based on where user is in the flow
@@ -268,7 +276,13 @@ function EmailOnboardingScreen({
             async (connectionResult: { success: boolean; email?: string; tokens?: PendingEmailTokens["tokens"]; error?: string }) => {
               try {
                 if (connectionResult.success && connectionResult.email && connectionResult.tokens) {
+                  console.log("[EmailOnboarding] Google pending connection successful:", connectionResult.email);
                   // Store pending tokens for later saving after DB init
+                  setPendingTokens({
+                    provider: "google",
+                    email: connectionResult.email,
+                    tokens: connectionResult.tokens,
+                  });
                   setConnections((prev) => ({
                     ...prev,
                     google: { connected: true, email: connectionResult.email! },
@@ -286,6 +300,7 @@ function EmailOnboardingScreen({
             },
           );
           cleanupCancelled = window.api.onGoogleMailboxPendingCancelled(() => {
+            console.log("[EmailOnboarding] Google pending connection cancelled");
             setConnectingProvider(null);
             cleanup();
           });
@@ -294,6 +309,8 @@ function EmailOnboardingScreen({
             async (connectionResult: ConnectionResult) => {
               try {
                 if (connectionResult.success) {
+                  console.log("[EmailOnboarding] Google regular connection successful");
+                  setConnectedViaRegularApi(true);
                   await checkConnections();
                 }
               } catch (error) {
@@ -308,6 +325,7 @@ function EmailOnboardingScreen({
             },
           );
           cleanupCancelled = window.api.onGoogleMailboxCancelled(() => {
+            console.log("[EmailOnboarding] Google regular connection cancelled");
             setConnectingProvider(null);
             cleanup();
           });
@@ -368,7 +386,13 @@ function EmailOnboardingScreen({
             async (connectionResult: { success: boolean; email?: string; tokens?: PendingEmailTokens["tokens"]; error?: string }) => {
               try {
                 if (connectionResult.success && connectionResult.email && connectionResult.tokens) {
+                  console.log("[EmailOnboarding] Microsoft pending connection successful:", connectionResult.email);
                   // Store pending tokens for later saving after DB init
+                  setPendingTokens({
+                    provider: "microsoft",
+                    email: connectionResult.email,
+                    tokens: connectionResult.tokens,
+                  });
                   setConnections((prev) => ({
                     ...prev,
                     microsoft: { connected: true, email: connectionResult.email! },
@@ -386,6 +410,7 @@ function EmailOnboardingScreen({
             },
           );
           cleanupCancelled = window.api.onMicrosoftMailboxPendingCancelled(() => {
+            console.log("[EmailOnboarding] Microsoft pending connection cancelled");
             setConnectingProvider(null);
             cleanup();
           });
@@ -394,6 +419,8 @@ function EmailOnboardingScreen({
             async (connectionResult: ConnectionResult) => {
               try {
                 if (connectionResult.success) {
+                  console.log("[EmailOnboarding] Microsoft regular connection successful");
+                  setConnectedViaRegularApi(true);
                   await checkConnections();
                 }
               } catch (error) {
@@ -408,6 +435,7 @@ function EmailOnboardingScreen({
             },
           );
           cleanupCancelled = window.api.onMicrosoftMailboxCancelled(() => {
+            console.log("[EmailOnboarding] Microsoft regular connection cancelled");
             setConnectingProvider(null);
             cleanup();
           });
@@ -425,7 +453,13 @@ function EmailOnboardingScreen({
   };
 
   const handleContinue = (): void => {
-    onComplete();
+    console.log("[EmailOnboarding] Continue clicked, pendingTokens:", pendingTokens, "connectedViaRegularApi:", connectedViaRegularApi);
+    // Pass pending tokens if we collected any during the pending API flow
+    if (pendingTokens) {
+      onComplete(pendingTokens);
+    } else {
+      onComplete();
+    }
   };
 
   const handleSkip = (): void => {

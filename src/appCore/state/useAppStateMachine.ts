@@ -463,6 +463,9 @@ export function useAppStateMachine(): AppStateMachine {
       }));
       if (isMacOS) {
         setCurrentStep("keychain-explanation");
+      } else if (isWindows) {
+        // On Windows, go to Apple driver setup for iPhone users
+        setCurrentStep("apple-driver-setup");
       }
       return;
     }
@@ -480,10 +483,13 @@ export function useAppStateMachine(): AppStateMachine {
     if (pendingOAuthData && !isAuthenticated) {
       setPendingOnboardingData((prev) => ({
         ...prev,
-        emailConnected: true,
+        emailConnected: false, // Skipped, not connected
       }));
       if (isMacOS) {
         setCurrentStep("keychain-explanation");
+      } else if (isWindows) {
+        // On Windows, go to Apple driver setup for iPhone users
+        setCurrentStep("apple-driver-setup");
       }
       return;
     }
