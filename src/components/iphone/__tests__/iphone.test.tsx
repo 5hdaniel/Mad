@@ -430,7 +430,9 @@ describe("SyncProgress", () => {
 
     render(<SyncProgress progress={progress} onCancel={mockOnCancel} />);
 
-    expect(screen.getByText(/backing up device/i)).toBeInTheDocument();
+    // Option C 2-tier UI shows combined title+context
+    expect(screen.getByText(/backing up/i)).toBeInTheDocument();
+    expect(screen.getByText(/keep connected/i)).toBeInTheDocument();
   });
 
   it("should show extracting phase", () => {
@@ -441,7 +443,9 @@ describe("SyncProgress", () => {
 
     render(<SyncProgress progress={progress} onCancel={mockOnCancel} />);
 
-    expect(screen.getByText(/extracting messages/i)).toBeInTheDocument();
+    // Option C 2-tier UI shows combined title+context
+    expect(screen.getByText(/reading messages/i)).toBeInTheDocument();
+    expect(screen.getByText(/safe to disconnect/i)).toBeInTheDocument();
   });
 
   it("should show complete phase", () => {
@@ -464,7 +468,8 @@ describe("SyncProgress", () => {
 
     render(<SyncProgress progress={progress} onCancel={mockOnCancel} />);
 
-    expect(screen.getByText(/an error occurred/i)).toBeInTheDocument();
+    // Option C 2-tier UI shows "Sync failed" for error phase
+    expect(screen.getByText(/sync failed/i)).toBeInTheDocument();
   });
 
   it("should show progress percentage", () => {
