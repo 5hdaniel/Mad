@@ -553,40 +553,13 @@ function AppleDriverSetup({ onComplete, onSkip, onBack }: AppleDriverSetupProps)
               </div>
             )}
 
-            {/* Installed State (just finished installing) */}
+            {/* Installed State (just finished installing) - auto-continues */}
             {status === "installed" && (
-              <>
-                {/* Success message */}
-                <div className="bg-green-50 rounded-lg p-4 mb-6">
-                  <h3 className="font-medium text-gray-900 mb-2 flex items-center gap-2">
-                    <svg
-                      className="w-5 h-5 text-green-500"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                      />
-                    </svg>
-                    Tools Installed Successfully
-                  </h3>
-                  <p className="text-sm text-gray-600">
-                    Apple Mobile Device Support is now installed and ready.
-                  </p>
-                </div>
-
-                {/* Green Continue Button */}
-                <button
-                  onClick={onComplete}
-                  className="w-full py-3 px-4 bg-green-500 text-white rounded-lg font-semibold hover:bg-green-600 transition-all shadow-md hover:shadow-lg"
-                >
-                  Continue
-                </button>
-              </>
+              <div className="text-center py-4">
+                <p className="text-gray-600 text-sm">
+                  Continuing to the next step...
+                </p>
+              </div>
             )}
 
             {/* Already Installed State (detected on load) - show green continue */}
