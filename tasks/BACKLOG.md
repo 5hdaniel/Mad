@@ -513,6 +513,226 @@ When iPhone sync runs again, intelligently merge new data while preserving manua
 
 ---
 
+### BACKLOG-019: Returning User Experience - Skip Phone Selection
+**Priority:** Medium
+**Status:** Pending
+**Category:** UX
+
+**Description:**
+Returning users shouldn't have to re-select their phone type every time they open the app. Store the selection and allow changing it from settings.
+
+**Current behavior:**
+- Every app launch shows phone type selection screen
+- User must click through onboarding steps each time
+
+**Target behavior:**
+- First launch: Show full onboarding (phone type → email → drivers)
+- Returning user: Skip to dashboard directly
+- Settings: Option to change phone platform (iPhone ↔ Android)
+- Settings: Option to re-run onboarding if needed
+
+**Implementation:**
+1. Store `phoneType` preference in local storage/database on first selection
+2. On app launch, check if `phoneType` exists → skip to dashboard
+3. Add "Phone Platform" setting in Settings screen with options:
+   - iPhone (current)
+   - Android (current)
+   - "Change Phone" → triggers re-onboarding flow
+4. Store `onboardingCompleted: true` flag to distinguish new vs returning users
+
+**Files to modify:**
+- `src/App.tsx` - Check stored preference on launch
+- `src/components/settings/` - Add phone platform setting
+- `electron/services/databaseService.ts` or localStorage - Store preference
+
+---
+
+### BACKLOG-020: Device UUID Licensing - Single Device Lock
+**Priority:** High
+**Status:** Pending
+**Category:** Licensing/Security
+
+**Description:**
+Tie user licenses to a specific device UUID to prevent account sharing. Store device binding in Supabase.
+
+**Requirements:**
+1. Generate/retrieve unique device UUID on first launch
+2. On login, check if account already bound to a different UUID
+3. If bound to different device → show error "This account is already activated on another device"
+4. Allow license upgrade for multi-device support
+
+**Implementation:**
+
+1. **Generate Device UUID:**
+   ```typescript
+   // Use machine-id package or Electron's machineId
+   import { machineIdSync } from 'node-machine-id';
+   const deviceUuid = machineIdSync();
+   ```
+
+2. **Supabase table: `user_devices`**
+   ```sql
+   CREATE TABLE user_devices (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     user_id UUID REFERENCES auth.users(id),
+     device_uuid TEXT NOT NULL,
+     device_name TEXT,  -- "Daniel's Windows PC"
+     platform TEXT,     -- 'win32', 'darwin'
+     first_seen_at TIMESTAMPTZ DEFAULT NOW(),
+     last_seen_at TIMESTAMPTZ DEFAULT NOW(),
+     is_active BOOLEAN DEFAULT true,
+     UNIQUE(user_id, device_uuid)
+   );
+   ```
+
+3. **On login flow:**
+   - Get local device UUID
+   - Query `user_devices` for this user
+   - If no devices → insert this device (first activation)
+   - If devices exist but not this one → check license limit
+   - If over limit → reject login with upgrade prompt
+
+**SOC 2 Consideration:**
+- Device UUID is not PII (it's a machine identifier)
+- Storing in Supabase should be fine for SOC 2
+- Add audit logging for device activations/deactivations
+
+**Files to modify:**
+- `electron/auth-handlers.ts` - Add device check on login
+- `electron/services/deviceIdService.ts` - NEW: Get/generate device UUID
+- Supabase migrations - Add `user_devices` table
+
+---
+
+### BACKLOG-021: License Management System
+**Priority:** High
+**Status:** Pending
+**Category:** Licensing/Business Logic
+
+**Description:**
+Create a comprehensive license management system in Supabase to control feature access, limits, and billing.
+
+**Supabase Tables:**
+
+1. **`license_tiers`** - Define available license levels
+   ```sql
+   CREATE TABLE license_tiers (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     name TEXT NOT NULL,              -- 'free', 'starter', 'professional', 'enterprise'
+     display_name TEXT NOT NULL,      -- 'Free Trial', 'Starter', 'Professional', 'Enterprise'
+     price_monthly DECIMAL(10,2),
+     price_yearly DECIMAL(10,2),
+
+     -- Device Limits
+     max_devices INTEGER DEFAULT 1,
+
+     -- Mailbox Limits
+     max_mailboxes INTEGER DEFAULT 1,
+
+     -- Export Limits
+     exports_per_month INTEGER,       -- NULL = unlimited
+     exports_per_year INTEGER,        -- NULL = unlimited
+
+     -- Feature Flags
+     feature_email_export BOOLEAN DEFAULT true,
+     feature_text_export BOOLEAN DEFAULT false,
+     feature_ai_timeline BOOLEAN DEFAULT false,
+     feature_attachments BOOLEAN DEFAULT false,
+     feature_bulk_export BOOLEAN DEFAULT false,
+     feature_api_access BOOLEAN DEFAULT false,
+     feature_priority_support BOOLEAN DEFAULT false,
+
+     -- Metadata
+     is_active BOOLEAN DEFAULT true,
+     sort_order INTEGER DEFAULT 0,
+     created_at TIMESTAMPTZ DEFAULT NOW()
+   );
+   ```
+
+2. **`user_licenses`** - User's active license
+   ```sql
+   CREATE TABLE user_licenses (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     user_id UUID REFERENCES auth.users(id) UNIQUE,
+     tier_id UUID REFERENCES license_tiers(id),
+
+     -- License Status
+     status TEXT CHECK (status IN ('trial', 'active', 'expired', 'cancelled', 'suspended')),
+
+     -- Dates
+     trial_start_date TIMESTAMPTZ,
+     trial_end_date TIMESTAMPTZ,
+     license_start_date TIMESTAMPTZ,
+     license_end_date TIMESTAMPTZ,    -- NULL = lifetime/no expiry
+
+     -- Usage Tracking
+     exports_this_month INTEGER DEFAULT 0,
+     exports_this_year INTEGER DEFAULT 0,
+     last_export_reset_at TIMESTAMPTZ DEFAULT NOW(),
+
+     -- Billing (if integrated with Stripe)
+     stripe_customer_id TEXT,
+     stripe_subscription_id TEXT,
+
+     -- Metadata
+     created_at TIMESTAMPTZ DEFAULT NOW(),
+     updated_at TIMESTAMPTZ DEFAULT NOW()
+   );
+   ```
+
+3. **`license_usage_log`** - Audit trail for usage
+   ```sql
+   CREATE TABLE license_usage_log (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     user_id UUID REFERENCES auth.users(id),
+     action TEXT,                     -- 'export', 'add_mailbox', 'add_device'
+     resource_type TEXT,              -- 'transaction', 'mailbox', 'device'
+     resource_id TEXT,
+     metadata JSONB,
+     created_at TIMESTAMPTZ DEFAULT NOW()
+   );
+   ```
+
+**Default License Tiers (seed data):**
+| Tier | Devices | Mailboxes | Exports/Mo | AI Timeline | Attachments | Price |
+|------|---------|-----------|------------|-------------|-------------|-------|
+| Trial | 1 | 1 | 5 | ❌ | ❌ | Free (14 days) |
+| Starter | 1 | 1 | 25 | ❌ | ❌ | $29/mo |
+| Professional | 2 | 3 | Unlimited | ✅ | ✅ | $79/mo |
+| Enterprise | 10 | 10 | Unlimited | ✅ | ✅ | Custom |
+
+**Feature Check Implementation:**
+```typescript
+// electron/services/licenseService.ts
+class LicenseService {
+  async canExport(userId: string): Promise<boolean> {
+    const license = await this.getUserLicense(userId);
+    if (license.status !== 'active' && license.status !== 'trial') return false;
+    if (license.exports_this_month >= license.tier.exports_per_month) return false;
+    return license.tier.feature_email_export;
+  }
+
+  async canUseAiTimeline(userId: string): Promise<boolean> {
+    const license = await this.getUserLicense(userId);
+    return license.tier.feature_ai_timeline;
+  }
+
+  async incrementExportCount(userId: string): Promise<void> {
+    // Update exports_this_month, log to usage_log
+  }
+}
+```
+
+**Files to create:**
+- `supabase/migrations/xxx_license_tables.sql` - Database schema
+- `supabase/seed.sql` - Default license tiers
+- `electron/services/licenseService.ts` - License checking logic
+- `src/hooks/useLicense.ts` - React hook for feature checks
+- `src/components/settings/LicenseSettings.tsx` - License info display
+- `src/components/UpgradePrompt.tsx` - Shown when hitting limits
+
+---
+
 ## Last Updated
 2024-12-10 - Initial backlog created from build warnings and sync testing session
 2024-12-10 - Added BACKLOG-006: Dark Mode
@@ -522,3 +742,6 @@ When iPhone sync runs again, intelligently merge new data while preserving manua
 2024-12-11 - Added BACKLOG-016: Refactor Contact Import to Use Reference Model (High priority)
 2024-12-11 - Added BACKLOG-017: Naming Convention Documentation (Low priority)
 2024-12-11 - Added BACKLOG-018: Smart Contact Sync with Manual Override Support (High priority)
+2024-12-11 - Added BACKLOG-019: Returning User Experience - Skip Phone Selection (Medium priority)
+2024-12-11 - Added BACKLOG-020: Device UUID Licensing - Single Device Lock (High priority)
+2024-12-11 - Added BACKLOG-021: License Management System (High priority)
