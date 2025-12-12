@@ -472,15 +472,15 @@ describe("SyncProgress", () => {
     expect(screen.getByText(/sync failed/i)).toBeInTheDocument();
   });
 
-  it("should show progress percentage", () => {
+  it("should show progress percentage during extracting phase", () => {
     const progress: BackupProgress = {
-      phase: "backing_up",
+      phase: "extracting",
       percent: 45,
     };
 
     render(<SyncProgress progress={progress} onCancel={mockOnCancel} />);
 
-    // Current UI shows "X% complete"
+    // Current UI shows "X% complete" during extracting/storing phases
     expect(screen.getByText(/45% complete/i)).toBeInTheDocument();
   });
 
