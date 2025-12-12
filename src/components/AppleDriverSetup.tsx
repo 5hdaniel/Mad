@@ -35,10 +35,9 @@ function getDriversAPI(): DriversAPI | null {
 
 // Windows + iPhone setup steps (includes driver installation)
 const WINDOWS_IPHONE_SETUP_STEPS = [
-  { id: 1, label: "Sign In" },
-  { id: 2, label: "Phone Type" },
+  { id: 1, label: "Phone Type" },
+  { id: 2, label: "Connect Email" },
   { id: 3, label: "Install Tools" },
-  { id: 4, label: "Connect Email" },
 ];
 
 /**
@@ -102,12 +101,14 @@ type InstallStatus =
   | "needs-update"
   | "installing"
   | "installed"
+  | "already-installed"
   | "error"
   | "cancelled";
 
 interface AppleDriverSetupProps {
   onComplete: () => void;
   onSkip: () => void;
+  onBack?: () => void;
 }
 
 /**
@@ -118,7 +119,7 @@ interface AppleDriverSetupProps {
  * The component explains what tools are being installed and obtains
  * user consent before triggering the installation (which shows UAC prompt).
  */
-function AppleDriverSetup({ onComplete, onSkip }: AppleDriverSetupProps) {
+function AppleDriverSetup({ onComplete, onSkip, onBack }: AppleDriverSetupProps) {
   const [status, setStatus] = useState<InstallStatus>("checking");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [hasBundled, setHasBundled] = useState(false);
@@ -142,6 +143,7 @@ function AppleDriverSetup({ onComplete, onSkip }: AppleDriverSetupProps) {
         const driverResult = await drivers.checkApple();
 
         if (driverResult.installed && driverResult.serviceRunning) {
+          console.log("[AppleDriverSetup] Drivers already installed!");
           // Drivers installed - check if update is available
           if (drivers.checkUpdate) {
             try {
@@ -163,8 +165,9 @@ function AppleDriverSetup({ onComplete, onSkip }: AppleDriverSetupProps) {
               );
             }
           }
-          // Already installed, no update needed - skip this step immediately
-          onComplete();
+          // Already installed, no update needed - show green continue button
+          setInstalledVersion(driverResult.version || null);
+          setStatus("already-installed");
           return;
         }
 
@@ -230,13 +233,8 @@ function AppleDriverSetup({ onComplete, onSkip }: AppleDriverSetupProps) {
 
   // Auto-continue if already installed
   useEffect(() => {
-    if (status === "installed") {
-      const timer = setTimeout(() => {
-        onComplete();
-      }, 1500);
-      return () => clearTimeout(timer);
-    }
-  }, [status, onComplete]);
+    // No auto-advance - let user click Continue button
+  }, [status]);
 
   // Only show on Windows
   if (!isWindows) {
@@ -260,7 +258,7 @@ function AppleDriverSetup({ onComplete, onSkip }: AppleDriverSetupProps) {
             <div className="text-center mb-6">
               <div
                 className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${
-                  status === "installed"
+                  status === "installed" || status === "already-installed"
                     ? "bg-green-100"
                     : status === "needs-update"
                       ? "bg-amber-100"
@@ -271,7 +269,7 @@ function AppleDriverSetup({ onComplete, onSkip }: AppleDriverSetupProps) {
               >
                 {status === "checking" || status === "installing" ? (
                   <div className="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                ) : status === "installed" ? (
+                ) : status === "installed" || status === "already-installed" ? (
                   <svg
                     className="w-8 h-8 text-green-600"
                     fill="none"
@@ -335,8 +333,8 @@ function AppleDriverSetup({ onComplete, onSkip }: AppleDriverSetupProps) {
                   ? "Checking System..."
                   : status === "installing"
                     ? "Installing Tools..."
-                    : status === "installed"
-                      ? "Tools Installed!"
+                    : status === "installed" || status === "already-installed"
+                      ? "Tools Ready!"
                       : status === "needs-update"
                         ? "Update Available"
                         : status === "error" || status === "cancelled"
@@ -349,7 +347,7 @@ function AppleDriverSetup({ onComplete, onSkip }: AppleDriverSetupProps) {
                   ? "Checking if Apple tools are already installed..."
                   : status === "installing"
                     ? "Please approve the installation when prompted..."
-                    : status === "installed"
+                    : status === "installed" || status === "already-installed"
                       ? "Your computer is ready to sync with your iPhone."
                       : status === "needs-update"
                         ? "A newer version of Apple tools is available."
@@ -449,13 +447,6 @@ function AppleDriverSetup({ onComplete, onSkip }: AppleDriverSetupProps) {
                   </>
                 )}
 
-                {/* Skip option */}
-                <button
-                  onClick={onSkip}
-                  className="w-full py-2 text-gray-500 hover:text-gray-700 text-sm font-medium transition-colors"
-                >
-                  Skip update (continue with current version)
-                </button>
               </>
             )}
 
@@ -547,13 +538,6 @@ function AppleDriverSetup({ onComplete, onSkip }: AppleDriverSetupProps) {
                   </>
                 )}
 
-                {/* Skip option */}
-                <button
-                  onClick={onSkip}
-                  className="w-full py-2 text-gray-500 hover:text-gray-700 text-sm font-medium transition-colors"
-                >
-                  Skip for now (you can set this up later)
-                </button>
               </>
             )}
 
@@ -569,13 +553,54 @@ function AppleDriverSetup({ onComplete, onSkip }: AppleDriverSetupProps) {
               </div>
             )}
 
-            {/* Installed State */}
+            {/* Installed State (just finished installing) - auto-continues */}
             {status === "installed" && (
               <div className="text-center py-4">
                 <p className="text-gray-600 text-sm">
                   Continuing to the next step...
                 </p>
               </div>
+            )}
+
+            {/* Already Installed State (detected on load) - show green continue */}
+            {status === "already-installed" && (
+              <>
+                {/* Version info */}
+                <div className="bg-green-50 rounded-lg p-4 mb-6">
+                  <h3 className="font-medium text-gray-900 mb-2 flex items-center gap-2">
+                    <svg
+                      className="w-5 h-5 text-green-500"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                    Already Installed
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    Apple Mobile Device Support is installed and running.
+                    {installedVersion && (
+                      <span className="block mt-1 text-gray-500">
+                        Version: {installedVersion}
+                      </span>
+                    )}
+                  </p>
+                </div>
+
+                {/* Green Continue Button */}
+                <button
+                  onClick={onComplete}
+                  className="w-full py-3 px-4 bg-green-500 text-white rounded-lg font-semibold hover:bg-green-600 transition-all shadow-md hover:shadow-lg"
+                >
+                  Continue
+                </button>
+              </>
             )}
 
             {/* Error/Cancelled State */}
@@ -595,12 +620,6 @@ function AppleDriverSetup({ onComplete, onSkip }: AppleDriverSetupProps) {
                     Install iTunes
                   </button>
                 </div>
-                <button
-                  onClick={onSkip}
-                  className="w-full py-2 text-gray-500 hover:text-gray-700 text-sm font-medium transition-colors"
-                >
-                  Skip for now
-                </button>
               </>
             )}
 
@@ -619,6 +638,49 @@ function AppleDriverSetup({ onComplete, onSkip }: AppleDriverSetupProps) {
               install Apple's official tools which are required to communicate
               with iPhone devices.
             </p>
+          )}
+
+          {/* Navigation Footer - shown for states where user can navigate */}
+          {(status === "not-installed" || status === "needs-update" || status === "error" || status === "cancelled") && (
+            <>
+              {/* Back Button */}
+              <div className="flex items-center justify-start pt-4 mt-4 border-t border-gray-200">
+                {onBack && (
+                  <button
+                    onClick={onBack}
+                    className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium transition-all text-gray-700 hover:bg-gray-100"
+                  >
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M15 19l-7-7 7-7"
+                      />
+                    </svg>
+                    <span>Back</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Skip Option */}
+              <div className="text-center mt-4">
+                <button
+                  onClick={onSkip}
+                  className="text-gray-500 hover:text-gray-700 py-2 text-sm font-medium transition-colors"
+                >
+                  Skip for Now
+                </button>
+                <p className="text-xs text-gray-400 mt-1">
+                  You can install these tools later via the iPhone sync option
+                </p>
+              </div>
+            </>
           )}
         </div>
       </div>

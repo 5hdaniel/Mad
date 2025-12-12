@@ -1060,6 +1060,14 @@ contextBridge.exposeInMainWorld("api", {
     getStatus: () => ipcRenderer.invoke("backup:status"),
 
     /**
+     * Check backup status for a specific device (returns last sync time, size, etc.)
+     * @param {string} udid - Device UDID
+     * @returns {Promise<{success: boolean, exists: boolean, lastSyncTime: string | null, sizeBytes: number}>}
+     */
+    checkStatus: (udid: string) =>
+      ipcRenderer.invoke("backup:check-status", udid),
+
+    /**
      * Starts a backup operation for the specified device
      * @param {BackupOptions} options - Backup options including device UDID
      * @returns {Promise<BackupResult>} Backup result
@@ -1327,6 +1335,16 @@ contextBridge.exposeInMainWorld("api", {
     stopDetection: () => ipcRenderer.invoke("sync:stop-detection"),
 
     /**
+     * Process existing backup without running new backup (for testing)
+     * @param {Object} options - Processing options
+     * @param {string} options.udid - Device UDID
+     * @param {string} [options.password] - Backup password if encrypted
+     * @returns {Promise<SyncResult>} Processing result
+     */
+    processExisting: (options: { udid: string; password?: string }) =>
+      ipcRenderer.invoke("sync:process-existing", options),
+
+    /**
      * Subscribes to sync progress updates
      * @param {Function} callback - Callback with progress info
      * @returns {Function} Cleanup function to remove listener
@@ -1386,6 +1404,30 @@ contextBridge.exposeInMainWorld("api", {
     },
 
     /**
+     * Subscribes to passcode waiting events (user needs to enter passcode on iPhone)
+     * @param {Function} callback - Callback when waiting for passcode
+     * @returns {Function} Cleanup function to remove listener
+     */
+    onWaitingForPasscode: (callback: () => void) => {
+      const listener = () => callback();
+      ipcRenderer.on("sync:waiting-for-passcode", listener);
+      return () =>
+        ipcRenderer.removeListener("sync:waiting-for-passcode", listener);
+    },
+
+    /**
+     * Subscribes to passcode entered events (user entered passcode, backup starting)
+     * @param {Function} callback - Callback when passcode entered
+     * @returns {Function} Cleanup function to remove listener
+     */
+    onPasscodeEntered: (callback: () => void) => {
+      const listener = () => callback();
+      ipcRenderer.on("sync:passcode-entered", listener);
+      return () =>
+        ipcRenderer.removeListener("sync:passcode-entered", listener);
+    },
+
+    /**
      * Subscribes to sync error events
      * @param {Function} callback - Callback with error info
      * @returns {Function} Cleanup function to remove listener
@@ -1405,6 +1447,35 @@ contextBridge.exposeInMainWorld("api", {
       const listener = (_: IpcRendererEvent, result: any) => callback(result);
       ipcRenderer.on("sync:complete", listener);
       return () => ipcRenderer.removeListener("sync:complete", listener);
+    },
+
+    /**
+     * Subscribes to storage completion events (after messages saved to DB)
+     * @param {Function} callback - Callback with storage result
+     * @returns {Function} Cleanup function to remove listener
+     */
+    onStorageComplete: (
+      callback: (result: {
+        messagesStored: number;
+        contactsStored: number;
+        duration: number;
+      }) => void
+    ) => {
+      const listener = (_: IpcRendererEvent, result: any) => callback(result);
+      ipcRenderer.on("sync:storage-complete", listener);
+      return () =>
+        ipcRenderer.removeListener("sync:storage-complete", listener);
+    },
+
+    /**
+     * Subscribes to storage error events
+     * @param {Function} callback - Callback with error info
+     * @returns {Function} Cleanup function to remove listener
+     */
+    onStorageError: (callback: (error: { error: string }) => void) => {
+      const listener = (_: IpcRendererEvent, error: any) => callback(error);
+      ipcRenderer.on("sync:storage-error", listener);
+      return () => ipcRenderer.removeListener("sync:storage-error", listener);
     },
   },
 });

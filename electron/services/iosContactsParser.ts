@@ -15,8 +15,8 @@ import path from "path";
 import log from "electron-log";
 import type {
   iOSContact,
-  ContactPhone,
-  ContactEmail,
+  iOSContactPhone,
+  iOSContactEmail,
   ContactLookupResult,
   RawContactRow,
   RawMultiValueRow,
@@ -57,13 +57,25 @@ export class iOSContactsParser {
   private stmtMultiValuesByContact: Statement | null = null;
 
   /**
+   * Get the full path to a file in an iOS backup.
+   * iOS backups store files in subdirectories based on the first 2 characters of the hash.
+   * e.g., hash "31bb7ba8..." is stored at "31/31bb7ba8..."
+   */
+  private static getBackupFilePath(backupPath: string, hash: string): string {
+    return path.join(backupPath, hash.substring(0, 2), hash);
+  }
+
+  /**
    * Opens the AddressBook database from a backup directory.
    *
    * @param backupPath - Path to the iOS backup directory
    * @throws Error if the database file is not found or cannot be opened
    */
   open(backupPath: string): void {
-    const dbPath = path.join(backupPath, iOSContactsParser.ADDRESSBOOK_DB_HASH);
+    const dbPath = iOSContactsParser.getBackupFilePath(
+      backupPath,
+      iOSContactsParser.ADDRESSBOOK_DB_HASH,
+    );
 
     try {
       // Open in readonly mode - we never modify the backup
@@ -228,8 +240,8 @@ export class iOSContactsParser {
     row: RawContactRow,
     multiValues: RawMultiValueRow[],
   ): iOSContact {
-    const phoneNumbers: ContactPhone[] = [];
-    const emails: ContactEmail[] = [];
+    const phoneNumbers: iOSContactPhone[] = [];
+    const emails: iOSContactEmail[] = [];
 
     for (const mv of multiValues) {
       if (mv.property === ABMultiValuePropertyType.PHONE) {

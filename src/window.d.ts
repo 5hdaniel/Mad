@@ -8,6 +8,46 @@ import type { iOSDevice, BackupProgress } from "./types/iphone";
 import type { Transaction } from "../electron/types/models";
 
 /**
+ * Backup progress details from idevicebackup2
+ */
+interface BackupProgressDetails {
+  phase: string;
+  percentComplete: number;
+  currentFile: string | null;
+  filesTransferred: number;
+  totalFiles: number | null;
+  bytesTransferred: number;
+  totalBytes: number | null;
+  estimatedTimeRemaining: number | null;
+}
+
+/**
+ * Sync progress information
+ */
+interface SyncProgress {
+  phase: string;
+  phaseProgress: number;
+  overallProgress: number;
+  message?: string;
+  /** Detailed backup progress from idevicebackup2 */
+  backupProgress?: BackupProgressDetails;
+  /** Estimated total backup size in bytes (for progress calculation) */
+  estimatedTotalBytes?: number;
+}
+
+/**
+ * Sync operation result
+ */
+interface SyncResult {
+  success: boolean;
+  messages: unknown[];
+  contacts: unknown[];
+  conversations: unknown[];
+  error?: string;
+  duration: number;
+}
+
+/**
  * iOS Device information from libimobiledevice
  */
 interface iOSDeviceInfo {
@@ -127,6 +167,16 @@ interface ElectronAPI {
     onProgress: (
       callback: (progress: BackupProgress) => void,
     ) => (() => void) | undefined;
+    /** Check backup status for a specific device (last sync time, size, etc.) */
+    checkStatus?: (udid: string) => Promise<{
+      success: boolean;
+      exists?: boolean;
+      isComplete?: boolean;
+      isCorrupted?: boolean;
+      lastSyncTime?: string | null;
+      sizeBytes?: number;
+      error?: string;
+    }>;
   };
 
   // Apple Driver Management (Windows only)
@@ -323,6 +373,69 @@ interface MainAPI {
     onDisconnected: (callback: (device: iOSDeviceInfo) => void) => () => void;
   };
 
+  /**
+   * Sync API for iPhone message/contact synchronization
+   */
+  sync: {
+    /** Start a sync operation */
+    start: (options: {
+      udid: string;
+      password?: string;
+      forceFullBackup?: boolean;
+    }) => Promise<SyncResult>;
+
+    /** Cancel current sync operation */
+    cancel: () => Promise<{ success: boolean }>;
+
+    /** Get current sync status */
+    getStatus: () => Promise<{
+      isRunning: boolean;
+      phase: string;
+    }>;
+
+    /** Get connected devices */
+    getDevices: () => Promise<iOSDeviceInfo[]>;
+
+    /** Start device detection polling */
+    startDetection: (intervalMs?: number) => Promise<{ success: boolean }>;
+
+    /** Stop device detection polling */
+    stopDetection: () => Promise<{ success: boolean }>;
+
+    /** Subscribe to sync progress updates */
+    onProgress: (callback: (progress: SyncProgress) => void) => () => void;
+
+    /** Subscribe to sync phase changes */
+    onPhase: (callback: (phase: string) => void) => () => void;
+
+    /** Subscribe to device connected events */
+    onDeviceConnected: (callback: (device: iOSDeviceInfo) => void) => () => void;
+
+    /** Subscribe to device disconnected events */
+    onDeviceDisconnected: (callback: (device: iOSDeviceInfo) => void) => () => void;
+
+    /** Subscribe to password required events */
+    onPasswordRequired: (callback: () => void) => () => void;
+
+    /** Subscribe to sync error events */
+    onError: (callback: (error: { message: string }) => void) => () => void;
+
+    /** Subscribe to sync completion events */
+    onComplete: (callback: (result: SyncResult) => void) => () => void;
+
+    /** Subscribe to storage completion events (after messages saved to DB) */
+    onStorageComplete: (
+      callback: (result: {
+        messagesStored: number;
+        contactsStored: number;
+        duration: number;
+      }) => void
+    ) => () => void;
+
+    /** Subscribe to storage error events */
+    onStorageError: (callback: (error: { error: string }) => void) => () => void;
+  };
+
   // Event listeners for login completion
   onGoogleLoginComplete: (
     callback: (result: {
@@ -429,6 +542,17 @@ interface MainAPI {
         totalBytes: number | null;
         estimatedTimeRemaining: number | null;
       } | null;
+    }>;
+
+    /** Check backup status for a specific device (last sync time, size, etc.) */
+    checkStatus: (udid: string) => Promise<{
+      success: boolean;
+      exists?: boolean;
+      isComplete?: boolean;
+      isCorrupted?: boolean;
+      lastSyncTime?: string | null;
+      sizeBytes?: number;
+      error?: string;
     }>;
 
     /** Start a backup operation */

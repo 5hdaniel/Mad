@@ -7,7 +7,7 @@ import React from "react";
  */
 export const TrustComputerHint: React.FC = () => {
   return (
-    <div className="flex items-start gap-3 p-4 bg-blue-50 border border-blue-200 rounded-lg mt-4">
+    <div className="flex items-start gap-3 p-4 bg-blue-50 border border-blue-200 rounded-lg mt-4 w-full max-w-sm text-left">
       {/* Info Icon */}
       <div className="flex-shrink-0">
         <svg
@@ -25,8 +25,8 @@ export const TrustComputerHint: React.FC = () => {
         </svg>
       </div>
       <div className="flex-1">
-        <p className="font-medium text-blue-800">First time connecting?</p>
-        <ol className="text-sm text-blue-700 mt-2 space-y-1">
+        <p className="font-medium text-blue-800 text-left">First time connecting?</p>
+        <ol className="text-sm text-blue-700 mt-2 space-y-1 text-left list-none p-0 m-0">
           <li>1. Unlock your iPhone</li>
           <li>2. Tap &quot;Trust&quot; when prompted</li>
           <li>3. Enter your iPhone passcode</li>

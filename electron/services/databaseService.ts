@@ -187,6 +187,20 @@ class DatabaseService implements IDatabaseService {
   }
 
   /**
+   * Get raw database instance for bulk operations.
+   * Use with caution - prefer using service methods when possible.
+   *
+   * This is exposed for performance-critical bulk operations like
+   * iPhone sync which need direct transaction control.
+   *
+   * @returns The underlying better-sqlite3 database instance
+   * @throws {DatabaseError} If database is not initialized
+   */
+  getRawDatabase(): DatabaseType {
+    return this._ensureDb();
+  }
+
+  /**
    * Open database connection with encryption
    */
   private _openDatabase(): DatabaseType {
@@ -444,6 +458,10 @@ class DatabaseService implements IDatabaseService {
     const schemaSql = fs.readFileSync(schemaPath, "utf8");
 
     try {
+      // Run pre-schema migrations to add missing columns to existing tables
+      // This prevents errors when schema.sql tries to create indexes on missing columns
+      await this._runPreSchemaMigrations();
+
       db.exec(schemaSql);
       // Run additional migrations for existing databases
       await this._runAdditionalMigrations();
@@ -452,6 +470,97 @@ class DatabaseService implements IDatabaseService {
         error: error instanceof Error ? error.message : String(error),
       });
       throw error;
+    }
+  }
+
+  /**
+   * Run pre-schema migrations to add missing columns to existing tables
+   * This runs BEFORE schema.sql to prevent index creation errors
+   */
+  private async _runPreSchemaMigrations(): Promise<void> {
+    const db = this._ensureDb();
+
+    // Helper to add missing columns to a table
+    const addMissingColumns = async (tableName: string, columns: { name: string; sql: string }[]) => {
+      const tableExists = db.prepare(
+        `SELECT name FROM sqlite_master WHERE type='table' AND name=?`
+      ).get(tableName);
+
+      if (!tableExists) return;
+
+      const tableColumns = db.prepare(`PRAGMA table_info(${tableName})`).all() as { name: string }[];
+      const columnNames = tableColumns.map(c => c.name);
+
+      for (const col of columns) {
+        if (!columnNames.includes(col.name)) {
+          try {
+            db.exec(col.sql);
+            await logService.debug(
+              `Pre-migration: Added ${col.name} column to ${tableName}`,
+              "DatabaseService"
+            );
+          } catch (err) {
+            await logService.warn(
+              `Pre-migration: Could not add ${col.name} column to ${tableName}`,
+              "DatabaseService",
+              { error: (err as Error).message }
+            );
+          }
+        }
+      }
+    };
+
+    // Contacts table columns
+    await addMissingColumns('contacts', [
+      { name: 'display_name', sql: `ALTER TABLE contacts ADD COLUMN display_name TEXT` },
+      { name: 'company', sql: `ALTER TABLE contacts ADD COLUMN company TEXT` },
+      { name: 'title', sql: `ALTER TABLE contacts ADD COLUMN title TEXT` },
+      { name: 'source', sql: `ALTER TABLE contacts ADD COLUMN source TEXT DEFAULT 'manual'` },
+      { name: 'metadata', sql: `ALTER TABLE contacts ADD COLUMN metadata TEXT` },
+      { name: 'last_inbound_at', sql: `ALTER TABLE contacts ADD COLUMN last_inbound_at DATETIME` },
+      { name: 'last_outbound_at', sql: `ALTER TABLE contacts ADD COLUMN last_outbound_at DATETIME` },
+      { name: 'total_messages', sql: `ALTER TABLE contacts ADD COLUMN total_messages INTEGER DEFAULT 0` },
+      { name: 'tags', sql: `ALTER TABLE contacts ADD COLUMN tags TEXT` },
+    ]);
+
+    // Transactions table columns
+    await addMissingColumns('transactions', [
+      { name: 'stage', sql: `ALTER TABLE transactions ADD COLUMN stage TEXT` },
+      { name: 'stage_source', sql: `ALTER TABLE transactions ADD COLUMN stage_source TEXT` },
+      { name: 'stage_confidence', sql: `ALTER TABLE transactions ADD COLUMN stage_confidence REAL` },
+      { name: 'stage_updated_at', sql: `ALTER TABLE transactions ADD COLUMN stage_updated_at DATETIME` },
+      { name: 'listing_price', sql: `ALTER TABLE transactions ADD COLUMN listing_price REAL` },
+      { name: 'sale_price', sql: `ALTER TABLE transactions ADD COLUMN sale_price REAL` },
+      { name: 'earnest_money_amount', sql: `ALTER TABLE transactions ADD COLUMN earnest_money_amount REAL` },
+      { name: 'mutual_acceptance_date', sql: `ALTER TABLE transactions ADD COLUMN mutual_acceptance_date DATE` },
+      { name: 'inspection_deadline', sql: `ALTER TABLE transactions ADD COLUMN inspection_deadline DATE` },
+      { name: 'financing_deadline', sql: `ALTER TABLE transactions ADD COLUMN financing_deadline DATE` },
+      { name: 'closing_deadline', sql: `ALTER TABLE transactions ADD COLUMN closing_deadline DATE` },
+      { name: 'export_status', sql: `ALTER TABLE transactions ADD COLUMN export_status TEXT DEFAULT 'not_exported'` },
+      { name: 'export_count', sql: `ALTER TABLE transactions ADD COLUMN export_count INTEGER DEFAULT 0` },
+      { name: 'last_exported_at', sql: `ALTER TABLE transactions ADD COLUMN last_exported_at DATETIME` },
+    ]);
+
+    // Messages table columns (for iPhone sync)
+    await addMissingColumns('messages', [
+      { name: 'external_id', sql: `ALTER TABLE messages ADD COLUMN external_id TEXT` },
+      { name: 'thread_id', sql: `ALTER TABLE messages ADD COLUMN thread_id TEXT` },
+      { name: 'participants_flat', sql: `ALTER TABLE messages ADD COLUMN participants_flat TEXT` },
+    ]);
+
+    // Try to populate display_name from 'name' column if it exists in contacts
+    const contactsExists = db.prepare(
+      `SELECT name FROM sqlite_master WHERE type='table' AND name='contacts'`
+    ).get();
+    if (contactsExists) {
+      const contactColumns = db.prepare(`PRAGMA table_info(contacts)`).all() as { name: string }[];
+      if (contactColumns.some(c => c.name === 'name')) {
+        try {
+          db.exec(`UPDATE contacts SET display_name = name WHERE display_name IS NULL AND name IS NOT NULL`);
+        } catch {
+          // Ignore errors
+        }
+      }
     }
   }
 
@@ -832,10 +941,75 @@ class DatabaseService implements IDatabaseService {
         `);
       }
 
-      // Migration 6: Contact import tracking
+      // Migration 6: Contact import tracking and schema sync
       const contactColumns = this._all<{ name: string }>(
         `PRAGMA table_info(contacts)`,
       );
+
+      // Add display_name column if missing (needed for iPhone sync)
+      if (!contactColumns.some((col) => col.name === "display_name")) {
+        await logService.debug(
+          "Adding display_name column to contacts",
+          "DatabaseService",
+        );
+        this._run(
+          `ALTER TABLE contacts ADD COLUMN display_name TEXT`,
+        );
+        // Populate display_name from existing name column if it exists
+        const hasNameCol = contactColumns.some((col) => col.name === "name");
+        if (hasNameCol) {
+          this._run(`UPDATE contacts SET display_name = name WHERE display_name IS NULL`);
+        }
+        await logService.debug(
+          "Successfully added display_name column",
+          "DatabaseService",
+        );
+      }
+
+      // Add company column if missing
+      if (!contactColumns.some((col) => col.name === "company")) {
+        await logService.debug(
+          "Adding company column to contacts",
+          "DatabaseService",
+        );
+        this._run(
+          `ALTER TABLE contacts ADD COLUMN company TEXT`,
+        );
+      }
+
+      // Add title column if missing
+      if (!contactColumns.some((col) => col.name === "title")) {
+        await logService.debug(
+          "Adding title column to contacts",
+          "DatabaseService",
+        );
+        this._run(
+          `ALTER TABLE contacts ADD COLUMN title TEXT`,
+        );
+      }
+
+      // Add source column if missing
+      if (!contactColumns.some((col) => col.name === "source")) {
+        await logService.debug(
+          "Adding source column to contacts",
+          "DatabaseService",
+        );
+        this._run(
+          `ALTER TABLE contacts ADD COLUMN source TEXT DEFAULT 'manual'`,
+        );
+      }
+
+      // Add metadata column if missing
+      if (!contactColumns.some((col) => col.name === "metadata")) {
+        await logService.debug(
+          "Adding metadata column to contacts",
+          "DatabaseService",
+        );
+        this._run(
+          `ALTER TABLE contacts ADD COLUMN metadata TEXT`,
+        );
+      }
+
       if (!contactColumns.some((col) => col.name === "is_imported")) {
         await logService.debug(
           "Adding is_imported column to contacts",

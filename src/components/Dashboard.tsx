@@ -11,6 +11,7 @@ interface DashboardActionProps {
   onAuditNew: () => void;
   onViewTransactions: () => void;
   onManageContacts: () => void;
+  onSyncPhone?: () => void; // Only available for Windows + iPhone users
   onTourStateChange?: (isActive: boolean) => void;
   showSetupPrompt?: boolean;
   onContinueSetup?: () => void;
@@ -26,6 +27,7 @@ function Dashboard({
   onAuditNew,
   onViewTransactions,
   onManageContacts,
+  onSyncPhone,
   onTourStateChange,
   showSetupPrompt,
   onContinueSetup,
@@ -230,8 +232,9 @@ function Dashboard({
           </button>
         </div>
 
-        {/* Manage Contacts Card */}
-        <div className="mt-8">
+        {/* Secondary Actions Row */}
+        <div className={`mt-8 grid gap-4 ${onSyncPhone ? 'md:grid-cols-2' : 'grid-cols-1'}`}>
+          {/* Manage Contacts Card */}
           <button
             onClick={onManageContacts}
             className="group w-full relative bg-white bg-opacity-70 backdrop-blur rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 p-6 text-left border-2 border-transparent hover:border-purple-400 transform hover:scale-[1.02]"
@@ -273,6 +276,54 @@ function Dashboard({
               </svg>
             </div>
           </button>
+
+          {/* Sync iPhone Card (Windows + iPhone users only) */}
+          {onSyncPhone && (
+            <button
+              onClick={onSyncPhone}
+              className="group w-full relative bg-white bg-opacity-70 backdrop-blur rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 p-6 text-left border-2 border-transparent hover:border-indigo-400 transform hover:scale-[1.02]"
+              data-tour="sync-phone-card"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
+                  <svg
+                    className="w-6 h-6 text-white"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"
+                    />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-bold text-gray-900 mb-1">
+                    Sync iPhone Messages
+                  </h3>
+                  <p className="text-sm text-gray-500">
+                    Import texts via USB cable
+                  </p>
+                </div>
+                <svg
+                  className="w-5 h-5 text-indigo-600 group-hover:translate-x-2 transition-transform"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 5l7 7-7 7"
+                  />
+                </svg>
+              </div>
+            </button>
+          )}
         </div>
 
       </div>

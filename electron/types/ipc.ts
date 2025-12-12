@@ -931,6 +931,8 @@ export interface WindowApi {
     onPasswordRequired: (callback: () => void) => () => void;
     onError: (callback: (error: { message: string }) => void) => () => void;
     onComplete: (callback: (result: unknown) => void) => () => void;
+    onWaitingForPasscode: (callback: () => void) => () => void;
+    onPasscodeEntered: (callback: () => void) => () => void;
   };
 
   // Event listeners for mailbox connections

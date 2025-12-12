@@ -9,8 +9,8 @@
 
 import type { IpcMainInvokeEvent } from "electron";
 
-// Store original setTimeout for async operations
-const originalSetTimeout = global.setTimeout;
+// Store original setTimeout for async operations (prefixed with _ to indicate intentionally unused)
+const _originalSetTimeout = global.setTimeout;
 
 // Mock electron module
 const mockIpcHandle = jest.fn();
@@ -174,7 +174,7 @@ jest.mock("../services/logService", () => ({
 }));
 
 // Import after mocks
-import { registerAuthHandlers, initializeDatabase } from "../auth-handlers";
+import { registerAuthHandlers } from "../auth-handlers";
 
 // Test constants
 const TEST_USER_ID = "550e8400-e29b-41d4-a716-446655440000";
@@ -198,6 +198,7 @@ describe("Auth Handlers Integration Tests", () => {
     });
 
     // Register all handlers
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     registerAuthHandlers(mockMainWindow as any);
   });
 
