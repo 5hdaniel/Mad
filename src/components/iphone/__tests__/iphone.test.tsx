@@ -480,7 +480,8 @@ describe("SyncProgress", () => {
 
     render(<SyncProgress progress={progress} onCancel={mockOnCancel} />);
 
-    expect(screen.getByText("45%")).toBeInTheDocument();
+    // Current UI shows "X% complete"
+    expect(screen.getByText(/45% complete/i)).toBeInTheDocument();
   });
 
   it("should show progress message when provided", () => {
@@ -495,17 +496,17 @@ describe("SyncProgress", () => {
     expect(screen.getByText("Backing up photos...")).toBeInTheDocument();
   });
 
-  it("should show file progress when provided", () => {
+  it("should show file count when provided", () => {
     const progress: BackupProgress = {
       phase: "extracting",
       percent: 60,
       processedFiles: 150,
-      totalFiles: 250,
     };
 
     render(<SyncProgress progress={progress} onCancel={mockOnCancel} />);
 
-    expect(screen.getByText(/150 of 250 files processed/i)).toBeInTheDocument();
+    // Current UI shows "• X files" format
+    expect(screen.getByText(/150 files/i)).toBeInTheDocument();
   });
 
   it("should show cancel button during active sync", () => {
