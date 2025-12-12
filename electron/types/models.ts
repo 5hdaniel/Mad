@@ -720,3 +720,39 @@ export interface UserFeedback {
   feedback_text?: string;
   created_at: Date | string;
 }
+
+// ============================================
+// IGNORED COMMUNICATION MODELS
+// ============================================
+
+/**
+ * Represents a communication that has been explicitly ignored/excluded
+ * from a transaction. This allows users to permanently hide irrelevant
+ * emails without them being re-added during future scans.
+ */
+export interface IgnoredCommunication {
+  id: string;
+  user_id: string;
+  transaction_id: string;
+  email_subject?: string;
+  email_sender?: string;
+  email_sent_at?: string;
+  email_thread_id?: string;
+  original_communication_id?: string;
+  reason?: string;
+  ignored_at: string;
+}
+
+/**
+ * Data required to create a new ignored communication record.
+ */
+export interface NewIgnoredCommunication {
+  user_id: string;
+  transaction_id: string;
+  email_subject?: string;
+  email_sender?: string;
+  email_sent_at?: string;
+  email_thread_id?: string;
+  original_communication_id?: string;
+  reason?: string;
+}

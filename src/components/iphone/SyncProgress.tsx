@@ -29,19 +29,32 @@ function formatBytes(bytes: number | undefined): string {
 export const SyncProgress: React.FC<SyncProgressProps> = ({
   progress,
   onCancel,
+  isWaitingForPasscode = false,
 }) => {
-  const getPhaseLabel = (): string => {
+  /**
+   * Option C: 2-Level Progress Display
+   * Level 1: Combined title + context (bold, larger)
+   * Level 2: Dynamic detail from progress.message (smaller, gray)
+   */
+  const getPhaseTitle = (): string => {
+    // Special state: waiting for passcode
+    if (isWaitingForPasscode) {
+      return "Enter passcode on iPhone";
+    }
+
     switch (progress.phase) {
       case "preparing":
         return "Preparing backup...";
       case "backing_up":
-        return "Backing up device...";
+        return "Backing up - Keep connected";
       case "extracting":
-        return "Extracting messages and contacts...";
+        return "Reading messages - Safe to disconnect";
+      case "storing":
+        return "Saving to database - Safe to disconnect";
       case "complete":
         return "Sync complete!";
       case "error":
-        return "An error occurred";
+        return "Sync failed";
       default:
         return "Processing...";
     }
@@ -51,13 +64,18 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
   const isError = progress.phase === "error";
   const isBackingUp = progress.phase === "backing_up";
   const isPreparing = progress.phase === "preparing";
+  const isExtracting = progress.phase === "extracting";
+  const isStoring = progress.phase === "storing";
   const hasStartedTransfer = (progress.bytesProcessed ?? 0) > 0 || (progress.processedFiles ?? 0) > 0;
 
-  // Show passcode hint only very early (before data starts flowing)
-  const showPasscodeHint = !isComplete && !isError && (isPreparing || (isBackingUp && !hasStartedTransfer));
+  // Backup is done once we move to extracting or storing phase
+  const backupComplete = isExtracting || isStoring || isComplete;
 
-  // Show informational hints once transfer has started
-  const showTransferHints = !isComplete && !isError && isBackingUp && hasStartedTransfer;
+  // Show passcode waiting warning (special state with detailed instructions)
+  const showPasscodeWarning = isWaitingForPasscode;
+
+  // Show first sync time warning once transfer has started
+  const showFirstSyncHint = !isComplete && !isError && isBackingUp && hasStartedTransfer;
 
   return (
     <div className="p-6">
@@ -95,6 +113,27 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
               />
             </svg>
           </div>
+        ) : isWaitingForPasscode ? (
+          // Special icon for passcode waiting - phone with keypad
+          <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center animate-pulse">
+            <svg
+              className="w-8 h-8 text-amber-600"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              {/* Phone outline */}
+              <rect x="7" y="2" width="10" height="20" rx="2" strokeWidth={2} />
+              {/* Keypad dots */}
+              <circle cx="10" cy="10" r="1" fill="currentColor" />
+              <circle cx="12" cy="10" r="1" fill="currentColor" />
+              <circle cx="14" cy="10" r="1" fill="currentColor" />
+              <circle cx="10" cy="13" r="1" fill="currentColor" />
+              <circle cx="12" cy="13" r="1" fill="currentColor" />
+              <circle cx="14" cy="13" r="1" fill="currentColor" />
+              <circle cx="12" cy="16" r="1" fill="currentColor" />
+            </svg>
+          </div>
         ) : (
           <div className="w-16 h-16 rounded-full bg-purple-100 flex items-center justify-center">
             <div className="w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
@@ -102,13 +141,13 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
         )}
       </div>
 
-      {/* Phase Label */}
+      {/* Level 1: Phase Title (combined title + context) */}
       <h3 className="text-lg font-semibold text-gray-800 text-center mb-1">
-        {getPhaseLabel()}
+        {getPhaseTitle()}
       </h3>
 
-      {/* Status Message - shows what's actively happening */}
-      {progress.message && !isComplete && !isError && (
+      {/* Level 2: Dynamic detail message from backend */}
+      {progress.message && !isComplete && (
         <p className="text-sm text-gray-500 text-center mb-3">
           {progress.message}
         </p>
@@ -175,8 +214,8 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
         </div>
       )}
 
-      {/* Determinate Progress Bar - only for extracting phase where we have accurate counts */}
-      {!isComplete && !isError && progress.phase === "extracting" && (
+      {/* Determinate Progress Bar - for extracting and storing phases where we have progress */}
+      {!isComplete && !isError && (isExtracting || isStoring) && (
         <div className="mb-4">
           <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
             <div
@@ -184,16 +223,14 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
               style={{ width: `${Math.min(progress.percent, 100)}%` }}
             />
           </div>
-          {progress.processedFiles !== undefined && progress.totalFiles !== undefined && (
-            <p className="text-xs text-gray-400 text-center mt-1">
-              {progress.processedFiles} of {progress.totalFiles} files processed
-            </p>
-          )}
+          <p className="text-xs text-gray-400 text-center mt-1">
+            {progress.percent}% complete
+          </p>
         </div>
       )}
 
-      {/* Passcode Hint - only shown before data starts flowing */}
-      {showPasscodeHint && (
+      {/* Passcode Waiting Warning - detailed instructions when waiting for passcode */}
+      {showPasscodeWarning && (
         <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg mt-4">
           <svg
             className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5"
@@ -205,17 +242,21 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
               strokeLinecap="round"
               strokeLinejoin="round"
               strokeWidth={2}
-              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+              d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"
             />
           </svg>
-          <p className="text-sm text-amber-700">
-            <span className="font-medium">Check your iPhone!</span> You may need to enter your passcode to allow the backup.
-          </p>
+          <div className="text-sm text-amber-700">
+            <p className="font-medium mb-1">Your iPhone is waiting for your passcode</p>
+            <p className="text-xs text-amber-600">
+              After entering your passcode, it may take several minutes before the sync starts.
+              Please don't disconnect or close this window.
+            </p>
+          </div>
         </div>
       )}
 
       {/* First Sync Time Warning - shown once transfer has started */}
-      {showTransferHints && (
+      {showFirstSyncHint && (
         <div className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg mt-4">
           <svg
             className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5"
@@ -236,8 +277,8 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
         </div>
       )}
 
-      {/* Don't Disconnect Warning - shown throughout backup */}
-      {!isComplete && !isError && (isBackingUp || isPreparing) && (
+      {/* Don't Disconnect Warning - shown during backup (but NOT when waiting for passcode, that has its own message) */}
+      {!isComplete && !isError && (isBackingUp || isPreparing) && !isWaitingForPasscode && (
         <div className="flex items-start gap-2 p-3 bg-gray-50 border border-gray-200 rounded-lg mt-3">
           <svg
             className="w-5 h-5 text-gray-500 flex-shrink-0 mt-0.5"
@@ -253,7 +294,7 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
             />
           </svg>
           <p className="text-sm text-gray-600">
-            Please keep your iPhone connected until sync is complete.
+            Please keep your iPhone connected until backup completes.
           </p>
         </div>
       )}

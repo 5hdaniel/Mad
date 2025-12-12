@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { usePlatform } from "../contexts/PlatformContext";
+import type { PendingEmailTokens } from "../appCore/state/types";
 
 interface ConnectionStatus {
   connected: boolean;
@@ -20,8 +21,12 @@ interface EmailOnboardingScreenProps {
   authProvider: "google" | "microsoft";
   selectedPhoneType?: "iphone" | "android" | null;
   onPhoneTypeChange?: (phoneType: "iphone" | "android") => Promise<void>;
-  onComplete: () => void;
-  onSkip: () => void;
+  onComplete: (emailTokens?: PendingEmailTokens) => void | Promise<void>;
+  onSkip: () => void | Promise<void>;
+  onBack?: () => void;
+  isPreDbFlow?: boolean;
+  emailHint?: string;
+  existingPendingTokens?: PendingEmailTokens | null;
 }
 
 // Setup steps for progress indicator - platform specific

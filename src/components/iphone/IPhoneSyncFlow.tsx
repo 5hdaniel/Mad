@@ -31,6 +31,7 @@ export const IPhoneSyncFlow: React.FC<IPhoneSyncFlowProps> = ({ onClose }) => {
     error,
     needsPassword,
     lastSyncTime,
+    isWaitingForPasscode,
     startSync,
     submitPassword,
     cancelSync,
@@ -55,7 +56,11 @@ export const IPhoneSyncFlow: React.FC<IPhoneSyncFlowProps> = ({ onClose }) => {
 
       {/* Sync Progress - Shown during sync */}
       {isSyncing && progress && (
-        <SyncProgress progress={progress} onCancel={cancelSync} />
+        <SyncProgress
+          progress={progress}
+          onCancel={cancelSync}
+          isWaitingForPasscode={isWaitingForPasscode}
+        />
       )}
 
       {/* Success State */}

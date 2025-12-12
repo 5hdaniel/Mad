@@ -106,6 +106,7 @@ export function useAppStateMachine(): AppStateMachine {
   const [showVersion, setShowVersion] = useState<boolean>(false);
   const [showMoveAppPrompt, setShowMoveAppPrompt] = useState<boolean>(false);
   const [showTermsModal, setShowTermsModal] = useState<boolean>(false);
+  const [showIPhoneSync, setShowIPhoneSync] = useState<boolean>(false);
 
   // ============================================
   // FLOW HOOKS
@@ -662,6 +663,9 @@ export function useAppStateMachine(): AppStateMachine {
   const openMoveAppPrompt = useCallback(() => setShowMoveAppPrompt(true), []);
   const closeMoveAppPrompt = useCallback(() => setShowMoveAppPrompt(false), []);
 
+  const openIPhoneSync = useCallback(() => setShowIPhoneSync(true), []);
+  const closeIPhoneSync = useCallback(() => setShowIPhoneSync(false), []);
+
   // ============================================
   // NAVIGATION METHODS
   // ============================================
@@ -684,6 +688,7 @@ export function useAppStateMachine(): AppStateMachine {
       showVersion,
       showMoveAppPrompt,
       showTermsModal,
+      showIPhoneSync,
     }),
     [
       showProfile,
@@ -694,6 +699,7 @@ export function useAppStateMachine(): AppStateMachine {
       showVersion,
       showMoveAppPrompt,
       showTermsModal,
+      showIPhoneSync,
     ],
   );
 
@@ -782,6 +788,8 @@ export function useAppStateMachine(): AppStateMachine {
     closeTermsModal,
     openMoveAppPrompt,
     closeMoveAppPrompt,
+    openIPhoneSync,
+    closeIPhoneSync,
 
     // Navigation transitions
     goToStep,

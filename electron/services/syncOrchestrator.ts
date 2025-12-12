@@ -158,6 +158,17 @@ export class SyncOrchestrator extends EventEmitter {
       this.emit("password-required");
     });
 
+    // Forward passcode waiting events (user needs to enter passcode on iPhone)
+    this.backupService.on("waiting-for-passcode", () => {
+      log.info("[SyncOrchestrator] Waiting for user to enter passcode on iPhone");
+      this.emit("waiting-for-passcode");
+    });
+
+    this.backupService.on("passcode-entered", () => {
+      log.info("[SyncOrchestrator] User entered passcode, backup starting");
+      this.emit("passcode-entered");
+    });
+
     // Forward device events
     this.deviceService.on("device-connected", (device: iOSDevice) => {
       this.emit("device-connected", device);

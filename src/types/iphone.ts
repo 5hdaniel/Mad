@@ -74,6 +74,8 @@ export interface BackupPasswordModalProps {
 export interface SyncProgressProps {
   progress: BackupProgress;
   onCancel?: () => void;
+  /** Whether the sync is waiting for the user to enter their iPhone passcode */
+  isWaitingForPasscode?: boolean;
 }
 
 // ============================================
@@ -89,6 +91,8 @@ export interface UseIPhoneSyncReturn {
   needsPassword: boolean;
   /** Last sync time for this device (from backup status) */
   lastSyncTime: Date | null;
+  /** Whether the sync is waiting for the user to enter their iPhone passcode */
+  isWaitingForPasscode: boolean;
   startSync: () => void;
   submitPassword: (password: string) => void;
   cancelSync: () => void;

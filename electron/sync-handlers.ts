@@ -220,6 +220,17 @@ function setupEventForwarding(): void {
     sendToRenderer("sync:password-required", {});
   });
 
+  // Forward passcode waiting events (user needs to enter passcode on iPhone)
+  orchestrator.on("waiting-for-passcode", () => {
+    log.info("[SyncHandlers] Waiting for user to enter passcode on iPhone");
+    sendToRenderer("sync:waiting-for-passcode", {});
+  });
+
+  orchestrator.on("passcode-entered", () => {
+    log.info("[SyncHandlers] User entered passcode, backup starting");
+    sendToRenderer("sync:passcode-entered", {});
+  });
+
   // Forward error events
   orchestrator.on("error", (error: Error) => {
     log.error("[SyncHandlers] Sync error event", { error: error.message });
@@ -233,8 +244,15 @@ function setupEventForwarding(): void {
       messages: result.messages.length,
     });
 
-    // Send completion to renderer first (with extraction results)
-    sendToRenderer("sync:complete", result);
+    // Send completion to renderer with counts only (NOT the full message/contact arrays)
+    // Sending 627k messages over IPC would freeze the renderer
+    sendToRenderer("sync:complete", {
+      success: result.success,
+      error: result.error,
+      messageCount: result.messages.length,
+      contactCount: result.contacts.length,
+      conversationCount: result.conversations.length,
+    });
 
     // Use the user ID captured at sync start (not current) to prevent race conditions
     const userIdForPersistence = syncSessionUserId;
@@ -275,11 +293,13 @@ function setupEventForwarding(): void {
         });
 
         // Send final completion with storage results
+        log.info("[SyncHandlers] Sending sync:storage-complete to renderer");
         sendToRenderer("sync:storage-complete", {
           messagesStored: persistResult.messagesStored,
           contactsStored: persistResult.contactsStored,
           duration: persistResult.duration,
         });
+        log.info("[SyncHandlers] sync:storage-complete sent successfully");
       } catch (error) {
         log.error("[SyncHandlers] Database persistence failed", {
           error: error instanceof Error ? error.message : "Unknown error",

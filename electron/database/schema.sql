@@ -591,6 +591,41 @@ BEGIN
 END;
 
 -- ============================================
+-- IGNORED COMMUNICATIONS TABLE
+-- ============================================
+-- Stores communications that have been explicitly ignored/hidden from transactions.
+-- This prevents them from being re-added during future email scans.
+CREATE TABLE IF NOT EXISTS ignored_communications (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  transaction_id TEXT NOT NULL,
+
+  -- Email identification fields (used to match incoming emails)
+  email_subject TEXT,
+  email_sender TEXT,
+  email_sent_at TEXT,
+  email_thread_id TEXT,
+
+  -- Original communication reference (if available)
+  original_communication_id TEXT,
+
+  -- Reason for ignoring (optional user note)
+  reason TEXT,
+
+  ignored_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+  FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE,
+  FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE CASCADE
+);
+
+-- Index for quick lookups during email scanning
+CREATE INDEX IF NOT EXISTS idx_ignored_comms_user_email
+  ON ignored_communications(user_id, email_sender, email_subject, email_sent_at);
+
+CREATE INDEX IF NOT EXISTS idx_ignored_comms_transaction
+  ON ignored_communications(transaction_id);
+
+-- ============================================
 -- VIEWS (Convenient queries for common operations)
 -- ============================================
 

@@ -1404,6 +1404,30 @@ contextBridge.exposeInMainWorld("api", {
     },
 
     /**
+     * Subscribes to passcode waiting events (user needs to enter passcode on iPhone)
+     * @param {Function} callback - Callback when waiting for passcode
+     * @returns {Function} Cleanup function to remove listener
+     */
+    onWaitingForPasscode: (callback: () => void) => {
+      const listener = () => callback();
+      ipcRenderer.on("sync:waiting-for-passcode", listener);
+      return () =>
+        ipcRenderer.removeListener("sync:waiting-for-passcode", listener);
+    },
+
+    /**
+     * Subscribes to passcode entered events (user entered passcode, backup starting)
+     * @param {Function} callback - Callback when passcode entered
+     * @returns {Function} Cleanup function to remove listener
+     */
+    onPasscodeEntered: (callback: () => void) => {
+      const listener = () => callback();
+      ipcRenderer.on("sync:passcode-entered", listener);
+      return () =>
+        ipcRenderer.removeListener("sync:passcode-entered", listener);
+    },
+
+    /**
      * Subscribes to sync error events
      * @param {Function} callback - Callback with error info
      * @returns {Function} Cleanup function to remove listener

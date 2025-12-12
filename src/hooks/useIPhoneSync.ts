@@ -31,6 +31,7 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
   const [needsPassword, setNeedsPassword] = useState(false);
   const [pendingPassword, setPendingPassword] = useState<string | null>(null);
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
+  const [isWaitingForPasscode, setIsWaitingForPasscode] = useState(false);
 
   // Track cleanup functions
   const cleanupRef = useRef<(() => void)[]>([]);
@@ -167,6 +168,34 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
         cleanups.push(unsub);
       }
 
+      // Passcode waiting event (user needs to enter passcode on iPhone)
+      if (syncApi.onWaitingForPasscode) {
+        const unsub = syncApi.onWaitingForPasscode(() => {
+          console.log("[useIPhoneSync] Waiting for user to enter passcode on iPhone");
+          setIsWaitingForPasscode(true);
+          setProgress((prev) => ({
+            phase: "backing_up",
+            percent: prev?.percent ?? 0,
+            message: "Waiting for passcode input on your iPhone...",
+          }));
+        });
+        cleanups.push(unsub);
+      }
+
+      // Passcode entered event (user entered passcode, backup starting)
+      if (syncApi.onPasscodeEntered) {
+        const unsub = syncApi.onPasscodeEntered(() => {
+          console.log("[useIPhoneSync] User entered passcode, backup starting");
+          setIsWaitingForPasscode(false);
+          setProgress((prev) => ({
+            phase: "backing_up",
+            percent: prev?.percent ?? 0,
+            message: "Passcode accepted! iPhone is preparing backup...",
+          }));
+        });
+        cleanups.push(unsub);
+      }
+
       // Sync error events
       if (syncApi.onError) {
         const unsub = syncApi.onError((err) => {
@@ -181,17 +210,17 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
       if (syncApi.onComplete) {
         interface SyncResultType {
           success: boolean;
-          messages?: unknown[];
-          contacts?: unknown[];
-          conversations?: unknown[];
+          messageCount?: number;
+          contactCount?: number;
+          conversationCount?: number;
           error?: string;
         }
         const unsub = syncApi.onComplete((data: unknown) => {
           const result = data as SyncResultType;
           console.log("[useIPhoneSync] Sync extraction complete:", {
-            messages: result.messages?.length ?? 0,
-            contacts: result.contacts?.length ?? 0,
-            conversations: result.conversations?.length ?? 0,
+            messages: result.messageCount ?? 0,
+            contacts: result.contactCount ?? 0,
+            conversations: result.conversationCount ?? 0,
           });
 
           if (result.success) {
@@ -200,7 +229,7 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
             setProgress({
               phase: "storing",
               percent: 0,
-              message: `Saving ${(result.messages?.length ?? 0).toLocaleString()} messages to database...`,
+              message: `Saving ${(result.messageCount ?? 0).toLocaleString()} messages to database...`,
             });
           } else {
             setSyncStatus("error");
@@ -469,6 +498,7 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
     error,
     needsPassword,
     lastSyncTime,
+    isWaitingForPasscode,
     startSync,
     submitPassword,
     cancelSync,

@@ -37,6 +37,8 @@ import {
  * - 'error': Error - Error events
  * - 'complete': BackupResult - When backup completes
  * - 'password-required': { udid: string } - When encrypted backup needs password (TASK-007)
+ * - 'waiting-for-passcode': void - When waiting for user to enter passcode on iPhone
+ * - 'passcode-entered': void - When passcode was entered and transfer begins
  */
 export class BackupService extends EventEmitter {
   private currentProcess: ChildProcess | null = null;
@@ -51,6 +53,13 @@ export class BackupService extends EventEmitter {
   private bytesTransferred: number = 0;
   private currentFileProgress: number = 0;
   private lastFileSize: number = 0;
+
+  // Passcode waiting detection
+  private passcodeWaitingTimer: NodeJS.Timeout | null = null;
+  private hasReceivedFileProgress: boolean = false;
+  private hasEmittedPasscodeWaiting: boolean = false;
+  private backupCommandStartTime: number = 0;
+  private static readonly PASSCODE_WAIT_DETECTION_MS = 5000; // 5 seconds without progress = waiting for passcode
 
   constructor() {
     super();
@@ -218,6 +227,15 @@ export class BackupService extends EventEmitter {
       this.currentFileProgress = 0;
       this.lastFileSize = 0;
 
+      // Reset passcode waiting detection
+      this.hasReceivedFileProgress = false;
+      this.hasEmittedPasscodeWaiting = false;
+      this.backupCommandStartTime = Date.now();
+      if (this.passcodeWaitingTimer) {
+        clearTimeout(this.passcodeWaitingTimer);
+        this.passcodeWaitingTimer = null;
+      }
+
       this.lastProgress = {
         phase: "preparing",
         percentComplete: 0,
@@ -233,6 +251,17 @@ export class BackupService extends EventEmitter {
       this.currentProcess = spawn(idevicebackup2, args, {
         stdio: ["pipe", "pipe", "pipe"],
       });
+
+      // Start timer to detect if we're waiting for passcode
+      // If no file transfer progress after 5 seconds, assume waiting for user passcode
+      this.passcodeWaitingTimer = setTimeout(() => {
+        if (!this.hasReceivedFileProgress && !this.hasEmittedPasscodeWaiting) {
+          this.hasEmittedPasscodeWaiting = true;
+          const waitTime = ((Date.now() - this.backupCommandStartTime) / 1000).toFixed(1);
+          log.info(`[BackupService] No file progress after ${waitTime}s - waiting for user passcode`);
+          this.emit("waiting-for-passcode");
+        }
+      }, BackupService.PASSCODE_WAIT_DETECTION_MS);
 
       let stdoutBuffer = "";
       let stderrBuffer = "";
@@ -250,6 +279,21 @@ export class BackupService extends EventEmitter {
 
         const progress = this.parseProgress(output);
         if (progress) {
+          // Detect when file transfer starts (passcode was entered)
+          if (progress.phase === "transferring" && !this.hasReceivedFileProgress) {
+            this.hasReceivedFileProgress = true;
+            // Clear the waiting timer
+            if (this.passcodeWaitingTimer) {
+              clearTimeout(this.passcodeWaitingTimer);
+              this.passcodeWaitingTimer = null;
+            }
+            // If we previously emitted waiting-for-passcode, now emit passcode-entered
+            if (this.hasEmittedPasscodeWaiting) {
+              const waitTime = ((Date.now() - this.backupCommandStartTime) / 1000).toFixed(1);
+              log.info(`[BackupService] File transfer started after ${waitTime}s - passcode entered`);
+              this.emit("passcode-entered");
+            }
+          }
           this.lastProgress = progress;
           this.emit("progress", progress);
         }
@@ -276,6 +320,12 @@ export class BackupService extends EventEmitter {
         this.isRunning = false;
         this.currentProcess = null;
         this.currentDeviceUdid = null;
+
+        // Clear passcode waiting timer
+        if (this.passcodeWaitingTimer) {
+          clearTimeout(this.passcodeWaitingTimer);
+          this.passcodeWaitingTimer = null;
+        }
 
         const success = code === 0;
         let backupSize = 0;

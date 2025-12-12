@@ -118,6 +118,9 @@ export function AppRouter({ app }: AppRouterProps) {
     // UI handlers
     handleDismissSetupPrompt,
     setIsTourActive,
+
+    // iPhone sync
+    openIPhoneSync,
   } = app;
   // Loading state
   if (currentStep === "loading") {
@@ -260,11 +263,15 @@ export function AppRouter({ app }: AppRouterProps) {
 
   // Dashboard
   if (currentStep === "dashboard") {
+    // Show iPhone sync button for Windows + iPhone users
+    const showIPhoneSyncButton = isWindows && selectedPhoneType === "iphone";
+
     return (
       <Dashboard
         onAuditNew={openAuditTransaction}
         onViewTransactions={openTransactions}
         onManageContacts={openContacts}
+        onSyncPhone={showIPhoneSyncButton ? openIPhoneSync : undefined}
         onTourStateChange={setIsTourActive}
         showSetupPrompt={!hasEmailConnected && !showSetupPromptDismissed}
         onContinueSetup={goToEmailOnboarding}

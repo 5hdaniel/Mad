@@ -36,7 +36,8 @@
       "Bash(gh pr checks:*)",
       "Bash(git stash:*)",
       "Bash(gh api:*)",
-      "Bash(git branch:*)"
+      "Bash(git branch:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nfeat: add passcode detection and Option C 2-tier progress UI\n\n- Passcode detection: 5s timer after backup starts, emits waiting-for-passcode\n  event when no file progress detected, passcode-entered when transfer begins\n- SyncProgress.tsx: 2-tier display with getPhaseTitle() (title+context) and\n  progress.message (dynamic backend details)\n- Amber warning box during passcode wait with detailed instructions\n- IPC events: onWaitingForPasscode, onPasscodeEntered in preload + hook\n- AppModals integration: iPhone sync modal with proper wrapper\n- Added missing IgnoredCommunication types and ignored_communications table\n- BACKLOG items 022-030 added for future improvements\n- BACKLOG-030 (Critical): Message parser async yielding deferred\n\nTested with 627k messages, 1k contacts - sync completes successfully.\nKnown: ~60s UI freeze during parsing (tracked in BACKLOG-030).\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n)\")"
     ],
     "deny": [],
     "ask": []
