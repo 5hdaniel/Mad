@@ -386,11 +386,10 @@ export function useAppStateMachine(): AppStateMachine {
     const success = await savePhoneType("iphone");
     if (success) {
       setHasSelectedPhoneType(true);
-      if (isWindows) {
-        setCurrentStep("apple-driver-setup");
-      } else {
-        setCurrentStep("email-onboarding");
-      }
+      // Windows flow: Phone Type → Email → Driver Setup → Dashboard
+      // macOS flow: Phone Type → Email → Permissions → Dashboard
+      // Both start with email onboarding after phone type
+      setCurrentStep("email-onboarding");
     }
   };
 
@@ -434,16 +433,43 @@ export function useAppStateMachine(): AppStateMachine {
     await savePhoneType(phoneType);
   };
 
-  const handleAppleDriverSetupComplete = (): void => {
+  const handleAppleDriverSetupComplete = async (): Promise<void> => {
     setNeedsDriverSetup(false);
     setHasSelectedPhoneType(true);
-    setCurrentStep("email-onboarding");
+
+    // On Windows, driver setup is step 3 (after email onboarding)
+    // So after driver setup, go to dashboard
+    if (pendingOAuthData && !isAuthenticated) {
+      // Pre-DB flow: need to initialize database before going to dashboard
+      // The secure storage flow will handle initialization and navigation
+      // For now, we need to trigger the initialization
+      try {
+        await window.api.auth.completePendingLogin(pendingOAuthData);
+      } catch (error) {
+        console.error("[handleAppleDriverSetupComplete] Failed to complete pending login:", error);
+      }
+      return;
+    }
+
+    // Post-DB flow: go directly to dashboard
+    setCurrentStep("dashboard");
   };
 
-  const handleAppleDriverSetupSkip = (): void => {
+  const handleAppleDriverSetupSkip = async (): Promise<void> => {
     setNeedsDriverSetup(false);
     setHasSelectedPhoneType(true);
-    setCurrentStep("email-onboarding");
+
+    // Same logic as complete - driver setup is the last onboarding step on Windows
+    if (pendingOAuthData && !isAuthenticated) {
+      try {
+        await window.api.auth.completePendingLogin(pendingOAuthData);
+      } catch (error) {
+        console.error("[handleAppleDriverSetupSkip] Failed to complete pending login:", error);
+      }
+      return;
+    }
+
+    setCurrentStep("dashboard");
   };
 
   // ============================================
@@ -472,6 +498,13 @@ export function useAppStateMachine(): AppStateMachine {
 
     await completeEmailOnboarding();
     setHasEmailConnected(true);
+
+    // Windows iPhone users need driver setup after email onboarding
+    if (isWindows && selectedPhoneType === "iphone" && needsDriverSetup) {
+      setCurrentStep("apple-driver-setup");
+      return;
+    }
+
     if (hasPermissions) {
       setCurrentStep("dashboard");
     } else {
@@ -495,6 +528,13 @@ export function useAppStateMachine(): AppStateMachine {
     }
 
     await completeEmailOnboarding();
+
+    // Windows iPhone users need driver setup after email onboarding
+    if (isWindows && selectedPhoneType === "iphone" && needsDriverSetup) {
+      setCurrentStep("apple-driver-setup");
+      return;
+    }
+
     if (hasPermissions) {
       setCurrentStep("dashboard");
     } else {
