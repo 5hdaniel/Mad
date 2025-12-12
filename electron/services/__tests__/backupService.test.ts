@@ -425,25 +425,28 @@ describe("BackupService - parseProgress", () => {
     backupService = new BackupService();
   });
 
-  it("should parse percentage progress", () => {
+  it("should parse progress bar format", () => {
     const parseProgress = (backupService as any).parseProgress.bind(
       backupService,
     );
 
-    const progress = parseProgress("Backup progress: 50%");
+    // Progress bar format: "[====...] XX% (X.X MB/Y.Y MB)"
+    const progress = parseProgress("[====      ] 50% (25.0 MB/50.0 MB)");
     expect(progress).not.toBeNull();
-    expect(progress?.percentComplete).toBe(50);
+    expect(progress?.phase).toBe("transferring");
+    expect(progress?.bytesTransferred).toBeGreaterThan(0);
   });
 
-  it("should parse file count progress", () => {
+  it("should parse file count at end of backup", () => {
     const parseProgress = (backupService as any).parseProgress.bind(
       backupService,
     );
 
+    // File count pattern indicates finishing phase
     const progress = parseProgress("Received 500 files");
     expect(progress).not.toBeNull();
     expect(progress?.filesTransferred).toBe(500);
-    expect(progress?.phase).toBe("transferring");
+    expect(progress?.phase).toBe("finishing");
   });
 
   it("should detect preparing phase", () => {
@@ -451,19 +454,19 @@ describe("BackupService - parseProgress", () => {
       backupService,
     );
 
-    const progress = parseProgress("Receiving files");
+    const progress = parseProgress("Requesting backup from device");
     expect(progress).not.toBeNull();
-    expect(progress?.phase).toBe("transferring");
+    expect(progress?.phase).toBe("preparing");
   });
 
-  it("should detect finishing phase", () => {
+  it("should detect waiting phase", () => {
     const parseProgress = (backupService as any).parseProgress.bind(
       backupService,
     );
 
-    const progress = parseProgress("Finishing backup...");
+    const progress = parseProgress("Waiting for device to respond");
     expect(progress).not.toBeNull();
-    expect(progress?.phase).toBe("finishing");
+    expect(progress?.phase).toBe("preparing");
   });
 
   it("should return null for unrecognized output", () => {
