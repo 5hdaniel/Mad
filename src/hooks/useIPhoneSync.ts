@@ -30,6 +30,7 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
   const [error, setError] = useState<string | null>(null);
   const [needsPassword, setNeedsPassword] = useState(false);
   const [pendingPassword, setPendingPassword] = useState<string | null>(null);
+  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
 
   // Track cleanup functions
   const cleanupRef = useRef<(() => void)[]>([]);
@@ -47,32 +48,51 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
 
     const cleanups: (() => void)[] = [];
 
-    // Start device detection - prefer sync API, fallback to device API
-    if (syncApi?.startDetection) {
-      syncApi.startDetection();
-    } else if (deviceApi?.startDetection) {
-      deviceApi.startDetection();
-    }
+    // Helper to handle device connection
+    const handleDeviceConnected = async (device: unknown) => {
+      const connectedDevice = device as iOSDevice;
+      const mappedDevice: iOSDevice = {
+        udid: connectedDevice.udid,
+        name: connectedDevice.name,
+        productType: connectedDevice.productType,
+        productVersion: connectedDevice.productVersion,
+        serialNumber: connectedDevice.serialNumber,
+        isConnected: true,
+      };
+      setIsConnected(true);
+      setDevice(mappedDevice);
+      setError(null);
+      console.log("[useIPhoneSync] Device connected:", mappedDevice.name);
 
-    // === SYNC API EVENT LISTENERS ===
+      // Fetch last sync time for this device
+      try {
+        // Use type assertion to access checkStatus which may not be in older type definitions
+        const backupApi = window.api?.backup as {
+          checkStatus?: (udid: string) => Promise<{
+            success: boolean;
+            lastSyncTime?: string | null;
+          }>;
+        } | undefined;
+        if (backupApi?.checkStatus) {
+          const status = await backupApi.checkStatus(connectedDevice.udid);
+          if (status?.success && status.lastSyncTime) {
+            setLastSyncTime(new Date(status.lastSyncTime));
+            console.log("[useIPhoneSync] Last sync time:", status.lastSyncTime);
+          } else {
+            setLastSyncTime(null);
+          }
+        }
+      } catch (err) {
+        console.warn("[useIPhoneSync] Failed to fetch backup status:", err);
+        setLastSyncTime(null);
+      }
+    };
+
+    // === SET UP EVENT LISTENERS FIRST (before starting detection) ===
     if (syncApi) {
       // Device connected via sync API
       if (syncApi.onDeviceConnected) {
-        const unsub = syncApi.onDeviceConnected((device: unknown) => {
-          const connectedDevice = device as iOSDevice;
-          const mappedDevice: iOSDevice = {
-            udid: connectedDevice.udid,
-            name: connectedDevice.name,
-            productType: connectedDevice.productType,
-            productVersion: connectedDevice.productVersion,
-            serialNumber: connectedDevice.serialNumber,
-            isConnected: true,
-          };
-          setIsConnected(true);
-          setDevice(mappedDevice);
-          setError(null);
-          console.log("[useIPhoneSync] Device connected:", mappedDevice.name);
-        });
+        const unsub = syncApi.onDeviceConnected(handleDeviceConnected);
         cleanups.push(unsub);
       }
 
@@ -113,10 +133,26 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
             phase = "complete";
           }
 
+          // Extract bytes/files info from backupProgress if available
+          // The backupProgress field contains detailed backup stats from idevicebackup2
+          const progressWithBackup = syncProgress as {
+            phase: string;
+            overallProgress: number;
+            message?: string;
+            estimatedTotalBytes?: number;
+            backupProgress?: {
+              bytesTransferred?: number;
+              filesTransferred?: number;
+            };
+          };
+
           setProgress({
             phase,
             percent: syncProgress.overallProgress ?? 0,
             message: syncProgress.message,
+            bytesProcessed: progressWithBackup.backupProgress?.bytesTransferred,
+            processedFiles: progressWithBackup.backupProgress?.filesTransferred,
+            estimatedTotalBytes: progressWithBackup.estimatedTotalBytes,
           });
         });
         cleanups.push(unsub);
@@ -141,7 +177,7 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
         cleanups.push(unsub);
       }
 
-      // Sync complete event
+      // Sync complete event (extraction done, now storing to DB)
       if (syncApi.onComplete) {
         interface SyncResultType {
           success: boolean;
@@ -152,24 +188,72 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
         }
         const unsub = syncApi.onComplete((data: unknown) => {
           const result = data as SyncResultType;
-          console.log("[useIPhoneSync] Sync complete:", {
+          console.log("[useIPhoneSync] Sync extraction complete:", {
             messages: result.messages?.length ?? 0,
             contacts: result.contacts?.length ?? 0,
             conversations: result.conversations?.length ?? 0,
           });
 
           if (result.success) {
-            setSyncStatus("complete");
+            // Extraction complete, now storing to DB (status will update via onStorageComplete)
+            setSyncStatus("syncing");
             setProgress({
-              phase: "complete",
-              percent: 100,
-              message: `Synced ${result.messages?.length ?? 0} messages and ${result.contacts?.length ?? 0} contacts`,
+              phase: "storing",
+              percent: 0,
+              message: `Saving ${(result.messages?.length ?? 0).toLocaleString()} messages to database...`,
             });
           } else {
             setSyncStatus("error");
             setError(result.error || "Sync failed");
           }
           setNeedsPassword(false);
+        });
+        cleanups.push(unsub);
+      }
+
+      // Storage complete event (messages saved to DB)
+      // Use type assertion since window.d.ts may not have this method yet
+      const syncApiWithStorage = syncApi as typeof syncApi & {
+        onStorageComplete?: (
+          callback: (result: {
+            messagesStored: number;
+            contactsStored: number;
+            duration: number;
+          }) => void
+        ) => () => void;
+        onStorageError?: (callback: (err: { error: string }) => void) => () => void;
+      };
+
+      if (syncApiWithStorage.onStorageComplete) {
+        const unsub = syncApiWithStorage.onStorageComplete((result) => {
+          console.log("[useIPhoneSync] Storage complete:", {
+            messagesStored: result.messagesStored,
+            contactsStored: result.contactsStored,
+            duration: result.duration,
+          });
+
+          setSyncStatus("complete");
+          setLastSyncTime(new Date());
+          setProgress({
+            phase: "complete",
+            percent: 100,
+            message: `Saved ${result.messagesStored.toLocaleString()} messages and ${result.contactsStored} contacts`,
+          });
+        });
+        cleanups.push(unsub);
+      }
+
+      // Storage error event
+      if (syncApiWithStorage.onStorageError) {
+        const unsub = syncApiWithStorage.onStorageError((err) => {
+          console.error("[useIPhoneSync] Storage error:", err.error);
+          // Still mark as complete since extraction succeeded, just storage failed
+          setSyncStatus("complete");
+          setProgress({
+            phase: "complete",
+            percent: 100,
+            message: "Messages extracted but failed to save to database",
+          });
         });
         cleanups.push(unsub);
       }
@@ -210,6 +294,15 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
         });
         cleanups.push(unsub);
       }
+    }
+
+    // === NOW START DEVICE DETECTION (after all listeners are set up) ===
+    // This order ensures we don't miss any events
+    console.log("[useIPhoneSync] Starting device detection...");
+    if (syncApi?.startDetection) {
+      syncApi.startDetection();
+    } else if (deviceApi?.startDetection) {
+      deviceApi.startDetection();
     }
 
     // Store cleanups for later
@@ -375,6 +468,7 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
     progress,
     error,
     needsPassword,
+    lastSyncTime,
     startSync,
     submitPassword,
     cancelSync,

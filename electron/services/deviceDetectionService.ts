@@ -9,7 +9,8 @@ import { spawn, exec } from "child_process";
 import { promisify } from "util";
 import { EventEmitter } from "events";
 import log from "electron-log";
-import { iOSDevice } from "../types/device";
+import { iOSDevice, DeviceStorageInfo } from "../types/device";
+import { getCommand, canUseLibimobiledevice } from "./libimobiledeviceService";
 
 const execAsync = promisify(exec);
 
@@ -67,15 +68,27 @@ export class DeviceDetectionService extends EventEmitter {
       return this.libimobiledeviceAvailable;
     }
 
+    // First check if we can use libimobiledevice at all (platform/mock check)
+    if (!canUseLibimobiledevice()) {
+      this.libimobiledeviceAvailable = false;
+      log.warn(
+        "[DeviceDetection] libimobiledevice not available on this platform",
+      );
+      return false;
+    }
+
     try {
-      await execAsync("idevice_id --version");
+      const ideviceIdCmd = getCommand("idevice_id");
+      log.info(`[DeviceDetection] Checking libimobiledevice at: ${ideviceIdCmd}`);
+      await execAsync(`"${ideviceIdCmd}" --version`);
       this.libimobiledeviceAvailable = true;
       log.info("[DeviceDetection] libimobiledevice is available");
       return true;
-    } catch {
+    } catch (err) {
       this.libimobiledeviceAvailable = false;
       log.warn(
         "[DeviceDetection] libimobiledevice is not available - device detection will not work",
+        err,
       );
       return false;
     }
@@ -141,6 +154,7 @@ export class DeviceDetectionService extends EventEmitter {
       // Check for new devices
       for (const udid of currentUdids) {
         if (!previousUdids.has(udid)) {
+          log.info(`[DeviceDetection] New device found: ${udid}, fetching info...`);
           try {
             const deviceInfo = await this.getDeviceInfo(udid);
             this.connectedDevices.set(udid, deviceInfo);
@@ -197,19 +211,21 @@ export class DeviceDetectionService extends EventEmitter {
     }
 
     return new Promise((resolve) => {
-      const process = spawn("idevice_id", ["-l"]);
+      const ideviceIdCmd = getCommand("idevice_id");
+      // Don't log every poll - too noisy (runs every 2 seconds)
+      const proc = spawn(ideviceIdCmd, ["-l"]);
       let stdout = "";
       let stderr = "";
 
-      process.stdout.on("data", (data) => {
+      proc.stdout.on("data", (data) => {
         stdout += data.toString();
       });
 
-      process.stderr.on("data", (data) => {
+      proc.stderr.on("data", (data) => {
         stderr += data.toString();
       });
 
-      process.on("close", (code) => {
+      proc.on("close", (code) => {
         if (code !== 0) {
           if (stderr.trim()) {
             log.debug(`[DeviceDetection] idevice_id stderr: ${stderr.trim()}`);
@@ -224,10 +240,12 @@ export class DeviceDetectionService extends EventEmitter {
           .split("\n")
           .filter((line) => line.trim().length > 0);
 
+        // Only log device count changes, not every poll
+        // The pollDevices() method will log when devices connect/disconnect
         resolve(udids);
       });
 
-      process.on("error", (err) => {
+      proc.on("error", (err) => {
         log.error("[DeviceDetection] Failed to spawn idevice_id:", err);
         resolve([]);
       });
@@ -246,19 +264,21 @@ export class DeviceDetectionService extends EventEmitter {
     }
 
     return new Promise((resolve, reject) => {
-      const process = spawn("ideviceinfo", ["-u", udid]);
+      const ideviceinfoCmd = getCommand("ideviceinfo");
+      log.debug(`[DeviceDetection] Running: ${ideviceinfoCmd} -u ${udid}`);
+      const proc = spawn(ideviceinfoCmd, ["-u", udid]);
       let stdout = "";
       let stderr = "";
 
-      process.stdout.on("data", (data) => {
+      proc.stdout.on("data", (data) => {
         stdout += data.toString();
       });
 
-      process.stderr.on("data", (data) => {
+      proc.stderr.on("data", (data) => {
         stderr += data.toString();
       });
 
-      process.on("close", (code) => {
+      proc.on("close", (code) => {
         if (code !== 0) {
           reject(
             new Error(`ideviceinfo exited with code ${code}: ${stderr.trim()}`),
@@ -274,7 +294,7 @@ export class DeviceDetectionService extends EventEmitter {
         }
       });
 
-      process.on("error", (err) => {
+      proc.on("error", (err) => {
         reject(new Error(`Failed to spawn ideviceinfo: ${err.message}`));
       });
     });
@@ -306,6 +326,122 @@ export class DeviceDetectionService extends EventEmitter {
       productVersion: info["ProductVersion"] || "Unknown",
       serialNumber: info["SerialNumber"] || "Unknown",
       isConnected: true,
+    };
+  }
+
+  /**
+   * Gets device storage information for estimating backup size.
+   * Uses ideviceinfo -q com.apple.disk_usage to query disk usage.
+   * @param udid Device UDID
+   * @returns Storage info with estimated backup size
+   */
+  async getDeviceStorageInfo(udid: string): Promise<DeviceStorageInfo | null> {
+    try {
+      const ideviceinfoCmd = getCommand("ideviceinfo");
+      log.debug(`[DeviceDetection] Getting storage info for device: ${udid}`);
+
+      return new Promise((resolve) => {
+        // Query disk usage domain for storage information
+        const proc = spawn(ideviceinfoCmd, ["-u", udid, "-q", "com.apple.disk_usage"]);
+        let stdout = "";
+        let stderr = "";
+
+        proc.stdout.on("data", (data) => {
+          stdout += data.toString();
+        });
+
+        proc.stderr.on("data", (data) => {
+          stderr += data.toString();
+        });
+
+        proc.on("close", (code) => {
+          if (code !== 0) {
+            log.warn(`[DeviceDetection] Failed to get storage info: ${stderr}`);
+            resolve(null);
+            return;
+          }
+
+          try {
+            const storageInfo = this.parseStorageInfo(stdout);
+            log.info(`[DeviceDetection] Storage info: ${JSON.stringify(storageInfo)}`);
+            resolve(storageInfo);
+          } catch (err) {
+            log.error("[DeviceDetection] Failed to parse storage info:", err);
+            resolve(null);
+          }
+        });
+
+        proc.on("error", (err) => {
+          log.error("[DeviceDetection] Failed to spawn ideviceinfo for storage:", err);
+          resolve(null);
+        });
+      });
+    } catch (err) {
+      log.error("[DeviceDetection] Exception getting storage info:", err);
+      return null;
+    }
+  }
+
+  /**
+   * Parses storage information from ideviceinfo disk_usage output.
+   *
+   * Common fields returned by ideviceinfo -q com.apple.disk_usage:
+   * - TotalDataCapacity: Total device storage capacity in bytes
+   * - TotalDataAvailable: Available free space in bytes
+   * - TotalDiskCapacity: Total disk capacity (may be same as TotalDataCapacity)
+   * - TotalSystemAvailable: System available space
+   * - TotalSystemCapacity: System capacity
+   *
+   * @param output Raw output from ideviceinfo -q com.apple.disk_usage
+   * @returns Parsed storage info with estimated backup size
+   */
+  private parseStorageInfo(output: string): DeviceStorageInfo {
+    const lines = output.split("\n");
+    const info: Record<string, string> = {};
+
+    for (const line of lines) {
+      const colonIndex = line.indexOf(":");
+      if (colonIndex > 0) {
+        const key = line.substring(0, colonIndex).trim();
+        const value = line.substring(colonIndex + 1).trim();
+        info[key] = value;
+      }
+    }
+
+    // Log all available fields for debugging
+    log.debug("[DeviceDetection] Storage info raw fields:", info);
+
+    // Try multiple field names as they may vary by iOS version
+    const totalCapacity = parseInt(
+      info["TotalDataCapacity"] || info["TotalDiskCapacity"] || "0",
+      10
+    );
+    const availableSpace = parseInt(
+      info["TotalDataAvailable"] || info["TotalSystemAvailable"] || "0",
+      10
+    );
+    const usedSpace = totalCapacity - availableSpace;
+
+    log.info(`[DeviceDetection] Storage: total=${Math.round(totalCapacity / 1024 / 1024 / 1024)}GB, available=${Math.round(availableSpace / 1024 / 1024 / 1024)}GB, used=${Math.round(usedSpace / 1024 / 1024 / 1024)}GB`);
+
+    // Estimate backup size based on used space
+    // NOTE: This estimate is only used for first-time backups (no existing backup to reference)
+    // Real-world observations:
+    // - Encrypted backups include much more data than unencrypted
+    // - Photos, messages with attachments can be very large
+    // - "Used space" from iOS disk_usage may not include all backed-up data
+    // We use a conservative high estimate to avoid underestimating
+    // (Better to overestimate disk space needed than underestimate)
+    const BACKUP_SIZE_RATIO = 1.5; // 150% of "used" space - iOS reports usage conservatively
+    const estimatedBackupSize = Math.round(usedSpace * BACKUP_SIZE_RATIO);
+
+    log.info(`[DeviceDetection] Estimated backup size: ${Math.round(estimatedBackupSize / 1024 / 1024)} MB (${BACKUP_SIZE_RATIO * 100}% of used space)`);
+
+    return {
+      totalCapacity,
+      availableSpace,
+      usedSpace,
+      estimatedBackupSize,
     };
   }
 }

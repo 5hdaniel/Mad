@@ -8,6 +8,20 @@ import type { iOSDevice, BackupProgress } from "./types/iphone";
 import type { Transaction } from "../electron/types/models";
 
 /**
+ * Backup progress details from idevicebackup2
+ */
+interface BackupProgressDetails {
+  phase: string;
+  percentComplete: number;
+  currentFile: string | null;
+  filesTransferred: number;
+  totalFiles: number | null;
+  bytesTransferred: number;
+  totalBytes: number | null;
+  estimatedTimeRemaining: number | null;
+}
+
+/**
  * Sync progress information
  */
 interface SyncProgress {
@@ -15,6 +29,10 @@ interface SyncProgress {
   phaseProgress: number;
   overallProgress: number;
   message?: string;
+  /** Detailed backup progress from idevicebackup2 */
+  backupProgress?: BackupProgressDetails;
+  /** Estimated total backup size in bytes (for progress calculation) */
+  estimatedTotalBytes?: number;
 }
 
 /**
@@ -149,6 +167,16 @@ interface ElectronAPI {
     onProgress: (
       callback: (progress: BackupProgress) => void,
     ) => (() => void) | undefined;
+    /** Check backup status for a specific device (last sync time, size, etc.) */
+    checkStatus?: (udid: string) => Promise<{
+      success: boolean;
+      exists?: boolean;
+      isComplete?: boolean;
+      isCorrupted?: boolean;
+      lastSyncTime?: string | null;
+      sizeBytes?: number;
+      error?: string;
+    }>;
   };
 
   // Apple Driver Management (Windows only)
@@ -394,6 +422,18 @@ interface MainAPI {
 
     /** Subscribe to sync completion events */
     onComplete: (callback: (result: SyncResult) => void) => () => void;
+
+    /** Subscribe to storage completion events (after messages saved to DB) */
+    onStorageComplete: (
+      callback: (result: {
+        messagesStored: number;
+        contactsStored: number;
+        duration: number;
+      }) => void
+    ) => () => void;
+
+    /** Subscribe to storage error events */
+    onStorageError: (callback: (error: { error: string }) => void) => () => void;
   };
 
   // Event listeners for login completion
@@ -502,6 +542,17 @@ interface MainAPI {
         totalBytes: number | null;
         estimatedTimeRemaining: number | null;
       } | null;
+    }>;
+
+    /** Check backup status for a specific device (last sync time, size, etc.) */
+    checkStatus: (udid: string) => Promise<{
+      success: boolean;
+      exists?: boolean;
+      isComplete?: boolean;
+      isCorrupted?: boolean;
+      lastSyncTime?: string | null;
+      sizeBytes?: number;
+      error?: string;
     }>;
 
     /** Start a backup operation */

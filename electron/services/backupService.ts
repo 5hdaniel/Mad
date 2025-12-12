@@ -45,6 +45,13 @@ export class BackupService extends EventEmitter {
   private startTime: number = 0;
   private lastProgress: BackupProgress | null = null;
 
+  // Progress tracking for accurate overall progress
+  private filesCompleted: number = 0;
+  private totalFilesEstimate: number = 0;
+  private bytesTransferred: number = 0;
+  private currentFileProgress: number = 0;
+  private lastFileSize: number = 0;
+
   constructor() {
     super();
   }
@@ -96,6 +103,10 @@ export class BackupService extends EventEmitter {
         proc.on("close", (code) => {
           if (code === 0) {
             const willEncrypt = output.trim().toLowerCase() === "true";
+            log.info("[BackupService] Device encryption status:", {
+              willEncrypt,
+              rawOutput: output.trim(),
+            });
             resolve({
               isEncrypted: willEncrypt,
               needsPassword: willEncrypt,
@@ -199,6 +210,14 @@ export class BackupService extends EventEmitter {
       this.isRunning = true;
       this.currentDeviceUdid = options.udid;
       this.startTime = Date.now();
+
+      // Reset progress tracking
+      this.filesCompleted = 0;
+      this.totalFilesEstimate = 0;
+      this.bytesTransferred = 0;
+      this.currentFileProgress = 0;
+      this.lastFileSize = 0;
+
       this.lastProgress = {
         phase: "preparing",
         percentComplete: 0,
@@ -221,7 +240,13 @@ export class BackupService extends EventEmitter {
       this.currentProcess.stdout?.on("data", (data: Buffer) => {
         const output = data.toString();
         stdoutBuffer += output;
-        log.debug("[BackupService] stdout:", output);
+
+        // Only log non-progress-bar output (progress bars are very spammy)
+        // Progress bars look like: [====] XX% (X.X MB/Y.Y MB)
+        const isProgressBar = /\[=*\s*\]\s*\d+%/.test(output);
+        if (!isProgressBar && output.trim()) {
+          log.debug("[BackupService] stdout:", output.trim());
+        }
 
         const progress = this.parseProgress(output);
         if (progress) {
@@ -233,7 +258,12 @@ export class BackupService extends EventEmitter {
       this.currentProcess.stderr?.on("data", (data: Buffer) => {
         const output = data.toString();
         stderrBuffer += output;
-        log.warn("[BackupService] stderr:", output);
+
+        // Only log non-progress-bar output (progress bars are very spammy)
+        const isProgressBar = /\[=*\s*\]\s*\d+%/.test(output);
+        if (!isProgressBar && output.trim()) {
+          log.warn("[BackupService] stderr:", output.trim());
+        }
       });
 
       this.currentProcess.on("error", (error: Error) => {
@@ -257,8 +287,45 @@ export class BackupService extends EventEmitter {
             `[BackupService] Backup completed successfully in ${duration}ms, size: ${backupSize} bytes`,
           );
 
+          // Check ACTUAL encryption status from backup on disk (not just device setting)
+          // The device's WillEncrypt flag may not reflect existing backup encryption
+          const actuallyEncrypted = await backupDecryptionService.isBackupEncrypted(deviceBackupPath);
+          log.info("[BackupService] Backup encryption check:", {
+            deviceWillEncrypt: encryptionInfo.isEncrypted,
+            backupActuallyEncrypted: actuallyEncrypted,
+          });
+
+          // Update encryption info to reflect actual backup state
+          if (actuallyEncrypted !== encryptionInfo.isEncrypted) {
+            log.warn("[BackupService] Encryption mismatch - backup on disk differs from device setting");
+            encryptionInfo.isEncrypted = actuallyEncrypted;
+            encryptionInfo.needsPassword = actuallyEncrypted;
+          }
+
+          // Handle encrypted backup - need password to proceed
+          if (actuallyEncrypted && !options.password) {
+            // Backup is encrypted but no password provided - need to ask user
+            log.info("[BackupService] Backup is encrypted but no password provided, requesting password");
+            this.emit("password-required", { udid: options.udid });
+
+            const result: BackupResult = {
+              success: false,
+              backupPath: deviceBackupPath,
+              error: "Backup password required",
+              errorCode: "PASSWORD_REQUIRED" as BackupErrorCode,
+              duration: Date.now() - this.startTime,
+              deviceUdid: options.udid,
+              isIncremental: previousBackupExists && !options.forceFullBackup,
+              backupSize,
+              isEncrypted: true,
+            };
+            this.emit("complete", result);
+            resolve(result);
+            return;
+          }
+
           // Handle encrypted backup decryption (TASK-007)
-          if (encryptionInfo.isEncrypted && options.password) {
+          if (actuallyEncrypted && options.password) {
             this.lastProgress = {
               phase: "decrypting",
               percentComplete: 95,
@@ -305,12 +372,16 @@ export class BackupService extends EventEmitter {
           log.error("[BackupService] stderr:", stderrBuffer);
         }
 
+        // Convert error code to user-friendly message
+        let errorMessage: string | null = null;
+        if (!success) {
+          errorMessage = this.getErrorMessage(code, stderrBuffer);
+        }
+
         const result: BackupResult = {
           success,
           backupPath: success ? finalBackupPath : null,
-          error: success
-            ? null
-            : `Backup failed with code ${code}: ${stderrBuffer}`,
+          error: errorMessage,
           duration: Date.now() - this.startTime,
           deviceUdid: options.udid,
           isIncremental: previousBackupExists && !options.forceFullBackup,
@@ -394,71 +465,255 @@ export class BackupService extends EventEmitter {
    * Parse idevicebackup2 output for progress information
    *
    * Example output patterns:
+   * - "[====================                              ]  39% (18.8 MB/48.3 MB)"
    * - "Receiving files"
    * - "Received 100 files"
-   * - Progress percentage updates
+   *
+   * Note: The percentage shown is per-file, not overall. Each file goes 0-100%.
+   * We track cumulative bytes transferred to show accurate overall progress.
    */
   private parseProgress(output: string): BackupProgress | null {
-    // Check for file count pattern
+    // Parse progress bar format: "[====...] XX% (X.X MB/Y.Y MB)"
+    // This gives us per-file progress with current/total bytes for that file
+    const progressMatch = output.match(
+      /\[[\s=]+\]\s*(\d+)%\s*\((\d+(?:\.\d+)?)\s*(MB|KB|GB)\/(\d+(?:\.\d+)?)\s*(MB|KB|GB)\)/
+    );
+
+    if (progressMatch) {
+      const filePercent = parseInt(progressMatch[1], 10);
+      const currentBytes = this.parseBytes(
+        parseFloat(progressMatch[2]),
+        progressMatch[3]
+      );
+      const totalFileBytes = this.parseBytes(
+        parseFloat(progressMatch[4]),
+        progressMatch[5]
+      );
+
+      // Track when a file completes (goes from high % to low %)
+      if (filePercent < this.currentFileProgress - 50 && this.currentFileProgress > 90) {
+        // Previous file completed, add its size to our total
+        this.bytesTransferred += this.lastFileSize;
+        this.filesCompleted++;
+        log.debug(
+          `[BackupService] File completed. Total transferred: ${this.bytesTransferred}, Files: ${this.filesCompleted}`
+        );
+      }
+
+      this.currentFileProgress = filePercent;
+      this.lastFileSize = totalFileBytes;
+
+      // Calculate overall progress based on cumulative bytes
+      // We add the current file's progress to previously completed files
+      const totalTransferred = this.bytesTransferred + currentBytes;
+
+      // Estimate total based on time elapsed and transfer rate
+      // For display, we show the current file's context
+      const overallPercent = this.calculateOverallPercent(totalTransferred);
+
+      return {
+        phase: "transferring",
+        percentComplete: overallPercent,
+        currentFile: null,
+        filesTransferred: this.filesCompleted,
+        totalFiles: null,
+        bytesTransferred: totalTransferred,
+        totalBytes: null, // We don't know total until complete
+        estimatedTimeRemaining: this.estimateTimeRemaining(overallPercent),
+      };
+    }
+
+    // Check for file count pattern (end of backup)
     const filesMatch = output.match(/Received (\d+) files/);
     if (filesMatch) {
       const filesTransferred = parseInt(filesMatch[1], 10);
-      return {
-        phase: "transferring",
-        percentComplete: Math.min(filesTransferred / 100, 99), // Estimate
-        currentFile: null,
-        filesTransferred,
-        totalFiles: null,
-        bytesTransferred: 0,
-        totalBytes: null,
-        estimatedTimeRemaining: null,
-      };
-    }
-
-    // Check for percentage pattern
-    const percentMatch = output.match(/(\d+(?:\.\d+)?)%/);
-    if (percentMatch) {
-      const percent = parseFloat(percentMatch[1]);
-      return {
-        phase: "transferring",
-        percentComplete: percent,
-        currentFile: null,
-        filesTransferred: 0,
-        totalFiles: null,
-        bytesTransferred: 0,
-        totalBytes: null,
-        estimatedTimeRemaining: this.estimateTimeRemaining(percent),
-      };
-    }
-
-    // Check for phase indicators
-    if (output.includes("Receiving files")) {
-      return {
-        phase: "transferring",
-        percentComplete: 5,
-        currentFile: null,
-        filesTransferred: 0,
-        totalFiles: null,
-        bytesTransferred: 0,
-        totalBytes: null,
-        estimatedTimeRemaining: null,
-      };
-    }
-
-    if (output.includes("Finishing")) {
+      this.totalFilesEstimate = filesTransferred;
       return {
         phase: "finishing",
         percentComplete: 95,
         currentFile: null,
-        filesTransferred: 0,
-        totalFiles: null,
-        bytesTransferred: 0,
-        totalBytes: null,
+        filesTransferred,
+        totalFiles: filesTransferred,
+        bytesTransferred: this.bytesTransferred,
+        totalBytes: this.bytesTransferred,
         estimatedTimeRemaining: 30,
       };
     }
 
+    // Check for phase indicators - early initialization phases
+    if (output.includes("Requesting backup") || output.includes("Starting backup")) {
+      return {
+        phase: "preparing",
+        percentComplete: 0,
+        currentFile: null,
+        filesTransferred: 0,
+        totalFiles: null,
+        bytesTransferred: 0,
+        totalBytes: null,
+        estimatedTimeRemaining: null,
+      };
+    }
+
+    // Waiting for device to respond (can take a few minutes after trust/passcode)
+    if (output.includes("Waiting") || output.includes("Starting data")) {
+      return {
+        phase: "preparing",
+        percentComplete: 0,
+        currentFile: null,
+        filesTransferred: 0,
+        totalFiles: null,
+        bytesTransferred: 0,
+        totalBytes: null,
+        estimatedTimeRemaining: null,
+      };
+    }
+
+    if (output.includes("Receiving files")) {
+      return {
+        phase: "transferring",
+        percentComplete: 1,
+        currentFile: null,
+        filesTransferred: 0,
+        totalFiles: null,
+        bytesTransferred: 0,
+        totalBytes: null,
+        estimatedTimeRemaining: null,
+      };
+    }
+
+    if (output.includes("Finishing") || output.includes("Backup Successful")) {
+      return {
+        phase: "finishing",
+        percentComplete: 98,
+        currentFile: null,
+        filesTransferred: this.filesCompleted,
+        totalFiles: this.filesCompleted,
+        bytesTransferred: this.bytesTransferred,
+        totalBytes: this.bytesTransferred,
+        estimatedTimeRemaining: 10,
+      };
+    }
+
     return null;
+  }
+
+  /**
+   * Convert exit code to user-friendly error message
+   */
+  private getErrorMessage(code: number | null, stderr: string): string {
+    // Convert unsigned 32-bit to signed (Windows wraps negative codes)
+    const signedCode = code !== null && code > 2147483647 ? code - 4294967296 : code;
+
+    // Check stderr for specific error messages first
+    const stderrLower = stderr.toLowerCase();
+
+    if (stderrLower.includes("password") || stderrLower.includes("incorrect")) {
+      return "Incorrect backup password. Please try again with the correct password.";
+    }
+
+    if (stderrLower.includes("locked") || stderrLower.includes("passcode")) {
+      return "iPhone is locked. Please unlock your iPhone and try again.";
+    }
+
+    if (stderrLower.includes("trust") || stderrLower.includes("pair")) {
+      return "iPhone trust not established. Please disconnect and reconnect your iPhone, then tap 'Trust' when prompted.";
+    }
+
+    if (stderrLower.includes("no device") || stderrLower.includes("not found")) {
+      return "iPhone disconnected. Please reconnect your iPhone and try again.";
+    }
+
+    if (stderrLower.includes("disk") || stderrLower.includes("space") || stderrLower.includes("storage")) {
+      return "Not enough disk space to complete the backup. Please free up space and try again.";
+    }
+
+    // Check by exit code
+    switch (signedCode) {
+      case -208:
+      case -207:
+        // Connection lost / device disconnected
+        return "Connection to iPhone was lost. Please make sure your iPhone stays connected and unlocked during the sync.";
+
+      case -1:
+        return "Backup was cancelled.";
+
+      case 1:
+        return "Backup failed. Please make sure your iPhone is unlocked and connected.";
+
+      case 2:
+        return "Invalid backup configuration. Please try again.";
+
+      default:
+        // Generic error with code
+        if (stderr.trim()) {
+          return `Backup failed: ${stderr.trim().substring(0, 200)}`;
+        }
+        return `Backup failed with error code ${code}. Please try again.`;
+    }
+  }
+
+  /**
+   * Parse bytes from value and unit
+   */
+  private parseBytes(value: number, unit: string): number {
+    switch (unit.toUpperCase()) {
+      case "KB":
+        return value * 1024;
+      case "MB":
+        return value * 1024 * 1024;
+      case "GB":
+        return value * 1024 * 1024 * 1024;
+      default:
+        return value;
+    }
+  }
+
+  /**
+   * Calculate overall progress percentage
+   * Uses time-based estimation since we don't know total size upfront
+   */
+  private calculateOverallPercent(bytesTransferred: number): number {
+    // For first sync, we use a time-based approach
+    // Typical first sync: 30-60 minutes for ~5-20GB
+    // Subsequent syncs: 1-5 minutes
+
+    const elapsedMs = Date.now() - this.startTime;
+    const elapsedMinutes = elapsedMs / 1000 / 60;
+
+    // Calculate transfer rate (bytes per minute)
+    const transferRate = bytesTransferred / Math.max(elapsedMinutes, 0.1);
+
+    // Estimate total time based on typical backup sizes
+    // We use a heuristic: if we've been going > 5 min, assume it's a larger backup
+    let estimatedTotalMinutes: number;
+
+    if (elapsedMinutes < 2) {
+      // Early phase - assume 10 minutes total (will adjust as we go)
+      estimatedTotalMinutes = 10;
+    } else if (elapsedMinutes < 10) {
+      // Getting data - estimate based on rate
+      // Assume we're roughly 1/3 through at 10 min mark
+      estimatedTotalMinutes = Math.max(elapsedMinutes * 3, 15);
+    } else {
+      // Long backup - use logarithmic scaling to avoid stalling at high %
+      estimatedTotalMinutes = elapsedMinutes * 1.5;
+    }
+
+    // Calculate percentage, capped at 94% until we get completion signal
+    const percent = Math.min((elapsedMinutes / estimatedTotalMinutes) * 100, 94);
+
+    // Blend with file completion estimate if we have it
+    if (this.filesCompleted > 10) {
+      // Once we have enough files, use a weighted average
+      // This helps smooth out the progress
+      const fileBasedPercent = Math.min(
+        (this.bytesTransferred / (this.bytesTransferred + this.lastFileSize * 5)) * 100,
+        94
+      );
+      return Math.max(percent, fileBasedPercent);
+    }
+
+    return Math.max(percent, 1); // Never show 0%
   }
 
   /**
@@ -521,6 +776,80 @@ export class BackupService extends EventEmitter {
       return true;
     } catch {
       return false;
+    }
+  }
+
+  /**
+   * Check if a backup for a device exists and its status
+   * @param udid Device UDID
+   * @returns Backup status info or null if no backup exists
+   */
+  async checkBackupStatus(udid: string): Promise<{
+    exists: boolean;
+    isComplete: boolean;
+    isCorrupted: boolean;
+    lastModified: Date | null;
+    sizeBytes: number;
+  } | null> {
+    const backupPath = this.getDefaultBackupPath();
+    const deviceBackupPath = path.join(backupPath, udid);
+
+    try {
+      if (!(await this.pathExists(deviceBackupPath))) {
+        return null;
+      }
+
+      const stats = await fs.stat(deviceBackupPath);
+      const size = await this.calculateBackupSize(deviceBackupPath);
+
+      // Check for key files that indicate backup completeness
+      const manifestPath = path.join(deviceBackupPath, "Manifest.db");
+      const infoPlistPath = path.join(deviceBackupPath, "Info.plist");
+      const statusPlistPath = path.join(deviceBackupPath, "Status.plist");
+
+      const hasManifest = await this.pathExists(manifestPath);
+      const hasInfoPlist = await this.pathExists(infoPlistPath);
+      const hasStatusPlist = await this.pathExists(statusPlistPath);
+
+      // A complete backup should have Manifest.db and Info.plist
+      // Status.plist contains backup state info
+      const isComplete = hasManifest && hasInfoPlist;
+
+      // Check for corruption indicators
+      let isCorrupted = false;
+      if (hasStatusPlist) {
+        try {
+          const statusContent = await fs.readFile(statusPlistPath, "utf8");
+          // If Status.plist indicates backup was in progress, it was interrupted
+          if (statusContent.includes("BackupState") && statusContent.includes("InProgress")) {
+            isCorrupted = true;
+          }
+        } catch {
+          // Can't read status, assume potentially corrupted
+          isCorrupted = !isComplete;
+        }
+      }
+
+      log.info(`[BackupService] Backup status for ${udid}:`, {
+        exists: true,
+        isComplete,
+        isCorrupted,
+        hasManifest,
+        hasInfoPlist,
+        hasStatusPlist,
+        sizeBytes: size,
+      });
+
+      return {
+        exists: true,
+        isComplete,
+        isCorrupted,
+        lastModified: stats.mtime,
+        sizeBytes: size,
+      };
+    } catch (error) {
+      log.error("[BackupService] Error checking backup status:", error);
+      return null;
     }
   }
 

@@ -76,6 +76,45 @@ export function registerBackupHandlers(mainWindow: BrowserWindow): void {
   });
 
   /**
+   * Check backup status for a specific device (returns last sync time, size, etc.)
+   * @param udid Device UDID
+   */
+  ipcMain.handle("backup:check-status", async (_, udid: string) => {
+    log.info("[BackupHandlers] Checking backup status for device:", udid);
+
+    try {
+      if (!udid) {
+        throw new Error("Device UDID is required");
+      }
+
+      const status = await backupService.checkBackupStatus(udid);
+
+      if (!status) {
+        return {
+          success: true,
+          exists: false,
+          lastSyncTime: null,
+        };
+      }
+
+      return {
+        success: true,
+        exists: status.exists,
+        isComplete: status.isComplete,
+        isCorrupted: status.isCorrupted,
+        lastSyncTime: status.lastModified?.toISOString() || null,
+        sizeBytes: status.sizeBytes,
+      };
+    } catch (error) {
+      log.error("[BackupHandlers] Error checking backup status:", error);
+      return {
+        success: false,
+        error: (error as Error).message,
+      };
+    }
+  });
+
+  /**
    * Check if a device requires encrypted backup (TASK-007)
    * @param udid Device UDID
    */

@@ -4,6 +4,11 @@ import { ConnectionStatus } from "./ConnectionStatus";
 import { SyncProgress } from "./SyncProgress";
 import { BackupPasswordModal } from "./BackupPasswordModal";
 
+interface IPhoneSyncFlowProps {
+  /** Callback when sync is complete and user clicks Continue */
+  onClose?: () => void;
+}
+
 /**
  * IPhoneSyncFlow Container Component
  *
@@ -17,7 +22,7 @@ import { BackupPasswordModal } from "./BackupPasswordModal";
  * This component ties together the useIPhoneSync hook with
  * the individual UI components for a complete user experience.
  */
-export const IPhoneSyncFlow: React.FC = () => {
+export const IPhoneSyncFlow: React.FC<IPhoneSyncFlowProps> = ({ onClose }) => {
   const {
     isConnected,
     device,
@@ -25,6 +30,7 @@ export const IPhoneSyncFlow: React.FC = () => {
     progress,
     error,
     needsPassword,
+    lastSyncTime,
     startSync,
     submitPassword,
     cancelSync,
@@ -37,12 +43,13 @@ export const IPhoneSyncFlow: React.FC = () => {
 
   return (
     <div className="iphone-sync-flow">
-      {/* Connection Status - Always shown when not syncing */}
-      {!isSyncing && !isComplete && (
+      {/* Connection Status - Shown when idle (not syncing, not complete, not error) */}
+      {!isSyncing && !isComplete && !isError && (
         <ConnectionStatus
           isConnected={isConnected}
           device={device}
           onSyncClick={startSync}
+          lastSyncTime={lastSyncTime}
         />
       )}
 
@@ -74,7 +81,7 @@ export const IPhoneSyncFlow: React.FC = () => {
             <p className="text-gray-500 mt-2">{progress.message}</p>
           )}
           <button
-            onClick={() => window.location.reload()}
+            onClick={onClose}
             className="mt-6 px-6 py-3 bg-gradient-to-r from-purple-500 to-indigo-600 text-white font-medium rounded-lg hover:from-purple-600 hover:to-indigo-700 transition-all shadow-md hover:shadow-lg"
           >
             Continue

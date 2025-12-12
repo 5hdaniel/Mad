@@ -25,6 +25,7 @@ import rateLimitService from "./services/rateLimitService";
 import sessionSecurityService from "./services/sessionSecurityService";
 import auditService from "./services/auditService";
 import logService from "./services/logService";
+import { setSyncUserId } from "./sync-handlers";
 
 // Import types
 import type {
@@ -510,6 +511,9 @@ const handleGoogleLogin = async (
           metadata: { provider: "google", isNewUser },
           success: true,
         });
+
+        // Set user ID for iPhone sync storage
+        setSyncUserId(localUser.id);
 
         // Close the auth window if still open
         if (authWindow && !authWindow.isDestroyed()) {
@@ -1526,6 +1530,9 @@ const handleMicrosoftLogin = async (
           metadata: { provider: "microsoft", isNewUser },
           success: true,
         });
+
+        // Set user ID for iPhone sync storage
+        setSyncUserId(localUser.id);
 
         // Notify renderer of successful login
         await logService.info(
@@ -2778,6 +2785,9 @@ export const registerAuthHandlers = (
         await sessionService.clearSession();
         sessionSecurityService.cleanupSession(validatedSessionToken);
 
+        // Clear sync user ID
+        setSyncUserId(null);
+
         // Audit log logout
         await auditService.log({
           userId,
@@ -3169,6 +3179,9 @@ export const registerAuthHandlers = (
         // Load fresh user data from database to ensure we have latest terms acceptance status
         const freshUser = await databaseService.getUserById(session.user.id);
         const user = freshUser || session.user; // Fallback to session user if db read fails
+
+        // Set user ID for iPhone sync storage
+        setSyncUserId(user.id);
 
         return {
           success: true,

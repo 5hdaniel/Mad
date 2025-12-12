@@ -251,21 +251,24 @@ function App() {
           const result = await userApi.getPhoneType(currentUser.id);
           if (result.success && result.phoneType) {
             setSelectedPhoneType(result.phoneType);
+            setHasSelectedPhoneType(true);
 
             // On Windows + iPhone, check if drivers need to be installed/updated
+            // Driver setup happens AFTER email onboarding in the flow
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const drivers = (window.electron as any)?.drivers;
             if (isWindows && result.phoneType === "iphone" && drivers) {
               try {
                 const driverStatus = await drivers.checkApple();
+                console.log("[App] Driver status:", driverStatus);
                 if (!driverStatus.installed || !driverStatus.serviceRunning) {
-                  // Drivers not installed or service not running - need setup
+                  // Drivers not installed or service not running - need setup after email
+                  console.log("[App] Drivers need setup (after email onboarding)");
                   setNeedsDriverSetup(true);
-                  setHasSelectedPhoneType(false); // Don't skip driver setup
                 } else {
-                  // Drivers are good
+                  // Drivers are good - skip the driver setup step
+                  console.log("[App] Drivers already installed - skipping setup");
                   setNeedsDriverSetup(false);
-                  setHasSelectedPhoneType(true);
                 }
               } catch (driverError) {
                 console.error(
@@ -274,12 +277,10 @@ function App() {
                 );
                 // On error, assume drivers need setup
                 setNeedsDriverSetup(true);
-                setHasSelectedPhoneType(false);
               }
             } else {
               // Not Windows + iPhone, no driver check needed
               setNeedsDriverSetup(false);
-              setHasSelectedPhoneType(true);
             }
           } else {
             // No phone type stored - user needs to select
@@ -398,16 +399,16 @@ function App() {
 
       if (isAuthenticated && !needsTermsAcceptance) {
         // User is authenticated and has accepted terms
-        // Check if user has selected phone type (new step after terms acceptance)
+        // Flow: Sign In → Phone Type → Connect Email → Install Tools (Windows+iPhone only)
         if (!hasSelectedPhoneType && !needsDriverSetup) {
-          // No phone type selected yet, and not in driver setup mode
+          // Step 2: No phone type selected yet
           setCurrentStep("phone-type-selection");
-        } else if (needsDriverSetup && isWindows) {
-          // Windows + iPhone user needs to set up Apple drivers
-          setCurrentStep("apple-driver-setup");
         } else if (!hasCompletedEmailOnboarding || !hasEmailConnected) {
-          // Show email onboarding if never completed OR if no email is connected
+          // Step 3: Show email onboarding if never completed OR if no email is connected
           setCurrentStep("email-onboarding");
+        } else if (needsDriverSetup && isWindows) {
+          // Step 4: Windows + iPhone user needs to set up Apple drivers (after email)
+          setCurrentStep("apple-driver-setup");
         } else if (hasPermissions) {
           setCurrentStep("dashboard");
         } else {
@@ -503,14 +504,12 @@ function App() {
       const result = await userApi.setPhoneType(currentUser.id, "iphone");
       if (result.success) {
         setSelectedPhoneType("iphone");
-        // On Windows, show Apple driver setup before continuing
-        // On macOS, drivers are bundled with the OS
+        // On Windows, mark that drivers need setup (will happen after email onboarding)
         if (isWindows) {
-          setCurrentStep("apple-driver-setup");
-        } else {
-          setHasSelectedPhoneType(true);
-          // Continue to email onboarding (flow will be handled by useEffect)
+          setNeedsDriverSetup(true);
         }
+        setHasSelectedPhoneType(true);
+        // Flow continues to email onboarding (handled by useEffect)
       } else {
         console.error("[App] Failed to save phone type:", result.error);
       }
@@ -531,7 +530,13 @@ function App() {
     // User chose to skip - they can set up drivers later
     setNeedsDriverSetup(false);
     setHasSelectedPhoneType(true);
-    // Continue to email onboarding (flow will be handled by useEffect)
+    // Continue to dashboard (flow will be handled by useEffect)
+  };
+
+  // Handle Apple driver setup back (Windows only) - go back to email onboarding
+  const handleAppleDriverSetupBack = (): void => {
+    // Go back to email onboarding
+    setCurrentStep("email-onboarding");
   };
 
   const handleSelectAndroid = (): void => {
@@ -1056,6 +1061,7 @@ function App() {
           <AppleDriverSetup
             onComplete={handleAppleDriverSetupComplete}
             onSkip={handleAppleDriverSetupSkip}
+            onBack={handleAppleDriverSetupBack}
           />
         )}
 
@@ -1283,7 +1289,7 @@ function App() {
               </button>
             </div>
             <div className="p-6">
-              <IPhoneSyncFlow />
+              <IPhoneSyncFlow onClose={() => setShowIPhoneSync(false)} />
             </div>
           </div>
         </div>
