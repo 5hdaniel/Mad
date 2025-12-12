@@ -14,9 +14,11 @@ import { PlatformProvider } from "../../contexts/PlatformContext";
 const originalElectron = window.electron;
 
 // Helper to render with PlatformProvider
+// Default to Windows (win32) so tests start at Connect Email step (navigationStep=2)
+// On macOS (darwin), navigationStep starts at 1 (Phone Type), not Connect Email
 function renderWithPlatform(
   ui: React.ReactElement,
-  platform: string = "darwin",
+  platform: string = "win32",
 ) {
   Object.defineProperty(window, "electron", {
     value: { platform },
@@ -73,9 +75,6 @@ describe("EmailOnboardingScreen", () => {
   });
 
   describe("Connect Email UI", () => {
-    // Use Windows platform to start at Connect Email step (navigationStep=2)
-    // On macOS, navigationStep starts at 1 (Phone Type), not Connect Email
-
     it("should render email connection screen", async () => {
       renderWithPlatform(
         <EmailOnboardingScreen
@@ -84,7 +83,6 @@ describe("EmailOnboardingScreen", () => {
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
         />,
-        "win32", // Use Windows to start at Connect Email step
       );
 
       expect(screen.getByText("Connect Your Gmail")).toBeInTheDocument();
@@ -98,7 +96,6 @@ describe("EmailOnboardingScreen", () => {
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
         />,
-        "win32", // Use Windows to start at Connect Email step
       );
 
       expect(screen.getByText("Connect Your Gmail")).toBeInTheDocument();
@@ -113,7 +110,6 @@ describe("EmailOnboardingScreen", () => {
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
         />,
-        "win32", // Use Windows to start at Connect Email step
       );
 
       expect(screen.getByText("Connect Your Outlook")).toBeInTheDocument();
@@ -128,7 +124,6 @@ describe("EmailOnboardingScreen", () => {
           onComplete={mockOnComplete}
           onSkip={mockOnSkip}
         />,
-        "win32", // Use Windows to start at Connect Email step
       );
 
       expect(screen.getByText("Why connect your email?")).toBeInTheDocument();
