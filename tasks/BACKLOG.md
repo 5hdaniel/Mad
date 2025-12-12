@@ -1187,11 +1187,17 @@ Need to balance security (session-only tokens) vs. UX (not re-authorizing every 
 
 ### BACKLOG-030: Message Parser Async Yielding for Large Databases
 **Priority:** Critical
-**Status:** Pending
+**Status:** ✅ Completed (2024-12-12)
 **Category:** Performance
 
 **Description:**
 The message parsing phase (`getConversations()` and `getMessages()`) runs synchronously and blocks the main Electron process for large databases (627k+ messages). This causes "App Not Responding" during extraction.
+
+**Solution Implemented:**
+- Added `getConversationsAsync()` method with yielding every 50 chats
+- Added `getMessagesAsync()` method with yielding every 500 messages
+- Updated `syncOrchestrator.ts` to use async methods
+- Uses `setImmediate()` pattern consistent with `iPhoneSyncStorageService`
 
 **Root Cause:**
 - `iosMessagesParser.getConversations()` runs N+1 queries (one per chat for participants + last message)
