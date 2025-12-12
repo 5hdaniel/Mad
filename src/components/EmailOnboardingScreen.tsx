@@ -229,6 +229,7 @@ function EmailOnboardingScreen({
     let cleanupConnected: (() => void) | undefined;
     let cleanupCancelled: (() => void) | undefined;
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    let usePendingApi = isPreDbFlow;
 
     const cleanup = () => {
       if (cleanupConnected) cleanupConnected();
@@ -237,10 +238,19 @@ function EmailOnboardingScreen({
     };
 
     try {
-      // Use pending API if database isn't initialized yet
-      const result = isPreDbFlow
-        ? await window.api.auth.googleConnectMailboxPending(emailHint)
-        : await window.api.auth.googleConnectMailbox(userId);
+      // Try regular API first if not in pre-DB flow, fall back to pending if DB not ready
+      let result;
+      if (usePendingApi) {
+        result = await window.api.auth.googleConnectMailboxPending(emailHint);
+      } else {
+        result = await window.api.auth.googleConnectMailbox(userId);
+        // If regular API fails due to DB not initialized, fall back to pending API
+        if (!result.success && result.error?.includes("Database is not initialized")) {
+          console.log("[EmailOnboarding] DB not ready, falling back to pending API for Google");
+          usePendingApi = true;
+          result = await window.api.auth.googleConnectMailboxPending(emailHint);
+        }
+      }
 
       if (result.success) {
         // Set up timeout fallback - if no response in 2 minutes, reset state
@@ -253,7 +263,7 @@ function EmailOnboardingScreen({
         }, 120000);
 
         // Use appropriate event listeners based on flow type
-        if (isPreDbFlow) {
+        if (usePendingApi) {
           cleanupConnected = window.api.onGoogleMailboxPendingConnected(
             async (connectionResult: { success: boolean; email?: string; tokens?: PendingEmailTokens["tokens"]; error?: string }) => {
               try {
@@ -319,6 +329,7 @@ function EmailOnboardingScreen({
     let cleanupConnected: (() => void) | undefined;
     let cleanupCancelled: (() => void) | undefined;
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    let usePendingApi = isPreDbFlow;
 
     const cleanup = () => {
       if (cleanupConnected) cleanupConnected();
@@ -327,10 +338,19 @@ function EmailOnboardingScreen({
     };
 
     try {
-      // Use pending API if database isn't initialized yet
-      const result = isPreDbFlow
-        ? await window.api.auth.microsoftConnectMailboxPending(emailHint)
-        : await window.api.auth.microsoftConnectMailbox(userId);
+      // Try regular API first if not in pre-DB flow, fall back to pending if DB not ready
+      let result;
+      if (usePendingApi) {
+        result = await window.api.auth.microsoftConnectMailboxPending(emailHint);
+      } else {
+        result = await window.api.auth.microsoftConnectMailbox(userId);
+        // If regular API fails due to DB not initialized, fall back to pending API
+        if (!result.success && result.error?.includes("Database is not initialized")) {
+          console.log("[EmailOnboarding] DB not ready, falling back to pending API for Microsoft");
+          usePendingApi = true;
+          result = await window.api.auth.microsoftConnectMailboxPending(emailHint);
+        }
+      }
 
       if (result.success) {
         // Set up timeout fallback - if no response in 2 minutes, reset state
@@ -343,7 +363,7 @@ function EmailOnboardingScreen({
         }, 120000);
 
         // Use appropriate event listeners based on flow type
-        if (isPreDbFlow) {
+        if (usePendingApi) {
           cleanupConnected = window.api.onMicrosoftMailboxPendingConnected(
             async (connectionResult: { success: boolean; email?: string; tokens?: PendingEmailTokens["tokens"]; error?: string }) => {
               try {
