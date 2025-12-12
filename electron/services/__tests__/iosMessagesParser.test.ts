@@ -529,7 +529,11 @@ describe("iOSMessagesParser", () => {
 
     beforeAll(() => {
       emptyDbDir = fs.mkdtempSync(path.join(os.tmpdir(), "ios-parser-empty-"));
-      const emptyDbPath = path.join(emptyDbDir, iOSMessagesParser.SMS_DB_HASH);
+      // iOS backups store files in subdirectories based on first 2 chars of hash
+      const hashSubdir = iOSMessagesParser.SMS_DB_HASH.substring(0, 2);
+      const subDir = path.join(emptyDbDir, hashSubdir);
+      fs.mkdirSync(subDir, { recursive: true });
+      const emptyDbPath = path.join(subDir, iOSMessagesParser.SMS_DB_HASH);
 
       // Create empty database with schema only
       const db = new Database(emptyDbPath);
