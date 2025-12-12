@@ -53,10 +53,17 @@ export function getLibimobiledevicePath(): string {
  * @returns The absolute path to the executable
  * @throws Error if not running on Windows
  */
+// Cache to avoid logging the same path repeatedly
+const loggedPaths = new Set<string>();
+
 export function getExecutablePath(name: string): string {
   const basePath = getLibimobiledevicePath();
   const exePath = path.join(basePath, `${name}.exe`);
-  log.debug(`[libimobiledeviceService] Resolved executable path: ${exePath}`);
+  // Only log each unique path once to reduce noise
+  if (!loggedPaths.has(exePath)) {
+    log.debug(`[libimobiledeviceService] Resolved executable path: ${exePath}`);
+    loggedPaths.add(exePath);
+  }
   return exePath;
 }
 

@@ -32,6 +32,7 @@ describe("Main Process - AutoUpdater Initialization Bug Fix", () => {
       };
 
       const mockAutoUpdater = {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         logger: null as any,
         on: jest.fn(),
       };

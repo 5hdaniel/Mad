@@ -190,6 +190,8 @@ function Contacts({ userId, onClose }: ContactsProps) {
         text: "Contacts App",
         color: "bg-purple-100 text-purple-700",
       },
+      sms: { text: "From SMS", color: "bg-orange-100 text-orange-700" },
+      inferred: { text: "Inferred", color: "bg-gray-100 text-gray-700" },
     };
     return badges[source] || badges.manual;
   };
@@ -1198,6 +1200,8 @@ function ContactDetailsModal({
         text: "Contacts App",
         color: "bg-purple-100 text-purple-700",
       },
+      sms: { text: "From SMS", color: "bg-orange-100 text-orange-700" },
+      inferred: { text: "Inferred", color: "bg-gray-100 text-gray-700" },
     };
     return badges[source] || badges.manual;
   };

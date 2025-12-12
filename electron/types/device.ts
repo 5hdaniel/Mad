@@ -22,6 +22,20 @@ export interface iOSDevice {
 }
 
 /**
+ * Device storage information for estimating backup size
+ */
+export interface DeviceStorageInfo {
+  /** Total device capacity in bytes */
+  totalCapacity: number;
+  /** Total available space in bytes */
+  availableSpace: number;
+  /** Used space in bytes (totalCapacity - availableSpace) */
+  usedSpace: number;
+  /** Estimated backup size in bytes (used for progress calculation) */
+  estimatedBackupSize: number;
+}
+
+/**
  * Event emitted when a device is connected or disconnected.
  */
 export interface DeviceEvent {

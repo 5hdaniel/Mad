@@ -6,10 +6,36 @@ import { TrustComputerHint } from "./TrustComputerHint";
  * ConnectionStatus Component
  * Displays iPhone connection status and provides sync action
  */
+/**
+ * Format a date as a relative time string (e.g., "2 hours ago", "Yesterday")
+ */
+function formatLastSyncTime(date: Date): string {
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMinutes = Math.floor(diffMs / 1000 / 60);
+  const diffHours = Math.floor(diffMinutes / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffMinutes < 1) {
+    return "Just now";
+  } else if (diffMinutes < 60) {
+    return `${diffMinutes} minute${diffMinutes === 1 ? "" : "s"} ago`;
+  } else if (diffHours < 24) {
+    return `${diffHours} hour${diffHours === 1 ? "" : "s"} ago`;
+  } else if (diffDays === 1) {
+    return "Yesterday";
+  } else if (diffDays < 7) {
+    return `${diffDays} days ago`;
+  } else {
+    return date.toLocaleDateString();
+  }
+}
+
 export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({
   isConnected,
   device,
   onSyncClick,
+  lastSyncTime,
 }) => {
   if (!isConnected) {
     return (
@@ -63,12 +89,63 @@ export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({
         {device?.name || "iPhone"}
       </h3>
       <p className="text-sm text-gray-500 mt-1">iOS {device?.productVersion}</p>
+
+      {/* Last sync time */}
+      {lastSyncTime && (
+        <div className="mt-3 flex items-center gap-2 text-sm">
+          <svg
+            className="w-4 h-4 text-green-500"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M5 13l4 4L19 7"
+            />
+          </svg>
+          <span className="text-gray-600">
+            Last synced: <span className="font-medium">{formatLastSyncTime(lastSyncTime)}</span>
+          </span>
+        </div>
+      )}
+
       <button
         onClick={onSyncClick}
         className="mt-6 px-6 py-3 bg-gradient-to-r from-purple-500 to-indigo-600 text-white font-medium rounded-lg hover:from-purple-600 hover:to-indigo-700 transition-all shadow-md hover:shadow-lg"
       >
-        Sync Messages & Contacts
+        {lastSyncTime ? "Sync New Data" : "Sync Messages & Contacts"}
       </button>
+
+      {/* Sync time note - different message for first vs subsequent syncs */}
+      <div className="mt-4 flex items-start gap-2 text-left max-w-sm">
+        <svg
+          className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+          />
+        </svg>
+        <p className="text-xs text-gray-400">
+          {lastSyncTime ? (
+            <>
+              <span className="font-medium text-gray-500">Incremental sync</span> will only transfer new data since your last sync. This is usually much faster.
+            </>
+          ) : (
+            <>
+              <span className="font-medium text-gray-500">First sync</span> may take up to two hours depending on your phone's data. Future syncs will be much faster as only new data is transferred.
+            </>
+          )}
+        </p>
+      </div>
     </div>
   );
 };

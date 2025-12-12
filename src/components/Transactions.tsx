@@ -2235,7 +2235,7 @@ function EditTransactionModal({
  * Reusable component for editing contact assignments
  */
 interface EditContactAssignmentsProps {
-  transactionType: "purchase" | "sale";
+  transactionType: "purchase" | "sale" | "other";
   contactAssignments: ContactAssignmentMap;
   onAssignContact: (
     role: string,
@@ -2343,7 +2343,7 @@ interface EditRoleAssignmentProps {
   onRemove: (role: string, contactId: string) => void;
   userId: string;
   propertyAddress: string;
-  transactionType: "purchase" | "sale";
+  transactionType: "purchase" | "sale" | "other";
 }
 
 function EditRoleAssignment({
@@ -2394,7 +2394,7 @@ function EditRoleAssignment({
     selectedContacts.forEach((contact: ExtendedContact) => {
       onAssign(role, {
         contactId: contact.id,
-        contactName: contact.name,
+        contactName: contact.name || contact.display_name || "Unknown",
         contactEmail: contact.email,
         contactPhone: contact.phone,
         contactCompany: contact.company,

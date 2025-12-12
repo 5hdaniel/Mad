@@ -17,7 +17,7 @@ export interface RoleConfig {
 /**
  * Transaction type - represents which side of the deal the user represents
  */
-export type TransactionType = "purchase" | "sale";
+export type TransactionType = "purchase" | "sale" | "other";
 
 /**
  * Contact assignments mapping roles to assigned contacts

@@ -46,11 +46,23 @@ export class iOSMessagesParser {
   static readonly SMS_DB_HASH = "3d0d7e5fb2ce288813306e4d4636395e047a3d28";
 
   /**
+   * Get the full path to a file in an iOS backup.
+   * iOS backups store files in subdirectories based on the first 2 characters of the hash.
+   * e.g., hash "3d0d7e5f..." is stored at "3d/3d0d7e5f..."
+   */
+  private static getBackupFilePath(backupPath: string, hash: string): string {
+    return path.join(backupPath, hash.substring(0, 2), hash);
+  }
+
+  /**
    * Open the sms.db database from a backup
    * @param backupPath Path to the iOS backup directory
    */
   open(backupPath: string): void {
-    const dbPath = path.join(backupPath, iOSMessagesParser.SMS_DB_HASH);
+    const dbPath = iOSMessagesParser.getBackupFilePath(
+      backupPath,
+      iOSMessagesParser.SMS_DB_HASH,
+    );
 
     try {
       this.db = new Database(dbPath, { readonly: true });

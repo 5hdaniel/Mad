@@ -73,6 +73,7 @@ export function AppRouter({ app }: AppRouterProps) {
     handleSelectAndroid,
     handleAndroidGoBack,
     handleAndroidContinueWithEmail,
+    handlePhoneTypeChange,
 
     // Driver setup handlers
     handleAppleDriverSetupComplete,
@@ -118,6 +119,9 @@ export function AppRouter({ app }: AppRouterProps) {
     // UI handlers
     handleDismissSetupPrompt,
     setIsTourActive,
+
+    // iPhone sync
+    openIPhoneSync,
   } = app;
   // Loading state
   if (currentStep === "loading") {
@@ -228,6 +232,8 @@ export function AppRouter({ app }: AppRouterProps) {
         authProvider={
           (authProvider || pendingOAuthData?.provider) as "google" | "microsoft"
         }
+        selectedPhoneType={selectedPhoneType || pendingOnboardingData.phoneType}
+        onPhoneTypeChange={handlePhoneTypeChange}
         onComplete={handleEmailOnboardingComplete}
         onSkip={handleEmailOnboardingSkip}
         onBack={handleEmailOnboardingBack}
@@ -260,11 +266,15 @@ export function AppRouter({ app }: AppRouterProps) {
 
   // Dashboard
   if (currentStep === "dashboard") {
+    // Show iPhone sync button for Windows + iPhone users
+    const showIPhoneSyncButton = isWindows && selectedPhoneType === "iphone";
+
     return (
       <Dashboard
         onAuditNew={openAuditTransaction}
         onViewTransactions={openTransactions}
         onManageContacts={openContacts}
+        onSyncPhone={showIPhoneSyncButton ? openIPhoneSync : undefined}
         onTourStateChange={setIsTourActive}
         showSetupPrompt={!hasEmailConnected && !showSetupPromptDismissed}
         onContinueSetup={goToEmailOnboarding}

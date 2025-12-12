@@ -21,7 +21,7 @@ export interface iOSDevice {
 // ============================================
 
 export interface BackupProgress {
-  phase: "preparing" | "backing_up" | "extracting" | "complete" | "error";
+  phase: "preparing" | "backing_up" | "extracting" | "storing" | "complete" | "error";
   percent: number;
   currentFile?: string;
   totalFiles?: number;
@@ -29,6 +29,8 @@ export interface BackupProgress {
   bytesProcessed?: number;
   totalBytes?: number;
   message?: string;
+  /** Estimated total backup size in bytes (based on device storage) */
+  estimatedTotalBytes?: number;
 }
 
 export interface BackupResult {
@@ -52,6 +54,8 @@ export interface ConnectionStatusProps {
   isConnected: boolean;
   device: iOSDevice | null;
   onSyncClick: () => void;
+  /** Last sync timestamp (from backup status) */
+  lastSyncTime?: Date | null;
 }
 
 export interface DeviceInfoProps {
@@ -70,6 +74,8 @@ export interface BackupPasswordModalProps {
 export interface SyncProgressProps {
   progress: BackupProgress;
   onCancel?: () => void;
+  /** Whether the sync is waiting for the user to enter their iPhone passcode */
+  isWaitingForPasscode?: boolean;
 }
 
 // ============================================
@@ -83,6 +89,10 @@ export interface UseIPhoneSyncReturn {
   progress: BackupProgress | null;
   error: string | null;
   needsPassword: boolean;
+  /** Last sync time for this device (from backup status) */
+  lastSyncTime: Date | null;
+  /** Whether the sync is waiting for the user to enter their iPhone passcode */
+  isWaitingForPasscode: boolean;
   startSync: () => void;
   submitPassword: (password: string) => void;
   cancelSync: () => void;

@@ -216,6 +216,7 @@ describe("Auth Handlers", () => {
     });
 
     // Register all handlers
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     registerAuthHandlers(mockMainWindow as any);
   });
 
@@ -764,6 +765,7 @@ describe("Auth Handlers", () => {
         localUserWithTerms,
       );
       mockDatabaseService.getUserById.mockResolvedValue(localUserWithTerms);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       mockSupabaseService.syncUser.mockResolvedValue(cloudUserNoTerms as any);
       mockSupabaseService.syncTermsAcceptance.mockResolvedValue(undefined);
 
@@ -815,6 +817,7 @@ describe("Auth Handlers", () => {
         ...localUserNoTerms,
         ...cloudUserWithTerms,
       });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       mockSupabaseService.syncUser.mockResolvedValue(cloudUserWithTerms as any);
 
       const handler = registeredHandlers.get("auth:google:complete-login");
@@ -857,6 +860,7 @@ describe("Auth Handlers", () => {
         localUserWithTerms,
       );
       mockDatabaseService.getUserById.mockResolvedValue(localUserWithTerms);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       mockSupabaseService.syncUser.mockResolvedValue(cloudUserNoTerms as any);
       mockSupabaseService.syncTermsAcceptance.mockRejectedValue(
         new Error("Network error"),
@@ -896,6 +900,7 @@ describe("Auth Handlers", () => {
 
       mockDatabaseService.getUserByOAuthId.mockResolvedValue(localUserNoTerms);
       mockDatabaseService.getUserById.mockResolvedValue(localUserNoTerms);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       mockSupabaseService.syncUser.mockResolvedValue(cloudUserNoTerms as any);
 
       const handler = registeredHandlers.get("auth:google:complete-login");
