@@ -213,6 +213,7 @@ Review for:
 - [ ] Missing null-checks / undefined handling
 - [ ] Inconsistent naming conventions
 - [ ] Code that needs refactoring
+- [ ] **Optional props with silent failures** - verify all interface props are passed from parent components (see "Common Issues" section)
 
 ### 6.2 Architecture Compliance
 - [ ] Entry file guardrails respected (App.tsx < 70 lines)
@@ -426,6 +427,42 @@ git commit
 1. Check the failing job logs on GitHub Actions
 2. Run the failing check locally
 3. Fix and push
+
+### Optional Props with Silent Failures (Component Refactoring Bug)
+
+**Pattern**: When extracting components during refactoring, optional props (`prop?: type`) can be defined in the interface but never passed from the parent. This causes **silent failures** - the UI renders, buttons appear clickable, but handlers do nothing.
+
+**Example** (from commit `3b481ef` - EmailOnboardingScreen bug):
+```tsx
+// Interface defines optional props:
+interface EmailOnboardingScreenProps {
+  selectedPhoneType?: "iphone" | "android";  // Optional - no compile error if missing
+  onPhoneTypeChange?: (type: "iphone" | "android") => void;  // Silent failure
+  onBack?: () => void;  // Back button breaks silently
+}
+
+// Parent component never passes them:
+<EmailOnboardingScreen
+  userId={...}
+  authProvider={...}
+  onComplete={handleEmailOnboardingComplete}
+  // selectedPhoneType - MISSING! No compile error
+  // onPhoneTypeChange - MISSING! Buttons do nothing
+  // onBack - MISSING! Back button appears but fails silently
+/>
+```
+
+**Prevention Checklist** (add to Phase 6.1):
+- [ ] When extracting/refactoring components, verify ALL props in the interface are passed from parent
+- [ ] Pay special attention to optional props (`?`) - they won't cause compile errors when missing
+- [ ] Test interactive elements (buttons, selects) actually trigger their handlers
+- [ ] Check that state flows bidirectionally (parent → child AND child → parent)
+
+**Detection**:
+```bash
+# Find optional props in component interfaces that might be missing
+grep -rn "?: .*=>.*void" src/components --include="*.tsx"
+```
 
 ---
 

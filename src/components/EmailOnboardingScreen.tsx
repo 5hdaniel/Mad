@@ -148,6 +148,7 @@ function EmailOnboardingScreen({
   onPhoneTypeChange,
   onComplete,
   onSkip,
+  onBack,
 }: EmailOnboardingScreenProps) {
   const { isWindows } = usePlatform();
 
@@ -180,6 +181,9 @@ function EmailOnboardingScreen({
   const handleBackStep = (): void => {
     if (navigationStep > 1) {
       setNavigationStep(navigationStep - 1);
+    } else if (navigationStep === 1 && onBack) {
+      // At first step, navigate back to PhoneTypeSelection
+      onBack();
     }
   };
 
@@ -190,7 +194,8 @@ function EmailOnboardingScreen({
     }
   };
 
-  const isFirstStep = navigationStep === 1;
+  // Only consider it the "first step" (disable back button) if at step 1 AND no onBack handler
+  const isFirstStep = navigationStep === 1 && !onBack;
   const isLastNavigableStep = navigationStep === currentStep;
 
   // Check existing connections on mount

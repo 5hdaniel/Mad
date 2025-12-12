@@ -73,6 +73,7 @@ export function AppRouter({ app }: AppRouterProps) {
     handleSelectAndroid,
     handleAndroidGoBack,
     handleAndroidContinueWithEmail,
+    handlePhoneTypeChange,
 
     // Driver setup handlers
     handleAppleDriverSetupComplete,
@@ -231,6 +232,8 @@ export function AppRouter({ app }: AppRouterProps) {
         authProvider={
           (authProvider || pendingOAuthData?.provider) as "google" | "microsoft"
         }
+        selectedPhoneType={selectedPhoneType || pendingOnboardingData.phoneType}
+        onPhoneTypeChange={handlePhoneTypeChange}
         onComplete={handleEmailOnboardingComplete}
         onSkip={handleEmailOnboardingSkip}
         onBack={handleEmailOnboardingBack}
