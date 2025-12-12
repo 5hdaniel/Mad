@@ -44,6 +44,38 @@ function yieldToEventLoop(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve));
 }
 
+// Input validation constants
+const MAX_MESSAGE_TEXT_LENGTH = 100000; // 100KB - truncate extremely long messages
+const MAX_HANDLE_LENGTH = 500; // Phone numbers, emails, etc.
+const MAX_GUID_LENGTH = 100; // Message GUID format
+
+/**
+ * Sanitize and validate a string field
+ * @param value - The value to sanitize
+ * @param maxLength - Maximum allowed length
+ * @param defaultValue - Default if null/undefined
+ * @returns Sanitized string
+ */
+function sanitizeString(value: string | null | undefined, maxLength: number, defaultValue = ""): string {
+  if (value === null || value === undefined) {
+    return defaultValue;
+  }
+  const str = String(value);
+  return str.length > maxLength ? str.substring(0, maxLength) : str;
+}
+
+/**
+ * Validate a GUID/external ID format
+ * @param guid - The GUID to validate
+ * @returns true if valid format
+ */
+function isValidGuid(guid: string | null | undefined): boolean {
+  if (!guid || typeof guid !== "string") return false;
+  // Allow alphanumeric, hyphens, underscores, and common GUID characters
+  // iOS message GUIDs can be various formats
+  return guid.length > 0 && guid.length <= MAX_GUID_LENGTH && /^[\w\-:.]+$/.test(guid);
+}
+
 /**
  * iPhone Sync Storage Service
  * Handles persistence of iPhone sync data to the local database
@@ -168,8 +200,8 @@ class IPhoneSyncStorageService {
     let stored = 0;
     let skipped = 0;
 
-    // Get database instance
-    const db = (databaseService as any)._ensureDb();
+    // Get database instance via public API
+    const db = databaseService.getRawDatabase();
 
     // OPTIMIZATION: Load ALL existing external_ids into a Set (one query instead of 626k)
     // This gives us O(1) lookup instead of O(n) database queries
@@ -206,6 +238,15 @@ class IPhoneSyncStorageService {
       // Use a transaction for each batch
       const insertBatch = db.transaction((msgs: iOSMessage[]) => {
         for (const msg of msgs) {
+          // Validate GUID before using it
+          if (!isValidGuid(msg.guid)) {
+            log.warn(`[${IPhoneSyncStorageService.SERVICE_NAME}] Skipping message with invalid GUID`, {
+              guid: msg.guid?.substring(0, 20),
+            });
+            skipped++;
+            continue;
+          }
+
           // O(1) lookup using Set instead of database query
           if (existingIds.has(msg.guid)) {
             skipped++;
@@ -222,10 +263,14 @@ class IPhoneSyncStorageService {
           // Map direction
           const direction = msg.isFromMe ? "outbound" : "inbound";
 
-          // Build participants JSON
+          // Sanitize user-provided data
+          const sanitizedHandle = sanitizeString(msg.handle, MAX_HANDLE_LENGTH, "unknown");
+          const sanitizedText = sanitizeString(msg.text, MAX_MESSAGE_TEXT_LENGTH, "");
+
+          // Build participants JSON with sanitized data
           const participants = JSON.stringify({
-            from: msg.isFromMe ? "me" : msg.handle,
-            to: msg.isFromMe ? [msg.handle] : ["me"],
+            from: msg.isFromMe ? "me" : sanitizedHandle,
+            to: msg.isFromMe ? [sanitizedHandle] : ["me"],
           });
 
           // Build metadata
@@ -242,10 +287,10 @@ class IPhoneSyncStorageService {
               crypto.randomUUID(), // id
               userId, // user_id
               channel, // channel
-              msg.guid, // external_id (for deduplication)
+              msg.guid, // external_id (for deduplication) - already validated
               direction, // direction
-              msg.text || "", // body_text
-              participants, // participants JSON
+              sanitizedText, // body_text - sanitized
+              participants, // participants JSON - sanitized
               threadId, // thread_id
               msg.date.toISOString(), // sent_at
               msg.attachments.length > 0 ? 1 : 0, // has_attachments
@@ -255,7 +300,14 @@ class IPhoneSyncStorageService {
             // Add to set so duplicates within same batch are caught
             existingIds.add(msg.guid);
           } catch (insertError) {
-            // Likely a duplicate - skip silently
+            // Log unexpected errors (not just duplicates)
+            const errMsg = insertError instanceof Error ? insertError.message : "Unknown error";
+            if (!errMsg.includes("UNIQUE constraint")) {
+              log.warn(`[${IPhoneSyncStorageService.SERVICE_NAME}] Failed to insert message`, {
+                guid: msg.guid,
+                error: errMsg,
+              });
+            }
             skipped++;
           }
         }
@@ -297,7 +349,8 @@ class IPhoneSyncStorageService {
     let stored = 0;
     let skipped = 0;
 
-    const db = (databaseService as any)._ensureDb();
+    // Get database instance via public API
+    const db = databaseService.getRawDatabase();
 
     // Prepare statements
     // Note: We populate both 'name' (legacy column) and 'display_name' (new column) for compatibility
@@ -373,45 +426,59 @@ class IPhoneSyncStorageService {
         return;
       }
 
-      // Create new contact
+      // Create new contact with sanitized data
       const contactId = crypto.randomUUID();
+      const sanitizedDisplayName = sanitizeString(contact.displayName, MAX_HANDLE_LENGTH, "Unknown");
+      const sanitizedOrganization = sanitizeString(contact.organization, MAX_HANDLE_LENGTH);
+      const sanitizedFirstName = sanitizeString(contact.firstName, MAX_HANDLE_LENGTH);
+      const sanitizedLastName = sanitizeString(contact.lastName, MAX_HANDLE_LENGTH);
+
       const metadata = JSON.stringify({
         source: "iphone_sync",
         originalId: contact.id,
-        firstName: contact.firstName,
-        lastName: contact.lastName,
+        firstName: sanitizedFirstName || null,
+        lastName: sanitizedLastName || null,
       });
 
       insertContactStmt.run(
         contactId,
         userId,
-        contact.displayName,  // name (legacy)
-        contact.displayName,  // display_name (new)
-        contact.organization || null,
+        sanitizedDisplayName,  // name (legacy)
+        sanitizedDisplayName,  // display_name (new)
+        sanitizedOrganization || null,
         metadata
       );
 
-      // Add phone numbers
+      // Add phone numbers with validation
       for (const phone of contact.phoneNumbers) {
         if (phone.normalizedNumber) {
-          insertPhoneStmt.run(
-            crypto.randomUUID(),
-            contactId,
-            phone.normalizedNumber,
-            phone.number,
-            phone.label || "mobile"
-          );
+          const sanitizedPhone = sanitizeString(phone.normalizedNumber, MAX_HANDLE_LENGTH);
+          const sanitizedPhoneDisplay = sanitizeString(phone.number, MAX_HANDLE_LENGTH);
+          const sanitizedLabel = sanitizeString(phone.label, 50, "mobile");
+          if (sanitizedPhone) {
+            insertPhoneStmt.run(
+              crypto.randomUUID(),
+              contactId,
+              sanitizedPhone,
+              sanitizedPhoneDisplay,
+              sanitizedLabel
+            );
+          }
         }
       }
 
-      // Add emails
+      // Add emails with validation
       for (const email of contact.emails) {
-        insertEmailStmt.run(
-          crypto.randomUUID(),
-          contactId,
-          email.email.toLowerCase(),
-          email.label || "home"
-        );
+        const sanitizedEmail = sanitizeString(email.email, MAX_HANDLE_LENGTH);
+        const sanitizedLabel = sanitizeString(email.label, 50, "home");
+        if (sanitizedEmail) {
+          insertEmailStmt.run(
+            crypto.randomUUID(),
+            contactId,
+            sanitizedEmail.toLowerCase(),
+            sanitizedLabel
+          );
+        }
       }
 
       stored++;

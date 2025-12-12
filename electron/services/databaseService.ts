@@ -187,6 +187,20 @@ class DatabaseService implements IDatabaseService {
   }
 
   /**
+   * Get raw database instance for bulk operations.
+   * Use with caution - prefer using service methods when possible.
+   *
+   * This is exposed for performance-critical bulk operations like
+   * iPhone sync which need direct transaction control.
+   *
+   * @returns The underlying better-sqlite3 database instance
+   * @throws {DatabaseError} If database is not initialized
+   */
+  getRawDatabase(): DatabaseType {
+    return this._ensureDb();
+  }
+
+  /**
    * Open database connection with encryption
    */
   private _openDatabase(): DatabaseType {

@@ -19,6 +19,8 @@ import type { iOSDevice } from "./types/device";
 let orchestrator: SyncOrchestrator | null = null;
 let mainWindowRef: BrowserWindow | null = null;
 let currentUserId: string | null = null;
+// Track user ID at sync start to prevent race conditions
+let syncSessionUserId: string | null = null;
 
 /**
  * Send event to renderer process
@@ -53,6 +55,13 @@ export function registerSyncHandlers(mainWindow: BrowserWindow, userId?: string)
     ) => {
       log.info("[SyncHandlers] Starting sync", { udid: options.udid });
 
+      // Capture user ID at sync start to prevent race conditions
+      // This ensures data is saved to the correct user even if login state changes during sync
+      syncSessionUserId = currentUserId;
+      if (!syncSessionUserId) {
+        log.warn("[SyncHandlers] No user ID available at sync start - data will not be persisted");
+      }
+
       // Check if sync is stuck and force reset if needed
       const status = orchestrator?.getStatus();
       if (status?.isRunning) {
@@ -67,6 +76,7 @@ export function registerSyncHandlers(mainWindow: BrowserWindow, userId?: string)
         log.error("[SyncHandlers] Sync error", { error });
         // Reset state on error
         orchestrator?.forceReset();
+        syncSessionUserId = null; // Clear session user ID on error
         return {
           success: false,
           messages: [],
@@ -104,6 +114,12 @@ export function registerSyncHandlers(mainWindow: BrowserWindow, userId?: string)
     async (_, options: { udid: string; password?: string }) => {
       log.info("[SyncHandlers] Processing existing backup", { udid: options.udid });
 
+      // Capture user ID at sync start to prevent race conditions
+      syncSessionUserId = currentUserId;
+      if (!syncSessionUserId) {
+        log.warn("[SyncHandlers] No user ID available at sync start - data will not be persisted");
+      }
+
       // Check if sync is stuck and force reset if needed
       const status = orchestrator?.getStatus();
       if (status?.isRunning) {
@@ -117,6 +133,7 @@ export function registerSyncHandlers(mainWindow: BrowserWindow, userId?: string)
       } catch (error) {
         log.error("[SyncHandlers] Process existing backup error", { error });
         orchestrator?.forceReset();
+        syncSessionUserId = null; // Clear session user ID on error
         return {
           success: false,
           messages: [],
@@ -219,9 +236,13 @@ function setupEventForwarding(): void {
     // Send completion to renderer first (with extraction results)
     sendToRenderer("sync:complete", result);
 
+    // Use the user ID captured at sync start (not current) to prevent race conditions
+    const userIdForPersistence = syncSessionUserId;
+    syncSessionUserId = null; // Clear session user ID after capturing
+
     // Persist to database if we have a user ID
-    if (currentUserId && result.success) {
-      log.info("[SyncHandlers] Starting database persistence...");
+    if (userIdForPersistence && result.success) {
+      log.info("[SyncHandlers] Starting database persistence for user", { userId: userIdForPersistence });
       sendToRenderer("sync:progress", {
         phase: "storing",
         percent: 0,
@@ -230,7 +251,7 @@ function setupEventForwarding(): void {
 
       try {
         const persistResult = await iPhoneSyncStorageService.persistSyncResult(
-          currentUserId,
+          userIdForPersistence,
           result,
           (progress) => {
             const message =
@@ -267,8 +288,8 @@ function setupEventForwarding(): void {
           error: error instanceof Error ? error.message : "Failed to save messages",
         });
       }
-    } else if (!currentUserId) {
-      log.warn("[SyncHandlers] No user ID available, skipping database persistence");
+    } else if (!userIdForPersistence) {
+      log.warn("[SyncHandlers] No user ID available (was not set at sync start), skipping database persistence");
     }
   });
 }
@@ -293,6 +314,7 @@ export function cleanupSyncHandlers(): void {
   orchestrator = null;
   mainWindowRef = null;
   currentUserId = null;
+  syncSessionUserId = null;
 
   // Remove IPC handlers
   ipcMain.removeHandler("sync:start");
