@@ -226,28 +226,51 @@ function EmailOnboardingScreen({
     setConnectingProvider("google");
     let cleanupConnected: (() => void) | undefined;
     let cleanupCancelled: (() => void) | undefined;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
     const cleanup = () => {
       if (cleanupConnected) cleanupConnected();
       if (cleanupCancelled) cleanupCancelled();
+      if (timeoutId) clearTimeout(timeoutId);
     };
 
     try {
       const result = await window.api.auth.googleConnectMailbox(userId);
       if (result.success) {
+        // Set up timeout fallback - if no response in 2 minutes, reset state
+        timeoutId = setTimeout(() => {
+          console.warn(
+            "[EmailOnboarding] Google connection timed out after 2 minutes",
+          );
+          setConnectingProvider(null);
+          cleanup();
+        }, 120000);
+
         cleanupConnected = window.api.onGoogleMailboxConnected(
           async (connectionResult: ConnectionResult) => {
-            if (connectionResult.success) {
-              await checkConnections();
+            try {
+              if (connectionResult.success) {
+                await checkConnections();
+              }
+            } catch (error) {
+              console.error(
+                "[EmailOnboarding] Error checking connections after Google connect:",
+                error,
+              );
+            } finally {
+              setConnectingProvider(null);
+              cleanup();
             }
-            setConnectingProvider(null);
-            cleanup();
           },
         );
         cleanupCancelled = window.api.onGoogleMailboxCancelled(() => {
           setConnectingProvider(null);
           cleanup();
         });
+      } else {
+        // API returned success: false - reset state
+        console.error("[EmailOnboarding] Google connect returned failure:", result);
+        setConnectingProvider(null);
       }
     } catch (error) {
       console.error("[EmailOnboarding] Failed to connect Google:", error);
@@ -260,28 +283,51 @@ function EmailOnboardingScreen({
     setConnectingProvider("microsoft");
     let cleanupConnected: (() => void) | undefined;
     let cleanupCancelled: (() => void) | undefined;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
     const cleanup = () => {
       if (cleanupConnected) cleanupConnected();
       if (cleanupCancelled) cleanupCancelled();
+      if (timeoutId) clearTimeout(timeoutId);
     };
 
     try {
       const result = await window.api.auth.microsoftConnectMailbox(userId);
       if (result.success) {
+        // Set up timeout fallback - if no response in 2 minutes, reset state
+        timeoutId = setTimeout(() => {
+          console.warn(
+            "[EmailOnboarding] Microsoft connection timed out after 2 minutes",
+          );
+          setConnectingProvider(null);
+          cleanup();
+        }, 120000);
+
         cleanupConnected = window.api.onMicrosoftMailboxConnected(
           async (connectionResult: ConnectionResult) => {
-            if (connectionResult.success) {
-              await checkConnections();
+            try {
+              if (connectionResult.success) {
+                await checkConnections();
+              }
+            } catch (error) {
+              console.error(
+                "[EmailOnboarding] Error checking connections after Microsoft connect:",
+                error,
+              );
+            } finally {
+              setConnectingProvider(null);
+              cleanup();
             }
-            setConnectingProvider(null);
-            cleanup();
           },
         );
         cleanupCancelled = window.api.onMicrosoftMailboxCancelled(() => {
           setConnectingProvider(null);
           cleanup();
         });
+      } else {
+        // API returned success: false - reset state
+        console.error("[EmailOnboarding] Microsoft connect returned failure:", result);
+        setConnectingProvider(null);
       }
     } catch (error) {
       console.error("[EmailOnboarding] Failed to connect Microsoft:", error);
