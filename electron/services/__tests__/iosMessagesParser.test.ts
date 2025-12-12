@@ -149,7 +149,12 @@ describe("iOSMessagesParser", () => {
   beforeAll(() => {
     // Create temp directory for test database
     testDir = fs.mkdtempSync(path.join(os.tmpdir(), "ios-parser-test-"));
-    testDbPath = path.join(testDir, iOSMessagesParser.SMS_DB_HASH);
+    // iOS backups store files in subdirectories based on first 2 chars of hash
+    // e.g., hash "3d0d7e5f..." is stored at "3d/3d0d7e5f..."
+    const hashSubdir = iOSMessagesParser.SMS_DB_HASH.substring(0, 2);
+    const subDir = path.join(testDir, hashSubdir);
+    fs.mkdirSync(subDir, { recursive: true });
+    testDbPath = path.join(subDir, iOSMessagesParser.SMS_DB_HASH);
     createTestDatabase();
   });
 
