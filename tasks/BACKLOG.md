@@ -1379,6 +1379,109 @@ useEffect(() => {
 
 ---
 
+### BACKLOG-032: Handle "Backup Already in Progress" - Recovery UI
+**Priority:** Critical
+**Status:** Pending
+**Category:** UX / Error Recovery
+
+**Description:**
+When a sync is interrupted (device disconnect, app crash, user closes modal), the `idevicebackup2` process may still be running. Subsequent sync attempts fail with "Backup already in progress" and the user has no way to recover.
+
+**Current Behavior:**
+- Sync fails with "Backup already in progress"
+- User is stuck - no option to kill orphaned process or resume
+- User must manually open Task Manager and kill `idevicebackup2.exe`
+
+**Required Behavior:**
+
+**Option A: Auto-Recovery (Recommended)**
+1. When "Backup already in progress" error occurs:
+   - Check if `idevicebackup2.exe` is actually running (via tasklist/ps)
+   - If running: Try to reconnect to its output/progress
+   - If not running: Clear the lock and retry automatically
+
+2. If process IS running but we lost connection:
+   - Show UI: "A backup is already running. Would you like to reconnect or restart?"
+   - [Reconnect] - Try to reattach to process output
+   - [Restart] - Kill process and start fresh
+
+**Option B: Manual Recovery UI**
+1. Show error dialog with clear options:
+   ```
+   ┌─────────────────────────────────────────┐
+   │  ⚠️ Backup Already Running              │
+   │                                         │
+   │  A previous backup process is still     │
+   │  running. This can happen if the app    │
+   │  was closed during a sync.              │
+   │                                         │
+   │  [Force Restart]  [Cancel]              │
+   │                                         │
+   │  Force Restart will stop the existing   │
+   │  backup and start a new one.            │
+   └─────────────────────────────────────────┘
+   ```
+
+2. "Force Restart" button:
+   - Kills `idevicebackup2.exe` process
+   - Waits 1 second for cleanup
+   - Automatically retries sync
+
+**Implementation:**
+
+1. **Add process detection helper:**
+```typescript
+// electron/services/processHelper.ts
+export async function isBackupRunning(): Promise<boolean> {
+  // Windows: tasklist | findstr idevicebackup2
+  // macOS: pgrep idevicebackup2
+}
+
+export async function killBackupProcess(): Promise<boolean> {
+  // Windows: taskkill /F /IM idevicebackup2.exe
+  // macOS: pkill idevicebackup2
+}
+```
+
+2. **Add IPC handlers:**
+```typescript
+// electron/sync-handlers.ts
+ipcMain.handle('sync:check-backup-running', async () => {
+  return await isBackupRunning();
+});
+
+ipcMain.handle('sync:kill-backup-process', async () => {
+  return await killBackupProcess();
+});
+```
+
+3. **Update sync error handling:**
+```typescript
+// useIPhoneSync.ts
+if (error === 'Backup already in progress') {
+  setShowBackupRunningDialog(true);
+}
+```
+
+4. **Add recovery dialog component:**
+```typescript
+// src/components/iphone/BackupRecoveryDialog.tsx
+```
+
+**Files to Create:**
+- `electron/services/processHelper.ts` - Process detection/kill utilities
+
+**Files to Modify:**
+- `electron/sync-handlers.ts` - Add IPC handlers
+- `electron/preload.ts` - Expose new IPC methods
+- `src/hooks/useIPhoneSync.ts` - Handle error and show dialog
+- `src/components/iphone/IPhoneSyncFlow.tsx` - Add recovery dialog
+
+**Related:**
+- BACKLOG-025: Resume Failed Sync Prompt
+
+---
+
 ### BACKLOG-031: Incremental Backup Size Estimation & Progress Improvement
 **Priority:** High
 **Status:** Pending
@@ -1457,3 +1560,4 @@ Show in sync progress:
 2024-12-11 - Added BACKLOG-029: App Startup Performance & Loading Screen (Medium priority)
 2024-12-11 - Added BACKLOG-030: Message Parser Async Yielding for Large Databases (Critical priority)
 2024-12-12 - Added BACKLOG-031: Incremental Backup Size Estimation & Progress Improvement (High priority)
+2024-12-12 - Added BACKLOG-032: Handle "Backup Already in Progress" - Recovery UI (Critical priority)
