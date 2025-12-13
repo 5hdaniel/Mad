@@ -2558,6 +2558,120 @@ function extractPlainText(html: string): string {
 
 ---
 
+### BACKLOG-055: AI Extraction of Scheduled House Viewings & Calendar Integration
+**Priority:** High
+**Status:** Pending
+**Category:** Feature / AI
+
+**Description:**
+Use LLM to extract scheduled house viewings/showings from emails and texts, and optionally sync with the user's calendar (Google Calendar, Outlook Calendar). This helps auditors track property viewing history for a transaction.
+
+**Use Cases:**
+1. Extract viewing appointments from agent emails ("Showing scheduled for Tuesday at 2pm")
+2. Extract viewing confirmations from texts ("See you at 123 Main St tomorrow at 3")
+3. Correlate viewings with calendar events
+4. Build timeline of property viewings for audit trail
+
+**Data to Extract:**
+- Property address
+- Date and time of viewing
+- Attendees (buyer, seller, agents)
+- Viewing type (first showing, second showing, open house, final walkthrough)
+- Status (scheduled, completed, cancelled, rescheduled)
+- Source communication (email/text reference)
+
+**AI Extraction Example:**
+```
+Input Email:
+"Hi John, confirming the showing for 123 Main Street on Tuesday,
+December 15th at 2:00 PM. The seller will not be present.
+Please meet the listing agent Sarah at the property."
+
+Extracted Data:
+{
+  "property_address": "123 Main Street",
+  "date": "2024-12-15",
+  "time": "14:00",
+  "viewing_type": "showing",
+  "attendees": ["John (buyer)", "Sarah (listing agent)"],
+  "seller_present": false,
+  "status": "scheduled"
+}
+```
+
+**Calendar Integration:**
+
+1. **Read from Calendar:**
+   - Connect to Google Calendar / Outlook Calendar
+   - Find events matching property addresses
+   - Correlate with communications
+   - Import viewing events into transaction timeline
+
+2. **Write to Calendar (optional):**
+   - Create calendar events for detected viewings
+   - Include property details, attendees, notes
+   - Set reminders
+
+**API Integrations:**
+- Google Calendar API (OAuth2)
+- Microsoft Graph Calendar API (already have Outlook OAuth)
+- Apple Calendar (via local CalDAV or EventKit)
+
+**Database Schema:**
+```sql
+CREATE TABLE property_viewings (
+  id TEXT PRIMARY KEY,
+  transaction_id TEXT,
+  property_address TEXT NOT NULL,
+  viewing_date TEXT NOT NULL,
+  viewing_time TEXT,
+  viewing_type TEXT, -- 'showing', 'open_house', 'walkthrough', 'inspection'
+  status TEXT DEFAULT 'scheduled', -- 'scheduled', 'completed', 'cancelled'
+  attendees TEXT, -- JSON array
+  notes TEXT,
+  source_type TEXT, -- 'email', 'text', 'calendar', 'manual'
+  source_id TEXT, -- communication_id or calendar_event_id
+  calendar_event_id TEXT, -- linked calendar event
+  extracted_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  confidence_score REAL, -- AI confidence 0-1
+  FOREIGN KEY (transaction_id) REFERENCES transactions(id)
+);
+```
+
+**UI Components:**
+1. **Viewings Tab** in Transaction Details
+   - List of all viewings for the property
+   - Timeline view with dates
+   - Link to source communication
+   - Manual add/edit viewing
+
+2. **Calendar Sync Settings**
+   - Connect Google/Outlook calendar
+   - Enable auto-detection of viewing events
+   - Two-way sync toggle
+
+**Implementation Steps:**
+1. Add calendar OAuth flows (Google Calendar, extend existing Outlook)
+2. Create AI prompt for viewing extraction
+3. Build property_viewings table and service
+4. Create ViewingsTab component
+5. Add calendar event correlation logic
+6. Implement calendar write-back (optional)
+
+**Files to Create:**
+- `electron/services/calendarService.ts` - Calendar API integration
+- `electron/services/viewingExtractionService.ts` - AI extraction
+- `src/components/TransactionViewings.tsx` - UI component
+- `electron/calendar-handlers.ts` - IPC handlers
+
+**Privacy Considerations:**
+- Calendar access requires explicit user consent
+- Only read events matching property addresses
+- Don't store unrelated calendar data
+- Clear disclosure of what calendar data is accessed
+
+---
+
 ## Last Updated
 2024-12-10 - Initial backlog created from build warnings and sync testing session
 2024-12-10 - Added BACKLOG-006: Dark Mode
