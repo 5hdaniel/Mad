@@ -11,6 +11,23 @@
 |----------|-------|---------|
 | [Addendum 01](addendum-01-state-persistence.md) | Step Completion & State Persistence | TASK-101, 106, 107-112, 113, 114 |
 
+### Key Documents
+
+| Document | Purpose |
+|----------|---------|
+| [Engineer Prompts](engineer-prompts.md) | Assignment prompts with guardrails for each task |
+| [Task Template](templates/task-file-template.md) | Standard template for task files |
+
+### ⚠️ Engineer Guardrails (Mandatory)
+
+All engineers MUST read the [Engineer Guardrails](engineer-prompts.md#-engineer-guardrails-read-first) section before starting any task. Key requirements:
+
+1. **Read task files first** - Understand all requirements before coding
+2. **Follow the plan exactly** - Use specified names, IDs, patterns
+3. **Document deviations** - If you must deviate, explain WHY with "⚠️ DEVIATION:" prefix
+4. **Complete Implementation Summary** - PRs rejected without this
+5. **Stop and ask** - When uncertain, ask PM before proceeding
+
 ---
 
 ## 1. Sprint Narrative / Goal
