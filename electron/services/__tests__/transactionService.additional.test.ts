@@ -326,7 +326,7 @@ describe("TransactionService - Additional Coverage", () => {
       (databaseService.getTransactionById as jest.Mock).mockResolvedValue(
         mockTransaction,
       );
-      (databaseService.getTransactionContacts as jest.Mock).mockResolvedValue(
+      (databaseService.getTransactionContactsWithRoles as jest.Mock).mockResolvedValue(
         mockContacts,
       );
 
@@ -346,7 +346,7 @@ describe("TransactionService - Additional Coverage", () => {
         await transactionService.getTransactionWithContacts("non-existent");
 
       expect(result).toBeNull();
-      expect(databaseService.getTransactionContacts).not.toHaveBeenCalled();
+      expect(databaseService.getTransactionContactsWithRoles).not.toHaveBeenCalled();
     });
   });
 
@@ -572,7 +572,7 @@ describe("TransactionService - Additional Coverage", () => {
       (databaseService.getTransactionById as jest.Mock).mockResolvedValue(
         mockCreatedTransaction,
       );
-      (databaseService.getTransactionContacts as jest.Mock).mockResolvedValue(
+      (databaseService.getTransactionContactsWithRoles as jest.Mock).mockResolvedValue(
         auditedData.contact_assignments,
       );
 
@@ -613,7 +613,7 @@ describe("TransactionService - Additional Coverage", () => {
       (databaseService.getTransactionById as jest.Mock).mockResolvedValue(
         mockCreatedTransaction,
       );
-      (databaseService.getTransactionContacts as jest.Mock).mockResolvedValue(
+      (databaseService.getTransactionContactsWithRoles as jest.Mock).mockResolvedValue(
         [],
       );
 

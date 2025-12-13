@@ -23,6 +23,7 @@ jest.mock("../services/databaseService", () => ({
   __esModule: true,
   default: {
     getImportedContactsByUserId: jest.fn(),
+    getUnimportedContactsByUserId: jest.fn(),
     getContactsSortedByActivity: jest.fn(),
     createContact: jest.fn(),
     updateContact: jest.fn(),
@@ -30,6 +31,7 @@ jest.mock("../services/databaseService", () => ({
     deleteContact: jest.fn(),
     removeContact: jest.fn(),
     getTransactionsByContact: jest.fn(),
+    markContactAsImported: jest.fn(),
   },
 }));
 
@@ -142,6 +144,9 @@ describe("Contact Handlers", () => {
 
   describe("contacts:get-available", () => {
     it("should return available contacts for import", async () => {
+      // Mock unimported DB contacts (empty for this test)
+      mockDatabaseService.getUnimportedContactsByUserId.mockResolvedValue([]);
+      // Mock macOS contacts app
       mockContactsService.getContactNames.mockResolvedValue({
         phoneToContactInfo: {
           "555-1234": {
@@ -168,6 +173,9 @@ describe("Contact Handlers", () => {
     });
 
     it("should filter out already imported contacts", async () => {
+      // Mock unimported DB contacts (empty for this test)
+      mockDatabaseService.getUnimportedContactsByUserId.mockResolvedValue([]);
+      // Mock macOS contacts app
       mockContactsService.getContactNames.mockResolvedValue({
         phoneToContactInfo: {
           "555-1234": {
@@ -204,6 +212,8 @@ describe("Contact Handlers", () => {
     });
 
     it("should handle contacts service error", async () => {
+      // Mock unimported DB contacts (empty for this test)
+      mockDatabaseService.getUnimportedContactsByUserId.mockResolvedValue([]);
       mockContactsService.getContactNames.mockRejectedValue(
         new Error("Contacts access denied"),
       );
