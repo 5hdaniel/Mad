@@ -22,7 +22,7 @@
     "package": "npm run build && dotenv -e .env.local -- electron-builder",
     "package:win": "npm run download:drivers && npm run build && dotenv -e .env.local -- electron-builder --win",
     "package:dev": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --dir",
-    "package:unsigned": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder",
+    "package:unsigned": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --publish never",
     "postinstall": "electron-rebuild && npm run build:preload",
     "pretest": "npm rebuild better-sqlite3-multiple-ciphers",
     "posttest": "electron-rebuild",
