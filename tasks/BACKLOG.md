@@ -2470,6 +2470,94 @@ CREATE TABLE manual_attachments (
 
 ---
 
+### BACKLOG-054: Render Email HTML Properly Instead of Raw HTML
+**Priority:** High
+**Status:** Pending
+**Category:** Bug / UX
+
+**Description:**
+Emails are currently displayed as raw HTML markup instead of being rendered as they would appear in an email client. Users see HTML tags and code instead of formatted content.
+
+**Current Behavior:**
+```
+<html><body><div style="font-family: Arial;">
+<p>Hi John,</p>
+<p>Please find attached the <strong>purchase agreement</strong> for 123 Main St.</p>
+<table border="1">...
+</body></html>
+```
+
+**Expected Behavior:**
+- Email list/preview: Show plain text summary or sanitized snippet
+- Full email view: Render HTML properly like an email client would display it
+
+**Two Views to Fix:**
+
+1. **Related Emails List (Summary View):**
+   - Show plain text excerpt (strip HTML)
+   - Or AI-summarized 1-2 line description
+   - Quick preview without rendering complexity
+
+2. **Full Email Modal (Detail View):**
+   - Render HTML in a sandboxed iframe or safe HTML renderer
+   - Preserve formatting: bold, italics, tables, lists
+   - Handle inline images
+   - Sanitize to prevent XSS attacks
+
+**Implementation Options:**
+
+1. **Iframe Sandbox (Safest):**
+```tsx
+<iframe
+  srcDoc={sanitizedHtml}
+  sandbox="allow-same-origin"
+  style={{ width: '100%', border: 'none' }}
+/>
+```
+
+2. **DOMPurify + dangerouslySetInnerHTML:**
+```tsx
+import DOMPurify from 'dompurify';
+
+const cleanHtml = DOMPurify.sanitize(emailHtml, {
+  ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'ul', 'ol', 'li', 'table', 'tr', 'td', 'th', 'a', 'img'],
+  ALLOWED_ATTR: ['href', 'src', 'alt', 'style'],
+});
+
+<div dangerouslySetInnerHTML={{ __html: cleanHtml }} />
+```
+
+3. **Plain Text Extraction (for previews):**
+```typescript
+function extractPlainText(html: string): string {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  return doc.body.textContent || '';
+}
+```
+
+**Security Considerations:**
+- MUST sanitize HTML to prevent XSS attacks
+- Remove `<script>` tags, `onclick` handlers, etc.
+- Use CSP headers if using iframe
+- Consider blocking external image loading (tracking pixels)
+
+**Dependencies:**
+- `dompurify` - HTML sanitization library
+- Or use Electron's `<webview>` with `nodeintegration=false`
+
+**Files to Modify:**
+- `src/components/EmailPreview.tsx` (or wherever emails are displayed)
+- `src/components/EmailDetailModal.tsx` - Full email view
+- Add `dompurify` to package.json if not present
+
+**Testing:**
+- Test with various email formats (plain text, rich HTML, tables)
+- Test with malicious HTML (script injection attempts)
+- Test with inline images and external images
+- Test with different email clients' HTML quirks (Outlook, Gmail)
+
+---
+
 ## Last Updated
 2024-12-10 - Initial backlog created from build warnings and sync testing session
 2024-12-10 - Added BACKLOG-006: Dark Mode
