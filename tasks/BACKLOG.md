@@ -2344,6 +2344,132 @@ Add an AI-summarized timeline view of the transaction that shows key milestones 
 
 ---
 
+### BACKLOG-053: Manually Add Missing Communications to Transaction
+**Priority:** High
+**Status:** Pending
+**Category:** Feature / UX
+
+**Description:**
+Allow users to manually attach emails, text conversations, or uploaded files to a transaction. This handles cases where automatic detection missed relevant communications or the user has external documents to include.
+
+**Use Cases:**
+1. Email wasn't auto-detected (different subject line, forwarded thread)
+2. Text conversation not linked to transaction
+3. User has PDF/document from external source (fax, paper scan, other system)
+4. Communication from before sync date range
+
+**UI Flow:**
+```
+Transaction Details
+├── [+ Add Missing Information] button
+│
+└── Modal: "What would you like to add?"
+    ├── 📧 Email
+    │   └── Search mailbox UI
+    │       - Search by subject, sender, date range
+    │       - Show preview of matching emails
+    │       - Select one or more to link
+    │
+    ├── 💬 Text Message
+    │   └── Search texts UI
+    │       - Search by contact name, phone number, keywords
+    │       - Show matching conversations
+    │       - Select messages or entire thread to link
+    │
+    └── 📎 Upload File
+        └── File picker
+            - Drag & drop or browse
+            - Supported: PDF, DOC, DOCX, images, etc.
+            - Add description/label for the file
+```
+
+**Email Search UI:**
+```
+┌─────────────────────────────────────────────────────────┐
+│ 🔍 Search Emails                                    [X] │
+├─────────────────────────────────────────────────────────┤
+│ Subject: [_________________]                            │
+│ From:    [_________________]                            │
+│ Date:    [Dec 1] to [Dec 15]                           │
+│                                        [Search]         │
+├─────────────────────────────────────────────────────────┤
+│ Results:                                                │
+│ ☐ RE: 123 Main St Offer - agent@realty.com - Dec 5    │
+│ ☐ Inspection Report - inspector@... - Dec 10           │
+│ ☐ Title Insurance Quote - title@... - Dec 12          │
+├─────────────────────────────────────────────────────────┤
+│                              [Cancel] [Add Selected]    │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Text Search UI:**
+```
+┌─────────────────────────────────────────────────────────┐
+│ 🔍 Search Text Messages                             [X] │
+├─────────────────────────────────────────────────────────┤
+│ Contact: [John Smith_________] (autocomplete)          │
+│ Keywords: [closing documents__]                         │
+│ Date:     [Dec 1] to [Dec 15]                          │
+│                                        [Search]         │
+├─────────────────────────────────────────────────────────┤
+│ Results:                                                │
+│ ☐ John Smith - Dec 8 - "Can you send the closing..."  │
+│ ☐ Jane Doe - Dec 10 - "Documents are ready..."        │
+├─────────────────────────────────────────────────────────┤
+│                              [Cancel] [Add Selected]    │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Implementation:**
+
+1. **Email Search:**
+   - Query Gmail/Outlook API with user's search criteria
+   - Return emails not already linked to this transaction
+   - Allow multi-select and batch linking
+
+2. **Text Search:**
+   - Query local iMessage database with search criteria
+   - Show conversation context around matching messages
+   - Link individual messages or entire threads
+
+3. **File Upload:**
+   - Store in app's document storage
+   - Create `manual_attachments` record linked to transaction
+   - Support common document formats
+
+**Database Changes:**
+```sql
+-- For manually uploaded files (not from email/text)
+CREATE TABLE manual_attachments (
+  id TEXT PRIMARY KEY,
+  transaction_id TEXT NOT NULL,
+  filename TEXT NOT NULL,
+  mime_type TEXT,
+  size_bytes INTEGER,
+  storage_path TEXT NOT NULL,
+  description TEXT,
+  uploaded_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (transaction_id) REFERENCES transactions(id)
+);
+```
+
+**Files to Create/Modify:**
+- `src/components/AddMissingInfoModal.tsx` - Main modal component
+- `src/components/EmailSearchModal.tsx` - Email search UI
+- `src/components/TextSearchModal.tsx` - Text message search UI
+- `src/components/FileUploadModal.tsx` - Manual file upload
+- `electron/services/emailSearchService.ts` - Backend email search
+- `electron/services/textSearchService.ts` - Backend text search
+- `electron/services/manualAttachmentService.ts` - File upload handling
+
+**API Endpoints Needed:**
+- `emails:search` - Search user's mailbox
+- `texts:search` - Search local iMessage database
+- `attachments:upload` - Upload and store manual file
+- `transaction:link-communication` - Link existing email/text to transaction
+
+---
+
 ## Last Updated
 2024-12-10 - Initial backlog created from build warnings and sync testing session
 2024-12-10 - Added BACKLOG-006: Dark Mode
