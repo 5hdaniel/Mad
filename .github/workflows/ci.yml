@@ -21,7 +21,7 @@ jobs:
     strategy:
       matrix:
         os: [macos-latest, windows-latest]
-        node-version: [18.x, 20.x]
+        node-version: [20.x]  # Node 18 dropped - better-sqlite3-multiple-ciphers requires Node 20+
 
     steps:
       - name: Checkout code

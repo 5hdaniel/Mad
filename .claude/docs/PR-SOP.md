@@ -326,7 +326,22 @@ gh pr create --base develop --title "type: description" --body "..."
 
 ## Phase 8: CI Verification
 
-Wait for all CI checks to pass:
+**⚠️ CRITICAL: Never claim CI passed without explicit verification. False CI claims waste user time and erode trust.**
+
+### 8.1 Wait for ALL Checks to Complete
+
+Use `--watch` to block until all checks finish:
+
+```bash
+# REQUIRED: Wait for all checks to complete (blocks until done)
+gh pr checks <PR-NUMBER> --watch
+```
+
+**DO NOT** use `gh pr checks` without `--watch` and assume checks passed - they may still be running.
+
+### 8.2 Verify ALL Jobs Passed
+
+After checks complete, verify EVERY job shows `pass`:
 
 | Check | Required | Description |
 |-------|----------|-------------|
@@ -334,11 +349,56 @@ Wait for all CI checks to pass:
 | Test & Lint (Windows) | Yes | Cross-platform verification |
 | Security Audit | Yes | npm audit |
 | Build Application | Yes | Vite + Electron build |
-| Package Application | Main only | Creates DMG/NSIS |
+| Package Application | develop/main only | Creates DMG/NSIS installers |
 
 ```bash
-# Monitor CI status
+# Verify all checks passed (should show all green checkmarks)
 gh pr checks <PR-NUMBER>
+
+# For develop/main PRs, also check the Package Application step explicitly
+gh run list --branch <BRANCH-NAME> --limit 5
+gh run view <RUN-ID>  # Check Package Application job status
+```
+
+### 8.3 Special Attention: Package Application
+
+**The Package Application job only runs on `develop` and `main` branches.** This means:
+
+1. **Feature branch PRs** - Package job doesn't run. CI may pass on feature branch but fail after merge.
+2. **After merging to develop** - ALWAYS verify Package Application succeeded:
+   ```bash
+   # Check the develop branch CI after merge
+   gh run list --branch develop --limit 3
+   gh run view <LATEST-RUN-ID>
+   ```
+
+### 8.4 LLM Guardrails (for Claude and AI agents)
+
+When verifying CI status, you MUST:
+
+1. **Run `gh pr checks --watch`** and wait for it to complete (don't interrupt)
+2. **Include the actual command output** in your response to the user
+3. **Check all jobs** - if any show `fail` or `pending`, CI has NOT passed
+4. **After merge to develop/main**, verify Package Application job separately
+5. **Never say "CI passed"** without showing evidence from `gh pr checks` or `gh run view`
+
+**Example verification response:**
+```
+CI Status for PR #114:
+✓ Test & Lint (macos-latest, 20.x)  pass
+✓ Test & Lint (windows-latest, 20.x)  pass
+✓ Build Application (macos-latest)  pass
+✓ Build Application (windows-latest)  pass
+✓ Security Audit  pass
+
+All 5 checks passed. Ready to merge.
+```
+
+**If Package Application needs verification (after merge to develop):**
+```bash
+gh run list --branch develop --limit 1
+# Then check that specific run
+gh run view <RUN-ID>
 ```
 
 ---
