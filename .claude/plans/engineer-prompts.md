@@ -13,11 +13,9 @@ Every engineer MUST follow these guardrails. PRs will be REJECTED if these are n
 ### 1. Setup Requirements
 
 ```bash
-# Always start by fetching and branching from the integration branch
+# Fetch the integration branch and create your feature branch from it
 git fetch origin claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
-git checkout claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
-git pull origin claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
-git checkout -b <your-branch-name>
+git checkout -b <your-branch-name> origin/claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
 ```
 
 ### 2. Read the Task File First
@@ -108,67 +106,9 @@ STOP and ask the PM before proceeding if:
 
 ---
 
-### TASK-102: Step Registry
+### TASK-102: Step Registry ✅ COMPLETED
 
-```
-You are assigned Task TASK-102 – "Create Step Registry Infrastructure".
-
-## Setup
-Base branch: claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
-Your branch: feat/102-step-registry
-
-git fetch origin claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
-git checkout claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
-git pull origin claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
-git checkout -b feat/102-step-registry
-
-## Task Files (READ THESE FIRST)
-- .claude/plans/tasks/TASK-102-step-registry.md
-
-## Context
-TASK-101 has been merged. You have access to:
-- src/components/onboarding/types.ts
-
-Key types to use:
-- OnboardingStep
-- OnboardingStepId
-- OnboardingStepRegistry
-
-## Deliverables
-- Create: src/components/onboarding/steps/index.ts
-
-## Instructions
-Implement the step registry with these functions:
-- registerStep(key, step) - validates key matches meta.id
-- getStep(id) - retrieves step, throws if not found
-- getAllSteps() - returns all registered steps
-- STEP_REGISTRY - the registry object (initially empty)
-
-Validation rules (dev mode only):
-- Registry key must equal step.meta.id (throw if mismatch)
-- Duplicate registrations throw error
-- getStep throws for unknown steps with helpful message
-
-## Verification
-- npm run type-check passes
-- npm run lint passes
-
-## ⚠️ BEFORE OPENING PR
-
-1. Update `.claude/plans/tasks/TASK-102-step-registry.md`:
-   - Complete the Implementation Summary section
-   - Check all boxes [x]
-   - Add Notes section with any deviations/decisions
-
-2. Self-review:
-   - [ ] All acceptance criteria met
-   - [ ] Implementation Summary complete
-   - [ ] No undocumented deviations
-   - [ ] CI passes
-
-PR target: claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
-PR title: feat(onboarding): add step registry infrastructure
-```
+*This task has been completed and merged.*
 
 ---
 
@@ -182,9 +122,7 @@ Base branch: claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
 Your branch: feat/103-flow-definitions
 
 git fetch origin claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
-git checkout claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
-git pull origin claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
-git checkout -b feat/103-flow-definitions
+git checkout -b feat/103-flow-definitions origin/claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
 
 ## Task Files (READ THESE FIRST)
 - .claude/plans/tasks/TASK-103-flow-definitions.md
@@ -252,9 +190,7 @@ Base branch: claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
 Your branch: feat/104-onboarding-shell
 
 git fetch origin claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
-git checkout claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
-git pull origin claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
-git checkout -b feat/104-onboarding-shell
+git checkout -b feat/104-onboarding-shell origin/claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
 
 ## Task Files (READ THESE FIRST)
 - .claude/plans/tasks/TASK-104-onboarding-shell.md
@@ -303,9 +239,7 @@ Base branch: claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
 Your branch: feat/105-progress-indicator
 
 git fetch origin claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
-git checkout claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
-git pull origin claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
-git checkout -b feat/105-progress-indicator
+git checkout -b feat/105-progress-indicator origin/claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
 
 ## Task Files (READ THESE FIRST)
 - .claude/plans/tasks/TASK-105-progress-indicator.md
@@ -358,9 +292,7 @@ Base branch: claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
 Your branch: feat/106-navigation-buttons
 
 git fetch origin claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
-git checkout claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
-git pull origin claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
-git checkout -b feat/106-navigation-buttons
+git checkout -b feat/106-navigation-buttons origin/claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
 
 ## Task Files (READ THESE FIRST)
 - .claude/plans/tasks/TASK-106-navigation-buttons.md
