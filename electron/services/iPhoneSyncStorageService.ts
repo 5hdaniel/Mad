@@ -353,20 +353,21 @@ class IPhoneSyncStorageService {
     const db = databaseService.getRawDatabase();
 
     // Prepare statements
-    // Note: We populate both 'name' (legacy column) and 'display_name' (new column) for compatibility
+    // Note: Schema uses 'display_name' (not 'name')
+    // Set is_imported = 0 so contacts appear in "Available to Import" screen first
     const insertContactStmt = db.prepare(`
-      INSERT INTO contacts (id, user_id, name, display_name, company, source, metadata, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, 'contacts_app', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      INSERT INTO contacts (id, user_id, display_name, company, source, is_imported, metadata, created_at, updated_at)
+      VALUES (?, ?, ?, ?, 'contacts_app', 0, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     `);
 
     const insertPhoneStmt = db.prepare(`
-      INSERT OR IGNORE INTO contact_phones (id, contact_id, phone_e164, phone_display, label, source, created_at)
-      VALUES (?, ?, ?, ?, ?, 'import', CURRENT_TIMESTAMP)
+      INSERT OR IGNORE INTO contact_phones (id, contact_id, phone_e164, phone_display, label, is_primary, source, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, 'import', CURRENT_TIMESTAMP)
     `);
 
     const insertEmailStmt = db.prepare(`
-      INSERT OR IGNORE INTO contact_emails (id, contact_id, email, label, source, created_at)
-      VALUES (?, ?, ?, ?, 'import', CURRENT_TIMESTAMP)
+      INSERT OR IGNORE INTO contact_emails (id, contact_id, email, label, is_primary, source, created_at)
+      VALUES (?, ?, ?, ?, ?, 'import', CURRENT_TIMESTAMP)
     `);
 
     // Check if contact exists by looking up phone numbers
@@ -392,7 +393,7 @@ class IPhoneSyncStorageService {
       }
 
       if (existingContactId) {
-        // Contact already exists - add any new phones/emails
+        // Contact already exists - add any new phones/emails (not primary since contact already has data)
         for (const phone of contact.phoneNumbers) {
           if (phone.normalizedNumber) {
             try {
@@ -401,7 +402,8 @@ class IPhoneSyncStorageService {
                 existingContactId,
                 phone.normalizedNumber,
                 phone.number,
-                phone.label || "mobile"
+                phone.label || "mobile",
+                0  // is_primary = 0 for additional phones on existing contact
               );
             } catch {
               // Duplicate phone, ignore
@@ -415,7 +417,8 @@ class IPhoneSyncStorageService {
               crypto.randomUUID(),
               existingContactId,
               email.email.toLowerCase(),
-              email.label || "home"
+              email.label || "home",
+              0  // is_primary = 0 for additional emails on existing contact
             );
           } catch {
             // Duplicate email, ignore
@@ -443,13 +446,13 @@ class IPhoneSyncStorageService {
       insertContactStmt.run(
         contactId,
         userId,
-        sanitizedDisplayName,  // name (legacy)
-        sanitizedDisplayName,  // display_name (new)
+        sanitizedDisplayName,  // display_name
         sanitizedOrganization || null,
         metadata
       );
 
-      // Add phone numbers with validation
+      // Add phone numbers with validation (first one is primary)
+      let isFirstPhone = true;
       for (const phone of contact.phoneNumbers) {
         if (phone.normalizedNumber) {
           const sanitizedPhone = sanitizeString(phone.normalizedNumber, MAX_HANDLE_LENGTH);
@@ -461,13 +464,16 @@ class IPhoneSyncStorageService {
               contactId,
               sanitizedPhone,
               sanitizedPhoneDisplay,
-              sanitizedLabel
+              sanitizedLabel,
+              isFirstPhone ? 1 : 0  // is_primary
             );
+            isFirstPhone = false;
           }
         }
       }
 
-      // Add emails with validation
+      // Add emails with validation (first one is primary)
+      let isFirstEmail = true;
       for (const email of contact.emails) {
         const sanitizedEmail = sanitizeString(email.email, MAX_HANDLE_LENGTH);
         const sanitizedLabel = sanitizeString(email.label, 50, "home");
@@ -476,8 +482,10 @@ class IPhoneSyncStorageService {
             crypto.randomUUID(),
             contactId,
             sanitizedEmail.toLowerCase(),
-            sanitizedLabel
+            sanitizedLabel,
+            isFirstEmail ? 1 : 0  // is_primary
           );
+          isFirstEmail = false;
         }
       }
 

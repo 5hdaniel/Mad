@@ -52,17 +52,50 @@ git merge origin/develop  # or origin/main for hotfixes
 
 Resolve any merge conflicts before proceeding.
 
-### 1.2 Dependencies
-Verify clean dependency installation:
+### 1.2 Dependencies & Native Modules
 
+**CRITICAL: Native Module Rebuild Required**
+
+Native modules like `better-sqlite3-multiple-ciphers` must be compiled for Electron's bundled Node.js version (not your system Node.js). This is a common source of "infinite loop" bugs.
+
+**Standard rebuild (try first):**
 ```bash
-rm -rf node_modules
-npm install
-
-# Rebuild native modules if needed
 npm rebuild better-sqlite3-multiple-ciphers
 npx electron-rebuild
 ```
+
+**If standard rebuild doesn't work** (common on Windows without Python):
+```powershell
+# 1. Clear the prebuild cache (may have wrong version cached)
+Remove-Item -Recurse -Force "$env:LOCALAPPDATA\npm-cache\_prebuilds"
+
+# 2. Delete the existing build
+Remove-Item -Recurse -Force "node_modules\better-sqlite3-multiple-ciphers\build"
+
+# 3. Download the correct Electron-specific prebuild (replace 35.7.5 with your Electron version)
+cd node_modules/better-sqlite3-multiple-ciphers
+npx prebuild-install --runtime=electron --target=35.7.5 --arch=x64 --platform=win32
+```
+
+Check your Electron version with: `npx electron --version`
+
+**Common Error**: If you see `NODE_MODULE_VERSION` mismatch errors:
+```
+NODE_MODULE_VERSION 127. This version of Node.js requires NODE_MODULE_VERSION 133.
+```
+This means the native module was compiled for Node.js (127 = Node 22.x) but Electron needs a different version (133). Use the prebuild-install fix above.
+
+### 1.3 Verify App Starts
+**Before committing**, always verify the app actually runs:
+
+```bash
+npm run dev
+```
+
+Check for:
+- [ ] No `NODE_MODULE_VERSION` errors in console
+- [ ] Database initializes successfully
+- [ ] App doesn't get stuck on loading/onboarding screens
 
 ---
 

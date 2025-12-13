@@ -456,8 +456,8 @@ describe("DatabaseService", () => {
     describe("updateContact", () => {
       it("should update allowed contact fields", async () => {
         await databaseService.updateContact("contact-123", {
-          name: "Updated Name",
-          email: "updated@example.com",
+          display_name: "Updated Name",
+          company: "Updated Company",
         });
 
         expect(mockStatement.run).toHaveBeenCalled();

@@ -2156,6 +2156,9 @@ const handleCompletePendingLogin = async (
       },
     );
 
+    // Set user ID for iPhone sync storage
+    setSyncUserId(localUser.id);
+
     return {
       success: true,
       user: localUser,

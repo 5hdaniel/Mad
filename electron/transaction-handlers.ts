@@ -1134,8 +1134,7 @@ export const registerTransactionHandlers = (
         );
 
         // Update export tracking in database
-        const { databaseService: db } =
-          require("./services/databaseService").default;
+        const db = require("./services/databaseService").default;
         await db.updateTransaction(validatedTransactionId, {
           export_status: "exported",
           export_format: sanitizedOptions.exportFormat || "pdf",

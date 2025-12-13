@@ -1187,11 +1187,17 @@ Need to balance security (session-only tokens) vs. UX (not re-authorizing every 
 
 ### BACKLOG-030: Message Parser Async Yielding for Large Databases
 **Priority:** Critical
-**Status:** Pending
+**Status:** ✅ Completed (2024-12-12)
 **Category:** Performance
 
 **Description:**
 The message parsing phase (`getConversations()` and `getMessages()`) runs synchronously and blocks the main Electron process for large databases (627k+ messages). This causes "App Not Responding" during extraction.
+
+**Solution Implemented:**
+- Added `getConversationsAsync()` method with yielding every 50 chats
+- Added `getMessagesAsync()` method with yielding every 500 messages
+- Updated `syncOrchestrator.ts` to use async methods
+- Uses `setImmediate()` pattern consistent with `iPhoneSyncStorageService`
 
 **Root Cause:**
 - `iosMessagesParser.getConversations()` runs N+1 queries (one per chat for participants + last message)
@@ -1373,6 +1379,1299 @@ useEffect(() => {
 
 ---
 
+### BACKLOG-032: Handle "Backup Already in Progress" - Recovery UI
+**Priority:** Critical
+**Status:** Pending
+**Category:** UX / Error Recovery
+
+**Description:**
+When a sync is interrupted (device disconnect, app crash, user closes modal), the `idevicebackup2` process may still be running. Subsequent sync attempts fail with "Backup already in progress" and the user has no way to recover.
+
+**Current Behavior:**
+- Sync fails with "Backup already in progress"
+- User is stuck - no option to kill orphaned process or resume
+- User must manually open Task Manager and kill `idevicebackup2.exe`
+
+**Required Behavior:**
+
+**Option A: Auto-Recovery (Recommended)**
+1. When "Backup already in progress" error occurs:
+   - Check if `idevicebackup2.exe` is actually running (via tasklist/ps)
+   - If running: Try to reconnect to its output/progress
+   - If not running: Clear the lock and retry automatically
+
+2. If process IS running but we lost connection:
+   - Show UI: "A backup is already running. Would you like to reconnect or restart?"
+   - [Reconnect] - Try to reattach to process output
+   - [Restart] - Kill process and start fresh
+
+**Option B: Manual Recovery UI**
+1. Show error dialog with clear options:
+   ```
+   ┌─────────────────────────────────────────┐
+   │  ⚠️ Backup Already Running              │
+   │                                         │
+   │  A previous backup process is still     │
+   │  running. This can happen if the app    │
+   │  was closed during a sync.              │
+   │                                         │
+   │  [Force Restart]  [Cancel]              │
+   │                                         │
+   │  Force Restart will stop the existing   │
+   │  backup and start a new one.            │
+   └─────────────────────────────────────────┘
+   ```
+
+2. "Force Restart" button:
+   - Kills `idevicebackup2.exe` process
+   - Waits 1 second for cleanup
+   - Automatically retries sync
+
+**Implementation:**
+
+1. **Add process detection helper:**
+```typescript
+// electron/services/processHelper.ts
+export async function isBackupRunning(): Promise<boolean> {
+  // Windows: tasklist | findstr idevicebackup2
+  // macOS: pgrep idevicebackup2
+}
+
+export async function killBackupProcess(): Promise<boolean> {
+  // Windows: taskkill /F /IM idevicebackup2.exe
+  // macOS: pkill idevicebackup2
+}
+```
+
+2. **Add IPC handlers:**
+```typescript
+// electron/sync-handlers.ts
+ipcMain.handle('sync:check-backup-running', async () => {
+  return await isBackupRunning();
+});
+
+ipcMain.handle('sync:kill-backup-process', async () => {
+  return await killBackupProcess();
+});
+```
+
+3. **Update sync error handling:**
+```typescript
+// useIPhoneSync.ts
+if (error === 'Backup already in progress') {
+  setShowBackupRunningDialog(true);
+}
+```
+
+4. **Add recovery dialog component:**
+```typescript
+// src/components/iphone/BackupRecoveryDialog.tsx
+```
+
+**Files to Create:**
+- `electron/services/processHelper.ts` - Process detection/kill utilities
+
+**Files to Modify:**
+- `electron/sync-handlers.ts` - Add IPC handlers
+- `electron/preload.ts` - Expose new IPC methods
+- `src/hooks/useIPhoneSync.ts` - Handle error and show dialog
+- `src/components/iphone/IPhoneSyncFlow.tsx` - Add recovery dialog
+
+**Related:**
+- BACKLOG-025: Resume Failed Sync Prompt
+
+---
+
+### BACKLOG-031: Incremental Backup Size Estimation & Progress Improvement
+**Priority:** High
+**Status:** Pending
+**Category:** UX / Sync Progress
+
+**Description:**
+Improve backup progress estimation for incremental syncs by calculating an estimated incremental backup size. Currently, progress shows total bytes transferred but doesn't indicate expected total for incremental backups.
+
+**Problem:**
+- During incremental backup, user sees "11.6 GB transferred" but doesn't know if that's 50% or 99% done
+- Progress bar may be inaccurate because it's based on full backup size, not incremental delta
+- User has no idea if the sync is progressing or stuck
+
+**Solution: Estimate Incremental Size**
+Calculate estimated incremental backup size by:
+1. Get last backup size from stored metadata (e.g., 47.8 GB)
+2. Get current device used space from iOS disk_usage (e.g., 43 GB)
+3. Calculate delta: `max(currentUsedSpace - lastBackupSize, 1KB)`
+4. If delta is negative or tiny, estimate minimum 1KB (device freed space)
+5. If delta is large, that's the expected incremental transfer size
+
+**Formula:**
+```typescript
+function estimateIncrementalSize(
+  lastBackupSizeBytes: number,
+  currentUsedSpaceBytes: number
+): number {
+  const delta = currentUsedSpaceBytes - lastBackupSizeBytes;
+  // Minimum 1KB - if user deleted data, there's still metadata to sync
+  return Math.max(delta, 1024);
+}
+```
+
+**UI Enhancement:**
+Show in sync progress:
+- "Incremental sync: ~2.3 GB expected"
+- "Transferred: 1.8 GB / ~2.3 GB (78%)"
+- More accurate progress bar based on estimated incremental size
+
+**Also show last sync info:**
+- "Last synced: Dec 11, 2024 2:36 PM"
+- "Previous backup: 47.8 GB"
+- "Messages: 626,947 | Contacts: 1,091"
+
+**Files to Modify:**
+- `electron/services/syncOrchestrator.ts` - Calculate incremental estimate
+- `electron/services/backupService.ts` - Expose last backup size
+- `src/components/iphone/SyncProgress.tsx` - Display estimated size and last sync info
+- `src/hooks/useIPhoneSync.ts` - Add state for estimates and last sync info
+
+**Related:**
+- BACKLOG-023: Detailed Sync Progress (this adds incremental estimation)
+- BACKLOG-015: Display Last Sync Time (this adds more last sync details)
+
+---
+
+### BACKLOG-038: Fix Schema Mismatch - contacts.name vs contacts.display_name
+**Priority:** Critical
+**Status:** Pending
+**Category:** Bug Fix / Schema
+
+**Description:**
+The `contacts` table has column `display_name` but code queries for `name`, causing "no such column: name" error.
+
+**Error:**
+```
+SqliteError: no such column: name
+at DatabaseService.getImportedContactsByUserId
+```
+
+**Root Cause:**
+`databaseService.ts` line ~1068 queries `SELECT * FROM contacts ... ORDER BY name ASC` but schema defines `display_name`.
+
+**Fix Options:**
+1. Update all queries to use `display_name` (preferred - matches schema)
+2. Or add `name` as alias/column to schema
+
+**Files to Check:**
+- `electron/services/databaseService.ts` - `getImportedContactsByUserId()` and other contact queries
+- Search for `ORDER BY name` or `SELECT.*name.*FROM contacts`
+
+---
+
+### BACKLOG-039: Fix Schema Mismatch - transactions.transaction_status vs transactions.status
+**Priority:** Critical
+**Status:** Pending
+**Category:** Bug Fix / Schema
+
+**Description:**
+The `transactions` table has column `status` but code tries to INSERT with `transaction_status`, causing "table transactions has no column named transaction_status" error.
+
+**Error:**
+```
+table transactions has no column named transaction_status
+```
+
+**Root Cause:**
+Auto-detect transaction creation code uses `transaction_status` but schema defines `status`.
+
+**Fix Options:**
+1. Update INSERT/UPDATE queries to use `status` (preferred - matches schema)
+2. Or add `transaction_status` column to schema
+
+**Files to Check:**
+- `electron/services/databaseService.ts` - transaction INSERT/UPDATE queries
+- Search for `transaction_status`
+
+---
+
+### BACKLOG-040: ContactsService Using macOS Paths on Windows
+**Priority:** Medium
+**Status:** Pending
+**Category:** Bug Fix / Platform
+
+**Description:**
+On Windows, ContactsService tries to access macOS AddressBook paths which don't exist.
+
+**Error:**
+```
+[ContactsService] Error finding database files: Command failed: find "C:\Users\Daniel\Library\Application Support\AddressBook"
+```
+
+**Root Cause:**
+The `contactsService.ts` is using macOS-specific paths (`~/Library/Application Support/AddressBook`) on Windows.
+
+**Expected Behavior:**
+- On Windows: Query contacts from local database (synced from iPhone) or skip AddressBook import
+- On macOS: Use AddressBook database
+
+**Fix:**
+Add platform check before attempting AddressBook access.
+
+---
+
+### BACKLOG-041: Create UX Engineer Agent
+**Priority:** Medium
+**Status:** Pending
+**Category:** Tooling / Agents
+
+**Description:**
+Create a specialized UX Engineer agent that can review UI/UX issues and suggest improvements.
+
+**Agent Responsibilities:**
+1. Review UI components for consistency
+2. Check accessibility compliance
+3. Validate responsive design
+4. Test user flows
+
+**Important Notes:**
+- **Viewport Scrolling**: Agent should verify that all windows/modals that extend past the viewport are scrollable. No content should be cut off or inaccessible.
+- Test on different screen sizes
+- Ensure all interactive elements are reachable
+
+**Files to Create:**
+- `.claude/agents/ux-engineer.md` - Agent definition and instructions
+
+---
+
+### BACKLOG-042: Lookback Period Setting Not Persistent
+**Priority:** Medium
+**Status:** Pending
+**Category:** Bug Fix / Settings
+
+**Description:**
+The lookback period setting in Settings (9 months, 6 months, 3 months, etc.) is not persisted. When the user changes it and restarts the app, it reverts to the default.
+
+**Expected Behavior:**
+- User changes lookback period from 9 months to 3 months
+- Setting is saved to database
+- On app restart, the setting should still be 3 months
+
+**Files to Investigate:**
+- `src/components/Settings.tsx` - Where setting is displayed/changed
+- `electron/services/databaseService.ts` or preferences service - Where settings should be persisted
+- Check if `users_local.notification_preferences` or a separate preferences table stores this
+
+---
+
+### BACKLOG-043: Settings Screen Not Scrollable
+**Priority:** Medium
+**Status:** Pending
+**Category:** Bug Fix / UX
+
+**Description:**
+The Settings screen sometimes isn't scrollable, causing content to be cut off at the bottom of the viewport.
+
+**Expected Behavior:**
+- All settings content should be accessible
+- If content exceeds viewport, scroll should be enabled
+- User should be able to reach all settings options
+
+**Files to Investigate:**
+- `src/components/Settings.tsx` - Check container overflow styles
+- Ensure parent containers have `overflow-y: auto` or `overflow-y: scroll`
+
+**Related:**
+- BACKLOG-041: UX Engineer Agent should verify all screens are scrollable
+
+---
+
+### BACKLOG-037: Don't Fail Sync on Disconnect During Extraction/Storage Phases
+**Priority:** High
+**Status:** Pending
+**Category:** Bug Fix
+
+**Description:**
+When the iPhone is disconnected during sync, the app shows "Device disconnected during sync" error regardless of which phase we're in. This is incorrect because the iPhone is only needed during the backup phase.
+
+**Root Cause:**
+In `src/hooks/useIPhoneSync.ts` lines 316-322:
+```typescript
+setSyncStatus((current) => {
+  if (current === "syncing") {
+    setError("Device disconnected during sync");
+    return "error";
+  }
+  return current;
+});
+```
+This only checks if `syncStatus === "syncing"` but doesn't check the current `phase`.
+
+**Current Behavior:**
+- Disconnect during backup → Error (correct)
+- Disconnect during extraction → Error (incorrect)
+- Disconnect during storage → Error (incorrect)
+
+**Expected Behavior:**
+- Disconnect during backup → Error "Device disconnected - backup incomplete"
+- Disconnect during extraction → No error, continue processing
+- Disconnect during storage → No error, continue processing
+
+**Fix:**
+Check `progress.phase` before setting error:
+```typescript
+setSyncStatus((current) => {
+  if (current === "syncing" && progress.phase === "backing_up") {
+    setError("Device disconnected during backup");
+    return "error";
+  }
+  return current;
+});
+```
+
+**Files to Modify:**
+- `src/hooks/useIPhoneSync.ts` - Check phase before failing on disconnect
+
+**Related:**
+- BACKLOG-036: Fix Misleading Sync Phase UI Text
+
+---
+
+### BACKLOG-036: Fix Misleading Sync Phase UI Text
+**Priority:** Medium
+**Status:** Pending
+**Category:** UX
+
+**Description:**
+During iPhone sync, the UI shows "Backing up - Keep connected" even after the backup completes and moves to extraction/storage phases. This is misleading because:
+1. User thinks backup is still happening when it's actually done
+2. User keeps iPhone connected unnecessarily during database processing
+3. "Keep connected" message is incorrect for phases 2 & 3
+
+**Current Behavior:**
+- Shows "Backing up - Keep connected" during all phases
+- "Saving messages... 87,000 of 627,118" appears under backup title
+
+**Expected Behavior:**
+| Phase | Title | Subtitle |
+|-------|-------|----------|
+| 1. Backup | "Backing up - Keep connected" | Transfer progress |
+| 2. Extract | "Reading messages - Safe to disconnect" | "Reading from backup..." |
+| 3. Store | "Saving to database - Safe to disconnect" | "Saving messages... X of Y" |
+
+**Files to Modify:**
+- `src/components/iphone/SyncProgress.tsx` - Update `getPhaseTitle()` to show accurate phase text
+- Backend may need to send correct `phase` value ('backing_up', 'extracting', 'storing')
+
+**Related:**
+- BACKLOG-023: Detailed Sync Progress (comprehensive progress UI overhaul)
+
+---
+
+### BACKLOG-035: Remove Orphaned `transaction_participants` Table
+**Priority:** Critical
+**Status:** Pending
+**Category:** Schema Cleanup / Technical Debt
+
+**Description:**
+The `transaction_participants` table is defined in the schema but **never used in the code**. The codebase exclusively uses `transaction_contacts` for linking contacts to transactions.
+
+**Evidence:**
+- `transaction_contacts`: 15+ references in databaseService.ts (INSERT, SELECT, UPDATE, DELETE)
+- `transaction_participants`: 0 references in any TypeScript files
+
+**Action Required:**
+Remove from `electron/database/schema.sql`:
+1. DROP/remove CREATE TABLE statement for `transaction_participants`
+2. Remove indexes: `idx_transaction_participants_transaction`, `idx_transaction_participants_contact`, `idx_transaction_participants_role`
+3. Remove trigger: `update_transaction_participants_timestamp`
+4. Update `docs/DATABASE-SCHEMA.md` to reflect the change
+
+**Risk:** Low - table is not used anywhere in code.
+
+**Related:** Database schema audit (2024-12-12)
+
+---
+
+### BACKLOG-033: Check Supabase for Existing Terms Acceptance
+**Priority:** High
+**Status:** Pending
+**Category:** Auth / Onboarding
+
+**Description:**
+When a returning user logs in, the app shows the Terms & Conditions acceptance modal again even if they've already accepted. The app should query Supabase to check if `terms_accepted_at` is already set for the user.
+
+**Current Behavior:**
+- User logs in
+- Terms modal appears even though they already accepted
+- User has to accept again every time database is reset/recreated
+
+**Expected Behavior:**
+- On login, check cloud user's `terms_accepted_at` field from Supabase
+- If already set: Skip terms modal, proceed to onboarding/dashboard
+- If not set: Show terms modal
+
+**Root Cause:**
+The pre-DB onboarding flow checks `pendingOAuthData.cloudUser.terms_accepted_at` but this may not be populated correctly from Supabase, OR the check is happening before the cloud user data is fetched.
+
+**Implementation:**
+1. Ensure `completePendingLogin` or `handleLoginPending` fetches the user's `terms_accepted_at` from Supabase
+2. Pass this to the navigation effect so it can skip the terms modal
+3. Only show terms modal when `terms_accepted_at` is NULL/undefined
+
+**Files to Investigate:**
+- `src/appCore/state/useAppStateMachine.ts` - Navigation effect checks `needsTermsAcceptance`
+- `electron/auth-handlers.ts` - How cloud user data is fetched
+- `src/contexts/AuthContext.tsx` - How `needsTermsAcceptance` is determined
+
+---
+
+### BACKLOG-034: Phone Type Selection Card Layout Inconsistency
+**Priority:** Medium
+**Status:** Pending
+**Category:** UI/UX
+
+**Description:**
+The phone type selection screen has a card that is not aligned consistently with other onboarding screens. The card should be aligned to the top, under the progress bar, matching the layout of Email Onboarding and Apple Driver Setup screens.
+
+**Current Behavior:**
+- Phone type selection card appears centered vertically (or in a different position)
+- Other onboarding screens (Email, Driver Setup) have cards aligned to the top under the progress bar
+
+**Expected Behavior:**
+- All onboarding screens should have consistent card positioning
+- Card should be aligned to the top, right under the progress indicator
+- Consistent spacing/margins across all onboarding steps
+
+**Files to Modify:**
+- `src/components/PhoneTypeSelection.tsx` - Adjust card container layout
+- Compare with `src/components/EmailOnboardingScreen.tsx` and `src/components/AppleDriverSetup.tsx` for reference
+
+---
+
+### BACKLOG-046: Database Initialization Circuit Breaker & Error Screen
+**Priority:** Critical
+**Status:** Pending
+**Category:** Error Handling / UX
+
+**Description:**
+When database initialization fails (e.g., due to native module version mismatch), the app gets stuck in an infinite retry loop. The app should detect repeated failures, stop retrying, and show a helpful error screen.
+
+**Root Cause Analysis:**
+The `NODE_MODULE_VERSION` mismatch error occurs when native modules (like `better-sqlite3-multiple-ciphers`) are compiled for a different Node.js version than what's currently running. This causes:
+1. DB init fails → error caught but not handled properly
+2. App stays on current screen (e.g., driver setup)
+3. Screen continues polling → triggers more DB init attempts
+4. Creates infinite loop (10+ attempts per second)
+5. User sees "Installing iPhone Tools" forever
+
+**Current Behavior:**
+```
+21:18:25.265 → DB init attempt #1 → FAILS
+21:18:25.355 → DB init attempt #2 → FAILS
+21:18:25.438 → DB init attempt #3 → FAILS
+... (continues forever, 10+ times per second)
+```
+
+**Expected Behavior:**
+1. **Circuit Breaker**: After 3 consecutive DB init failures, stop retrying
+2. **Error State**: Transition to a dedicated error screen
+3. **Helpful Message**: Show user-friendly error with actionable fix:
+   ```
+   Database Failed to Initialize
+
+   This usually means native modules need to be rebuilt.
+   Run these commands in your terminal:
+
+     npm rebuild better-sqlite3-multiple-ciphers
+     npx electron-rebuild
+
+   Then restart the application.
+
+   [Copy Commands] [Retry] [Quit]
+   ```
+4. **Specific Detection**: Detect `NODE_MODULE_VERSION` errors specifically
+
+**Implementation:**
+
+1. **Add circuit breaker to DatabaseService:**
+```typescript
+class DatabaseService {
+  private initAttempts = 0;
+  private lastInitError: Error | null = null;
+  private readonly MAX_INIT_ATTEMPTS = 3;
+
+  async initialize(): Promise<void> {
+    if (this.initAttempts >= this.MAX_INIT_ATTEMPTS) {
+      throw new DatabaseError("Max initialization attempts exceeded", {
+        attempts: this.initAttempts,
+        lastError: this.lastInitError?.message
+      });
+    }
+    this.initAttempts++;
+    try {
+      // ... existing init code
+      this.initAttempts = 0; // Reset on success
+    } catch (error) {
+      this.lastInitError = error;
+      throw error;
+    }
+  }
+
+  resetInitAttempts(): void {
+    this.initAttempts = 0;
+    this.lastInitError = null;
+  }
+}
+```
+
+2. **Add error state to app state machine:**
+```typescript
+type AppState =
+  | "loading"
+  | "onboarding"
+  | "dashboard"
+  | "database_error";  // NEW
+
+// In useAppStateMachine:
+const [databaseError, setDatabaseError] = useState<{
+  type: "native_module" | "corruption" | "unknown";
+  message: string;
+} | null>(null);
+```
+
+3. **Create DatabaseErrorScreen component:**
+```typescript
+// src/components/DatabaseErrorScreen.tsx
+function DatabaseErrorScreen({ error, onRetry, onQuit }) {
+  const commands = `npm rebuild better-sqlite3-multiple-ciphers
+npx electron-rebuild`;
+
+  return (
+    <div className="error-screen">
+      <h1>Database Failed to Initialize</h1>
+      {error.type === "native_module" && (
+        <>
+          <p>Native modules need to be rebuilt for your Node.js version.</p>
+          <pre>{commands}</pre>
+          <button onClick={() => navigator.clipboard.writeText(commands)}>
+            Copy Commands
+          </button>
+        </>
+      )}
+      <button onClick={onRetry}>Retry</button>
+      <button onClick={onQuit}>Quit</button>
+    </div>
+  );
+}
+```
+
+4. **Detect specific errors in SystemHandlers:**
+```typescript
+if (error.message.includes("NODE_MODULE_VERSION")) {
+  mainWindow.webContents.send("database:native-module-error", {
+    message: error.message,
+    fix: "npm rebuild better-sqlite3-multiple-ciphers && npx electron-rebuild"
+  });
+}
+```
+
+**Files to Modify:**
+- `electron/services/databaseService.ts` - Add circuit breaker logic
+- `electron/system-handlers.ts` - Emit specific error events
+- `src/appCore/state/useAppStateMachine.ts` - Add database_error state
+- `src/appCore/state/types.ts` - Add DatabaseError type
+- `src/components/DatabaseErrorScreen.tsx` - NEW: Error UI component
+- `src/appCore/AppModals.tsx` - Render error screen when in error state
+
+**Testing:**
+- Unit test: Circuit breaker stops after N attempts
+- Unit test: Reset works correctly
+- Integration test: Error state transition on DB failure
+- Manual test: Corrupt native module, verify error screen shows
+
+**Related:**
+- Root cause documented in `CLAUDE.md` (Native Module Errors section)
+- PR checklist updated in `.claude/docs/PR-SOP.md` (Phase 1.3)
+- Native module test: `electron/services/__tests__/nativeModules.test.ts`
+
+---
+
+### BACKLOG-047: Contact Deletion Query References Non-Existent Column
+**Priority:** Critical
+**Status:** Pending
+**Category:** Bug / Database
+
+**Description:**
+When trying to delete a contact, the app shows error: "Failed to check contact: no such column: closing_date". This indicates the contact deletion check query is referencing a `closing_date` column that doesn't exist in the expected table.
+
+**Error Message:**
+```
+Failed to check contact: no such column: closing_date
+```
+
+**Root Cause (suspected):**
+The contact deletion validation logic (likely in BACKLOG-045 implementation or existing code) is querying transactions or transaction_contacts but using a column name (`closing_date`) that doesn't exist in that table's schema.
+
+**Investigation Needed:**
+1. Find the query that checks if a contact can be deleted
+2. Verify the correct table/column names from the database schema
+3. Fix the SQL query to use the correct column name
+
+**Files to Check:**
+- `electron/services/databaseService.ts` - Look for contact deletion methods
+- `electron/services/contactsService.ts` - Contact deletion logic
+- `electron/database/schema.sql` - Verify actual column names
+
+---
+
+### BACKLOG-045: Block Contact Deletion if Linked to Transactions
+**Priority:** Critical
+**Status:** Pending
+**Category:** Data Integrity / UX
+
+**Description:**
+When a user tries to delete an imported contact, the system should check if that contact is assigned to any transactions. If so, block the deletion and show the user which transaction(s) the contact is part of.
+
+**Current Behavior:**
+- Contact deletion may succeed even if linked to transactions
+- Could leave orphaned references in `transaction_contacts` table
+- Or deletion fails silently with foreign key error
+
+**Expected Behavior:**
+1. User clicks "Delete" on a contact
+2. System checks `transaction_contacts` for any assignments
+3. If found:
+   - Block deletion
+   - Show error message: "Cannot delete [Contact Name]. This contact is assigned to the following transactions:"
+   - List transaction(s): property address, role assigned
+   - Provide option: "Remove from transactions first" or "Cancel"
+4. If not found:
+   - Proceed with deletion normally
+
+**Implementation:**
+
+1. **Add validation query:**
+```typescript
+// databaseService.ts
+async getContactTransactionAssignments(contactId: string): Promise<{
+  transactionId: string;
+  propertyAddress: string;
+  role: string;
+}[]> {
+  const sql = `
+    SELECT
+      t.id as transactionId,
+      t.property_address as propertyAddress,
+      tc.specific_role as role
+    FROM transaction_contacts tc
+    JOIN transactions t ON tc.transaction_id = t.id
+    WHERE tc.contact_id = ?
+  `;
+  return this._all(sql, [contactId]);
+}
+```
+
+2. **Update delete handler:**
+```typescript
+// contact-handlers.ts - contacts:delete handler
+const assignments = await databaseService.getContactTransactionAssignments(contactId);
+if (assignments.length > 0) {
+  return {
+    success: false,
+    error: 'CONTACT_HAS_TRANSACTIONS',
+    transactions: assignments,
+    message: `Cannot delete contact. Assigned to ${assignments.length} transaction(s).`
+  };
+}
+```
+
+3. **Update UI to show blocking dialog:**
+```typescript
+// Show modal with transaction list
+"Cannot delete [Name]. This contact is assigned to:"
+- 123 Main St (Buyer)
+- 456 Oak Ave (Seller Agent)
+
+[Remove from all transactions] [Cancel]
+```
+
+**Files to Modify:**
+- `electron/services/databaseService.ts` - Add `getContactTransactionAssignments()` method
+- `electron/contact-handlers.ts` - Add validation before delete
+- `src/components/contacts/` - Update delete UI to handle blocked state
+
+**Alternative Approach:**
+Instead of blocking, could offer cascade options:
+- "Delete contact AND remove from all transactions"
+- "Delete contact only" (keep transaction history with "Deleted Contact" placeholder)
+
+---
+
+### BACKLOG-044: Allow Multiple Contacts Per Role in Transaction UI
+**Priority:** Critical
+**Status:** Pending
+**Category:** Feature / UI
+
+**Description:**
+The transaction editor UI should allow assigning multiple contacts to the same role (e.g., 2 buyers, 2 sellers, multiple agents).
+
+**Current Behavior:**
+- UI may only allow selecting one contact per role
+- User cannot add a second buyer or second seller
+
+**Expected Behavior:**
+- Each role slot should have an "Add another [role]" button
+- Multiple contacts can be assigned to the same role
+- UI shows all assigned contacts for each role
+- Each contact assignment can be individually removed
+
+**Database Support:**
+The schema already supports this:
+```sql
+-- This is ALLOWED:
+INSERT INTO transaction_contacts (transaction_id, contact_id, role) VALUES ('txn-1', 'contact-A', 'Buyer');
+INSERT INTO transaction_contacts (transaction_id, contact_id, role) VALUES ('txn-1', 'contact-B', 'Buyer');
+-- Two different contacts as Buyer ✅
+```
+
+The UNIQUE constraint is on `(transaction_id, contact_id)`, meaning the same contact can't be assigned twice to the same transaction, but different contacts CAN share the same role.
+
+**UI Changes Needed:**
+1. Update `TransactionContactEditor` component to support multiple contacts per role
+2. Add "Add another [Buyer/Seller/Agent]" button after each role section
+3. Show list of assigned contacts per role with individual remove buttons
+4. Contact picker should exclude already-assigned contacts
+
+**Files to Modify:**
+- `src/components/Transactions.tsx` - Transaction editor UI
+- `src/components/TransactionDetails.tsx` - Display multiple contacts per role
+- Backend already supports this - no changes needed
+
+**Note:**
+What the schema does NOT support is the same contact having multiple roles (e.g., John as both Buyer and Agent). If that's needed, would require schema change to remove the UNIQUE constraint or change it to `UNIQUE(transaction_id, contact_id, role)`.
+
+---
+
+### BACKLOG-048: Transaction Edit Mode Should Preserve Active Tab
+**Priority:** Medium
+**Status:** Pending
+**Category:** UX / Bug
+
+**Description:**
+When viewing transaction details and clicking "Edit", the edit mode should open on the same tab the user was viewing. Currently, if the user is on the "Contacts & Roles" tab and clicks Edit, the edit mode opens but reverts to the "Transaction Details" tab.
+
+**Current Behavior:**
+1. User is on Transaction Details screen
+2. User clicks "Contacts & Roles" tab
+3. User clicks "Edit" button
+4. Edit mode opens on "Transaction Details" tab (wrong!)
+
+**Expected Behavior:**
+1. User is on "Contacts & Roles" tab
+2. User clicks "Edit"
+3. Edit mode opens on "Contacts & Roles" tab (preserves context)
+
+**Implementation:**
+- Track active tab state in parent component
+- Pass active tab to edit mode component
+- Initialize edit mode with the same active tab
+
+**Files to Modify:**
+- `src/components/TransactionDetails.tsx`
+- `src/components/Transactions.tsx` (if edit modal is here)
+
+---
+
+### BACKLOG-049: Communications Tab for Transaction Details
+**Priority:** Medium
+**Status:** Pending
+**Category:** Feature / UI Refactor
+
+**Description:**
+Move all related emails and text messages to a dedicated "Communications" tab within the transaction details view. This provides better organization and separates communication history from transaction metadata.
+
+**Current Behavior:**
+- Emails and texts may be scattered or shown inline with other transaction details
+
+**Expected Behavior:**
+- New "Communications" tab in transaction details
+- Tab shows all emails related to the transaction
+- Tab shows all text messages related to the transaction
+- Chronological view with filters (All, Emails only, Texts only)
+- Each item shows: sender, date, subject/preview, source (Gmail/Outlook/iMessage)
+
+**UI Layout:**
+```
+[Transaction Details] [Contacts & Roles] [Communications] [Attachments]
+                                              ^
+                                         NEW TAB
+```
+
+**Files to Modify:**
+- `src/components/TransactionDetails.tsx` - Add new tab
+- Create `src/components/TransactionCommunications.tsx` - New component
+- Backend queries may need updating to fetch communications by transaction
+
+---
+
+### BACKLOG-050: Attachments Tab for Transaction Details
+**Priority:** Medium
+**Status:** Pending
+**Category:** Feature / UI
+
+**Description:**
+Add a new "Attachments" tab to transaction details that shows all attachments extracted from the related communications (emails and texts).
+
+**Expected Behavior:**
+- New "Attachments" tab in transaction details
+- Shows all attachments from emails related to this transaction
+- Shows all attachments from texts related to this transaction
+- Each attachment shows: filename, file type icon, size, source communication
+- Click to preview/download attachment
+- Filter by type: Documents, Images, PDFs, All
+
+**UI Layout:**
+```
+[Transaction Details] [Contacts & Roles] [Communications] [Attachments]
+                                                              ^
+                                                          NEW TAB
+```
+
+**Attachment Display:**
+- Grid or list view toggle
+- Thumbnail previews for images
+- File type icons for documents
+- "From: Email subject" or "From: Text from [Contact]" attribution
+
+**Database Consideration:**
+- May need `attachments` table linked to `communications`
+- Store: filename, mime_type, size, storage_path, communication_id
+
+**Files to Create/Modify:**
+- `src/components/TransactionAttachments.tsx` - New component
+- `src/components/TransactionDetails.tsx` - Add tab
+- `electron/services/attachmentService.ts` - Backend service
+- `electron/database/schema.sql` - Attachments table if needed
+
+---
+
+### BACKLOG-051: Delete Option for Communications and Attachments
+**Priority:** Medium
+**Status:** Pending
+**Category:** Feature / UX
+
+**Description:**
+Add ability to remove/hide irrelevant emails, texts, and attachments from a transaction. Users should be able to clean up communications that aren't relevant to the audit.
+
+**Expected Behavior:**
+- Each email/text/attachment has a dismiss button (X icon)
+- Clicking X prompts: "Remove this from transaction? (The original email/text is not deleted)"
+- Removed items are hidden from the transaction view
+- Option to view "Hidden items" if user wants to restore something
+- Soft delete - original data preserved, just unlinked from transaction
+
+**UI Pattern:**
+```
+┌─────────────────────────────────────────────┐
+│ 📧 RE: Purchase Agreement for 123 Main St   │ [X]
+│ From: agent@realty.com - Dec 10, 2024       │
+│ Preview of email content...                 │
+└─────────────────────────────────────────────┘
+```
+
+**Database:**
+- Add `hidden` or `is_visible` flag to transaction_communications link table
+- Or use `removed_at` timestamp for soft delete
+
+**Files to Modify:**
+- `src/components/TransactionCommunications.tsx`
+- `src/components/TransactionAttachments.tsx`
+- `electron/services/transactionService.ts` - Add hide/unhide methods
+
+---
+
+### BACKLOG-052: AI-Generated Transaction Timeline Summary
+**Priority:** High
+**Status:** Pending
+**Category:** Feature / AI
+
+**Description:**
+Add an AI-summarized timeline view of the transaction that shows key milestones and events extracted from communications. This helps auditors quickly understand the transaction history.
+
+**Expected Behavior:**
+- New "Timeline" section or tab in transaction details
+- AI analyzes all communications and extracts key events
+- Events displayed chronologically with dates
+- Each event can link to the source email/text
+- Key milestones highlighted: Offer, Counter-offer, Acceptance, Inspection, Financing, Closing
+
+**Timeline Display:**
+```
+📅 Transaction Timeline (AI Generated)
+─────────────────────────────────────
+● Dec 1  - Initial offer submitted ($425,000)
+           └─ 📧 "Offer for 123 Main St"
+
+● Dec 3  - Counter-offer received ($435,000)
+           └─ 📧 "RE: Counter-offer"
+
+● Dec 5  - Offer accepted
+           └─ 📱 Text from Agent: "They accepted!"
+
+● Dec 10 - Inspection scheduled
+           └─ 📧 "Inspection Appointment Confirmed"
+
+● Dec 15 - Inspection completed - issues found
+           └─ 📧 "Inspection Report Attached"
+
+● Dec 20 - Closing date confirmed
+           └─ 📧 "Closing Instructions"
+```
+
+**AI Integration:**
+- Use Claude/GPT to analyze communication content
+- Extract: dates, amounts, key decisions, participants
+- Summarize each milestone in 1-2 sentences
+- Confidence score for extracted information
+
+**Future Enhancements:**
+- Click timeline event to see full communication
+- Edit/correct AI-extracted information
+- Export timeline as PDF report
+- Flag discrepancies or missing steps
+
+**Files to Create:**
+- `src/components/TransactionTimeline.tsx` - Timeline UI component
+- `electron/services/aiTimelineService.ts` - AI extraction logic
+- Integration with existing AI/LLM service
+
+---
+
+### BACKLOG-053: Manually Add Missing Communications to Transaction
+**Priority:** High
+**Status:** Pending
+**Category:** Feature / UX
+
+**Description:**
+Allow users to manually attach emails, text conversations, or uploaded files to a transaction. This handles cases where automatic detection missed relevant communications or the user has external documents to include.
+
+**Use Cases:**
+1. Email wasn't auto-detected (different subject line, forwarded thread)
+2. Text conversation not linked to transaction
+3. User has PDF/document from external source (fax, paper scan, other system)
+4. Communication from before sync date range
+
+**UI Flow:**
+```
+Transaction Details
+├── [+ Add Missing Information] button
+│
+└── Modal: "What would you like to add?"
+    ├── 📧 Email
+    │   └── Search mailbox UI
+    │       - Search by subject, sender, date range
+    │       - Show preview of matching emails
+    │       - Select one or more to link
+    │
+    ├── 💬 Text Message
+    │   └── Search texts UI
+    │       - Search by contact name, phone number, keywords
+    │       - Show matching conversations
+    │       - Select messages or entire thread to link
+    │
+    └── 📎 Upload File
+        └── File picker
+            - Drag & drop or browse
+            - Supported: PDF, DOC, DOCX, images, etc.
+            - Add description/label for the file
+```
+
+**Email Search UI:**
+```
+┌─────────────────────────────────────────────────────────┐
+│ 🔍 Search Emails                                    [X] │
+├─────────────────────────────────────────────────────────┤
+│ Subject: [_________________]                            │
+│ From:    [_________________]                            │
+│ Date:    [Dec 1] to [Dec 15]                           │
+│                                        [Search]         │
+├─────────────────────────────────────────────────────────┤
+│ Results:                                                │
+│ ☐ RE: 123 Main St Offer - agent@realty.com - Dec 5    │
+│ ☐ Inspection Report - inspector@... - Dec 10           │
+│ ☐ Title Insurance Quote - title@... - Dec 12          │
+├─────────────────────────────────────────────────────────┤
+│                              [Cancel] [Add Selected]    │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Text Search UI:**
+```
+┌─────────────────────────────────────────────────────────┐
+│ 🔍 Search Text Messages                             [X] │
+├─────────────────────────────────────────────────────────┤
+│ Contact: [John Smith_________] (autocomplete)          │
+│ Keywords: [closing documents__]                         │
+│ Date:     [Dec 1] to [Dec 15]                          │
+│                                        [Search]         │
+├─────────────────────────────────────────────────────────┤
+│ Results:                                                │
+│ ☐ John Smith - Dec 8 - "Can you send the closing..."  │
+│ ☐ Jane Doe - Dec 10 - "Documents are ready..."        │
+├─────────────────────────────────────────────────────────┤
+│                              [Cancel] [Add Selected]    │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Implementation:**
+
+1. **Email Search:**
+   - Query Gmail/Outlook API with user's search criteria
+   - Return emails not already linked to this transaction
+   - Allow multi-select and batch linking
+
+2. **Text Search:**
+   - Query local iMessage database with search criteria
+   - Show conversation context around matching messages
+   - Link individual messages or entire threads
+
+3. **File Upload:**
+   - Store in app's document storage
+   - Create `manual_attachments` record linked to transaction
+   - Support common document formats
+
+**Database Changes:**
+```sql
+-- For manually uploaded files (not from email/text)
+CREATE TABLE manual_attachments (
+  id TEXT PRIMARY KEY,
+  transaction_id TEXT NOT NULL,
+  filename TEXT NOT NULL,
+  mime_type TEXT,
+  size_bytes INTEGER,
+  storage_path TEXT NOT NULL,
+  description TEXT,
+  uploaded_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (transaction_id) REFERENCES transactions(id)
+);
+```
+
+**Files to Create/Modify:**
+- `src/components/AddMissingInfoModal.tsx` - Main modal component
+- `src/components/EmailSearchModal.tsx` - Email search UI
+- `src/components/TextSearchModal.tsx` - Text message search UI
+- `src/components/FileUploadModal.tsx` - Manual file upload
+- `electron/services/emailSearchService.ts` - Backend email search
+- `electron/services/textSearchService.ts` - Backend text search
+- `electron/services/manualAttachmentService.ts` - File upload handling
+
+**API Endpoints Needed:**
+- `emails:search` - Search user's mailbox
+- `texts:search` - Search local iMessage database
+- `attachments:upload` - Upload and store manual file
+- `transaction:link-communication` - Link existing email/text to transaction
+
+---
+
+### BACKLOG-054: Render Email HTML Properly Instead of Raw HTML
+**Priority:** High
+**Status:** Pending
+**Category:** Bug / UX
+
+**Description:**
+Emails are currently displayed as raw HTML markup instead of being rendered as they would appear in an email client. Users see HTML tags and code instead of formatted content.
+
+**Current Behavior:**
+```
+<html><body><div style="font-family: Arial;">
+<p>Hi John,</p>
+<p>Please find attached the <strong>purchase agreement</strong> for 123 Main St.</p>
+<table border="1">...
+</body></html>
+```
+
+**Expected Behavior:**
+- Email list/preview: Show plain text summary or sanitized snippet
+- Full email view: Render HTML properly like an email client would display it
+
+**Two Views to Fix:**
+
+1. **Related Emails List (Summary View):**
+   - Show plain text excerpt (strip HTML)
+   - Or AI-summarized 1-2 line description
+   - Quick preview without rendering complexity
+
+2. **Full Email Modal (Detail View):**
+   - Render HTML in a sandboxed iframe or safe HTML renderer
+   - Preserve formatting: bold, italics, tables, lists
+   - Handle inline images
+   - Sanitize to prevent XSS attacks
+
+**Implementation Options:**
+
+1. **Iframe Sandbox (Safest):**
+```tsx
+<iframe
+  srcDoc={sanitizedHtml}
+  sandbox="allow-same-origin"
+  style={{ width: '100%', border: 'none' }}
+/>
+```
+
+2. **DOMPurify + dangerouslySetInnerHTML:**
+```tsx
+import DOMPurify from 'dompurify';
+
+const cleanHtml = DOMPurify.sanitize(emailHtml, {
+  ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'ul', 'ol', 'li', 'table', 'tr', 'td', 'th', 'a', 'img'],
+  ALLOWED_ATTR: ['href', 'src', 'alt', 'style'],
+});
+
+<div dangerouslySetInnerHTML={{ __html: cleanHtml }} />
+```
+
+3. **Plain Text Extraction (for previews):**
+```typescript
+function extractPlainText(html: string): string {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  return doc.body.textContent || '';
+}
+```
+
+**Security Considerations:**
+- MUST sanitize HTML to prevent XSS attacks
+- Remove `<script>` tags, `onclick` handlers, etc.
+- Use CSP headers if using iframe
+- Consider blocking external image loading (tracking pixels)
+
+**Dependencies:**
+- `dompurify` - HTML sanitization library
+- Or use Electron's `<webview>` with `nodeintegration=false`
+
+**Files to Modify:**
+- `src/components/EmailPreview.tsx` (or wherever emails are displayed)
+- `src/components/EmailDetailModal.tsx` - Full email view
+- Add `dompurify` to package.json if not present
+
+**Testing:**
+- Test with various email formats (plain text, rich HTML, tables)
+- Test with malicious HTML (script injection attempts)
+- Test with inline images and external images
+- Test with different email clients' HTML quirks (Outlook, Gmail)
+
+---
+
+### BACKLOG-055: AI Extraction of Scheduled House Viewings & Calendar Integration
+**Priority:** High
+**Status:** Pending
+**Category:** Feature / AI
+
+**Description:**
+Use LLM to extract scheduled house viewings/showings from emails and texts, and optionally sync with the user's calendar (Google Calendar, Outlook Calendar). This helps auditors track property viewing history for a transaction.
+
+**Use Cases:**
+1. Extract viewing appointments from agent emails ("Showing scheduled for Tuesday at 2pm")
+2. Extract viewing confirmations from texts ("See you at 123 Main St tomorrow at 3")
+3. Correlate viewings with calendar events
+4. Build timeline of property viewings for audit trail
+
+**Data to Extract:**
+- Property address
+- Date and time of viewing
+- Attendees (buyer, seller, agents)
+- Viewing type (first showing, second showing, open house, final walkthrough)
+- Status (scheduled, completed, cancelled, rescheduled)
+- Source communication (email/text reference)
+
+**AI Extraction Example:**
+```
+Input Email:
+"Hi John, confirming the showing for 123 Main Street on Tuesday,
+December 15th at 2:00 PM. The seller will not be present.
+Please meet the listing agent Sarah at the property."
+
+Extracted Data:
+{
+  "property_address": "123 Main Street",
+  "date": "2024-12-15",
+  "time": "14:00",
+  "viewing_type": "showing",
+  "attendees": ["John (buyer)", "Sarah (listing agent)"],
+  "seller_present": false,
+  "status": "scheduled"
+}
+```
+
+**Calendar Integration:**
+
+1. **Read from Calendar:**
+   - Connect to Google Calendar / Outlook Calendar
+   - Find events matching property addresses
+   - Correlate with communications
+   - Import viewing events into transaction timeline
+
+2. **Write to Calendar (optional):**
+   - Create calendar events for detected viewings
+   - Include property details, attendees, notes
+   - Set reminders
+
+**API Integrations:**
+- Google Calendar API (OAuth2)
+- Microsoft Graph Calendar API (already have Outlook OAuth)
+- Apple Calendar (via local CalDAV or EventKit)
+
+**Database Schema:**
+```sql
+CREATE TABLE property_viewings (
+  id TEXT PRIMARY KEY,
+  transaction_id TEXT,
+  property_address TEXT NOT NULL,
+  viewing_date TEXT NOT NULL,
+  viewing_time TEXT,
+  viewing_type TEXT, -- 'showing', 'open_house', 'walkthrough', 'inspection'
+  status TEXT DEFAULT 'scheduled', -- 'scheduled', 'completed', 'cancelled'
+  attendees TEXT, -- JSON array
+  notes TEXT,
+  source_type TEXT, -- 'email', 'text', 'calendar', 'manual'
+  source_id TEXT, -- communication_id or calendar_event_id
+  calendar_event_id TEXT, -- linked calendar event
+  extracted_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  confidence_score REAL, -- AI confidence 0-1
+  FOREIGN KEY (transaction_id) REFERENCES transactions(id)
+);
+```
+
+**UI Components:**
+1. **Viewings Tab** in Transaction Details
+   - List of all viewings for the property
+   - Timeline view with dates
+   - Link to source communication
+   - Manual add/edit viewing
+
+2. **Calendar Sync Settings**
+   - Connect Google/Outlook calendar
+   - Enable auto-detection of viewing events
+   - Two-way sync toggle
+
+**Implementation Steps:**
+1. Add calendar OAuth flows (Google Calendar, extend existing Outlook)
+2. Create AI prompt for viewing extraction
+3. Build property_viewings table and service
+4. Create ViewingsTab component
+5. Add calendar event correlation logic
+6. Implement calendar write-back (optional)
+
+**Files to Create:**
+- `electron/services/calendarService.ts` - Calendar API integration
+- `electron/services/viewingExtractionService.ts` - AI extraction
+- `src/components/TransactionViewings.tsx` - UI component
+- `electron/calendar-handlers.ts` - IPC handlers
+
+**Privacy Considerations:**
+- Calendar access requires explicit user consent
+- Only read events matching property addresses
+- Don't store unrelated calendar data
+- Clear disclosure of what calendar data is accessed
+
+---
+
 ## Last Updated
 2024-12-10 - Initial backlog created from build warnings and sync testing session
 2024-12-10 - Added BACKLOG-006: Dark Mode
@@ -1394,3 +2693,18 @@ useEffect(() => {
 2024-12-11 - Added BACKLOG-028: Create App Logo & Branding Assets (Medium priority)
 2024-12-11 - Added BACKLOG-029: App Startup Performance & Loading Screen (Medium priority)
 2024-12-11 - Added BACKLOG-030: Message Parser Async Yielding for Large Databases (Critical priority)
+2024-12-12 - Added BACKLOG-031: Incremental Backup Size Estimation & Progress Improvement (High priority)
+2024-12-12 - Added BACKLOG-032: Handle "Backup Already in Progress" - Recovery UI (Critical priority)
+2024-12-12 - Added BACKLOG-033: Check Supabase for Existing Terms Acceptance (High priority)
+2024-12-12 - Added BACKLOG-034: Phone Type Selection Card Layout Inconsistency (Medium priority)
+2024-12-12 - Added BACKLOG-035: Remove Orphaned `transaction_participants` Table (Critical priority)
+2024-12-12 - Added BACKLOG-036: Fix Misleading Sync Phase UI Text (Medium priority)
+2024-12-12 - Added BACKLOG-037: Don't Fail Sync on Disconnect During Extraction/Storage (High priority - Bug)
+2024-12-12 - Added BACKLOG-038: Fix Schema Mismatch - contacts.name vs contacts.display_name (Critical)
+2024-12-12 - Added BACKLOG-039: Fix Schema Mismatch - transactions.transaction_status vs transactions.status (Critical)
+2024-12-12 - Added BACKLOG-040: ContactsService Using macOS Paths on Windows (Medium)
+2024-12-12 - Added BACKLOG-041: Create UX Engineer Agent (Medium)
+2024-12-12 - Added BACKLOG-042: Lookback Period Setting Not Persistent (Medium)
+2024-12-12 - Added BACKLOG-043: Settings Screen Not Scrollable (Medium)
+2024-12-13 - Added BACKLOG-044: Allow Multiple Contacts Per Role in Transaction UI (Critical)
+2024-12-13 - Added BACKLOG-045: Block Contact Deletion if Linked to Transactions (Critical)
