@@ -2149,6 +2149,201 @@ What the schema does NOT support is the same contact having multiple roles (e.g.
 
 ---
 
+### BACKLOG-048: Transaction Edit Mode Should Preserve Active Tab
+**Priority:** Medium
+**Status:** Pending
+**Category:** UX / Bug
+
+**Description:**
+When viewing transaction details and clicking "Edit", the edit mode should open on the same tab the user was viewing. Currently, if the user is on the "Contacts & Roles" tab and clicks Edit, the edit mode opens but reverts to the "Transaction Details" tab.
+
+**Current Behavior:**
+1. User is on Transaction Details screen
+2. User clicks "Contacts & Roles" tab
+3. User clicks "Edit" button
+4. Edit mode opens on "Transaction Details" tab (wrong!)
+
+**Expected Behavior:**
+1. User is on "Contacts & Roles" tab
+2. User clicks "Edit"
+3. Edit mode opens on "Contacts & Roles" tab (preserves context)
+
+**Implementation:**
+- Track active tab state in parent component
+- Pass active tab to edit mode component
+- Initialize edit mode with the same active tab
+
+**Files to Modify:**
+- `src/components/TransactionDetails.tsx`
+- `src/components/Transactions.tsx` (if edit modal is here)
+
+---
+
+### BACKLOG-049: Communications Tab for Transaction Details
+**Priority:** Medium
+**Status:** Pending
+**Category:** Feature / UI Refactor
+
+**Description:**
+Move all related emails and text messages to a dedicated "Communications" tab within the transaction details view. This provides better organization and separates communication history from transaction metadata.
+
+**Current Behavior:**
+- Emails and texts may be scattered or shown inline with other transaction details
+
+**Expected Behavior:**
+- New "Communications" tab in transaction details
+- Tab shows all emails related to the transaction
+- Tab shows all text messages related to the transaction
+- Chronological view with filters (All, Emails only, Texts only)
+- Each item shows: sender, date, subject/preview, source (Gmail/Outlook/iMessage)
+
+**UI Layout:**
+```
+[Transaction Details] [Contacts & Roles] [Communications] [Attachments]
+                                              ^
+                                         NEW TAB
+```
+
+**Files to Modify:**
+- `src/components/TransactionDetails.tsx` - Add new tab
+- Create `src/components/TransactionCommunications.tsx` - New component
+- Backend queries may need updating to fetch communications by transaction
+
+---
+
+### BACKLOG-050: Attachments Tab for Transaction Details
+**Priority:** Medium
+**Status:** Pending
+**Category:** Feature / UI
+
+**Description:**
+Add a new "Attachments" tab to transaction details that shows all attachments extracted from the related communications (emails and texts).
+
+**Expected Behavior:**
+- New "Attachments" tab in transaction details
+- Shows all attachments from emails related to this transaction
+- Shows all attachments from texts related to this transaction
+- Each attachment shows: filename, file type icon, size, source communication
+- Click to preview/download attachment
+- Filter by type: Documents, Images, PDFs, All
+
+**UI Layout:**
+```
+[Transaction Details] [Contacts & Roles] [Communications] [Attachments]
+                                                              ^
+                                                          NEW TAB
+```
+
+**Attachment Display:**
+- Grid or list view toggle
+- Thumbnail previews for images
+- File type icons for documents
+- "From: Email subject" or "From: Text from [Contact]" attribution
+
+**Database Consideration:**
+- May need `attachments` table linked to `communications`
+- Store: filename, mime_type, size, storage_path, communication_id
+
+**Files to Create/Modify:**
+- `src/components/TransactionAttachments.tsx` - New component
+- `src/components/TransactionDetails.tsx` - Add tab
+- `electron/services/attachmentService.ts` - Backend service
+- `electron/database/schema.sql` - Attachments table if needed
+
+---
+
+### BACKLOG-051: Delete Option for Communications and Attachments
+**Priority:** Medium
+**Status:** Pending
+**Category:** Feature / UX
+
+**Description:**
+Add ability to remove/hide irrelevant emails, texts, and attachments from a transaction. Users should be able to clean up communications that aren't relevant to the audit.
+
+**Expected Behavior:**
+- Each email/text/attachment has a dismiss button (X icon)
+- Clicking X prompts: "Remove this from transaction? (The original email/text is not deleted)"
+- Removed items are hidden from the transaction view
+- Option to view "Hidden items" if user wants to restore something
+- Soft delete - original data preserved, just unlinked from transaction
+
+**UI Pattern:**
+```
+┌─────────────────────────────────────────────┐
+│ 📧 RE: Purchase Agreement for 123 Main St   │ [X]
+│ From: agent@realty.com - Dec 10, 2024       │
+│ Preview of email content...                 │
+└─────────────────────────────────────────────┘
+```
+
+**Database:**
+- Add `hidden` or `is_visible` flag to transaction_communications link table
+- Or use `removed_at` timestamp for soft delete
+
+**Files to Modify:**
+- `src/components/TransactionCommunications.tsx`
+- `src/components/TransactionAttachments.tsx`
+- `electron/services/transactionService.ts` - Add hide/unhide methods
+
+---
+
+### BACKLOG-052: AI-Generated Transaction Timeline Summary
+**Priority:** High
+**Status:** Pending
+**Category:** Feature / AI
+
+**Description:**
+Add an AI-summarized timeline view of the transaction that shows key milestones and events extracted from communications. This helps auditors quickly understand the transaction history.
+
+**Expected Behavior:**
+- New "Timeline" section or tab in transaction details
+- AI analyzes all communications and extracts key events
+- Events displayed chronologically with dates
+- Each event can link to the source email/text
+- Key milestones highlighted: Offer, Counter-offer, Acceptance, Inspection, Financing, Closing
+
+**Timeline Display:**
+```
+📅 Transaction Timeline (AI Generated)
+─────────────────────────────────────
+● Dec 1  - Initial offer submitted ($425,000)
+           └─ 📧 "Offer for 123 Main St"
+
+● Dec 3  - Counter-offer received ($435,000)
+           └─ 📧 "RE: Counter-offer"
+
+● Dec 5  - Offer accepted
+           └─ 📱 Text from Agent: "They accepted!"
+
+● Dec 10 - Inspection scheduled
+           └─ 📧 "Inspection Appointment Confirmed"
+
+● Dec 15 - Inspection completed - issues found
+           └─ 📧 "Inspection Report Attached"
+
+● Dec 20 - Closing date confirmed
+           └─ 📧 "Closing Instructions"
+```
+
+**AI Integration:**
+- Use Claude/GPT to analyze communication content
+- Extract: dates, amounts, key decisions, participants
+- Summarize each milestone in 1-2 sentences
+- Confidence score for extracted information
+
+**Future Enhancements:**
+- Click timeline event to see full communication
+- Edit/correct AI-extracted information
+- Export timeline as PDF report
+- Flag discrepancies or missing steps
+
+**Files to Create:**
+- `src/components/TransactionTimeline.tsx` - Timeline UI component
+- `electron/services/aiTimelineService.ts` - AI extraction logic
+- Integration with existing AI/LLM service
+
+---
+
 ## Last Updated
 2024-12-10 - Initial backlog created from build warnings and sync testing session
 2024-12-10 - Added BACKLOG-006: Dark Mode
