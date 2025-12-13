@@ -1993,6 +1993,34 @@ if (error.message.includes("NODE_MODULE_VERSION")) {
 
 ---
 
+### BACKLOG-047: Contact Deletion Query References Non-Existent Column
+**Priority:** Critical
+**Status:** Pending
+**Category:** Bug / Database
+
+**Description:**
+When trying to delete a contact, the app shows error: "Failed to check contact: no such column: closing_date". This indicates the contact deletion check query is referencing a `closing_date` column that doesn't exist in the expected table.
+
+**Error Message:**
+```
+Failed to check contact: no such column: closing_date
+```
+
+**Root Cause (suspected):**
+The contact deletion validation logic (likely in BACKLOG-045 implementation or existing code) is querying transactions or transaction_contacts but using a column name (`closing_date`) that doesn't exist in that table's schema.
+
+**Investigation Needed:**
+1. Find the query that checks if a contact can be deleted
+2. Verify the correct table/column names from the database schema
+3. Fix the SQL query to use the correct column name
+
+**Files to Check:**
+- `electron/services/databaseService.ts` - Look for contact deletion methods
+- `electron/services/contactsService.ts` - Contact deletion logic
+- `electron/database/schema.sql` - Verify actual column names
+
+---
+
 ### BACKLOG-045: Block Contact Deletion if Linked to Transactions
 **Priority:** Critical
 **Status:** Pending
