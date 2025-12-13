@@ -1379,6 +1379,62 @@ useEffect(() => {
 
 ---
 
+### BACKLOG-031: Incremental Backup Size Estimation & Progress Improvement
+**Priority:** High
+**Status:** Pending
+**Category:** UX / Sync Progress
+
+**Description:**
+Improve backup progress estimation for incremental syncs by calculating an estimated incremental backup size. Currently, progress shows total bytes transferred but doesn't indicate expected total for incremental backups.
+
+**Problem:**
+- During incremental backup, user sees "11.6 GB transferred" but doesn't know if that's 50% or 99% done
+- Progress bar may be inaccurate because it's based on full backup size, not incremental delta
+- User has no idea if the sync is progressing or stuck
+
+**Solution: Estimate Incremental Size**
+Calculate estimated incremental backup size by:
+1. Get last backup size from stored metadata (e.g., 47.8 GB)
+2. Get current device used space from iOS disk_usage (e.g., 43 GB)
+3. Calculate delta: `max(currentUsedSpace - lastBackupSize, 1KB)`
+4. If delta is negative or tiny, estimate minimum 1KB (device freed space)
+5. If delta is large, that's the expected incremental transfer size
+
+**Formula:**
+```typescript
+function estimateIncrementalSize(
+  lastBackupSizeBytes: number,
+  currentUsedSpaceBytes: number
+): number {
+  const delta = currentUsedSpaceBytes - lastBackupSizeBytes;
+  // Minimum 1KB - if user deleted data, there's still metadata to sync
+  return Math.max(delta, 1024);
+}
+```
+
+**UI Enhancement:**
+Show in sync progress:
+- "Incremental sync: ~2.3 GB expected"
+- "Transferred: 1.8 GB / ~2.3 GB (78%)"
+- More accurate progress bar based on estimated incremental size
+
+**Also show last sync info:**
+- "Last synced: Dec 11, 2024 2:36 PM"
+- "Previous backup: 47.8 GB"
+- "Messages: 626,947 | Contacts: 1,091"
+
+**Files to Modify:**
+- `electron/services/syncOrchestrator.ts` - Calculate incremental estimate
+- `electron/services/backupService.ts` - Expose last backup size
+- `src/components/iphone/SyncProgress.tsx` - Display estimated size and last sync info
+- `src/hooks/useIPhoneSync.ts` - Add state for estimates and last sync info
+
+**Related:**
+- BACKLOG-023: Detailed Sync Progress (this adds incremental estimation)
+- BACKLOG-015: Display Last Sync Time (this adds more last sync details)
+
+---
+
 ## Last Updated
 2024-12-10 - Initial backlog created from build warnings and sync testing session
 2024-12-10 - Added BACKLOG-006: Dark Mode
@@ -1400,3 +1456,4 @@ useEffect(() => {
 2024-12-11 - Added BACKLOG-028: Create App Logo & Branding Assets (Medium priority)
 2024-12-11 - Added BACKLOG-029: App Startup Performance & Loading Screen (Medium priority)
 2024-12-11 - Added BACKLOG-030: Message Parser Async Yielding for Large Databases (Critical priority)
+2024-12-12 - Added BACKLOG-031: Incremental Backup Size Estimation & Progress Improvement (High priority)
