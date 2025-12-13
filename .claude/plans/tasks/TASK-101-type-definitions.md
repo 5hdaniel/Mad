@@ -18,16 +18,16 @@ Create the foundational TypeScript type definitions that all onboarding componen
 
 ## Acceptance Criteria
 
-- [ ] `Platform` type defined as union: `'macos' | 'windows' | 'linux'`
-- [ ] `SkipConfig` interface with `enabled`, `label`, and optional `description`
-- [ ] `OnboardingStepMeta` interface with all required fields (see Implementation Notes)
-- [ ] `OnboardingContext` interface for step function parameters
-- [ ] `OnboardingStep` interface combining meta and Content component
-- [ ] `OnboardingStepContentProps` interface for content component props
-- [ ] `StepAction` union type for step-dispatched actions
-- [ ] All types have JSDoc documentation
-- [ ] File compiles with `npm run type-check`
-- [ ] No circular imports possible (types only, no implementations)
+- [x] `Platform` type defined as union: `'macos' | 'windows' | 'linux'`
+- [x] `SkipConfig` interface with `enabled`, `label`, and optional `description`
+- [x] `OnboardingStepMeta` interface with all required fields (see Implementation Notes)
+- [x] `OnboardingContext` interface for step function parameters
+- [x] `OnboardingStep` interface combining meta and Content component
+- [x] `OnboardingStepContentProps` interface for content component props
+- [x] `StepAction` union type for step-dispatched actions
+- [x] All types have JSDoc documentation
+- [x] File compiles with `npm run type-check`
+- [x] No circular imports possible (types only, no implementations)
 
 ## Implementation Notes
 
