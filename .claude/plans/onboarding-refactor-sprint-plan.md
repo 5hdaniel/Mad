@@ -5,6 +5,12 @@
 **Branch:** `claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J`
 **PM Authority:** Final authority on scope, sequencing, and merge readiness
 
+### Addenda
+
+| Addendum | Topic | Affects |
+|----------|-------|---------|
+| [Addendum 01](addendum-01-state-persistence.md) | Step Completion & State Persistence | TASK-101, 106, 107-112, 113, 114 |
+
 ---
 
 ## 1. Sprint Narrative / Goal
