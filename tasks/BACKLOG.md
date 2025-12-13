@@ -1845,6 +1845,154 @@ The phone type selection screen has a card that is not aligned consistently with
 
 ---
 
+### BACKLOG-046: Database Initialization Circuit Breaker & Error Screen
+**Priority:** Critical
+**Status:** Pending
+**Category:** Error Handling / UX
+
+**Description:**
+When database initialization fails (e.g., due to native module version mismatch), the app gets stuck in an infinite retry loop. The app should detect repeated failures, stop retrying, and show a helpful error screen.
+
+**Root Cause Analysis:**
+The `NODE_MODULE_VERSION` mismatch error occurs when native modules (like `better-sqlite3-multiple-ciphers`) are compiled for a different Node.js version than what's currently running. This causes:
+1. DB init fails → error caught but not handled properly
+2. App stays on current screen (e.g., driver setup)
+3. Screen continues polling → triggers more DB init attempts
+4. Creates infinite loop (10+ attempts per second)
+5. User sees "Installing iPhone Tools" forever
+
+**Current Behavior:**
+```
+21:18:25.265 → DB init attempt #1 → FAILS
+21:18:25.355 → DB init attempt #2 → FAILS
+21:18:25.438 → DB init attempt #3 → FAILS
+... (continues forever, 10+ times per second)
+```
+
+**Expected Behavior:**
+1. **Circuit Breaker**: After 3 consecutive DB init failures, stop retrying
+2. **Error State**: Transition to a dedicated error screen
+3. **Helpful Message**: Show user-friendly error with actionable fix:
+   ```
+   Database Failed to Initialize
+
+   This usually means native modules need to be rebuilt.
+   Run these commands in your terminal:
+
+     npm rebuild better-sqlite3-multiple-ciphers
+     npx electron-rebuild
+
+   Then restart the application.
+
+   [Copy Commands] [Retry] [Quit]
+   ```
+4. **Specific Detection**: Detect `NODE_MODULE_VERSION` errors specifically
+
+**Implementation:**
+
+1. **Add circuit breaker to DatabaseService:**
+```typescript
+class DatabaseService {
+  private initAttempts = 0;
+  private lastInitError: Error | null = null;
+  private readonly MAX_INIT_ATTEMPTS = 3;
+
+  async initialize(): Promise<void> {
+    if (this.initAttempts >= this.MAX_INIT_ATTEMPTS) {
+      throw new DatabaseError("Max initialization attempts exceeded", {
+        attempts: this.initAttempts,
+        lastError: this.lastInitError?.message
+      });
+    }
+    this.initAttempts++;
+    try {
+      // ... existing init code
+      this.initAttempts = 0; // Reset on success
+    } catch (error) {
+      this.lastInitError = error;
+      throw error;
+    }
+  }
+
+  resetInitAttempts(): void {
+    this.initAttempts = 0;
+    this.lastInitError = null;
+  }
+}
+```
+
+2. **Add error state to app state machine:**
+```typescript
+type AppState =
+  | "loading"
+  | "onboarding"
+  | "dashboard"
+  | "database_error";  // NEW
+
+// In useAppStateMachine:
+const [databaseError, setDatabaseError] = useState<{
+  type: "native_module" | "corruption" | "unknown";
+  message: string;
+} | null>(null);
+```
+
+3. **Create DatabaseErrorScreen component:**
+```typescript
+// src/components/DatabaseErrorScreen.tsx
+function DatabaseErrorScreen({ error, onRetry, onQuit }) {
+  const commands = `npm rebuild better-sqlite3-multiple-ciphers
+npx electron-rebuild`;
+
+  return (
+    <div className="error-screen">
+      <h1>Database Failed to Initialize</h1>
+      {error.type === "native_module" && (
+        <>
+          <p>Native modules need to be rebuilt for your Node.js version.</p>
+          <pre>{commands}</pre>
+          <button onClick={() => navigator.clipboard.writeText(commands)}>
+            Copy Commands
+          </button>
+        </>
+      )}
+      <button onClick={onRetry}>Retry</button>
+      <button onClick={onQuit}>Quit</button>
+    </div>
+  );
+}
+```
+
+4. **Detect specific errors in SystemHandlers:**
+```typescript
+if (error.message.includes("NODE_MODULE_VERSION")) {
+  mainWindow.webContents.send("database:native-module-error", {
+    message: error.message,
+    fix: "npm rebuild better-sqlite3-multiple-ciphers && npx electron-rebuild"
+  });
+}
+```
+
+**Files to Modify:**
+- `electron/services/databaseService.ts` - Add circuit breaker logic
+- `electron/system-handlers.ts` - Emit specific error events
+- `src/appCore/state/useAppStateMachine.ts` - Add database_error state
+- `src/appCore/state/types.ts` - Add DatabaseError type
+- `src/components/DatabaseErrorScreen.tsx` - NEW: Error UI component
+- `src/appCore/AppModals.tsx` - Render error screen when in error state
+
+**Testing:**
+- Unit test: Circuit breaker stops after N attempts
+- Unit test: Reset works correctly
+- Integration test: Error state transition on DB failure
+- Manual test: Corrupt native module, verify error screen shows
+
+**Related:**
+- Root cause documented in `CLAUDE.md` (Native Module Errors section)
+- PR checklist updated in `.claude/docs/PR-SOP.md` (Phase 1.3)
+- Native module test: `electron/services/__tests__/nativeModules.test.ts`
+
+---
+
 ### BACKLOG-045: Block Contact Deletion if Linked to Transactions
 **Priority:** Critical
 **Status:** Pending
