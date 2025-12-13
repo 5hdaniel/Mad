@@ -52,17 +52,39 @@ git merge origin/develop  # or origin/main for hotfixes
 
 Resolve any merge conflicts before proceeding.
 
-### 1.2 Dependencies
-Verify clean dependency installation:
+### 1.2 Dependencies & Native Modules
+
+**CRITICAL: Native Module Rebuild Required**
+
+Native modules like `better-sqlite3-multiple-ciphers` are compiled against a specific Node.js version. If your Node.js version changes or you pull changes, you MUST rebuild:
 
 ```bash
+# Clean install (if needed)
 rm -rf node_modules
 npm install
 
-# Rebuild native modules if needed
+# ALWAYS rebuild native modules after npm install or Node.js update
 npm rebuild better-sqlite3-multiple-ciphers
 npx electron-rebuild
 ```
+
+**Common Error**: If you see `NODE_MODULE_VERSION` mismatch errors, the native module was compiled for a different Node.js version:
+```
+NODE_MODULE_VERSION 127. This version of Node.js requires NODE_MODULE_VERSION 133.
+```
+This causes database initialization to fail silently, leading to infinite loops in the app.
+
+### 1.3 Verify App Starts
+**Before committing**, always verify the app actually runs:
+
+```bash
+npm run dev
+```
+
+Check for:
+- [ ] No `NODE_MODULE_VERSION` errors in console
+- [ ] Database initializes successfully
+- [ ] App doesn't get stuck on loading/onboarding screens
 
 ---
 

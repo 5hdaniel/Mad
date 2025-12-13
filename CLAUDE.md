@@ -160,10 +160,31 @@ npm test                 # Run all tests
 npm run type-check       # TypeScript check
 npm run lint             # ESLint check
 
-# Native modules (after npm install or Node.js update)
+# Native modules (REQUIRED after npm install or Node.js update)
 npm rebuild better-sqlite3-multiple-ciphers
 npx electron-rebuild
 ```
+
+### Native Module Errors
+
+If you see this error, rebuild native modules:
+```
+NODE_MODULE_VERSION 127. This version of Node.js requires NODE_MODULE_VERSION 133.
+```
+
+**Symptoms**: Database fails to initialize, app stuck on loading/onboarding screens in an infinite loop.
+
+**Fix**:
+```bash
+npm rebuild better-sqlite3-multiple-ciphers
+npx electron-rebuild
+```
+
+**When to rebuild**:
+- After `npm install`
+- After upgrading Node.js
+- After pulling changes with dependency updates
+- After switching branches with different dependencies
 
 ## Key Documentation
 
