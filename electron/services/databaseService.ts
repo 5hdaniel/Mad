@@ -1485,16 +1485,14 @@ class DatabaseService implements IDatabaseService {
     const id = crypto.randomUUID();
     const sql = `
       INSERT INTO contacts (
-        id, user_id, name, email, phone, company, title, source, is_imported
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        id, user_id, display_name, company, title, source, is_imported
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
     `;
 
     const params = [
       id,
       contactData.user_id,
-      contactData.name,
-      contactData.email || null,
-      contactData.phone || null,
+      contactData.display_name || contactData.name || "Unknown",
       contactData.company || null,
       contactData.title || null,
       contactData.source || "manual",
@@ -1544,22 +1542,76 @@ class DatabaseService implements IDatabaseService {
       params.push(filters.is_imported ? 1 : 0);
     }
 
-    sql += " ORDER BY name ASC";
+    sql += " ORDER BY display_name ASC";
 
     return this._all<Contact>(sql, params);
   }
 
   /**
    * Get only imported contacts for a user
+   * Returns contacts with display_name aliased as 'name' for backwards compatibility
+   * Also includes primary email and phone from child tables
    */
   async getImportedContactsByUserId(userId: string): Promise<Contact[]> {
-    const sql =
-      "SELECT * FROM contacts WHERE user_id = ? AND is_imported = 1 ORDER BY name ASC";
+    // Use subqueries with COALESCE to fall back to any email/phone if no primary is set
+    const sql = `
+      SELECT
+        c.*,
+        c.display_name as name,
+        COALESCE(
+          (SELECT email FROM contact_emails WHERE contact_id = c.id AND is_primary = 1 LIMIT 1),
+          (SELECT email FROM contact_emails WHERE contact_id = c.id LIMIT 1)
+        ) as email,
+        COALESCE(
+          (SELECT phone_e164 FROM contact_phones WHERE contact_id = c.id AND is_primary = 1 LIMIT 1),
+          (SELECT phone_e164 FROM contact_phones WHERE contact_id = c.id LIMIT 1)
+        ) as phone
+      FROM contacts c
+      WHERE c.user_id = ? AND c.is_imported = 1
+      ORDER BY c.display_name ASC
+    `;
     return this._all<Contact>(sql, [userId]);
   }
 
   /**
+   * Get unimported contacts for a user (available to import)
+   * These are contacts synced from iPhone that haven't been imported yet
+   * Returns contacts with display_name aliased as 'name' for backwards compatibility
+   * Also includes primary email and phone from child tables
+   */
+  async getUnimportedContactsByUserId(userId: string): Promise<Contact[]> {
+    // First, try to get contacts with is_primary = 1 (preferred)
+    // If no primary set, fall back to getting any email/phone
+    const sql = `
+      SELECT
+        c.*,
+        c.display_name as name,
+        COALESCE(
+          (SELECT email FROM contact_emails WHERE contact_id = c.id AND is_primary = 1 LIMIT 1),
+          (SELECT email FROM contact_emails WHERE contact_id = c.id LIMIT 1)
+        ) as email,
+        COALESCE(
+          (SELECT phone_e164 FROM contact_phones WHERE contact_id = c.id AND is_primary = 1 LIMIT 1),
+          (SELECT phone_e164 FROM contact_phones WHERE contact_id = c.id LIMIT 1)
+        ) as phone
+      FROM contacts c
+      WHERE c.user_id = ? AND c.is_imported = 0
+      ORDER BY c.display_name ASC
+    `;
+    return this._all<Contact>(sql, [userId]);
+  }
+
+  /**
+   * Mark a contact as imported (change is_imported from 0 to 1)
+   */
+  async markContactAsImported(contactId: string): Promise<void> {
+    const sql = "UPDATE contacts SET is_imported = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?";
+    this._run(sql, [contactId]);
+  }
+
+  /**
    * Get contacts sorted by recent communication and optionally by property address relevance
+   * Note: emails are stored in contact_emails child table, not directly on contacts
    */
   async getContactsSortedByActivity(
     userId: string,
@@ -1568,8 +1620,11 @@ class DatabaseService implements IDatabaseService {
     const sql = `
       SELECT
         c.*,
+        c.display_name as name,
+        ce_primary.email as email,
+        cp_primary.phone_e164 as phone,
         MAX(comm.sent_at) as last_communication_at,
-        COUNT(comm.id) as communication_count,
+        COUNT(DISTINCT comm.id) as communication_count,
         ${
           propertyAddress
             ? `
@@ -1581,9 +1636,12 @@ class DatabaseService implements IDatabaseService {
             : "0 as address_mention_count"
         }
       FROM contacts c
+      LEFT JOIN contact_emails ce_primary ON c.id = ce_primary.contact_id AND ce_primary.is_primary = 1
+      LEFT JOIN contact_phones cp_primary ON c.id = cp_primary.contact_id AND cp_primary.is_primary = 1
+      LEFT JOIN contact_emails ce_all ON c.id = ce_all.contact_id
       LEFT JOIN communications comm ON (
-        c.email IS NOT NULL
-        AND (comm.sender = c.email OR comm.recipients LIKE '%' || c.email || '%')
+        ce_all.email IS NOT NULL
+        AND (comm.sender = ce_all.email OR comm.recipients LIKE '%' || ce_all.email || '%')
         AND comm.user_id = c.user_id
       )
       WHERE c.user_id = ? AND c.is_imported = 1
@@ -1592,7 +1650,7 @@ class DatabaseService implements IDatabaseService {
         ${propertyAddress ? "address_mention_count DESC," : ""}
         CASE WHEN last_communication_at IS NULL THEN 1 ELSE 0 END,
         last_communication_at DESC,
-        c.name ASC
+        c.display_name ASC
     `;
 
     const params = propertyAddress
@@ -1622,8 +1680,8 @@ class DatabaseService implements IDatabaseService {
   async searchContacts(query: string, userId: string): Promise<Contact[]> {
     const sql = `
       SELECT * FROM contacts
-      WHERE user_id = ? AND (name LIKE ? OR email LIKE ?)
-      ORDER BY name ASC
+      WHERE user_id = ? AND (display_name LIKE ? OR display_name LIKE ?)
+      ORDER BY display_name ASC
     `;
     const searchPattern = `%${query}%`;
     return this._all<Contact>(sql, [userId, searchPattern, searchPattern]);
@@ -1636,7 +1694,7 @@ class DatabaseService implements IDatabaseService {
     contactId: string,
     updates: Partial<Contact>,
   ): Promise<void> {
-    const allowedFields = ["name", "email", "phone", "company", "title"];
+    const allowedFields = ["display_name", "company", "title"];
     const fields: string[] = [];
     const values: any[] = [];
 
@@ -2061,7 +2119,7 @@ class DatabaseService implements IDatabaseService {
       INSERT INTO transactions (
         id, user_id, property_address, property_street, property_city,
         property_state, property_zip, property_coordinates,
-        transaction_type, transaction_status, closing_date
+        transaction_type, status, closing_deadline
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
@@ -2077,8 +2135,16 @@ class DatabaseService implements IDatabaseService {
         ? JSON.stringify(transactionData.property_coordinates)
         : null,
       transactionData.transaction_type || null,
-      transactionData.transaction_status || "completed",
-      transactionData.closing_date || null,
+      // Map legacy status values to valid schema values
+      (() => {
+        const rawStatus = transactionData.transaction_status || transactionData.status || "active";
+        // Map "completed" -> "closed", "pending" -> "active"
+        if (rawStatus === "completed") return "closed";
+        if (rawStatus === "pending") return "active";
+        if (["active", "closed", "archived"].includes(rawStatus)) return rawStatus;
+        return "active"; // Default fallback
+      })(),
+      transactionData.closing_date || transactionData.closing_deadline || null,
     ];
 
     this._run(sql, params);
@@ -2110,14 +2176,9 @@ class DatabaseService implements IDatabaseService {
       params.push(filters.transaction_type);
     }
 
-    if (filters?.transaction_status) {
-      sql += " AND t.transaction_status = ?";
-      params.push(filters.transaction_status);
-    }
-
-    if (filters?.status) {
+    if (filters?.transaction_status || filters?.status) {
       sql += " AND t.status = ?";
-      params.push(filters.status);
+      params.push(filters.transaction_status || filters.status);
     }
 
     if (filters?.export_status) {
@@ -2276,9 +2337,8 @@ class DatabaseService implements IDatabaseService {
       "property_zip",
       "property_coordinates",
       "transaction_type",
-      "transaction_status",
       "status",
-      "closing_date",
+      "closing_deadline",
       "representation_start_date",
       "closing_date_verified",
       "representation_start_confidence",
@@ -2762,13 +2822,39 @@ class DatabaseService implements IDatabaseService {
 
   /**
    * Assign contact to transaction with detailed role data
+   * Uses INSERT OR REPLACE to handle duplicate assignments gracefully
    */
   async assignContactToTransaction(
     transactionId: string,
     data: TransactionContactData,
   ): Promise<string> {
-    const id = crypto.randomUUID();
+    // First check if this contact is already assigned to this transaction
+    const existingCheck = `
+      SELECT id FROM transaction_contacts
+      WHERE transaction_id = ? AND contact_id = ?
+    `;
+    const existing = this._get<{ id: string }>(existingCheck, [transactionId, data.contact_id]);
 
+    if (existing) {
+      // Update the existing assignment instead of inserting
+      const updateSql = `
+        UPDATE transaction_contacts
+        SET role = ?, role_category = ?, specific_role = ?, is_primary = ?, notes = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `;
+      this._run(updateSql, [
+        data.role || null,
+        data.role_category || null,
+        data.specific_role || null,
+        data.is_primary ? 1 : 0,
+        data.notes || null,
+        existing.id,
+      ]);
+      return existing.id;
+    }
+
+    // Insert new assignment
+    const id = crypto.randomUUID();
     const sql = `
       INSERT INTO transaction_contacts (
         id, transaction_id, contact_id, role, role_category, specific_role, is_primary, notes
@@ -2808,6 +2894,7 @@ class DatabaseService implements IDatabaseService {
 
   /**
    * Get all contacts assigned to a transaction with role details
+   * Uses COALESCE to fallback to any email/phone if primary is not set
    */
   async getTransactionContactsWithRoles(
     transactionId: string,
@@ -2815,9 +2902,15 @@ class DatabaseService implements IDatabaseService {
     const sql = `
       SELECT
         tc.*,
-        c.name as contact_name,
-        c.email as contact_email,
-        c.phone as contact_phone,
+        c.display_name as contact_name,
+        COALESCE(
+          (SELECT email FROM contact_emails WHERE contact_id = c.id AND is_primary = 1 LIMIT 1),
+          (SELECT email FROM contact_emails WHERE contact_id = c.id LIMIT 1)
+        ) as contact_email,
+        COALESCE(
+          (SELECT phone_e164 FROM contact_phones WHERE contact_id = c.id AND is_primary = 1 LIMIT 1),
+          (SELECT phone_e164 FROM contact_phones WHERE contact_id = c.id LIMIT 1)
+        ) as contact_phone,
         c.company as contact_company,
         c.title as contact_title
       FROM transaction_contacts tc
@@ -2831,6 +2924,7 @@ class DatabaseService implements IDatabaseService {
 
   /**
    * Get all contacts for a specific role in a transaction
+   * Uses COALESCE to fallback to any email/phone if primary is not set
    */
   async getTransactionContactsByRole(
     transactionId: string,
@@ -2839,9 +2933,15 @@ class DatabaseService implements IDatabaseService {
     const sql = `
       SELECT
         tc.*,
-        c.name as contact_name,
-        c.email as contact_email,
-        c.phone as contact_phone,
+        c.display_name as contact_name,
+        COALESCE(
+          (SELECT email FROM contact_emails WHERE contact_id = c.id AND is_primary = 1 LIMIT 1),
+          (SELECT email FROM contact_emails WHERE contact_id = c.id LIMIT 1)
+        ) as contact_email,
+        COALESCE(
+          (SELECT phone_e164 FROM contact_phones WHERE contact_id = c.id AND is_primary = 1 LIMIT 1),
+          (SELECT phone_e164 FROM contact_phones WHERE contact_id = c.id LIMIT 1)
+        ) as contact_phone,
         c.company as contact_company,
         c.title as contact_title
       FROM transaction_contacts tc

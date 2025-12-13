@@ -607,7 +607,7 @@ class TransactionService {
   }
 
   /**
-   * Get transaction by ID with communications
+   * Get transaction by ID with communications and contact assignments
    */
   async getTransactionDetails(
     transactionId: string,
@@ -620,8 +620,9 @@ class TransactionService {
 
     const communications =
       await databaseService.getCommunicationsByTransaction(transactionId);
+    // Use getTransactionContactsWithRoles to include contact_name, contact_phone, specific_role, etc.
     const contact_assignments =
-      await databaseService.getTransactionContacts(transactionId);
+      await databaseService.getTransactionContactsWithRoles(transactionId);
 
     return {
       ...transaction,
@@ -747,9 +748,9 @@ class TransactionService {
       return null;
     }
 
-    // Get all contact assignments
+    // Get all contact assignments with role details (includes contact_name, contact_phone, specific_role, etc.)
     const contactAssignments =
-      await databaseService.getTransactionContacts(transactionId);
+      await databaseService.getTransactionContactsWithRoles(transactionId);
 
     return {
       ...transaction,

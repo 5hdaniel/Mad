@@ -35,6 +35,8 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
 
   // Track cleanup functions
   const cleanupRef = useRef<(() => void)[]>([]);
+  // Track current progress phase for disconnect handler (avoids stale closure)
+  const progressPhaseRef = useRef<BackupProgress["phase"] | null>(null);
 
   // Set up device detection and event listeners
   useEffect(() => {
@@ -103,11 +105,19 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
           console.log("[useIPhoneSync] Device disconnected");
           setIsConnected(false);
           setDevice(null);
-          // Reset sync state on disconnect during active sync
+          // Only show error if sync is in a phase that requires the device
+          // Phases that require device: preparing, backing_up
+          // Phases safe to disconnect: extracting, storing, complete
           setSyncStatus((current) => {
             if (current === "syncing") {
-              setError("Device disconnected during sync");
-              return "error";
+              const currentPhase = progressPhaseRef.current;
+              // Only show error if still in backup phase (device required)
+              if (currentPhase === "backing_up" || currentPhase === "preparing") {
+                setError("Device disconnected during sync");
+                return "error";
+              }
+              // In extracting/storing phases, disconnect is fine - just log it
+              console.log("[useIPhoneSync] Device disconnected but in safe phase:", currentPhase);
             }
             return current;
           });
@@ -147,6 +157,8 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
             };
           };
 
+          // Update ref for disconnect handler (avoids stale closure)
+          progressPhaseRef.current = phase;
           setProgress({
             phase,
             percent: syncProgress.overallProgress ?? 0,
@@ -313,10 +325,17 @@ export function useIPhoneSync(): UseIPhoneSyncReturn {
         const unsub = deviceApi.onDisconnected(() => {
           setIsConnected(false);
           setDevice(null);
+          // Only show error if sync is in a phase that requires the device
           setSyncStatus((current) => {
             if (current === "syncing") {
-              setError("Device disconnected during sync");
-              return "error";
+              const currentPhase = progressPhaseRef.current;
+              // Only show error if still in backup phase (device required)
+              if (currentPhase === "backing_up" || currentPhase === "preparing") {
+                setError("Device disconnected during sync");
+                return "error";
+              }
+              // In extracting/storing phases, disconnect is fine
+              console.log("[useIPhoneSync] Device disconnected but in safe phase:", currentPhase);
             }
             return current;
           });

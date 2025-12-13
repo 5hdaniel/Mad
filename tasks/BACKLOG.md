@@ -1538,6 +1538,441 @@ Show in sync progress:
 
 ---
 
+### BACKLOG-038: Fix Schema Mismatch - contacts.name vs contacts.display_name
+**Priority:** Critical
+**Status:** Pending
+**Category:** Bug Fix / Schema
+
+**Description:**
+The `contacts` table has column `display_name` but code queries for `name`, causing "no such column: name" error.
+
+**Error:**
+```
+SqliteError: no such column: name
+at DatabaseService.getImportedContactsByUserId
+```
+
+**Root Cause:**
+`databaseService.ts` line ~1068 queries `SELECT * FROM contacts ... ORDER BY name ASC` but schema defines `display_name`.
+
+**Fix Options:**
+1. Update all queries to use `display_name` (preferred - matches schema)
+2. Or add `name` as alias/column to schema
+
+**Files to Check:**
+- `electron/services/databaseService.ts` - `getImportedContactsByUserId()` and other contact queries
+- Search for `ORDER BY name` or `SELECT.*name.*FROM contacts`
+
+---
+
+### BACKLOG-039: Fix Schema Mismatch - transactions.transaction_status vs transactions.status
+**Priority:** Critical
+**Status:** Pending
+**Category:** Bug Fix / Schema
+
+**Description:**
+The `transactions` table has column `status` but code tries to INSERT with `transaction_status`, causing "table transactions has no column named transaction_status" error.
+
+**Error:**
+```
+table transactions has no column named transaction_status
+```
+
+**Root Cause:**
+Auto-detect transaction creation code uses `transaction_status` but schema defines `status`.
+
+**Fix Options:**
+1. Update INSERT/UPDATE queries to use `status` (preferred - matches schema)
+2. Or add `transaction_status` column to schema
+
+**Files to Check:**
+- `electron/services/databaseService.ts` - transaction INSERT/UPDATE queries
+- Search for `transaction_status`
+
+---
+
+### BACKLOG-040: ContactsService Using macOS Paths on Windows
+**Priority:** Medium
+**Status:** Pending
+**Category:** Bug Fix / Platform
+
+**Description:**
+On Windows, ContactsService tries to access macOS AddressBook paths which don't exist.
+
+**Error:**
+```
+[ContactsService] Error finding database files: Command failed: find "C:\Users\Daniel\Library\Application Support\AddressBook"
+```
+
+**Root Cause:**
+The `contactsService.ts` is using macOS-specific paths (`~/Library/Application Support/AddressBook`) on Windows.
+
+**Expected Behavior:**
+- On Windows: Query contacts from local database (synced from iPhone) or skip AddressBook import
+- On macOS: Use AddressBook database
+
+**Fix:**
+Add platform check before attempting AddressBook access.
+
+---
+
+### BACKLOG-041: Create UX Engineer Agent
+**Priority:** Medium
+**Status:** Pending
+**Category:** Tooling / Agents
+
+**Description:**
+Create a specialized UX Engineer agent that can review UI/UX issues and suggest improvements.
+
+**Agent Responsibilities:**
+1. Review UI components for consistency
+2. Check accessibility compliance
+3. Validate responsive design
+4. Test user flows
+
+**Important Notes:**
+- **Viewport Scrolling**: Agent should verify that all windows/modals that extend past the viewport are scrollable. No content should be cut off or inaccessible.
+- Test on different screen sizes
+- Ensure all interactive elements are reachable
+
+**Files to Create:**
+- `.claude/agents/ux-engineer.md` - Agent definition and instructions
+
+---
+
+### BACKLOG-042: Lookback Period Setting Not Persistent
+**Priority:** Medium
+**Status:** Pending
+**Category:** Bug Fix / Settings
+
+**Description:**
+The lookback period setting in Settings (9 months, 6 months, 3 months, etc.) is not persisted. When the user changes it and restarts the app, it reverts to the default.
+
+**Expected Behavior:**
+- User changes lookback period from 9 months to 3 months
+- Setting is saved to database
+- On app restart, the setting should still be 3 months
+
+**Files to Investigate:**
+- `src/components/Settings.tsx` - Where setting is displayed/changed
+- `electron/services/databaseService.ts` or preferences service - Where settings should be persisted
+- Check if `users_local.notification_preferences` or a separate preferences table stores this
+
+---
+
+### BACKLOG-043: Settings Screen Not Scrollable
+**Priority:** Medium
+**Status:** Pending
+**Category:** Bug Fix / UX
+
+**Description:**
+The Settings screen sometimes isn't scrollable, causing content to be cut off at the bottom of the viewport.
+
+**Expected Behavior:**
+- All settings content should be accessible
+- If content exceeds viewport, scroll should be enabled
+- User should be able to reach all settings options
+
+**Files to Investigate:**
+- `src/components/Settings.tsx` - Check container overflow styles
+- Ensure parent containers have `overflow-y: auto` or `overflow-y: scroll`
+
+**Related:**
+- BACKLOG-041: UX Engineer Agent should verify all screens are scrollable
+
+---
+
+### BACKLOG-037: Don't Fail Sync on Disconnect During Extraction/Storage Phases
+**Priority:** High
+**Status:** Pending
+**Category:** Bug Fix
+
+**Description:**
+When the iPhone is disconnected during sync, the app shows "Device disconnected during sync" error regardless of which phase we're in. This is incorrect because the iPhone is only needed during the backup phase.
+
+**Root Cause:**
+In `src/hooks/useIPhoneSync.ts` lines 316-322:
+```typescript
+setSyncStatus((current) => {
+  if (current === "syncing") {
+    setError("Device disconnected during sync");
+    return "error";
+  }
+  return current;
+});
+```
+This only checks if `syncStatus === "syncing"` but doesn't check the current `phase`.
+
+**Current Behavior:**
+- Disconnect during backup → Error (correct)
+- Disconnect during extraction → Error (incorrect)
+- Disconnect during storage → Error (incorrect)
+
+**Expected Behavior:**
+- Disconnect during backup → Error "Device disconnected - backup incomplete"
+- Disconnect during extraction → No error, continue processing
+- Disconnect during storage → No error, continue processing
+
+**Fix:**
+Check `progress.phase` before setting error:
+```typescript
+setSyncStatus((current) => {
+  if (current === "syncing" && progress.phase === "backing_up") {
+    setError("Device disconnected during backup");
+    return "error";
+  }
+  return current;
+});
+```
+
+**Files to Modify:**
+- `src/hooks/useIPhoneSync.ts` - Check phase before failing on disconnect
+
+**Related:**
+- BACKLOG-036: Fix Misleading Sync Phase UI Text
+
+---
+
+### BACKLOG-036: Fix Misleading Sync Phase UI Text
+**Priority:** Medium
+**Status:** Pending
+**Category:** UX
+
+**Description:**
+During iPhone sync, the UI shows "Backing up - Keep connected" even after the backup completes and moves to extraction/storage phases. This is misleading because:
+1. User thinks backup is still happening when it's actually done
+2. User keeps iPhone connected unnecessarily during database processing
+3. "Keep connected" message is incorrect for phases 2 & 3
+
+**Current Behavior:**
+- Shows "Backing up - Keep connected" during all phases
+- "Saving messages... 87,000 of 627,118" appears under backup title
+
+**Expected Behavior:**
+| Phase | Title | Subtitle |
+|-------|-------|----------|
+| 1. Backup | "Backing up - Keep connected" | Transfer progress |
+| 2. Extract | "Reading messages - Safe to disconnect" | "Reading from backup..." |
+| 3. Store | "Saving to database - Safe to disconnect" | "Saving messages... X of Y" |
+
+**Files to Modify:**
+- `src/components/iphone/SyncProgress.tsx` - Update `getPhaseTitle()` to show accurate phase text
+- Backend may need to send correct `phase` value ('backing_up', 'extracting', 'storing')
+
+**Related:**
+- BACKLOG-023: Detailed Sync Progress (comprehensive progress UI overhaul)
+
+---
+
+### BACKLOG-035: Remove Orphaned `transaction_participants` Table
+**Priority:** Critical
+**Status:** Pending
+**Category:** Schema Cleanup / Technical Debt
+
+**Description:**
+The `transaction_participants` table is defined in the schema but **never used in the code**. The codebase exclusively uses `transaction_contacts` for linking contacts to transactions.
+
+**Evidence:**
+- `transaction_contacts`: 15+ references in databaseService.ts (INSERT, SELECT, UPDATE, DELETE)
+- `transaction_participants`: 0 references in any TypeScript files
+
+**Action Required:**
+Remove from `electron/database/schema.sql`:
+1. DROP/remove CREATE TABLE statement for `transaction_participants`
+2. Remove indexes: `idx_transaction_participants_transaction`, `idx_transaction_participants_contact`, `idx_transaction_participants_role`
+3. Remove trigger: `update_transaction_participants_timestamp`
+4. Update `docs/DATABASE-SCHEMA.md` to reflect the change
+
+**Risk:** Low - table is not used anywhere in code.
+
+**Related:** Database schema audit (2024-12-12)
+
+---
+
+### BACKLOG-033: Check Supabase for Existing Terms Acceptance
+**Priority:** High
+**Status:** Pending
+**Category:** Auth / Onboarding
+
+**Description:**
+When a returning user logs in, the app shows the Terms & Conditions acceptance modal again even if they've already accepted. The app should query Supabase to check if `terms_accepted_at` is already set for the user.
+
+**Current Behavior:**
+- User logs in
+- Terms modal appears even though they already accepted
+- User has to accept again every time database is reset/recreated
+
+**Expected Behavior:**
+- On login, check cloud user's `terms_accepted_at` field from Supabase
+- If already set: Skip terms modal, proceed to onboarding/dashboard
+- If not set: Show terms modal
+
+**Root Cause:**
+The pre-DB onboarding flow checks `pendingOAuthData.cloudUser.terms_accepted_at` but this may not be populated correctly from Supabase, OR the check is happening before the cloud user data is fetched.
+
+**Implementation:**
+1. Ensure `completePendingLogin` or `handleLoginPending` fetches the user's `terms_accepted_at` from Supabase
+2. Pass this to the navigation effect so it can skip the terms modal
+3. Only show terms modal when `terms_accepted_at` is NULL/undefined
+
+**Files to Investigate:**
+- `src/appCore/state/useAppStateMachine.ts` - Navigation effect checks `needsTermsAcceptance`
+- `electron/auth-handlers.ts` - How cloud user data is fetched
+- `src/contexts/AuthContext.tsx` - How `needsTermsAcceptance` is determined
+
+---
+
+### BACKLOG-034: Phone Type Selection Card Layout Inconsistency
+**Priority:** Medium
+**Status:** Pending
+**Category:** UI/UX
+
+**Description:**
+The phone type selection screen has a card that is not aligned consistently with other onboarding screens. The card should be aligned to the top, under the progress bar, matching the layout of Email Onboarding and Apple Driver Setup screens.
+
+**Current Behavior:**
+- Phone type selection card appears centered vertically (or in a different position)
+- Other onboarding screens (Email, Driver Setup) have cards aligned to the top under the progress bar
+
+**Expected Behavior:**
+- All onboarding screens should have consistent card positioning
+- Card should be aligned to the top, right under the progress indicator
+- Consistent spacing/margins across all onboarding steps
+
+**Files to Modify:**
+- `src/components/PhoneTypeSelection.tsx` - Adjust card container layout
+- Compare with `src/components/EmailOnboardingScreen.tsx` and `src/components/AppleDriverSetup.tsx` for reference
+
+---
+
+### BACKLOG-045: Block Contact Deletion if Linked to Transactions
+**Priority:** Critical
+**Status:** Pending
+**Category:** Data Integrity / UX
+
+**Description:**
+When a user tries to delete an imported contact, the system should check if that contact is assigned to any transactions. If so, block the deletion and show the user which transaction(s) the contact is part of.
+
+**Current Behavior:**
+- Contact deletion may succeed even if linked to transactions
+- Could leave orphaned references in `transaction_contacts` table
+- Or deletion fails silently with foreign key error
+
+**Expected Behavior:**
+1. User clicks "Delete" on a contact
+2. System checks `transaction_contacts` for any assignments
+3. If found:
+   - Block deletion
+   - Show error message: "Cannot delete [Contact Name]. This contact is assigned to the following transactions:"
+   - List transaction(s): property address, role assigned
+   - Provide option: "Remove from transactions first" or "Cancel"
+4. If not found:
+   - Proceed with deletion normally
+
+**Implementation:**
+
+1. **Add validation query:**
+```typescript
+// databaseService.ts
+async getContactTransactionAssignments(contactId: string): Promise<{
+  transactionId: string;
+  propertyAddress: string;
+  role: string;
+}[]> {
+  const sql = `
+    SELECT
+      t.id as transactionId,
+      t.property_address as propertyAddress,
+      tc.specific_role as role
+    FROM transaction_contacts tc
+    JOIN transactions t ON tc.transaction_id = t.id
+    WHERE tc.contact_id = ?
+  `;
+  return this._all(sql, [contactId]);
+}
+```
+
+2. **Update delete handler:**
+```typescript
+// contact-handlers.ts - contacts:delete handler
+const assignments = await databaseService.getContactTransactionAssignments(contactId);
+if (assignments.length > 0) {
+  return {
+    success: false,
+    error: 'CONTACT_HAS_TRANSACTIONS',
+    transactions: assignments,
+    message: `Cannot delete contact. Assigned to ${assignments.length} transaction(s).`
+  };
+}
+```
+
+3. **Update UI to show blocking dialog:**
+```typescript
+// Show modal with transaction list
+"Cannot delete [Name]. This contact is assigned to:"
+- 123 Main St (Buyer)
+- 456 Oak Ave (Seller Agent)
+
+[Remove from all transactions] [Cancel]
+```
+
+**Files to Modify:**
+- `electron/services/databaseService.ts` - Add `getContactTransactionAssignments()` method
+- `electron/contact-handlers.ts` - Add validation before delete
+- `src/components/contacts/` - Update delete UI to handle blocked state
+
+**Alternative Approach:**
+Instead of blocking, could offer cascade options:
+- "Delete contact AND remove from all transactions"
+- "Delete contact only" (keep transaction history with "Deleted Contact" placeholder)
+
+---
+
+### BACKLOG-044: Allow Multiple Contacts Per Role in Transaction UI
+**Priority:** Critical
+**Status:** Pending
+**Category:** Feature / UI
+
+**Description:**
+The transaction editor UI should allow assigning multiple contacts to the same role (e.g., 2 buyers, 2 sellers, multiple agents).
+
+**Current Behavior:**
+- UI may only allow selecting one contact per role
+- User cannot add a second buyer or second seller
+
+**Expected Behavior:**
+- Each role slot should have an "Add another [role]" button
+- Multiple contacts can be assigned to the same role
+- UI shows all assigned contacts for each role
+- Each contact assignment can be individually removed
+
+**Database Support:**
+The schema already supports this:
+```sql
+-- This is ALLOWED:
+INSERT INTO transaction_contacts (transaction_id, contact_id, role) VALUES ('txn-1', 'contact-A', 'Buyer');
+INSERT INTO transaction_contacts (transaction_id, contact_id, role) VALUES ('txn-1', 'contact-B', 'Buyer');
+-- Two different contacts as Buyer ✅
+```
+
+The UNIQUE constraint is on `(transaction_id, contact_id)`, meaning the same contact can't be assigned twice to the same transaction, but different contacts CAN share the same role.
+
+**UI Changes Needed:**
+1. Update `TransactionContactEditor` component to support multiple contacts per role
+2. Add "Add another [Buyer/Seller/Agent]" button after each role section
+3. Show list of assigned contacts per role with individual remove buttons
+4. Contact picker should exclude already-assigned contacts
+
+**Files to Modify:**
+- `src/components/Transactions.tsx` - Transaction editor UI
+- `src/components/TransactionDetails.tsx` - Display multiple contacts per role
+- Backend already supports this - no changes needed
+
+**Note:**
+What the schema does NOT support is the same contact having multiple roles (e.g., John as both Buyer and Agent). If that's needed, would require schema change to remove the UNIQUE constraint or change it to `UNIQUE(transaction_id, contact_id, role)`.
+
+---
+
 ## Last Updated
 2024-12-10 - Initial backlog created from build warnings and sync testing session
 2024-12-10 - Added BACKLOG-006: Dark Mode
@@ -1561,3 +1996,16 @@ Show in sync progress:
 2024-12-11 - Added BACKLOG-030: Message Parser Async Yielding for Large Databases (Critical priority)
 2024-12-12 - Added BACKLOG-031: Incremental Backup Size Estimation & Progress Improvement (High priority)
 2024-12-12 - Added BACKLOG-032: Handle "Backup Already in Progress" - Recovery UI (Critical priority)
+2024-12-12 - Added BACKLOG-033: Check Supabase for Existing Terms Acceptance (High priority)
+2024-12-12 - Added BACKLOG-034: Phone Type Selection Card Layout Inconsistency (Medium priority)
+2024-12-12 - Added BACKLOG-035: Remove Orphaned `transaction_participants` Table (Critical priority)
+2024-12-12 - Added BACKLOG-036: Fix Misleading Sync Phase UI Text (Medium priority)
+2024-12-12 - Added BACKLOG-037: Don't Fail Sync on Disconnect During Extraction/Storage (High priority - Bug)
+2024-12-12 - Added BACKLOG-038: Fix Schema Mismatch - contacts.name vs contacts.display_name (Critical)
+2024-12-12 - Added BACKLOG-039: Fix Schema Mismatch - transactions.transaction_status vs transactions.status (Critical)
+2024-12-12 - Added BACKLOG-040: ContactsService Using macOS Paths on Windows (Medium)
+2024-12-12 - Added BACKLOG-041: Create UX Engineer Agent (Medium)
+2024-12-12 - Added BACKLOG-042: Lookback Period Setting Not Persistent (Medium)
+2024-12-12 - Added BACKLOG-043: Settings Screen Not Scrollable (Medium)
+2024-12-13 - Added BACKLOG-044: Allow Multiple Contacts Per Role in Transaction UI (Critical)
+2024-12-13 - Added BACKLOG-045: Block Contact Deletion if Linked to Transactions (Critical)

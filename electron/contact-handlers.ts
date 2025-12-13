@@ -89,7 +89,7 @@ export function registerContactHandlers(): void {
     },
   );
 
-  // Get available contacts for import (from external sources)
+  // Get available contacts for import (from external sources + unimported DB contacts)
   ipcMain.handle(
     "contacts:get-available",
     async (
@@ -125,6 +125,33 @@ export function registerContactHandlers(): void {
         const availableContacts: any[] = [];
         const seenContacts = new Set<string>();
 
+        // STEP 1: Get unimported contacts from database (iPhone synced contacts)
+        const unimportedDbContacts =
+          await databaseService.getUnimportedContactsByUserId(validatedUserId);
+
+        console.log(
+          `[Main] Found ${unimportedDbContacts.length} unimported contacts from database (iPhone sync)`,
+        );
+
+        for (const dbContact of unimportedDbContacts) {
+          const nameLower = dbContact.name?.toLowerCase() || dbContact.display_name?.toLowerCase();
+
+          if (nameLower && !seenContacts.has(nameLower)) {
+            seenContacts.add(nameLower);
+
+            availableContacts.push({
+              id: dbContact.id, // Use actual DB ID so we can mark as imported
+              name: dbContact.name || dbContact.display_name,
+              phone: dbContact.phone || null,
+              email: dbContact.email || null,
+              company: dbContact.company || null,
+              source: dbContact.source || "contacts_app",
+              isFromDatabase: true, // Flag to distinguish from macOS Contacts app
+            });
+          }
+        }
+
+        // STEP 2: Add contacts from macOS Contacts app (if not already in list)
         if (phoneToContactInfo && Object.keys(phoneToContactInfo).length > 0) {
           for (const [_phone, contactInfo] of Object.entries(
             phoneToContactInfo,
@@ -142,24 +169,28 @@ export function registerContactHandlers(): void {
               continue;
             }
 
-            if (!seenContacts.has(contactInfo.name)) {
-              seenContacts.add(contactInfo.name);
-
-              availableContacts.push({
-                id: `contacts-app-${contactInfo.name}`, // Temporary ID for UI
-                name: contactInfo.name,
-                phone: contactInfo.phones?.[0] || null, // Primary phone
-                email: contactInfo.emails?.[0] || null, // Primary email
-                source: "contacts_app",
-                allPhones: contactInfo.phones || [],
-                allEmails: contactInfo.emails || [],
-              });
+            // Skip if already added from database
+            if (seenContacts.has(nameLower)) {
+              continue;
             }
+
+            seenContacts.add(contactInfo.name);
+
+            availableContacts.push({
+              id: `contacts-app-${contactInfo.name}`, // Temporary ID for UI
+              name: contactInfo.name,
+              phone: contactInfo.phones?.[0] || null, // Primary phone
+              email: contactInfo.emails?.[0] || null, // Primary email
+              source: "contacts_app",
+              allPhones: contactInfo.phones || [],
+              allEmails: contactInfo.emails || [],
+              isFromDatabase: false,
+            });
           }
         }
 
         console.log(
-          `[Main] Found ${availableContacts.length} available contacts for import`,
+          `[Main] Found ${availableContacts.length} total available contacts for import`,
         );
 
         return {
@@ -231,20 +262,33 @@ export function registerContactHandlers(): void {
 
         for (const contact of contactsToImport) {
           // Validate each contact's data (basic validation)
-          const sanitizedContact = sanitizeObject(contact);
+          const sanitizedContact = sanitizeObject(contact) as any;
           const validatedData = validateContactData(sanitizedContact, false);
 
-          const importedContact = await databaseService.createContact({
-            user_id: validatedUserId,
-            name: validatedData.name || "Unknown",
-            email: validatedData.email ?? undefined,
-            phone: validatedData.phone ?? undefined,
-            company: validatedData.company ?? undefined,
-            title: validatedData.title ?? undefined,
-            source: (sanitizedContact as any).source || "contacts_app",
-            is_imported: true,
-          });
-          importedContacts.push(importedContact);
+          // Check if this is a contact already in the database (from iPhone sync)
+          // If so, just mark it as imported instead of creating a new record
+          if (sanitizedContact.isFromDatabase && sanitizedContact.id && !sanitizedContact.id.startsWith("contacts-app-")) {
+            await databaseService.markContactAsImported(sanitizedContact.id);
+            // Fetch the updated contact to return
+            const updatedContact = await databaseService.getContactById(sanitizedContact.id);
+            if (updatedContact) {
+              importedContacts.push(updatedContact);
+            }
+            console.log(`[Main] Marked existing contact as imported: ${sanitizedContact.id}`);
+          } else {
+            // Create new contact from macOS Contacts app
+            const importedContact = await databaseService.createContact({
+              user_id: validatedUserId,
+              name: validatedData.name || "Unknown",
+              email: validatedData.email ?? undefined,
+              phone: validatedData.phone ?? undefined,
+              company: validatedData.company ?? undefined,
+              title: validatedData.title ?? undefined,
+              source: sanitizedContact.source || "contacts_app",
+              is_imported: true,
+            });
+            importedContacts.push(importedContact);
+          }
         }
 
         console.log(

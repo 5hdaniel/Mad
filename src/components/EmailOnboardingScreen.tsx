@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { usePlatform } from "../contexts/PlatformContext";
 import type { PendingEmailTokens } from "../appCore/state/types";
 
@@ -168,8 +168,6 @@ function EmailOnboardingScreen({
   const [pendingTokens, setPendingTokens] = useState<PendingEmailTokens | null>(
     existingPendingTokens || null,
   );
-  // Also track if we connected via regular (non-pending) API
-  const [connectedViaRegularApi, setConnectedViaRegularApi] = useState(false);
   // Start navigation at the current step for this screen
   // On Windows: currentStep is 2 (Connect Email), so start navigation at 2
   // On macOS: varies based on where user is in the flow
@@ -208,14 +206,7 @@ function EmailOnboardingScreen({
   const isFirstStep = navigationStep === 1 && !onBack;
   const isLastNavigableStep = navigationStep === currentStep;
 
-  // Check existing connections on mount
-  useEffect(() => {
-    if (userId) {
-      checkConnections();
-    }
-  }, [userId]);
-
-  const checkConnections = async (): Promise<void> => {
+  const checkConnections = useCallback(async (): Promise<void> => {
     setLoadingConnections(true);
     try {
       const result = await window.api.system.checkAllConnections(userId);
@@ -230,7 +221,14 @@ function EmailOnboardingScreen({
     } finally {
       setLoadingConnections(false);
     }
-  };
+  }, [userId]);
+
+  // Check existing connections on mount
+  useEffect(() => {
+    if (userId) {
+      checkConnections();
+    }
+  }, [userId, checkConnections]);
 
   const handleConnectGoogle = async (): Promise<void> => {
     setConnectingProvider("google");
@@ -254,7 +252,6 @@ function EmailOnboardingScreen({
         result = await window.api.auth.googleConnectMailbox(userId);
         // If regular API fails due to DB not initialized, fall back to pending API
         if (!result.success && result.error?.includes("Database is not initialized")) {
-          console.log("[EmailOnboarding] DB not ready, falling back to pending API for Google");
           usePendingApi = true;
           result = await window.api.auth.googleConnectMailboxPending(emailHint);
         }
@@ -276,7 +273,6 @@ function EmailOnboardingScreen({
             async (connectionResult: { success: boolean; email?: string; tokens?: PendingEmailTokens["tokens"]; error?: string }) => {
               try {
                 if (connectionResult.success && connectionResult.email && connectionResult.tokens) {
-                  console.log("[EmailOnboarding] Google pending connection successful:", connectionResult.email);
                   // Store pending tokens for later saving after DB init
                   setPendingTokens({
                     provider: "google",
@@ -300,7 +296,6 @@ function EmailOnboardingScreen({
             },
           );
           cleanupCancelled = window.api.onGoogleMailboxPendingCancelled(() => {
-            console.log("[EmailOnboarding] Google pending connection cancelled");
             setConnectingProvider(null);
             cleanup();
           });
@@ -309,8 +304,6 @@ function EmailOnboardingScreen({
             async (connectionResult: ConnectionResult) => {
               try {
                 if (connectionResult.success) {
-                  console.log("[EmailOnboarding] Google regular connection successful");
-                  setConnectedViaRegularApi(true);
                   await checkConnections();
                 }
               } catch (error) {
@@ -325,7 +318,6 @@ function EmailOnboardingScreen({
             },
           );
           cleanupCancelled = window.api.onGoogleMailboxCancelled(() => {
-            console.log("[EmailOnboarding] Google regular connection cancelled");
             setConnectingProvider(null);
             cleanup();
           });
@@ -364,7 +356,6 @@ function EmailOnboardingScreen({
         result = await window.api.auth.microsoftConnectMailbox(userId);
         // If regular API fails due to DB not initialized, fall back to pending API
         if (!result.success && result.error?.includes("Database is not initialized")) {
-          console.log("[EmailOnboarding] DB not ready, falling back to pending API for Microsoft");
           usePendingApi = true;
           result = await window.api.auth.microsoftConnectMailboxPending(emailHint);
         }
@@ -386,7 +377,6 @@ function EmailOnboardingScreen({
             async (connectionResult: { success: boolean; email?: string; tokens?: PendingEmailTokens["tokens"]; error?: string }) => {
               try {
                 if (connectionResult.success && connectionResult.email && connectionResult.tokens) {
-                  console.log("[EmailOnboarding] Microsoft pending connection successful:", connectionResult.email);
                   // Store pending tokens for later saving after DB init
                   setPendingTokens({
                     provider: "microsoft",
@@ -410,7 +400,6 @@ function EmailOnboardingScreen({
             },
           );
           cleanupCancelled = window.api.onMicrosoftMailboxPendingCancelled(() => {
-            console.log("[EmailOnboarding] Microsoft pending connection cancelled");
             setConnectingProvider(null);
             cleanup();
           });
@@ -419,8 +408,6 @@ function EmailOnboardingScreen({
             async (connectionResult: ConnectionResult) => {
               try {
                 if (connectionResult.success) {
-                  console.log("[EmailOnboarding] Microsoft regular connection successful");
-                  setConnectedViaRegularApi(true);
                   await checkConnections();
                 }
               } catch (error) {
@@ -435,7 +422,6 @@ function EmailOnboardingScreen({
             },
           );
           cleanupCancelled = window.api.onMicrosoftMailboxCancelled(() => {
-            console.log("[EmailOnboarding] Microsoft regular connection cancelled");
             setConnectingProvider(null);
             cleanup();
           });
@@ -453,7 +439,6 @@ function EmailOnboardingScreen({
   };
 
   const handleContinue = (): void => {
-    console.log("[EmailOnboarding] Continue clicked, pendingTokens:", pendingTokens, "connectedViaRegularApi:", connectedViaRegularApi);
     // Pass pending tokens if we collected any during the pending API flow
     if (pendingTokens) {
       onComplete(pendingTokens);
