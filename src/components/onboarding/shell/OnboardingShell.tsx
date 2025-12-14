@@ -35,18 +35,23 @@ export function OnboardingShell({
   maxWidth = 'max-w-xl',
 }: OnboardingShellProps) {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center p-4">
-      <div className={`${maxWidth} w-full`}>
-        {/* Progress indicator slot */}
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex flex-col p-4">
+      {/* Progress indicator at top */}
+      <div className={`${maxWidth} w-full mx-auto`}>
         {progressSlot}
+      </div>
 
-        {/* Main card container */}
-        <div className="bg-white rounded-2xl shadow-xl p-6">
-          {children}
+      {/* Card centered vertically in remaining space */}
+      <div className="flex-1 flex items-center justify-center">
+        <div className={`${maxWidth} w-full`}>
+          {/* Main card container */}
+          <div className="bg-white rounded-2xl shadow-xl p-6">
+            {children}
+          </div>
+
+          {/* Navigation buttons slot */}
+          {navigationSlot}
         </div>
-
-        {/* Navigation buttons slot */}
-        {navigationSlot}
       </div>
     </div>
   );
