@@ -395,7 +395,7 @@ export class SyncOrchestrator extends EventEmitter {
         return this.errorResult("Sync cancelled by user");
       }
 
-      // Step 4: Parse messages
+      // Step 4: Parse messages (using async methods to prevent UI blocking)
       this.setPhase("parsing-messages");
       this.emitProgress({
         phase: "parsing-messages",
@@ -405,20 +405,36 @@ export class SyncOrchestrator extends EventEmitter {
       });
 
       this.messagesParser.open(backupPath);
-      const conversations = this.messagesParser.getConversations();
 
-      // Load messages for each conversation
+      // Use async method with progress callback
+      const conversations = await this.messagesParser.getConversationsAsync(
+        (current, total) => {
+          const progress = (current / total) * 50; // First 50% is getting conversation list
+          this.emitProgress({
+            phase: "parsing-messages",
+            phaseProgress: progress,
+            overallProgress: this.calculateOverallProgress(
+              "parsing-messages",
+              progress,
+            ),
+            message: `Scanning chats: ${current}/${total}`,
+          });
+        },
+      );
+
+      // Load messages for each conversation using async method
       let loadedCount = 0;
       for (const conv of conversations) {
         if (this.isCancelled) {
           break;
         }
 
-        conv.messages = this.messagesParser.getMessages(conv.chatId);
+        conv.messages = await this.messagesParser.getMessagesAsync(conv.chatId);
         loadedCount++;
 
-        if (loadedCount % 10 === 0) {
-          const progress = (loadedCount / conversations.length) * 100;
+        // Report progress every 10 conversations (second 50%)
+        if (loadedCount % 10 === 0 || loadedCount === conversations.length) {
+          const progress = 50 + (loadedCount / conversations.length) * 50;
           this.emitProgress({
             phase: "parsing-messages",
             phaseProgress: progress,
@@ -788,7 +804,7 @@ export class SyncOrchestrator extends EventEmitter {
         message: `Found ${contacts.length} contacts`,
       });
 
-      // Parse messages
+      // Parse messages (using async methods to prevent UI blocking)
       this.setPhase("parsing-messages");
       this.emitProgress({
         phase: "parsing-messages",
@@ -798,24 +814,37 @@ export class SyncOrchestrator extends EventEmitter {
       });
 
       this.messagesParser.open(extractionPath);
-      const conversations = this.messagesParser.getConversations();
 
-      // Load messages for each conversation
+      // Use async method with progress callback
+      const conversations = await this.messagesParser.getConversationsAsync(
+        (current, total) => {
+          const progress = (current / total) * 50; // First 50% is getting conversation list
+          this.emitProgress({
+            phase: "parsing-messages",
+            phaseProgress: progress,
+            overallProgress: 40 + progress * 0.25,
+            message: `Scanning chats: ${current}/${total}`,
+          });
+        },
+      );
+
+      // Load messages for each conversation using async method
       let loadedCount = 0;
       for (const conv of conversations) {
         if (this.isCancelled) {
           break;
         }
 
-        conv.messages = this.messagesParser.getMessages(conv.chatId);
+        conv.messages = await this.messagesParser.getMessagesAsync(conv.chatId);
         loadedCount++;
 
-        if (loadedCount % 10 === 0) {
-          const progress = (loadedCount / conversations.length) * 100;
+        // Report progress every 10 conversations (second 50%)
+        if (loadedCount % 10 === 0 || loadedCount === conversations.length) {
+          const progress = 50 + (loadedCount / conversations.length) * 50;
           this.emitProgress({
             phase: "parsing-messages",
             phaseProgress: progress,
-            overallProgress: 40 + (progress * 0.5),
+            overallProgress: 40 + progress * 0.5,
             message: `Loading conversations: ${loadedCount}/${conversations.length}`,
           });
         }

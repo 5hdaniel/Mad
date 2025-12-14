@@ -251,8 +251,8 @@ export interface AppStateMachine {
   handleAndroidGoBack: () => void;
   handleAndroidContinueWithEmail: () => Promise<void>;
   handlePhoneTypeChange: (phoneType: "iphone" | "android") => Promise<void>;
-  handleAppleDriverSetupComplete: () => void;
-  handleAppleDriverSetupSkip: () => void;
+  handleAppleDriverSetupComplete: () => Promise<void>;
+  handleAppleDriverSetupSkip: () => Promise<void>;
 
   // ============================================
   // EMAIL ONBOARDING HANDLERS

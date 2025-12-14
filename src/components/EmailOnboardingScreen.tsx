@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { usePlatform } from "../contexts/PlatformContext";
 import type { PendingEmailTokens } from "../appCore/state/types";
 
@@ -149,6 +149,9 @@ function EmailOnboardingScreen({
   onComplete,
   onSkip,
   onBack,
+  isPreDbFlow = false,
+  emailHint,
+  existingPendingTokens,
 }: EmailOnboardingScreenProps) {
   const { isWindows } = usePlatform();
 
@@ -159,6 +162,11 @@ function EmailOnboardingScreen({
   const [loadingConnections, setLoadingConnections] = useState<boolean>(true);
   const [connectingProvider, setConnectingProvider] = useState<string | null>(
     null,
+  );
+  // Store pending tokens collected during this screen (when using pending API)
+  // We can only store one at a time - the most recent connection
+  const [pendingTokens, setPendingTokens] = useState<PendingEmailTokens | null>(
+    existingPendingTokens || null,
   );
   // Start navigation at the current step for this screen
   // On Windows: currentStep is 2 (Connect Email), so start navigation at 2
@@ -198,14 +206,7 @@ function EmailOnboardingScreen({
   const isFirstStep = navigationStep === 1 && !onBack;
   const isLastNavigableStep = navigationStep === currentStep;
 
-  // Check existing connections on mount
-  useEffect(() => {
-    if (userId) {
-      checkConnections();
-    }
-  }, [userId]);
-
-  const checkConnections = async (): Promise<void> => {
+  const checkConnections = useCallback(async (): Promise<void> => {
     setLoadingConnections(true);
     try {
       const result = await window.api.system.checkAllConnections(userId);
@@ -220,34 +221,111 @@ function EmailOnboardingScreen({
     } finally {
       setLoadingConnections(false);
     }
-  };
+  }, [userId]);
+
+  // Check existing connections on mount
+  useEffect(() => {
+    if (userId) {
+      checkConnections();
+    }
+  }, [userId, checkConnections]);
 
   const handleConnectGoogle = async (): Promise<void> => {
     setConnectingProvider("google");
     let cleanupConnected: (() => void) | undefined;
     let cleanupCancelled: (() => void) | undefined;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    let usePendingApi = isPreDbFlow;
 
     const cleanup = () => {
       if (cleanupConnected) cleanupConnected();
       if (cleanupCancelled) cleanupCancelled();
+      if (timeoutId) clearTimeout(timeoutId);
     };
 
     try {
-      const result = await window.api.auth.googleConnectMailbox(userId);
+      // Try regular API first if not in pre-DB flow, fall back to pending if DB not ready
+      let result;
+      if (usePendingApi) {
+        result = await window.api.auth.googleConnectMailboxPending(emailHint);
+      } else {
+        result = await window.api.auth.googleConnectMailbox(userId);
+        // If regular API fails due to DB not initialized, fall back to pending API
+        if (!result.success && result.error?.includes("Database is not initialized")) {
+          usePendingApi = true;
+          result = await window.api.auth.googleConnectMailboxPending(emailHint);
+        }
+      }
+
       if (result.success) {
-        cleanupConnected = window.api.onGoogleMailboxConnected(
-          async (connectionResult: ConnectionResult) => {
-            if (connectionResult.success) {
-              await checkConnections();
-            }
-            setConnectingProvider(null);
-            cleanup();
-          },
-        );
-        cleanupCancelled = window.api.onGoogleMailboxCancelled(() => {
+        // Set up timeout fallback - if no response in 2 minutes, reset state
+        timeoutId = setTimeout(() => {
+          console.warn(
+            "[EmailOnboarding] Google connection timed out after 2 minutes",
+          );
           setConnectingProvider(null);
           cleanup();
-        });
+        }, 120000);
+
+        // Use appropriate event listeners based on flow type
+        if (usePendingApi) {
+          cleanupConnected = window.api.onGoogleMailboxPendingConnected(
+            async (connectionResult: { success: boolean; email?: string; tokens?: PendingEmailTokens["tokens"]; error?: string }) => {
+              try {
+                if (connectionResult.success && connectionResult.email && connectionResult.tokens) {
+                  // Store pending tokens for later saving after DB init
+                  setPendingTokens({
+                    provider: "google",
+                    email: connectionResult.email,
+                    tokens: connectionResult.tokens,
+                  });
+                  setConnections((prev) => ({
+                    ...prev,
+                    google: { connected: true, email: connectionResult.email! },
+                  }));
+                }
+              } catch (error) {
+                console.error(
+                  "[EmailOnboarding] Error handling pending Google connect:",
+                  error,
+                );
+              } finally {
+                setConnectingProvider(null);
+                cleanup();
+              }
+            },
+          );
+          cleanupCancelled = window.api.onGoogleMailboxPendingCancelled(() => {
+            setConnectingProvider(null);
+            cleanup();
+          });
+        } else {
+          cleanupConnected = window.api.onGoogleMailboxConnected(
+            async (connectionResult: ConnectionResult) => {
+              try {
+                if (connectionResult.success) {
+                  await checkConnections();
+                }
+              } catch (error) {
+                console.error(
+                  "[EmailOnboarding] Error checking connections after Google connect:",
+                  error,
+                );
+              } finally {
+                setConnectingProvider(null);
+                cleanup();
+              }
+            },
+          );
+          cleanupCancelled = window.api.onGoogleMailboxCancelled(() => {
+            setConnectingProvider(null);
+            cleanup();
+          });
+        }
+      } else {
+        // API returned success: false - reset state
+        console.error("[EmailOnboarding] Google connect returned failure:", result);
+        setConnectingProvider(null);
       }
     } catch (error) {
       console.error("[EmailOnboarding] Failed to connect Google:", error);
@@ -260,28 +338,98 @@ function EmailOnboardingScreen({
     setConnectingProvider("microsoft");
     let cleanupConnected: (() => void) | undefined;
     let cleanupCancelled: (() => void) | undefined;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    let usePendingApi = isPreDbFlow;
 
     const cleanup = () => {
       if (cleanupConnected) cleanupConnected();
       if (cleanupCancelled) cleanupCancelled();
+      if (timeoutId) clearTimeout(timeoutId);
     };
 
     try {
-      const result = await window.api.auth.microsoftConnectMailbox(userId);
+      // Try regular API first if not in pre-DB flow, fall back to pending if DB not ready
+      let result;
+      if (usePendingApi) {
+        result = await window.api.auth.microsoftConnectMailboxPending(emailHint);
+      } else {
+        result = await window.api.auth.microsoftConnectMailbox(userId);
+        // If regular API fails due to DB not initialized, fall back to pending API
+        if (!result.success && result.error?.includes("Database is not initialized")) {
+          usePendingApi = true;
+          result = await window.api.auth.microsoftConnectMailboxPending(emailHint);
+        }
+      }
+
       if (result.success) {
-        cleanupConnected = window.api.onMicrosoftMailboxConnected(
-          async (connectionResult: ConnectionResult) => {
-            if (connectionResult.success) {
-              await checkConnections();
-            }
-            setConnectingProvider(null);
-            cleanup();
-          },
-        );
-        cleanupCancelled = window.api.onMicrosoftMailboxCancelled(() => {
+        // Set up timeout fallback - if no response in 2 minutes, reset state
+        timeoutId = setTimeout(() => {
+          console.warn(
+            "[EmailOnboarding] Microsoft connection timed out after 2 minutes",
+          );
           setConnectingProvider(null);
           cleanup();
-        });
+        }, 120000);
+
+        // Use appropriate event listeners based on flow type
+        if (usePendingApi) {
+          cleanupConnected = window.api.onMicrosoftMailboxPendingConnected(
+            async (connectionResult: { success: boolean; email?: string; tokens?: PendingEmailTokens["tokens"]; error?: string }) => {
+              try {
+                if (connectionResult.success && connectionResult.email && connectionResult.tokens) {
+                  // Store pending tokens for later saving after DB init
+                  setPendingTokens({
+                    provider: "microsoft",
+                    email: connectionResult.email,
+                    tokens: connectionResult.tokens,
+                  });
+                  setConnections((prev) => ({
+                    ...prev,
+                    microsoft: { connected: true, email: connectionResult.email! },
+                  }));
+                }
+              } catch (error) {
+                console.error(
+                  "[EmailOnboarding] Error handling pending Microsoft connect:",
+                  error,
+                );
+              } finally {
+                setConnectingProvider(null);
+                cleanup();
+              }
+            },
+          );
+          cleanupCancelled = window.api.onMicrosoftMailboxPendingCancelled(() => {
+            setConnectingProvider(null);
+            cleanup();
+          });
+        } else {
+          cleanupConnected = window.api.onMicrosoftMailboxConnected(
+            async (connectionResult: ConnectionResult) => {
+              try {
+                if (connectionResult.success) {
+                  await checkConnections();
+                }
+              } catch (error) {
+                console.error(
+                  "[EmailOnboarding] Error checking connections after Microsoft connect:",
+                  error,
+                );
+              } finally {
+                setConnectingProvider(null);
+                cleanup();
+              }
+            },
+          );
+          cleanupCancelled = window.api.onMicrosoftMailboxCancelled(() => {
+            setConnectingProvider(null);
+            cleanup();
+          });
+        }
+      } else {
+        // API returned success: false - reset state
+        console.error("[EmailOnboarding] Microsoft connect returned failure:", result);
+        setConnectingProvider(null);
       }
     } catch (error) {
       console.error("[EmailOnboarding] Failed to connect Microsoft:", error);
@@ -291,7 +439,12 @@ function EmailOnboardingScreen({
   };
 
   const handleContinue = (): void => {
-    onComplete();
+    // Pass pending tokens if we collected any during the pending API flow
+    if (pendingTokens) {
+      onComplete(pendingTokens);
+    } else {
+      onComplete();
+    }
   };
 
   const handleSkip = (): void => {

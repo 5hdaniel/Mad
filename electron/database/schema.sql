@@ -132,6 +132,9 @@ CREATE TABLE IF NOT EXISTS contacts (
   total_messages INTEGER DEFAULT 0,      -- Total message count
   tags TEXT,                             -- JSON array: ["VIP", "past_client", "lead"]
 
+  -- Import tracking
+  is_imported INTEGER DEFAULT 1,         -- 1 = imported contact, 0 = manually created
+
   -- Metadata
   metadata TEXT,                         -- JSON for additional notes/data
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -376,6 +379,60 @@ CREATE TABLE IF NOT EXISTS transaction_participants (
 );
 
 -- ============================================
+-- TRANSACTION CONTACTS (Junction table for contacts in transactions)
+-- ============================================
+-- Links contacts to transactions with detailed role information
+CREATE TABLE IF NOT EXISTS transaction_contacts (
+  id TEXT PRIMARY KEY,
+  transaction_id TEXT NOT NULL,
+  contact_id TEXT NOT NULL,
+
+  -- Role information
+  role TEXT,
+  role_category TEXT,
+  specific_role TEXT,
+  is_primary INTEGER DEFAULT 0,
+  notes TEXT,
+
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+  FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE CASCADE,
+  FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE CASCADE,
+  UNIQUE(transaction_id, contact_id)
+);
+
+-- ============================================
+-- AUDIT LOGS TABLE (Compliance tracking)
+-- ============================================
+-- Tracks all user actions for compliance/SOC 2
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  session_id TEXT,
+  action TEXT NOT NULL CHECK (action IN (
+    'LOGIN', 'LOGOUT', 'SESSION_REFRESH',
+    'TRANSACTION_CREATE', 'TRANSACTION_UPDATE', 'TRANSACTION_DELETE',
+    'CONTACT_CREATE', 'CONTACT_UPDATE', 'CONTACT_DELETE',
+    'EXPORT_START', 'EXPORT_COMPLETE', 'EXPORT_FAIL',
+    'MAILBOX_CONNECT', 'MAILBOX_DISCONNECT',
+    'SETTINGS_UPDATE', 'TERMS_ACCEPT'
+  )),
+  resource_type TEXT,
+  resource_id TEXT,
+  details TEXT,                           -- JSON for additional context
+  metadata TEXT,                          -- JSON for additional metadata (used by AuditService)
+  ip_address TEXT,
+  user_agent TEXT,
+  success INTEGER DEFAULT 1,              -- Whether the action succeeded (1=true, 0=false)
+  error_message TEXT,                     -- Error message if action failed
+  timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+  synced_at DATETIME,                     -- When synced to cloud (if applicable)
+
+  FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE
+);
+
+-- ============================================
 -- AUDIT PACKAGES (Generated compliance bundles)
 -- ============================================
 -- Represents a complete audit export for a transaction
@@ -509,6 +566,8 @@ CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
 -- Contacts
 CREATE INDEX IF NOT EXISTS idx_contacts_user_id ON contacts(user_id);
 CREATE INDEX IF NOT EXISTS idx_contacts_display_name ON contacts(display_name);
+CREATE INDEX IF NOT EXISTS idx_contacts_is_imported ON contacts(is_imported);
+CREATE INDEX IF NOT EXISTS idx_contacts_user_imported ON contacts(user_id, is_imported);
 CREATE INDEX IF NOT EXISTS idx_contact_emails_contact_id ON contact_emails(contact_id);
 CREATE INDEX IF NOT EXISTS idx_contact_emails_email ON contact_emails(email);
 CREATE INDEX IF NOT EXISTS idx_contact_phones_contact_id ON contact_phones(contact_id);
@@ -538,6 +597,22 @@ CREATE INDEX IF NOT EXISTS idx_transactions_stage ON transactions(stage);
 CREATE INDEX IF NOT EXISTS idx_transaction_participants_transaction ON transaction_participants(transaction_id);
 CREATE INDEX IF NOT EXISTS idx_transaction_participants_contact ON transaction_participants(contact_id);
 CREATE INDEX IF NOT EXISTS idx_transaction_participants_role ON transaction_participants(role);
+
+-- Transaction Contacts
+CREATE INDEX IF NOT EXISTS idx_transaction_contacts_transaction ON transaction_contacts(transaction_id);
+CREATE INDEX IF NOT EXISTS idx_transaction_contacts_contact ON transaction_contacts(contact_id);
+CREATE INDEX IF NOT EXISTS idx_transaction_contacts_role ON transaction_contacts(role);
+CREATE INDEX IF NOT EXISTS idx_transaction_contacts_specific_role ON transaction_contacts(specific_role);
+CREATE INDEX IF NOT EXISTS idx_transaction_contacts_category ON transaction_contacts(role_category);
+CREATE INDEX IF NOT EXISTS idx_transaction_contacts_primary ON transaction_contacts(is_primary);
+
+-- Audit Logs
+CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_synced ON audit_logs(synced_at);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_resource_type ON audit_logs(resource_type);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_session_id ON audit_logs(session_id);
 
 -- Audit Packages
 CREATE INDEX IF NOT EXISTS idx_audit_packages_transaction ON audit_packages(transaction_id);
@@ -589,6 +664,82 @@ AFTER UPDATE ON transaction_participants
 BEGIN
   UPDATE transaction_participants SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
 END;
+
+CREATE TRIGGER IF NOT EXISTS update_transaction_contacts_timestamp
+AFTER UPDATE ON transaction_contacts
+BEGIN
+  UPDATE transaction_contacts SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+END;
+
+-- Audit logs are append-only (no updates/deletes allowed)
+CREATE TRIGGER IF NOT EXISTS prevent_audit_update
+BEFORE UPDATE ON audit_logs
+BEGIN
+  SELECT RAISE(ABORT, 'Audit logs cannot be modified');
+END;
+
+CREATE TRIGGER IF NOT EXISTS prevent_audit_delete
+BEFORE DELETE ON audit_logs
+BEGIN
+  SELECT RAISE(ABORT, 'Audit logs cannot be deleted');
+END;
+
+-- ============================================
+-- COMMUNICATIONS TABLE (Transaction-related emails)
+-- ============================================
+-- Stores communications linked to transactions for auditing.
+-- Note: This is separate from 'messages' table which is for general message storage.
+-- Communications are specifically for transaction-related correspondence.
+CREATE TABLE IF NOT EXISTS communications (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  transaction_id TEXT,
+
+  -- Type & Source
+  communication_type TEXT DEFAULT 'email' CHECK (communication_type IN ('email', 'text', 'imessage')),
+  source TEXT,
+
+  -- Email Threading
+  email_thread_id TEXT,
+
+  -- Participants
+  sender TEXT,
+  recipients TEXT,
+  cc TEXT,
+  bcc TEXT,
+
+  -- Content
+  subject TEXT,
+  body TEXT,
+  body_plain TEXT,
+
+  -- Timestamps
+  sent_at DATETIME,
+  received_at DATETIME,
+
+  -- Attachments
+  has_attachments INTEGER DEFAULT 0,
+  attachment_count INTEGER DEFAULT 0,
+  attachment_metadata TEXT,                -- JSON
+
+  -- Analysis/Classification
+  keywords_detected TEXT,                  -- JSON array
+  parties_involved TEXT,                   -- JSON array
+  communication_category TEXT,
+  relevance_score REAL,
+  is_compliance_related INTEGER DEFAULT 0,
+
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+  FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE,
+  FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE SET NULL
+);
+
+-- Communications indexes
+CREATE INDEX IF NOT EXISTS idx_communications_user_id ON communications(user_id);
+CREATE INDEX IF NOT EXISTS idx_communications_transaction_id ON communications(transaction_id);
+CREATE INDEX IF NOT EXISTS idx_communications_sent_at ON communications(sent_at);
+CREATE INDEX IF NOT EXISTS idx_communications_sender ON communications(sender);
 
 -- ============================================
 -- IGNORED COMMUNICATIONS TABLE

@@ -14,6 +14,7 @@ import {
   SyncResult,
 } from "./services/syncOrchestrator";
 import { iPhoneSyncStorageService } from "./services/iPhoneSyncStorageService";
+import sessionService from "./services/sessionService";
 import type { iOSDevice } from "./types/device";
 
 let orchestrator: SyncOrchestrator | null = null;
@@ -29,6 +30,35 @@ function sendToRenderer(channel: string, data: unknown): void {
   if (mainWindowRef && !mainWindowRef.isDestroyed()) {
     mainWindowRef.webContents.send(channel, data);
   }
+}
+
+/**
+ * Get the current user ID, trying multiple sources
+ * 1. Use currentUserId if already set via setSyncUserId
+ * 2. Fall back to loading from session file
+ */
+async function getCurrentUserIdForSync(): Promise<string | null> {
+  // First try the cached currentUserId
+  if (currentUserId) {
+    return currentUserId;
+  }
+
+  // Fall back to loading from session
+  log.info("[SyncHandlers] currentUserId not set, attempting to load from session...");
+  try {
+    const session = await sessionService.loadSession();
+    if (session?.user?.id) {
+      log.info("[SyncHandlers] Loaded user ID from session file", { userId: session.user.id });
+      // Also update currentUserId for future calls
+      currentUserId = session.user.id;
+      return session.user.id;
+    }
+  } catch (error) {
+    log.error("[SyncHandlers] Failed to load session for user ID", { error });
+  }
+
+  log.warn("[SyncHandlers] Could not determine user ID from any source");
+  return null;
 }
 
 /**
@@ -57,9 +87,11 @@ export function registerSyncHandlers(mainWindow: BrowserWindow, userId?: string)
 
       // Capture user ID at sync start to prevent race conditions
       // This ensures data is saved to the correct user even if login state changes during sync
-      syncSessionUserId = currentUserId;
+      syncSessionUserId = await getCurrentUserIdForSync();
       if (!syncSessionUserId) {
         log.warn("[SyncHandlers] No user ID available at sync start - data will not be persisted");
+      } else {
+        log.info("[SyncHandlers] User ID captured for sync persistence", { userId: syncSessionUserId });
       }
 
       // Check if sync is stuck and force reset if needed
@@ -115,9 +147,11 @@ export function registerSyncHandlers(mainWindow: BrowserWindow, userId?: string)
       log.info("[SyncHandlers] Processing existing backup", { udid: options.udid });
 
       // Capture user ID at sync start to prevent race conditions
-      syncSessionUserId = currentUserId;
+      syncSessionUserId = await getCurrentUserIdForSync();
       if (!syncSessionUserId) {
         log.warn("[SyncHandlers] No user ID available at sync start - data will not be persisted");
+      } else {
+        log.info("[SyncHandlers] User ID captured for sync persistence", { userId: syncSessionUserId });
       }
 
       // Check if sync is stuck and force reset if needed

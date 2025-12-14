@@ -115,9 +115,9 @@ describe("TransactionService - Database Method Fixes", () => {
   });
 
   describe("getTransactionDetails", () => {
-    it("should call getCommunicationsByTransaction instead of getCommunicationsByTransactionId", async () => {
+    it("should call getCommunicationsByTransaction and getTransactionContactsWithRoles", async () => {
       const mockCommunications = [{ id: "comm-1", subject: "Test" }];
-      const mockContacts = [{ id: mockContactId, name: "Test Contact" }];
+      const mockContactsWithRoles = [{ id: mockContactId, contact_name: "Test Contact", specific_role: "Buyer" }];
 
       (databaseService.getTransactionById as jest.Mock).mockResolvedValue(
         mockTransaction,
@@ -125,8 +125,8 @@ describe("TransactionService - Database Method Fixes", () => {
       (
         databaseService.getCommunicationsByTransaction as jest.Mock
       ).mockResolvedValue(mockCommunications);
-      (databaseService.getTransactionContacts as jest.Mock).mockResolvedValue(
-        mockContacts,
+      (databaseService.getTransactionContactsWithRoles as jest.Mock).mockResolvedValue(
+        mockContactsWithRoles,
       );
 
       const result =
@@ -135,10 +135,13 @@ describe("TransactionService - Database Method Fixes", () => {
       expect(
         databaseService.getCommunicationsByTransaction,
       ).toHaveBeenCalledWith(mockTransactionId);
+      expect(
+        databaseService.getTransactionContactsWithRoles,
+      ).toHaveBeenCalledWith(mockTransactionId);
       expect(result).toEqual({
         ...mockTransaction,
         communications: mockCommunications,
-        contact_assignments: mockContacts,
+        contact_assignments: mockContactsWithRoles,
       });
     });
 

@@ -52,17 +52,50 @@ git merge origin/develop  # or origin/main for hotfixes
 
 Resolve any merge conflicts before proceeding.
 
-### 1.2 Dependencies
-Verify clean dependency installation:
+### 1.2 Dependencies & Native Modules
 
+**CRITICAL: Native Module Rebuild Required**
+
+Native modules like `better-sqlite3-multiple-ciphers` must be compiled for Electron's bundled Node.js version (not your system Node.js). This is a common source of "infinite loop" bugs.
+
+**Standard rebuild (try first):**
 ```bash
-rm -rf node_modules
-npm install
-
-# Rebuild native modules if needed
 npm rebuild better-sqlite3-multiple-ciphers
 npx electron-rebuild
 ```
+
+**If standard rebuild doesn't work** (common on Windows without Python):
+```powershell
+# 1. Clear the prebuild cache (may have wrong version cached)
+Remove-Item -Recurse -Force "$env:LOCALAPPDATA\npm-cache\_prebuilds"
+
+# 2. Delete the existing build
+Remove-Item -Recurse -Force "node_modules\better-sqlite3-multiple-ciphers\build"
+
+# 3. Download the correct Electron-specific prebuild (replace 35.7.5 with your Electron version)
+cd node_modules/better-sqlite3-multiple-ciphers
+npx prebuild-install --runtime=electron --target=35.7.5 --arch=x64 --platform=win32
+```
+
+Check your Electron version with: `npx electron --version`
+
+**Common Error**: If you see `NODE_MODULE_VERSION` mismatch errors:
+```
+NODE_MODULE_VERSION 127. This version of Node.js requires NODE_MODULE_VERSION 133.
+```
+This means the native module was compiled for Node.js (127 = Node 22.x) but Electron needs a different version (133). Use the prebuild-install fix above.
+
+### 1.3 Verify App Starts
+**Before committing**, always verify the app actually runs:
+
+```bash
+npm run dev
+```
+
+Check for:
+- [ ] No `NODE_MODULE_VERSION` errors in console
+- [ ] Database initializes successfully
+- [ ] App doesn't get stuck on loading/onboarding screens
 
 ---
 
@@ -293,7 +326,22 @@ gh pr create --base develop --title "type: description" --body "..."
 
 ## Phase 8: CI Verification
 
-Wait for all CI checks to pass:
+**⚠️ CRITICAL: Never claim CI passed without explicit verification. False CI claims waste user time and erode trust.**
+
+### 8.1 Wait for ALL Checks to Complete
+
+Use `--watch` to block until all checks finish:
+
+```bash
+# REQUIRED: Wait for all checks to complete (blocks until done)
+gh pr checks <PR-NUMBER> --watch
+```
+
+**DO NOT** use `gh pr checks` without `--watch` and assume checks passed - they may still be running.
+
+### 8.2 Verify ALL Jobs Passed
+
+After checks complete, verify EVERY job shows `pass`:
 
 | Check | Required | Description |
 |-------|----------|-------------|
@@ -301,11 +349,56 @@ Wait for all CI checks to pass:
 | Test & Lint (Windows) | Yes | Cross-platform verification |
 | Security Audit | Yes | npm audit |
 | Build Application | Yes | Vite + Electron build |
-| Package Application | Main only | Creates DMG/NSIS |
+| Package Application | develop/main only | Creates DMG/NSIS installers |
 
 ```bash
-# Monitor CI status
+# Verify all checks passed (should show all green checkmarks)
 gh pr checks <PR-NUMBER>
+
+# For develop/main PRs, also check the Package Application step explicitly
+gh run list --branch <BRANCH-NAME> --limit 5
+gh run view <RUN-ID>  # Check Package Application job status
+```
+
+### 8.3 Special Attention: Package Application
+
+**The Package Application job only runs on `develop` and `main` branches.** This means:
+
+1. **Feature branch PRs** - Package job doesn't run. CI may pass on feature branch but fail after merge.
+2. **After merging to develop** - ALWAYS verify Package Application succeeded:
+   ```bash
+   # Check the develop branch CI after merge
+   gh run list --branch develop --limit 3
+   gh run view <LATEST-RUN-ID>
+   ```
+
+### 8.4 LLM Guardrails (for Claude and AI agents)
+
+When verifying CI status, you MUST:
+
+1. **Run `gh pr checks --watch`** and wait for it to complete (don't interrupt)
+2. **Include the actual command output** in your response to the user
+3. **Check all jobs** - if any show `fail` or `pending`, CI has NOT passed
+4. **After merge to develop/main**, verify Package Application job separately
+5. **Never say "CI passed"** without showing evidence from `gh pr checks` or `gh run view`
+
+**Example verification response:**
+```
+CI Status for PR #114:
+✓ Test & Lint (macos-latest, 20.x)  pass
+✓ Test & Lint (windows-latest, 20.x)  pass
+✓ Build Application (macos-latest)  pass
+✓ Build Application (windows-latest)  pass
+✓ Security Audit  pass
+
+All 5 checks passed. Ready to merge.
+```
+
+**If Package Application needs verification (after merge to develop):**
+```bash
+gh run list --branch develop --limit 1
+# Then check that specific run
+gh run view <RUN-ID>
 ```
 
 ---

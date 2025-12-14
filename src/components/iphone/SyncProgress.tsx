@@ -246,7 +246,6 @@ export const SyncProgress: React.FC<SyncProgressProps> = ({
             />
           </svg>
           <div className="text-sm text-amber-700">
-            <p className="font-medium mb-1">Your iPhone is waiting for your passcode</p>
             <p className="text-xs text-amber-600">
               After entering your passcode, it may take several minutes before the sync starts.
               Please don't disconnect or close this window.

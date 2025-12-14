@@ -231,10 +231,16 @@ function AppleDriverSetup({ onComplete, onSkip, onBack }: AppleDriverSetupProps)
     }
   };
 
-  // Auto-continue if already installed
+  // Auto-continue when installation completes
   useEffect(() => {
-    // No auto-advance - let user click Continue button
-  }, [status]);
+    if (status === "installed") {
+      // Small delay to show success message, then continue
+      const timer = setTimeout(() => {
+        onComplete();
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [status, onComplete]);
 
   // Only show on Windows
   if (!isWindows) {
