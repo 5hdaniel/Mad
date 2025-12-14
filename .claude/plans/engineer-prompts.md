@@ -136,69 +136,9 @@ STOP and ask the PM before proceeding if:
 
 ---
 
-### TASK-103: Flow Definitions
+### TASK-103: Flow Definitions ✅ COMPLETED
 
-```
-You are assigned Task TASK-103 – "Create Flow Definitions".
-
-## Setup
-Base branch: claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
-Your branch: feat/103-flow-definitions
-
-git fetch origin claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
-git checkout -b feat/103-flow-definitions origin/claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
-
-## Task Files (READ THESE FIRST)
-- .claude/plans/tasks/TASK-103-flow-definitions.md
-
-## Context
-TASK-102 must be merged first. You'll have access to:
-- src/components/onboarding/types.ts
-- src/components/onboarding/steps/index.ts
-
-## Deliverables
-- Create: src/components/onboarding/flows/macosFlow.ts
-- Create: src/components/onboarding/flows/windowsFlow.ts
-- Create: src/components/onboarding/flows/index.ts
-
-## Instructions
-
-### CRITICAL: Use these EXACT step IDs
-
-macOS flow order (use these exact IDs):
-['phone-type', 'secure-storage', 'email-connect', 'permissions']
-
-Windows flow order (use these exact IDs):
-['phone-type', 'email-connect', 'apple-driver']
-
-### Platform Validation
-getFlowSteps(platform) must:
-1. Return ordered OnboardingStep[] for the platform
-2. Validate each step supports the platform
-3. Throw descriptive error if step doesn't support platform:
-   "Step 'X' does not support platform 'Y'. Supported: [Z].
-    Either remove from flow or add platform to step."
-
-## Verification
-- npm run type-check passes
-- npm run lint passes
-
-## ⚠️ BEFORE OPENING PR
-
-1. Update `.claude/plans/tasks/TASK-103-flow-definitions.md`:
-   - Complete the Implementation Summary section
-   - Check all boxes [x]
-   - Add Notes section with any deviations/decisions
-
-2. Self-review:
-   - [ ] Step IDs match EXACTLY as specified above
-   - [ ] All acceptance criteria met
-   - [ ] Implementation Summary complete
-   - [ ] CI passes
-
-PR target: claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
-PR title: feat(onboarding): add platform flow definitions with validation
-```
+*This task has been completed and merged.*
 
 ---
 
