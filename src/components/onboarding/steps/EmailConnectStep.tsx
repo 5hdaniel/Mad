@@ -349,11 +349,11 @@ export function Content({
           </svg>
         </div>
         <h2 className="text-2xl font-bold text-gray-900 mb-3">
-          Connect Your {primaryConfig.name}
+          Connect Your Email
         </h2>
         <p className="text-gray-600">
-          Connect your {primaryConfig.name} account to export email
-          communications alongside text messages for complete audit trails.
+          Connect your email account to export communications alongside text
+          messages for complete audit trails.
         </p>
       </div>
 
