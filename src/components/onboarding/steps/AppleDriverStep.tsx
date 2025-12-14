@@ -244,11 +244,9 @@ function AppleDriverStepContent({
   }, [status, handleContinue]);
 
   return (
-    <div className="max-w-xl w-full mx-auto">
-      {/* Main Card */}
-      <div className="bg-white rounded-2xl shadow-xl p-6">
-        {/* Header */}
-        <div className="text-center mb-5">
+    <>
+      {/* Header */}
+      <div className="text-center mb-5">
           <div
             className={`w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-3 ${
               status === "installed" || status === "already-installed"
@@ -612,13 +610,12 @@ function AppleDriverStepContent({
           </div>
         )}
 
-        {/* Checking State */}
-        {status === "checking" && (
-          <div className="text-center py-3">
-            <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" />
-          </div>
-        )}
-      </div>
+      {/* Checking State */}
+      {status === "checking" && (
+        <div className="text-center py-3">
+          <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" />
+        </div>
+      )}
 
       {/* Additional info */}
       {status === "not-installed" && (
@@ -628,51 +625,7 @@ function AppleDriverStepContent({
           devices.
         </p>
       )}
-
-      {/* Navigation Footer - shown for states where user can navigate */}
-      {(status === "not-installed" ||
-        status === "needs-update" ||
-        status === "error" ||
-        status === "cancelled") && (
-        <>
-          {/* Back Button */}
-          <div className="flex items-center justify-start pt-4 mt-4 border-t border-gray-200">
-            <button
-              onClick={handleBack}
-              className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium transition-all text-gray-700 hover:bg-gray-100"
-            >
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M15 19l-7-7 7-7"
-                />
-              </svg>
-              <span>Back</span>
-            </button>
-          </div>
-
-          {/* Skip Option */}
-          <div className="text-center mt-4">
-            <button
-              onClick={handleSkip}
-              className="text-gray-500 hover:text-gray-700 py-2 text-sm font-medium transition-colors"
-            >
-              Skip for Now
-            </button>
-            <p className="text-xs text-gray-400 mt-1">
-              You can install these tools later via the iPhone sync option
-            </p>
-          </div>
-        </>
-      )}
-    </div>
+    </>
   );
 }
 

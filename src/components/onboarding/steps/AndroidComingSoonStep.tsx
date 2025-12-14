@@ -47,10 +47,8 @@ function Content({ onAction }: OnboardingStepContentProps) {
   };
 
   return (
-    <div className="max-w-lg w-full mx-auto">
-      {/* Main Card */}
-      <div className="bg-white rounded-2xl shadow-xl p-6 text-center">
-        {/* Android Icon with Coming Soon Badge */}
+    <div className="text-center">
+      {/* Android Icon with Coming Soon Badge */}
         <div className="relative inline-block mb-4">
           <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
             <svg
@@ -215,12 +213,11 @@ function Content({ onAction }: OnboardingStepContentProps) {
           </button>
         </div>
 
-        {/* Footer Note */}
-        <p className="text-xs text-gray-400 mt-4">
-          Have an iPhone as well? Go back and select iPhone to sync your
-          messages today.
-        </p>
-      </div>
+      {/* Footer Note */}
+      <p className="text-xs text-gray-400 mt-4">
+        Have an iPhone as well? Go back and select iPhone to sync your
+        messages today.
+      </p>
     </div>
   );
 }
