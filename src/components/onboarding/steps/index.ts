@@ -80,3 +80,15 @@ export function getStep(id: string): OnboardingStep {
 export function getAllSteps(): OnboardingStep[] {
   return Object.values(STEP_REGISTRY);
 }
+
+// =============================================================================
+// STEP IMPORTS (triggers registration)
+// =============================================================================
+
+// Import steps to trigger their self-registration
+// Each step file calls registerStep() at module load time
+// IMPORTANT: These imports MUST come after registerStep is defined
+import "./EmailConnectStep";
+
+// Re-export step modules for direct access
+export { emailConnectStep } from "./EmailConnectStep";
