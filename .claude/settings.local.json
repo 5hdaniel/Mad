@@ -43,7 +43,9 @@
       "Bash(npm rebuild:*)",
       "Bash(npm run lint)",
       "Bash(dir \"C:\\Users\\Daniel\\New folder\\Mad\\src\\components\\onboarding\")",
-      "Bash(gh release:*)"
+      "Bash(gh release:*)",
+      "Bash(npx prebuild-install:*)",
+      "Bash(node scripts/rebuild-native.js:*)"
     ],
     "deny": [],
     "ask": []

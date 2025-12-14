@@ -599,6 +599,11 @@ export function useAppStateMachine(): AppStateMachine {
           (connectionResult: { success: boolean; email?: string; error?: string }) => {
             if (connectionResult.success) {
               setHasEmailConnected(true);
+              // Also set email provider so EmailConnectStep shows as connected
+              setPendingOnboardingData((prev) => ({
+                ...prev,
+                emailProvider: "google",
+              }));
             }
             cleanup();
           }
@@ -667,6 +672,11 @@ export function useAppStateMachine(): AppStateMachine {
             if (connectionResult.success) {
               console.log("[AppStateMachine] Setting hasEmailConnected=true (regular flow)");
               setHasEmailConnected(true);
+              // Also set email provider so EmailConnectStep shows as connected
+              setPendingOnboardingData((prev) => ({
+                ...prev,
+                emailProvider: "microsoft",
+              }));
             }
             cleanup();
           }
