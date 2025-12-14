@@ -92,3 +92,4 @@ export function getAllSteps(): OnboardingStep[] {
 // IMPORTANT: These imports MUST come after registerStep is defined
 import "./SecureStorageStep";
 import "./EmailConnectStep";
+import "./PermissionsStep";
