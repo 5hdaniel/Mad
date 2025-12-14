@@ -228,17 +228,24 @@ export function useAppStateMachine(): AppStateMachine {
 
         // Only route TO onboarding if we're not already there and need to start
         if (!isCheckingEmailOnboarding && !isLoadingPhoneType) {
-          const needsOnboarding = !hasSelectedPhoneType ||
-            !hasCompletedEmailOnboarding ||
-            !hasEmailConnected ||
-            (isWindows && needsDriverSetup) ||
-            (isMacOS && !hasPermissions);
+          // Check what's missing to determine the right starting point
+          const needsPhoneSelection = !hasSelectedPhoneType;
+          const needsEmailOnboarding = !hasCompletedEmailOnboarding || !hasEmailConnected;
+          const needsDrivers = isWindows && needsDriverSetup;
+          const needsPermissions = isMacOS && !hasPermissions;
 
-          if (needsOnboarding && currentStep !== "phone-type-selection") {
-            // Start onboarding from the beginning - the flow will handle the rest
-            setCurrentStep("phone-type-selection");
-          } else if (!needsOnboarding && currentStep !== "dashboard") {
-            // Onboarding complete - go to dashboard
+          // If only permissions are missing (user completed rest of onboarding), go directly there
+          if (!needsPhoneSelection && !needsEmailOnboarding && !needsDrivers && needsPermissions) {
+            if (currentStep !== "permissions") {
+              setCurrentStep("permissions");
+            }
+          } else if (needsPhoneSelection || needsEmailOnboarding || needsDrivers) {
+            // Full onboarding needed - start from the beginning
+            if (currentStep !== "phone-type-selection") {
+              setCurrentStep("phone-type-selection");
+            }
+          } else if (currentStep !== "dashboard") {
+            // Everything complete - go to dashboard
             setCurrentStep("dashboard");
           }
         }
