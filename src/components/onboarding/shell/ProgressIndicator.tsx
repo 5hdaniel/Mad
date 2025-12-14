@@ -95,7 +95,7 @@ function StepCircle({ stepNumber, status }: StepCircleProps) {
 function ConnectingLine({ completed }: ConnectingLineProps) {
   return (
     <div
-      className={`flex-1 h-0.5 mx-1 transition-all max-w-[48px] ${
+      className={`flex-1 h-0.5 mx-2 transition-all max-w-[72px] ${
         completed ? "bg-green-500" : "bg-gray-200"
       }`}
     />
@@ -109,9 +109,9 @@ function ConnectingLine({ completed }: ConnectingLineProps) {
  */
 function StepLabel({ label, isActive }: StepLabelProps) {
   return (
-    <div className="flex-shrink-0 w-8 flex items-center justify-center">
+    <div className="flex-shrink-0 w-20 flex items-center justify-center">
       <span
-        className={`text-xs text-center max-w-[56px] ${
+        className={`text-xs text-center whitespace-nowrap ${
           isActive ? "text-blue-600 font-medium" : "text-gray-500"
         }`}
       >
@@ -126,7 +126,7 @@ function StepLabel({ label, isActive }: StepLabelProps) {
  * Matches the width of the connecting lines.
  */
 function LabelSpacer() {
-  return <div className="flex-1 mx-1 max-w-[48px]" />;
+  return <div className="flex-1 mx-2 max-w-[72px]" />;
 }
 
 /**
