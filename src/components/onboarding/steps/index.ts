@@ -80,3 +80,10 @@ export function getStep(id: string): OnboardingStep {
 export function getAllSteps(): OnboardingStep[] {
   return Object.values(STEP_REGISTRY);
 }
+
+// =============================================================================
+// STEP IMPORTS (auto-registration via side effects)
+// =============================================================================
+
+// Import steps to trigger registration via registerStep() calls
+import "./SecureStorageStep";
