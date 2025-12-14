@@ -128,7 +128,7 @@ const Content: React.FC<OnboardingStepContentProps> = ({
   return (
     <>
       {/* Header */}
-      <div className="text-center mb-6">
+      <div className="text-center mb-8">
         <div className="w-14 h-14 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
           <PhoneIcon />
         </div>
@@ -142,7 +142,7 @@ const Content: React.FC<OnboardingStepContentProps> = ({
       </div>
 
       {/* Phone Selection Cards */}
-      <div className="grid grid-cols-2 gap-3 mb-6">
+      <div className="grid grid-cols-2 gap-3 mb-8">
         {/* iPhone Option */}
         <button
           onClick={handleSelectIPhone}
