@@ -16,7 +16,6 @@ import type {
   OnboardingStepContentProps,
   SecureStorageSetupAction,
 } from "../types";
-import { registerStep } from "./index";
 
 // =============================================================================
 // STEP METADATA
@@ -232,10 +231,9 @@ export function SecureStorageContent({
 /**
  * Complete step definition for the secure storage step.
  */
-export const secureStorageStep: OnboardingStep = {
+const SecureStorageStep: OnboardingStep = {
   meta,
   Content: SecureStorageContent,
 };
 
-// Register the step in the central registry
-registerStep("secure-storage", secureStorageStep);
+export default SecureStorageStep;

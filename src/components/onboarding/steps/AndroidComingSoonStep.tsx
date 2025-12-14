@@ -18,7 +18,6 @@ import type {
   OnboardingStepMeta,
   OnboardingStepContentProps,
 } from "../types";
-import { registerStep } from "./index";
 
 /**
  * Step metadata configuration.
@@ -229,12 +228,9 @@ function Content({ onAction }: OnboardingStepContentProps) {
 /**
  * Complete Android Coming Soon step definition.
  */
-export const androidComingSoonStep: OnboardingStep = {
+const AndroidComingSoonStep: OnboardingStep = {
   meta,
   Content,
 };
 
-// Register the step in the central registry
-registerStep("android-coming-soon", androidComingSoonStep);
-
-export default androidComingSoonStep;
+export default AndroidComingSoonStep;

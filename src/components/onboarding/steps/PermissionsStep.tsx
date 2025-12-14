@@ -12,7 +12,6 @@ import type {
   OnboardingStep,
   OnboardingStepContentProps,
 } from "../types";
-import { registerStep } from "./index";
 
 /**
  * Shield icon with lock - represents security/permissions
@@ -506,8 +505,5 @@ const permissionsStep: OnboardingStep = {
   },
   Content: PermissionsStepContent,
 };
-
-// Register the step
-registerStep("permissions", permissionsStep);
 
 export default permissionsStep;

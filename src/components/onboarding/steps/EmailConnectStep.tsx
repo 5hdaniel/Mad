@@ -14,7 +14,6 @@ import type {
   OnboardingStepMeta,
   OnboardingStepContentProps,
 } from "../types";
-import { registerStep } from "./index";
 
 // =============================================================================
 // PROVIDER CONFIGURATION
@@ -432,10 +431,9 @@ export function Content({
 // STEP REGISTRATION
 // =============================================================================
 
-export const emailConnectStep: OnboardingStep = {
+const EmailConnectStep: OnboardingStep = {
   meta,
   Content,
 };
 
-// Register with the step registry
-registerStep("email-connect", emailConnectStep);
+export default EmailConnectStep;

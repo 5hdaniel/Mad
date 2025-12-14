@@ -13,7 +13,6 @@ import type {
   OnboardingStepMeta,
   OnboardingStepContentProps,
 } from "../types";
-import { registerStep } from "./index";
 
 // =============================================================================
 // TYPES
@@ -684,12 +683,9 @@ function AppleDriverStepContent({
 /**
  * Complete AppleDriverStep definition for registration
  */
-export const appleDriverStep: OnboardingStep = {
+const AppleDriverStep: OnboardingStep = {
   meta,
   Content: AppleDriverStepContent,
 };
 
-// Register the step in the central registry
-registerStep("apple-driver", appleDriverStep);
-
-export default appleDriverStep;
+export default AppleDriverStep;

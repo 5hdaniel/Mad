@@ -9,14 +9,29 @@
  */
 
 import type { OnboardingStep } from "../types";
+
+// Import all steps as default exports
 import PhoneTypeStep from "./PhoneTypeStep";
+import SecureStorageStep from "./SecureStorageStep";
+import EmailConnectStep from "./EmailConnectStep";
+import PermissionsStep from "./PermissionsStep";
+import AppleDriverStep from "./AppleDriverStep";
+import AndroidComingSoonStep from "./AndroidComingSoonStep";
 
 /**
  * Central registry of all onboarding steps.
  * Key = step ID (must match meta.id in the step file)
+ *
+ * All steps are registered here at module load time to avoid
+ * circular dependency issues.
  */
 export const STEP_REGISTRY: Record<string, OnboardingStep> = {
   "phone-type": PhoneTypeStep,
+  "secure-storage": SecureStorageStep,
+  "email-connect": EmailConnectStep,
+  "permissions": PermissionsStep,
+  "apple-driver": AppleDriverStep,
+  "android-coming-soon": AndroidComingSoonStep,
 };
 
 /**
@@ -83,15 +98,3 @@ export function getStep(id: string): OnboardingStep {
 export function getAllSteps(): OnboardingStep[] {
   return Object.values(STEP_REGISTRY);
 }
-
-// =============================================================================
-// STEP IMPORTS (auto-registration via side effects)
-// =============================================================================
-
-// Import steps to trigger registration via registerStep() calls
-// IMPORTANT: These imports MUST come after registerStep is defined
-import "./SecureStorageStep";
-import "./EmailConnectStep";
-import "./PermissionsStep";
-import "./AppleDriverStep";
-import "./AndroidComingSoonStep";
