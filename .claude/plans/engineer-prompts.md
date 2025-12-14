@@ -66,13 +66,15 @@ If you believe a deviation is necessary:
 3. Flag it with "⚠️ DEVIATION FROM PLAN:" prefix
 4. The PM will review and decide if it's acceptable
 
-### 5. Before Opening PR (REQUIRED)
+### 5. Before Pushing (REQUIRED)
 
-You MUST complete ALL of these before opening your PR:
+> ⚠️ **REQUIRED**: You MUST update the Implementation Summary in your task file BEFORE pushing. This is a deliverable, not optional documentation.
 
-#### A. Update the Implementation Summary
+You MUST complete ALL of these before pushing your branch:
 
-Go to the task file's "Implementation Summary (Engineer-Owned)" section and:
+#### A. Update the Implementation Summary (THIS IS A DELIVERABLE)
+
+Go to `.claude/plans/tasks/TASK-XXX-*.md` and complete the "Implementation Summary (Engineer-Owned)" section:
 
 1. Check all completed boxes: `- [ ]` → `- [x]`
 2. Add completion date
@@ -81,6 +83,8 @@ Go to the task file's "Implementation Summary (Engineer-Owned)" section and:
    - Issues or challenges encountered
    - Design decisions you made and why
    - Anything the reviewer should pay attention to
+
+**Your branch will be REJECTED if this section is not complete.**
 
 #### B. Verify Your Work
 
@@ -98,14 +102,15 @@ npm test            # Must pass (if tests exist)
 
 ⚠️ You are still responsible for ensuring CI passes. "CI will verify" is not an excuse for broken code.
 
-#### C. Self-Review Checklist
+#### C. Final Checklist (ALL REQUIRED)
 
-Before opening PR, verify:
+Before pushing, verify ALL of these:
+- [ ] Code files created/modified as specified
+- [ ] Task file Implementation Summary COMPLETED with all boxes checked
+- [ ] Task file has Notes section (deviations, decisions, issues)
 - [ ] All acceptance criteria in task file are met
-- [ ] Implementation Summary is complete with notes
-- [ ] No deviations from plan (or deviations are documented)
 - [ ] All specified names/IDs/patterns match the plan exactly
-- [ ] Code compiles and lints cleanly
+- [ ] Code compiles and lints (or documented why CI will verify)
 
 ### 6. PR Requirements
 
