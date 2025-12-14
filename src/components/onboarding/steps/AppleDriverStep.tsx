@@ -23,16 +23,16 @@ import type {
  */
 interface DriversAPI {
   checkApple: () => Promise<{
-    installed: boolean;
+    isInstalled: boolean;
     version?: string;
     serviceRunning: boolean;
-    error?: string;
+    error?: string | null;
   }>;
   hasBundled: () => Promise<{ hasBundled: boolean }>;
   installApple: () => Promise<{
     success: boolean;
     cancelled?: boolean;
-    error?: string;
+    error?: string | null;
     rebootRequired?: boolean;
   }>;
   openITunesStore: () => Promise<{ success: boolean; error?: string }>;
@@ -133,8 +133,8 @@ function AppleDriverStepContent({
         const driverResult = await drivers.checkApple();
         console.log("[AppleDriverStep] Driver check result:", driverResult);
 
-        // Only require installed flag - service might not be running yet after fresh install
-        if (driverResult.installed) {
+        // Only require isInstalled flag - service might not be running yet after fresh install
+        if (driverResult.isInstalled) {
           console.log("[AppleDriverStep] Drivers already installed!");
           // Drivers installed - check if update is available
           if (drivers.checkUpdate) {

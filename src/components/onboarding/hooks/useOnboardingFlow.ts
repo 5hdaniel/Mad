@@ -8,7 +8,7 @@
  * @module onboarding/hooks/useOnboardingFlow
  */
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { usePlatform } from "../../../contexts/PlatformContext";
 import { getFlowSteps } from "../flows";
 import type {
@@ -171,12 +171,14 @@ export function useOnboardingFlow(
 
   // Filter steps based on shouldShow
   const steps = useMemo(() => {
-    return allSteps.filter((step) => {
+    const filtered = allSteps.filter((step) => {
       if (step.meta.shouldShow) {
         return step.meta.shouldShow(context);
       }
       return true;
     });
+    console.log("[Onboarding] Steps calculated:", filtered.map(s => s.meta.id));
+    return filtered;
   }, [allSteps, context]);
 
   // Current step state
@@ -185,8 +187,16 @@ export function useOnboardingFlow(
     return Math.min(Math.max(0, initialStepIndex), Math.max(0, steps.length - 1));
   });
 
+  // Log when currentIndex changes
+  useEffect(() => {
+    console.log("[Onboarding] currentIndex changed to:", currentIndex, "currentStep:", steps[currentIndex]?.meta.id);
+  }, [currentIndex, steps]);
+
   // Current step (with safety check)
   const currentStep = steps[currentIndex] ?? steps[0];
+  if (steps[currentIndex] !== currentStep) {
+    console.warn("[Onboarding] currentIndex out of bounds!", { currentIndex, stepsLength: steps.length, fallbackTo: currentStep?.meta.id });
+  }
   const currentStepMeta = currentStep?.meta;
 
   // Check if step can proceed (for disabling next button)
@@ -211,13 +221,21 @@ export function useOnboardingFlow(
 
   // Navigation: Go to next step
   const goToNext = useCallback(() => {
+    console.log("[Onboarding] goToNext called", {
+      currentIndex,
+      stepsLength: steps.length,
+      stepIds: steps.map(s => s.meta.id),
+      currentStepId: steps[currentIndex]?.meta.id,
+    });
     if (currentIndex < steps.length - 1) {
+      console.log("[Onboarding] Advancing to index", currentIndex + 1);
       setCurrentIndex(currentIndex + 1);
     } else {
       // Flow complete
+      console.log("[Onboarding] Flow complete, calling onComplete");
       onComplete?.();
     }
-  }, [currentIndex, steps.length, onComplete]);
+  }, [currentIndex, steps, onComplete]);
 
   // Navigation: Go to previous step
   const goToPrevious = useCallback(() => {
