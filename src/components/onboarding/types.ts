@@ -320,6 +320,18 @@ export interface TermsDeclinedAction extends BaseStepAction {
 }
 
 /**
+ * Action dispatched when secure storage setup is confirmed.
+ * Includes the user's preference for skipping the explanation in the future.
+ */
+export interface SecureStorageSetupAction extends BaseStepAction {
+  type: "SECURE_STORAGE_SETUP";
+  /**
+   * Whether the user wants to skip the explanation screen in the future.
+   */
+  dontShowAgain: boolean;
+}
+
+/**
  * Action dispatched to navigate to the next step.
  */
 export interface NavigateNextAction extends BaseStepAction {
@@ -353,6 +365,7 @@ export type StepAction =
   | DriverSkippedAction
   | TermsAcceptedAction
   | TermsDeclinedAction
+  | SecureStorageSetupAction
   | NavigateNextAction
   | NavigateBackAction
   | OnboardingCompleteAction;
