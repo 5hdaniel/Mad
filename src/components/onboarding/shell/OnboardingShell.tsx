@@ -41,8 +41,8 @@ export function OnboardingShell({
         {progressSlot}
       </div>
 
-      {/* Card centered on screen */}
-      <div className="min-h-screen flex items-center justify-center p-4">
+      {/* Card centered on screen (pt-20 prevents overlap with progress bar) */}
+      <div className="min-h-screen flex items-center justify-center p-4 pt-20">
         <div className={`${maxWidth} w-full`}>
           {/* Main card container */}
           <div className="bg-white rounded-2xl shadow-xl p-6">
