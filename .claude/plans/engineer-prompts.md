@@ -10,15 +10,39 @@ These are the exact prompts to be given to engineers for each task in the onboar
 
 Every engineer MUST follow these guardrails. PRs will be REJECTED if these are not followed.
 
-### 1. Setup Requirements
+### 1. Setup Requirements (MANDATORY - DO NOT SKIP)
+
+⚠️ **WARNING**: If you skip this step or branch from the wrong place, your PR will be REJECTED.
 
 ```bash
-# Fetch the integration branch and create your feature branch from it
+# Step 1: Fetch and branch from the integration branch (NOT main, NOT develop)
 git fetch origin claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
 git checkout -b <your-branch-name> origin/claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
 ```
 
-### 2. Read the Task File First
+**If Claude Code auto-created a branch for you**, you MUST rebase it:
+```bash
+git fetch origin claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
+git rebase origin/claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
+```
+
+### 2. Verify You're On The Correct Base (REQUIRED)
+
+Run this command and verify the files exist:
+```bash
+ls -la src/components/onboarding/
+```
+
+**You MUST see these files** (depending on which task you're doing):
+- `types.ts` - Required for TASK-102 and later
+- `steps/index.ts` - Required for TASK-103 and later
+
+**If these files are MISSING:**
+1. STOP - you branched from the wrong place
+2. Delete your branch: `git checkout main && git branch -D <your-branch-name>`
+3. Re-run Step 1 above
+
+### 3. Read the Task File First
 
 Before writing ANY code:
 1. Read the full task file in `.claude/plans/tasks/TASK-XXX-*.md`
@@ -26,7 +50,7 @@ Before writing ANY code:
 3. Understand the acceptance criteria
 4. Note the specific values, names, and patterns specified
 
-### 3. Follow the Plan Exactly
+### 4. Follow the Plan Exactly
 
 **DO NOT deviate from the plan without documenting it.**
 
@@ -42,7 +66,7 @@ If you believe a deviation is necessary:
 3. Flag it with "⚠️ DEVIATION FROM PLAN:" prefix
 4. The PM will review and decide if it's acceptable
 
-### 4. Before Opening PR (REQUIRED)
+### 5. Before Opening PR (REQUIRED)
 
 You MUST complete ALL of these before opening your PR:
 
@@ -75,7 +99,7 @@ Before opening PR, verify:
 - [ ] All specified names/IDs/patterns match the plan exactly
 - [ ] Code compiles and lints cleanly
 
-### 5. PR Requirements
+### 6. PR Requirements
 
 - **Target branch:** `claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J`
 - **Title format:** `feat(onboarding): <description from task>`
@@ -85,7 +109,7 @@ Before opening PR, verify:
   - CI checks fail
   - Acceptance criteria not met
 
-### 6. When to Stop and Ask
+### 7. When to Stop and Ask
 
 STOP and ask the PM before proceeding if:
 - Requirements are ambiguous or contradictory
