@@ -27,7 +27,7 @@ import type { AppStateMachine, OutlookExportResults } from "./state/types";
  * Set to true to use the new unified onboarding system.
  * Set to false to use the legacy per-screen components.
  */
-const USE_NEW_ONBOARDING = true;
+const USE_NEW_ONBOARDING = false; // TODO: Enable after adding OAuth handlers to new flow
 
 /**
  * Check if the current step is an onboarding step that should use the new system.
