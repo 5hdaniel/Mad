@@ -211,6 +211,20 @@ export function useAppStateMachine(): AppStateMachine {
 
       // POST-DB FLOW: Database initialized, user authenticated
       if (isAuthenticated && !needsTermsAcceptance) {
+        // Check if we're on an onboarding step handled by the new OnboardingFlow
+        // If so, let the hook manage navigation instead of this effect
+        const isOnNewOnboardingStep = [
+          "phone-type-selection",
+          "email-onboarding",
+          "apple-driver-setup",
+        ].includes(currentStep);
+
+        if (isOnNewOnboardingStep) {
+          // New onboarding system handles navigation - skip auto-routing
+          console.log("[AppStateMachine] Skipping auto-routing, new onboarding handles:", currentStep);
+          return;
+        }
+
         if (!isCheckingEmailOnboarding && !isLoadingPhoneType) {
           if (!hasSelectedPhoneType && !needsDriverSetup) {
             if (currentStep !== "phone-type-selection")
