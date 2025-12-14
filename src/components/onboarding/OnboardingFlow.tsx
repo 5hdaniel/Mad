@@ -156,15 +156,14 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
   const showBack = navigation.showBack !== false && !isFirstStep;
   const showNext = navigation.hideContinue !== true;
 
-  // Combined action handler that updates app state AND advances flow
+  // Action handler - flowHandleAction already calls onAction (which is handleAction)
+  // so we just need to call flowHandleAction, not both
   const handleStepAction = useCallback(
     (action: StepAction) => {
-      // First update app state via our handler
-      handleAction(action);
-      // Then let the flow handle navigation
+      // flowHandleAction calls onAction internally, then handles navigation
       flowHandleAction(action);
     },
-    [handleAction, flowHandleAction]
+    [flowHandleAction]
   );
 
   return (
