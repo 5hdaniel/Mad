@@ -229,20 +229,6 @@ function AppleDriverStepContent({
     // Note: DRIVER_SKIPPED already triggers goToNext() in the flow hook
   }, [onAction]);
 
-  const handleBack = useCallback(() => {
-    onAction({ type: "NAVIGATE_BACK" });
-  }, [onAction]);
-
-  // Auto-continue when installation completes
-  useEffect(() => {
-    if (status === "installed") {
-      const timer = setTimeout(() => {
-        handleContinue();
-      }, 1500);
-      return () => clearTimeout(timer);
-    }
-  }, [status, handleContinue]);
-
   return (
     <>
       {/* Header */}
@@ -530,54 +516,14 @@ function AppleDriverStepContent({
           </div>
         )}
 
-        {/* Installed State (just finished installing) - auto-continues */}
-        {status === "installed" && (
-          <div className="text-center py-4">
-            <p className="text-gray-600 text-sm">
-              Continuing to the next step...
-            </p>
-          </div>
-        )}
-
-        {/* Already Installed State */}
-        {status === "already-installed" && (
-          <>
-            {/* Version info */}
-            <div className="bg-green-50 rounded-lg p-3 mb-4">
-              <h3 className="font-medium text-gray-900 mb-2 flex items-center gap-2">
-                <svg
-                  className="w-5 h-5 text-green-500"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-                Already Installed
-              </h3>
-              <p className="text-sm text-gray-600">
-                Apple Mobile Device Support is installed and running.
-                {installedVersion && (
-                  <span className="block mt-1 text-gray-500">
-                    Version: {installedVersion}
-                  </span>
-                )}
-              </p>
-            </div>
-
-            {/* Green Continue Button */}
-            <button
-              onClick={handleContinue}
-              className="w-full py-2.5 px-4 bg-green-500 text-white rounded-lg font-semibold hover:bg-green-600 transition-all shadow-md hover:shadow-lg"
-            >
-              Continue
-            </button>
-          </>
+        {/* Installed or Already Installed State - show green Continue button */}
+        {(status === "installed" || status === "already-installed") && (
+          <button
+            onClick={handleContinue}
+            className="w-full py-2.5 px-4 bg-green-500 text-white rounded-lg font-semibold hover:bg-green-600 transition-all shadow-md hover:shadow-lg"
+          >
+            Continue
+          </button>
         )}
 
         {/* Error/Cancelled State */}
