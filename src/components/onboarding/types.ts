@@ -28,6 +28,7 @@ export type OnboardingStepId =
   | "welcome"
   | "terms"
   | "phone-type"
+  | "android-coming-soon"
   | "secure-storage"
   | "driver-setup"
   | "apple-driver"
@@ -370,6 +371,20 @@ export interface OnboardingCompleteAction extends BaseStepAction {
 }
 
 /**
+ * Action dispatched from Android Coming Soon screen to go back and select iPhone.
+ */
+export interface GoBackSelectIphoneAction extends BaseStepAction {
+  type: "GO_BACK_SELECT_IPHONE";
+}
+
+/**
+ * Action dispatched from Android Coming Soon screen to continue with email only.
+ */
+export interface ContinueEmailOnlyAction extends BaseStepAction {
+  type: "CONTINUE_EMAIL_ONLY";
+}
+
+/**
  * Union type of all possible step actions.
  * Used for type-safe action handling in step components.
  */
@@ -386,7 +401,9 @@ export type StepAction =
   | SecureStorageSetupAction
   | NavigateNextAction
   | NavigateBackAction
-  | OnboardingCompleteAction;
+  | OnboardingCompleteAction
+  | GoBackSelectIphoneAction
+  | ContinueEmailOnlyAction;
 
 /**
  * Type guard to extract the action type string literal.

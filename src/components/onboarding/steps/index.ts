@@ -94,3 +94,4 @@ import "./SecureStorageStep";
 import "./EmailConnectStep";
 import "./PermissionsStep";
 import "./AppleDriverStep";
+import "./AndroidComingSoonStep";
