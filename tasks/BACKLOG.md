@@ -2672,6 +2672,44 @@ CREATE TABLE property_viewings (
 
 ---
 
+## CI/CD & Release
+
+### BACKLOG-056: Fix macOS Code Signing Certificate Import in Release Workflow
+**Priority:** High
+**Status:** Pending
+**Category:** CI/CD
+
+**Description:**
+The macOS release workflow fails at certificate import with error: "SecKeychainItemImport: Unable to decode the provided data."
+
+The certificate file is created (3066 bytes) but macOS security tool cannot import it. This prevents signed/notarized macOS builds from being created in CI.
+
+**Root Cause (suspected):**
+1. Certificate password in `MACOS_CERTIFICATE_PASSWORD` doesn't match the password used during export
+2. The .p12 export may not have included the private key
+3. Certificate may have been exported in wrong format
+
+**Steps to Fix:**
+1. On Mac, open Keychain Access
+2. Find "Developer ID Application" certificate
+3. Right-click the certificate (not just the public key) → Export
+4. Choose .p12 format
+5. Set a password and **remember it exactly**
+6. Convert to base64: `base64 -i certificate.p12 | tr -d '\n' | pbcopy`
+7. Update `MACOS_CERTIFICATE` secret in GitHub with the base64 string
+8. Update `MACOS_CERTIFICATE_PASSWORD` secret with the exact password
+9. Trigger a new release to test
+
+**Files:**
+- `.github/workflows/release.yml` - Certificate import step (lines 37-71)
+
+**Verification:**
+- Push to main and verify "Import Apple Certificate" step succeeds
+- Verify macOS artifacts are uploaded (DMG, ZIP files)
+- Verify app is signed and notarized
+
+---
+
 ## Last Updated
 2024-12-10 - Initial backlog created from build warnings and sync testing session
 2024-12-10 - Added BACKLOG-006: Dark Mode
@@ -2708,3 +2746,4 @@ CREATE TABLE property_viewings (
 2024-12-12 - Added BACKLOG-043: Settings Screen Not Scrollable (Medium)
 2024-12-13 - Added BACKLOG-044: Allow Multiple Contacts Per Role in Transaction UI (Critical)
 2024-12-13 - Added BACKLOG-045: Block Contact Deletion if Linked to Transactions (Critical)
+2024-12-14 - Added BACKLOG-056: Fix macOS Code Signing Certificate Import in Release Workflow (High)
