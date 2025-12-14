@@ -103,7 +103,11 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
           break;
 
         case "CONNECT_EMAIL_START":
-          // OAuth flow is handled by the step content directly
+          if (action.payload.provider === "google") {
+            app.handleStartGoogleEmailConnect();
+          } else {
+            app.handleStartMicrosoftEmailConnect();
+          }
           break;
 
         case "NAVIGATE_NEXT":
