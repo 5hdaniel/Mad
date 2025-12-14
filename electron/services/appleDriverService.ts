@@ -251,7 +251,23 @@ export async function installAppleDrivers(): Promise<DriverInstallResult> {
     const result = await runMsiInstaller(msiPath);
 
     if (result.success) {
-      log.info("[AppleDriverService] Driver installation completed");
+      log.info("[AppleDriverService] Installer reported success, verifying...");
+
+      // Verify that drivers are actually installed
+      // This catches cases where UAC was declined but exit code was 0
+      const verification = await checkAppleDrivers();
+
+      if (!verification.isInstalled) {
+        log.warn("[AppleDriverService] Verification failed - drivers not installed despite success code");
+        return {
+          success: false,
+          error: null,
+          rebootRequired: false,
+          cancelled: true, // Assume user cancelled UAC
+        };
+      }
+
+      log.info("[AppleDriverService] Driver installation verified successfully");
 
       // Start the service if it's not running
       await startAppleMobileDeviceService();
