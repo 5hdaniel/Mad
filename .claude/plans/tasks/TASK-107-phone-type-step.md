@@ -181,26 +181,32 @@ Extract:
 
 ## Implementation Summary (Engineer-Owned)
 
-*To be completed by implementing engineer after task completion.*
+*Completed by implementing engineer.*
 
 ```
 Files created:
-- [ ] src/components/onboarding/steps/PhoneTypeStep.tsx
+- [x] src/components/onboarding/steps/PhoneTypeStep.tsx
 
 Registration:
-- [ ] Step registered in STEP_REGISTRY
-- [ ] Registry key matches meta.id
+- [x] Step registered in STEP_REGISTRY
+- [x] Registry key matches meta.id ('phone-type')
 
 Meta fields verified:
-- [ ] id: 'phone-type'
-- [ ] progressLabel: 'Phone Type'
-- [ ] platforms: ['macos', 'windows']
-- [ ] navigation.showBack: false
-- [ ] navigation.showNext: false
-- [ ] skip: false
-- [ ] getNextStepOverride returns 'android-coming-soon' for Android
+- [x] id: 'phone-type'
+- [x] progressLabel: 'Phone Type'
+- [x] platforms: ['macos', 'windows']
+- [x] navigation.showBack: false
+- [x] navigation.hideContinue: true (types use 'hideContinue', not 'showNext')
+- [x] skip: undefined (types use SkipConfig | undefined, not boolean - undefined = not skippable)
+- [x] isStepComplete: (context) => context.phoneType !== null
+- [ ] getNextStepOverride: NOT IMPLEMENTED - field does not exist in OnboardingStepMeta type
+      (Android routing will be handled at flow/orchestrator level per types.ts design)
+
+Actions implemented:
+- [x] SELECT_PHONE with payload: { phoneType: 'iphone' | 'android' }
 
 Verification:
-- [ ] npm run type-check passes
-- [ ] npm run lint passes
+- [ ] npm run type-check - local environment missing node_modules (React types, etc.)
+- [ ] npm run lint - local environment missing eslint-plugin-react
+Note: Relying on CI for verification as per task instructions.
 ```

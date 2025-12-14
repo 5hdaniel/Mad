@@ -9,12 +9,15 @@
  */
 
 import type { OnboardingStep } from "../types";
+import PhoneTypeStep from "./PhoneTypeStep";
 
 /**
  * Central registry of all onboarding steps.
  * Key = step ID (must match meta.id in the step file)
  */
-export const STEP_REGISTRY: Record<string, OnboardingStep> = {};
+export const STEP_REGISTRY: Record<string, OnboardingStep> = {
+  "phone-type": PhoneTypeStep,
+};
 
 /**
  * Register a step in the registry.
