@@ -184,7 +184,9 @@ export function useOnboardingFlow(
   // Current step state
   const [currentIndex, setCurrentIndex] = useState(() => {
     // Clamp initial index to valid range
-    return Math.min(Math.max(0, initialStepIndex), Math.max(0, steps.length - 1));
+    const initialIndex = Math.min(Math.max(0, initialStepIndex), Math.max(0, steps.length - 1));
+    console.log("[Onboarding] Hook INITIALIZED with index:", initialIndex, "steps:", steps.map(s => s.meta.id));
+    return initialIndex;
   });
 
   // Log when currentIndex changes
