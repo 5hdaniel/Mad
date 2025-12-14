@@ -18,13 +18,13 @@ Create platform-specific flow definitions that specify the order of onboarding s
 
 ## Acceptance Criteria
 
-- [ ] `MACOS_FLOW` defines step order: `['phone-type', 'secure-storage', 'email-connect', 'permissions']`
-- [ ] `WINDOWS_FLOW` defines step order: `['phone-type', 'email-connect', 'apple-driver']`
-- [ ] `getFlowSteps(platform)` returns ordered `OnboardingStep[]`
-- [ ] Platform validation throws if step doesn't support platform
-- [ ] `validateAllFlows()` validates all flows at startup (dev only)
-- [ ] Error messages are descriptive and actionable
-- [ ] File compiles with `npm run type-check`
+- [x] `MACOS_FLOW` defines step order: `['phone-type', 'secure-storage', 'email-connect', 'permissions']`
+- [x] `WINDOWS_FLOW` defines step order: `['phone-type', 'email-connect', 'apple-driver']`
+- [x] `getFlowSteps(platform)` returns ordered `OnboardingStep[]`
+- [x] Platform validation throws if step doesn't support platform
+- [x] `validateAllFlows()` validates all flows at startup (dev only)
+- [x] Error messages are descriptive and actionable
+- [x] File compiles with `npm run type-check`
 
 ## Implementation Notes
 
@@ -131,21 +131,51 @@ src/components/onboarding/
 
 ## Implementation Summary (Engineer-Owned)
 
-*To be completed by implementing engineer after task completion.*
+*Completed: 2025-12-14*
 
 ```
 Files created:
-- [ ] src/components/onboarding/flows/index.ts
-- [ ] src/components/onboarding/flows/macosFlow.ts
-- [ ] src/components/onboarding/flows/windowsFlow.ts
+- [x] src/components/onboarding/flows/index.ts
+- [x] src/components/onboarding/flows/macosFlow.ts
+- [x] src/components/onboarding/flows/windowsFlow.ts
+
+Files modified:
+- [x] src/components/onboarding/types.ts (added missing step IDs)
 
 Functions implemented:
-- [ ] getFlowSteps(platform)
-- [ ] validateAllFlows()
-- [ ] FLOWS registry
+- [x] getFlowSteps(platform) - returns OnboardingStep[] with validation
+- [x] getFlowForPlatform(platform) - returns step ID array
+- [x] validateFlowSteps(stepIds, platform) - validates step platform support
+- [x] validateAllFlows() - validates all flows at startup (dev only)
+- [x] FLOWS registry - maps Platform to flow config
+
+Exports:
+- [x] MACOS_FLOW, MACOS_FLOW_STEPS, MACOS_PLATFORM
+- [x] WINDOWS_FLOW, WINDOWS_FLOW_STEPS, WINDOWS_PLATFORM
+- [x] FLOWS registry
+- [x] getFlowForPlatform, getFlowSteps, validateFlowSteps, validateAllFlows
 
 Verification:
-- [ ] npm run type-check passes
-- [ ] npm run lint passes
-- [ ] Platform validation throws correct errors
+- [x] npm run type-check passes
+- [x] npm run lint passes
+- [x] Platform validation throws correct errors
 ```
+
+### Notes
+
+**Deviations from plan:**
+- **DEVIATION FROM PLAN:** Updated `OnboardingStepId` in `types.ts` to add missing step IDs (`secure-storage`, `apple-driver`) that were not included in TASK-101 but are required for the platform flows. This was pre-approved by the PM.
+
+**Design decisions:**
+- Added `getFlowForPlatform(platform)` function that returns just the step ID array (in addition to `getFlowSteps` which returns full step objects) for consumers who only need IDs
+- Linux platform uses the same flow as macOS (documented in code comment)
+- Validation gracefully skips unregistered steps to allow flows to be defined before step implementations exist (Phase 3)
+- All validation only runs in development mode (`process.env.NODE_ENV === 'development'`)
+
+**Issues encountered:**
+- Initial type mismatch between task requirements (`secure-storage`, `apple-driver`) and TASK-101 types (`driver-setup`, no `secure-storage`). Resolved by updating types.ts with PM approval.
+- npm install had network issues with electron binary download, but type-check/lint still ran successfully after partial install.
+
+**Reviewer notes:**
+- The types.ts modification adds `secure-storage` and `apple-driver` to `OnboardingStepId` union type
+- Validation handles the case where `platforms` is undefined/empty (meaning "all platforms supported")
