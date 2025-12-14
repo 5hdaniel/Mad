@@ -236,22 +236,43 @@ Actions fire in the step's Content component. The hook's `handleAction` processe
 
 ## Implementation Summary (Engineer-Owned)
 
-*To be completed by implementing engineer after task completion.*
+*Completed: 2025-12-13*
 
 ```
 Files created:
-- [ ] src/components/onboarding/hooks/useOnboardingFlow.ts
-- [ ] src/components/onboarding/hooks/index.ts
+- [x] src/components/onboarding/hooks/useOnboardingFlow.ts
+- [x] src/components/onboarding/hooks/index.ts
 
 Features implemented:
-- [ ] Platform-specific step loading
-- [ ] Navigation (next/previous/goTo)
-- [ ] Action handling
-- [ ] Context building
-- [ ] Step override support
-- [ ] Skip handling
+- [x] Platform-specific step loading
+- [x] Navigation (next/previous/goTo)
+- [x] Action handling
+- [x] Context building
+- [x] Step filtering via shouldShow
+- [x] Skip handling
 
 Verification:
-- [ ] npm run type-check passes
-- [ ] npm run lint passes
+- [x] npm run type-check passes
+- [x] npm run lint passes (0 errors, 473 pre-existing warnings)
 ```
+
+### Notes
+
+**Deviations from plan:**
+- Used `shouldShow` filtering instead of "step override" pattern - the shouldShow approach is simpler and already defined in types
+- Added `allSteps` in return for cases where unfiltered list is needed
+- Added `OnboardingAppState` interface for cleaner app state typing
+
+**Design decisions:**
+- Hook receives app state as prop rather than accessing global state directly (dependency injection pattern)
+- Actions are passed to parent via `onAction` callback - parent is responsible for updating app state
+- Step filtering happens on every render based on context (dynamic)
+- `isNextDisabled` computed from both `canProceed` and `isStepComplete` meta functions
+
+**Issues encountered:**
+- Fixed pre-existing type error in AndroidComingSoonStep.tsx (`showNext` -> `hideContinue`)
+
+**Reviewer notes:**
+- The hook does not modify app state directly - it only handles navigation state
+- All StepAction types are handled in the switch statement with appropriate navigation
+- Error handling added for missing steps/flows

@@ -30,7 +30,7 @@ export const meta: OnboardingStepMeta = {
   platforms: ["macos", "windows"],
   navigation: {
     showBack: false,
-    showNext: false,
+    hideContinue: true,
   },
 };
 
