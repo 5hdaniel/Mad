@@ -158,114 +158,15 @@ STOP and ask the PM before proceeding if:
 
 ---
 
-### TASK-105: ProgressIndicator
+### TASK-105: ProgressIndicator ✅ COMPLETED
 
-```
-You are assigned Task TASK-105 – "Create Unified ProgressIndicator".
-
-## Setup
-Base branch: claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
-Your branch: feat/105-progress-indicator
-
-git fetch origin claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
-git checkout -b feat/105-progress-indicator origin/claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
-
-## Task Files (READ THESE FIRST)
-- .claude/plans/tasks/TASK-105-progress-indicator.md
-
-## Deliverables
-- Create: src/components/onboarding/shell/ProgressIndicator.tsx
-- Update: src/components/onboarding/shell/index.ts
-
-## Instructions
-Create a progress indicator that reads from step metadata.
-
-Props:
-- steps: OnboardingStep[] (from flow)
-- currentIndex: number
-- viewingIndex?: number (for back navigation)
-
-Visual specs (MUST match existing SetupProgressIndicator.tsx):
-- Circle: `w-8 h-8 rounded-full`
-- Completed: `bg-green-500 text-white` + checkmark SVG
-- Current: `bg-blue-500 text-white` + `ring-2 ring-offset-2 ring-blue-500`
-- Pending: `bg-gray-200 text-gray-500`
-- Connecting line: `h-0.5 mx-1 max-w-[48px]`
-- Labels: `text-xs` below circles
-
-KEY: Labels come from `step.meta.progressLabel` (single source of truth)
-
-## Verification
-- npm run type-check passes
-- npm run lint passes
-
-## ⚠️ BEFORE OPENING PR
-
-1. Update `.claude/plans/tasks/TASK-105-progress-indicator.md`
-2. Complete Implementation Summary with notes
-3. Visually compare with existing SetupProgressIndicator.tsx
-
-PR target: claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
-PR title: feat(onboarding): add unified ProgressIndicator component
-```
+*This task has been completed and merged.*
 
 ---
 
-### TASK-106: NavigationButtons
+### TASK-106: NavigationButtons ✅ COMPLETED
 
-```
-You are assigned Task TASK-106 – "Create NavigationButtons Component".
-
-## Setup
-Base branch: claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
-Your branch: feat/106-navigation-buttons
-
-git fetch origin claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
-git checkout -b feat/106-navigation-buttons origin/claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
-
-## Task Files (READ THESE FIRST)
-- .claude/plans/tasks/TASK-106-navigation-buttons.md
-- .claude/plans/addendum-01-state-persistence.md
-
-## Deliverables
-- Create: src/components/onboarding/shell/NavigationButtons.tsx
-- Update: src/components/onboarding/shell/index.ts
-
-## Instructions
-Create configurable navigation buttons.
-
-Props:
-- showBack: boolean
-- showNext: boolean
-- skipConfig?: SkipConfig | false
-- backLabel?: string (default: "Back")
-- nextLabel?: string (default: "Continue")
-- nextDisabled?: boolean
-- isStepComplete?: boolean (per Addendum 01 - disables Next until step complete)
-- onBack?: () => void
-- onNext?: () => void
-- onSkip?: () => void
-
-Button styles (MUST match existing):
-- Back: `bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200`
-- Next: `bg-blue-500 text-white rounded-lg font-semibold hover:bg-blue-600`
-- Skip: `text-sm text-gray-500 hover:text-gray-700 underline` (centered above buttons)
-- All: `flex-1 px-4 py-3 transition-colors`
-- Disabled: `disabled:opacity-50 disabled:cursor-not-allowed`
-
-## Verification
-- npm run type-check passes
-- npm run lint passes
-
-## ⚠️ BEFORE OPENING PR
-
-1. Update `.claude/plans/tasks/TASK-106-navigation-buttons.md`
-2. Complete Implementation Summary with notes
-3. Test all button combinations render correctly
-
-PR target: claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
-PR title: feat(onboarding): add NavigationButtons component
-```
+*This task has been completed and merged.*
 
 ---
 
