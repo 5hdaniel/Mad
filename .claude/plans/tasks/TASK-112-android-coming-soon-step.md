@@ -121,20 +121,39 @@ Key elements:
 
 ## Implementation Summary (Engineer-Owned)
 
-*To be completed by implementing engineer after task completion.*
+*Completed by Claude on 2025-12-14*
 
 ```
 Files created:
-- [ ] src/components/onboarding/steps/AndroidComingSoonStep.tsx
+- [x] src/components/onboarding/steps/AndroidComingSoonStep.tsx
+
+Files modified:
+- [x] src/components/onboarding/types.ts
+  - Added 'android-coming-soon' to OnboardingStepId union type
+  - Added GoBackSelectIphoneAction interface
+  - Added ContinueEmailOnlyAction interface
+  - Added both actions to StepAction union type
+- [x] src/components/onboarding/steps/index.ts
+  - Imported androidComingSoonStep
+  - Registered step in STEP_REGISTRY
 
 Features implemented:
-- [ ] Coming soon message with Android icon
-- [ ] Feature preview list
-- [ ] "Go Back & Select iPhone" button
-- [ ] "Continue with Email Only" button
-- [ ] Custom action firing
+- [x] Coming soon message with Android icon
+- [x] Feature preview list ("What's Coming")
+- [x] Notification sign-up section
+- [x] "Go Back & Select iPhone" button (fires GO_BACK_SELECT_IPHONE)
+- [x] "Continue with Email Only" button (fires CONTINUE_EMAIL_ONLY)
+- [x] Custom action firing via onAction prop
+
+Meta configuration:
+- id: 'android-coming-soon'
+- progressLabel: 'Android'
+- platforms: ['macos', 'windows']
+- navigation.showBack: false
+- navigation.showNext: false (custom buttons in Content)
 
 Verification:
-- [ ] npm run type-check passes
-- [ ] npm run lint passes
+- [ ] npm run type-check passes (environment issue - node_modules not installed)
+- [ ] npm run lint passes (environment issue - node_modules not installed)
+- Relying on CI for verification per task instructions
 ```

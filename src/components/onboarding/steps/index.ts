@@ -9,6 +9,7 @@
  */
 
 import type { OnboardingStep } from "../types";
+import { androidComingSoonStep } from "./AndroidComingSoonStep";
 
 /**
  * Central registry of all onboarding steps.
@@ -80,3 +81,10 @@ export function getStep(id: string): OnboardingStep {
 export function getAllSteps(): OnboardingStep[] {
   return Object.values(STEP_REGISTRY);
 }
+
+// =============================================================================
+// STEP REGISTRATIONS
+// =============================================================================
+
+// Register all steps
+registerStep("android-coming-soon", androidComingSoonStep);
