@@ -211,34 +211,35 @@ export function useAppStateMachine(): AppStateMachine {
 
       // POST-DB FLOW: Database initialized, user authenticated
       if (isAuthenticated && !needsTermsAcceptance) {
-        // Check if we're on an onboarding step handled by the new OnboardingFlow
-        // If so, let the hook manage navigation instead of this effect
-        const isOnNewOnboardingStep = [
+        // Onboarding steps handled by the new OnboardingFlow - don't interfere
+        const onboardingSteps = [
           "phone-type-selection",
           "email-onboarding",
           "apple-driver-setup",
-        ].includes(currentStep);
+          "android-coming-soon",
+          "keychain-explanation",
+          "permissions",
+        ];
 
-        if (isOnNewOnboardingStep) {
-          // New onboarding system handles navigation - skip auto-routing
-          console.log("[AppStateMachine] Skipping auto-routing, new onboarding handles:", currentStep);
+        if (onboardingSteps.includes(currentStep)) {
+          // New OnboardingFlow handles all navigation within onboarding
           return;
         }
 
+        // Only route TO onboarding if we're not already there and need to start
         if (!isCheckingEmailOnboarding && !isLoadingPhoneType) {
-          if (!hasSelectedPhoneType && !needsDriverSetup) {
-            if (currentStep !== "phone-type-selection")
-              setCurrentStep("phone-type-selection");
-          } else if (needsDriverSetup && isWindows) {
-            if (currentStep !== "apple-driver-setup")
-              setCurrentStep("apple-driver-setup");
-          } else if (!hasCompletedEmailOnboarding || !hasEmailConnected) {
-            if (currentStep !== "email-onboarding")
-              setCurrentStep("email-onboarding");
-          } else if (hasPermissions) {
-            if (currentStep !== "dashboard") setCurrentStep("dashboard");
-          } else {
-            if (currentStep !== "permissions") setCurrentStep("permissions");
+          const needsOnboarding = !hasSelectedPhoneType ||
+            !hasCompletedEmailOnboarding ||
+            !hasEmailConnected ||
+            (isWindows && needsDriverSetup) ||
+            (isMacOS && !hasPermissions);
+
+          if (needsOnboarding && currentStep !== "phone-type-selection") {
+            // Start onboarding from the beginning - the flow will handle the rest
+            setCurrentStep("phone-type-selection");
+          } else if (!needsOnboarding && currentStep !== "dashboard") {
+            // Onboarding complete - go to dashboard
+            setCurrentStep("dashboard");
           }
         }
       } else if (!isAuthenticated && !pendingOAuthData) {
