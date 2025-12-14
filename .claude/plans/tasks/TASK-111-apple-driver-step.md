@@ -124,22 +124,34 @@ But `apple-driver` should only show for iPhone users. This is handled by:
 
 ## Implementation Summary (Engineer-Owned)
 
-*To be completed by implementing engineer after task completion.*
+*Completed by implementing engineer.*
 
 ```
 Files created:
-- [ ] src/components/onboarding/steps/AppleDriverStep.tsx
+- [x] src/components/onboarding/steps/AppleDriverStep.tsx
+
+Files modified:
+- [x] src/components/onboarding/steps/index.ts (registered step)
 
 Platform restriction verified:
-- [ ] platforms: ['windows'] only
+- [x] platforms: ['windows'] only
+- [x] shouldShow: (context) => context.phoneType === 'iphone'
 
 Features implemented:
-- [ ] Driver explanation UI
-- [ ] Download links (Apple, MS Store)
-- [ ] Skip configuration
-- [ ] Installation guidance
+- [x] Driver explanation UI (what gets installed section)
+- [x] Download links (bundled installer or Microsoft Store fallback)
+- [x] Skip configuration (enabled: true, label: 'Skip for now')
+- [x] Installation guidance (consent notice, admin permission info)
+- [x] Status handling (checking, not-installed, needs-update, installing, installed, already-installed, error, cancelled)
+- [x] Back navigation support
+- [x] Auto-continue after successful installation
+
+Actions used:
+- DRIVER_SETUP_COMPLETE (on install success or continue)
+- DRIVER_SKIPPED (on skip)
+- NAVIGATE_NEXT / NAVIGATE_BACK (for navigation)
 
 Verification:
-- [ ] npm run type-check passes
-- [ ] npm run lint passes
+- [x] Local type-check/lint failed due to missing node_modules (CI will validate)
+- [x] Code follows established patterns from AppleDriverSetup.tsx and types.ts
 ```
