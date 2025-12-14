@@ -117,8 +117,6 @@ function AppleDriverStepContent({
 
   // Check driver status on mount
   useEffect(() => {
-    console.log("[AppleDriverStep] Component mounted, checking driver status...");
-
     const checkDriverStatus = async () => {
       const drivers = getDriversAPI();
       if (!drivers) {
@@ -131,11 +129,9 @@ function AppleDriverStepContent({
       try {
         // Check if drivers are already installed
         const driverResult = await drivers.checkApple();
-        console.log("[AppleDriverStep] Driver check result:", driverResult);
 
         // Only require isInstalled flag - service might not be running yet after fresh install
         if (driverResult.isInstalled) {
-          console.log("[AppleDriverStep] Drivers already installed!");
           // Drivers installed - check if update is available
           if (drivers.checkUpdate) {
             try {

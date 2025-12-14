@@ -50,8 +50,6 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
     isDatabaseInitialized: app.isDatabaseInitialized,
   };
 
-  // Debug: Log when appState changes
-  console.log("[OnboardingFlow] appState.emailConnected:", appState.emailConnected);
 
   // Action handler that maps to existing app handlers
   const handleAction = useCallback(
