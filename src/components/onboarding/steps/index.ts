@@ -89,4 +89,6 @@ export function getAllSteps(): OnboardingStep[] {
 // =============================================================================
 
 // Import steps to trigger registration via registerStep() calls
+// IMPORTANT: These imports MUST come after registerStep is defined
 import "./SecureStorageStep";
+import "./EmailConnectStep";

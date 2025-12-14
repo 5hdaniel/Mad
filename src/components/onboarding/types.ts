@@ -232,6 +232,12 @@ export interface OnboardingContext {
   emailProvider: "google" | "microsoft" | null;
 
   /**
+   * Authentication provider the user logged in with.
+   * Used to determine primary email provider recommendation.
+   */
+  authProvider: "google" | "microsoft";
+
+  /**
    * Whether this is a new user going through initial onboarding.
    * Affects which steps are shown and default behaviors.
    */
@@ -263,6 +269,17 @@ export interface SelectPhoneAction extends BaseStepAction {
   type: "SELECT_PHONE";
   payload: {
     phoneType: NonNullable<PhoneType>;
+  };
+}
+
+/**
+ * Action dispatched when user initiates email connection.
+ * The orchestrator handles the actual OAuth flow.
+ */
+export interface ConnectEmailStartAction extends BaseStepAction {
+  type: "CONNECT_EMAIL_START";
+  payload: {
+    provider: "google" | "microsoft";
   };
 }
 
@@ -358,6 +375,7 @@ export interface OnboardingCompleteAction extends BaseStepAction {
  */
 export type StepAction =
   | SelectPhoneAction
+  | ConnectEmailStartAction
   | EmailConnectedAction
   | EmailSkippedAction
   | PermissionGrantedAction
