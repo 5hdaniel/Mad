@@ -17,16 +17,16 @@ Create a single, authoritative progress indicator component that reads step info
 
 ## Acceptance Criteria
 
-- [ ] Accepts array of steps (from registry) and current index
-- [ ] Renders circular step indicators matching existing design
-- [ ] Completed steps show green checkmark
-- [ ] Current step shows blue with ring highlight
-- [ ] Pending steps show gray
-- [ ] Connecting lines between circles
-- [ ] Labels display `progressLabel` from step meta
-- [ ] Labels truncate gracefully if too long
-- [ ] Component is responsive
-- [ ] Matches visual style of existing SetupProgressIndicator.tsx
+- [x] Accepts array of steps (from registry) and current index
+- [x] Renders circular step indicators matching existing design
+- [x] Completed steps show green checkmark
+- [x] Current step shows blue with ring highlight
+- [x] Pending steps show gray
+- [x] Connecting lines between circles
+- [x] Labels display `progressLabel` from step meta
+- [x] Labels truncate gracefully if too long
+- [x] Component is responsive
+- [x] Matches visual style of existing SetupProgressIndicator.tsx
 
 ## Implementation Notes
 
@@ -165,20 +165,42 @@ function getStepStatus(
 
 ## Implementation Summary (Engineer-Owned)
 
-*To be completed by implementing engineer after task completion.*
+**Completed: 2025-12-14**
 
 ```
 Files created:
-- [ ] src/components/onboarding/shell/ProgressIndicator.tsx
+- [x] src/components/onboarding/shell/ProgressIndicator.tsx
+- [x] src/components/onboarding/shell/index.ts
 
 Sub-components:
-- [ ] StepCircle
-- [ ] ConnectingLine
-- [ ] StepLabel
-- [ ] LabelSpacer
+- [x] StepCircle - renders circle with status styling (completed/current/pending)
+- [x] ConnectingLine - renders line between circles with correct colors
+- [x] StepLabel - renders label below circle with active/inactive styling
+- [x] LabelSpacer - maintains alignment between labels
+- [x] EdgeSpacer - invisible spacers at edges (matching original design)
+- [x] CheckmarkIcon - SVG checkmark for completed steps
 
 Verification:
-- [ ] npm run type-check passes
-- [ ] npm run lint passes
-- [ ] Visual matches existing SetupProgressIndicator
+- [x] npm run type-check passes
+- [x] npm run lint passes
+- [x] Visual matches existing SetupProgressIndicator
 ```
+
+### Notes
+
+**Design Decisions:**
+- Added `EdgeSpacer` and `LabelEdgeSpacer` helper components to match the original invisible spacers in SetupProgressIndicator.tsx (lines 37, 79, 85, 107)
+- Extracted `CheckmarkIcon` as a separate component for cleaner code
+- Added `transition-all` classes to StepCircle and ConnectingLine for smooth state changes
+- Added early return for empty steps array as edge case handling
+
+**Visual Matching:**
+- All Tailwind classes directly copied from SetupProgressIndicator.tsx:
+  - Circle: `w-8 h-8 rounded-full`
+  - Completed: `bg-green-500 text-white`
+  - Current: `bg-blue-500 text-white ring-2 ring-offset-2 ring-blue-500`
+  - Pending: `bg-gray-200 text-gray-500`
+  - Line: `flex-1 h-0.5 mx-1 max-w-[48px]`
+  - Labels: `text-xs text-center max-w-[56px]`
+
+**No Deviations from spec.** All acceptance criteria met.
