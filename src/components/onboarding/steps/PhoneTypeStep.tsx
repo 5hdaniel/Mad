@@ -128,25 +128,25 @@ const Content: React.FC<OnboardingStepContentProps> = ({
   return (
     <>
       {/* Header */}
-      <div className="text-center mb-8">
-        <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+      <div className="text-center mb-6">
+        <div className="w-14 h-14 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
           <PhoneIcon />
         </div>
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">
+        <h1 className="text-xl font-bold text-gray-900 mb-2">
           What phone do you use?
         </h1>
-        <p className="text-gray-600">
+        <p className="text-sm text-gray-600">
           Magic Audit can sync your text messages and contacts to help track
           real estate communications.
         </p>
       </div>
 
       {/* Phone Selection Cards */}
-      <div className="grid grid-cols-2 gap-4 mb-8">
+      <div className="grid grid-cols-2 gap-3 mb-6">
         {/* iPhone Option */}
         <button
           onClick={handleSelectIPhone}
-          className={`relative p-6 rounded-xl border-2 transition-all duration-200 text-left ${
+          className={`relative p-4 rounded-xl border-2 transition-all duration-200 text-left ${
             selectedType === "iphone"
               ? "border-blue-500 bg-blue-50 ring-2 ring-blue-200"
               : "border-gray-200 hover:border-blue-400 hover:bg-blue-50"
@@ -175,7 +175,7 @@ const Content: React.FC<OnboardingStepContentProps> = ({
         {/* Android Option */}
         <button
           onClick={handleSelectAndroid}
-          className={`relative p-6 rounded-xl border-2 transition-all duration-200 text-left ${
+          className={`relative p-4 rounded-xl border-2 transition-all duration-200 text-left ${
             selectedType === "android"
               ? "border-green-500 bg-green-50 ring-2 ring-green-200"
               : "border-gray-200 hover:border-green-400 hover:bg-green-50"

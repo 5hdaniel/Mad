@@ -49,12 +49,12 @@ function Content({ onAction }: OnboardingStepContentProps) {
   return (
     <div className="max-w-lg w-full mx-auto">
       {/* Main Card */}
-      <div className="bg-white rounded-2xl shadow-xl p-8 text-center">
+      <div className="bg-white rounded-2xl shadow-xl p-6 text-center">
         {/* Android Icon with Coming Soon Badge */}
-        <div className="relative inline-block mb-6">
-          <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mx-auto">
+        <div className="relative inline-block mb-4">
+          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
             <svg
-              className="w-14 h-14 text-green-500"
+              className="w-10 h-10 text-green-500"
               viewBox="0 0 24 24"
               fill="currentColor"
             >
@@ -70,19 +70,19 @@ function Content({ onAction }: OnboardingStepContentProps) {
         </div>
 
         {/* Header */}
-        <h1 className="text-2xl font-bold text-gray-900 mb-3">
+        <h1 className="text-xl font-bold text-gray-900 mb-2">
           Android Support Coming Soon!
         </h1>
 
-        <p className="text-gray-600 mb-6">
+        <p className="text-sm text-gray-600 mb-4">
           We're working hard to bring Android phone sync to Magic Audit. You'll
           be able to sync your text messages and contacts from your Android
           device.
         </p>
 
         {/* Feature Preview */}
-        <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-6 mb-6 text-left">
-          <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+        <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4 mb-4 text-left">
+          <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
             <svg
               className="w-5 h-5 text-green-500"
               fill="none"
@@ -151,7 +151,7 @@ function Content({ onAction }: OnboardingStepContentProps) {
         </div>
 
         {/* Notification Sign Up */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
           <div className="flex items-start gap-3">
             <svg
               className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5"
@@ -178,25 +178,25 @@ function Content({ onAction }: OnboardingStepContentProps) {
         </div>
 
         {/* In the Meantime */}
-        <div className="border-t border-gray-100 pt-6 mb-6">
-          <p className="text-sm text-gray-500 mb-4">
+        <div className="border-t border-gray-100 pt-4 mb-4">
+          <p className="text-sm text-gray-500 mb-3">
             In the meantime, you can still use Magic Audit to audit your email
             communications. Email auditing works great on both Mac and PC!
           </p>
         </div>
 
         {/* Action Buttons */}
-        <div className="space-y-3">
+        <div className="space-y-2">
           <button
             onClick={handleContinueWithEmail}
-            className="w-full py-3 px-4 bg-blue-500 text-white rounded-lg font-semibold hover:bg-blue-600 transition-all shadow-md hover:shadow-lg"
+            className="w-full py-2.5 px-4 bg-blue-500 text-white rounded-lg font-semibold hover:bg-blue-600 transition-all shadow-md hover:shadow-lg"
           >
             Continue with Email Only
           </button>
 
           <button
             onClick={handleGoBack}
-            className="w-full py-3 px-4 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-all flex items-center justify-center gap-2"
+            className="w-full py-2.5 px-4 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-all flex items-center justify-center gap-2"
           >
             <svg
               className="w-4 h-4"
@@ -216,7 +216,7 @@ function Content({ onAction }: OnboardingStepContentProps) {
         </div>
 
         {/* Footer Note */}
-        <p className="text-xs text-gray-400 mt-6">
+        <p className="text-xs text-gray-400 mt-4">
           Have an iPhone as well? Go back and select iPhone to sync your
           messages today.
         </p>

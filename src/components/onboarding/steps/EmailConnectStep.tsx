@@ -109,15 +109,15 @@ function ProviderCard({
   if (isPrimary) {
     // Primary provider card - larger and highlighted
     return (
-      <div className="mb-6">
-        <div className="p-5 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl border-2 border-blue-200">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-white rounded-lg shadow-md flex items-center justify-center">
+      <div className="mb-4">
+        <div className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl border-2 border-blue-200">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <div className="w-10 h-10 bg-white rounded-lg shadow-md flex items-center justify-center">
                 {config.icon}
               </div>
               <div>
-                <h4 className="text-base font-semibold text-gray-900">
+                <h4 className="text-sm font-semibold text-gray-900">
                   {config.name}
                 </h4>
                 {isLoading ? (
@@ -134,9 +134,9 @@ function ProviderCard({
               </div>
             </div>
             {isConnected && (
-              <div className="w-7 h-7 bg-green-500 rounded-full flex items-center justify-center">
+              <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
                 <svg
-                  className="w-4 h-4 text-white"
+                  className="w-3.5 h-3.5 text-white"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -154,7 +154,7 @@ function ProviderCard({
           {isConnected ? (
             <button
               onClick={onContinue}
-              className="w-full px-4 py-3 bg-green-500 hover:bg-green-600 text-white text-sm font-semibold rounded-lg transition-all flex items-center justify-center gap-2 shadow-md"
+              className="w-full px-4 py-2.5 bg-green-500 hover:bg-green-600 text-white text-sm font-semibold rounded-lg transition-all flex items-center justify-center gap-2 shadow-md"
             >
               <span>Continue</span>
               <svg
@@ -175,7 +175,7 @@ function ProviderCard({
             <button
               onClick={onConnect}
               disabled={isConnecting || isLoading}
-              className="w-full px-4 py-3 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white text-sm font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md"
+              className="w-full px-4 py-2.5 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white text-sm font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md"
             >
               {isConnecting ? (
                 <>
@@ -194,14 +194,14 @@ function ProviderCard({
 
   // Secondary provider card - smaller and optional
   return (
-    <div className="mb-8">
-      <p className="text-xs text-gray-500 text-center mb-3">
+    <div className="mb-4">
+      <p className="text-xs text-gray-500 text-center mb-2">
         Or connect another email service (optional)
       </p>
-      <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-white rounded-lg shadow flex items-center justify-center">
+      <div className="p-3 bg-gray-50 rounded-xl border border-gray-200">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <div className="w-9 h-9 bg-white rounded-lg shadow flex items-center justify-center">
               {config.icon}
             </div>
             <div>
@@ -332,10 +332,10 @@ export function Content({
   return (
     <>
       {/* Header */}
-      <div className="text-center mb-8">
-        <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full mb-6 shadow-lg">
+      <div className="text-center mb-5">
+        <div className="inline-flex items-center justify-center w-14 h-14 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full mb-3 shadow-lg">
           <svg
-            className="w-10 h-10 text-white"
+            className="w-7 h-7 text-white"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -348,18 +348,18 @@ export function Content({
             />
           </svg>
         </div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-3">
+        <h2 className="text-xl font-bold text-gray-900 mb-2">
           Connect Your Email
         </h2>
-        <p className="text-gray-600">
+        <p className="text-sm text-gray-600">
           Connect your email account to export communications alongside text
           messages for complete audit trails.
         </p>
       </div>
 
       {/* Why connect email info box */}
-      <div className="mb-8 bg-blue-50 rounded-xl p-4">
-        <h3 className="text-sm font-semibold text-blue-900 mb-3">
+      <div className="mb-5 bg-blue-50 rounded-xl p-3">
+        <h3 className="text-sm font-semibold text-blue-900 mb-2">
           Why connect your email?
         </h3>
         <ul className="space-y-2">

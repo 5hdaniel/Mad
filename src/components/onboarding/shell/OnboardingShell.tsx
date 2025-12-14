@@ -41,7 +41,7 @@ export function OnboardingShell({
         {progressSlot}
 
         {/* Main card container */}
-        <div className="bg-white rounded-2xl shadow-xl p-8">
+        <div className="bg-white rounded-2xl shadow-xl p-6">
           {children}
         </div>
 

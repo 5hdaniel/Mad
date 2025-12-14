@@ -73,10 +73,33 @@ export function NavigationButtons({
   const isNextDisabled = nextDisabled || !isStepComplete;
 
   return (
-    <div className="mt-6">
-      {/* Skip section (above main buttons) */}
+    <div className="mt-4">
+      {/* Main navigation buttons */}
+      <div className="flex gap-3">
+        {showBack && (
+          <button
+            type="button"
+            onClick={onBack}
+            className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-colors"
+          >
+            {backLabel}
+          </button>
+        )}
+        {showNext && (
+          <button
+            type="button"
+            onClick={onNext}
+            disabled={isNextDisabled}
+            className="flex-1 px-4 py-2.5 bg-blue-500 text-white rounded-lg font-semibold hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {nextLabel}
+          </button>
+        )}
+      </div>
+
+      {/* Skip section (below main buttons) */}
       {showSkip && (
-        <div className="text-center mb-4">
+        <div className="text-center mt-3">
           <button
             type="button"
             onClick={onSkip}
@@ -91,29 +114,6 @@ export function NavigationButtons({
           )}
         </div>
       )}
-
-      {/* Main navigation buttons */}
-      <div className="flex gap-3">
-        {showBack && (
-          <button
-            type="button"
-            onClick={onBack}
-            className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-colors"
-          >
-            {backLabel}
-          </button>
-        )}
-        {showNext && (
-          <button
-            type="button"
-            onClick={onNext}
-            disabled={isNextDisabled}
-            className="flex-1 px-4 py-3 bg-blue-500 text-white rounded-lg font-semibold hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {nextLabel}
-          </button>
-        )}
-      </div>
     </div>
   );
 }

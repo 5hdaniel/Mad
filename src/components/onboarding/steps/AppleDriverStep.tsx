@@ -246,11 +246,11 @@ function AppleDriverStepContent({
   return (
     <div className="max-w-xl w-full mx-auto">
       {/* Main Card */}
-      <div className="bg-white rounded-2xl shadow-xl p-8">
+      <div className="bg-white rounded-2xl shadow-xl p-6">
         {/* Header */}
-        <div className="text-center mb-6">
+        <div className="text-center mb-5">
           <div
-            className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${
+            className={`w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-3 ${
               status === "installed" || status === "already-installed"
                 ? "bg-green-100"
                 : status === "needs-update"
@@ -261,10 +261,10 @@ function AppleDriverStepContent({
             }`}
           >
             {status === "checking" || status === "installing" ? (
-              <div className="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin" />
+              <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
             ) : status === "installed" || status === "already-installed" ? (
               <svg
-                className="w-8 h-8 text-green-600"
+                className="w-7 h-7 text-green-600"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -278,7 +278,7 @@ function AppleDriverStepContent({
               </svg>
             ) : status === "needs-update" ? (
               <svg
-                className="w-8 h-8 text-amber-600"
+                className="w-7 h-7 text-amber-600"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -292,7 +292,7 @@ function AppleDriverStepContent({
               </svg>
             ) : status === "error" || status === "cancelled" ? (
               <svg
-                className="w-8 h-8 text-red-600"
+                className="w-7 h-7 text-red-600"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -306,7 +306,7 @@ function AppleDriverStepContent({
               </svg>
             ) : (
               <svg
-                className="w-8 h-8 text-blue-600"
+                className="w-7 h-7 text-blue-600"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -321,7 +321,7 @@ function AppleDriverStepContent({
             )}
           </div>
 
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">
+          <h1 className="text-xl font-bold text-gray-900 mb-2">
             {status === "checking"
               ? "Checking System..."
               : status === "installing"
@@ -354,8 +354,8 @@ function AppleDriverStepContent({
         {status === "needs-update" && (
           <>
             {/* Version info */}
-            <div className="bg-amber-50 rounded-lg p-4 mb-6">
-              <h3 className="font-medium text-gray-900 mb-3 flex items-center gap-2">
+            <div className="bg-amber-50 rounded-lg p-3 mb-4">
+              <h3 className="font-medium text-gray-900 mb-2 flex items-center gap-2">
                 <svg
                   className="w-5 h-5 text-amber-500"
                   fill="none"
@@ -390,7 +390,7 @@ function AppleDriverStepContent({
             </div>
 
             {/* Consent notice */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
               <div className="flex items-start gap-3">
                 <svg
                   className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5"
@@ -421,7 +421,7 @@ function AppleDriverStepContent({
             {hasBundled ? (
               <button
                 onClick={handleInstall}
-                className="w-full py-3 px-4 bg-blue-500 text-white rounded-lg font-semibold hover:bg-blue-600 transition-all shadow-md hover:shadow-lg mb-3"
+                className="w-full py-2.5 px-4 bg-blue-500 text-white rounded-lg font-semibold hover:bg-blue-600 transition-all shadow-md hover:shadow-lg mb-3"
               >
                 Update Tools
               </button>
@@ -433,7 +433,7 @@ function AppleDriverStepContent({
                 </p>
                 <button
                   onClick={handleOpenITunesStore}
-                  className="w-full py-3 px-4 bg-blue-500 text-white rounded-lg font-semibold hover:bg-blue-600 transition-all shadow-md hover:shadow-lg mb-3"
+                  className="w-full py-2.5 px-4 bg-blue-500 text-white rounded-lg font-semibold hover:bg-blue-600 transition-all shadow-md hover:shadow-lg mb-3"
                 >
                   Open Microsoft Store (iTunes)
                 </button>
@@ -446,8 +446,8 @@ function AppleDriverStepContent({
         {status === "not-installed" && (
           <>
             {/* What gets installed */}
-            <div className="bg-gray-50 rounded-lg p-4 mb-6">
-              <h3 className="font-medium text-gray-900 mb-3 flex items-center gap-2">
+            <div className="bg-gray-50 rounded-lg p-3 mb-4">
+              <h3 className="font-medium text-gray-900 mb-2 flex items-center gap-2">
                 <svg
                   className="w-5 h-5 text-gray-500"
                   fill="none"
@@ -479,7 +479,7 @@ function AppleDriverStepContent({
             </div>
 
             {/* Consent notice */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
               <div className="flex items-start gap-3">
                 <svg
                   className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5"
@@ -511,7 +511,7 @@ function AppleDriverStepContent({
             {hasBundled ? (
               <button
                 onClick={handleInstall}
-                className="w-full py-3 px-4 bg-blue-500 text-white rounded-lg font-semibold hover:bg-blue-600 transition-all shadow-md hover:shadow-lg mb-3"
+                className="w-full py-2.5 px-4 bg-blue-500 text-white rounded-lg font-semibold hover:bg-blue-600 transition-all shadow-md hover:shadow-lg mb-3"
               >
                 Install Tools
               </button>
@@ -523,7 +523,7 @@ function AppleDriverStepContent({
                 </p>
                 <button
                   onClick={handleOpenITunesStore}
-                  className="w-full py-3 px-4 bg-blue-500 text-white rounded-lg font-semibold hover:bg-blue-600 transition-all shadow-md hover:shadow-lg mb-3"
+                  className="w-full py-2.5 px-4 bg-blue-500 text-white rounded-lg font-semibold hover:bg-blue-600 transition-all shadow-md hover:shadow-lg mb-3"
                 >
                   Open Microsoft Store (iTunes)
                 </button>
@@ -557,7 +557,7 @@ function AppleDriverStepContent({
         {status === "already-installed" && (
           <>
             {/* Version info */}
-            <div className="bg-green-50 rounded-lg p-4 mb-6">
+            <div className="bg-green-50 rounded-lg p-3 mb-4">
               <h3 className="font-medium text-gray-900 mb-2 flex items-center gap-2">
                 <svg
                   className="w-5 h-5 text-green-500"
@@ -587,7 +587,7 @@ function AppleDriverStepContent({
             {/* Green Continue Button */}
             <button
               onClick={handleContinue}
-              className="w-full py-3 px-4 bg-green-500 text-white rounded-lg font-semibold hover:bg-green-600 transition-all shadow-md hover:shadow-lg"
+              className="w-full py-2.5 px-4 bg-green-500 text-white rounded-lg font-semibold hover:bg-green-600 transition-all shadow-md hover:shadow-lg"
             >
               Continue
             </button>
@@ -599,13 +599,13 @@ function AppleDriverStepContent({
           <div className="flex gap-3 mb-3">
             <button
               onClick={handleInstall}
-              className="flex-1 py-3 px-4 bg-blue-500 text-white rounded-lg font-semibold hover:bg-blue-600 transition-all"
+              className="flex-1 py-2.5 px-4 bg-blue-500 text-white rounded-lg font-semibold hover:bg-blue-600 transition-all"
             >
               Try Again
             </button>
             <button
               onClick={handleOpenITunesStore}
-              className="flex-1 py-3 px-4 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition-all"
+              className="flex-1 py-2.5 px-4 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition-all"
             >
               Install iTunes
             </button>
@@ -614,8 +614,8 @@ function AppleDriverStepContent({
 
         {/* Checking State */}
         {status === "checking" && (
-          <div className="text-center py-4">
-            <div className="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" />
+          <div className="text-center py-3">
+            <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" />
           </div>
         )}
       </div>

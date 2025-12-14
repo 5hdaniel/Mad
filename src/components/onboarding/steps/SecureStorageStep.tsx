@@ -47,7 +47,7 @@ export const meta: OnboardingStepMeta = {
 function LockIcon(): React.ReactElement {
   return (
     <svg
-      className="w-10 h-10 text-white"
+      className="w-7 h-7 text-white"
       fill="none"
       stroke="currentColor"
       viewBox="0 0 24 24"
@@ -68,7 +68,7 @@ function LockIcon(): React.ReactElement {
 function SpinnerIcon(): React.ReactElement {
   return (
     <svg
-      className="w-10 h-10 text-white animate-spin"
+      className="w-7 h-7 text-white animate-spin"
       fill="none"
       viewBox="0 0 24 24"
     >
@@ -155,15 +155,15 @@ export function SecureStorageContent({
   return (
     <div className="text-center">
       {/* Icon with gradient background */}
-      <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full mb-6 shadow-lg">
+      <div className="inline-flex items-center justify-center w-14 h-14 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full mb-4 shadow-lg">
         {isLoading ? <SpinnerIcon /> : <LockIcon />}
       </div>
 
       {/* Title and subtitle */}
-      <h2 className="text-2xl font-bold text-gray-900 mb-3">
+      <h2 className="text-xl font-bold text-gray-900 mb-2">
         {isLoading ? "Waiting for Authorization" : "Secure Storage Setup"}
       </h2>
-      <p className="text-gray-600 mb-8">
+      <p className="text-gray-600 text-sm mb-5">
         {isLoading
           ? "Please enter your password in the system dialog."
           : "Protect your data with macOS Keychain"}
@@ -179,8 +179,8 @@ export function SecureStorageContent({
       ) : (
         <>
           {/* Info box */}
-          <div className="mb-6 bg-blue-50 rounded-xl p-4 text-left">
-            <p className="text-gray-700 text-sm mb-3">{bodyText}</p>
+          <div className="mb-4 bg-blue-50 rounded-xl p-3 text-left">
+            <p className="text-gray-700 text-sm mb-2">{bodyText}</p>
             <div className="flex items-start gap-2">
               <InfoIcon />
               <p className="text-sm text-blue-700">
@@ -191,7 +191,7 @@ export function SecureStorageContent({
           </div>
 
           {/* Don't show again checkbox */}
-          <label className="flex items-center gap-2 mb-6 cursor-pointer justify-start">
+          <label className="flex items-center gap-2 mb-4 cursor-pointer justify-start">
             <input
               type="checkbox"
               checked={dontShowAgain}
@@ -207,13 +207,13 @@ export function SecureStorageContent({
           <div className="flex gap-3">
             <button
               onClick={handleBack}
-              className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-colors"
+              className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-colors"
             >
               Back
             </button>
             <button
               onClick={handleContinue}
-              className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-600 hover:to-purple-700 transition-colors"
+              className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-600 hover:to-purple-700 transition-colors"
             >
               Continue
             </button>

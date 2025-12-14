@@ -108,7 +108,7 @@ function InstructionStep({
 
   return (
     <div
-      className={`border-2 rounded-lg p-6 mb-4 transition-all ${
+      className={`border-2 rounded-lg p-4 mb-3 transition-all ${
         isComplete
           ? "bg-green-50 border-green-300"
           : "bg-yellow-50 border-yellow-300"
@@ -136,15 +136,15 @@ function InstructionStep({
         <>
           {actionButton}
           {tip && (
-            <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
               <p className="text-xs text-blue-800">{tip}</p>
             </div>
           )}
-          <div className="flex gap-3 mt-4">
+          <div className="flex gap-3 mt-3">
             {onBack && (
               <button
                 onClick={onBack}
-                className="px-4 py-3 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-colors flex items-center gap-2"
+                className="px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-colors flex items-center gap-2"
               >
                 <BackArrowIcon className="w-4 h-4" />
                 Back
@@ -152,7 +152,7 @@ function InstructionStep({
             )}
             <button
               onClick={onComplete}
-              className="flex-1 bg-blue-500 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors"
+              className="flex-1 bg-blue-500 text-white py-2.5 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors"
             >
               Done
             </button>
@@ -245,20 +245,20 @@ function PermissionsStepContent({ onAction }: OnboardingStepContentProps) {
   if (currentInstructionStep === 0) {
     return (
       <div className="max-w-2xl mx-auto">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-primary/10 rounded-full mb-6">
-            <ShieldLockIcon className="w-10 h-10 text-primary" />
+        <div className="text-center mb-5">
+          <div className="inline-flex items-center justify-center w-14 h-14 bg-primary/10 rounded-full mb-4">
+            <ShieldLockIcon className="w-7 h-7 text-primary" />
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-4">
+          <h1 className="text-xl font-bold text-gray-900 mb-2">
             Full Disk Access Required
           </h1>
-          <p className="text-lg text-gray-600">
+          <p className="text-sm text-gray-600">
             To read your Messages database, macOS requires Full Disk Access
             permission
           </p>
         </div>
 
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-8">
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-5">
           <h2 className="font-semibold text-gray-900 mb-3">
             Why is this needed?
           </h2>
@@ -284,7 +284,7 @@ function PermissionsStepContent({ onAction }: OnboardingStepContentProps) {
           </div>
         </div>
 
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-8">
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-5">
           <div className="flex items-start">
             <svg
               className="w-5 h-5 text-gray-500 mr-2 flex-shrink-0 mt-0.5"
@@ -314,7 +314,7 @@ function PermissionsStepContent({ onAction }: OnboardingStepContentProps) {
             }
             setCurrentInstructionStep(1);
           }}
-          className="w-full bg-primary text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors text-lg"
+          className="w-full bg-primary text-white py-2.5 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors"
         >
           Grant Permission
         </button>
@@ -325,10 +325,10 @@ function PermissionsStepContent({ onAction }: OnboardingStepContentProps) {
   // Guided instruction flow
   return (
     <div className="max-w-2xl mx-auto">
-      <div className="text-center mb-8">
-        <div className="inline-flex items-center justify-center w-16 h-16 bg-primary/10 rounded-full mb-4">
+      <div className="text-center mb-5">
+        <div className="inline-flex items-center justify-center w-12 h-12 bg-primary/10 rounded-full mb-3">
           <svg
-            className="w-8 h-8 text-primary"
+            className="w-6 h-6 text-primary"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -341,10 +341,10 @@ function PermissionsStepContent({ onAction }: OnboardingStepContentProps) {
             />
           </svg>
         </div>
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">
+        <h1 className="text-xl font-bold text-gray-900 mb-2">
           Grant Full Disk Access
         </h1>
-        <p className="text-gray-600">Follow these steps to grant permission</p>
+        <p className="text-sm text-gray-600">Follow these steps to grant permission</p>
       </div>
 
       {/* Step 1: Open System Settings */}
@@ -360,10 +360,10 @@ function PermissionsStepContent({ onAction }: OnboardingStepContentProps) {
         isActive={currentInstructionStep >= 1}
         onComplete={() => markStepComplete(1)}
         actionButton={
-          <div className="space-y-3">
+          <div className="space-y-2">
             <button
               onClick={handleOpenSystemSettings}
-              className="w-full bg-primary text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors"
+              className="w-full bg-primary text-white py-2.5 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors"
             >
               Open System Settings
             </button>
@@ -459,17 +459,17 @@ function PermissionsStepContent({ onAction }: OnboardingStepContentProps) {
 
       {/* Final: All steps complete */}
       {completedSteps.has(5) && (
-        <div className="bg-green-50 border-2 border-green-300 rounded-lg p-6 text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-green-500 rounded-full mb-4">
-            <CheckIcon className="w-8 h-8 text-white" />
+        <div className="bg-green-50 border-2 border-green-300 rounded-lg p-4 text-center">
+          <div className="inline-flex items-center justify-center w-12 h-12 bg-green-500 rounded-full mb-3">
+            <CheckIcon className="w-6 h-6 text-white" />
           </div>
-          <h3 className="text-xl font-bold text-gray-900 mb-2">
+          <h3 className="text-lg font-bold text-gray-900 mb-2">
             Almost Done!
           </h3>
-          <p className="text-gray-700 mb-2">
+          <p className="text-sm text-gray-700 mb-2">
             macOS will prompt you to <strong>"Quit & Reopen"</strong> the app.
           </p>
-          <p className="text-sm text-gray-600 mb-4">
+          <p className="text-xs text-gray-600 mb-3">
             Click "Quit & Reopen" when prompted, or restart the app manually.
             We're checking for permissions automatically.
           </p>
