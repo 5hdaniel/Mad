@@ -188,7 +188,11 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
         />
       }
     >
-      <currentStep.Content context={context} onAction={handleStepAction} />
+      <currentStep.Content
+        key={currentStep.meta.id}
+        context={context}
+        onAction={handleStepAction}
+      />
     </OnboardingShell>
   );
 }
