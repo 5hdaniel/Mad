@@ -118,23 +118,40 @@ This logic currently exists in PermissionsScreen.tsx and should be preserved.
 
 ## Implementation Summary (Engineer-Owned)
 
-*To be completed by implementing engineer after task completion.*
+*Completed by Claude on 2025-12-14*
 
 ```
 Files created:
-- [ ] src/components/onboarding/steps/PermissionsStep.tsx
+- [x] src/components/onboarding/steps/PermissionsStep.tsx (513 lines)
+
+Files modified:
+- [x] src/components/onboarding/steps/index.ts (import + re-export)
 
 Platform restriction verified:
-- [ ] platforms: ['macos'] only
+- [x] platforms: ['macos'] only
 
 Features implemented:
-- [ ] Permission explanation UI
-- [ ] System Settings guide
-- [ ] Open Settings action
-- [ ] Permission status indicator
-- [ ] canProceed validation
+- [x] Permission explanation UI (shield icon, Full Disk Access explanation)
+- [x] System Settings guide (6-step walkthrough)
+- [x] Open Settings action (window.electron.openSystemSettings())
+- [x] Permission status indicator (auto-check every 2s + manual button)
+- [x] canProceed validation (context.permissionsGranted)
+
+Meta configuration:
+- id: 'permissions'
+- progressLabel: 'Permissions'
+- platforms: ['macos']
+- navigation.showBack: true
+- canProceed: (context) => context.permissionsGranted
+
+Actions dispatched:
+- { type: 'PERMISSION_GRANTED' } when permission confirmed
 
 Verification:
-- [ ] npm run type-check passes
-- [ ] npm run lint passes
+- [ ] npm run type-check passes (local tools unavailable - rely on CI)
+- [ ] npm run lint passes (local tools unavailable - rely on CI)
+
+Notes:
+- Local dev dependencies not installed; CI will validate
+- Used window.electron API (not window.api) per existing codebase pattern
 ```
