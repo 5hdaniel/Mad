@@ -35,11 +35,17 @@ jobs:
 
       # Import Apple certificate for code signing
       - name: Import Apple Certificate
-        if: env.MACOS_CERTIFICATE != ''
+        id: import-cert
         env:
           MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
           MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
         run: |
+          if [ -z "$MACOS_CERTIFICATE" ]; then
+            echo "No certificate configured, skipping import"
+            echo "signing_enabled=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
           # Create keychain
           KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
           KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
@@ -48,8 +54,13 @@ jobs:
           security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
 
-          # Import certificate
-          echo "$MACOS_CERTIFICATE" | base64 --decode > $RUNNER_TEMP/certificate.p12
+          # Import certificate (strip any line breaks/spaces from base64)
+          echo "$MACOS_CERTIFICATE" | tr -d '\n\r ' | base64 --decode > $RUNNER_TEMP/certificate.p12
+
+          # Debug: show certificate file size
+          echo "Certificate file size:"
+          ls -la $RUNNER_TEMP/certificate.p12
+
           security import $RUNNER_TEMP/certificate.p12 -P "$MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
           security list-keychain -d user -s $KEYCHAIN_PATH
 
@@ -57,6 +68,7 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
 
           echo "Certificate imported successfully"
+          echo "signing_enabled=true" >> $GITHUB_OUTPUT
 
       - name: Package and Sign macOS App
         env:
@@ -203,7 +215,8 @@ jobs:
     name: Create GitHub Release
     needs: [release-macos, release-windows]
     runs-on: ubuntu-latest
-    if: success()
+    # Create release if at least one platform succeeded
+    if: always() && (needs.release-macos.result == 'success' || needs.release-windows.result == 'success')
 
     steps:
       - name: Checkout code
