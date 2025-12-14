@@ -532,20 +532,12 @@ function AppleDriverStepContent({
 
         {/* Error/Cancelled State */}
         {(status === "error" || status === "cancelled") && (
-          <div className="flex gap-3 mb-3">
-            <button
-              onClick={handleInstall}
-              className="flex-1 py-2.5 px-4 bg-blue-500 text-white rounded-lg font-semibold hover:bg-blue-600 transition-all"
-            >
-              Try Again
-            </button>
-            <button
-              onClick={handleOpenITunesStore}
-              className="flex-1 py-2.5 px-4 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition-all"
-            >
-              Install iTunes
-            </button>
-          </div>
+          <button
+            onClick={handleInstall}
+            className="w-full py-2.5 px-4 bg-blue-500 text-white rounded-lg font-semibold hover:bg-blue-600 transition-all shadow-md hover:shadow-lg mb-3"
+          >
+            Retry
+          </button>
         )}
 
 

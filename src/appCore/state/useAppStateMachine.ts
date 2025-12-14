@@ -449,29 +449,31 @@ export function useAppStateMachine(): AppStateMachine {
   };
 
   const handleAppleDriverSetupComplete = async (): Promise<void> => {
+    // Mark all onboarding as complete - driver setup is the final step on Windows
     setNeedsDriverSetup(false);
     setHasSelectedPhoneType(true);
+    setHasCompletedEmailOnboarding(true);
+    // hasEmailConnected should already be true from email step
 
-    // On Windows, driver setup is step 3 (after email onboarding)
-    // Navigation to dashboard is handled by the onboarding flow hook's onComplete callback
+    // On Windows, driver setup is the last step - now navigate to dashboard
     if (pendingOAuthData && !isAuthenticated) {
       // Pre-DB flow: need to initialize database before going to dashboard
-      // The secure storage flow will handle initialization and navigation
       try {
         await window.api.auth.completePendingLogin(pendingOAuthData);
       } catch (error) {
         console.error("[handleAppleDriverSetupComplete] Failed to complete pending login:", error);
       }
     }
-    // Note: Don't call setCurrentStep here - let the onboarding flow hook handle navigation
+    // Navigation to dashboard is handled by the onboarding flow hook's onComplete callback
   };
 
   const handleAppleDriverSetupSkip = async (): Promise<void> => {
+    // Mark all onboarding as complete - even if skipped, we're done with onboarding on Windows
     setNeedsDriverSetup(false);
     setHasSelectedPhoneType(true);
+    setHasCompletedEmailOnboarding(true);
 
     // Same logic as complete - driver setup is the last onboarding step on Windows
-    // Navigation to dashboard is handled by the onboarding flow hook's onComplete callback
     if (pendingOAuthData && !isAuthenticated) {
       try {
         await window.api.auth.completePendingLogin(pendingOAuthData);
