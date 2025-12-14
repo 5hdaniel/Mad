@@ -351,8 +351,9 @@ function AppleDriverStepContent({
         {/* Needs Update State */}
         {status === "needs-update" && (
           <>
-            {/* Version info */}
-            <div className="bg-amber-50 rounded-lg p-3 mb-4">
+            {/* Info box with version details and consent notice */}
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
+              {/* Version info */}
               <h3 className="font-medium text-gray-900 mb-2 flex items-center gap-2">
                 <svg
                   className="w-5 h-5 text-amber-500"
@@ -369,7 +370,7 @@ function AppleDriverStepContent({
                 </svg>
                 Update Details
               </h3>
-              <ul className="space-y-2 text-sm text-gray-600">
+              <ul className="space-y-1 text-sm text-gray-700 mb-4">
                 <li className="flex items-start gap-2">
                   <span className="text-gray-400 mt-0.5">•</span>
                   <span>
@@ -385,33 +386,13 @@ function AppleDriverStepContent({
                   </span>
                 </li>
               </ul>
-            </div>
 
-            {/* Consent notice */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
-              <div className="flex items-start gap-3">
-                <svg
-                  className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-                <div className="text-sm text-blue-800">
-                  <p className="font-medium mb-1">
-                    Administrator Permission Required
-                  </p>
-                  <p>
-                    Updating will require administrator permission. Your
-                    existing settings will be preserved.
-                  </p>
-                </div>
+              {/* Consent notice */}
+              <div className="border-t border-amber-200 pt-3">
+                <p className="text-sm text-amber-800">
+                  <strong>Administrator Permission Required</strong> — Your
+                  existing settings will be preserved.
+                </p>
               </div>
             </div>
 
@@ -443,11 +424,12 @@ function AppleDriverStepContent({
         {/* Not Installed State */}
         {status === "not-installed" && (
           <>
-            {/* What gets installed */}
-            <div className="bg-gray-50 rounded-lg p-3 mb-4">
+            {/* Info box with what gets installed and consent notice */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+              {/* What gets installed */}
               <h3 className="font-medium text-gray-900 mb-2 flex items-center gap-2">
                 <svg
-                  className="w-5 h-5 text-gray-500"
+                  className="w-5 h-5 text-blue-500"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -461,7 +443,7 @@ function AppleDriverStepContent({
                 </svg>
                 What gets installed
               </h3>
-              <ul className="space-y-2 text-sm text-gray-600">
+              <ul className="space-y-1 text-sm text-gray-700 mb-4">
                 <li className="flex items-start gap-2">
                   <span className="text-green-500 mt-0.5">•</span>
                   <span>
@@ -474,34 +456,13 @@ function AppleDriverStepContent({
                   <span>This is Apple's official software</span>
                 </li>
               </ul>
-            </div>
 
-            {/* Consent notice */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
-              <div className="flex items-start gap-3">
-                <svg
-                  className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-                <div className="text-sm text-blue-800">
-                  <p className="font-medium mb-1">
-                    Administrator Permission Required
-                  </p>
-                  <p>
-                    By clicking "Install Tools", you consent to installing Apple
-                    Mobile Device Support on your computer. Windows will ask for
-                    administrator permission to proceed.
-                  </p>
-                </div>
+              {/* Consent notice */}
+              <div className="border-t border-blue-200 pt-3">
+                <p className="text-sm text-blue-800">
+                  <strong>Administrator Permission Required</strong> — By clicking
+                  "Install Tools", Windows will ask for administrator permission.
+                </p>
               </div>
             </div>
 
