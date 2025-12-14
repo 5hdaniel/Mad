@@ -107,7 +107,8 @@ describe("App", () => {
       renderApp();
 
       await waitFor(() => {
-        expect(screen.getByText(/setup permissions/i)).toBeInTheDocument();
+        // New onboarding architecture uses "Full Disk Access Required" for permissions step
+        expect(screen.getByText(/Full Disk Access/i)).toBeInTheDocument();
       });
     });
 
