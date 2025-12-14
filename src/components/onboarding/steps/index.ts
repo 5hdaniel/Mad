@@ -93,3 +93,4 @@ export function getAllSteps(): OnboardingStep[] {
 import "./SecureStorageStep";
 import "./EmailConnectStep";
 import "./PermissionsStep";
+import "./AppleDriverStep";
