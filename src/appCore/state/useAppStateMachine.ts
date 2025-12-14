@@ -549,6 +549,7 @@ export function useAppStateMachine(): AppStateMachine {
   /**
    * Start Google OAuth flow for email connection.
    * Handles both pre-DB (pending) and post-DB flows.
+   * Sets up IPC listeners to update state when OAuth completes.
    */
   const handleStartGoogleEmailConnect = async (): Promise<void> => {
     const usePendingApi = pendingOAuthData && !isAuthenticated;
@@ -556,21 +557,53 @@ export function useAppStateMachine(): AppStateMachine {
 
     try {
       let result;
+      let actuallyUsedPendingApi = usePendingApi;
+
       if (usePendingApi) {
         result = await window.api.auth.googleConnectMailboxPending(emailHint);
       } else if (currentUser?.id) {
         result = await window.api.auth.googleConnectMailbox(currentUser.id);
         // If regular API fails due to DB not initialized, fall back to pending API
         if (!result.success && result.error?.includes("Database is not initialized")) {
+          actuallyUsedPendingApi = true;
           result = await window.api.auth.googleConnectMailboxPending(emailHint);
         }
       }
 
       if (!result?.success) {
         console.error("[AppStateMachine] Failed to start Google OAuth:", result?.error);
+        return;
       }
-      // OAuth completion is handled by event listeners set up in EmailOnboardingScreen
-      // or the new onboarding flow will need to set up its own listeners
+
+      // Set up IPC listeners for OAuth completion
+      if (actuallyUsedPendingApi) {
+        const cleanup = window.api.onGoogleMailboxPendingConnected(
+          (connectionResult: { success: boolean; email?: string; tokens?: PendingEmailTokens["tokens"]; error?: string }) => {
+            if (connectionResult.success && connectionResult.email && connectionResult.tokens) {
+              setPendingEmailTokens({
+                provider: "google",
+                email: connectionResult.email,
+                tokens: connectionResult.tokens,
+              });
+              setHasEmailConnected(true);
+              setPendingOnboardingData((prev) => ({
+                ...prev,
+                emailProvider: "google",
+              }));
+            }
+            cleanup();
+          }
+        );
+      } else {
+        const cleanup = window.api.onGoogleMailboxConnected(
+          (connectionResult: { success: boolean; email?: string; error?: string }) => {
+            if (connectionResult.success) {
+              setHasEmailConnected(true);
+            }
+            cleanup();
+          }
+        );
+      }
     } catch (error) {
       console.error("[AppStateMachine] Error starting Google OAuth:", error);
     }
@@ -579,6 +612,7 @@ export function useAppStateMachine(): AppStateMachine {
   /**
    * Start Microsoft OAuth flow for email connection.
    * Handles both pre-DB (pending) and post-DB flows.
+   * Sets up IPC listeners to update state when OAuth completes.
    */
   const handleStartMicrosoftEmailConnect = async (): Promise<void> => {
     const usePendingApi = pendingOAuthData && !isAuthenticated;
@@ -586,21 +620,53 @@ export function useAppStateMachine(): AppStateMachine {
 
     try {
       let result;
+      let actuallyUsedPendingApi = usePendingApi;
+
       if (usePendingApi) {
         result = await window.api.auth.microsoftConnectMailboxPending(emailHint);
       } else if (currentUser?.id) {
         result = await window.api.auth.microsoftConnectMailbox(currentUser.id);
         // If regular API fails due to DB not initialized, fall back to pending API
         if (!result.success && result.error?.includes("Database is not initialized")) {
+          actuallyUsedPendingApi = true;
           result = await window.api.auth.microsoftConnectMailboxPending(emailHint);
         }
       }
 
       if (!result?.success) {
         console.error("[AppStateMachine] Failed to start Microsoft OAuth:", result?.error);
+        return;
       }
-      // OAuth completion is handled by event listeners set up in EmailOnboardingScreen
-      // or the new onboarding flow will need to set up its own listeners
+
+      // Set up IPC listeners for OAuth completion
+      if (actuallyUsedPendingApi) {
+        const cleanup = window.api.onMicrosoftMailboxPendingConnected(
+          (connectionResult: { success: boolean; email?: string; tokens?: PendingEmailTokens["tokens"]; error?: string }) => {
+            if (connectionResult.success && connectionResult.email && connectionResult.tokens) {
+              setPendingEmailTokens({
+                provider: "microsoft",
+                email: connectionResult.email,
+                tokens: connectionResult.tokens,
+              });
+              setHasEmailConnected(true);
+              setPendingOnboardingData((prev) => ({
+                ...prev,
+                emailProvider: "microsoft",
+              }));
+            }
+            cleanup();
+          }
+        );
+      } else {
+        const cleanup = window.api.onMicrosoftMailboxConnected(
+          (connectionResult: { success: boolean; email?: string; error?: string }) => {
+            if (connectionResult.success) {
+              setHasEmailConnected(true);
+            }
+            cleanup();
+          }
+        );
+      }
     } catch (error) {
       console.error("[AppStateMachine] Error starting Microsoft OAuth:", error);
     }
