@@ -45,7 +45,7 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
     hasSecureStorage: app.hasSecureStorageSetup,
     driverSetupComplete: !app.needsDriverSetup,
     termsAccepted: !app.needsTermsAcceptance,
-    authProvider: (app.authProvider as "google" | "microsoft") ?? "google",
+    authProvider: (app.pendingOAuthData?.provider ?? app.authProvider) as "google" | "microsoft" ?? "google",
     isNewUser: app.isNewUserFlow,
     isDatabaseInitialized: app.isDatabaseInitialized,
   };
