@@ -122,7 +122,7 @@ export function ProgressIndicator({
   const activeIndex = viewingIndex ?? currentIndex;
 
   return (
-    <div className="mb-7">
+    <div>
       <div className="flex items-start justify-center">
         {steps.map((step, index) => (
           <React.Fragment key={step.meta.id}>

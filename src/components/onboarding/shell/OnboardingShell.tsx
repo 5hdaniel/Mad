@@ -35,15 +35,13 @@ export function OnboardingShell({
   maxWidth = 'max-w-xl',
 }: OnboardingShellProps) {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 relative">
-      {/* Progress indicator fixed at top */}
-      <div className={`absolute top-4 left-0 right-0 ${maxWidth} w-full mx-auto px-4`}>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 p-4">
+      <div className={`${maxWidth} w-full mx-auto`}>
+        {/* Progress indicator at top */}
         {progressSlot}
-      </div>
 
-      {/* Card centered on screen (pt-20 prevents overlap with progress bar) */}
-      <div className="min-h-screen flex items-center justify-center p-4 pt-20">
-        <div className={`${maxWidth} w-full`}>
+        {/* Card with responsive gap from progress bar */}
+        <div className="mt-4 sm:mt-6">
           {/* Main card container */}
           <div className="bg-white rounded-2xl shadow-xl p-6">
             {children}
