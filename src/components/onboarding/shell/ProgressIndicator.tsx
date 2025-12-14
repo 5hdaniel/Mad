@@ -16,20 +16,6 @@ interface ProgressIndicatorProps {
 
 type StepStatus = "completed" | "current" | "pending";
 
-interface StepCircleProps {
-  stepNumber: number;
-  status: StepStatus;
-}
-
-interface ConnectingLineProps {
-  completed: boolean;
-}
-
-interface StepLabelProps {
-  label: string;
-  isActive: boolean;
-}
-
 // =============================================================================
 // HELPER FUNCTIONS
 // =============================================================================
@@ -65,14 +51,19 @@ function CheckmarkIcon() {
 }
 
 /**
- * Renders a step circle with status-based styling.
- * - Completed: green background with checkmark
- * - Current: blue background with ring highlight
- * - Pending: gray background with number
+ * Single step item with circle and label stacked vertically.
+ * Ensures perfect alignment between circle and its label.
  */
-function StepCircle({ stepNumber, status }: StepCircleProps) {
-  const baseClasses =
-    "w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-all flex-shrink-0";
+function StepItem({
+  stepNumber,
+  status,
+  label,
+}: {
+  stepNumber: number;
+  status: StepStatus;
+  label: string;
+}) {
+  const circleClasses = "w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-all";
 
   const statusClasses: Record<StepStatus, string> = {
     completed: "bg-green-500 text-white",
@@ -80,41 +71,18 @@ function StepCircle({ stepNumber, status }: StepCircleProps) {
     pending: "bg-gray-200 text-gray-500",
   };
 
-  return (
-    <div className={`${baseClasses} ${statusClasses[status]}`}>
-      {status === "completed" ? <CheckmarkIcon /> : stepNumber}
-    </div>
-  );
-}
+  const labelClasses = status === "current"
+    ? "text-blue-600 font-medium"
+    : "text-gray-500";
 
-/**
- * Renders the connecting line between step circles.
- * - Completed: green line
- * - Pending: gray line
- */
-function ConnectingLine({ completed }: ConnectingLineProps) {
   return (
-    <div
-      className={`flex-1 h-0.5 mx-2 transition-all max-w-[72px] ${
-        completed ? "bg-green-500" : "bg-gray-200"
-      }`}
-    />
-  );
-}
-
-/**
- * Renders the label below a step circle.
- * - Active: blue text with medium font weight
- * - Inactive: gray text
- */
-function StepLabel({ label, isActive }: StepLabelProps) {
-  return (
-    <div className="flex-shrink-0 w-20 flex items-center justify-center">
-      <span
-        className={`text-xs text-center whitespace-nowrap ${
-          isActive ? "text-blue-600 font-medium" : "text-gray-500"
-        }`}
-      >
+    <div className="flex flex-col items-center">
+      {/* Circle */}
+      <div className={`${circleClasses} ${statusClasses[status]}`}>
+        {status === "completed" ? <CheckmarkIcon /> : stepNumber}
+      </div>
+      {/* Label */}
+      <span className={`text-xs mt-2 whitespace-nowrap ${labelClasses}`}>
         {label}
       </span>
     </div>
@@ -122,25 +90,16 @@ function StepLabel({ label, isActive }: StepLabelProps) {
 }
 
 /**
- * Invisible spacer to maintain alignment between labels.
- * Matches the width of the connecting lines.
+ * Renders the connecting line between step circles.
  */
-function LabelSpacer() {
-  return <div className="flex-1 mx-2 max-w-[72px]" />;
-}
-
-/**
- * Small invisible spacer at the edges of the indicator.
- */
-function EdgeSpacer() {
-  return <div className="w-1 h-0.5 flex-shrink-0" />;
-}
-
-/**
- * Small invisible spacer for labels at the edges.
- */
-function LabelEdgeSpacer() {
-  return <div className="w-1 flex-shrink-0" />;
+function ConnectingLine({ completed }: { completed: boolean }) {
+  return (
+    <div
+      className={`w-16 h-0.5 mx-2 transition-all self-start mt-4 ${
+        completed ? "bg-green-500" : "bg-gray-200"
+      }`}
+    />
+  );
 }
 
 // =============================================================================
@@ -149,23 +108,13 @@ function LabelEdgeSpacer() {
 
 /**
  * Progress indicator showing onboarding step progression.
- * Reads labels from step metadata - single source of truth.
- *
- * Visual design matches the existing SetupProgressIndicator component.
- *
- * @example
- * <ProgressIndicator
- *   steps={flowSteps}
- *   currentIndex={2}
- *   viewingIndex={1} // User navigated back
- * />
+ * Each step is a unified component with circle + label for perfect alignment.
  */
 export function ProgressIndicator({
   steps,
   currentIndex,
   viewingIndex,
 }: ProgressIndicatorProps) {
-  // Handle edge cases
   if (steps.length === 0) {
     return null;
   }
@@ -174,44 +123,19 @@ export function ProgressIndicator({
 
   return (
     <div className="mb-7">
-      {/* Circles and connecting lines */}
-      <div className="flex items-center justify-center px-2 mb-3">
-        {/* Invisible spacer before first circle */}
-        <EdgeSpacer />
-
+      <div className="flex items-start justify-center">
         {steps.map((step, index) => (
           <React.Fragment key={step.meta.id}>
-            <StepCircle
+            <StepItem
               stepNumber={index + 1}
               status={getStepStatus(index, currentIndex, activeIndex)}
+              label={step.meta.progressLabel}
             />
             {index < steps.length - 1 && (
               <ConnectingLine completed={index < currentIndex} />
             )}
           </React.Fragment>
         ))}
-
-        {/* Invisible spacer after last circle */}
-        <EdgeSpacer />
-      </div>
-
-      {/* Labels - aligned with circles above */}
-      <div className="flex items-start justify-center px-2">
-        {/* Invisible spacer to match circle row */}
-        <LabelEdgeSpacer />
-
-        {steps.map((step, index) => (
-          <React.Fragment key={`label-${step.meta.id}`}>
-            <StepLabel
-              label={step.meta.progressLabel}
-              isActive={index === activeIndex}
-            />
-            {index < steps.length - 1 && <LabelSpacer />}
-          </React.Fragment>
-        ))}
-
-        {/* Invisible spacer to match circle row */}
-        <LabelEdgeSpacer />
       </div>
     </div>
   );
