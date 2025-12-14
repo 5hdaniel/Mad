@@ -76,6 +76,8 @@ export const meta: OnboardingStepMeta = {
   },
   isStepComplete: (context) => context.emailConnected || context.emailSkipped,
   canProceed: (context) => context.emailConnected,
+  // Only show if email not yet connected
+  shouldShow: (context) => !context.emailConnected,
 };
 
 // =============================================================================

@@ -35,6 +35,8 @@ export const meta: OnboardingStepMeta = {
   },
   // This step is required for macOS users
   skip: undefined,
+  // Only show if database not yet initialized (pre-DB flow)
+  shouldShow: (context) => !context.isDatabaseInitialized,
 };
 
 // =============================================================================

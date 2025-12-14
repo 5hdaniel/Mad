@@ -101,6 +101,8 @@ export const meta: OnboardingStepMeta = {
   },
   // skip is undefined = step cannot be skipped (required)
   isStepComplete: (context) => context.phoneType !== null,
+  // Only show if phone type not yet selected
+  shouldShow: (context) => context.phoneType === null,
 };
 
 // =============================================================================
