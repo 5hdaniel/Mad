@@ -90,6 +90,14 @@ npm run lint        # Must pass
 npm test            # Must pass (if tests exist)
 ```
 
+**If local verification fails due to environment issues (npm install errors, network issues):**
+1. Document the issue in your Implementation Summary under "Issues encountered"
+2. Note: "Local verification failed due to [reason]. CI will verify."
+3. Push your branch - CI will run type-check and lint
+4. Monitor the CI results and fix any failures before requesting merge
+
+⚠️ You are still responsible for ensuring CI passes. "CI will verify" is not an excuse for broken code.
+
 #### C. Self-Review Checklist
 
 Before opening PR, verify:
@@ -144,52 +152,9 @@ STOP and ask the PM before proceeding if:
 
 ## Phase 2: Shell Components
 
-### TASK-104: OnboardingShell
+### TASK-104: OnboardingShell ✅ COMPLETED
 
-```
-You are assigned Task TASK-104 – "Create OnboardingShell Layout Wrapper".
-
-## Setup
-Base branch: claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
-Your branch: feat/104-onboarding-shell
-
-git fetch origin claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
-git checkout -b feat/104-onboarding-shell origin/claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
-
-## Task Files (READ THESE FIRST)
-- .claude/plans/tasks/TASK-104-onboarding-shell.md
-
-## Deliverables
-- Create: src/components/onboarding/shell/OnboardingShell.tsx
-- Create: src/components/onboarding/shell/index.ts
-
-## Instructions
-Create a layout wrapper with these EXACT styles (match existing screens):
-- Background: `bg-gradient-to-br from-slate-50 to-blue-50`
-- Container: `min-h-screen flex items-center justify-center p-4`
-- Inner wrapper: `max-w-xl w-full`
-- Card: `bg-white rounded-2xl shadow-xl p-8`
-
-Props:
-- progressSlot?: React.ReactNode (above card)
-- navigationSlot?: React.ReactNode (below card content)
-- children: React.ReactNode (inside card)
-
-This is a LAYOUT component only. No business logic.
-
-## Verification
-- npm run type-check passes
-- npm run lint passes
-
-## ⚠️ BEFORE OPENING PR
-
-1. Update `.claude/plans/tasks/TASK-104-onboarding-shell.md`
-2. Complete Implementation Summary with notes
-3. Verify styles match existing onboarding screens exactly
-
-PR target: claude/fix-onboarding-flow-01QTesyUwNYxSQs4qSx8MZ1J
-PR title: feat(onboarding): add OnboardingShell layout wrapper
-```
+*This task has been completed and merged.*
 
 ---
 
