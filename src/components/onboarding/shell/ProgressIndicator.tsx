@@ -173,7 +173,7 @@ export function ProgressIndicator({
   const activeIndex = viewingIndex ?? currentIndex;
 
   return (
-    <div className="mb-8">
+    <div className="mb-7">
       {/* Circles and connecting lines */}
       <div className="flex items-center justify-center px-2 mb-3">
         {/* Invisible spacer before first circle */}
