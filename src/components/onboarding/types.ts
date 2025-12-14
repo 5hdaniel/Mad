@@ -28,7 +28,9 @@ export type OnboardingStepId =
   | "welcome"
   | "terms"
   | "phone-type"
+  | "secure-storage"
   | "driver-setup"
+  | "apple-driver"
   | "email-connect"
   | "permissions"
   | "complete";
