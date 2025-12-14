@@ -221,12 +221,12 @@ function AppleDriverStepContent({
 
   const handleContinue = useCallback(() => {
     onAction({ type: "DRIVER_SETUP_COMPLETE" });
-    onAction({ type: "NAVIGATE_NEXT" });
+    // Note: DRIVER_SETUP_COMPLETE already triggers goToNext() in the flow hook
   }, [onAction]);
 
   const handleSkip = useCallback(() => {
     onAction({ type: "DRIVER_SKIPPED" });
-    onAction({ type: "NAVIGATE_NEXT" });
+    // Note: DRIVER_SKIPPED already triggers goToNext() in the flow hook
   }, [onAction]);
 
   const handleBack = useCallback(() => {
@@ -424,9 +424,8 @@ function AppleDriverStepContent({
         {/* Not Installed State */}
         {status === "not-installed" && (
           <>
-            {/* Info box with what gets installed and consent notice */}
+            {/* Info box with what gets installed */}
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-              {/* What gets installed */}
               <h3 className="font-medium text-gray-900 mb-2 flex items-center gap-2">
                 <svg
                   className="w-5 h-5 text-blue-500"
@@ -443,27 +442,40 @@ function AppleDriverStepContent({
                 </svg>
                 What gets installed
               </h3>
-              <ul className="space-y-1 text-sm text-gray-700 mb-4">
+              <ul className="space-y-2 text-sm text-gray-700">
                 <li className="flex items-start gap-2">
-                  <span className="text-green-500 mt-0.5">•</span>
-                  <span>
-                    <strong>Apple Mobile Device Support</strong> - Required to
-                    communicate with your iPhone
-                  </span>
+                  <svg
+                    className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M5 13l4 4L19 7"
+                    />
+                  </svg>
+                  <span>Apple Mobile Device Support — required to communicate with your iPhone</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-green-500 mt-0.5">•</span>
-                  <span>This is Apple's official software</span>
+                  <svg
+                    className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M5 13l4 4L19 7"
+                    />
+                  </svg>
+                  <span>Apple's official software bundled with Magic Audit</span>
                 </li>
               </ul>
-
-              {/* Consent notice */}
-              <div className="border-t border-blue-200 pt-3">
-                <p className="text-sm text-blue-800">
-                  <strong>Administrator Permission Required</strong> — By clicking
-                  "Install Tools", Windows will ask for administrator permission.
-                </p>
-              </div>
             </div>
 
             {/* Install Button */}
@@ -493,13 +505,28 @@ function AppleDriverStepContent({
 
         {/* Installing State */}
         {status === "installing" && (
-          <div className="text-center py-4">
-            <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-            <p className="text-gray-600 text-sm">
-              A Windows dialog will appear asking for permission.
-              <br />
-              Please click "Yes" to continue.
-            </p>
+          <div className="py-4">
+            {/* Yellow permission warning */}
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
+              <div className="flex items-start gap-3">
+                <svg
+                  className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                  />
+                </svg>
+                <p className="text-sm text-amber-800">
+                  <strong>Administrator Permission Required</strong> — Please approve the Windows permission prompt to continue the installation.
+                </p>
+              </div>
+            </div>
           </div>
         )}
 
@@ -571,12 +598,6 @@ function AppleDriverStepContent({
           </div>
         )}
 
-      {/* Checking State */}
-      {status === "checking" && (
-        <div className="text-center py-3">
-          <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" />
-        </div>
-      )}
 
       {/* Additional info */}
       {status === "not-installed" && (
