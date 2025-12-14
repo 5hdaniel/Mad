@@ -1,3 +1,13 @@
+/**
+ * @deprecated Use `onboarding/steps/PermissionsStep.tsx` instead.
+ *
+ * Migration guide:
+ * 1. New step file has `meta` object with configuration
+ * 2. Content component receives `onAction` callback
+ * 3. Layout/navigation handled by OnboardingShell
+ *
+ * This file will be removed after migration is complete.
+ */
 import React, { useState, useEffect } from "react";
 // import SystemSettingsMockup from './SystemSettingsMockup';
 
