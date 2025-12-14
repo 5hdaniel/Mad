@@ -12,6 +12,10 @@ on:
         default: 'true'
         type: boolean
 
+# Required permissions for creating releases
+permissions:
+  contents: write
+
 jobs:
   # Build and release for macOS
   release-macos:
