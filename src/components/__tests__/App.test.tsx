@@ -566,10 +566,10 @@ describe("App", () => {
       renderApp();
 
       await waitFor(() => {
-        // Should show email onboarding screen (starts at phone type selection step)
-        // The EmailOnboardingScreen always starts at step 1 regardless of prior state
+        // Should show onboarding screen (starts at phone type selection step)
+        // The new OnboardingFlow uses PhoneTypeStep with "What phone do you use?" heading
         expect(
-          screen.getByRole("heading", { name: /Select Your Phone Type/i }),
+          screen.getByRole("heading", { name: /What phone do you use/i }),
         ).toBeInTheDocument();
       });
     });
