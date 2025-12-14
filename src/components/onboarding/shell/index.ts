@@ -7,3 +7,5 @@
 
 export { OnboardingShell } from "./OnboardingShell";
 export { ProgressIndicator } from "./ProgressIndicator";
+export { NavigationButtons } from "./NavigationButtons";
+export type { NavigationButtonsProps } from "./NavigationButtons";
