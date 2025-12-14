@@ -280,9 +280,16 @@ function runMsiInstaller(msiPath: string): Promise<DriverInstallResult> {
     // Use PowerShell Start-Process with -Verb RunAs to trigger UAC elevation
     // -Wait ensures we wait for the installation to complete
     // -PassThru returns the process object so we can get the exit code
+    // Wrap in try-catch to properly handle UAC decline (which throws an exception)
     const psCommand = `
-      $process = Start-Process -FilePath "msiexec.exe" -ArgumentList '${msiArgs}' -Verb RunAs -Wait -PassThru
-      exit $process.ExitCode
+      try {
+        $process = Start-Process -FilePath "msiexec.exe" -ArgumentList '${msiArgs}' -Verb RunAs -Wait -PassThru -ErrorAction Stop
+        exit $process.ExitCode
+      } catch {
+        # UAC declined or other error starting the elevated process
+        # Exit with 1602 (ERROR_INSTALL_USEREXIT) to indicate user cancellation
+        exit 1602
+      }
     `.trim();
 
     log.info("[AppleDriverService] Running elevated installer via PowerShell");
