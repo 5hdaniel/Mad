@@ -233,6 +233,12 @@ export function useAppStateMachine(): AppStateMachine {
         // Wait for user data to load before routing to onboarding
         // This prevents showing wrong screens before we know what the user needs
         if (isStillLoading) {
+          console.log("[Routing] Still loading, skipping routing", {
+            isAuthLoading,
+            isCheckingSecureStorage,
+            isLoadingPhoneType,
+            isCheckingEmailOnboarding,
+          });
           return;
         }
 
@@ -242,6 +248,18 @@ export function useAppStateMachine(): AppStateMachine {
         const needsEmailOnboarding = !hasCompletedEmailOnboarding;
         const needsDrivers = isWindows && needsDriverSetup;
         const needsPermissions = isMacOS && !hasPermissions;
+
+        console.log("[Routing] POST-DB check", {
+          currentStep,
+          hasSelectedPhoneType,
+          hasCompletedEmailOnboarding,
+          needsDriverSetup,
+          hasPermissions,
+          needsPhoneSelection,
+          needsEmailOnboarding,
+          needsDrivers,
+          needsPermissions,
+        });
 
         // Route to the first incomplete step
         if (needsPhoneSelection) {
@@ -494,6 +512,7 @@ export function useAppStateMachine(): AppStateMachine {
   };
 
   const handleAppleDriverSetupSkip = async (): Promise<void> => {
+    console.log("[handleAppleDriverSetupSkip] Setting flags to complete onboarding");
     // Mark all onboarding as complete - even if skipped, we're done with onboarding on Windows
     setNeedsDriverSetup(false);
     setHasSelectedPhoneType(true);
