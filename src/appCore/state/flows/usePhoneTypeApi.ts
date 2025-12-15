@@ -59,7 +59,8 @@ export function usePhoneTypeApi({
             if (isWindows && result.phoneType === "iphone" && drivers) {
               try {
                 const driverStatus = await drivers.checkApple();
-                if (!driverStatus.installed || !driverStatus.serviceRunning) {
+                // Only check isInstalled - service might not be running after fresh install
+                if (!driverStatus.isInstalled) {
                   setNeedsDriverSetup(true);
                   setHasSelectedPhoneType(false);
                 } else {
