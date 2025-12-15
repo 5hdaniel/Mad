@@ -163,6 +163,25 @@ export function useAppStateMachine(): AppStateMachine {
   // NAVIGATION EFFECTS
   // ============================================
 
+  // Auto-initialize database for returning Windows users (no keychain UI needed)
+  // On macOS, users see keychain-explanation screen which triggers init on Continue.
+  // On Windows, returning users skip all pre-DB onboarding, so we auto-init here.
+  useEffect(() => {
+    const isReturningUser = pendingOAuthData && !!pendingOAuthData.cloudUser.terms_accepted_at;
+
+    if (
+      isWindows &&
+      pendingOAuthData &&
+      !isAuthenticated &&
+      isReturningUser &&
+      !isDatabaseInitialized &&
+      !isInitializingDatabase &&
+      currentStep === "loading"
+    ) {
+      initializeSecureStorage(true);
+    }
+  }, [isWindows, pendingOAuthData, isAuthenticated, isDatabaseInitialized, isInitializingDatabase, currentStep, initializeSecureStorage]);
+
   // Handle auth state changes to update navigation
   // IMPORTANT: Guards prevent infinite loops by only updating state when values differ
   useEffect(() => {
@@ -175,8 +194,27 @@ export function useAppStateMachine(): AppStateMachine {
       if (pendingOAuthData && !isAuthenticated) {
         const isNewUser = !pendingOAuthData.cloudUser.terms_accepted_at;
 
+        // RETURNING USERS: Skip pre-DB onboarding, go straight to DB initialization
+        // Their phone type and email settings are in the local database
+        if (!isNewUser) {
+          if (isMacOS) {
+            if (currentStep !== "keychain-explanation") {
+              setCurrentStep("keychain-explanation");
+            }
+          } else {
+            // Windows: Initialize database directly (no keychain setup needed)
+            // The useSecureStorage hook will handle this
+            if (currentStep !== "loading") {
+              setCurrentStep("loading");
+            }
+          }
+          return;
+        }
+
+        // NEW USERS ONLY: Go through full pre-DB onboarding flow
+
         // Step 1: New users must accept terms first (shows as modal)
-        if (isNewUser && !pendingOnboardingData.termsAccepted) {
+        if (!pendingOnboardingData.termsAccepted) {
           if (!showTermsModal) setShowTermsModal(true);
           if (currentStep !== "phone-type-selection")
             setCurrentStep("phone-type-selection");
@@ -233,12 +271,6 @@ export function useAppStateMachine(): AppStateMachine {
         // Wait for user data to load before routing to onboarding
         // This prevents showing wrong screens before we know what the user needs
         if (isStillLoading) {
-          console.log("[Routing] Still loading, skipping routing", {
-            isAuthLoading,
-            isCheckingSecureStorage,
-            isLoadingPhoneType,
-            isCheckingEmailOnboarding,
-          });
           return;
         }
 
@@ -248,18 +280,6 @@ export function useAppStateMachine(): AppStateMachine {
         const needsEmailOnboarding = !hasCompletedEmailOnboarding;
         const needsDrivers = isWindows && needsDriverSetup;
         const needsPermissions = isMacOS && !hasPermissions;
-
-        console.log("[Routing] POST-DB check", {
-          currentStep,
-          hasSelectedPhoneType,
-          hasCompletedEmailOnboarding,
-          needsDriverSetup,
-          hasPermissions,
-          needsPhoneSelection,
-          needsEmailOnboarding,
-          needsDrivers,
-          needsPermissions,
-        });
 
         // Route to the first incomplete step
         if (needsPhoneSelection) {
