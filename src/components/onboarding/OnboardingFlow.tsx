@@ -126,11 +126,25 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
     app.goToStep("dashboard");
   }, [app]);
 
+  // Map app's currentStep to onboarding step ID
+  const getInitialStepId = (): string | undefined => {
+    const stepMap: Record<string, string> = {
+      "phone-type-selection": "phone-type",
+      "keychain-explanation": "secure-storage",
+      "email-onboarding": "email-connect",
+      "permissions": "permissions",
+      "apple-driver-setup": "apple-driver",
+      "android-coming-soon": "android-coming-soon",
+    };
+    return stepMap[app.currentStep];
+  };
+
   // Initialize the hook
   const flow = useOnboardingFlow({
     appState,
     onAction: handleAction,
     onComplete: handleComplete,
+    initialStepId: getInitialStepId(),
   });
 
   const {

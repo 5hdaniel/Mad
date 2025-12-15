@@ -91,9 +91,10 @@ describe("App", () => {
       expect(screen.getByText(/sign in with microsoft/i)).toBeInTheDocument();
     });
 
-    // TODO: This test needs to be updated for the new OnboardingFlow architecture.
-    // The new flow uses derived state from multiple hooks that require more complex
-    // test setup. Skipping until the onboarding test suite is properly refactored.
+    // TODO: This test needs updates for new OnboardingFlow architecture.
+    // The new OnboardingFlow starts at the step specified by app.currentStep via initialStepId,
+    // but the complex async state machine makes direct testing difficult.
+    // The new onboarding architecture has its own test suite in onboarding/__tests__/.
     it.skip("should show permissions screen when authenticated but no permissions", async () => {
       window.api.auth.getCurrentUser.mockResolvedValue({
         success: true,
@@ -109,15 +110,16 @@ describe("App", () => {
 
       renderApp();
 
-      await waitFor(() => {
-        // New onboarding architecture uses "Full Disk Access Required" for permissions step
-        expect(screen.getByText(/Full Disk Access/i)).toBeInTheDocument();
-      });
+      await waitFor(
+        () => {
+          // New onboarding architecture uses "Full Disk Access Required" for permissions step
+          expect(screen.getByText(/Full Disk Access/i)).toBeInTheDocument();
+        },
+        { timeout: 5000 },
+      );
     });
 
-    // TODO: These tests need to be updated for the new OnboardingFlow architecture.
-    // The new flow uses derived state from multiple hooks that require more complex
-    // test setup. Skipping until the onboarding test suite is properly refactored.
+    // TODO: This test needs updates for new OnboardingFlow architecture.
     it.skip("should show dashboard when authenticated with permissions", async () => {
       window.api.auth.getCurrentUser.mockResolvedValue({
         success: true,
