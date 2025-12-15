@@ -57,6 +57,8 @@ export interface OnboardingAppState {
 export interface UseOnboardingFlowOptions {
   /** Initial step index (default: 0) */
   initialStepIndex?: number;
+  /** Initial step ID - takes precedence over initialStepIndex */
+  initialStepId?: string;
   /** Callback when flow completes */
   onComplete?: () => void;
   /** Callback for action handling - parent processes and updates app state */
@@ -135,7 +137,7 @@ export interface UseOnboardingFlowReturn {
 export function useOnboardingFlow(
   options: UseOnboardingFlowOptions
 ): UseOnboardingFlowReturn {
-  const { initialStepIndex = 0, onComplete, onAction, appState } = options;
+  const { initialStepIndex = 0, initialStepId, onComplete, onAction, appState } = options;
   const { platform } = usePlatform();
 
   // Get all steps for this platform
@@ -181,6 +183,13 @@ export function useOnboardingFlow(
 
   // Current step state
   const [currentIndex, setCurrentIndex] = useState(() => {
+    // If initialStepId is provided, find its index in the steps array
+    if (initialStepId) {
+      const idIndex = steps.findIndex((s) => s.meta.id === initialStepId);
+      if (idIndex >= 0) {
+        return idIndex;
+      }
+    }
     // Clamp initial index to valid range
     return Math.min(Math.max(0, initialStepIndex), Math.max(0, steps.length - 1));
   });
