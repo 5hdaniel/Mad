@@ -19,7 +19,29 @@ import OfflineFallback from "../components/OfflineFallback";
 import PhoneTypeSelection from "../components/PhoneTypeSelection";
 import AndroidComingSoon from "../components/AndroidComingSoon";
 import AppleDriverSetup from "../components/AppleDriverSetup";
+import { OnboardingFlow } from "../components/onboarding";
 import type { AppStateMachine, OutlookExportResults } from "./state/types";
+
+/**
+ * Feature flag for new onboarding architecture.
+ * Set to true to use the new unified onboarding system.
+ * Set to false to use the legacy per-screen components.
+ */
+const USE_NEW_ONBOARDING = true;
+
+/**
+ * Check if the current step is an onboarding step that should use the new system.
+ */
+function isOnboardingStep(step: string): boolean {
+  return [
+    "phone-type-selection",
+    "android-coming-soon",
+    "email-onboarding",
+    "keychain-explanation",
+    "permissions",
+    "apple-driver-setup",
+  ].includes(step);
+}
 
 interface AppRouterProps {
   app: AppStateMachine;
@@ -123,6 +145,11 @@ export function AppRouter({ app }: AppRouterProps) {
     // iPhone sync
     openIPhoneSync,
   } = app;
+  // New onboarding architecture (when enabled)
+  if (USE_NEW_ONBOARDING && isOnboardingStep(currentStep)) {
+    return <OnboardingFlow app={app} />;
+  }
+
   // Loading state
   if (currentStep === "loading") {
     return (

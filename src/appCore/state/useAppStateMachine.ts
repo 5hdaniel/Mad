@@ -211,20 +211,42 @@ export function useAppStateMachine(): AppStateMachine {
 
       // POST-DB FLOW: Database initialized, user authenticated
       if (isAuthenticated && !needsTermsAcceptance) {
+        // Onboarding steps handled by the new OnboardingFlow - don't interfere
+        const onboardingSteps = [
+          "phone-type-selection",
+          "email-onboarding",
+          "apple-driver-setup",
+          "android-coming-soon",
+          "keychain-explanation",
+          "permissions",
+        ];
+
+        if (onboardingSteps.includes(currentStep)) {
+          // New OnboardingFlow handles all navigation within onboarding
+          return;
+        }
+
+        // Only route TO onboarding if we're not already there and need to start
         if (!isCheckingEmailOnboarding && !isLoadingPhoneType) {
-          if (!hasSelectedPhoneType && !needsDriverSetup) {
-            if (currentStep !== "phone-type-selection")
+          // Check what's missing to determine the right starting point
+          const needsPhoneSelection = !hasSelectedPhoneType;
+          const needsEmailOnboarding = !hasCompletedEmailOnboarding || !hasEmailConnected;
+          const needsDrivers = isWindows && needsDriverSetup;
+          const needsPermissions = isMacOS && !hasPermissions;
+
+          // If only permissions are missing (user completed rest of onboarding), go directly there
+          if (!needsPhoneSelection && !needsEmailOnboarding && !needsDrivers && needsPermissions) {
+            if (currentStep !== "permissions") {
+              setCurrentStep("permissions");
+            }
+          } else if (needsPhoneSelection || needsEmailOnboarding || needsDrivers) {
+            // Full onboarding needed - start from the beginning
+            if (currentStep !== "phone-type-selection") {
               setCurrentStep("phone-type-selection");
-          } else if (needsDriverSetup && isWindows) {
-            if (currentStep !== "apple-driver-setup")
-              setCurrentStep("apple-driver-setup");
-          } else if (!hasCompletedEmailOnboarding || !hasEmailConnected) {
-            if (currentStep !== "email-onboarding")
-              setCurrentStep("email-onboarding");
-          } else if (hasPermissions) {
-            if (currentStep !== "dashboard") setCurrentStep("dashboard");
-          } else {
-            if (currentStep !== "permissions") setCurrentStep("permissions");
+            }
+          } else if (currentStep !== "dashboard") {
+            // Everything complete - go to dashboard
+            setCurrentStep("dashboard");
           }
         }
       } else if (!isAuthenticated && !pendingOAuthData) {
@@ -434,30 +456,29 @@ export function useAppStateMachine(): AppStateMachine {
   };
 
   const handleAppleDriverSetupComplete = async (): Promise<void> => {
+    // Mark all onboarding as complete - driver setup is the final step on Windows
     setNeedsDriverSetup(false);
     setHasSelectedPhoneType(true);
+    setHasCompletedEmailOnboarding(true);
+    // hasEmailConnected should already be true from email step
 
-    // On Windows, driver setup is step 3 (after email onboarding)
-    // So after driver setup, go to dashboard
+    // On Windows, driver setup is the last step - now navigate to dashboard
     if (pendingOAuthData && !isAuthenticated) {
       // Pre-DB flow: need to initialize database before going to dashboard
-      // The secure storage flow will handle initialization and navigation
-      // For now, we need to trigger the initialization
       try {
         await window.api.auth.completePendingLogin(pendingOAuthData);
       } catch (error) {
         console.error("[handleAppleDriverSetupComplete] Failed to complete pending login:", error);
       }
-      return;
     }
-
-    // Post-DB flow: go directly to dashboard
-    setCurrentStep("dashboard");
+    // Navigation to dashboard is handled by the onboarding flow hook's onComplete callback
   };
 
   const handleAppleDriverSetupSkip = async (): Promise<void> => {
+    // Mark all onboarding as complete - even if skipped, we're done with onboarding on Windows
     setNeedsDriverSetup(false);
     setHasSelectedPhoneType(true);
+    setHasCompletedEmailOnboarding(true);
 
     // Same logic as complete - driver setup is the last onboarding step on Windows
     if (pendingOAuthData && !isAuthenticated) {
@@ -466,10 +487,8 @@ export function useAppStateMachine(): AppStateMachine {
       } catch (error) {
         console.error("[handleAppleDriverSetupSkip] Failed to complete pending login:", error);
       }
-      return;
     }
-
-    setCurrentStep("dashboard");
+    // Note: Don't call setCurrentStep here - let the onboarding flow hook handle navigation
   };
 
   // ============================================
@@ -544,6 +563,142 @@ export function useAppStateMachine(): AppStateMachine {
 
   const handleEmailOnboardingBack = (): void => {
     setCurrentStep("phone-type-selection");
+  };
+
+  /**
+   * Start Google OAuth flow for email connection.
+   * Handles both pre-DB (pending) and post-DB flows.
+   * Sets up IPC listeners to update state when OAuth completes.
+   */
+  const handleStartGoogleEmailConnect = async (): Promise<void> => {
+    const usePendingApi = pendingOAuthData && !isAuthenticated;
+    const emailHint = pendingOAuthData?.userInfo?.email || currentUser?.email;
+
+    try {
+      let result;
+      let actuallyUsedPendingApi = usePendingApi;
+
+      if (usePendingApi) {
+        result = await window.api.auth.googleConnectMailboxPending(emailHint);
+      } else if (currentUser?.id) {
+        result = await window.api.auth.googleConnectMailbox(currentUser.id);
+        // If regular API fails due to DB not initialized, fall back to pending API
+        if (!result.success && result.error?.includes("Database is not initialized")) {
+          actuallyUsedPendingApi = true;
+          result = await window.api.auth.googleConnectMailboxPending(emailHint);
+        }
+      }
+
+      if (!result?.success) {
+        console.error("[AppStateMachine] Failed to start Google OAuth:", result?.error);
+        return;
+      }
+
+      // Set up IPC listeners for OAuth completion
+      if (actuallyUsedPendingApi) {
+        const cleanup = window.api.onGoogleMailboxPendingConnected(
+          (connectionResult: { success: boolean; email?: string; tokens?: PendingEmailTokens["tokens"]; error?: string }) => {
+            if (connectionResult.success && connectionResult.email && connectionResult.tokens) {
+              setPendingEmailTokens({
+                provider: "google",
+                email: connectionResult.email,
+                tokens: connectionResult.tokens,
+              });
+              setHasEmailConnected(true);
+              setPendingOnboardingData((prev) => ({
+                ...prev,
+                emailProvider: "google",
+              }));
+            }
+            cleanup();
+          }
+        );
+      } else {
+        const cleanup = window.api.onGoogleMailboxConnected(
+          (connectionResult: { success: boolean; email?: string; error?: string }) => {
+            if (connectionResult.success) {
+              setHasEmailConnected(true);
+              // Also set email provider so EmailConnectStep shows as connected
+              setPendingOnboardingData((prev) => ({
+                ...prev,
+                emailProvider: "google",
+              }));
+            }
+            cleanup();
+          }
+        );
+      }
+    } catch (error) {
+      console.error("[AppStateMachine] Error starting Google OAuth:", error);
+    }
+  };
+
+  /**
+   * Start Microsoft OAuth flow for email connection.
+   * Handles both pre-DB (pending) and post-DB flows.
+   * Sets up IPC listeners to update state when OAuth completes.
+   */
+  const handleStartMicrosoftEmailConnect = async (): Promise<void> => {
+    const usePendingApi = pendingOAuthData && !isAuthenticated;
+    const emailHint = pendingOAuthData?.userInfo?.email || currentUser?.email;
+
+    try {
+      let result;
+      let actuallyUsedPendingApi = usePendingApi;
+
+      if (usePendingApi) {
+        result = await window.api.auth.microsoftConnectMailboxPending(emailHint);
+      } else if (currentUser?.id) {
+        result = await window.api.auth.microsoftConnectMailbox(currentUser.id);
+        // If regular API fails due to DB not initialized, fall back to pending API
+        if (!result.success && result.error?.includes("Database is not initialized")) {
+          actuallyUsedPendingApi = true;
+          result = await window.api.auth.microsoftConnectMailboxPending(emailHint);
+        }
+      }
+
+      if (!result?.success) {
+        console.error("[AppStateMachine] Failed to start Microsoft OAuth:", result?.error);
+        return;
+      }
+
+      // Set up IPC listeners for OAuth completion
+      if (actuallyUsedPendingApi) {
+        const cleanup = window.api.onMicrosoftMailboxPendingConnected(
+          (connectionResult: { success: boolean; email?: string; tokens?: PendingEmailTokens["tokens"]; error?: string }) => {
+            if (connectionResult.success && connectionResult.email && connectionResult.tokens) {
+              setPendingEmailTokens({
+                provider: "microsoft",
+                email: connectionResult.email,
+                tokens: connectionResult.tokens,
+              });
+              setHasEmailConnected(true);
+              setPendingOnboardingData((prev) => ({
+                ...prev,
+                emailProvider: "microsoft",
+              }));
+            }
+            cleanup();
+          }
+        );
+      } else {
+        const cleanup = window.api.onMicrosoftMailboxConnected(
+          (connectionResult: { success: boolean; email?: string; error?: string }) => {
+            if (connectionResult.success) {
+              setHasEmailConnected(true);
+              // Also set email provider so EmailConnectStep shows as connected
+              setPendingOnboardingData((prev) => ({
+                ...prev,
+                emailProvider: "microsoft",
+              }));
+            }
+            cleanup();
+          }
+        );
+      }
+    } catch (error) {
+      console.error("[AppStateMachine] Error starting Microsoft OAuth:", error);
+    }
   };
 
   // ============================================
@@ -863,6 +1018,8 @@ export function useAppStateMachine(): AppStateMachine {
     handleEmailOnboardingComplete,
     handleEmailOnboardingSkip,
     handleEmailOnboardingBack,
+    handleStartGoogleEmailConnect,
+    handleStartMicrosoftEmailConnect,
 
     // Keychain handlers
     handleKeychainExplanationContinue,

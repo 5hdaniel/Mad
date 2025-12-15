@@ -1,3 +1,13 @@
+/**
+ * @deprecated Use `onboarding/shell/ProgressIndicator.tsx` instead.
+ *
+ * Migration guide:
+ * 1. New component receives steps array from flow
+ * 2. Progress labels come from step.meta.progressLabel
+ * 3. Used via OnboardingShell progressSlot
+ *
+ * This file will be removed after migration is complete.
+ */
 import React from "react";
 
 interface SetupProgressIndicatorProps {

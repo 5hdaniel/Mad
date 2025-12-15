@@ -264,6 +264,18 @@ export interface AppStateMachine {
   handleEmailOnboardingSkip: () => Promise<void>;
   handleEmailOnboardingBack: () => void;
 
+  /**
+   * Start Google OAuth flow for email connection.
+   * Sets up event listeners and initiates the OAuth popup.
+   */
+  handleStartGoogleEmailConnect: () => Promise<void>;
+
+  /**
+   * Start Microsoft OAuth flow for email connection.
+   * Sets up event listeners and initiates the OAuth popup.
+   */
+  handleStartMicrosoftEmailConnect: () => Promise<void>;
+
   // ============================================
   // KEYCHAIN HANDLERS
   // ============================================

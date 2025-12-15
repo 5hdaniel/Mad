@@ -41,7 +41,11 @@
       "Bash(gh run view:*)",
       "Bash(git commit -m \"$(cat <<''EOF''\nfix: update iosMessagesParser test to use correct backup path structure\n\niOS backups store files in subdirectories based on the first 2 characters\nof the file hash. The test was creating the database file in a flat structure,\nbut the parser expects it in the nested structure (e.g., \"3d/3d0d7e5f...\").\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n)\")",
       "Bash(npm rebuild:*)",
-      "Bash(gh release:*)"
+      "Bash(npm run lint)",
+      "Bash(dir \"C:\\Users\\Daniel\\New folder\\Mad\\src\\components\\onboarding\")",
+      "Bash(gh release:*)",
+      "Bash(npx prebuild-install:*)",
+      "Bash(node scripts/rebuild-native.js:*)"
     ],
     "deny": [],
     "ask": []
