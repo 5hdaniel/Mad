@@ -94,11 +94,9 @@ export function usePhoneTypeApi({
           setIsLoadingPhoneType(false);
         }
       } else {
-        // No user logged in
-        setIsLoadingPhoneType(false);
-        setHasSelectedPhoneType(false);
-        setSelectedPhoneType(null);
-        setNeedsDriverSetup(false);
+        // No user logged in - keep loading true to prevent premature routing
+        // Routing should only happen after we've loaded user data
+        // Don't reset hasSelectedPhoneType/selectedPhoneType here - they'll be set when user logs in
       }
     };
     loadPhoneType();

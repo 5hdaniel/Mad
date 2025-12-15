@@ -68,8 +68,8 @@ export function useEmailOnboardingApi({
           setIsCheckingEmailOnboarding(false);
         }
       } else {
-        // No user logged in, nothing to check
-        setIsCheckingEmailOnboarding(false);
+        // No user logged in - keep checking true to prevent premature routing
+        // Routing should only happen after we've loaded user data
       }
     };
     checkEmailStatus();
