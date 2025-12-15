@@ -53,6 +53,9 @@ export function usePhoneTypeApi({
           if (result.success && result.phoneType) {
             setSelectedPhoneType(result.phoneType);
 
+            // Phone type is selected (loaded from DB) - this is separate from driver status
+            setHasSelectedPhoneType(true);
+
             // On Windows + iPhone, check if drivers need to be installed/updated
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const drivers = (window.electron as any)?.drivers;
@@ -62,22 +65,19 @@ export function usePhoneTypeApi({
                 // Only check isInstalled - service might not be running after fresh install
                 if (!driverStatus.isInstalled) {
                   setNeedsDriverSetup(true);
-                  setHasSelectedPhoneType(false);
                 } else {
                   setNeedsDriverSetup(false);
-                  setHasSelectedPhoneType(true);
                 }
               } catch (driverError) {
                 console.error(
                   "[usePhoneTypeApi] Failed to check driver status:",
                   driverError,
                 );
+                // Assume drivers need setup if check fails
                 setNeedsDriverSetup(true);
-                setHasSelectedPhoneType(false);
               }
             } else {
               setNeedsDriverSetup(false);
-              setHasSelectedPhoneType(true);
             }
           } else {
             // No phone type stored - user needs to select

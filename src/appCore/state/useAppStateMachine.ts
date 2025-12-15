@@ -229,20 +229,32 @@ export function useAppStateMachine(): AppStateMachine {
         // Only route TO onboarding if we're not already there and need to start
         if (!isCheckingEmailOnboarding && !isLoadingPhoneType) {
           // Check what's missing to determine the right starting point
+          // Note: hasCompletedEmailOnboarding means user finished the email step (connected OR skipped)
           const needsPhoneSelection = !hasSelectedPhoneType;
-          const needsEmailOnboarding = !hasCompletedEmailOnboarding || !hasEmailConnected;
+          const needsEmailOnboarding = !hasCompletedEmailOnboarding;
           const needsDrivers = isWindows && needsDriverSetup;
           const needsPermissions = isMacOS && !hasPermissions;
 
-          // If only permissions are missing (user completed rest of onboarding), go directly there
-          if (!needsPhoneSelection && !needsEmailOnboarding && !needsDrivers && needsPermissions) {
-            if (currentStep !== "permissions") {
-              setCurrentStep("permissions");
-            }
-          } else if (needsPhoneSelection || needsEmailOnboarding || needsDrivers) {
-            // Full onboarding needed - start from the beginning
+          // Route to the first incomplete step, not always phone-type-selection
+          if (needsPhoneSelection) {
+            // New user - start from phone selection
             if (currentStep !== "phone-type-selection") {
               setCurrentStep("phone-type-selection");
+            }
+          } else if (needsEmailOnboarding) {
+            // Returning user who hasn't completed email step
+            if (currentStep !== "email-onboarding") {
+              setCurrentStep("email-onboarding");
+            }
+          } else if (needsDrivers) {
+            // Returning user who needs driver setup (Windows + iPhone)
+            if (currentStep !== "apple-driver-setup") {
+              setCurrentStep("apple-driver-setup");
+            }
+          } else if (needsPermissions) {
+            // Returning user who only needs permissions (macOS)
+            if (currentStep !== "permissions") {
+              setCurrentStep("permissions");
             }
           } else if (currentStep !== "dashboard") {
             // Everything complete - go to dashboard
