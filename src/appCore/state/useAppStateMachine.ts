@@ -663,13 +663,10 @@ export function useAppStateMachine(): AppStateMachine {
       }
 
       // Set up IPC listeners for OAuth completion
-      console.log("[AppStateMachine] Setting up Microsoft mailbox IPC listener, pendingApi:", actuallyUsedPendingApi);
       if (actuallyUsedPendingApi) {
         const cleanup = window.api.onMicrosoftMailboxPendingConnected(
           (connectionResult: { success: boolean; email?: string; tokens?: PendingEmailTokens["tokens"]; error?: string }) => {
-            console.log("[AppStateMachine] Received microsoft:mailbox-pending-connected", connectionResult);
             if (connectionResult.success && connectionResult.email && connectionResult.tokens) {
-              console.log("[AppStateMachine] Setting hasEmailConnected=true (pending flow)");
               setPendingEmailTokens({
                 provider: "microsoft",
                 email: connectionResult.email,
@@ -687,9 +684,7 @@ export function useAppStateMachine(): AppStateMachine {
       } else {
         const cleanup = window.api.onMicrosoftMailboxConnected(
           (connectionResult: { success: boolean; email?: string; error?: string }) => {
-            console.log("[AppStateMachine] Received microsoft:mailbox-connected", connectionResult);
             if (connectionResult.success) {
-              console.log("[AppStateMachine] Setting hasEmailConnected=true (regular flow)");
               setHasEmailConnected(true);
               // Also set email provider so EmailConnectStep shows as connected
               setPendingOnboardingData((prev) => ({
