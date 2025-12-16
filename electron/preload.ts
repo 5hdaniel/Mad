@@ -312,6 +312,31 @@ contextBridge.exposeInMainWorld("api", {
       ),
 
     /**
+     * Batch update contact assignments for a transaction
+     * Performs multiple add/remove operations in a single atomic transaction
+     * @param {string} transactionId - Transaction ID
+     * @param {Array} operations - Array of operations to perform
+     * @returns {Promise<{success: boolean, error?: string}>} Batch update result
+     */
+    batchUpdateContacts: (
+      transactionId: string,
+      operations: Array<{
+        action: "add" | "remove";
+        contactId: string;
+        role?: string;
+        roleCategory?: string;
+        specificRole?: string;
+        isPrimary?: boolean;
+        notes?: string;
+      }>,
+    ) =>
+      ipcRenderer.invoke(
+        "transactions:batchUpdateContacts",
+        transactionId,
+        operations,
+      ),
+
+    /**
      * Unlinks a communication (email) from a transaction
      * The email will be added to an ignored list and won't be re-added during future scans
      * @param {string} communicationId - Communication ID to unlink
