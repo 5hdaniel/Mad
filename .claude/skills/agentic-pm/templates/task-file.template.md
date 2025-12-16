@@ -118,6 +118,22 @@ This task's PR MUST pass:
 
 *Completed: <DATE>*
 
+### Plan-First Protocol
+
+```
+Plan Agent Invocations:
+- [ ] Initial plan created
+- [ ] Plan reviewed from Engineer perspective
+- [ ] Plan approved (revisions: X)
+
+Plan Agent Metrics:
+| Activity | Turns | Tokens (est.) | Time |
+|----------|-------|---------------|------|
+| Initial Plan | X | ~XK | X min |
+| Revision(s) | X | ~XK | X min |
+| **Plan Total** | X | ~XK | X min |
+```
+
 ### Checklist
 
 ```
@@ -135,12 +151,26 @@ Verification:
 - [ ] npm test passes (if applicable)
 ```
 
+### Engineer Metrics
+
+```
+| Phase | Turns | Tokens | Time |
+|-------|-------|--------|------|
+| Planning (Plan) | X | ~XK | X min |
+| Implementation (Impl) | X | ~XK | X min |
+| Debugging (Debug) | X | ~XK | X min |
+| **Engineer Total** | X | ~XK | X min |
+```
+
 ### Notes
 
 <REQUIRED: Document the following>
 
+**Planning notes:**
+<Key decisions from planning phase, revisions if any>
+
 **Deviations from plan:**
-<If you deviated from the plan, explain what and why. Use "DEVIATION:" prefix.>
+<If you deviated from the approved plan, explain what and why. Use "DEVIATION:" prefix.>
 <If no deviations, write "None">
 
 **Design decisions:**
