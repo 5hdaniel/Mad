@@ -35,8 +35,8 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Rebuild native modules
-        run: npm rebuild better-sqlite3-multiple-ciphers
+      - name: Rebuild native modules for Electron
+        run: node scripts/rebuild-native.js
 
       - name: TypeScript type check
         run: npm run type-check
