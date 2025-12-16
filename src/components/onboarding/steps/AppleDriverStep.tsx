@@ -86,8 +86,8 @@ export const meta: OnboardingStepMeta = {
     label: "Skip for now",
     description: "You can install iTunes later to sync iPhone messages",
   },
-  // Only show for iPhone users
-  shouldShow: (context) => context.phoneType === "iphone",
+  // Only show for iPhone users who need driver setup (skip if already installed)
+  shouldShow: (context) => context.phoneType === "iphone" && !context.driverSetupComplete,
   // Complete when driver is installed or skipped
   isStepComplete: (context) =>
     context.driverSetupComplete || context.driverSkipped,

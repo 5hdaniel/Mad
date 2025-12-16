@@ -127,6 +127,7 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
   }, [app]);
 
   // Map app's currentStep to onboarding step ID
+  // This ensures the OnboardingFlow starts at the correct step based on routing
   const getInitialStepId = (): string | undefined => {
     const stepMap: Record<string, string> = {
       "phone-type-selection": "phone-type",
