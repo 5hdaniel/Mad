@@ -228,12 +228,11 @@ export function registerSystemHandlers(): void {
           "SystemHandlers",
         );
 
-        // Session-only OAuth: Clear all sessions and OAuth tokens
-        // This forces users to re-authenticate each app launch for better security
+        // Session-only login: Clear login sessions but keep mailbox tokens
+        // Users must re-login each app launch (security), but mailbox access persists (UX)
         await databaseService.clearAllSessions();
-        await databaseService.clearAllOAuthTokens();
         logService.info(
-          "Cleared sessions and OAuth tokens for session-only OAuth",
+          "Cleared login sessions (mailbox tokens preserved)",
           "SystemHandlers",
         );
 
