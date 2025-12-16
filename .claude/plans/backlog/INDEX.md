@@ -2,9 +2,9 @@
 
 This index tracks all backlog items with their current status and metadata.
 
-**Last Updated:** 2024-12-15
-**Total Items:** 70
-**Pending:** 68 | **In Progress:** 0 | **Completed:** 2 | **Obsolete:** 1
+**Last Updated:** 2025-12-16
+**Total Items:** 71
+**Pending:** 65 | **In Progress:** 0 | **Completed:** 6 | **Obsolete:** 1
 
 ---
 
@@ -99,7 +99,7 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-055 | AI House Viewing Extraction | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-056 | macOS Code Signing Fix | High | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-057 | Login Auth Timeout Retry | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
-| BACKLOG-058 | Split databaseService.ts | Critical | Pending | SPRINT-002 | 60-80 | 200-300K | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-058.md](BACKLOG-058.md) |
+| BACKLOG-058 | Split databaseService.ts | Critical | ✅ Completed | SPRINT-002 | 60-80 | 200-300K | - | ~25 | ~100K | ~2h | 2 | ~15K | ~15m | 5 | ~20K | ~30m | ~32 | ~135K | ~3h | [BACKLOG-058.md](BACKLOG-058.md) |
 | BACKLOG-059 | Fix Skipped Tests (27+) | Critical | ✅ Completed | SPRINT-002 | 12-18 | 48-72K | - | 10 | ~45K | - | 1 | ~12K | - | 3 | ~8K | - | 14 | ~65K | - | [BACKLOG-059.md](BACKLOG-059.md) |
 | BACKLOG-060 | Fix N+1 Query Pattern | High | ✅ Completed | SPRINT-002 | 10-15 | 40-60K | - | - | - | - | - | - | - | - | - | - | 14 | ~55K | - | [BACKLOG-060.md](BACKLOG-060.md) |
 | BACKLOG-061 | Refactor Transactions.tsx | High | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
@@ -134,7 +134,7 @@ This index tracks all backlog items with their current status and metadata.
 | Sprint ID | Name | Status | Items Completed |
 |-----------|------|--------|-----------------|
 | SPRINT-001 | Onboarding Refactor | ✅ Completed | TASK-101 to TASK-116 |
-| SPRINT-002 | Tech Debt | 🔄 Active | BACKLOG-058, 059, 060 |
+| SPRINT-002 | Tech Debt | ✅ Completed | BACKLOG-058, 059, 060 + 3 bonus fixes |
 
 ---
 
@@ -142,3 +142,6 @@ This index tracks all backlog items with their current status and metadata.
 
 - 2024-12-15: Created index, added BACKLOG-058 to 070
 - 2024-12-15: Assigned BACKLOG-058, 059, 060 to SPRINT-002
+- 2025-12-16: SPRINT-002 completed - marked BACKLOG-058, 059, 060 as complete
+- 2025-12-16: Added sprint review document (SPRINT-002-tech-debt-review.md)
+- 2025-12-16: PRs merged: #134 (tests), #135 (email bugs), #136 (Windows login), #137 (db split), #138 (native modules)
