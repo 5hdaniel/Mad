@@ -1,0 +1,229 @@
+/**
+ * Database Connection Module
+ * Manages the shared SQLite database connection for all database services.
+ *
+ * This module provides:
+ * - Database initialization and connection management
+ * - Helper methods for executing queries (_get, _all, _run)
+ * - Access to the raw database instance for bulk operations
+ *
+ * SECURITY: Database is encrypted at rest using SQLCipher (AES-256)
+ */
+
+import Database from "better-sqlite3-multiple-ciphers";
+import type { Database as DatabaseType } from "better-sqlite3";
+import path from "path";
+import fs from "fs";
+import { app } from "electron";
+import { DatabaseError, QueryResult } from "../../../types";
+import { databaseEncryptionService } from "../../databaseEncryptionService";
+import logService from "../../logService";
+
+/**
+ * Database connection state - shared across all services
+ */
+let db: DatabaseType | null = null;
+let dbPath: string | null = null;
+let encryptionKey: string | null = null;
+
+/**
+ * Check if database is initialized
+ */
+export function isInitialized(): boolean {
+  return db !== null;
+}
+
+/**
+ * Get the database path
+ */
+export function getDbPath(): string | null {
+  return dbPath;
+}
+
+/**
+ * Get the encryption key
+ */
+export function getEncryptionKey(): string | null {
+  return encryptionKey;
+}
+
+/**
+ * Ensure database is initialized and return it
+ * @throws {DatabaseError} If database is not initialized
+ */
+export function ensureDb(): DatabaseType {
+  if (!db) {
+    throw new DatabaseError(
+      "Database is not initialized. Call initialize() first.",
+    );
+  }
+  return db;
+}
+
+/**
+ * Get raw database instance for bulk operations.
+ * Use with caution - prefer using service methods when possible.
+ *
+ * This is exposed for performance-critical bulk operations like
+ * iPhone sync which need direct transaction control.
+ *
+ * @returns The underlying better-sqlite3 database instance
+ * @throws {DatabaseError} If database is not initialized
+ */
+export function getRawDatabase(): DatabaseType {
+  return ensureDb();
+}
+
+/**
+ * Open database connection with encryption
+ */
+export function openDatabase(): DatabaseType {
+  if (!dbPath) {
+    throw new DatabaseError("Database path is not set");
+  }
+  if (!encryptionKey) {
+    throw new DatabaseError("Encryption key is not set");
+  }
+
+  const database = new Database(dbPath);
+
+  // Configure SQLCipher encryption
+  database.pragma(`key = "x'${encryptionKey}'"`);
+  database.pragma("cipher_compatibility = 4");
+
+  // Enable foreign keys
+  database.pragma("foreign_keys = ON");
+
+  // Verify database is accessible (will throw if key is wrong)
+  try {
+    database.pragma("cipher_integrity_check");
+  } catch (error) {
+    throw new DatabaseError(
+      "Failed to decrypt database. Encryption key may be invalid.",
+    );
+  }
+
+  return database;
+}
+
+/**
+ * Set the database instance (used during initialization)
+ */
+export function setDb(database: DatabaseType): void {
+  db = database;
+}
+
+/**
+ * Set database path (used during initialization)
+ */
+export function setDbPath(path: string): void {
+  dbPath = path;
+}
+
+/**
+ * Set encryption key (used during initialization)
+ */
+export function setEncryptionKey(key: string): void {
+  encryptionKey = key;
+}
+
+/**
+ * Initialize the database path and encryption key
+ * Does NOT open the database - that's done by initialize() in databaseService
+ */
+export async function initializePaths(): Promise<void> {
+  // Get user data path
+  const userDataPath = app.getPath("userData");
+  dbPath = path.join(userDataPath, "mad.db");
+
+  await logService.info("Initializing database paths", "DbConnection", {
+    path: dbPath,
+  });
+
+  // Ensure directory exists
+  const dbDir = path.dirname(dbPath);
+  if (!fs.existsSync(dbDir)) {
+    fs.mkdirSync(dbDir, { recursive: true });
+  }
+
+  // Initialize encryption service and get key
+  await databaseEncryptionService.initialize();
+  encryptionKey = await databaseEncryptionService.getEncryptionKey();
+}
+
+/**
+ * Close the database connection
+ */
+export async function closeDb(): Promise<void> {
+  if (db) {
+    db.close();
+    db = null;
+    await logService.info("Database connection closed", "DbConnection");
+  }
+}
+
+/**
+ * Vacuum the database to reclaim space
+ */
+export async function vacuumDb(): Promise<void> {
+  const database = ensureDb();
+  database.exec("VACUUM");
+  await logService.info("Database vacuumed", "DbConnection");
+}
+
+// ============================================
+// QUERY HELPERS
+// ============================================
+
+/**
+ * Helper: Run a query that returns a single row
+ * Uses better-sqlite3's synchronous API
+ */
+export function dbGet<T = unknown>(
+  sql: string,
+  params: unknown[] = [],
+): T | undefined {
+  const database = ensureDb();
+  const stmt = database.prepare(sql);
+  return stmt.get(...params) as T | undefined;
+}
+
+/**
+ * Helper: Run a query that returns multiple rows
+ * Uses better-sqlite3's synchronous API
+ */
+export function dbAll<T = unknown>(sql: string, params: unknown[] = []): T[] {
+  const database = ensureDb();
+  const stmt = database.prepare(sql);
+  return stmt.all(...params) as T[];
+}
+
+/**
+ * Helper: Run a query that modifies data (INSERT, UPDATE, DELETE)
+ * Uses better-sqlite3's synchronous API
+ */
+export function dbRun(sql: string, params: unknown[] = []): QueryResult {
+  const database = ensureDb();
+  const stmt = database.prepare(sql);
+  const result = stmt.run(...params);
+  return {
+    lastInsertRowid: result.lastInsertRowid as number,
+    changes: result.changes,
+  };
+}
+
+/**
+ * Helper: Execute raw SQL (for migrations, schema changes)
+ */
+export function dbExec(sql: string): void {
+  const database = ensureDb();
+  database.exec(sql);
+}
+
+/**
+ * Helper: Run a transaction
+ */
+export function dbTransaction<T>(fn: () => T): T {
+  const database = ensureDb();
+  return database.transaction(fn)();
+}
