@@ -324,6 +324,47 @@ gh pr create --base develop --title "type: description" --body "..."
 
 ---
 
+## Phase 7.5: MANDATORY Sync with Target Branch
+
+**⚠️ NON-NEGOTIABLE: Always merge the target branch INTO your feature branch before final CI run.**
+
+This step MUST be performed before pushing for final CI verification:
+
+```bash
+# 1. Fetch latest from target branch
+git fetch origin
+
+# 2. Merge target branch into your feature branch
+git merge origin/develop  # or origin/main for hotfixes
+
+# 3. If conflicts exist, resolve them NOW
+# 4. Run tests locally to verify nothing broke
+npm run type-check
+npm test
+
+# 5. Push (this triggers CI on the merged state)
+git push
+```
+
+**Why this is mandatory:**
+- Other PRs may have been merged since you started
+- Merge conflicts caught BEFORE merge to develop, not after
+- CI runs against the FINAL merged state
+- Prevents broken `develop` branch from conflicting changes
+
+**If conflicts exist:**
+1. Resolve them in your feature branch
+2. Test locally
+3. Push the resolution
+4. CI will run on the conflict-resolved code
+
+**DO NOT skip this step even if:**
+- Your PR was just created
+- CI already passed once before
+- You think develop hasn't changed
+
+---
+
 ## Phase 8: CI Verification
 
 **⚠️ CRITICAL: Never claim CI passed without explicit verification. False CI claims waste user time and erode trust.**
@@ -405,45 +446,9 @@ gh run view <RUN-ID>
 
 ## Phase 9: Merge
 
-### 9.1 MANDATORY: Sync with Target Branch Before Merge
-
-**⚠️ NON-NEGOTIABLE: Always merge the target branch INTO your feature branch before merging the PR.**
-
-This step MUST be performed immediately before merging, even if CI has passed:
-
-```bash
-# 1. Checkout your feature branch
-git checkout your-feature-branch
-
-# 2. Fetch and merge latest from target branch
-git fetch origin
-git merge origin/develop  # or origin/main for hotfixes
-
-# 3. Resolve ANY merge conflicts
-# 4. Run tests locally to verify nothing broke
-npm run type-check
-npm test
-
-# 5. Push the merge commit
-git push
-```
-
-**Why this is mandatory:**
-- Other PRs may have been merged since you started
-- Merge conflicts caught BEFORE merge, not after
-- Ensures CI runs against the FINAL merged state
-- Prevents broken `develop` branch from conflicting changes
-
-**If conflicts exist:**
-1. Resolve them in your feature branch
-2. Push the resolution
-3. Wait for CI to pass again
-4. THEN merge the PR
-
-### 9.2 Pre-Merge Checklist
-- [ ] **Target branch merged into feature branch** (Step 9.1 - MANDATORY)
-- [ ] All CI checks pass (after sync)
-- [ ] No merge conflicts
+### Pre-Merge Checklist
+- [ ] All CI checks pass
+- [ ] No merge conflicts (verified in Phase 7.5)
 - [ ] PR approved (if reviews required)
 - [ ] Target branch is correct
 
@@ -515,8 +520,8 @@ When reviewing PRs, verify:
 - [ ] **Phase 5**: Type check + lint pass
 - [ ] **Phase 6**: Automated code review completed
 - [ ] **Phase 7**: Clear PR description
-- [ ] **Phase 8**: CI passes
-- [ ] **Phase 9.1**: Target branch merged into feature branch (MANDATORY before merge)
+- [ ] **Phase 7.5**: Target branch merged into feature branch (MANDATORY)
+- [ ] **Phase 8**: CI passes (after Phase 7.5 sync)
 
 ### Review Output Format
 
