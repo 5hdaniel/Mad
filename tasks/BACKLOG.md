@@ -2734,6 +2734,352 @@ The certificate file is created (3066 bytes) but macOS security tool cannot impo
 
 ---
 
+## Technical Debt & Refactoring (Senior Engineer Assessment - 2024-12-15)
+
+### BACKLOG-058: Split databaseService.ts into Domain Repositories
+**Priority:** Critical
+**Status:** Pending
+**Category:** Architecture Refactor
+
+**Description:**
+`electron/services/databaseService.ts` is 3,342 lines - far exceeding the ~300 line guideline. This monolithic file contains all database operations for users, sessions, contacts, transactions, communications, feedback, and audit logs.
+
+**Senior Engineer Assessment:**
+- Maintainability: Very difficult to navigate and modify
+- Testing: Hard to unit test individual domains
+- Risk: High coupling, changes in one area can break others
+
+**Recommended Split:**
+| New File | Responsibility |
+|----------|---------------|
+| `electron/services/db/userRepository.ts` | User CRUD, authentication |
+| `electron/services/db/contactRepository.ts` | Contact management |
+| `electron/services/db/transactionRepository.ts` | Transaction CRUD |
+| `electron/services/db/communicationRepository.ts` | Emails, messages |
+| `electron/services/db/auditRepository.ts` | Audit logs |
+| `electron/services/db/sessionRepository.ts` | Sessions, tokens |
+| `electron/services/db/baseRepository.ts` | Shared utilities, connection |
+
+**Files to modify:**
+- `electron/services/databaseService.ts` → Split into domain files
+- All IPC handlers → Update imports
+- Tests → Update to match new structure
+
+---
+
+### BACKLOG-059: Fix/Enable Skipped Tests (27+ Test Cases)
+**Priority:** Critical
+**Status:** Pending
+**Category:** Testing
+
+**Description:**
+27+ test cases are currently skipped across 4 critical files. These cover core app functionality including navigation, authentication, onboarding, and sync.
+
+**Skipped Tests Inventory:**
+| File | Skipped | Coverage Gap |
+|------|---------|--------------|
+| `src/components/__tests__/App.test.tsx` | 13 tests (4 describe blocks) | Core app behavior |
+| `electron/services/__tests__/syncOrchestrator.test.ts` | 9+ tests (entire file) | Sync logic |
+| `src/components/__tests__/AppleDriverSetup.test.tsx` | 8 tests | Driver setup flow |
+| `src/components/__tests__/EmailOnboardingScreen.test.tsx` | 3 tests | Email connection |
+| `electron/services/__tests__/deviceDetectionService.test.ts` | 1 test | Device detection |
+
+**Root Causes (from TODO comments):**
+- Tests need updates for new OnboardingFlow architecture
+- Flaky timing issues with fake timers
+- Button text/behavior changes not reflected in tests
+
+**Approach:**
+1. Start with App.test.tsx - update for OnboardingFlow architecture
+2. Fix AppleDriverSetup.test.tsx timing issues
+3. Re-enable syncOrchestrator.test.ts with proper mocks
+
+---
+
+### BACKLOG-060: Fix N+1 Query Pattern in Contact Assignment
+**Priority:** High
+**Status:** Pending
+**Category:** Performance
+
+**Description:**
+`src/components/Transactions.tsx` lines 1972-1998 performs N+1 IPC calls when assigning contacts to transactions.
+
+**Current Pattern:**
+```typescript
+for (const existing of currentAssignments) {
+  await window.api.transactions.removeContact(...);  // N+1!
+}
+for (const [role, contacts] of Object.entries(contactAssignments)) {
+  for (const contact of contacts) {
+    await window.api.transactions.assignContact(...);  // N+1!
+  }
+}
+```
+
+**Impact:** Significant slowdown with many contacts. Each operation is a separate IPC call + database operation.
+
+**Solution:**
+1. Add batch API endpoint: `transactions:batchUpdateContacts`
+2. Accept array of {action, contactId, role} operations
+3. Execute in single database transaction
+4. Update UI to use batch operation
+
+**Files to modify:**
+- `electron/services/databaseService.ts` - Add batch method
+- `electron/transaction-handlers.ts` - Add batch IPC handler
+- `src/components/Transactions.tsx` - Use batch API
+
+---
+
+### BACKLOG-061: Refactor Transactions.tsx (2,500 Lines)
+**Priority:** High
+**Status:** Pending
+**Category:** Architecture Refactor
+
+**Description:**
+`src/components/Transactions.tsx` is 2,500 lines - violates the ~300 line guideline by 8x.
+
+**Recommended Extraction:**
+| Component | Responsibility |
+|-----------|---------------|
+| `TransactionCard.tsx` | Single transaction display card |
+| `TransactionList.tsx` | List rendering, virtualization |
+| `TransactionFilters.tsx` | Filter UI and logic |
+| `ContactAssignmentManager.tsx` | Contact assignment modal/panel |
+| `useTransactionFilters.ts` | Filter state hook |
+| `useTransactionOperations.ts` | CRUD operations hook |
+
+**Benefits:**
+- Easier testing of individual components
+- Better code navigation
+- Reusable components
+- Reduced cognitive load
+
+---
+
+### BACKLOG-062: Refactor Contacts.tsx (1,638 Lines)
+**Priority:** High
+**Status:** Pending
+**Category:** Architecture Refactor
+
+**Description:**
+`src/components/Contacts.tsx` is 1,638 lines - significantly over the ~300 line guideline.
+
+**Recommended Extraction:**
+| Component | Responsibility |
+|-----------|---------------|
+| `ContactCard.tsx` | Single contact display |
+| `ContactList.tsx` | List rendering |
+| `ContactFilters.tsx` | Search/filter UI |
+| `ImportContactsModal.tsx` | Import flow UI |
+| `useContactOperations.ts` | CRUD operations hook |
+
+---
+
+### BACKLOG-063: Refactor useAppStateMachine.ts (1,113 Lines)
+**Priority:** High
+**Status:** Pending
+**Category:** Architecture Refactor
+
+**Description:**
+`src/appCore/state/useAppStateMachine.ts` is 1,113 lines. The file itself notes in a TODO comment that it's a "staging area" that should be split.
+
+**Recommended Split:**
+| Hook | Responsibility |
+|------|---------------|
+| `useAuthFlow.ts` | Login, logout, session management |
+| `useOnboardingFlow.ts` | Onboarding state (partially done) |
+| `useSyncFlow.ts` | iPhone sync state |
+| `useNavigationState.ts` | Route/screen state |
+| `useAppStateMachine.ts` | Orchestrates sub-hooks |
+
+**Note:** Some onboarding flow logic was extracted during TASK-113, but auth and sync flows remain in the main file.
+
+---
+
+### BACKLOG-064: Add Batch Operations to Database Service
+**Priority:** Medium
+**Status:** Pending
+**Category:** Performance
+
+**Description:**
+The database service lacks batch operation methods. Most write operations are individual statements without transaction wrapping.
+
+**Needed Batch Methods:**
+- `batchCreateContacts(contacts[])` - Bulk contact import
+- `batchUpdateContactAssignments(transactionId, assignments[])` - See BACKLOG-060
+- `batchInsertMessages(messages[])` - iPhone sync performance
+- `batchInsertEmails(emails[])` - Email sync performance
+
+**Implementation:**
+1. Wrap batch operations in SQLite transactions
+2. Use prepared statements with parameter binding
+3. Return array of results with success/failure per item
+
+---
+
+### BACKLOG-065: Remove/Replace Console Statements (350 Total)
+**Priority:** Medium
+**Status:** Pending
+**Category:** Code Quality
+
+**Description:**
+The codebase contains 350 console.log/error/warn statements that should be removed or replaced with proper logging.
+
+**Breakdown:**
+- Renderer (src/): 143 occurrences across 34 files
+- Main Process (electron/): 207 occurrences across 23 files
+
+**Top offenders:**
+- `electron/services/googleAuthService.ts` - 30
+- `electron/services/supabaseService.ts` - 28
+- `electron/main.ts` - 22
+- `electron/contact-handlers.ts` - 15
+
+**Solution:**
+1. Use existing `logService` for main process logging
+2. Create renderer-side log utility that forwards to main
+3. Remove debug-only statements
+4. Keep error logging but route through service
+
+---
+
+## LLM Integration & Transaction Intelligence
+
+### BACKLOG-066: LLM Integration for Transaction Detection
+**Priority:** High
+**Status:** Pending
+**Category:** Core Feature
+
+**Description:**
+Implement LLM connection to evaluate incoming parsed data and identify real estate transactions, their related communications, and participants.
+
+**Capabilities:**
+1. **Transaction Detection**: Analyze emails/texts to identify real estate transactions
+2. **Contact Role Identification**: Determine who is buyer, seller, agent, lender, etc.
+3. **Communication Linking**: Match emails/texts to specific transactions
+4. **Confidence Scoring**: Rate detection confidence for user review
+
+**Architecture:**
+```
+[Parsed Data] → [LLM Evaluation Service] → [Transaction Candidates]
+                       ↓
+              [User Review/Confirm]
+                       ↓
+              [Save to Database]
+```
+
+**Technical Considerations:**
+- Local LLM vs API-based (privacy, cost, latency)
+- Prompt engineering for real estate domain
+- Batch processing for efficiency
+- Caching to avoid re-processing same content
+
+**Files to create:**
+- `electron/services/llm/llmService.ts` - Core LLM interface
+- `electron/services/llm/transactionDetector.ts` - Detection logic
+- `electron/services/llm/roleIdentifier.ts` - Contact role inference
+- `src/components/TransactionCandidates.tsx` - Review UI
+
+---
+
+### BACKLOG-067: AI-Powered Transaction Timeline Builder
+**Priority:** High
+**Status:** Pending
+**Category:** Core Feature
+
+**Description:**
+Use LLM to build a chronological timeline of transaction events from all extracted data sources (emails, texts, documents).
+
+**Timeline Events to Detect:**
+- Initial inquiry / showing request
+- Offer made / received
+- Counter offers
+- Inspection scheduled / completed
+- Appraisal scheduled / completed
+- Financing updates
+- Closing date set / changed
+- Final walkthrough
+- Closing / funding
+
+**Output:**
+- Timeline visualization in Transaction Details
+- Event cards with source citations (link to original email/text)
+- Confidence indicators
+- Manual override capability
+
+**Related:** BACKLOG-052 (AI-Generated Transaction Timeline Summary)
+
+---
+
+### BACKLOG-068: Intelligent Contact Deduplication
+**Priority:** Medium
+**Status:** Pending
+**Category:** Data Quality
+
+**Description:**
+Use LLM to identify duplicate contacts that have different names/emails but are likely the same person.
+
+**Signals to Consider:**
+- Similar names (typos, nicknames, maiden names)
+- Same phone with different emails
+- Same email with different names
+- Appear in same transactions
+- Email signature analysis
+
+**UI:**
+- "Possible Duplicates" review queue
+- Side-by-side comparison
+- Merge / Keep Separate actions
+- "Always keep separate" flag
+
+---
+
+## Deferred Features (Lower Priority)
+
+### BACKLOG-069: Telemetry & Analytics System
+**Priority:** Low
+**Status:** Deferred
+**Category:** Infrastructure
+
+**Description:**
+Implement opt-in telemetry to understand usage patterns and improve the product.
+
+**Scope:**
+- Feature usage tracking
+- Error reporting (with user consent)
+- Performance metrics
+- Funnel analysis (onboarding completion, etc.)
+
+**Privacy Requirements:**
+- Explicit opt-in during onboarding
+- Clear data collection disclosure
+- Easy opt-out in settings
+- No PII in telemetry
+
+**Note:** Existing stale branch `origin/claude/add-telemetry-tracking-*` may have partial implementation.
+
+---
+
+### BACKLOG-070: Enterprise User Management
+**Priority:** Low
+**Status:** Deferred
+**Category:** Feature
+
+**Description:**
+Admin features for enterprise/team deployments.
+
+**Capabilities:**
+- User provisioning
+- Role-based access control
+- Audit logging for compliance
+- Centralized settings management
+- SSO integration
+
+**Note:** Existing stale branch `origin/claude/enterprise-user-management-*` may have partial implementation. This is a major feature requiring dedicated planning sprint.
+
+---
+
 ## Last Updated
 2024-12-10 - Initial backlog created from build warnings and sync testing session
 2024-12-10 - Added BACKLOG-006: Dark Mode
@@ -2772,3 +3118,6 @@ The certificate file is created (3066 bytes) but macOS security tool cannot impo
 2024-12-13 - Added BACKLOG-045: Block Contact Deletion if Linked to Transactions (Critical)
 2024-12-14 - Added BACKLOG-056: Fix macOS Code Signing Certificate Import in Release Workflow (High)
 2024-12-15 - Added BACKLOG-057: Show Retry Component on Login Auth Timeout (Medium)
+2024-12-15 - Added BACKLOG-058 to BACKLOG-065: Technical Debt items from Senior Engineer Assessment
+2024-12-15 - Added BACKLOG-066 to BACKLOG-068: LLM Integration & Transaction Intelligence features
+2024-12-15 - Added BACKLOG-069 to BACKLOG-070: Deferred features (Telemetry, Enterprise Management)

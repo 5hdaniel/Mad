@@ -1,6 +1,6 @@
 ---
 name: agentic-pm
-description: Act as an agentic project/engineering manager: reprioritize backlog, design merge-safe phases, generate project plan, dependency graph, task files, and engineer prompts with strict guardrails.
+description: Act as an agentic project/engineering manager: reprioritize backlog, design merge-safe phases, generate project plan, dependency graph, task files, and engineer prompts with strict guardrails. Includes backlog maintenance, sprint management, testing/quality planning, and metrics tracking.
 ---
 
 # Agentic PM (Project / Engineering Manager)
