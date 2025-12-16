@@ -3,8 +3,8 @@
 This index tracks all backlog items with their current status and metadata.
 
 **Last Updated:** 2025-12-16
-**Total Items:** 71
-**Pending:** 65 | **In Progress:** 0 | **Completed:** 6 | **Obsolete:** 1
+**Total Items:** 72
+**Pending:** 66 | **In Progress:** 0 | **Completed:** 6 | **Obsolete:** 1
 
 ---
 
@@ -26,7 +26,7 @@ This index tracks all backlog items with their current status and metadata.
 ## Quick Filters
 
 ### By Priority
-- **Critical:** BACKLOG-030, 032, 035, 038, 039, 044, 045, 058, 059
+- **Critical:** BACKLOG-030, 032, 035, 038, 039, 044, 045, 058, 059, 072
 - **High:** BACKLOG-008, 009, 013, 016, 018, 020, 021, 023, 026, 031, 033, 037, 056, 060, 061, 062, 063, 066, 067
 - **Medium:** Multiple (see full index)
 - **Low/Deferred:** BACKLOG-001, 003, 004, 010, 017, 069, 070
@@ -113,6 +113,7 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-069 | Telemetry & Analytics | Low | Deferred | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-070 | Enterprise User Management | Low | Deferred | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-071 | Atomic Transaction Creation | Low | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| BACKLOG-072 | Enforce Engineer Workflow Compliance | Critical | Pending | - | 23-35 | 90-140K | ~3h | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-072.md](BACKLOG-072.md) |
 
 ---
 
@@ -145,3 +146,4 @@ This index tracks all backlog items with their current status and metadata.
 - 2025-12-16: SPRINT-002 completed - marked BACKLOG-058, 059, 060 as complete
 - 2025-12-16: Added sprint review document (SPRINT-002-tech-debt-review.md)
 - 2025-12-16: PRs merged: #134 (tests), #135 (email bugs), #136 (Windows login), #137 (db split), #138 (native modules)
+- 2025-12-16: Added BACKLOG-072 (Workflow Enforcement) - Critical priority from SPRINT-002 audit
