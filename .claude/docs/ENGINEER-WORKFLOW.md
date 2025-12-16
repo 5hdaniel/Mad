@@ -8,12 +8,13 @@
 
 ```
 1. BRANCH  → Create from develop
-2. TRACK   → Note start time, count turns
-3. IMPLEMENT → Do the work
-4. METRICS → Add to PR description
-5. PR      → Create when ready for review
-6. SR REVIEW → Wait for SR Engineer
-7. PM      → SR passes to PM for next task
+2. PLAN    → Invoke Plan agent (MANDATORY)
+3. TRACK   → Note start time, count turns
+4. IMPLEMENT → Do the work
+5. METRICS → Add to PR description (including Plan metrics)
+6. PR      → Create when ready for review
+7. SR REVIEW → Wait for SR Engineer
+8. PM      → SR passes to PM for next task
 ```
 
 ---
@@ -40,7 +41,38 @@ git checkout -b fix/task-XXX-description
 
 ---
 
-## Step 2: Track Metrics (Start Timer)
+## Step 2: Plan-First Protocol (MANDATORY)
+
+**Before ANY implementation**, invoke the Plan agent to create an implementation plan.
+
+Use the Task tool with `subagent_type="Plan"` and provide:
+- Task context (file, branch, objective, constraints)
+- Expected deliverables from task file
+- Architecture boundaries to respect
+
+**Track Plan Agent Metrics:**
+
+| Activity | Turns | Tokens (est.) | Time |
+|----------|-------|---------------|------|
+| Initial Plan | X | ~XK | X min |
+| Revision(s) | X | ~XK | X min |
+| **Plan Total** | X | ~XK | X min |
+
+**Review the plan** from your Engineer perspective:
+- [ ] Files to modify are correct
+- [ ] Implementation sequence is logical
+- [ ] Test strategy is complete
+- [ ] Architecture boundaries respected
+
+**If issues found**, re-invoke Plan agent with revision request.
+
+**BLOCKING**: Do NOT start implementation until you have an approved plan.
+
+See `.claude/agents/engineer.md` for detailed Plan-First Protocol.
+
+---
+
+## Step 3: Track Metrics (Start Timer)
 
 **Before reading the task file:**
 
@@ -60,11 +92,11 @@ Turns: |||| |||| || (12)
 
 ---
 
-## Step 3: Implement the Task
+## Step 4: Implement the Task
 
 1. Read the task file (`.claude/plans/tasks/TASK-XXX.md`)
 2. Understand requirements and acceptance criteria
-3. Implement the solution
+3. Implement the solution following your approved plan
 4. Run tests locally: `npm test`
 5. Run type check: `npm run type-check`
 6. Run lint: `npm run lint`
@@ -73,7 +105,7 @@ Turns: |||| |||| || (12)
 
 ---
 
-## Step 4: Complete Task File Summary
+## Step 5: Complete Task File Summary
 
 **Before creating PR**, update the task file's Implementation Summary:
 
@@ -98,9 +130,10 @@ Turns: |||| |||| || (12)
 
 ---
 
-## Step 5: Create PR with Metrics
+## Step 6: Create PR with Metrics
 
 **Only create PR when:**
+- [ ] Plan agent approved and metrics recorded
 - [ ] All tests pass locally
 - [ ] Type check passes
 - [ ] Lint passes
@@ -131,20 +164,22 @@ gh pr create --base develop --title "..." --body "..."
 
 | Phase | Turns | Tokens | Time |
 |-------|-------|--------|------|
+| Planning (Plan) | X | ~XK | X min |
 | Implementation (Impl) | X | ~XK | X min |
 | Debugging (Debug) | X | ~XK | X min |
 | **Engineer Total** | X | ~XK | X min |
 
+**Planning Notes:** [plan revisions if any, key decisions]
 **Implementation Notes:** [any context]
 
 **Estimated vs Actual:**
 - Est: X turns, XK tokens
-- Actual: X turns, ~XK tokens
+- Actual: X turns, ~XK tokens (Plan: X, Impl: X, Debug: X)
 ```
 
 ---
 
-## Step 6: Wait for CI and Debug Failures
+## Step 7: Wait for CI and Debug Failures
 
 1. **Wait for CI to complete:**
    ```bash
@@ -197,7 +232,7 @@ Please verify, add SR metrics, approve and merge.
 
 ---
 
-## Step 7: SR Engineer Reviews and Merges
+## Step 8: SR Engineer Reviews and Merges
 
 The SR Engineer will:
 1. Verify Engineer Metrics are present
@@ -236,15 +271,21 @@ Copy this to your task file or notes:
 - [ ] Noted start time: ___
 - [ ] Read task file
 
+### Plan-First (MANDATORY)
+- [ ] Invoked Plan agent with task context
+- [ ] Reviewed plan from Engineer perspective
+- [ ] Plan approved (or revised and re-approved)
+- [ ] Plan agent metrics recorded (turns, tokens, time)
+
 ### Implementation
-- [ ] Code complete
+- [ ] Code complete (following approved plan)
 - [ ] Tests pass locally
 - [ ] Type check passes
 - [ ] Lint passes
 
 ### PR Submission
 - [ ] Task file summary updated
-- [ ] PR created with Engineer Metrics
+- [ ] PR created with Engineer Metrics (including Plan metrics)
 - [ ] CI passes
 - [ ] SR Engineer review requested
 
