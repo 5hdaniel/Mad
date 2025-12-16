@@ -19,6 +19,7 @@ Reorder backlog items to maximize:
    - `dependency_hints`: {depends_on, conflicts_with}
    - `llm_complexity`: {trivial, simple, moderate, complex, very_complex}
    - `estimated_turns`: <number> (estimated LLM conversation turns to complete)
+   - `estimated_tokens`: <number>K (estimated total tokens to complete task)
 
 3) **Cluster items**:
    - "contract-first" items (schema/API/types)
@@ -38,21 +39,41 @@ Reorder backlog items to maximize:
 
 Markdown table:
 
-| ID | Title | Priority | LLM Complexity | Est. Turns | Rationale | Dependencies | Conflicts |
-|----|-------|----------|----------------|------------|-----------|--------------|-----------|
-| ... | ... | ... | ... | ... | ... | ... | ... |
+| ID | Title | Priority | LLM Complexity | Est. Turns | Est. Tokens | Rationale | Dependencies | Conflicts |
+|----|-------|----------|----------------|------------|-------------|-----------|--------------|-----------|
+| ... | ... | ... | ... | ... | ... | ... | ... | ... |
 
 ## LLM Complexity Guide
 
-| Complexity | Description | Typical Turns |
-|------------|-------------|---------------|
-| trivial | Single file change, clear pattern | 1-3 |
-| simple | Few files, well-defined scope | 3-8 |
-| moderate | Multiple files, some exploration needed | 8-15 |
-| complex | Cross-cutting changes, research required | 15-30 |
-| very_complex | Architectural changes, multi-phase | 30+ |
+| Complexity | Description | Typical Turns | Typical Tokens |
+|------------|-------------|---------------|----------------|
+| trivial | Single file change, clear pattern | 1-3 | 5-15K |
+| simple | Few files, well-defined scope | 3-8 | 15-40K |
+| moderate | Multiple files, some exploration needed | 8-15 | 40-100K |
+| complex | Cross-cutting changes, research required | 15-30 | 100-250K |
+| very_complex | Architectural changes, multi-phase | 30+ | 250K+ |
 
-**Note**: "Turns" = full LLM request-response cycles, not token count.
+**Definitions**:
+- **Turns** = Full LLM request-response cycles (user message → assistant response)
+- **Tokens** = Total input + output tokens consumed across all turns
+
+## Token Estimation Factors
+
+When estimating tokens, consider:
+
+| Factor | Low Token Impact | High Token Impact |
+|--------|------------------|-------------------|
+| Code reading | 1-2 files, <200 lines | 10+ files, 1000+ lines |
+| Code writing | Small edits | New files, extensive changes |
+| Exploration | Known codebase | Unfamiliar codebase |
+| Test writing | Updating existing | Writing from scratch |
+| Debugging | Obvious fix | Investigation required |
+
+**Token cost breakdown (typical)**:
+- Reading a file: 500-2000 tokens per file (depends on size)
+- Tool calls: ~100-300 tokens overhead each
+- Code generation: ~1.5x the output length in tokens
+- Planning/reasoning: 500-2000 tokens per turn
 
 ## Red flags
 

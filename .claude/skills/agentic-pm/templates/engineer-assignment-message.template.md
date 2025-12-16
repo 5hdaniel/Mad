@@ -2,10 +2,11 @@
 
 > **NON-NEGOTIABLE: METRICS TRACKING REQUIRED**
 >
-> You MUST track and report metrics at task completion. This is mandatory.
-> - Track **turns**, **tokens**, and **time** for each phase (implementation, PR review, debugging)
-> - Report using the template in "Completion Reporting" section below
+> You MUST track and report YOUR OWN metrics at task completion. This is mandatory.
+> - Track **turns**, **tokens**, and **time** for YOUR implementation work
+> - Report using the template in "Engineer Metrics Reporting" section below
 > - Start tracking NOW - note your start time before reading further
+> - Senior Engineer will add their own metrics separately
 >
 > **Start Time:** _______________
 
@@ -45,39 +46,53 @@ Read the full task file before starting.
 4. Complete the Implementation Summary section
 5. Run all CI checks locally
 6. Open PR targeting `<branch>`
-7. Have senior-engineer-pr-lead agent review the PR
-8. After merge, report completion metrics (see below)
+7. Wait for CI to pass
+8. **Add YOUR Engineer Metrics to PR description** (see below)
+9. Request Senior Engineer review
+10. Senior Engineer reviews, adds their metrics, approves, and merges
 
-## Completion Reporting (REQUIRED)
+## Engineer Metrics Reporting (REQUIRED)
 
-After your task is complete and PR is merged, you MUST report:
+**TIMING: Add your metrics AFTER CI passes, BEFORE requesting SR review.**
 
-```
-## Task Completion Report: TASK-XXX
+Add this to your PR description once CI is green:
 
-**Status:** ✅ Complete
-**PR:** #<number>
+```markdown
+---
 
-### Metrics Breakdown
+## Engineer Metrics: TASK-XXX
+
+**Engineer Start Time:** [when you started]
+**Engineer End Time:** [when CI passed]
 
 | Phase | Turns | Tokens | Time |
 |-------|-------|--------|------|
-| Implementation | <N> | ~<X>K | <X> min |
-| PR Review (sr-eng agent) | <N> | ~<X>K | <X> min |
-| Debugging/Fixes | <N> | ~<X>K | <X> min |
-| **Total** | <N> | ~<X>K | <X> min |
+| Implementation (Impl) | X | ~XK | X min |
+| Debugging (Debug) | X | ~XK | X min |
+| **Engineer Total** | X | ~XK | X min |
 
-### Variance Notes
-(if significantly different from estimate of <X> turns, <X>K tokens)
-<explanation>
+**Implementation Notes:** [any context about your implementation]
 ```
 
-**How to track:**
-- **Turns**: Count user message prompts (yours = implementation, agent spawns = PR review)
-- **Tokens**: Estimate based on conversation length (~4 tokens/word, or use Claude Code token counter if available)
-- **Time**: Note start/end timestamps for each phase
+**Maps to INDEX.md columns:**
+- `Impl Turns | Impl Tokens | Impl Time` → Implementation phase
+- `Debug Turns | Debug Tokens | Debug Time` → Debugging phase
 
-This data is used to improve future estimates. The PM will update the backlog index with these metrics.
+**What YOU track:**
+- **Turns**: Your prompts during implementation and debugging
+- **Tokens**: ~4K per turn (or use token counter if available)
+- **Time**: Wall-clock time for YOUR active work (not CI wait time)
+
+**What you do NOT track:**
+- PR metrics (Senior Engineer reports as `PR Turns | PR Tokens | PR Time`)
+- Time waiting for CI to run
+
+After you add your metrics, request Senior Engineer review. They will:
+1. Review your code
+2. Add their own SR Engineer Metrics
+3. Approve and merge the PR
+
+See `.claude/docs/METRICS-PROTOCOL.md` for full protocol details.
 
 ## Stop and Ask If
 
