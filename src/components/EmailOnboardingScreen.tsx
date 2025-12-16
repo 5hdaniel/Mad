@@ -165,11 +165,31 @@ function EmailOnboardingScreen({
 }: EmailOnboardingScreenProps) {
   const { isWindows } = usePlatform();
 
-  const [connections, setConnections] = useState<Connections>({
-    google: null,
-    microsoft: null,
+  // Initialize connections state from existingPendingTokens if provided
+  // This ensures the UI shows "Connected" state when navigating back
+  const [connections, setConnections] = useState<Connections>(() => {
+    if (existingPendingTokens) {
+      const provider = existingPendingTokens.provider;
+      return {
+        google:
+          provider === "google"
+            ? { connected: true, email: existingPendingTokens.email }
+            : null,
+        microsoft:
+          provider === "microsoft"
+            ? { connected: true, email: existingPendingTokens.email }
+            : null,
+      };
+    }
+    return {
+      google: null,
+      microsoft: null,
+    };
   });
-  const [loadingConnections, setLoadingConnections] = useState<boolean>(true);
+  // In pre-DB flow or with existing tokens, we don't need to load from API
+  const [loadingConnections, setLoadingConnections] = useState<boolean>(
+    !existingPendingTokens && !isPreDbFlow,
+  );
   const [connectingProvider, setConnectingProvider] = useState<string | null>(
     null,
   );
@@ -233,12 +253,13 @@ function EmailOnboardingScreen({
     }
   }, [userId]);
 
-  // Check existing connections on mount
+  // Check existing connections on mount (only in post-DB flow)
+  // In pre-DB flow, the database isn't ready so we skip this check
   useEffect(() => {
-    if (userId) {
+    if (userId && !isPreDbFlow) {
       checkConnections();
     }
-  }, [userId, checkConnections]);
+  }, [userId, isPreDbFlow, checkConnections]);
 
   const handleConnectGoogle = async (): Promise<void> => {
     setConnectingProvider("google");

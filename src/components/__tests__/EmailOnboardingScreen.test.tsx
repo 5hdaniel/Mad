@@ -348,11 +348,7 @@ describe("EmailOnboardingScreen", () => {
       expect(window.api.auth.googleConnectMailboxPending).toHaveBeenCalled();
     });
 
-    // BLOCKED: Component bug - existingPendingTokens prop initializes pendingTokens state
-    // but doesn't initialize connections state. UI reads from connections, so "Connected"
-    // state is never shown. Requires fix in EmailOnboardingScreen.tsx lines 168-179.
-    // See: BACKLOG-061
-    it.skip("should restore pending tokens when navigating back", () => {
+    it("should restore pending tokens when navigating back", () => {
       const existingTokens = {
         provider: "google" as const,
         email: "test@gmail.com",
@@ -409,11 +405,7 @@ describe("EmailOnboardingScreen", () => {
       expect(screen.getAllByText("Checking...").length).toBeGreaterThan(0);
     });
 
-    // BLOCKED: Component bug - checkConnections() is called unconditionally on mount
-    // (lines 237-241) regardless of isPreDbFlow. In pre-DB mode, DB isn't ready so this
-    // call should be skipped. Requires fix in EmailOnboardingScreen.tsx useEffect.
-    // See: BACKLOG-061
-    it.skip("should not check connections in pre-DB mode", () => {
+    it("should not check connections in pre-DB mode", () => {
       renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
