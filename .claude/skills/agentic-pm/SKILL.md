@@ -17,10 +17,20 @@ Use this skill when the user asks for any of:
 - Task file authoring for engineers
 - Handling engineer questions or resolving scope/contract ambiguity
 - Testing and quality planning for any project/feature
+- Backlog maintenance (adding new items, marking complete, cleanup, TODO extraction)
+- Sprint management (creating sprints, closing sprints, moving tasks between sprints)
+- Sprint/backlog review (what's done, in progress, upcoming)
 
-## Core principle (non-negotiable)
+## Core principles (non-negotiable)
 
-If an engineer could reasonably misinterpret something, **you failed to specify it**.
+1. **Clarity**: If an engineer could reasonably misinterpret something, **you failed to specify it**.
+
+2. **Metrics Tracking**: ALL task assignments MUST include metrics tracking requirements at the TOP of the assignment. Engineers must report:
+   - Turns (implementation vs PR review vs debugging)
+   - Tokens (implementation vs PR review vs debugging)
+   - Time spent (implementation vs PR review vs debugging)
+
+   This data is critical for improving estimates. No exceptions.
 
 ## Progressive disclosure (how to use the bundled modules)
 
@@ -35,6 +45,8 @@ Only load the module you need:
 | Task files for engineers | `modules/task-file-authoring.md` |
 | Engineer Q&A / guardrail escalation | `modules/engineer-questions.md` |
 | Testing & quality planning | `modules/testing-quality-planning.md` |
+| Backlog maintenance / cleanup | `modules/backlog-maintenance.md` |
+| Sprint lifecycle / moving tasks | `modules/sprint-management.md` |
 
 Templates and schemas exist for machine-readable outputs:
 - Templates → `templates/`
@@ -124,12 +136,34 @@ After engineers complete tasks, PRs go through the `senior-engineer-pr-lead` age
 
 ### With existing project structure
 
-| Artifact | Location |
-|----------|----------|
-| Sprint plans | `.claude/plans/<sprint-name>-sprint-plan.md` |
-| Task files | `.claude/plans/tasks/TASK-<ID>-<slug>.md` |
-| Decision logs | `.claude/plans/decision-log.md` |
-| Risk registers | `.claude/plans/risk-register.md` |
+| Artifact | Location | Naming Pattern |
+|----------|----------|----------------|
+| Sprint plans | `.claude/plans/sprints/` | `SPRINT-<NNN>-<slug>.md` |
+| Task files | `.claude/plans/tasks/` | `TASK-<NNN>-<slug>.md` |
+| Backlog items | `.claude/plans/backlog/` | `BACKLOG-<NNN>.md` |
+| Backlog index | `.claude/plans/backlog/INDEX.md` | Single index file |
+| Decision logs | `.claude/plans/decision-log.md` | - |
+| Risk registers | `.claude/plans/risk-register.md` | - |
+
+### Sprint Numbering
+
+Sprints use sequential 3-digit numbers:
+- `SPRINT-001-onboarding-refactor`
+- `SPRINT-002-tech-debt`
+- `SPRINT-003-llm-integration`
+
+When creating a new sprint, check existing sprints and increment.
+
+### Backlog Management
+
+The backlog index (`.claude/plans/backlog/INDEX.md`) tracks:
+- All backlog items with metadata
+- Sprint assignments
+- Status and priority
+- Completion dates
+- Quick filters by priority and sprint
+
+See `modules/backlog-maintenance.md` for procedures.
 
 ### Branching alignment
 
