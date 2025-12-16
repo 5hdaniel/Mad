@@ -405,8 +405,44 @@ gh run view <RUN-ID>
 
 ## Phase 9: Merge
 
-### Pre-Merge Checklist
-- [ ] All CI checks pass
+### 9.1 MANDATORY: Sync with Target Branch Before Merge
+
+**⚠️ NON-NEGOTIABLE: Always merge the target branch INTO your feature branch before merging the PR.**
+
+This step MUST be performed immediately before merging, even if CI has passed:
+
+```bash
+# 1. Checkout your feature branch
+git checkout your-feature-branch
+
+# 2. Fetch and merge latest from target branch
+git fetch origin
+git merge origin/develop  # or origin/main for hotfixes
+
+# 3. Resolve ANY merge conflicts
+# 4. Run tests locally to verify nothing broke
+npm run type-check
+npm test
+
+# 5. Push the merge commit
+git push
+```
+
+**Why this is mandatory:**
+- Other PRs may have been merged since you started
+- Merge conflicts caught BEFORE merge, not after
+- Ensures CI runs against the FINAL merged state
+- Prevents broken `develop` branch from conflicting changes
+
+**If conflicts exist:**
+1. Resolve them in your feature branch
+2. Push the resolution
+3. Wait for CI to pass again
+4. THEN merge the PR
+
+### 9.2 Pre-Merge Checklist
+- [ ] **Target branch merged into feature branch** (Step 9.1 - MANDATORY)
+- [ ] All CI checks pass (after sync)
 - [ ] No merge conflicts
 - [ ] PR approved (if reviews required)
 - [ ] Target branch is correct
@@ -480,6 +516,7 @@ When reviewing PRs, verify:
 - [ ] **Phase 6**: Automated code review completed
 - [ ] **Phase 7**: Clear PR description
 - [ ] **Phase 8**: CI passes
+- [ ] **Phase 9.1**: Target branch merged into feature branch (MANDATORY before merge)
 
 ### Review Output Format
 
