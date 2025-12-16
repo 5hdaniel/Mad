@@ -20,6 +20,7 @@ import supabaseService from "./services/supabaseService";
 // NOTE: tokenEncryptionService removed - using session-only OAuth
 // Tokens are kept in memory during session, users re-authenticate each app launch
 // Database encryption (databaseEncryptionService) still protects PII at rest for SOC 2 compliance
+import { databaseEncryptionService } from "./services/databaseEncryptionService";
 import sessionService from "./services/sessionService";
 import rateLimitService from "./services/rateLimitService";
 import sessionSecurityService from "./services/sessionSecurityService";
@@ -354,39 +355,70 @@ const handleGoogleLogin = async (
         // Check if local database is initialized (keychain has been set up)
         // If not, send pending login data so frontend can show keychain explanation first
         if (!databaseService.isInitialized()) {
-          await logService.info(
-            "Database not initialized - sending pending login for keychain setup",
-            "AuthHandlers",
-          );
-
-          // Close the auth window
-          if (authWindow && !authWindow.isDestroyed()) {
-            authWindow.close();
-          }
-
-          // Send pending login data to frontend
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send("google:login-pending", {
-              success: true,
-              pendingLogin: true,
-              // OAuth data needed to complete login after keychain setup
-              oauthData: {
-                provider: "google",
-                userInfo,
-                tokens: {
-                  access_token: accessToken,
-                  refresh_token: refreshToken,
-                  expires_at:
-                    tokens.expires_at ??
-                    new Date(Date.now() + 3600 * 1000).toISOString(),
-                  scopes: Array.isArray(tokens.scopes) ? tokens.scopes : scopes,
+          // For returning users on Windows, try to initialize database automatically
+          // This handles the race condition where user logs in before startup initialization completes
+          const hasKeyStore = databaseEncryptionService.hasKeyStore();
+          if (process.platform === "win32" && hasKeyStore) {
+            await logService.info(
+              "Database not initialized but keystore exists - initializing for returning Windows user",
+              "AuthHandlers",
+            );
+            try {
+              await initializeDatabase();
+              await logService.info(
+                "Database initialized successfully for returning user",
+                "AuthHandlers",
+              );
+            } catch (initError) {
+              await logService.error(
+                "Failed to initialize database for returning user",
+                "AuthHandlers",
+                {
+                  error:
+                    initError instanceof Error
+                      ? initError.message
+                      : "Unknown error",
                 },
-                cloudUser,
-                subscription: subscription ?? undefined,
-              },
-            });
+              );
+            }
           }
-          return; // Exit - frontend will complete login after keychain setup
+
+          // Re-check after potential initialization attempt
+          if (!databaseService.isInitialized()) {
+            await logService.info(
+              "Database not initialized - sending pending login for keychain setup",
+              "AuthHandlers",
+            );
+
+            // Close the auth window
+            if (authWindow && !authWindow.isDestroyed()) {
+              authWindow.close();
+            }
+
+            // Send pending login data to frontend
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send("google:login-pending", {
+                success: true,
+                pendingLogin: true,
+                // OAuth data needed to complete login after keychain setup
+                oauthData: {
+                  provider: "google",
+                  userInfo,
+                  tokens: {
+                    access_token: accessToken,
+                    refresh_token: refreshToken,
+                    expires_at:
+                      tokens.expires_at ??
+                      new Date(Date.now() + 3600 * 1000).toISOString(),
+                    scopes: Array.isArray(tokens.scopes) ? tokens.scopes : scopes,
+                  },
+                  cloudUser,
+                  subscription: subscription ?? undefined,
+                },
+              });
+            }
+            return; // Exit - frontend will complete login after keychain setup
+          }
         }
 
         // Database is initialized - proceed with local user creation
@@ -1317,37 +1349,68 @@ const handleMicrosoftLogin = async (
         // Check if local database is initialized (keychain has been set up)
         // If not, send pending login data so frontend can show keychain explanation first
         if (!databaseService.isInitialized()) {
-          await logService.info(
-            "Database not initialized - sending pending login for keychain setup",
-            "AuthHandlers",
-          );
-
-          // Close the auth window
-          if (authWindow && !authWindow.isDestroyed()) {
-            authWindow.close();
-          }
-
-          // Send pending login data to frontend
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send("microsoft:login-pending", {
-              success: true,
-              pendingLogin: true,
-              // OAuth data needed to complete login after keychain setup
-              oauthData: {
-                provider: "microsoft",
-                userInfo,
-                tokens: {
-                  access_token: accessToken,
-                  refresh_token: refreshToken,
-                  expires_in: tokens.expires_in,
-                  scope: tokens.scope,
+          // For returning users on Windows, try to initialize database automatically
+          // This handles the race condition where user logs in before startup initialization completes
+          const hasKeyStore = databaseEncryptionService.hasKeyStore();
+          if (process.platform === "win32" && hasKeyStore) {
+            await logService.info(
+              "Database not initialized but keystore exists - initializing for returning Windows user",
+              "AuthHandlers",
+            );
+            try {
+              await initializeDatabase();
+              await logService.info(
+                "Database initialized successfully for returning user",
+                "AuthHandlers",
+              );
+            } catch (initError) {
+              await logService.error(
+                "Failed to initialize database for returning user",
+                "AuthHandlers",
+                {
+                  error:
+                    initError instanceof Error
+                      ? initError.message
+                      : "Unknown error",
                 },
-                cloudUser,
-                subscription: subscription ?? undefined,
-              },
-            });
+              );
+            }
           }
-          return; // Exit - frontend will complete login after keychain setup
+
+          // Re-check after potential initialization attempt
+          if (!databaseService.isInitialized()) {
+            await logService.info(
+              "Database not initialized - sending pending login for keychain setup",
+              "AuthHandlers",
+            );
+
+            // Close the auth window
+            if (authWindow && !authWindow.isDestroyed()) {
+              authWindow.close();
+            }
+
+            // Send pending login data to frontend
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send("microsoft:login-pending", {
+                success: true,
+                pendingLogin: true,
+                // OAuth data needed to complete login after keychain setup
+                oauthData: {
+                  provider: "microsoft",
+                  userInfo,
+                  tokens: {
+                    access_token: accessToken,
+                    refresh_token: refreshToken,
+                    expires_in: tokens.expires_in,
+                    scope: tokens.scope,
+                  },
+                  cloudUser,
+                  subscription: subscription ?? undefined,
+                },
+              });
+            }
+            return; // Exit - frontend will complete login after keychain setup
+          }
         }
 
         // Database is initialized - proceed with local user creation
