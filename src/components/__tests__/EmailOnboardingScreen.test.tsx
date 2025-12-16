@@ -319,8 +319,7 @@ describe("EmailOnboardingScreen", () => {
   });
 
   describe("Pre-DB Flow", () => {
-    // TODO: Pre-DB flow handlers not wired correctly - button click doesn't trigger pending handler
-    it.skip("should use pre-DB handlers when isPreDbFlow is true", async () => {
+    it("should use pre-DB handlers when isPreDbFlow is true", async () => {
       renderWithPlatform(
         <EmailOnboardingScreen
           userId={mockUserId}
@@ -334,6 +333,13 @@ describe("EmailOnboardingScreen", () => {
         />,
       );
 
+      // Wait for loading to complete (button becomes enabled)
+      await waitFor(() => {
+        expect(
+          screen.getByRole("button", { name: /connect gmail/i }),
+        ).not.toBeDisabled();
+      });
+
       const connectButton = screen.getByRole("button", {
         name: /connect gmail/i,
       });
@@ -342,7 +348,10 @@ describe("EmailOnboardingScreen", () => {
       expect(window.api.auth.googleConnectMailboxPending).toHaveBeenCalled();
     });
 
-    // TODO: existingPendingTokens prop not properly restoring connected state
+    // BLOCKED: Component bug - existingPendingTokens prop initializes pendingTokens state
+    // but doesn't initialize connections state. UI reads from connections, so "Connected"
+    // state is never shown. Requires fix in EmailOnboardingScreen.tsx lines 168-179.
+    // See: BACKLOG-061 (if created)
     it.skip("should restore pending tokens when navigating back", () => {
       const existingTokens = {
         provider: "google" as const,
@@ -400,7 +409,10 @@ describe("EmailOnboardingScreen", () => {
       expect(screen.getAllByText("Checking...").length).toBeGreaterThan(0);
     });
 
-    // TODO: checkAllConnections is being called even in pre-DB mode
+    // BLOCKED: Component bug - checkConnections() is called unconditionally on mount
+    // (lines 237-241) regardless of isPreDbFlow. In pre-DB mode, DB isn't ready so this
+    // call should be skipped. Requires fix in EmailOnboardingScreen.tsx useEffect.
+    // See: BACKLOG-061 (if created)
     it.skip("should not check connections in pre-DB mode", () => {
       renderWithPlatform(
         <EmailOnboardingScreen
