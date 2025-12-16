@@ -26,10 +26,12 @@ export {
   dbTransaction,
 } from "./core/dbConnection";
 
-// Domain services will be added here as they are created:
-// export * from './userDbService';
-// export * from './sessionDbService';
-// export * from './oauthTokenDbService';
+// Domain services - Phase 2
+export * from "./userDbService";
+export * from "./sessionDbService";
+export * from "./oauthTokenDbService";
+
+// Domain services to be added in future phases:
 // export * from './contactDbService';
 // export * from './transactionDbService';
 // export * from './transactionContactDbService';

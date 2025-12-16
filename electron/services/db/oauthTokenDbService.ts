@@ -1,0 +1,151 @@
+/**
+ * OAuth Token Database Service
+ * Handles all OAuth token-related database operations
+ */
+
+import crypto from "crypto";
+import type { OAuthToken, OAuthProvider, OAuthPurpose } from "../../types";
+import { DatabaseError } from "../../types";
+import { dbGet, dbRun } from "./core/dbConnection";
+
+/**
+ * Save OAuth token (encrypted)
+ */
+export async function saveOAuthToken(
+  userId: string,
+  provider: OAuthProvider,
+  purpose: OAuthPurpose,
+  tokenData: Partial<OAuthToken>,
+): Promise<string> {
+  const id = crypto.randomUUID();
+
+  const sql = `
+    INSERT INTO oauth_tokens (
+      id, user_id, provider, purpose,
+      access_token, refresh_token, token_expires_at, scopes_granted,
+      connected_email_address, mailbox_connected, permissions_granted_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(user_id, provider, purpose) DO UPDATE SET
+      access_token = excluded.access_token,
+      refresh_token = excluded.refresh_token,
+      token_expires_at = excluded.token_expires_at,
+      scopes_granted = excluded.scopes_granted,
+      connected_email_address = excluded.connected_email_address,
+      mailbox_connected = excluded.mailbox_connected,
+      permissions_granted_at = excluded.permissions_granted_at,
+      is_active = 1,
+      token_last_refreshed_at = CURRENT_TIMESTAMP
+  `;
+
+  const params = [
+    id,
+    userId,
+    provider,
+    purpose,
+    tokenData.access_token || null,
+    tokenData.refresh_token || null,
+    tokenData.token_expires_at || null,
+    tokenData.scopes_granted ? JSON.stringify(tokenData.scopes_granted) : null,
+    tokenData.connected_email_address || null,
+    tokenData.mailbox_connected ? 1 : 0,
+    tokenData.permissions_granted_at || new Date().toISOString(),
+  ];
+
+  dbRun(sql, params);
+  return id;
+}
+
+/**
+ * Get OAuth token
+ */
+export async function getOAuthToken(
+  userId: string,
+  provider: OAuthProvider,
+  purpose: OAuthPurpose,
+): Promise<OAuthToken | null> {
+  const sql = `
+    SELECT * FROM oauth_tokens
+    WHERE user_id = ? AND provider = ? AND purpose = ? AND is_active = 1
+  `;
+  const token = dbGet<OAuthToken & { scopes_granted?: string }>(sql, [
+    userId,
+    provider,
+    purpose,
+  ]);
+
+  if (token && token.scopes_granted && typeof token.scopes_granted === "string") {
+    (token as OAuthToken).scopes_granted = JSON.parse(token.scopes_granted);
+  }
+
+  return token || null;
+}
+
+/**
+ * Update OAuth token
+ */
+export async function updateOAuthToken(
+  tokenId: string,
+  updates: Partial<OAuthToken>,
+): Promise<void> {
+  const allowedFields = [
+    "access_token",
+    "refresh_token",
+    "token_expires_at",
+    "scopes_granted",
+    "connected_email_address",
+    "mailbox_connected",
+    "token_last_refreshed_at",
+    "token_refresh_failed_count",
+    "last_sync_at",
+    "last_sync_error",
+    "is_active",
+  ];
+
+  const fields: string[] = [];
+  const values: unknown[] = [];
+
+  Object.keys(updates).forEach((key) => {
+    if (allowedFields.includes(key)) {
+      let value = (updates as Record<string, unknown>)[key];
+      if (key === "scopes_granted" && Array.isArray(value)) {
+        value = JSON.stringify(value);
+      }
+      fields.push(`${key} = ?`);
+      values.push(value);
+    }
+  });
+
+  if (fields.length === 0) {
+    throw new DatabaseError("No valid fields to update");
+  }
+
+  values.push(tokenId);
+
+  const sql = `UPDATE oauth_tokens SET ${fields.join(", ")} WHERE id = ?`;
+  dbRun(sql, values);
+}
+
+/**
+ * Delete OAuth token
+ */
+export async function deleteOAuthToken(
+  userId: string,
+  provider: OAuthProvider,
+  purpose: OAuthPurpose,
+): Promise<void> {
+  const sql =
+    "DELETE FROM oauth_tokens WHERE user_id = ? AND provider = ? AND purpose = ?";
+  dbRun(sql, [userId, provider, purpose]);
+}
+
+/**
+ * Clear all OAuth tokens (for session-only OAuth on app startup)
+ * This forces all users to re-authenticate each app launch
+ */
+export async function clearAllOAuthTokens(): Promise<void> {
+  const sql = "DELETE FROM oauth_tokens";
+  dbRun(sql, []);
+  console.log(
+    "[OAuthTokenDbService] Cleared all OAuth tokens for session-only OAuth",
+  );
+}
