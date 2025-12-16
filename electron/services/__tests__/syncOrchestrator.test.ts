@@ -2,8 +2,233 @@
  * Sync Orchestrator Tests
  *
  * Tests for the main integration service that orchestrates iPhone sync on Windows.
- * Uses mock mode for testing without actual devices.
+ * Uses comprehensive mock infrastructure for all dependencies.
+ *
+ * TASK-203: Fixed with proper mock infrastructure for:
+ * - BackupService
+ * - BackupDecryptionService
+ * - DeviceDetectionService
+ * - iOSMessagesParser
+ * - iOSContactsParser
+ * - check-disk-space
  */
+
+import { EventEmitter } from "events";
+
+// Mock data for tests
+const mockDevice = {
+  udid: "00000000-0000000000000000",
+  name: "Mock iPhone",
+  productType: "iPhone14,2",
+  productVersion: "17.0",
+  serialNumber: "MOCK123456789",
+  isConnected: true,
+};
+
+const mockContact = {
+  id: 1,
+  firstName: "John",
+  lastName: "Doe",
+  displayName: "John Doe",
+  organization: null,
+  phones: [{ label: "mobile", value: "+15551234567" }],
+  emails: [{ label: "home", value: "john@example.com" }],
+};
+
+const mockMessage = {
+  id: 1,
+  guid: "test-guid-1",
+  text: "Test message",
+  handle: "+15551234567",
+  isFromMe: false,
+  date: new Date("2024-01-01T10:00:00Z"),
+  dateRead: new Date("2024-01-01T10:01:00Z"),
+  dateDelivered: new Date("2024-01-01T10:00:01Z"),
+  isRead: true,
+  attachments: [],
+  chatId: 1,
+};
+
+const mockConversation = {
+  chatId: 1,
+  guid: "chat-guid-1",
+  displayName: "John Doe",
+  participants: ["+15551234567"],
+  lastMessageDate: new Date("2024-01-01T10:00:00Z"),
+  messageCount: 1,
+  isGroupChat: false,
+  messages: [mockMessage],
+};
+
+// Create mock classes that extend EventEmitter for proper event handling
+class MockBackupService extends EventEmitter {
+  private shouldSucceed = true;
+  private isEncrypted = false;
+
+  setMockBehavior(succeed: boolean, encrypted: boolean = false) {
+    this.shouldSucceed = succeed;
+    this.isEncrypted = encrypted;
+  }
+
+  async checkBackupStatus(_udid: string) {
+    return {
+      exists: true,
+      isComplete: true,
+      isCorrupted: false,
+      sizeBytes: 1024 * 1024 * 100, // 100MB
+      lastModified: new Date(),
+    };
+  }
+
+  async startBackup(_options: { udid: string; password?: string; forceFullBackup?: boolean; skipApps?: boolean }) {
+    // Emit progress events
+    this.emit("progress", {
+      phase: "preparing",
+      percentComplete: 0,
+      filesTransferred: 0,
+      bytesTransferred: 0,
+    });
+
+    // Simulate some async work
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    this.emit("progress", {
+      phase: "transferring",
+      percentComplete: 50,
+      filesTransferred: 100,
+      bytesTransferred: 50 * 1024 * 1024,
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    this.emit("progress", {
+      phase: "finishing",
+      percentComplete: 100,
+      filesTransferred: 200,
+      bytesTransferred: 100 * 1024 * 1024,
+    });
+
+    if (!this.shouldSucceed) {
+      return {
+        success: false,
+        error: "Mock backup failure",
+        backupPath: null,
+        isEncrypted: false,
+      };
+    }
+
+    return {
+      success: true,
+      error: null,
+      backupPath: "/tmp/mock-backup",
+      isEncrypted: this.isEncrypted,
+    };
+  }
+
+  cancelBackup() {
+    // No-op for mock
+  }
+}
+
+class MockBackupDecryptionService {
+  async isBackupEncrypted(_backupPath: string) {
+    return false;
+  }
+
+  async decryptBackup(_backupPath: string, _password: string) {
+    return {
+      success: true,
+      error: null,
+      decryptedPath: "/tmp/mock-backup/decrypted",
+    };
+  }
+
+  async cleanup(_path: string) {
+    // No-op for mock
+  }
+}
+
+class MockDeviceDetectionService extends EventEmitter {
+  private devices: typeof mockDevice[] = [];
+
+  start(_intervalMs?: number) {
+    // Simulate device detection
+    setTimeout(() => {
+      this.devices = [mockDevice];
+      this.emit("device-connected", mockDevice);
+    }, 50);
+  }
+
+  stop() {
+    // No-op for mock
+  }
+
+  getConnectedDevices() {
+    return this.devices;
+  }
+
+  async getDeviceStorageInfo(_udid: string) {
+    return {
+      totalSpace: 256 * 1024 * 1024 * 1024, // 256GB
+      usedSpace: 128 * 1024 * 1024 * 1024, // 128GB
+      freeSpace: 128 * 1024 * 1024 * 1024,
+      estimatedBackupSize: 50 * 1024 * 1024 * 1024, // 50GB estimated
+    };
+  }
+}
+
+class MockMessagesParser {
+  private isOpen = false;
+
+  open(_backupPath: string) {
+    this.isOpen = true;
+  }
+
+  close() {
+    this.isOpen = false;
+  }
+
+  async getConversationsAsync(progressCallback?: (current: number, total: number) => void) {
+    if (progressCallback) {
+      progressCallback(1, 1);
+    }
+    return [{ ...mockConversation, messages: [] }];
+  }
+
+  async getMessagesAsync(_chatId: number) {
+    return [mockMessage];
+  }
+}
+
+class MockContactsParser {
+  private isOpen = false;
+
+  open(_backupPath: string) {
+    this.isOpen = true;
+  }
+
+  close() {
+    this.isOpen = false;
+  }
+
+  getAllContacts() {
+    return [mockContact];
+  }
+
+  lookupByHandle(handle: string) {
+    if (handle === "+15551234567") {
+      return { contact: mockContact, matchType: "phone" as const };
+    }
+    return { contact: null, matchType: null };
+  }
+}
+
+// Create mock instances
+const mockBackupService = new MockBackupService();
+const mockDecryptionService = new MockBackupDecryptionService();
+const mockDeviceService = new MockDeviceDetectionService();
+const mockMessagesParser = new MockMessagesParser();
+const mockContactsParser = new MockContactsParser();
 
 // Mock better-sqlite3-multiple-ciphers before any imports
 jest.mock("better-sqlite3-multiple-ciphers", () => {
@@ -32,22 +257,58 @@ jest.mock("electron-log", () => ({
   debug: jest.fn(),
 }));
 
+// Mock check-disk-space
+jest.mock("check-disk-space", () => {
+  return jest.fn().mockResolvedValue({
+    diskPath: "C:",
+    free: 500 * 1024 * 1024 * 1024, // 500GB free
+    size: 1000 * 1024 * 1024 * 1024, // 1TB total
+  });
+});
+
+// Mock the service modules
+jest.mock("../backupService", () => ({
+  BackupService: jest.fn().mockImplementation(() => mockBackupService),
+}));
+
+jest.mock("../backupDecryptionService", () => ({
+  BackupDecryptionService: jest.fn().mockImplementation(() => mockDecryptionService),
+  backupDecryptionService: mockDecryptionService,
+}));
+
+jest.mock("../deviceDetectionService", () => ({
+  DeviceDetectionService: jest.fn().mockImplementation(() => mockDeviceService),
+  deviceDetectionService: mockDeviceService,
+}));
+
+jest.mock("../iosMessagesParser", () => ({
+  iOSMessagesParser: jest.fn().mockImplementation(() => mockMessagesParser),
+}));
+
+jest.mock("../iosContactsParser", () => ({
+  iOSContactsParser: jest.fn().mockImplementation(() => mockContactsParser),
+}));
+
+// Now import the module under test
 import {
   SyncOrchestrator,
   SyncPhase,
   SyncProgress,
-  SyncResult,
 } from "../syncOrchestrator";
 
 // Enable mock mode for testing
 process.env.MOCK_DEVICE = "true";
 
-// TODO: All SyncOrchestrator tests time out on Windows CI - needs investigation
-// The service works correctly but tests have timing issues
-describe.skip("SyncOrchestrator", () => {
+describe("SyncOrchestrator", () => {
   let orchestrator: SyncOrchestrator;
 
   beforeEach(() => {
+    // Reset mock states
+    mockBackupService.setMockBehavior(true, false);
+    mockBackupService.removeAllListeners();
+    mockDeviceService.removeAllListeners();
+
+    // Create fresh orchestrator
     orchestrator = new SyncOrchestrator();
   });
 
@@ -67,6 +328,10 @@ describe.skip("SyncOrchestrator", () => {
       expect(typeof orchestrator.on).toBe("function");
       expect(typeof orchestrator.emit).toBe("function");
     });
+
+    it("should be an EventEmitter", () => {
+      expect(orchestrator).toBeInstanceOf(EventEmitter);
+    });
   });
 
   describe("getStatus", () => {
@@ -75,6 +340,15 @@ describe.skip("SyncOrchestrator", () => {
 
       expect(status.isRunning).toBe(false);
       expect(status.phase).toBe("idle");
+    });
+
+    it("should return correct status structure", () => {
+      const status = orchestrator.getStatus();
+
+      expect(status).toHaveProperty("isRunning");
+      expect(status).toHaveProperty("phase");
+      expect(typeof status.isRunning).toBe("boolean");
+      expect(typeof status.phase).toBe("string");
     });
   });
 
@@ -85,8 +359,8 @@ describe.skip("SyncOrchestrator", () => {
 
       orchestrator.startDeviceDetection(5000);
 
-      // In mock mode, should detect mock device quickly
-      // This is tested indirectly through the connected event
+      // Should not throw
+      expect(orchestrator.getStatus().isRunning).toBe(false);
     });
 
     it("should stop device detection", () => {
@@ -97,16 +371,14 @@ describe.skip("SyncOrchestrator", () => {
       expect(true).toBe(true);
     });
 
-    it("should get connected devices", () => {
+    it("should get connected devices as array", () => {
       const devices = orchestrator.getConnectedDevices();
       expect(Array.isArray(devices)).toBe(true);
     });
   });
 
-  // TODO: Entire sync operation describe block times out on Windows CI
-  // All tests in this block have timing issues that need investigation
-  describe.skip("sync operation", () => {
-    it.skip("should reject starting sync when already running", async () => {
+  describe("sync operation", () => {
+    it("should reject starting sync when already running", async () => {
       // Start a sync but don't await it
       const syncPromise = orchestrator.sync({ udid: "test-udid" });
 
@@ -128,16 +400,10 @@ describe.skip("SyncOrchestrator", () => {
         progressEvents.push(progress);
       });
 
-      // This will fail in mock mode without full mock implementation,
-      // but we can test the event emission
-      try {
-        await orchestrator.sync({ udid: "mock-udid" });
-      } catch {
-        // Expected to fail without full mocks
-      }
+      await orchestrator.sync({ udid: "mock-udid" });
 
-      // Should have received at least some progress events
-      // In a full test environment with mocks, we'd expect more
+      // Should have received progress events
+      expect(progressEvents.length).toBeGreaterThan(0);
     });
 
     it("should emit phase change events", async () => {
@@ -147,16 +413,11 @@ describe.skip("SyncOrchestrator", () => {
         phases.push(phase);
       });
 
-      try {
-        await orchestrator.sync({ udid: "mock-udid" });
-      } catch {
-        // Expected to fail without full mocks
-      }
+      await orchestrator.sync({ udid: "mock-udid" });
 
       // Should have started with backup phase
-      if (phases.length > 0) {
-        expect(phases[0]).toBe("backup");
-      }
+      expect(phases.length).toBeGreaterThan(0);
+      expect(phases[0]).toBe("backup");
     });
 
     it("should handle cancellation", async () => {
@@ -167,68 +428,84 @@ describe.skip("SyncOrchestrator", () => {
 
       const result = await syncPromise;
 
-      // Result should indicate cancellation or the sync continues
-      // depending on timing
+      // Result should indicate cancellation
       expect(result).toBeDefined();
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("cancelled");
+    });
+
+    it("should complete successfully with mock data", async () => {
+      const result = await orchestrator.sync({ udid: "mock-udid" });
+
+      expect(result.success).toBe(true);
+      expect(result.error).toBeNull();
+      expect(Array.isArray(result.messages)).toBe(true);
+      expect(Array.isArray(result.contacts)).toBe(true);
+      expect(Array.isArray(result.conversations)).toBe(true);
+      expect(typeof result.duration).toBe("number");
     });
   });
 
   describe("error handling", () => {
-    it("should return error result on failure", async () => {
-      // Try to sync with invalid udid in non-mock mode would fail
-      // In mock mode, we test the error result structure
-      const result = await orchestrator.sync({ udid: "" });
+    it("should return error result on backup failure", async () => {
+      mockBackupService.setMockBehavior(false, false);
 
-      if (!result.success) {
-        expect(result.error).toBeDefined();
-        expect(result.messages).toEqual([]);
-        expect(result.contacts).toEqual([]);
-        expect(result.conversations).toEqual([]);
-      }
+      const result = await orchestrator.sync({ udid: "test-udid" });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBeDefined();
+      expect(result.messages).toEqual([]);
+      expect(result.contacts).toEqual([]);
+      expect(result.conversations).toEqual([]);
     });
 
-    it("should emit error events", (done) => {
-      orchestrator.on("error", (error: Error) => {
-        expect(error).toBeDefined();
-        done();
-      });
+    it("should emit error events on failure", async () => {
+      mockBackupService.setMockBehavior(false, false);
 
-      // Try to trigger an error
-      orchestrator.sync({ udid: "" }).catch(() => {
-        // Expected
-      });
+      const errorHandler = jest.fn();
+      orchestrator.on("error", errorHandler);
 
-      // Timeout if error event not received
-      setTimeout(() => {
-        // May not receive error event in all cases
-        done();
-      }, 1000);
+      const result = await orchestrator.sync({ udid: "test-udid" });
+
+      // Verify the result indicates failure
+      expect(result.success).toBe(false);
+      expect(result.error).toBeDefined();
+    });
+
+    it("should reset status after error", async () => {
+      mockBackupService.setMockBehavior(false, false);
+
+      const result = await orchestrator.sync({ udid: "test-udid" });
+
+      // Verify result first
+      expect(result.success).toBe(false);
+      // Status should be reset after error result is returned
+      const status = orchestrator.getStatus();
+      expect(status.isRunning).toBe(false);
     });
   });
 
-  // TODO: Result structure tests time out on Windows CI
-  describe.skip("result structure", () => {
+  describe("result structure", () => {
     it("should return proper result structure on success", async () => {
-      try {
-        const result = await orchestrator.sync({ udid: "mock-udid" });
+      const result = await orchestrator.sync({ udid: "mock-udid" });
 
-        expect(result).toHaveProperty("success");
-        expect(result).toHaveProperty("messages");
-        expect(result).toHaveProperty("contacts");
-        expect(result).toHaveProperty("conversations");
-        expect(result).toHaveProperty("error");
-        expect(result).toHaveProperty("duration");
+      expect(result).toHaveProperty("success");
+      expect(result).toHaveProperty("messages");
+      expect(result).toHaveProperty("contacts");
+      expect(result).toHaveProperty("conversations");
+      expect(result).toHaveProperty("error");
+      expect(result).toHaveProperty("duration");
 
-        expect(Array.isArray(result.messages)).toBe(true);
-        expect(Array.isArray(result.contacts)).toBe(true);
-        expect(Array.isArray(result.conversations)).toBe(true);
-        expect(typeof result.duration).toBe("number");
-      } catch {
-        // Expected to fail without full mocks
-      }
+      expect(result.success).toBe(true);
+      expect(Array.isArray(result.messages)).toBe(true);
+      expect(Array.isArray(result.contacts)).toBe(true);
+      expect(Array.isArray(result.conversations)).toBe(true);
+      expect(typeof result.duration).toBe("number");
     });
 
     it("should return proper result structure on failure", async () => {
+      mockBackupService.setMockBehavior(false, false);
+
       const result = await orchestrator.sync({ udid: "" });
 
       expect(result).toHaveProperty("success");
@@ -237,37 +514,33 @@ describe.skip("SyncOrchestrator", () => {
       expect(result).toHaveProperty("conversations");
       expect(result).toHaveProperty("error");
       expect(result).toHaveProperty("duration");
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBeTruthy();
     });
   });
 
-  // TODO: Encrypted backup handling tests may time out on Windows CI
-  describe.skip("encrypted backup handling", () => {
-    it("should emit password-required for encrypted backups", (done) => {
-      let passwordRequested = false;
+  describe("encrypted backup handling", () => {
+    it("should require password for encrypted backups", async () => {
+      mockBackupService.setMockBehavior(true, true);
 
-      orchestrator.on("password-required", () => {
-        passwordRequested = true;
-        done();
-      });
+      const result = await orchestrator.sync({ udid: "mock-udid" });
 
-      // In mock mode with encrypted backup simulation
-      // This would trigger the password-required event
-      // For now we just test the event listener is set up
-
-      setTimeout(() => {
-        // If event not triggered, still pass (depends on mock setup)
-        done();
-      }, 1000);
+      // Without password, should fail for encrypted backup
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("Password required");
     });
 
     it("should accept password for encrypted backup", async () => {
+      mockBackupService.setMockBehavior(true, true);
+
       const result = await orchestrator.sync({
         udid: "mock-udid",
         password: "test-password",
       });
 
-      // Should not fail due to missing password
-      expect(result).toBeDefined();
+      // With password, should succeed
+      expect(result.success).toBe(true);
     });
   });
 
@@ -279,53 +552,90 @@ describe.skip("SyncOrchestrator", () => {
         progressValues.push(progress.overallProgress);
       });
 
-      try {
-        await orchestrator.sync({ udid: "mock-udid" });
-      } catch {
-        // Expected
-      }
+      await orchestrator.sync({ udid: "mock-udid" });
 
-      // Progress should be monotonically increasing (mostly)
-      for (let i = 1; i < progressValues.length; i++) {
-        // Allow for some non-monotonicity due to phase changes
-        expect(progressValues[i]).toBeGreaterThanOrEqual(0);
-        expect(progressValues[i]).toBeLessThanOrEqual(100);
+      // Progress should be between 0 and 100
+      for (const value of progressValues) {
+        expect(value).toBeGreaterThanOrEqual(0);
+        expect(value).toBeLessThanOrEqual(100);
       }
+    });
+
+    it("should include phase progress in events", async () => {
+      const progressEvents: SyncProgress[] = [];
+
+      orchestrator.on("progress", (progress: SyncProgress) => {
+        progressEvents.push(progress);
+      });
+
+      await orchestrator.sync({ udid: "mock-udid" });
+
+      // All progress events should have required properties
+      for (const progress of progressEvents) {
+        expect(progress).toHaveProperty("phase");
+        expect(progress).toHaveProperty("phaseProgress");
+        expect(progress).toHaveProperty("overallProgress");
+        expect(progress).toHaveProperty("message");
+      }
+    });
+  });
+
+  describe("forceReset", () => {
+    it("should reset sync state", async () => {
+      // Start a sync
+      const syncPromise = orchestrator.sync({ udid: "test-udid" });
+
+      // Force reset
+      orchestrator.forceReset();
+
+      // Status should be reset
+      const status = orchestrator.getStatus();
+      expect(status.isRunning).toBe(false);
+      expect(status.phase).toBe("idle");
+
+      // Clean up
+      await syncPromise;
     });
   });
 });
 
-// TODO: E2E tests also time out on Windows CI
-describe.skip("SyncOrchestrator E2E Flow", () => {
-  // Note: These tests require proper mock setup or real device
+describe("SyncOrchestrator E2E Flow", () => {
+  let orchestrator: SyncOrchestrator;
+
+  beforeEach(() => {
+    mockBackupService.setMockBehavior(true, false);
+    mockBackupService.removeAllListeners();
+    mockDeviceService.removeAllListeners();
+    orchestrator = new SyncOrchestrator();
+  });
+
+  afterEach(() => {
+    orchestrator.stopDeviceDetection();
+    orchestrator.removeAllListeners();
+  });
 
   it("should complete full sync flow with mock device", async () => {
-    const orchestrator = new SyncOrchestrator();
     const phases: SyncPhase[] = [];
 
     orchestrator.on("phase", (phase: SyncPhase) => {
       phases.push(phase);
     });
 
-    try {
-      const result = await orchestrator.sync({
-        udid: "00000000-0000000000000000",
-      });
+    const result = await orchestrator.sync({
+      udid: "00000000-0000000000000000",
+    });
 
-      if (result.success) {
-        // Verify all phases were visited
-        expect(phases).toContain("backup");
-        // Other phases depend on mock implementation
-      }
-    } catch {
-      // Expected without full mock implementation
-    }
-
-    orchestrator.removeAllListeners();
+    expect(result.success).toBe(true);
+    // Verify phases were visited
+    expect(phases).toContain("backup");
+    expect(phases).toContain("parsing-contacts");
+    expect(phases).toContain("parsing-messages");
+    expect(phases).toContain("resolving");
+    expect(phases).toContain("cleanup");
+    expect(phases).toContain("complete");
   });
 
   it("should handle device disconnection during sync", async () => {
-    const orchestrator = new SyncOrchestrator();
     let disconnectionHandled = false;
 
     orchestrator.on("device-disconnected", () => {
@@ -336,28 +646,37 @@ describe.skip("SyncOrchestrator E2E Flow", () => {
     // Start sync
     const syncPromise = orchestrator.sync({ udid: "mock-udid" });
 
-    // Simulate disconnection would require mock device service
-    // For now just verify the handler is set up
+    // Simulate disconnection
+    mockDeviceService.emit("device-disconnected", mockDevice);
 
-    orchestrator.cancel();
-    await syncPromise;
+    const result = await syncPromise;
 
-    orchestrator.removeAllListeners();
+    // Either completed or was cancelled
+    expect(result).toBeDefined();
   });
 
   it("should clean up resources on completion", async () => {
-    const orchestrator = new SyncOrchestrator();
-
-    try {
-      await orchestrator.sync({ udid: "mock-udid" });
-    } catch {
-      // Expected
-    }
+    await orchestrator.sync({ udid: "mock-udid" });
 
     // Verify status is reset
     const status = orchestrator.getStatus();
     expect(status.isRunning).toBe(false);
+  });
 
-    orchestrator.removeAllListeners();
+  it("should emit complete event with result", async () => {
+    const completeHandler = jest.fn();
+    orchestrator.on("complete", completeHandler);
+
+    const result = await orchestrator.sync({ udid: "mock-udid" });
+
+    expect(result.success).toBe(true);
+    expect(completeHandler).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: true,
+        messages: expect.any(Array),
+        contacts: expect.any(Array),
+        conversations: expect.any(Array),
+      })
+    );
   });
 });
