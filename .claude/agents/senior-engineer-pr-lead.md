@@ -142,6 +142,107 @@ Beyond the standard SOP, as senior engineer you also verify:
 - [ ] No coupling violations across layers
 - [ ] Performance implications assessed
 - [ ] Security implications documented
+- [ ] **Engineer Metrics present, SR Metrics to be added** (see Metrics Protocol below)
+
+### Metrics Protocol (REQUIRED for Sprint Tasks)
+
+**You are the technical authority who approves and merges PRs.**
+
+For PRs related to sprint tasks (TASK-XXX), follow this protocol:
+
+#### 1. Verify Engineer Workflow Checklist Complete
+
+**BLOCKING REQUIREMENT**: Before starting your review, verify the Engineer has completed the full workflow:
+
+**Check the PR Description:**
+- [ ] Engineer Metrics section is present and complete
+- [ ] Start/End Time documented
+- [ ] Implementation turns/tokens/time filled in
+- [ ] Debugging/CI Fixes turns/tokens/time filled in (or 0)
+
+**Check the Task File:**
+- [ ] Implementation Summary section is complete
+- [ ] Engineer Checklist items are checked
+- [ ] Results section filled in (before/after/actual metrics)
+
+**If any are missing, BLOCK the PR with:**
+> "BLOCKED: Engineer workflow incomplete. Please complete the following before I can review:
+> - [ ] Add Engineer Metrics to PR description
+> - [ ] Complete Implementation Summary in task file
+> See `.claude/docs/ENGINEER-WORKFLOW.md` for the required checklist."
+
+**Do NOT proceed with code review until the checklist is complete.**
+
+#### 2. Track Your Own Metrics
+
+While reviewing, track YOUR metrics:
+- **Start Time**: When you begin review
+- **Code Review**: Turns/tokens/time spent reviewing
+- **Feedback Cycles**: Turns/tokens/time for back-and-forth with engineer
+
+#### 3. Add Your SR Metrics Before Merge
+
+After your review is complete, add YOUR metrics to the PR description (or commit):
+
+```markdown
+---
+
+## Senior Engineer Metrics: TASK-XXX
+
+**SR Review Start:** [when you started review]
+**SR Review End:** [when you're merging]
+
+| Phase | Turns | Tokens | Time |
+|-------|-------|--------|------|
+| PR Review (PR) | X | ~XK | X min |
+
+**Review Notes:** [architecture concerns, security review, approval rationale]
+```
+
+This maps to INDEX.md columns: `PR Turns | PR Tokens | PR Time`
+
+#### 4. Merge Checklist
+
+Before merging, verify:
+- [ ] CI has passed
+- [ ] Engineer Metrics present in PR
+- [ ] Engineer Checklist complete in task file
+- [ ] Your SR Metrics added
+- [ ] Code meets quality standards
+
+**Then approve and merge the PR.**
+
+#### 5. Notify PM After Merge (REQUIRED)
+
+**After merging, you MUST notify PM to:**
+1. Record metrics in INDEX.md
+2. Assign the next task to the engineer
+
+**Notification format:**
+```
+## Task Complete - PM Action Required
+
+**Task**: TASK-XXX
+**PR**: #XXX (merged)
+**Branch**: [branch name]
+
+### Metrics Summary
+| Role | Turns | Tokens | Time |
+|------|-------|--------|------|
+| Engineer | X | ~XK | X min |
+| SR Review | X | ~XK | X min |
+
+### PM Actions Needed
+1. Update INDEX.md with metrics
+2. Assign next task to engineer
+
+### Sprint Status
+[Brief note on sprint progress, e.g., "Phase 1: 3/4 tasks complete"]
+```
+
+**Important:** Engineers should NOT self-assign next tasks. PM determines priority and assignments.
+
+See `.claude/docs/METRICS-PROTOCOL.md` for the full protocol.
 
 ## Review Output Format
 
