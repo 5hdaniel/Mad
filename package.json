@@ -8,6 +8,7 @@
   },
   "scripts": {
     "start": "npm run build:preload && npm run build:electron && concurrently \"npm run dev:react\" \"npm run dev:electron\" \"npm run watch:electron\"",
+    "predev": "node scripts/rebuild-native.js",
     "dev": "npm run build:preload && npm run build:electron && concurrently \"npm run dev:react\" \"npm run dev:electron\" \"npm run watch:electron\"",
     "dev:react": "vite",
     "dev:electron": "wait-on http://localhost:5173 && electron .",
@@ -25,7 +26,7 @@
     "package:unsigned": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --publish never",
     "postinstall": "node scripts/rebuild-native.js && npm run build:preload",
     "pretest": "npm rebuild better-sqlite3-multiple-ciphers",
-    "posttest": "electron-rebuild",
+    "posttest": "node scripts/rebuild-native.js",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
