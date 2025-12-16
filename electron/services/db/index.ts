@@ -35,6 +35,8 @@ export * from "./oauthTokenDbService";
 export * from "./contactDbService";
 export * from "./transactionDbService";
 export * from "./transactionContactDbService";
-// export * from './communicationDbService';
-// export * from './feedbackDbService';
-// export * from './auditLogDbService';
+
+// Domain services - Phase 4
+export * from "./communicationDbService";
+export * from "./feedbackDbService";
+export * from "./auditLogDbService";
