@@ -123,6 +123,30 @@ Add dark mode support that automatically matches the user's system preferences.
 
 ---
 
+### BACKLOG-057: Show Retry Component on Login Auth Timeout
+**Priority:** Medium
+**Status:** Pending
+**Category:** UI/UX
+
+**Description:**
+When the login OAuth flow times out (currently shows an error), display the same retry component that appears when auth fails, allowing the user to retry without restarting the app.
+
+**Current behavior:**
+- Login timeout shows an error message
+- User has to restart the app or navigate away and back to login
+
+**Desired behavior:**
+- When OAuth times out, show a retry UI component
+- Same component/pattern used for other auth failures
+- "Try Again" button to restart the OAuth flow
+- Clear error state and retry cleanly
+
+**Files likely to modify:**
+- `src/components/Login.tsx` - Add retry component for timeout errors
+- Potentially reuse existing error/retry UI patterns from the codebase
+
+---
+
 ## Testing
 
 ### BACKLOG-007: Add iPhone Sync Integration Tests
@@ -2747,3 +2771,4 @@ The certificate file is created (3066 bytes) but macOS security tool cannot impo
 2024-12-13 - Added BACKLOG-044: Allow Multiple Contacts Per Role in Transaction UI (Critical)
 2024-12-13 - Added BACKLOG-045: Block Contact Deletion if Linked to Transactions (Critical)
 2024-12-14 - Added BACKLOG-056: Fix macOS Code Signing Certificate Import in Release Workflow (High)
+2024-12-15 - Added BACKLOG-057: Show Retry Component on Login Auth Timeout (Medium)
