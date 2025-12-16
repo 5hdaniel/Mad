@@ -33,8 +33,8 @@ export * from "./oauthTokenDbService";
 
 // Domain services - Phase 3
 export * from "./contactDbService";
-// export * from './transactionDbService';
-// export * from './transactionContactDbService';
+export * from "./transactionDbService";
+export * from "./transactionContactDbService";
 // export * from './communicationDbService';
 // export * from './feedbackDbService';
 // export * from './auditLogDbService';

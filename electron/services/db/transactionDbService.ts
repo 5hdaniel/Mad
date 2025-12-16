@@ -1,0 +1,316 @@
+/**
+ * Transaction Database Service
+ * Handles all transaction-related database operations
+ */
+
+import crypto from "crypto";
+import type {
+  Transaction,
+  NewTransaction,
+  TransactionFilters,
+  TransactionWithContacts,
+} from "../../types";
+import { DatabaseError } from "../../types";
+import { dbGet, dbAll, dbRun } from "./core/dbConnection";
+import { getTransactionContactsWithRoles } from "./transactionContactDbService";
+
+/**
+ * Create a new transaction
+ */
+export async function createTransaction(
+  transactionData: NewTransaction,
+): Promise<Transaction> {
+  const id = crypto.randomUUID();
+
+  const sql = `
+    INSERT INTO transactions (
+      id, user_id, property_address, property_street, property_city,
+      property_state, property_zip, property_coordinates,
+      transaction_type, status, closing_deadline
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `;
+
+  const params = [
+    id,
+    transactionData.user_id,
+    transactionData.property_address,
+    transactionData.property_street || null,
+    transactionData.property_city || null,
+    transactionData.property_state || null,
+    transactionData.property_zip || null,
+    transactionData.property_coordinates
+      ? JSON.stringify(transactionData.property_coordinates)
+      : null,
+    transactionData.transaction_type || null,
+    // Map legacy status values to valid schema values
+    (() => {
+      const rawStatus =
+        transactionData.transaction_status ||
+        transactionData.status ||
+        "active";
+      if (rawStatus === "completed") return "closed";
+      if (rawStatus === "pending") return "active";
+      if (["active", "closed", "archived"].includes(rawStatus)) return rawStatus;
+      return "active";
+    })(),
+    transactionData.closing_date || transactionData.closing_deadline || null,
+  ];
+
+  dbRun(sql, params);
+  const transaction = await getTransactionById(id);
+  if (!transaction) {
+    throw new DatabaseError("Failed to create transaction");
+  }
+  return transaction;
+}
+
+/**
+ * Get all transactions for a user
+ */
+export async function getTransactions(
+  filters?: TransactionFilters,
+): Promise<Transaction[]> {
+  let sql = `SELECT t.*,
+             (SELECT COUNT(*) FROM communications c WHERE c.transaction_id = t.id) as total_communications_count
+             FROM transactions t WHERE 1=1`;
+  const params: unknown[] = [];
+
+  if (filters?.user_id) {
+    sql += " AND t.user_id = ?";
+    params.push(filters.user_id);
+  }
+
+  if (filters?.transaction_type) {
+    sql += " AND t.transaction_type = ?";
+    params.push(filters.transaction_type);
+  }
+
+  if (filters?.transaction_status || filters?.status) {
+    sql += " AND t.status = ?";
+    params.push(filters.transaction_status || filters.status);
+  }
+
+  if (filters?.export_status) {
+    sql += " AND t.export_status = ?";
+    params.push(filters.export_status);
+  }
+
+  if (filters?.start_date) {
+    sql += " AND t.closing_date >= ?";
+    params.push(filters.start_date);
+  }
+
+  if (filters?.end_date) {
+    sql += " AND t.closing_date <= ?";
+    params.push(filters.end_date);
+  }
+
+  if (filters?.property_address) {
+    sql += " AND t.property_address LIKE ?";
+    params.push(`%${filters.property_address}%`);
+  }
+
+  sql += " ORDER BY t.created_at DESC";
+
+  return dbAll<Transaction>(sql, params);
+}
+
+/**
+ * Get transaction by ID
+ */
+export async function getTransactionById(
+  transactionId: string,
+): Promise<Transaction | null> {
+  const sql = "SELECT * FROM transactions WHERE id = ?";
+  const transaction = dbGet<Transaction>(sql, [transactionId]);
+  return transaction || null;
+}
+
+/**
+ * Get transaction with associated contacts
+ */
+export async function getTransactionWithContacts(
+  transactionId: string,
+): Promise<TransactionWithContacts | null> {
+  const transaction = await getTransactionById(transactionId);
+  if (!transaction) {
+    return null;
+  }
+
+  const contacts = await getTransactionContactsWithRoles(transactionId);
+
+  const result: TransactionWithContacts = {
+    ...transaction,
+    all_contacts: contacts.map((tc) => ({
+      id: tc.contact_id,
+      user_id: transaction.user_id,
+      name: tc.contact_name || "",
+      email: tc.contact_email,
+      phone: tc.contact_phone,
+      company: tc.contact_company,
+      title: tc.contact_title,
+      source: "manual" as const,
+      is_imported: true,
+      created_at: tc.created_at,
+      updated_at: tc.updated_at,
+    })),
+  };
+
+  // Find specific role contacts
+  const buyerAgent = contacts.find((c) => c.specific_role === "Buyer Agent");
+  const sellerAgent = contacts.find((c) => c.specific_role === "Seller Agent");
+  const escrowOfficer = contacts.find(
+    (c) => c.specific_role === "Escrow Officer",
+  );
+  const inspector = contacts.find((c) => c.specific_role === "Inspector");
+
+  if (buyerAgent) {
+    result.buyer_agent = {
+      id: buyerAgent.contact_id,
+      user_id: transaction.user_id,
+      name: buyerAgent.contact_name || "",
+      email: buyerAgent.contact_email,
+      phone: buyerAgent.contact_phone,
+      company: buyerAgent.contact_company,
+      title: buyerAgent.contact_title,
+      source: "manual" as const,
+      is_imported: true,
+      created_at: buyerAgent.created_at,
+      updated_at: buyerAgent.updated_at,
+    };
+  }
+
+  if (sellerAgent) {
+    result.seller_agent = {
+      id: sellerAgent.contact_id,
+      user_id: transaction.user_id,
+      name: sellerAgent.contact_name || "",
+      email: sellerAgent.contact_email,
+      phone: sellerAgent.contact_phone,
+      company: sellerAgent.contact_company,
+      title: sellerAgent.contact_title,
+      source: "manual" as const,
+      is_imported: true,
+      created_at: sellerAgent.created_at,
+      updated_at: sellerAgent.updated_at,
+    };
+  }
+
+  if (escrowOfficer) {
+    result.escrow_officer = {
+      id: escrowOfficer.contact_id,
+      user_id: transaction.user_id,
+      name: escrowOfficer.contact_name || "",
+      email: escrowOfficer.contact_email,
+      phone: escrowOfficer.contact_phone,
+      company: escrowOfficer.contact_company,
+      title: escrowOfficer.contact_title,
+      source: "manual" as const,
+      is_imported: true,
+      created_at: escrowOfficer.created_at,
+      updated_at: escrowOfficer.updated_at,
+    };
+  }
+
+  if (inspector) {
+    result.inspector = {
+      id: inspector.contact_id,
+      user_id: transaction.user_id,
+      name: inspector.contact_name || "",
+      email: inspector.contact_email,
+      phone: inspector.contact_phone,
+      company: inspector.contact_company,
+      title: inspector.contact_title,
+      source: "manual" as const,
+      is_imported: true,
+      created_at: inspector.created_at,
+      updated_at: inspector.updated_at,
+    };
+  }
+
+  return result;
+}
+
+/**
+ * Update transaction
+ */
+export async function updateTransaction(
+  transactionId: string,
+  updates: Partial<Transaction>,
+): Promise<void> {
+  const allowedFields = [
+    "property_address",
+    "property_street",
+    "property_city",
+    "property_state",
+    "property_zip",
+    "property_coordinates",
+    "transaction_type",
+    "status",
+    "closing_deadline",
+    "representation_start_date",
+    "closing_date_verified",
+    "representation_start_confidence",
+    "closing_date_confidence",
+    "buyer_agent_id",
+    "seller_agent_id",
+    "escrow_officer_id",
+    "inspector_id",
+    "other_contacts",
+    "export_generated_at",
+    "export_status",
+    "export_format",
+    "export_count",
+    "last_exported_on",
+    "communications_scanned",
+    "extraction_confidence",
+    "first_communication_date",
+    "last_communication_date",
+    "total_communications_count",
+    "mutual_acceptance_date",
+    "earnest_money_amount",
+    "earnest_money_delivered_date",
+    "listing_price",
+    "sale_price",
+    "other_parties",
+    "offer_count",
+    "failed_offers_count",
+    "key_dates",
+  ];
+
+  const fields: string[] = [];
+  const values: unknown[] = [];
+
+  Object.keys(updates).forEach((key) => {
+    if (allowedFields.includes(key)) {
+      let value = (updates as Record<string, unknown>)[key];
+      if (
+        ["property_coordinates", "other_parties", "key_dates", "other_contacts"].includes(
+          key,
+        ) &&
+        typeof value === "object"
+      ) {
+        value = JSON.stringify(value);
+      }
+      fields.push(`${key} = ?`);
+      values.push(value);
+    }
+  });
+
+  if (fields.length === 0) {
+    throw new DatabaseError("No valid fields to update");
+  }
+
+  values.push(transactionId);
+
+  const sql = `UPDATE transactions SET ${fields.join(", ")} WHERE id = ?`;
+  dbRun(sql, values);
+}
+
+/**
+ * Delete transaction
+ */
+export async function deleteTransaction(transactionId: string): Promise<void> {
+  const sql = "DELETE FROM transactions WHERE id = ?";
+  dbRun(sql, [transactionId]);
+}
