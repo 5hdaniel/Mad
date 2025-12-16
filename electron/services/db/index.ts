@@ -31,8 +31,8 @@ export * from "./userDbService";
 export * from "./sessionDbService";
 export * from "./oauthTokenDbService";
 
-// Domain services to be added in future phases:
-// export * from './contactDbService';
+// Domain services - Phase 3
+export * from "./contactDbService";
 // export * from './transactionDbService';
 // export * from './transactionContactDbService';
 // export * from './communicationDbService';
