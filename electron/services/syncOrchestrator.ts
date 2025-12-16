@@ -292,6 +292,7 @@ export class SyncOrchestrator extends EventEmitter {
         if (!diskSpaceCheck.hasEnoughSpace) {
           const requiredGB = (requiredSpace / 1024 / 1024 / 1024).toFixed(1);
           const availableGB = (diskSpaceCheck.availableSpace / 1024 / 1024 / 1024).toFixed(1);
+          this.isRunning = false;
           return this.errorResult(
             `Not enough disk space. Need approximately ${requiredGB} GB free, but only ${availableGB} GB available. Please free up some space and try again.`
           );
@@ -315,6 +316,7 @@ export class SyncOrchestrator extends EventEmitter {
 
         if (!diskSpaceCheck.hasEnoughSpace) {
           const availableGB = (diskSpaceCheck.availableSpace / 1024 / 1024 / 1024).toFixed(1);
+          this.isRunning = false;
           return this.errorResult(
             `Not enough disk space. Need at least 10 GB free for backup, but only ${availableGB} GB available. Please free up some space and try again.`
           );
@@ -331,10 +333,12 @@ export class SyncOrchestrator extends EventEmitter {
       });
 
       if (this.isCancelled) {
+        this.isRunning = false;
         return this.errorResult("Sync cancelled by user");
       }
 
       if (!backupResult.success || !backupResult.backupPath) {
+        this.isRunning = false;
         return this.errorResult(backupResult.error || "Backup failed");
       }
 
@@ -343,6 +347,7 @@ export class SyncOrchestrator extends EventEmitter {
       // Step 2: Decrypt if needed
       if (backupResult.isEncrypted) {
         if (!options.password) {
+          this.isRunning = false;
           this.emit("password-required");
           return this.errorResult("Password required for encrypted backup");
         }
@@ -361,10 +366,12 @@ export class SyncOrchestrator extends EventEmitter {
         );
 
         if (this.isCancelled) {
+          this.isRunning = false;
           return this.errorResult("Sync cancelled by user");
         }
 
         if (!decryptResult.success || !decryptResult.decryptedPath) {
+          this.isRunning = false;
           return this.errorResult(decryptResult.error || "Decryption failed");
         }
 
@@ -391,6 +398,7 @@ export class SyncOrchestrator extends EventEmitter {
       });
 
       if (this.isCancelled) {
+        this.isRunning = false;
         this.contactsParser.close();
         return this.errorResult("Sync cancelled by user");
       }
@@ -448,6 +456,7 @@ export class SyncOrchestrator extends EventEmitter {
       }
 
       if (this.isCancelled) {
+        this.isRunning = false;
         this.messagesParser.close();
         this.contactsParser.close();
         return this.errorResult("Sync cancelled by user");
