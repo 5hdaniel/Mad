@@ -532,7 +532,6 @@ export function useAppStateMachine(): AppStateMachine {
   };
 
   const handleAppleDriverSetupSkip = async (): Promise<void> => {
-    console.log("[handleAppleDriverSetupSkip] Setting flags to complete onboarding");
     // Mark all onboarding as complete - even if skipped, we're done with onboarding on Windows
     setNeedsDriverSetup(false);
     setHasSelectedPhoneType(true);
