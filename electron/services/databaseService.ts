@@ -82,6 +82,27 @@ interface TransactionWithRoles {
   roles: string;
 }
 
+/**
+ * Contact assignment operation for batch updates
+ * Used to add or remove contacts from a transaction in a single atomic operation
+ */
+export interface ContactAssignmentOperation {
+  /** The action to perform: 'add' to assign a contact, 'remove' to unassign */
+  action: "add" | "remove";
+  /** The contact ID to add or remove */
+  contactId: string;
+  /** Role name (e.g., "Buyer's Agent") - required for 'add', ignored for 'remove' */
+  role?: string;
+  /** Role category (e.g., "buyer_side", "seller_side", "neutral") */
+  roleCategory?: string;
+  /** Specific role from predefined list */
+  specificRole?: string;
+  /** Whether this is the primary contact for the role */
+  isPrimary?: boolean;
+  /** Additional notes about the assignment */
+  notes?: string;
+}
+
 // Feedback data for submission
 interface _FeedbackData {
   transaction_id: string;
@@ -3016,6 +3037,78 @@ class DatabaseService implements IDatabaseService {
       "SELECT id FROM transaction_contacts WHERE transaction_id = ? AND contact_id = ? LIMIT 1";
     const result = this._get(sql, [transactionId, contactId]);
     return !!result;
+  }
+
+  /**
+   * Batch update contact assignments for a transaction
+   * Executes all add/remove operations in a single SQLite transaction for atomicity
+   * @param transactionId - The transaction to update
+   * @param operations - Array of operations to perform
+   */
+  async batchUpdateContactAssignments(
+    transactionId: string,
+    operations: ContactAssignmentOperation[],
+  ): Promise<void> {
+    if (operations.length === 0) {
+      return; // Nothing to do
+    }
+
+    const db = this._ensureDb();
+
+    const batchOperation = db.transaction(() => {
+      for (const op of operations) {
+        if (op.action === "remove") {
+          const deleteSql =
+            "DELETE FROM transaction_contacts WHERE transaction_id = ? AND contact_id = ?";
+          db.prepare(deleteSql).run(transactionId, op.contactId);
+        } else if (op.action === "add") {
+          // Check if already exists
+          const existingCheck =
+            "SELECT id FROM transaction_contacts WHERE transaction_id = ? AND contact_id = ?";
+          const existing = db
+            .prepare(existingCheck)
+            .get(transactionId, op.contactId) as { id: string } | undefined;
+
+          if (existing) {
+            // Update existing assignment
+            const updateSql = `
+              UPDATE transaction_contacts
+              SET role = ?, role_category = ?, specific_role = ?, is_primary = ?, notes = ?, updated_at = CURRENT_TIMESTAMP
+              WHERE id = ?
+            `;
+            db.prepare(updateSql).run(
+              op.role || null,
+              op.roleCategory || null,
+              op.specificRole || null,
+              op.isPrimary ? 1 : 0,
+              op.notes || null,
+              existing.id,
+            );
+          } else {
+            // Insert new assignment
+            const id = crypto.randomUUID();
+            const insertSql = `
+              INSERT INTO transaction_contacts (
+                id, transaction_id, contact_id, role, role_category, specific_role, is_primary, notes
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `;
+            db.prepare(insertSql).run(
+              id,
+              transactionId,
+              op.contactId,
+              op.role || null,
+              op.roleCategory || null,
+              op.specificRole || null,
+              op.isPrimary ? 1 : 0,
+              op.notes || null,
+            );
+          }
+        }
+      }
+    });
+
+    // Execute the transaction - will rollback on any error
+    batchOperation();
   }
 
   // ============================================

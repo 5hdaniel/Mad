@@ -694,6 +694,109 @@ export const registerTransactionHandlers = (
     },
   );
 
+  // Batch update contact assignments for a transaction
+  ipcMain.handle(
+    "transactions:batchUpdateContacts",
+    async (
+      event: IpcMainInvokeEvent,
+      transactionId: string,
+      operations: Array<{
+        action: "add" | "remove";
+        contactId: string;
+        role?: string;
+        roleCategory?: string;
+        specificRole?: string;
+        isPrimary?: boolean;
+        notes?: string;
+      }>,
+    ): Promise<TransactionResponse> => {
+      try {
+        // Validate transaction ID
+        const validatedTransactionId = validateTransactionId(transactionId);
+        if (!validatedTransactionId) {
+          throw new ValidationError(
+            "Transaction ID validation failed",
+            "transactionId",
+          );
+        }
+
+        // Validate operations array
+        if (!Array.isArray(operations)) {
+          throw new ValidationError(
+            "Operations must be an array",
+            "operations",
+          );
+        }
+
+        // Validate each operation
+        const validatedOperations = operations.map((op, index) => {
+          if (!op.action || (op.action !== "add" && op.action !== "remove")) {
+            throw new ValidationError(
+              `Invalid action at index ${index}: must be 'add' or 'remove'`,
+              "operations",
+            );
+          }
+
+          const validatedContactId = validateContactId(op.contactId);
+          if (!validatedContactId) {
+            throw new ValidationError(
+              `Invalid contact ID at index ${index}`,
+              "operations",
+            );
+          }
+
+          return {
+            action: op.action,
+            contactId: validatedContactId,
+            role: op.role?.trim(),
+            roleCategory: op.roleCategory?.trim(),
+            specificRole: op.specificRole?.trim(),
+            isPrimary: op.isPrimary ?? false,
+            notes: op.notes?.trim(),
+          };
+        });
+
+        await transactionService.batchUpdateContactAssignments(
+          validatedTransactionId as string,
+          validatedOperations,
+        );
+
+        logService.info(
+          "Batch contact assignments updated",
+          "Transactions",
+          {
+            transactionId: validatedTransactionId,
+            operationCount: validatedOperations.length,
+          },
+        );
+
+        return {
+          success: true,
+        };
+      } catch (error) {
+        logService.error(
+          "Batch update contact assignments failed",
+          "Transactions",
+          {
+            transactionId,
+            operationCount: operations?.length ?? 0,
+            error: error instanceof Error ? error.message : "Unknown error",
+          },
+        );
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
   // Unlink communication (email) from transaction
   ipcMain.handle(
     "transactions:unlink-communication",

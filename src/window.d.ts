@@ -752,6 +752,22 @@ interface MainAPI {
       transactionId: string,
       contactId: string,
     ) => Promise<{ success: boolean; error?: string }>;
+    /**
+     * Batch update contact assignments for a transaction
+     * Performs multiple add/remove operations in a single atomic transaction
+     */
+    batchUpdateContacts: (
+      transactionId: string,
+      operations: Array<{
+        action: "add" | "remove";
+        contactId: string;
+        role?: string;
+        roleCategory?: string;
+        specificRole?: string;
+        isPrimary?: boolean;
+        notes?: string;
+      }>,
+    ) => Promise<{ success: boolean; error?: string }>;
     unlinkCommunication: (
       communicationId: string,
       reason?: string,

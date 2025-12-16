@@ -1968,7 +1968,18 @@ function EditTransactionModal({
           ).contact_assignments || []
         : [];
 
-      // Delete removed contacts
+      // Build batch operations for contact assignments
+      const operations: Array<{
+        action: "add" | "remove";
+        contactId: string;
+        role?: string;
+        roleCategory?: string;
+        specificRole?: string;
+        isPrimary?: boolean;
+        notes?: string;
+      }> = [];
+
+      // Collect remove operations for contacts no longer assigned
       for (const existing of currentAssignments) {
         const role = existing.specific_role || existing.role;
         if (!role) continue;
@@ -1976,14 +1987,14 @@ function EditTransactionModal({
           (c) => c.contactId === existing.contact_id,
         );
         if (!stillAssigned) {
-          await window.api.transactions.removeContact(
-            transaction.id,
-            existing.contact_id,
-          );
+          operations.push({
+            action: "remove",
+            contactId: existing.contact_id,
+          });
         }
       }
 
-      // Add new contacts
+      // Collect add operations for new contacts
       for (const [role, contacts] of Object.entries(contactAssignments)) {
         for (const contact of contacts) {
           // Check if this is a new assignment
@@ -1995,15 +2006,27 @@ function EditTransactionModal({
 
           if (!isExisting) {
             const roleCategory = ROLE_TO_CATEGORY[role] || "support";
-            await window.api.transactions.assignContact(
-              transaction.id,
-              contact.contactId,
-              role,
-              roleCategory,
-              contact.isPrimary,
-              contact.notes,
-            );
+            operations.push({
+              action: "add",
+              contactId: contact.contactId,
+              role: role,
+              roleCategory: roleCategory,
+              specificRole: role,
+              isPrimary: contact.isPrimary,
+              notes: contact.notes,
+            });
           }
+        }
+      }
+
+      // Execute all operations in a single batch call
+      if (operations.length > 0) {
+        const batchResult = await window.api.transactions.batchUpdateContacts(
+          transaction.id,
+          operations,
+        );
+        if (!batchResult.success) {
+          throw new Error(batchResult.error || "Failed to update contacts");
         }
       }
 

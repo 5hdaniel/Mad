@@ -793,6 +793,28 @@ class TransactionService {
   }
 
   /**
+   * Batch update contact assignments for a transaction
+   * Performs multiple add/remove operations in a single atomic transaction
+   */
+  async batchUpdateContactAssignments(
+    transactionId: string,
+    operations: Array<{
+      action: "add" | "remove";
+      contactId: string;
+      role?: string;
+      roleCategory?: string;
+      specificRole?: string;
+      isPrimary?: boolean;
+      notes?: string;
+    }>,
+  ): Promise<void> {
+    return await databaseService.batchUpdateContactAssignments(
+      transactionId,
+      operations,
+    );
+  }
+
+  /**
    * Update contact role in transaction
    */
   async updateContactRole(

@@ -659,6 +659,18 @@ export interface WindowApi {
       transactionId: string,
       contactId: string,
     ) => Promise<{ success: boolean; error?: string }>;
+    batchUpdateContacts: (
+      transactionId: string,
+      operations: Array<{
+        action: "add" | "remove";
+        contactId: string;
+        role?: string;
+        roleCategory?: string;
+        specificRole?: string;
+        isPrimary?: boolean;
+        notes?: string;
+      }>,
+    ) => Promise<{ success: boolean; error?: string }>;
     unlinkCommunication: (
       communicationId: string,
       reason?: string,
