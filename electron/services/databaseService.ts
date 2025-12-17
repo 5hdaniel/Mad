@@ -1303,6 +1303,154 @@ class DatabaseService implements IDatabaseService {
         );
       }
 
+// Migration 11: AI Detection Fields for Transactions (TASK-301)
+      // Part of Migration 008 group - version increment deferred to TASK-305
+      const txDetectionColumns = this._all<{ name: string }>(
+        `PRAGMA table_info(transactions)`
+      );
+      const txColumnNames = txDetectionColumns.map((col) => col.name);
+
+      if (!txColumnNames.includes("detection_source")) {
+        await logService.debug(
+          "Running Migration 11: Adding AI detection fields to transactions",
+          "DatabaseService"
+        );
+
+        // detection_source: how the transaction was created
+        if (!txColumnNames.includes("detection_source")) {
+          this._run(`
+            ALTER TABLE transactions ADD COLUMN detection_source TEXT DEFAULT 'manual'
+              CHECK (detection_source IN ('manual', 'auto', 'hybrid'))
+          `);
+        }
+
+        // detection_status: user review status of detected transaction
+        if (!txColumnNames.includes("detection_status")) {
+          this._run(`
+            ALTER TABLE transactions ADD COLUMN detection_status TEXT DEFAULT 'confirmed'
+              CHECK (detection_status IN ('pending', 'confirmed', 'rejected'))
+          `);
+        }
+
+        // detection_confidence: 0.0 - 1.0 confidence score from detection
+        if (!txColumnNames.includes("detection_confidence")) {
+          this._run(`ALTER TABLE transactions ADD COLUMN detection_confidence REAL`);
+        }
+
+        // detection_method: which algorithm detected it
+        if (!txColumnNames.includes("detection_method")) {
+          this._run(`ALTER TABLE transactions ADD COLUMN detection_method TEXT`);
+        }
+
+        // suggested_contacts: JSON array of suggested contact assignments
+        if (!txColumnNames.includes("suggested_contacts")) {
+          this._run(`ALTER TABLE transactions ADD COLUMN suggested_contacts TEXT`);
+        }
+
+        // reviewed_at: when user reviewed the detected transaction
+        if (!txColumnNames.includes("reviewed_at")) {
+          this._run(`ALTER TABLE transactions ADD COLUMN reviewed_at DATETIME`);
+        }
+
+        // rejection_reason: why user rejected (if detection_status='rejected')
+        if (!txColumnNames.includes("rejection_reason")) {
+          this._run(`ALTER TABLE transactions ADD COLUMN rejection_reason TEXT`);
+        }
+
+        await logService.info(
+          "Added AI detection fields to transactions table",
+          "DatabaseService"
+        );
+      }
+
+// Migration 11: Create llm_settings table (TASK-302)
+      // Part of SPRINT-004 schema migrations - version increment deferred to TASK-305
+      const llmSettingsExists = this._get<{ name: string }>(
+        `SELECT name FROM sqlite_master WHERE type='table' AND name='llm_settings'`
+      );
+
+      if (!llmSettingsExists) {
+        await logService.debug(
+          "Running Migration 11: Creating llm_settings table",
+          "DatabaseService"
+        );
+
+        this._run(`
+          CREATE TABLE IF NOT EXISTS llm_settings (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL UNIQUE,
+            -- Provider Config
+            openai_api_key_encrypted TEXT,
+            anthropic_api_key_encrypted TEXT,
+            preferred_provider TEXT DEFAULT 'openai' CHECK (preferred_provider IN ('openai', 'anthropic')),
+            openai_model TEXT DEFAULT 'gpt-4o-mini',
+            anthropic_model TEXT DEFAULT 'claude-3-haiku-20240307',
+            -- Usage Tracking
+            tokens_used_this_month INTEGER DEFAULT 0,
+            budget_limit_tokens INTEGER,
+            budget_reset_date DATE,
+            -- Platform Allowance
+            platform_allowance_tokens INTEGER DEFAULT 0,
+            platform_allowance_used INTEGER DEFAULT 0,
+            use_platform_allowance INTEGER DEFAULT 0,
+            -- Feature Flags
+            enable_auto_detect INTEGER DEFAULT 1,
+            enable_role_extraction INTEGER DEFAULT 1,
+            -- Consent (Security Option C)
+            llm_data_consent INTEGER DEFAULT 0,
+            llm_data_consent_at DATETIME,
+            -- Timestamps
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE
+          )
+        `);
+
+        this._run(`
+          CREATE INDEX IF NOT EXISTS idx_llm_settings_user ON llm_settings(user_id)
+        `);
+
+        await logService.info(
+          "Created llm_settings table",
+          "DatabaseService"
+        );
+      }
+
+      // Migration 11: Add llm_analysis column to messages (TASK-303)
+      // Part of SPRINT-004 schema migrations - version increment deferred to TASK-305
+      const messagesColumns = this._all<{ name: string }>(
+        `PRAGMA table_info(messages)`
+      );
+      const messageColumnNames = messagesColumns.map((col) => col.name);
+
+      if (!messageColumnNames.includes("llm_analysis")) {
+        await logService.debug(
+          "Running Migration 11: Adding llm_analysis column to messages",
+          "DatabaseService"
+        );
+
+        this._run(`ALTER TABLE messages ADD COLUMN llm_analysis TEXT`);
+
+        await logService.info(
+          "Added llm_analysis column to messages table",
+          "DatabaseService"
+        );
+      }
+
+      // Migration 008: Finalize schema version (TASK-305)
+      // Increment version after all TASK-301, 302, 303 changes are complete
+      const currentSchemaVersion =
+        this._get<{ version: number }>("SELECT version FROM schema_version")
+          ?.version || 0;
+
+      if (currentSchemaVersion < 8) {
+        this._run("UPDATE schema_version SET version = 8");
+        await logService.info(
+          "Migration 008 completed: AI Detection Support schema",
+          "DatabaseService"
+        );
+      }
+
       await logService.info(
         "All database migrations completed successfully",
         "DatabaseService",

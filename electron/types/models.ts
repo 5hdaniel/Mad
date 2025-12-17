@@ -309,6 +309,10 @@ export interface Message {
 
   created_at: Date | string;
 
+  // ========== LLM Analysis (Migration 11) ==========
+  /** Full LLM analysis response stored as JSON string */
+  llm_analysis?: string;
+
   // ========== Legacy Fields (backwards compatibility) ==========
   /** @deprecated Use channel instead */
   communication_type?: string;
@@ -444,6 +448,22 @@ export interface Transaction {
   metadata?: string; // JSON
   created_at: Date | string;
   updated_at: Date | string;
+
+  // ========== AI Detection Fields (Migration 11) ==========
+  /** How the transaction was created: manual, auto-detected, or hybrid */
+  detection_source?: 'manual' | 'auto' | 'hybrid';
+  /** User review status of detected transaction */
+  detection_status?: 'pending' | 'confirmed' | 'rejected';
+  /** Confidence score from detection (0.0 - 1.0) */
+  detection_confidence?: number;
+  /** Which algorithm detected it: 'pattern' | 'llm' | 'hybrid' */
+  detection_method?: string;
+  /** JSON array of suggested contact assignments */
+  suggested_contacts?: string;
+  /** When user reviewed the detected transaction */
+  reviewed_at?: Date | string;
+  /** Why user rejected (if detection_status='rejected') */
+  rejection_reason?: string;
 
   // ========== Legacy Fields (backwards compatibility) ==========
   /** @deprecated Use status instead */
@@ -675,6 +695,96 @@ export interface AttachmentFilters {
   message_id?: string;
   document_type?: DocumentType;
   has_text_content?: boolean;
+}
+
+// ============================================
+// LLM SETTINGS MODELS (Migration 11)
+// ============================================
+
+/**
+ * LLM settings and configuration per user
+ * Stores API keys (encrypted), usage tracking, and feature flags
+ */
+export interface LLMSettings {
+  id: string;
+  user_id: string;
+
+  // Provider Config
+  /** Encrypted OpenAI API key */
+  openai_api_key_encrypted?: string;
+  /** Encrypted Anthropic API key */
+  anthropic_api_key_encrypted?: string;
+  /** Preferred LLM provider */
+  preferred_provider: 'openai' | 'anthropic';
+  /** OpenAI model to use */
+  openai_model: string;
+  /** Anthropic model to use */
+  anthropic_model: string;
+
+  // Usage Tracking
+  /** Tokens used in current billing period */
+  tokens_used_this_month: number;
+  /** User-defined token budget limit */
+  budget_limit_tokens?: number;
+  /** Date when monthly usage resets */
+  budget_reset_date?: string;
+
+  // Platform Allowance
+  /** Platform-provided token allowance */
+  platform_allowance_tokens: number;
+  /** Platform allowance tokens used */
+  platform_allowance_used: number;
+  /** Whether to use platform allowance */
+  use_platform_allowance: boolean;
+
+  // Feature Flags
+  /** Enable automatic transaction detection */
+  enable_auto_detect: boolean;
+  /** Enable role extraction from messages */
+  enable_role_extraction: boolean;
+
+  // Consent (Security Option C)
+  /** User has consented to LLM data processing */
+  llm_data_consent: boolean;
+  /** When user gave consent */
+  llm_data_consent_at?: string;
+
+  // Timestamps
+  created_at: string;
+  updated_at: string;
+}
+
+// ============================================
+// LLM ANALYSIS MODELS (Migration 11)
+// ============================================
+
+/**
+ * Typed interface for the JSON content stored in Message.llm_analysis
+ * Parsing happens in the service layer, this interface is for documentation
+ */
+export interface MessageLLMAnalysis {
+  /** Whether the message is related to real estate transactions */
+  isRealEstateRelated: boolean;
+  /** Overall confidence in the analysis (0.0 - 1.0) */
+  confidence: number;
+  /** Transaction indicators extracted from the message */
+  transactionIndicators: {
+    type: 'purchase' | 'sale' | 'lease' | null;
+    stage: 'prospecting' | 'active' | 'pending' | 'closing' | 'closed' | null;
+  };
+  /** Entities extracted from the message */
+  extractedEntities: {
+    addresses: Array<{ value: string; confidence: number }>;
+    amounts: Array<{ value: number; context: string }>;
+    dates: Array<{ value: string; type: string }>;
+    contacts: Array<{ name: string; email?: string; suggestedRole?: string }>;
+  };
+  /** LLM's reasoning for the classification */
+  reasoning: string;
+  /** Model used for analysis */
+  model: string;
+  /** Version of the prompt used */
+  promptVersion: string;
 }
 
 // ============================================
