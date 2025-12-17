@@ -174,8 +174,12 @@ When assigning tasks to engineers:
 
 **Title:** [title]
 **Sprint:** SPRINT-XXX
-**Branch:** fix/task-XXX-description (or feature/, claude/)
-**Target:** develop
+**Execution:** Sequential | Parallel (approved by SR Engineer)
+
+### Branch Information (Required for Parallel)
+**Branch From:** develop
+**Branch Into:** develop
+**Branch Name:** fix/task-XXX-description (or feature/, claude/)
 
 **Estimated:**
 - Turns: X-Y
@@ -189,7 +193,7 @@ Read the task file: `.claude/plans/tasks/TASK-XXX.md`
 2. Track start time and turns
 3. Implement solution
 4. Complete task file Implementation Summary
-5. Create PR with Engineer Metrics
+5. Create PR with Engineer Metrics (or push branch for parallel batch review)
 6. Wait for CI to pass
 7. Request SR Engineer review
 
@@ -215,6 +219,47 @@ Read the task file: `.claude/plans/tasks/TASK-XXX.md`
 | Shared utility modifications | Multiple tasks depend on same code |
 | Core type changes | Affects multiple consumers |
 | Same service modifications | Merge conflicts guaranteed |
+
+### How to Execute Parallel Tasks (Claude Web)
+
+For approved parallel tasks, use **separate Claude Web sessions** (each runs in its own container):
+
+**Step 1: PM prepares task assignments**
+
+Each task file must clearly specify:
+```markdown
+**Branch From:** develop
+**Branch Into:** develop
+**Branch Name:** fix/task-XXX-description
+```
+
+**Step 2: Launch parallel Claude Web sessions**
+
+Give each session a prompt like:
+```
+You are an Engineer agent. Your task file is:
+.claude/plans/tasks/TASK-XXX.md
+
+Follow the Engineer Workflow in .claude/docs/ENGINEER-WORKFLOW.md
+
+When complete:
+1. Update the Implementation Summary in the task file
+2. Push your branch (branch name in task file)
+3. Do NOT create PR - SR Engineer will review all branches together
+```
+
+**Step 3: SR Engineer batch review**
+
+When all engineers report completion:
+1. Check out each branch listed in task summaries
+2. Review changes and run tests
+3. Create PRs for approved branches
+4. Merge in dependency order
+
+**Why this works:**
+- Each Claude Web session has isolated filesystem
+- No shared uncommitted changes
+- Branches don't conflict until merge (handled by SR)
 
 ### Project Branches for Multi-Sprint Work
 
