@@ -1363,7 +1363,7 @@ class DatabaseService implements IDatabaseService {
         );
       }
 
-      // Migration 11: Create llm_settings table (TASK-302)
+// Migration 11: Create llm_settings table (TASK-302)
       // Part of SPRINT-004 schema migrations - version increment deferred to TASK-305
       const llmSettingsExists = this._get<{ name: string }>(
         `SELECT name FROM sqlite_master WHERE type='table' AND name='llm_settings'`
@@ -1412,6 +1412,27 @@ class DatabaseService implements IDatabaseService {
 
         await logService.info(
           "Created llm_settings table",
+          "DatabaseService"
+        );
+      }
+
+      // Migration 11: Add llm_analysis column to messages (TASK-303)
+      // Part of SPRINT-004 schema migrations - version increment deferred to TASK-305
+      const messagesColumns = this._all<{ name: string }>(
+        `PRAGMA table_info(messages)`
+      );
+      const messageColumnNames = messagesColumns.map((col) => col.name);
+
+      if (!messageColumnNames.includes("llm_analysis")) {
+        await logService.debug(
+          "Running Migration 11: Adding llm_analysis column to messages",
+          "DatabaseService"
+        );
+
+        this._run(`ALTER TABLE messages ADD COLUMN llm_analysis TEXT`);
+
+        await logService.info(
+          "Added llm_analysis column to messages table",
           "DatabaseService"
         );
       }
