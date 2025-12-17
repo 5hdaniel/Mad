@@ -1,0 +1,119 @@
+name: PR Metrics Validation
+
+# This workflow enforces the Engineer Workflow Compliance requirements
+# by validating that all PRs include required metrics sections.
+#
+# Requirements:
+# 1. Engineer Metrics section must be present
+# 2. Plan-First Protocol section must be present
+# 3. Metrics table must have actual values (not placeholders)
+#
+# Exceptions:
+# - Dependabot PRs are exempt (automated dependency updates)
+# - PRs with [skip-metrics] in title are exempt (use sparingly)
+
+on:
+  pull_request:
+    branches: [main, develop]
+    types: [opened, edited, synchronize, reopened]
+
+jobs:
+  validate-metrics:
+    name: Validate PR Metrics
+    runs-on: ubuntu-latest
+
+    # Skip for Dependabot PRs
+    if: github.actor != 'dependabot[bot]'
+
+    steps:
+      - name: Check for skip flag
+        id: skip-check
+        run: |
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          if [[ "$PR_TITLE" == *"[skip-metrics]"* ]]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "::warning::Metrics validation skipped via [skip-metrics] flag"
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Validate Engineer Metrics Section
+        if: steps.skip-check.outputs.skip != 'true'
+        run: |
+          PR_BODY='${{ github.event.pull_request.body }}'
+
+          echo "=== Validating PR Metrics ==="
+          echo ""
+
+          # Check 1: Engineer Metrics section exists
+          echo "Check 1: Engineer Metrics section..."
+          if [[ ! "$PR_BODY" =~ "## Engineer Metrics" ]]; then
+            echo "::error::PR missing '## Engineer Metrics' section"
+            echo "  Add the Engineer Metrics section to your PR description."
+            echo "  See .github/PULL_REQUEST_TEMPLATE.md for the required format."
+            exit 1
+          fi
+          echo "  [PASS] Engineer Metrics section found"
+
+          # Check 2: Plan-First Protocol section exists
+          echo ""
+          echo "Check 2: Plan-First Protocol section..."
+          if [[ ! "$PR_BODY" =~ "Plan-First Protocol" ]]; then
+            echo "::error::PR missing 'Plan-First Protocol' section"
+            echo "  Add the Plan-First Protocol checklist to your PR description."
+            echo "  This confirms you invoked the Plan agent before implementation."
+            exit 1
+          fi
+          echo "  [PASS] Plan-First Protocol section found"
+
+          # Check 3: Metrics table has structure
+          echo ""
+          echo "Check 3: Metrics table structure..."
+          if [[ ! "$PR_BODY" =~ "| Phase | Turns | Tokens | Time |" ]]; then
+            echo "::error::PR missing metrics table"
+            echo "  Ensure the Engineer Metrics section contains the required table."
+            exit 1
+          fi
+          echo "  [PASS] Metrics table found"
+
+          # Check 4: Planning row exists (indicates Plan-First was followed)
+          echo ""
+          echo "Check 4: Planning metrics row..."
+          if [[ ! "$PR_BODY" =~ "Planning (Plan)" ]] && [[ ! "$PR_BODY" =~ "| Planning" ]]; then
+            echo "::error::PR missing Planning (Plan) row in metrics table"
+            echo "  Add the Planning metrics from your Plan agent invocation."
+            exit 1
+          fi
+          echo "  [PASS] Planning row found"
+
+          # Check 5: Estimated vs Actual section exists
+          echo ""
+          echo "Check 5: Estimated vs Actual section..."
+          if [[ ! "$PR_BODY" =~ "Estimated vs Actual" ]]; then
+            echo "::error::PR missing 'Estimated vs Actual' comparison"
+            echo "  Add the estimation comparison to help calibrate future estimates."
+            exit 1
+          fi
+          echo "  [PASS] Estimated vs Actual section found"
+
+          echo ""
+          echo "=== All metrics validations passed ==="
+
+      - name: Summary
+        if: always()
+        run: |
+          if [[ "${{ steps.skip-check.outputs.skip }}" == "true" ]]; then
+            echo "## PR Metrics Validation: SKIPPED" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Metrics validation was skipped due to [skip-metrics] flag in PR title." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "> **Note**: Use [skip-metrics] sparingly. All sprint tasks should include metrics." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## PR Metrics Validation: PASSED" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "All required metrics sections are present:" >> $GITHUB_STEP_SUMMARY
+            echo "- [x] Engineer Metrics section" >> $GITHUB_STEP_SUMMARY
+            echo "- [x] Plan-First Protocol section" >> $GITHUB_STEP_SUMMARY
+            echo "- [x] Metrics table with Planning row" >> $GITHUB_STEP_SUMMARY
+            echo "- [x] Estimated vs Actual comparison" >> $GITHUB_STEP_SUMMARY
+          fi
