@@ -1303,7 +1303,7 @@ class DatabaseService implements IDatabaseService {
         );
       }
 
-      // Migration 11: AI Detection Fields for Transactions (TASK-301)
+// Migration 11: AI Detection Fields for Transactions (TASK-301)
       // Part of Migration 008 group - version increment deferred to TASK-305
       const txDetectionColumns = this._all<{ name: string }>(
         `PRAGMA table_info(transactions)`
@@ -1359,6 +1359,59 @@ class DatabaseService implements IDatabaseService {
 
         await logService.info(
           "Added AI detection fields to transactions table",
+          "DatabaseService"
+        );
+      }
+
+      // Migration 11: Create llm_settings table (TASK-302)
+      // Part of SPRINT-004 schema migrations - version increment deferred to TASK-305
+      const llmSettingsExists = this._get<{ name: string }>(
+        `SELECT name FROM sqlite_master WHERE type='table' AND name='llm_settings'`
+      );
+
+      if (!llmSettingsExists) {
+        await logService.debug(
+          "Running Migration 11: Creating llm_settings table",
+          "DatabaseService"
+        );
+
+        this._run(`
+          CREATE TABLE IF NOT EXISTS llm_settings (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL UNIQUE,
+            -- Provider Config
+            openai_api_key_encrypted TEXT,
+            anthropic_api_key_encrypted TEXT,
+            preferred_provider TEXT DEFAULT 'openai' CHECK (preferred_provider IN ('openai', 'anthropic')),
+            openai_model TEXT DEFAULT 'gpt-4o-mini',
+            anthropic_model TEXT DEFAULT 'claude-3-haiku-20240307',
+            -- Usage Tracking
+            tokens_used_this_month INTEGER DEFAULT 0,
+            budget_limit_tokens INTEGER,
+            budget_reset_date DATE,
+            -- Platform Allowance
+            platform_allowance_tokens INTEGER DEFAULT 0,
+            platform_allowance_used INTEGER DEFAULT 0,
+            use_platform_allowance INTEGER DEFAULT 0,
+            -- Feature Flags
+            enable_auto_detect INTEGER DEFAULT 1,
+            enable_role_extraction INTEGER DEFAULT 1,
+            -- Consent (Security Option C)
+            llm_data_consent INTEGER DEFAULT 0,
+            llm_data_consent_at DATETIME,
+            -- Timestamps
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE
+          )
+        `);
+
+        this._run(`
+          CREATE INDEX IF NOT EXISTS idx_llm_settings_user ON llm_settings(user_id)
+        `);
+
+        await logService.info(
+          "Created llm_settings table",
           "DatabaseService"
         );
       }

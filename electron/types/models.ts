@@ -694,6 +694,63 @@ export interface AttachmentFilters {
 }
 
 // ============================================
+// LLM SETTINGS MODELS (Migration 11)
+// ============================================
+
+/**
+ * LLM settings and configuration per user
+ * Stores API keys (encrypted), usage tracking, and feature flags
+ */
+export interface LLMSettings {
+  id: string;
+  user_id: string;
+
+  // Provider Config
+  /** Encrypted OpenAI API key */
+  openai_api_key_encrypted?: string;
+  /** Encrypted Anthropic API key */
+  anthropic_api_key_encrypted?: string;
+  /** Preferred LLM provider */
+  preferred_provider: 'openai' | 'anthropic';
+  /** OpenAI model to use */
+  openai_model: string;
+  /** Anthropic model to use */
+  anthropic_model: string;
+
+  // Usage Tracking
+  /** Tokens used in current billing period */
+  tokens_used_this_month: number;
+  /** User-defined token budget limit */
+  budget_limit_tokens?: number;
+  /** Date when monthly usage resets */
+  budget_reset_date?: string;
+
+  // Platform Allowance
+  /** Platform-provided token allowance */
+  platform_allowance_tokens: number;
+  /** Platform allowance tokens used */
+  platform_allowance_used: number;
+  /** Whether to use platform allowance */
+  use_platform_allowance: boolean;
+
+  // Feature Flags
+  /** Enable automatic transaction detection */
+  enable_auto_detect: boolean;
+  /** Enable role extraction from messages */
+  enable_role_extraction: boolean;
+
+  // Consent (Security Option C)
+  /** User has consented to LLM data processing */
+  llm_data_consent: boolean;
+  /** When user gave consent */
+  llm_data_consent_at?: string;
+
+  // Timestamps
+  created_at: string;
+  updated_at: string;
+}
+
+// ============================================
 // LEGACY TYPES (Backwards Compatibility)
 // ============================================
 
