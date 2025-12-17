@@ -1303,6 +1303,66 @@ class DatabaseService implements IDatabaseService {
         );
       }
 
+      // Migration 11: AI Detection Fields for Transactions (TASK-301)
+      // Part of Migration 008 group - version increment deferred to TASK-305
+      const txDetectionColumns = this._all<{ name: string }>(
+        `PRAGMA table_info(transactions)`
+      );
+      const txColumnNames = txDetectionColumns.map((col) => col.name);
+
+      if (!txColumnNames.includes("detection_source")) {
+        await logService.debug(
+          "Running Migration 11: Adding AI detection fields to transactions",
+          "DatabaseService"
+        );
+
+        // detection_source: how the transaction was created
+        if (!txColumnNames.includes("detection_source")) {
+          this._run(`
+            ALTER TABLE transactions ADD COLUMN detection_source TEXT DEFAULT 'manual'
+              CHECK (detection_source IN ('manual', 'auto', 'hybrid'))
+          `);
+        }
+
+        // detection_status: user review status of detected transaction
+        if (!txColumnNames.includes("detection_status")) {
+          this._run(`
+            ALTER TABLE transactions ADD COLUMN detection_status TEXT DEFAULT 'confirmed'
+              CHECK (detection_status IN ('pending', 'confirmed', 'rejected'))
+          `);
+        }
+
+        // detection_confidence: 0.0 - 1.0 confidence score from detection
+        if (!txColumnNames.includes("detection_confidence")) {
+          this._run(`ALTER TABLE transactions ADD COLUMN detection_confidence REAL`);
+        }
+
+        // detection_method: which algorithm detected it
+        if (!txColumnNames.includes("detection_method")) {
+          this._run(`ALTER TABLE transactions ADD COLUMN detection_method TEXT`);
+        }
+
+        // suggested_contacts: JSON array of suggested contact assignments
+        if (!txColumnNames.includes("suggested_contacts")) {
+          this._run(`ALTER TABLE transactions ADD COLUMN suggested_contacts TEXT`);
+        }
+
+        // reviewed_at: when user reviewed the detected transaction
+        if (!txColumnNames.includes("reviewed_at")) {
+          this._run(`ALTER TABLE transactions ADD COLUMN reviewed_at DATETIME`);
+        }
+
+        // rejection_reason: why user rejected (if detection_status='rejected')
+        if (!txColumnNames.includes("rejection_reason")) {
+          this._run(`ALTER TABLE transactions ADD COLUMN rejection_reason TEXT`);
+        }
+
+        await logService.info(
+          "Added AI detection fields to transactions table",
+          "DatabaseService"
+        );
+      }
+
       await logService.info(
         "All database migrations completed successfully",
         "DatabaseService",
