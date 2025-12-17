@@ -4,7 +4,7 @@ This index tracks all backlog items with their current status and metadata.
 
 **Last Updated:** 2025-12-17
 **Total Items:** 79
-**Pending:** 71 | **In Progress:** 0 | **Completed:** 7 | **Obsolete:** 2
+**Pending:** 68 | **In Progress:** 0 | **Completed:** 10 | **Obsolete:** 2
 
 ---
 
@@ -90,11 +90,11 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-032 | Handle Backup Already in Progress | Critical | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-033 | Check Supabase Terms Acceptance | High | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-034 | Phone Type Card Layout | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
-| BACKLOG-035 | Remove Orphaned Table | Critical | Pending | SPRINT-003 | 5-8 | 20-30K | ~30m | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| BACKLOG-035 | Remove Orphaned Table | Critical | ✅ Completed | SPRINT-003 | 5-8 | 20-30K | ~30m | 10 | ~40K | ~20m | - | - | - | - | - | - | 10 | ~40K | ~20m | [BACKLOG-035.md](BACKLOG-035.md) |
 | BACKLOG-036 | Fix Sync Phase UI Text | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-037 | Don't Fail Sync on Disconnect | High | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
-| BACKLOG-038 | Schema Mismatch contacts.name | Critical | Pending | SPRINT-003 | 10-15 | 40-60K | ~1.5h | - | - | - | - | - | - | - | - | - | - | - | - | - |
-| BACKLOG-039 | Schema Mismatch transactions.status | Critical | Pending | SPRINT-003 | 10-15 | 40-60K | ~1.5h | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| BACKLOG-038 | Schema Mismatch contacts.name | Critical | ✅ Completed | SPRINT-003 | 10-15 | 40-60K | ~1.5h | 8 | ~30K | ~15m | - | - | - | - | - | - | 8 | ~30K | ~15m | [BACKLOG-038.md](BACKLOG-038.md) |
+| BACKLOG-039 | Schema Mismatch transactions.status | Critical | ✅ Completed | SPRINT-003 | 10-15 | 40-60K | ~1.5h | 25 | ~100K | ~45m | - | - | - | - | - | - | 25 | ~100K | ~45m | [BACKLOG-039.md](BACKLOG-039.md) |
 | BACKLOG-040 | ContactsService macOS Paths | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-041 | Create UX Engineer Agent | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-042 | Lookback Period Not Persistent | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
@@ -157,7 +157,7 @@ This index tracks all backlog items with their current status and metadata.
 |-----------|------|--------|-----------------|
 | SPRINT-001 | Onboarding Refactor | ✅ Completed | TASK-101 to TASK-116 |
 | SPRINT-002 | Tech Debt | ✅ Completed | BACKLOG-058, 059, 060 + 3 bonus fixes |
-| SPRINT-003 | Process & Data Integrity | 🔄 Active | BACKLOG-072, 038, 039, 035 |
+| SPRINT-003 | Process & Data Integrity | ✅ Completed | BACKLOG-072, 038, 039, 035 (4 tasks, 53 turns, ~210K tokens*) |
 | SPRINT-004 | AI MVP Foundation | 📋 Planned | BACKLOG-073, 074 (14 tasks) |
 | SPRINT-005 | AI MVP Core | 📋 Planned | BACKLOG-075, 076 |
 | SPRINT-006 | AI MVP Polish | 📋 Planned | BACKLOG-077, 078, 079 |
@@ -179,3 +179,9 @@ This index tracks all backlog items with their current status and metadata.
 - 2025-12-16: Planned SPRINT-004 (AI Foundation), SPRINT-005 (AI Core), SPRINT-006 (AI Polish)
 - 2025-12-16: Created SPRINT-004 plan and 14 task files (TASK-301 to TASK-314) for BACKLOG-073, BACKLOG-074
 - 2025-12-17: BACKLOG-072 (TASK-201) completed - Workflow Enforcement (PR #139 merged)
+- 2025-12-17: SPRINT-003 completed - All 4 tasks merged (PRs #139, #140, #141, #142)
+- 2025-12-17: BACKLOG-038 (TASK-202) completed - Contacts display_name (PR #141 merged)
+- 2025-12-17: BACKLOG-039 (TASK-203) completed - Transaction status (PR #140 merged)
+- 2025-12-17: BACKLOG-035 (TASK-204) completed - Orphaned tables + closing_date fix (PR #142 merged)
+- 2025-12-17: *INCIDENT*: Parallel agent execution burned ~14M tokens before manual intervention
+- 2025-12-17: Lesson learned: Database schema tasks must be SEQUENTIAL, never parallel
