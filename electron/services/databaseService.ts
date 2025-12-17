@@ -76,7 +76,7 @@ interface TransactionContactResult extends TransactionContactData {
 interface TransactionWithRoles {
   id: string;
   property_address: string;
-  closing_date?: string | null;
+  closing_deadline?: string | null;
   transaction_type?: string | null;
   status: string;
   roles: string;
@@ -1272,6 +1272,37 @@ class DatabaseService implements IDatabaseService {
         );
       }
 
+      // Migration 10: Remove orphaned tables (TASK-204)
+      const orphanedTablesExist = this._get<{ name: string }>(
+        `SELECT name FROM sqlite_master WHERE type='table' AND name='extraction_metrics'`
+      );
+      if (orphanedTablesExist) {
+        await logService.debug(
+          "Removing orphaned extraction_metrics and user_feedback tables",
+          "DatabaseService"
+        );
+
+        // Drop indexes
+        this._run(`DROP INDEX IF EXISTS idx_extraction_metrics_user_id`);
+        this._run(`DROP INDEX IF EXISTS idx_extraction_metrics_field`);
+        this._run(`DROP INDEX IF EXISTS idx_user_feedback_user_id`);
+        this._run(`DROP INDEX IF EXISTS idx_user_feedback_transaction_id`);
+        this._run(`DROP INDEX IF EXISTS idx_user_feedback_field_name`);
+        this._run(`DROP INDEX IF EXISTS idx_user_feedback_type`);
+
+        // Drop trigger
+        this._run(`DROP TRIGGER IF EXISTS update_extraction_metrics_timestamp`);
+
+        // Drop tables
+        this._run(`DROP TABLE IF EXISTS extraction_metrics`);
+        this._run(`DROP TABLE IF EXISTS user_feedback`);
+
+        await logService.info(
+          "Successfully removed orphaned tables",
+          "DatabaseService"
+        );
+      }
+
       await logService.info(
         "All database migrations completed successfully",
         "DatabaseService",
@@ -1868,7 +1899,7 @@ class DatabaseService implements IDatabaseService {
       {
         id: string;
         property_address: string;
-        closing_date?: string | null;
+        closing_deadline?: string | null;
         transaction_type?: string | null;
         status: string;
         roles: string[];
@@ -1880,7 +1911,7 @@ class DatabaseService implements IDatabaseService {
       SELECT DISTINCT
         id,
         property_address,
-        closing_date,
+        closing_deadline,
         transaction_type,
         status,
         CASE
@@ -1899,7 +1930,7 @@ class DatabaseService implements IDatabaseService {
     const directResults = this._all<{
       id: string;
       property_address: string;
-      closing_date?: string | null;
+      closing_deadline?: string | null;
       transaction_type?: string | null;
       status: string;
       role: string;
@@ -1919,7 +1950,7 @@ class DatabaseService implements IDatabaseService {
         transactionMap.set(txn.id, {
           id: txn.id,
           property_address: txn.property_address,
-          closing_date: txn.closing_date,
+          closing_deadline: txn.closing_deadline,
           transaction_type: txn.transaction_type,
           status: txn.status,
           roles: [txn.role],
@@ -1934,7 +1965,7 @@ class DatabaseService implements IDatabaseService {
       SELECT DISTINCT
         t.id,
         t.property_address,
-        t.closing_date,
+        t.closing_deadline,
         t.transaction_type,
         t.status,
         tc.specific_role,
@@ -1947,7 +1978,7 @@ class DatabaseService implements IDatabaseService {
     const junctionResults = this._all<{
       id: string;
       property_address: string;
-      closing_date?: string | null;
+      closing_deadline?: string | null;
       transaction_type?: string | null;
       status: string;
       specific_role?: string;
@@ -1961,7 +1992,7 @@ class DatabaseService implements IDatabaseService {
         transactionMap.set(txn.id, {
           id: txn.id,
           property_address: txn.property_address,
-          closing_date: txn.closing_date,
+          closing_deadline: txn.closing_deadline,
           transaction_type: txn.transaction_type,
           status: txn.status,
           roles: [role],
@@ -1977,7 +2008,7 @@ class DatabaseService implements IDatabaseService {
         SELECT DISTINCT
           t.id,
           t.property_address,
-          t.closing_date,
+          t.closing_deadline,
           t.transaction_type,
           t.status
         FROM transactions t, json_each(t.other_contacts) j
@@ -1987,7 +2018,7 @@ class DatabaseService implements IDatabaseService {
       const jsonResults = this._all<{
         id: string;
         property_address: string;
-        closing_date?: string | null;
+        closing_deadline?: string | null;
         transaction_type?: string | null;
         status: string;
       }>(jsonQuery, [contactId]);
@@ -1997,7 +2028,7 @@ class DatabaseService implements IDatabaseService {
           transactionMap.set(txn.id, {
             id: txn.id,
             property_address: txn.property_address,
-            closing_date: txn.closing_date,
+            closing_deadline: txn.closing_deadline,
             transaction_type: txn.transaction_type,
             status: txn.status,
             roles: ["Other Contact"],
@@ -2014,7 +2045,7 @@ class DatabaseService implements IDatabaseService {
       );
       // Fallback implementation using LIKE
       const fallbackQuery = `
-        SELECT id, property_address, closing_date, transaction_type, status, other_contacts
+        SELECT id, property_address, closing_deadline, transaction_type, status, other_contacts
         FROM transactions
         WHERE other_contacts LIKE ?
       `;
@@ -2022,7 +2053,7 @@ class DatabaseService implements IDatabaseService {
       const fallbackResults = this._all<{
         id: string;
         property_address: string;
-        closing_date?: string | null;
+        closing_deadline?: string | null;
         transaction_type?: string | null;
         status: string;
         other_contacts?: string;
@@ -2036,7 +2067,7 @@ class DatabaseService implements IDatabaseService {
               transactionMap.set(txn.id, {
                 id: txn.id,
                 property_address: txn.property_address,
-                closing_date: txn.closing_date,
+                closing_deadline: txn.closing_deadline,
                 transaction_type: txn.transaction_type,
                 status: txn.status,
                 roles: ["Other Contact"],
@@ -2287,7 +2318,7 @@ class DatabaseService implements IDatabaseService {
         if (["active", "closed", "archived"].includes(rawStatus)) return rawStatus;
         return "active"; // Default fallback
       })(),
-      transactionData.closing_date || transactionData.closing_deadline || null,
+      transactionData.closing_deadline || transactionData.closing_deadline || null,
     ];
 
     this._run(sql, params);
@@ -2330,12 +2361,12 @@ class DatabaseService implements IDatabaseService {
     }
 
     if (filters?.start_date) {
-      sql += " AND t.closing_date >= ?";
+      sql += " AND t.closing_deadline >= ?";
       params.push(filters.start_date);
     }
 
     if (filters?.end_date) {
-      sql += " AND t.closing_date <= ?";
+      sql += " AND t.closing_deadline <= ?";
       params.push(filters.end_date);
     }
 

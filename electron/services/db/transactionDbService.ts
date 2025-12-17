@@ -92,7 +92,7 @@ export async function createTransaction(
       : null,
     transactionData.transaction_type || null,
     validatedStatus,
-    transactionData.closing_date || transactionData.closing_deadline || null,
+    transactionData.closing_deadline || null,
   ];
 
   dbRun(sql, params);
@@ -135,12 +135,12 @@ export async function getTransactions(
   }
 
   if (filters?.start_date) {
-    sql += " AND t.closing_date >= ?";
+    sql += " AND t.closing_deadline >= ?";
     params.push(filters.start_date);
   }
 
   if (filters?.end_date) {
-    sql += " AND t.closing_date <= ?";
+    sql += " AND t.closing_deadline <= ?";
     params.push(filters.end_date);
   }
 
