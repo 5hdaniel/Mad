@@ -232,6 +232,11 @@ npm rebuild better-sqlite3-multiple-ciphers && npx electron-rebuild -f -w better
 
    **Review Date:** YYYY-MM-DD | **Status:** APPROVED / NEEDS CHANGES
 
+   ### Branch Information (SR Engineer decides)
+   - **Branch From:** develop | project/xxx | feature/xxx
+   - **Branch Into:** develop | project/xxx | feature/xxx
+   - **Suggested Branch Name:** fix/task-XXX-description
+
    ### Execution Classification
    - **Parallel Safe:** Yes/No
    - **Depends On:** TASK-XXX (if sequential)

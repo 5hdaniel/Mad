@@ -174,11 +174,11 @@ When assigning tasks to engineers:
 
 **Title:** [title]
 **Sprint:** SPRINT-XXX
-**Execution:** Sequential | Parallel (approved by SR Engineer)
+**Execution:** Sequential | Parallel (set by SR Engineer)
 
-### Branch Information (Required for Parallel)
-**Branch From:** develop
-**Branch Into:** develop
+### Branch Information (Set by SR Engineer during Technical Review)
+**Branch From:** [SR specifies: develop, project/xxx, or feature/xxx]
+**Branch Into:** [SR specifies: develop, project/xxx, or feature/xxx]
 **Branch Name:** fix/task-XXX-description (or feature/, claude/)
 
 **Estimated:**
@@ -224,12 +224,12 @@ Read the task file: `.claude/plans/tasks/TASK-XXX.md`
 
 For approved parallel tasks, use **separate Claude Web sessions** (each runs in its own container):
 
-**Step 1: PM prepares task assignments**
+**Step 1: PM prepares task assignments (after SR Technical Review)**
 
-Each task file must clearly specify:
+Each task file must include branch info from SR Engineer review:
 ```markdown
-**Branch From:** develop
-**Branch Into:** develop
+**Branch From:** [from SR review - develop, project/xxx, etc.]
+**Branch Into:** [from SR review - develop, project/xxx, etc.]
 **Branch Name:** fix/task-XXX-description
 ```
 
