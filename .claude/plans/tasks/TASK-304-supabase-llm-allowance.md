@@ -221,3 +221,43 @@ Verification:
 
 **Reviewer notes:**
 <Anything reviewer should pay attention to>
+
+---
+
+## SR Engineer Review Notes
+
+**Review Date:** 2025-12-17 | **Status:** APPROVED
+
+### Branch Information (SR Engineer decides)
+- **Branch From:** develop
+- **Branch Into:** int/schema-foundation
+- **Suggested Branch Name:** feature/TASK-304-supabase-llm-allowance
+
+### Execution Classification
+- **Parallel Safe:** Yes (with TASK-301, TASK-302, TASK-303)
+- **Depends On:** None
+- **Blocks:** TASK-305 (Migration Testing) - weak dependency, primarily documentation
+
+### Shared File Analysis
+- Files created:
+  - `supabase/migrations/YYYYMMDD_add_llm_allowance.sql`
+- Conflicts with:
+  - **NONE** - This task creates a new file in a separate directory (Supabase schema)
+  - No overlap with local SQLite migrations
+
+### Technical Considerations
+- **Lowest risk parallel task** - completely isolated file changes
+- Supabase migration applied manually via dashboard, not automated
+- SQL file is documentation + manual execution
+- Default allowance 50,000 tokens per month
+- Reset trigger is optional (can be handled in application code)
+- TypeScript type update is optional if Supabase types file exists
+- **No tests required** - Supabase schema not in local tests
+
+### Integration Branch Note
+- Integration branch `int/schema-foundation` must be created from `develop` before parallel execution begins
+- This task has NO conflicts - can merge at any time in Phase 1
+
+### Manual Steps Required
+- After PR merge, manually apply SQL via Supabase Dashboard
+- Verify columns exist with provided verification query

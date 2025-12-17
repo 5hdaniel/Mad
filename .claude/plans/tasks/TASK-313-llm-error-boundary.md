@@ -504,3 +504,49 @@ Verification:
 **Issues encountered:**
 
 **Reviewer notes:**
+<Anything reviewer should pay attention to>
+
+---
+
+## SR Engineer Review Notes
+
+**Review Date:** 2025-12-17 | **Status:** APPROVED
+
+### Branch Information (SR Engineer decides)
+- **Branch From:** int/llm-infrastructure (after TASK-306 merged)
+- **Branch Into:** int/llm-infrastructure
+- **Suggested Branch Name:** feature/TASK-313-llm-error-boundary
+
+### Execution Classification
+- **Parallel Safe:** Yes (with TASK-307, TASK-308, TASK-309, TASK-310, TASK-314)
+- **Depends On:** TASK-306 (LLM Base Interface - for error types)
+- **Blocks:** None (standalone UI component)
+
+### Shared File Analysis
+- Files created:
+  - `src/components/LLMErrorBoundary.tsx`
+  - `src/components/LLMErrorDisplay.tsx`
+  - `src/components/__tests__/LLMErrorBoundary.test.tsx`
+- Conflicts with:
+  - **NONE** - Creates new files in renderer
+
+### Technical Considerations
+- React Error Boundary (class component required)
+- Error type extraction from LLMError or message content
+- User-friendly messages with appropriate actions
+- useLLMErrorHandler hook for programmatic error handling
+- >70% coverage required
+
+### Renderer-Only Task
+- This task is entirely in `src/` (renderer process)
+- No Electron main/preload changes
+- Can run in parallel with most Phase 2 tasks
+
+### UI/UX Notes
+- Action buttons context-sensitive (retry for transient, settings for config issues)
+- CSS uses CSS variables for theming compatibility
+- Dismiss option for non-critical errors
+
+### Dependency Note
+- Only needs LLMErrorType from TASK-306 types.ts
+- Does NOT need full provider implementations

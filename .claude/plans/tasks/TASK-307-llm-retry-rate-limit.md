@@ -364,3 +364,42 @@ Verification:
 **Issues encountered:**
 
 **Reviewer notes:**
+<Anything reviewer should pay attention to>
+
+---
+
+## SR Engineer Review Notes
+
+**Review Date:** 2025-12-17 | **Status:** APPROVED
+
+### Branch Information (SR Engineer decides)
+- **Branch From:** int/llm-infrastructure (after TASK-306 merged)
+- **Branch Into:** int/llm-infrastructure
+- **Suggested Branch Name:** feature/TASK-307-llm-retry-rate-limit
+
+### Execution Classification
+- **Parallel Safe:** NO - Sequential (depends on TASK-306)
+- **Depends On:** TASK-306 (LLM Base Interface)
+- **Blocks:** TASK-308 (Token Tracking)
+
+### Shared File Analysis
+- Files modified:
+  - `electron/services/llm/baseLLMService.ts` (adds retry wrapper, rate limiter integration)
+- Files created:
+  - `electron/services/llm/rateLimiter.ts`
+  - `electron/services/llm/__tests__/rateLimiter.test.ts`
+- Conflicts with:
+  - **TASK-308:** Both modify `baseLLMService.ts` - Must execute sequentially
+
+### Technical Considerations
+- Token bucket rate limiter pattern
+- Exponential backoff with configurable max attempts (default 3)
+- Honors Retry-After headers from API responses
+- Non-retryable errors (invalid_api_key, quota_exceeded) fail immediately
+- Tests must cover: retry success, retry exhaust, rate limit blocking
+- >80% coverage required for retry and rate limiter
+
+### Architectural Notes
+- Rate limiter is per-service instance, not global
+- Default 60 requests/minute - may need adjustment per provider
+- Sleep is async (non-blocking)

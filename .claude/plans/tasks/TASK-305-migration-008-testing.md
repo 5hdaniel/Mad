@@ -397,3 +397,47 @@ Verification:
 
 **Reviewer notes:**
 <Anything reviewer should pay attention to>
+
+---
+
+## SR Engineer Review Notes
+
+**Review Date:** 2025-12-17 | **Status:** APPROVED
+
+### Branch Information (SR Engineer decides)
+- **Branch From:** int/schema-foundation (after TASK-301-304 merged)
+- **Branch Into:** int/schema-foundation
+- **Suggested Branch Name:** feature/TASK-305-migration-008-testing
+
+### Execution Classification
+- **Parallel Safe:** NO - Sequential only
+- **Depends On:** TASK-301, TASK-302, TASK-303, TASK-304 (all Phase 1 schema tasks)
+- **Blocks:** TASK-306 (Phase 2 start), all Phase 2 tasks
+
+### Shared File Analysis
+- Files modified:
+  - `electron/services/databaseService.ts` (schema version increment to 8)
+- Files created:
+  - `electron/services/__tests__/migration008.test.ts`
+- Conflicts with:
+  - None - runs after all schema changes merged
+
+### Technical Considerations
+- **CRITICAL:** This task MUST run after all Phase 1 tasks (301-304) are merged to integration branch
+- Increments schema_version from 7 to 8
+- Comprehensive migration testing: fresh DB, existing DB with data, idempotency
+- Tests verify all columns from TASK-301, TASK-302, TASK-303 exist
+- Rollback procedure documented but SQLite DROP COLUMN limitations apply
+- Test coverage increases for migration code
+
+### Phase Transition Gate
+- This task is the **gate between Phase 1 and Phase 2**
+- After this task completes and merges:
+  1. `int/schema-foundation` merged to `develop`
+  2. `int/llm-infrastructure` created from updated `develop`
+  3. Phase 2 tasks can begin
+
+### Integration Branch Note
+- After this task merges, SR Engineer will:
+  1. Review and merge `int/schema-foundation` to `develop`
+  2. Create `int/llm-infrastructure` from `develop`

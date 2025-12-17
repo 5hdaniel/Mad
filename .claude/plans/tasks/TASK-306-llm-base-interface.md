@@ -378,3 +378,42 @@ Verification:
 **Issues encountered:**
 
 **Reviewer notes:**
+<Anything reviewer should pay attention to>
+
+---
+
+## SR Engineer Review Notes
+
+**Review Date:** 2025-12-17 | **Status:** APPROVED
+
+### Branch Information (SR Engineer decides)
+- **Branch From:** int/schema-foundation (after Phase 1 complete) OR develop (if schema-foundation merged)
+- **Branch Into:** int/llm-infrastructure
+- **Suggested Branch Name:** feature/TASK-306-llm-base-interface
+
+### Execution Classification
+- **Parallel Safe:** NO - Sequential (Phase 2 foundation)
+- **Depends On:** TASK-305 (Phase 1 complete)
+- **Blocks:** TASK-307, TASK-308, TASK-309, TASK-310, TASK-313, TASK-314 (all Phase 2 tasks depend on this)
+
+### Shared File Analysis
+- Files created:
+  - `electron/services/llm/types.ts`
+  - `electron/services/llm/baseLLMService.ts`
+  - `electron/services/llm/__tests__/baseLLMService.test.ts`
+- Conflicts with:
+  - **NONE** - Creates new directory and files
+
+### Technical Considerations
+- **FOUNDATION TASK** - All Phase 2 tasks import from these files
+- Creates `electron/services/llm/` directory structure
+- Abstract class pattern with concrete helper methods
+- LLMError class extends Error with typed properties
+- Model cost constants for token tracking
+- Tests should cover error mapping and helper methods (>80% coverage)
+
+### Integration Branch Note
+- `int/llm-infrastructure` must be created from `develop` (after int/schema-foundation merged)
+- This is the FIRST task in Phase 2 - must complete before any other Phase 2 work
+
+### Architectural Notes

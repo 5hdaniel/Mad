@@ -426,3 +426,45 @@ Verification:
 **Issues encountered:**
 
 **Reviewer notes:**
+<Anything reviewer should pay attention to>
+
+---
+
+## SR Engineer Review Notes
+
+**Review Date:** 2025-12-17 | **Status:** APPROVED
+
+### Branch Information (SR Engineer decides)
+- **Branch From:** int/llm-infrastructure (after TASK-307 merged)
+- **Branch Into:** int/llm-infrastructure
+- **Suggested Branch Name:** feature/TASK-308-llm-token-tracking
+
+### Execution Classification
+- **Parallel Safe:** NO - Sequential (depends on TASK-307)
+- **Depends On:** TASK-307 (Retry/Rate Limit), TASK-302 (llmSettingsDbService)
+- **Blocks:** TASK-309, TASK-310 (provider implementations)
+
+### Shared File Analysis
+- Files modified:
+  - `electron/services/llm/baseLLMService.ts` (adds token tracking methods)
+- Files created:
+  - `electron/services/llm/tokenCounter.ts`
+  - `electron/services/llm/__tests__/tokenCounter.test.ts`
+- Conflicts with:
+  - **TASK-307:** Both modify `baseLLMService.ts` - Must execute after TASK-307
+
+### Technical Considerations
+- Token estimation uses ~4 chars/token approximation (conservative)
+- Budget checking integrates with llmSettingsDbService from TASK-302
+- Monthly reset logic checks budget_reset_date
+- `completeWithTracking()` wraps retry logic with usage tracking
+- Cost calculation uses model constants from types.ts
+- >80% coverage required for token counter
+
+### Cross-Phase Dependency
+- Requires `llmSettingsDbService` from TASK-302 (Phase 1)
+- Phase 1 MUST be complete before this task executes
+
+### Architectural Notes
+- Token estimation is intentionally conservative (may overestimate)
+- Actual usage recorded from API response, not estimate

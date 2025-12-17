@@ -460,3 +460,48 @@ Verification:
 **Issues encountered:**
 
 **Reviewer notes:**
+<Anything reviewer should pay attention to>
+
+---
+
+## SR Engineer Review Notes
+
+**Review Date:** 2025-12-17 | **Status:** APPROVED
+
+### Branch Information (SR Engineer decides)
+- **Branch From:** int/llm-infrastructure (after TASK-309 AND TASK-310 merged)
+- **Branch Into:** int/llm-infrastructure
+- **Suggested Branch Name:** feature/TASK-311-llm-config-service
+
+### Execution Classification
+- **Parallel Safe:** NO - Sequential (waits for both provider implementations)
+- **Depends On:** TASK-309 (OpenAI), TASK-310 (Anthropic), TASK-302 (llmSettingsDbService)
+- **Blocks:** TASK-312 (IPC Handlers)
+
+### Shared File Analysis
+- Files created:
+  - `electron/services/llm/llmConfigService.ts`
+  - `electron/services/llm/__tests__/llmConfigService.test.ts`
+- Conflicts with:
+  - **NONE** - Creates new file after dependencies merged
+
+### Technical Considerations
+- **Orchestration layer** - coordinates all LLM services
+- API keys encrypted before storage using existing DatabaseEncryptionService
+- Consent check BEFORE any LLM operation (Security Option C)
+- Creates default settings on first access
+- Provider selection logic based on user preferences
+- >70% coverage required
+
+### Security Critical
+- Decrypts API keys only when needed (not cached)
+- Consent check is mandatory - throws if not granted
+- Never expose raw settings to UI (use LLMUserConfig interface)
+
+### Integration Points
+- Imports: OpenAIService, AnthropicService, LLMSettingsDbService, DatabaseEncryptionService
+- All these must exist before this task executes
+
+### Code Issue Note
+- Line 290 in task file has typo: `canUseL LM` should be `canUseLLM`
+- Engineer should fix during implementation

@@ -442,3 +442,47 @@ Verification:
 **Issues encountered:**
 
 **Reviewer notes:**
+<Anything reviewer should pay attention to>
+
+---
+
+## SR Engineer Review Notes
+
+**Review Date:** 2025-12-17 | **Status:** APPROVED
+
+### Branch Information (SR Engineer decides)
+- **Branch From:** int/llm-infrastructure (after TASK-308 merged)
+- **Branch Into:** int/llm-infrastructure
+- **Suggested Branch Name:** feature/TASK-310-anthropic-service
+
+### Execution Classification
+- **Parallel Safe:** Yes (with TASK-309, TASK-313, TASK-314)
+- **Depends On:** TASK-308 (Token Tracking)
+- **Blocks:** TASK-311 (Config Service)
+
+### Shared File Analysis
+- Files modified:
+  - `package.json` (add @anthropic-ai/sdk dependency)
+- Files created:
+  - `electron/services/llm/anthropicService.ts`
+  - `electron/services/llm/__tests__/anthropicService.test.ts`
+- Conflicts with:
+  - **TASK-309:** Both modify `package.json` - **MERGE ORDER: Either first, resolve package.json**
+  - No code file conflicts with TASK-309
+
+### Technical Considerations
+- Uses official `@anthropic-ai/sdk`
+- System message handled separately (Anthropic's format)
+- Response may have multiple content blocks (text + tool_use)
+- API key validation requires actual API call (no models.list equivalent)
+- Tests MUST use mocked SDK (no real API calls)
+- >70% coverage required
+
+### Anthropic-Specific Notes
+- System prompt is a separate parameter, not in messages array
+- Messages must alternate user/assistant roles
+- Response content is array of blocks, extract text blocks
+
+### Dependency Note
+- `npm install @anthropic-ai/sdk` adds new dependency
+- Native module rebuild may be needed after npm install

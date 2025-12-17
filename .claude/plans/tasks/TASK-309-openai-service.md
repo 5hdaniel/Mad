@@ -435,3 +435,46 @@ Verification:
 **Issues encountered:**
 
 **Reviewer notes:**
+<Anything reviewer should pay attention to>
+
+---
+
+## SR Engineer Review Notes
+
+**Review Date:** 2025-12-17 | **Status:** APPROVED
+
+### Branch Information (SR Engineer decides)
+- **Branch From:** int/llm-infrastructure (after TASK-308 merged)
+- **Branch Into:** int/llm-infrastructure
+- **Suggested Branch Name:** feature/TASK-309-openai-service
+
+### Execution Classification
+- **Parallel Safe:** Yes (with TASK-310, TASK-313, TASK-314)
+- **Depends On:** TASK-308 (Token Tracking)
+- **Blocks:** TASK-311 (Config Service)
+
+### Shared File Analysis
+- Files modified:
+  - `package.json` (add openai dependency)
+- Files created:
+  - `electron/services/llm/openAIService.ts`
+  - `electron/services/llm/__tests__/openAIService.test.ts`
+- Conflicts with:
+  - **TASK-310:** Both modify `package.json` - **MERGE ORDER: Either first, resolve package.json**
+  - No code file conflicts with TASK-310
+
+### Technical Considerations
+- Uses official `openai` SDK
+- JSON mode supported for structured outputs (GPT-4 models)
+- API key validation via models.list endpoint (lightweight)
+- Error mapping: AuthenticationError, RateLimitError, BadRequestError
+- Tests MUST use mocked SDK (no real API calls)
+- >70% coverage required
+
+### Dependency Note
+- `npm install openai` adds new dependency
+- Native module rebuild may be needed after npm install
+
+### Security Notes
+- API key never logged
+- Decrypted only when initializing client

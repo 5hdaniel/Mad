@@ -415,3 +415,53 @@ Verification:
 **Issues encountered:**
 
 **Reviewer notes:**
+<Anything reviewer should pay attention to>
+
+---
+
+## SR Engineer Review Notes
+
+**Review Date:** 2025-12-17 | **Status:** APPROVED
+
+### Branch Information (SR Engineer decides)
+- **Branch From:** int/llm-infrastructure (after TASK-311 merged)
+- **Branch Into:** int/llm-infrastructure
+- **Suggested Branch Name:** feature/TASK-312-llm-handlers
+
+### Execution Classification
+- **Parallel Safe:** NO - Sequential (final Phase 2 task)
+- **Depends On:** TASK-311 (Config Service)
+- **Blocks:** None (end of sprint)
+
+### Shared File Analysis
+- Files modified:
+  - `electron/main.ts` (register handlers)
+  - `electron/preload.ts` (add bridge methods)
+  - `src/types/electron.d.ts` (or equivalent type file)
+- Files created:
+  - `electron/llm-handlers.ts`
+- Conflicts with:
+  - **NONE** in Phase 2 - but touches core Electron files
+
+### Technical Considerations
+- **FINAL PHASE 2 TASK** - Completes LLM infrastructure
+- Consistent response wrapper (success/data/error format)
+- All handlers delegate to LLMConfigService
+- Preload bridge must be type-safe
+- No sensitive data in error responses
+
+### Core File Modifications
+- `main.ts`: Adds service initialization and handler registration
+- `preload.ts`: Adds `llm` namespace to contextBridge
+- Both files are critical - changes must be minimal and focused
+
+### Architecture Boundary Check
+- Handlers are thin wrappers - business logic stays in config service
+- Error wrapping is consistent across all handlers
+- Type definitions in renderer match main process types
+
+### Integration Testing Note
+- After this task, full LLM flow can be tested:
+  - Set API key -> Validate -> Display usage
+  - Budget exceeded -> Request blocked
+  - LLM failure -> Graceful error display

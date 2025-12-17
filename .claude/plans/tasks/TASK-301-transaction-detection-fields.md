@@ -221,3 +221,41 @@ Verification:
 
 **Reviewer notes:**
 <Anything reviewer should pay attention to>
+
+---
+
+## SR Engineer Review Notes
+
+**Review Date:** 2025-12-17 | **Status:** APPROVED
+
+### Branch Information (SR Engineer decides)
+- **Branch From:** develop
+- **Branch Into:** int/schema-foundation
+- **Suggested Branch Name:** feature/TASK-301-transaction-detection-fields
+
+### Execution Classification
+- **Parallel Safe:** Yes (with TASK-302, TASK-303, TASK-304)
+- **Depends On:** None
+- **Blocks:** TASK-305 (Migration Testing)
+
+### Shared File Analysis
+- Files modified:
+  - `electron/services/databaseService.ts` (Migration 008 partial)
+  - `electron/types/models.ts` (Transaction interface)
+- Conflicts with:
+  - TASK-302: Both modify `databaseService.ts` (Migration 008) - **MERGE ORDER CRITICAL**
+  - TASK-303: Both modify `databaseService.ts` (Migration 008) - **MERGE ORDER CRITICAL**
+  - TASK-302, TASK-303: All modify `models.ts` - Additive, low conflict risk
+
+### Technical Considerations
+- Migration 008 is partial - version increment deferred to TASK-305
+- All columns are nullable or have defaults, preserving existing data
+- CHECK constraints for enum fields (detection_source, detection_status)
+- SQLite requires separate ALTER TABLE for each column
+- Must check if columns exist before adding (idempotent)
+- **Merge Order:** Can merge in any order with 301-304, but must resolve databaseService.ts conflicts during integration merge
+
+### Integration Branch Note
+- Integration branch `int/schema-foundation` must be created from `develop` before parallel execution begins
+- All Phase 1 parallel tasks (301-304) merge to this integration branch
+- SR Engineer will create the branch when sprint execution begins

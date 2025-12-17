@@ -539,3 +539,48 @@ Verification:
 **Issues encountered:**
 
 **Reviewer notes:**
+<Anything reviewer should pay attention to>
+
+---
+
+## SR Engineer Review Notes
+
+**Review Date:** 2025-12-17 | **Status:** APPROVED
+
+### Branch Information (SR Engineer decides)
+- **Branch From:** int/llm-infrastructure (after TASK-306 merged)
+- **Branch Into:** int/llm-infrastructure
+- **Suggested Branch Name:** feature/TASK-314-content-sanitizer
+
+### Execution Classification
+- **Parallel Safe:** Yes (with TASK-307, TASK-308, TASK-309, TASK-310, TASK-313)
+- **Depends On:** TASK-306 (LLM Base Interface - for integration)
+- **Blocks:** None (standalone utility)
+
+### Shared File Analysis
+- Files created:
+  - `electron/services/llm/contentSanitizer.ts`
+  - `electron/services/llm/__tests__/contentSanitizer.test.ts`
+- Conflicts with:
+  - **NONE** - Creates new files
+
+### Technical Considerations
+- **SECURITY CRITICAL** - Implements Security Option A
+- PII detection: email, phone, SSN, credit card, bank account, IP address
+- Preservation patterns: property addresses, MLS numbers, transaction amounts
+- Real estate-specific content PRESERVED for LLM context
+- >90% coverage required (critical security feature)
+
+### Security Notes
+- Original PII stored in maskedItems for debugging/logging (don't expose in production)
+- Masking preserves partial info for context (last 4 digits of phone/card)
+- Placeholder preservation prevents over-masking of important data
+
+### Pattern Testing
+- Test all PII formats (phone number variations especially)
+- Test preservation (property addresses NOT masked)
+- Test edge cases: empty content, very long content, mixed content
+
+### Standalone Utility
+- Can be used independently of LLM services
+- Exported singleton for convenience: `contentSanitizer`
