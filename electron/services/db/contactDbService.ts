@@ -20,7 +20,7 @@ interface ContactWithActivity extends Contact {
 interface TransactionWithRoles {
   id: string;
   property_address: string;
-  closing_date?: string | null;
+  closing_deadline?: string | null;
   transaction_type?: string | null;
   status: string;
   roles: string;
@@ -275,7 +275,7 @@ export async function getTransactionsByContact(
     {
       id: string;
       property_address: string;
-      closing_date?: string | null;
+      closing_deadline?: string | null;
       transaction_type?: string | null;
       status: string;
       roles: string[];
@@ -287,7 +287,7 @@ export async function getTransactionsByContact(
     SELECT DISTINCT
       id,
       property_address,
-      closing_date,
+      closing_deadline,
       transaction_type,
       status,
       CASE
@@ -306,7 +306,7 @@ export async function getTransactionsByContact(
   const directResults = dbAll<{
     id: string;
     property_address: string;
-    closing_date?: string | null;
+    closing_deadline?: string | null;
     transaction_type?: string | null;
     status: string;
     role: string;
@@ -326,7 +326,7 @@ export async function getTransactionsByContact(
       transactionMap.set(txn.id, {
         id: txn.id,
         property_address: txn.property_address,
-        closing_date: txn.closing_date,
+        closing_deadline: txn.closing_deadline,
         transaction_type: txn.transaction_type,
         status: txn.status,
         roles: [txn.role],
@@ -341,7 +341,7 @@ export async function getTransactionsByContact(
     SELECT DISTINCT
       t.id,
       t.property_address,
-      t.closing_date,
+      t.closing_deadline,
       t.transaction_type,
       t.status,
       tc.specific_role,
@@ -354,7 +354,7 @@ export async function getTransactionsByContact(
   const junctionResults = dbAll<{
     id: string;
     property_address: string;
-    closing_date?: string | null;
+    closing_deadline?: string | null;
     transaction_type?: string | null;
     status: string;
     specific_role?: string;
@@ -367,7 +367,7 @@ export async function getTransactionsByContact(
       transactionMap.set(txn.id, {
         id: txn.id,
         property_address: txn.property_address,
-        closing_date: txn.closing_date,
+        closing_deadline: txn.closing_deadline,
         transaction_type: txn.transaction_type,
         status: txn.status,
         roles: [role],
@@ -383,7 +383,7 @@ export async function getTransactionsByContact(
       SELECT DISTINCT
         t.id,
         t.property_address,
-        t.closing_date,
+        t.closing_deadline,
         t.transaction_type,
         t.status
       FROM transactions t, json_each(t.other_contacts) j
@@ -393,7 +393,7 @@ export async function getTransactionsByContact(
     const jsonResults = dbAll<{
       id: string;
       property_address: string;
-      closing_date?: string | null;
+      closing_deadline?: string | null;
       transaction_type?: string | null;
       status: string;
     }>(jsonQuery, [contactId]);
@@ -403,7 +403,7 @@ export async function getTransactionsByContact(
         transactionMap.set(txn.id, {
           id: txn.id,
           property_address: txn.property_address,
-          closing_date: txn.closing_date,
+          closing_deadline: txn.closing_deadline,
           transaction_type: txn.transaction_type,
           status: txn.status,
           roles: ["Other Contact"],
@@ -420,7 +420,7 @@ export async function getTransactionsByContact(
     );
     // Fallback implementation using LIKE
     const fallbackQuery = `
-      SELECT id, property_address, closing_date, transaction_type, status, other_contacts
+      SELECT id, property_address, closing_deadline, transaction_type, status, other_contacts
       FROM transactions
       WHERE other_contacts LIKE ?
     `;
@@ -428,7 +428,7 @@ export async function getTransactionsByContact(
     const fallbackResults = dbAll<{
       id: string;
       property_address: string;
-      closing_date?: string | null;
+      closing_deadline?: string | null;
       transaction_type?: string | null;
       status: string;
       other_contacts?: string;
@@ -442,7 +442,7 @@ export async function getTransactionsByContact(
             transactionMap.set(txn.id, {
               id: txn.id,
               property_address: txn.property_address,
-              closing_date: txn.closing_date,
+              closing_deadline: txn.closing_deadline,
               transaction_type: txn.transaction_type,
               status: txn.status,
               roles: ["Other Contact"],
