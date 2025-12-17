@@ -1150,6 +1150,94 @@ class DatabaseService implements IDatabaseService {
         );
       }
 
+      // Migration 8: Normalize transaction status values
+      // This ensures all status values conform to the canonical set: 'active', 'closed', 'archived'
+      // Legacy values are normalized to prevent CHECK constraint violations
+      await logService.debug(
+        "Running Migration 8: Normalize transaction status values",
+        "DatabaseService",
+      );
+
+      // Count legacy status values before migration
+      const legacyStatusCounts = this._all<{ status: string | null; count: number }>(
+        `SELECT status, COUNT(*) as count FROM transactions
+         WHERE status NOT IN ('active', 'closed', 'archived') OR status IS NULL
+         GROUP BY status`
+      );
+
+      if (legacyStatusCounts.length > 0) {
+        await logService.info(
+          "Found legacy transaction status values to normalize",
+          "DatabaseService",
+          { legacyStatuses: legacyStatusCounts }
+        );
+
+        // Normalize 'completed' -> 'closed'
+        const completedResult = this._run(
+          `UPDATE transactions SET status = 'closed' WHERE status = 'completed'`
+        );
+        if (completedResult.changes > 0) {
+          await logService.debug(
+            `Normalized ${completedResult.changes} 'completed' status values to 'closed'`,
+            "DatabaseService"
+          );
+        }
+
+        // Normalize 'pending' -> 'active'
+        const pendingResult = this._run(
+          `UPDATE transactions SET status = 'active' WHERE status = 'pending'`
+        );
+        if (pendingResult.changes > 0) {
+          await logService.debug(
+            `Normalized ${pendingResult.changes} 'pending' status values to 'active'`,
+            "DatabaseService"
+          );
+        }
+
+        // Normalize 'open' -> 'active'
+        const openResult = this._run(
+          `UPDATE transactions SET status = 'active' WHERE status = 'open'`
+        );
+        if (openResult.changes > 0) {
+          await logService.debug(
+            `Normalized ${openResult.changes} 'open' status values to 'active'`,
+            "DatabaseService"
+          );
+        }
+
+        // Normalize null or empty -> 'active'
+        const nullResult = this._run(
+          `UPDATE transactions SET status = 'active' WHERE status IS NULL OR status = ''`
+        );
+        if (nullResult.changes > 0) {
+          await logService.debug(
+            `Normalized ${nullResult.changes} null/empty status values to 'active'`,
+            "DatabaseService"
+          );
+        }
+
+        // Normalize 'cancelled' -> 'archived'
+        const cancelledResult = this._run(
+          `UPDATE transactions SET status = 'archived' WHERE status = 'cancelled'`
+        );
+        if (cancelledResult.changes > 0) {
+          await logService.debug(
+            `Normalized ${cancelledResult.changes} 'cancelled' status values to 'archived'`,
+            "DatabaseService"
+          );
+        }
+
+        await logService.info(
+          "Transaction status normalization complete",
+          "DatabaseService"
+        );
+      } else {
+        await logService.debug(
+          "No legacy transaction status values found - all values already normalized",
+          "DatabaseService"
+        );
+      }
+
       await logService.info(
         "All database migrations completed successfully",
         "DatabaseService",

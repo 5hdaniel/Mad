@@ -9,10 +9,55 @@ import type {
   NewTransaction,
   TransactionFilters,
   TransactionWithContacts,
+  TransactionStatus,
 } from "../../types";
 import { DatabaseError } from "../../types";
 import { dbGet, dbAll, dbRun } from "./core/dbConnection";
 import { getTransactionContactsWithRoles } from "./transactionContactDbService";
+
+/**
+ * Valid transaction status values.
+ * These are the only values allowed in the database.
+ */
+export const VALID_TRANSACTION_STATUSES: readonly TransactionStatus[] = [
+  "active",
+  "closed",
+  "archived",
+] as const;
+
+/**
+ * Validate and return a transaction status value.
+ *
+ * @param status - The status value to validate (can be null/undefined for default)
+ * @returns A valid TransactionStatus value
+ * @throws DatabaseError if the status is invalid (not null/undefined and not a valid value)
+ *
+ * @example
+ * validateTransactionStatus('active') // returns 'active'
+ * validateTransactionStatus(undefined) // returns 'active' (default)
+ * validateTransactionStatus('pending') // throws DatabaseError
+ */
+export function validateTransactionStatus(
+  status: unknown
+): TransactionStatus {
+  // Handle null/undefined - default to 'active'
+  if (status === null || status === undefined || status === "") {
+    return "active";
+  }
+
+  // Validate the status is one of the allowed values
+  if (
+    typeof status === "string" &&
+    VALID_TRANSACTION_STATUSES.includes(status as TransactionStatus)
+  ) {
+    return status as TransactionStatus;
+  }
+
+  // Reject invalid values with a clear error message
+  throw new DatabaseError(
+    `Invalid transaction status: "${status}". Valid values are: ${VALID_TRANSACTION_STATUSES.join(", ")}`
+  );
+}
 
 /**
  * Create a new transaction
@@ -30,6 +75,10 @@ export async function createTransaction(
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
+  // Validate status - reject invalid values, use 'active' as default for null/undefined
+  // Note: Legacy transaction_status field is no longer supported in write paths
+  const validatedStatus = validateTransactionStatus(transactionData.status);
+
   const params = [
     id,
     transactionData.user_id,
@@ -42,17 +91,7 @@ export async function createTransaction(
       ? JSON.stringify(transactionData.property_coordinates)
       : null,
     transactionData.transaction_type || null,
-    // Map legacy status values to valid schema values
-    (() => {
-      const rawStatus =
-        transactionData.transaction_status ||
-        transactionData.status ||
-        "active";
-      if (rawStatus === "completed") return "closed";
-      if (rawStatus === "pending") return "active";
-      if (["active", "closed", "archived"].includes(rawStatus)) return rawStatus;
-      return "active";
-    })(),
+    validatedStatus,
     transactionData.closing_date || transactionData.closing_deadline || null,
   ];
 
@@ -277,6 +316,11 @@ export async function updateTransaction(
     "failed_offers_count",
     "key_dates",
   ];
+
+  // Validate status if it's being updated
+  if (updates.status !== undefined) {
+    validateTransactionStatus(updates.status);
+  }
 
   const fields: string[] = [];
   const values: unknown[] = [];
