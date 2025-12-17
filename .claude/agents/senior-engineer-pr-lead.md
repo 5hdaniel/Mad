@@ -262,24 +262,40 @@ For PRs related to sprint tasks (TASK-XXX), follow this protocol:
 
 **BLOCKING REQUIREMENT**: Before starting your review, verify the Engineer has completed the full workflow:
 
+**Check Plan-First Protocol (MANDATORY):**
+- [ ] Plan-First Protocol checkboxes are checked (not empty)
+- [ ] Planning (Plan) row has actual numbers (not "X" placeholders)
+- [ ] Plan metrics are reasonable for task complexity
+- [ ] Planning Notes field is filled in (if revisions occurred, document them)
+
 **Check the PR Description:**
 - [ ] Engineer Metrics section is present and complete
 - [ ] Start/End Time documented
+- [ ] Planning turns/tokens/time filled in (REQUIRED)
 - [ ] Implementation turns/tokens/time filled in
 - [ ] Debugging/CI Fixes turns/tokens/time filled in (or 0)
+- [ ] Estimated vs Actual comparison included
 
 **Check the Task File:**
 - [ ] Implementation Summary section is complete
 - [ ] Engineer Checklist items are checked
 - [ ] Results section filled in (before/after/actual metrics)
+- [ ] Plan-First Protocol section completed
 
-**If any are missing, BLOCK the PR with:**
+**If Plan-First Protocol is missing, BLOCK immediately with:**
+> "BLOCKED: Plan-First Protocol not followed. This is a workflow violation.
+> - [ ] Plan agent must be invoked (even retroactively)
+> - [ ] Plan metrics must be recorded
+> - [ ] Document as DEVIATION if plan was created post-implementation
+> See `.claude/agents/engineer.md` for the Plan-First Protocol requirements."
+
+**If other items are missing, BLOCK the PR with:**
 > "BLOCKED: Engineer workflow incomplete. Please complete the following before I can review:
 > - [ ] Add Engineer Metrics to PR description
 > - [ ] Complete Implementation Summary in task file
 > See `.claude/docs/ENGINEER-WORKFLOW.md` for the required checklist."
 
-**Do NOT proceed with code review until the checklist is complete.**
+**Do NOT proceed with code review until ALL checklist items are complete.**
 
 #### 2. Track Your Own Metrics
 
