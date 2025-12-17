@@ -449,6 +449,22 @@ export interface Transaction {
   created_at: Date | string;
   updated_at: Date | string;
 
+  // ========== AI Detection Fields (Migration 11) ==========
+  /** How the transaction was created: manual, auto-detected, or hybrid */
+  detection_source?: 'manual' | 'auto' | 'hybrid';
+  /** User review status of detected transaction */
+  detection_status?: 'pending' | 'confirmed' | 'rejected';
+  /** Confidence score from detection (0.0 - 1.0) */
+  detection_confidence?: number;
+  /** Which algorithm detected it: 'pattern' | 'llm' | 'hybrid' */
+  detection_method?: string;
+  /** JSON array of suggested contact assignments */
+  suggested_contacts?: string;
+  /** When user reviewed the detected transaction */
+  reviewed_at?: Date | string;
+  /** Why user rejected (if detection_status='rejected') */
+  rejection_reason?: string;
+
   // ========== Legacy Fields (backwards compatibility) ==========
   /** @deprecated Use status instead */
   transaction_status?: string;
