@@ -283,11 +283,36 @@ Please review PR #XXX for merge readiness.
 Please verify, add SR metrics, approve and merge.
 ```
 
+## Workflow Violations
+
+**These are BLOCKING violations that will result in PR rejection:**
+
+| Violation | Detection | Consequence |
+|-----------|-----------|-------------|
+| Skipping Plan-First Protocol | CI check + SR Review | PR blocked until plan metrics added |
+| Missing Engineer Metrics | CI validation | PR automatically blocked by CI |
+| Placeholder metrics ("X" values) | SR Engineer review | PR rejected |
+| Missing Implementation Summary | SR Engineer review | PR rejected |
+| Starting implementation without plan | Session audit | Work must restart with plan |
+
+**If you realize you skipped the Plan-First Protocol:**
+1. STOP implementation immediately
+2. Invoke Plan agent to create a plan (even retroactively)
+3. Document this as a deviation in your Implementation Summary
+4. Note "DEVIATION: Plan created post-implementation" in PR
+
+**Reporting Violations:**
+If you encounter blockers that prevent following the workflow:
+1. Document the blocker in your task progress
+2. Notify PM immediately
+3. Do NOT proceed past the blocker without PM approval
+
 ## What You Must NEVER Do
 
 | Never | Why |
 |-------|-----|
 | Skip branch creation | Tracking and rollback impossible |
+| Skip Plan-First Protocol | Workflow violation, PR will be blocked |
 | Create PR without metrics | SR Engineer will block it |
 | Create PR with failing CI | Wastes SR Engineer time |
 | Self-assign next task | PM determines priorities |

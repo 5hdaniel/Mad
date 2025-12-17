@@ -296,8 +296,69 @@ Copy this to your task file or notes:
 
 ---
 
+## Enforcement Mechanisms
+
+This workflow is **technically enforced** through multiple mechanisms:
+
+### 1. CI Validation (Automated)
+
+The `pr-metrics-check.yml` workflow automatically validates PRs:
+
+| Check | Validation | Failure Action |
+|-------|------------|----------------|
+| Engineer Metrics section | Must be present | PR blocked |
+| Plan-First Protocol section | Must be present | PR blocked |
+| Metrics table structure | Must have correct format | PR blocked |
+| Planning (Plan) row | Must exist | PR blocked |
+| Estimated vs Actual | Must be present | PR blocked |
+
+**Bypassing CI (emergency only):**
+- Add `[skip-metrics]` to PR title
+- Dependabot PRs are automatically exempt
+- **WARNING:** Manual bypasses are logged and reviewed
+
+### 2. SR Engineer Verification (Manual)
+
+The SR Engineer performs additional verification beyond CI:
+
+- **Plan-First Protocol checkboxes** - Must be checked, not empty
+- **Metrics values** - Must be real numbers, not "X" placeholders
+- **Planning Notes** - Must document any plan revisions
+- **Implementation Summary** - Must be complete in task file
+
+### 3. Workflow Violations
+
+| Violation | Detection Method | Consequence |
+|-----------|------------------|-------------|
+| Missing Engineer Metrics | CI automation | PR auto-blocked |
+| Missing Plan-First Protocol | CI automation | PR auto-blocked |
+| Placeholder metrics ("X") | SR Engineer review | PR rejected |
+| Skipped planning phase | SR Engineer review | PR rejected, must retroactively plan |
+| Incomplete Implementation Summary | SR Engineer review | PR rejected |
+
+### 4. Violation Recovery
+
+If you violate the workflow:
+
+1. **Skipped Plan-First Protocol:**
+   - Invoke Plan agent retroactively
+   - Document as "DEVIATION: Plan created post-implementation"
+   - Include retroactive plan metrics
+
+2. **Missing Metrics:**
+   - Calculate from your session history
+   - Document estimation method in notes
+
+3. **CI Blocking PR:**
+   - Update PR description with required sections
+   - Push any additional commits
+   - Wait for CI to re-run
+
+---
+
 ## Questions?
 
 - **Workflow issues:** Ask PM
 - **Technical blockers:** Ask SR Engineer
 - **Task clarification:** Ask PM before starting
+- **Enforcement questions:** See `.claude/agents/engineer.md` for details
