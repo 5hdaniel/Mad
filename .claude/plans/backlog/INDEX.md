@@ -33,7 +33,8 @@ This index tracks all backlog items with their current status and metadata.
 
 ### By Sprint Assignment
 - **SPRINT-001 (Onboarding Refactor):** ✅ Completed
-- **SPRINT-002 (Tech Debt):** BACKLOG-058, 059, 060
+- **SPRINT-002 (Tech Debt):** ✅ Completed (BACKLOG-058, 059, 060)
+- **SPRINT-003 (Process & Data Integrity):** BACKLOG-072, 038, 039, 035
 - **Unassigned:** All others
 
 ---
@@ -76,11 +77,11 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-032 | Handle Backup Already in Progress | Critical | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-033 | Check Supabase Terms Acceptance | High | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-034 | Phone Type Card Layout | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
-| BACKLOG-035 | Remove Orphaned Table | Critical | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| BACKLOG-035 | Remove Orphaned Table | Critical | Pending | SPRINT-003 | 5-8 | 20-30K | ~30m | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-036 | Fix Sync Phase UI Text | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-037 | Don't Fail Sync on Disconnect | High | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
-| BACKLOG-038 | Schema Mismatch contacts.name | Critical | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
-| BACKLOG-039 | Schema Mismatch transactions.status | Critical | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| BACKLOG-038 | Schema Mismatch contacts.name | Critical | Pending | SPRINT-003 | 10-15 | 40-60K | ~1.5h | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| BACKLOG-039 | Schema Mismatch transactions.status | Critical | Pending | SPRINT-003 | 10-15 | 40-60K | ~1.5h | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-040 | ContactsService macOS Paths | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-041 | Create UX Engineer Agent | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-042 | Lookback Period Not Persistent | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
@@ -113,7 +114,7 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-069 | Telemetry & Analytics | Low | Deferred | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-070 | Enterprise User Management | Low | Deferred | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-071 | Atomic Transaction Creation | Low | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
-| BACKLOG-072 | Enforce Engineer Workflow Compliance | Critical | Pending | - | 23-35 | 90-140K | ~3h | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-072.md](BACKLOG-072.md) |
+| BACKLOG-072 | Enforce Engineer Workflow Compliance | Critical | Pending | SPRINT-003 | 23-35 | 90-140K | ~3h | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-072.md](BACKLOG-072.md) |
 
 ---
 
@@ -136,6 +137,7 @@ This index tracks all backlog items with their current status and metadata.
 |-----------|------|--------|-----------------|
 | SPRINT-001 | Onboarding Refactor | ✅ Completed | TASK-101 to TASK-116 |
 | SPRINT-002 | Tech Debt | ✅ Completed | BACKLOG-058, 059, 060 + 3 bonus fixes |
+| SPRINT-003 | Process & Data Integrity | 🔄 Active | BACKLOG-072, 038, 039, 035 |
 
 ---
 
@@ -147,3 +149,4 @@ This index tracks all backlog items with their current status and metadata.
 - 2025-12-16: Added sprint review document (SPRINT-002-tech-debt-review.md)
 - 2025-12-16: PRs merged: #134 (tests), #135 (email bugs), #136 (Windows login), #137 (db split), #138 (native modules)
 - 2025-12-16: Added BACKLOG-072 (Workflow Enforcement) - Critical priority from SPRINT-002 audit
+- 2025-12-16: Created SPRINT-003 (Process & Data Integrity) - assigned BACKLOG-072, 038, 039, 035
