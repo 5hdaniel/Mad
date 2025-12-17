@@ -180,7 +180,8 @@ export interface Contact {
   user_id: string;
 
   // Display Info
-  display_name?: string; // Optional for backwards compat - use name as fallback
+  /** Primary field for contact name. Migration ensures this is always populated. */
+  display_name?: string;
   company?: string;
   title?: string;
 
@@ -199,7 +200,7 @@ export interface Contact {
   updated_at: Date | string;
 
   // ========== Legacy Fields (backwards compatibility) ==========
-  /** @deprecated Use display_name instead */
+  /** @deprecated Read-only. Use display_name for all writes. */
   name?: string;
   /** @deprecated Use ContactEmail child table instead */
   email?: string;

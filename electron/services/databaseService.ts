@@ -1238,6 +1238,40 @@ class DatabaseService implements IDatabaseService {
         );
       }
 
+      // Migration 9: Normalize contacts display_name
+      // Ensures all contacts have display_name populated (TASK-202)
+      await logService.debug(
+        "Running Migration 9: Normalize contacts display_name",
+        "DatabaseService",
+      );
+
+      const nullDisplayNames = this._get<{ count: number }>(
+        `SELECT COUNT(*) as count FROM contacts WHERE display_name IS NULL OR display_name = ''`
+      );
+
+      if (nullDisplayNames && nullDisplayNames.count > 0) {
+        // Copy name -> display_name where display_name is null/empty
+        const copyResult = this._run(`
+          UPDATE contacts
+          SET display_name = name
+          WHERE (display_name IS NULL OR display_name = '')
+            AND name IS NOT NULL
+            AND name != ''
+        `);
+
+        // Set default for any remaining nulls
+        const defaultResult = this._run(`
+          UPDATE contacts
+          SET display_name = 'Unknown'
+          WHERE display_name IS NULL OR display_name = ''
+        `);
+
+        await logService.info(
+          `Normalized ${copyResult.changes + defaultResult.changes} contacts display_name values`,
+          "DatabaseService"
+        );
+      }
+
       await logService.info(
         "All database migrations completed successfully",
         "DatabaseService",
