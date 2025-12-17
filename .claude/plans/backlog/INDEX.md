@@ -158,6 +158,9 @@ This index tracks all backlog items with their current status and metadata.
 | SPRINT-001 | Onboarding Refactor | ✅ Completed | TASK-101 to TASK-116 |
 | SPRINT-002 | Tech Debt | ✅ Completed | BACKLOG-058, 059, 060 + 3 bonus fixes |
 | SPRINT-003 | Process & Data Integrity | 🔄 Active | BACKLOG-072, 038, 039, 035 |
+| SPRINT-004 | AI MVP Foundation | 📋 Planned | BACKLOG-073, 074 (14 tasks) |
+| SPRINT-005 | AI MVP Core | 📋 Planned | BACKLOG-075, 076 |
+| SPRINT-006 | AI MVP Polish | 📋 Planned | BACKLOG-077, 078, 079 |
 
 ---
 
@@ -174,3 +177,4 @@ This index tracks all backlog items with their current status and metadata.
 - 2025-12-16: Marked BACKLOG-066 as Obsolete (covered by AI MVP project)
 - 2025-12-16: SR Engineer + PM reviewed AI MVP plan - 40% schema reduction due to existing implementations
 - 2025-12-16: Planned SPRINT-004 (AI Foundation), SPRINT-005 (AI Core), SPRINT-006 (AI Polish)
+- 2025-12-16: Created SPRINT-004 plan and 14 task files (TASK-301 to TASK-314) for BACKLOG-073, BACKLOG-074
