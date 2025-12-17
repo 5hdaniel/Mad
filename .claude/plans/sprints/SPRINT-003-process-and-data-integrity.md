@@ -2,7 +2,8 @@
 
 **Status:** 🔄 Active
 **Created:** 2025-12-16
-**PM Decision:** Agentic PM
+**PM Agent:** Claude (acting as Agentic PM via skill invocation)
+**PM Session:** Inline (not separate agent - workflow violation noted)
 
 ---
 
@@ -185,6 +186,13 @@ Within the recommended 50-80 turn budget for moderate complexity sprints.
 2. **Schema fixes are blocking** - BACKLOG-044 and 045 depend on these
 3. **Orphaned table last** - Low risk quick win after schema verified
 4. **First sprint with enforcement** - Expect some friction, document learnings
+
+## Workflow Violation Log
+
+| Violation | Description | Remediation |
+|-----------|-------------|-------------|
+| PM not separate agent | PM work done inline, not via Task tool with PM agent | Add to BACKLOG-072: PM must use dedicated agent invocation |
+| No PM metrics | PM turns/tokens not tracked separately | Future sprints must track PM effort |
 
 ---
 
