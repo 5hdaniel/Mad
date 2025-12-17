@@ -40,7 +40,7 @@ export async function createContact(contactData: NewContact): Promise<Contact> {
   const params = [
     id,
     contactData.user_id,
-    contactData.display_name || contactData.name || "Unknown",
+    contactData.display_name || "Unknown",
     contactData.company || null,
     contactData.title || null,
     contactData.source || "manual",
