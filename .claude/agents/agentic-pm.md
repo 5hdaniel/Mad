@@ -64,22 +64,57 @@ Your full implementation details are in: **`.claude/skills/agentic-pm/SKILL.md`*
 ## Your Role in the Workflow
 
 ```
-PM (You)              Engineer              SR Engineer
+PM (You)              SR Engineer            Engineer
     │                     │                     │
-    ├─► Assign Task ─────►│                     │
-    │   (with estimates)  │                     │
-    │                     ├─► Implement         │
-    │                     ├─► Create PR         │
-    │                     ├─► Add Eng Metrics   │
-    │                     └─► Request SR ──────►│
-    │                                           ├─► Review
-    │                                           ├─► Add SR Metrics
-    │                                           ├─► Merge
-    │◄─────────────────── Notify PM ◄───────────┘
+    ├─► Create Sprint ───►│                     │
+    │   & Task Files      │                     │
+    │                     ├─► Technical Review  │
+    │                     │   (parallel/seq,    │
+    │                     │    dependencies,    │
+    │                     │    shared files)    │
+    │◄── Reviewed Tasks ◄─┘                     │
+    │                                           │
+    ├─► Update Sprint                           │
+    │   (dependency graph,                      │
+    │    execution order)                       │
+    │                                           │
+    ├─► Assign Task(s) ────────────────────────►│
+    │   (sequential or parallel)                │
+    │                                           ├─► Implement
+    │                                           ├─► Create PR
+    │                                           └─► Request SR ──►│
+    │                                                             ├─► PR Review
+    │                                                             ├─► Merge
+    │◄─────────────────────── Notify PM ◄─────────────────────────┘
     │
     ├─► Record Metrics in INDEX.md
-    └─► Assign Next Task
+    └─► Assign Next Task(s)
 ```
+
+### Sprint Planning Phases
+
+**Phase 1: PM Creates Sprint & Tasks**
+- Create sprint plan with goals and scope
+- Create individual task files with requirements
+- Add initial effort estimates
+
+**Phase 2: SR Engineer Technical Review**
+- SR Engineer reviews ALL task files before implementation
+- Identifies shared file dependencies
+- Recommends parallel vs sequential execution
+- Adds technical considerations to task files
+- Returns reviewed tasks to PM
+
+**Phase 3: PM Finalizes Sprint**
+- Update sprint with dependency graph
+- Group tasks by execution order (parallel batches)
+- Refine estimates based on SR feedback
+- Commit planning docs to develop (or project branch)
+
+**Phase 4: Execution**
+- Assign tasks following the dependency graph
+- Parallel tasks can be assigned simultaneously
+- Sequential tasks wait for dependencies to merge
 
 ## Primary Responsibilities
 
@@ -139,8 +174,12 @@ When assigning tasks to engineers:
 
 **Title:** [title]
 **Sprint:** SPRINT-XXX
-**Branch:** fix/task-XXX-description (or feature/, claude/)
-**Target:** develop
+**Execution:** Sequential | Parallel (set by SR Engineer)
+
+### Branch Information (Set by SR Engineer during Technical Review)
+**Branch From:** [SR specifies: develop, project/xxx, or feature/xxx]
+**Branch Into:** [SR specifies: develop, project/xxx, or feature/xxx]
+**Branch Name:** fix/task-XXX-description (or feature/, claude/)
 
 **Estimated:**
 - Turns: X-Y
@@ -154,11 +193,116 @@ Read the task file: `.claude/plans/tasks/TASK-XXX.md`
 2. Track start time and turns
 3. Implement solution
 4. Complete task file Implementation Summary
-5. Create PR with Engineer Metrics
+5. Create PR with Engineer Metrics (or push branch for parallel batch review)
 6. Wait for CI to pass
 7. Request SR Engineer review
 
 **Full workflow:** `.claude/docs/ENGINEER-WORKFLOW.md`
+```
+
+## Parallel vs Sequential Execution
+
+### When to Run Tasks in Parallel
+
+**Safe for Parallel:**
+| Scenario | Why Safe |
+|----------|----------|
+| Different services, no shared files | No merge conflicts |
+| UI components in different features | Isolated code paths |
+| Independent API endpoints | No shared logic |
+| Documentation updates | No code dependencies |
+
+**Must Be Sequential:**
+| Scenario | Why Sequential |
+|----------|----------------|
+| Database schema changes | Shared databaseService.ts, migration numbering |
+| Shared utility modifications | Multiple tasks depend on same code |
+| Core type changes | Affects multiple consumers |
+| Same service modifications | Merge conflicts guaranteed |
+
+### How to Execute Parallel Tasks (Claude Web)
+
+For approved parallel tasks, use **separate Claude Web sessions** (each runs in its own container):
+
+**Step 1: PM prepares task assignments (after SR Technical Review)**
+
+Each task file must include branch info from SR Engineer review:
+```markdown
+**Branch From:** [from SR review - develop, project/xxx, etc.]
+**Branch Into:** [from SR review - develop, project/xxx, etc.]
+**Branch Name:** fix/task-XXX-description
+```
+
+**Step 2: Launch parallel Claude Web sessions**
+
+Give each session a prompt like:
+```
+You are an Engineer agent. Your task file is:
+.claude/plans/tasks/TASK-XXX.md
+
+Follow the Engineer Workflow in .claude/docs/ENGINEER-WORKFLOW.md
+
+When complete:
+1. Update the Implementation Summary in the task file
+2. Push your branch (branch name in task file)
+3. Do NOT create PR - SR Engineer will review all branches together
+```
+
+**Step 3: SR Engineer batch review**
+
+When all engineers report completion:
+1. Check out each branch listed in task summaries
+2. Review changes and run tests
+3. Create PRs for approved branches
+4. Merge in dependency order
+
+**Why this works:**
+- Each Claude Web session has isolated filesystem
+- No shared uncommitted changes
+- Branches don't conflict until merge (handled by SR)
+
+### Project Branches for Multi-Sprint Work
+
+For related work spanning multiple sprints (e.g., "AI Integration" with 3 sprints):
+
+```bash
+# Create project branch
+git checkout develop
+git checkout -b project/ai-integration
+
+# Sprint work branches off project branch
+git checkout project/ai-integration
+git checkout -b feature/ai-sprint-1-task-xxx
+
+# Merge sprint work to project branch first
+# Then merge project branch to develop when milestone complete
+```
+
+**Benefits:**
+- Isolates large features from mainline development
+- Allows multiple sprints to build on each other
+- Single integration point to develop when ready
+
+### Requesting SR Technical Review
+
+Before assigning tasks, request SR Engineer review:
+
+```markdown
+## Technical Review Request: SPRINT-XXX
+
+**Sprint:** SPRINT-XXX - [name]
+**Tasks:** TASK-XXX, TASK-YYY, TASK-ZZZ
+
+### Review Needed
+1. Identify shared file dependencies across tasks
+2. Recommend parallel vs sequential execution
+3. Add technical considerations to each task file
+4. Flag any architectural concerns
+
+### Task Files
+- `.claude/plans/tasks/TASK-XXX.md`
+- `.claude/plans/tasks/TASK-YYY.md`
+- `.claude/plans/tasks/TASK-ZZZ.md`
 ```
 
 ## Guardrails: Stop-and-Ask Triggers
@@ -169,6 +313,7 @@ Stop and ask the user if:
 - Contract ownership unclear (APIs/schemas shared across tasks)
 - Parallelization requested for conflicting tasks
 - Testing requirements unclear
+- SR Technical Review not completed before task assignment
 
 ## Quality Enforcement
 

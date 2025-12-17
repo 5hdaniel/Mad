@@ -247,6 +247,63 @@ The SR Engineer will:
 
 ---
 
+## Parallel Task Execution
+
+Sometimes PM will assign multiple tasks to run in parallel. This is only safe when SR Engineer has reviewed and approved parallel execution.
+
+### When You're Assigned Parallel Tasks
+
+**You will be told explicitly:**
+```
+Parallel Assignment: TASK-XXX and TASK-YYY
+These tasks are approved for parallel execution.
+Create separate branches for each.
+```
+
+**Rules for parallel work:**
+1. Each task gets its own branch (from develop)
+2. Do NOT modify files that aren't listed in your task
+3. If you discover shared file needs, STOP and notify PM
+4. Submit PRs independently - don't wait for the other task
+
+### When Parallel Goes Wrong
+
+**Warning signs:**
+- You need to modify a file not in your task scope
+- Git shows conflicts when you pull develop
+- Another task's PR merged changes you depend on
+
+**If this happens:**
+1. STOP work immediately
+2. Notify PM: "Parallel conflict detected"
+3. Wait for PM/SR guidance on resolution
+
+### Why Same-Session Parallel Can Fail
+
+When two agents run in the **same Claude Code session**, they share:
+- The same working directory
+- The same uncommitted file state
+
+**What happens:**
+1. Agent A writes to `databaseService.ts` (uncommitted)
+2. Agent B reads `databaseService.ts` - sees A's uncommitted changes
+3. Agent B tries to edit - conflicts with A's version
+4. Both agents re-read/re-write in a loop, burning tokens
+
+**This is NOT a git branch problem** - branches only matter at commit/merge time.
+
+**Safe parallel requires:**
+- Separate working directories (different terminal sessions)
+- OR truly isolated files (no overlap)
+- OR sequential execution with commits between tasks
+
+### Token Burn Early Warning
+
+If a parallel task exceeds **2x estimated tokens** in first 10% of work:
+- This may indicate agent conflict (shared file loop)
+- Notify PM immediately
+- Do not continue burning tokens hoping it resolves
+
 ## What NOT To Do
 
 | Don't | Why |
@@ -256,6 +313,8 @@ The SR Engineer will:
 | Create PR without metrics | SR Engineer will block it |
 | Merge your own PR | Only SR Engineer merges |
 | Start next task without PM | PM assigns based on priorities |
+| Modify files outside task scope | Can cause parallel conflicts |
+| Continue when tokens exceed 2x estimate | Early warning of problems |
 
 ---
 
