@@ -57,6 +57,77 @@ Before starting sprint work, engineers must:
 
 **Total Estimated:** 50 turns (~4h)
 
+---
+
+## SR Technical Review (Pre-Implementation)
+
+**REQUIRED before any implementation begins.**
+
+SR Engineer must review all task files and add SR Engineer Review Notes to each:
+
+### Review Request
+
+```
+Tasks to review: TASK-301 through TASK-314
+Task files: .claude/plans/tasks/TASK-3XX.md
+```
+
+### SR Engineer Actions
+
+For each task, add the following section to the task file:
+
+```markdown
+## SR Engineer Review Notes
+
+**Review Date:** YYYY-MM-DD | **Status:** APPROVED / NEEDS CHANGES
+
+### Branch Information (SR Engineer decides)
+- **Branch From:** int/schema-foundation | int/llm-infrastructure | develop
+- **Branch Into:** int/schema-foundation | int/llm-infrastructure
+- **Suggested Branch Name:** feature/TASK-XXX-slug
+
+### Execution Classification
+- **Parallel Safe:** Yes/No
+- **Depends On:** TASK-XXX (if sequential)
+- **Blocks:** TASK-YYY (if others depend on this)
+
+### Shared File Analysis
+- Files modified: [list from task file]
+- Conflicts with: [other tasks if any]
+
+### Technical Considerations
+- [Any architectural notes]
+- [Migration ordering if applicable]
+```
+
+### Expected Classifications
+
+| Task | Expected Classification | Branch From | Branch Into |
+|------|------------------------|-------------|-------------|
+| TASK-301 | Parallel (Phase 1) | develop | int/schema-foundation |
+| TASK-302 | Parallel (Phase 1) | develop | int/schema-foundation |
+| TASK-303 | Parallel (Phase 1) | develop | int/schema-foundation |
+| TASK-304 | Parallel (Phase 1) | develop | int/schema-foundation |
+| TASK-305 | Sequential (after 301-304) | int/schema-foundation | int/schema-foundation |
+| TASK-306 | Sequential (Phase 2 start) | int/schema-foundation | int/llm-infrastructure |
+| TASK-307 | Sequential (after 306) | int/llm-infrastructure | int/llm-infrastructure |
+| TASK-308 | Sequential (after 307) | int/llm-infrastructure | int/llm-infrastructure |
+| TASK-309 | Parallel (after 308) | int/llm-infrastructure | int/llm-infrastructure |
+| TASK-310 | Parallel (after 308) | int/llm-infrastructure | int/llm-infrastructure |
+| TASK-311 | Sequential (after 309,310) | int/llm-infrastructure | int/llm-infrastructure |
+| TASK-312 | Sequential (after 311) | int/llm-infrastructure | int/llm-infrastructure |
+| TASK-313 | Parallel (after 306) | int/llm-infrastructure | int/llm-infrastructure |
+| TASK-314 | Parallel (after 306) | int/llm-infrastructure | int/llm-infrastructure |
+
+### Parallel Execution via Claude Web
+
+For parallel tasks (301-304, 309-310, 313-314), use separate Claude Web sessions:
+- Each session gets one task file reference
+- Each session runs in isolated container
+- SR Engineer batch reviews all branches when complete
+
+---
+
 ## Phase Plan
 
 ### Phase 1: Schema Foundation (BACKLOG-073)
