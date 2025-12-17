@@ -1437,6 +1437,20 @@ class DatabaseService implements IDatabaseService {
         );
       }
 
+      // Migration 008: Finalize schema version (TASK-305)
+      // Increment version after all TASK-301, 302, 303 changes are complete
+      const currentSchemaVersion =
+        this._get<{ version: number }>("SELECT version FROM schema_version")
+          ?.version || 0;
+
+      if (currentSchemaVersion < 8) {
+        this._run("UPDATE schema_version SET version = 8");
+        await logService.info(
+          "Migration 008 completed: AI Detection Support schema",
+          "DatabaseService"
+        );
+      }
+
       await logService.info(
         "All database migrations completed successfully",
         "DatabaseService",
