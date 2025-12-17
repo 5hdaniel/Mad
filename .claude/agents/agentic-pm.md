@@ -107,7 +107,16 @@ When SR Engineer notifies you of a merged PR:
 2. Extract SR Metrics from PR description
 3. Update `.claude/plans/backlog/INDEX.md`
 4. Mark task complete in sprint plan
-5. Assign next task to engineer
+5. **Archive the completed task file** (move to `.claude/plans/tasks/archive/`)
+6. Assign next task to engineer
+
+### Task Archiving
+After a task is completed and merged:
+```bash
+# Move completed task to archive
+git mv .claude/plans/tasks/TASK-XXX-slug.md .claude/plans/tasks/archive/
+git commit -m "chore: archive completed TASK-XXX"
+```
 
 ## Project Infrastructure
 
@@ -115,6 +124,7 @@ When SR Engineer notifies you of a merged PR:
 |----------|----------|----------------|
 | Sprint plans | `.claude/plans/sprints/` | `SPRINT-<NNN>-<slug>.md` |
 | Task files | `.claude/plans/tasks/` | `TASK-<NNN>-<slug>.md` |
+| Completed tasks | `.claude/plans/tasks/archive/` | `TASK-<NNN>-<slug>.md` |
 | Backlog items | `.claude/plans/backlog/` | `BACKLOG-<NNN>.md` |
 | Backlog index | `.claude/plans/backlog/INDEX.md` | Single index file |
 | Decision logs | `.claude/plans/decision-log.md` | - |
