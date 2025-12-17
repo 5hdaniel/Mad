@@ -3,8 +3,8 @@
 This index tracks all backlog items with their current status and metadata.
 
 **Last Updated:** 2025-12-16
-**Total Items:** 72
-**Pending:** 66 | **In Progress:** 0 | **Completed:** 6 | **Obsolete:** 1
+**Total Items:** 79
+**Pending:** 72 | **In Progress:** 0 | **Completed:** 6 | **Obsolete:** 2
 
 ---
 
@@ -26,16 +26,29 @@ This index tracks all backlog items with their current status and metadata.
 ## Quick Filters
 
 ### By Priority
-- **Critical:** BACKLOG-030, 032, 035, 038, 039, 044, 045, 058, 059, 072
-- **High:** BACKLOG-008, 009, 013, 016, 018, 020, 021, 023, 026, 031, 033, 037, 056, 060, 061, 062, 063, 066, 067
-- **Medium:** Multiple (see full index)
+- **Critical:** BACKLOG-030, 032, 035, 038, 039, 044, 045, 058, 059, 072, 073, 074
+- **High:** BACKLOG-008, 009, 013, 016, 018, 020, 021, 023, 026, 031, 033, 037, 056, 060, 061, 062, 063, 067, 075, 076
+- **Medium:** Multiple (see full index), 077, 078, 079
 - **Low/Deferred:** BACKLOG-001, 003, 004, 010, 017, 069, 070
 
 ### By Sprint Assignment
 - **SPRINT-001 (Onboarding Refactor):** ✅ Completed
 - **SPRINT-002 (Tech Debt):** ✅ Completed (BACKLOG-058, 059, 060)
 - **SPRINT-003 (Process & Data Integrity):** BACKLOG-072, 038, 039, 035
+- **SPRINT-004 (AI MVP Foundation):** BACKLOG-073, 074 (planned after SPRINT-003)
+- **SPRINT-005 (AI MVP Core):** BACKLOG-075, 076 (planned)
+- **SPRINT-006 (AI MVP Polish):** BACKLOG-077, 078, 079 (planned)
 - **Unassigned:** All others
+
+### AI MVP Project
+- **Phase 0 (Schema):** BACKLOG-073
+- **Phase 1 (LLM Infrastructure):** BACKLOG-074
+- **Phase 2 (AI Analysis Tools):** BACKLOG-075
+- **Phase 3 (Hybrid Pipeline):** BACKLOG-076
+- **Phase 4 (Feedback Loop):** BACKLOG-077
+- **Phase 5 (UI Enhancements):** BACKLOG-078
+- **Phase 6 (Integration Testing):** BACKLOG-079
+- **Note:** BACKLOG-066 (LLM Transaction Detection) is now covered by AI MVP project
 
 ---
 
@@ -108,13 +121,20 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-063 | Refactor useAppStateMachine.ts | High | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-064 | Add Batch DB Operations | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-065 | Remove Console Statements | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
-| BACKLOG-066 | LLM Transaction Detection | High | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| BACKLOG-066 | LLM Transaction Detection | High | Obsolete | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | Covered by AI MVP (BACKLOG-073-079) |
 | BACKLOG-067 | AI Timeline Builder | High | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-068 | Contact Deduplication | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-069 | Telemetry & Analytics | Low | Deferred | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-070 | Enterprise User Management | Low | Deferred | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-071 | Atomic Transaction Creation | Low | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-072 | Enforce Engineer Workflow Compliance | Critical | Pending | SPRINT-003 | 23-35 | 90-140K | ~3h | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-072.md](BACKLOG-072.md) |
+| BACKLOG-073 | AI MVP Phase 0 - Schema Foundation | Critical | Pending | SPRINT-004 | 22 | ~50K | ~1.5h | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-073.md](BACKLOG-073.md) |
+| BACKLOG-074 | AI MVP Phase 1 - LLM Infrastructure | Critical | Pending | SPRINT-004 | 28 | ~70K | ~2h | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-074.md](BACKLOG-074.md) |
+| BACKLOG-075 | AI MVP Phase 2 - AI Analysis Tools | High | Pending | SPRINT-005 | 28 | ~70K | ~2h | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-075.md](BACKLOG-075.md) |
+| BACKLOG-076 | AI MVP Phase 3 - Hybrid Pipeline | High | Pending | SPRINT-005 | 34 | ~85K | ~2.5h | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-076.md](BACKLOG-076.md) |
+| BACKLOG-077 | AI MVP Phase 4 - Feedback Loop | Medium | Pending | SPRINT-006 | 8 | ~25K | ~1h | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-077.md](BACKLOG-077.md) |
+| BACKLOG-078 | AI MVP Phase 5 - UI Enhancements | Medium | Pending | SPRINT-006 | 13 | ~40K | ~1.5h | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-078.md](BACKLOG-078.md) |
+| BACKLOG-079 | AI MVP Phase 6 - Integration Testing | Medium | Pending | SPRINT-006 | 13 | ~40K | ~1.5h | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-079.md](BACKLOG-079.md) |
 
 ---
 
@@ -150,3 +170,7 @@ This index tracks all backlog items with their current status and metadata.
 - 2025-12-16: PRs merged: #134 (tests), #135 (email bugs), #136 (Windows login), #137 (db split), #138 (native modules)
 - 2025-12-16: Added BACKLOG-072 (Workflow Enforcement) - Critical priority from SPRINT-002 audit
 - 2025-12-16: Created SPRINT-003 (Process & Data Integrity) - assigned BACKLOG-072, 038, 039, 035
+- 2025-12-16: Added AI MVP backlog items (BACKLOG-073 through BACKLOG-079) - 7 phases across 3 sprints
+- 2025-12-16: Marked BACKLOG-066 as Obsolete (covered by AI MVP project)
+- 2025-12-16: SR Engineer + PM reviewed AI MVP plan - 40% schema reduction due to existing implementations
+- 2025-12-16: Planned SPRINT-004 (AI Foundation), SPRINT-005 (AI Core), SPRINT-006 (AI Polish)
