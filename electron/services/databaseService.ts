@@ -1303,6 +1303,27 @@ class DatabaseService implements IDatabaseService {
         );
       }
 
+      // Migration 11: Add llm_analysis column to messages (TASK-303)
+      // Part of SPRINT-004 schema migrations - version increment deferred to TASK-305
+      const messagesColumns = this._all<{ name: string }>(
+        `PRAGMA table_info(messages)`
+      );
+      const messageColumnNames = messagesColumns.map((col) => col.name);
+
+      if (!messageColumnNames.includes("llm_analysis")) {
+        await logService.debug(
+          "Running Migration 11: Adding llm_analysis column to messages",
+          "DatabaseService"
+        );
+
+        this._run(`ALTER TABLE messages ADD COLUMN llm_analysis TEXT`);
+
+        await logService.info(
+          "Added llm_analysis column to messages table",
+          "DatabaseService"
+        );
+      }
+
       await logService.info(
         "All database migrations completed successfully",
         "DatabaseService",

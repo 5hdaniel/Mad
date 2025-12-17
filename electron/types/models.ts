@@ -309,6 +309,10 @@ export interface Message {
 
   created_at: Date | string;
 
+  // ========== LLM Analysis (Migration 11) ==========
+  /** Full LLM analysis response stored as JSON string */
+  llm_analysis?: string;
+
   // ========== Legacy Fields (backwards compatibility) ==========
   /** @deprecated Use channel instead */
   communication_type?: string;
@@ -675,6 +679,39 @@ export interface AttachmentFilters {
   message_id?: string;
   document_type?: DocumentType;
   has_text_content?: boolean;
+}
+
+// ============================================
+// LLM ANALYSIS MODELS (Migration 11)
+// ============================================
+
+/**
+ * Typed interface for the JSON content stored in Message.llm_analysis
+ * Parsing happens in the service layer, this interface is for documentation
+ */
+export interface MessageLLMAnalysis {
+  /** Whether the message is related to real estate transactions */
+  isRealEstateRelated: boolean;
+  /** Overall confidence in the analysis (0.0 - 1.0) */
+  confidence: number;
+  /** Transaction indicators extracted from the message */
+  transactionIndicators: {
+    type: 'purchase' | 'sale' | 'lease' | null;
+    stage: 'prospecting' | 'active' | 'pending' | 'closing' | 'closed' | null;
+  };
+  /** Entities extracted from the message */
+  extractedEntities: {
+    addresses: Array<{ value: string; confidence: number }>;
+    amounts: Array<{ value: number; context: string }>;
+    dates: Array<{ value: string; type: string }>;
+    contacts: Array<{ name: string; email?: string; suggestedRole?: string }>;
+  };
+  /** LLM's reasoning for the classification */
+  reasoning: string;
+  /** Model used for analysis */
+  model: string;
+  /** Version of the prompt used */
+  promptVersion: string;
 }
 
 // ============================================
