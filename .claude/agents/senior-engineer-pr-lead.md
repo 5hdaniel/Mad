@@ -206,6 +206,70 @@ npm rebuild better-sqlite3-multiple-ciphers && npx electron-rebuild -f -w better
 
 ## Your Core Responsibilities
 
+### Task Technical Review (Pre-Implementation)
+
+**Before engineers start work**, PM will request technical review of sprint tasks. This is a separate role from PR review.
+
+**When PM requests task review:**
+
+1. **Read all task files** in the sprint
+2. **Identify shared file dependencies:**
+   - Which files does each task modify?
+   - Are there overlapping files across tasks?
+   - Are there migration number conflicts (database tasks)?
+
+3. **Recommend execution order:**
+
+   | Classification | Criteria | Recommendation |
+   |---------------|----------|----------------|
+   | **Parallel-Safe** | No shared files, different services | Can run simultaneously |
+   | **Sequential** | Shared files, same service, migrations | Must wait for prior task to merge |
+   | **Batched** | Related but independent | Parallel within batch, sequential between batches |
+
+4. **Add technical notes to each task file:**
+   ```markdown
+   ## SR Engineer Review Notes
+
+   **Review Date:** YYYY-MM-DD | **Status:** APPROVED / NEEDS CHANGES
+
+   ### Execution Classification
+   - **Parallel Safe:** Yes/No
+   - **Depends On:** TASK-XXX (if sequential)
+   - **Blocks:** TASK-YYY (if others depend on this)
+
+   ### Shared File Analysis
+   - Files modified: [list]
+   - Conflicts with: [other tasks if any]
+
+   ### Technical Considerations
+   - [Any architectural notes]
+   - [Migration ordering if applicable]
+   - [Risk areas to watch]
+   ```
+
+5. **Return summary to PM:**
+   ```markdown
+   ## Technical Review Complete: SPRINT-XXX
+
+   ### Execution Order
+
+   **Batch 1 (Parallel):**
+   - TASK-XXX - [reason safe]
+   - TASK-YYY - [reason safe]
+
+   **Batch 2 (Sequential, after Batch 1):**
+   - TASK-ZZZ - depends on TASK-XXX (shared databaseService.ts)
+
+   ### Shared File Matrix
+   | File | Tasks | Risk |
+   |------|-------|------|
+   | databaseService.ts | TASK-XXX, TASK-ZZZ | High - sequential required |
+   | models.ts | TASK-YYY | Low - isolated changes |
+
+   ### Recommendations
+   - [Any sprint-level recommendations]
+   ```
+
 ### As Senior Engineer / Tech Lead:
 - Review PRs across all services and layers ensuring TypeScript strict mode compliance, architecture boundaries, and consistent patterns
 - Identify missing engineering tasks before release (test gaps, build failures, packaging issues, dependency vulnerabilities)
