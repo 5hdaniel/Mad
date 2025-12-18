@@ -1,0 +1,668 @@
+/**
+ * Hybrid Extractor Service
+ * TASK-320: Combines pattern matching and LLM-based extraction
+ *
+ * This service orchestrates:
+ * 1. Pattern matching (via transactionExtractorService) - fast, no API cost
+ * 2. LLM analysis (via AI tools) - contextual, higher accuracy
+ *
+ * Key principles:
+ * - Pattern matching always runs first (fail-fast for non-RE emails)
+ * - LLM errors never break the extraction pipeline
+ * - Results are merged with weighted confidence (LLM 60%, Pattern 40%)
+ * - Tools are initialized lazily to avoid unnecessary instantiation
+ */
+
+import { v4 as uuidv4 } from 'uuid';
+import transactionExtractorService, {
+  AnalysisResult,
+  TransactionSummary,
+} from '../transactionExtractorService';
+import { AnalyzeMessageTool } from '../llm/tools/analyzeMessageTool';
+import { ExtractContactRolesTool } from '../llm/tools/extractContactRolesTool';
+import { ClusterTransactionsTool } from '../llm/tools/clusterTransactionsTool';
+import { OpenAIService } from '../llm/openAIService';
+import { AnthropicService } from '../llm/anthropicService';
+import { LLMConfigService } from '../llm/llmConfigService';
+import { ContentSanitizer } from '../llm/contentSanitizer';
+import { LLMConfig, LLMProvider } from '../llm/types';
+import { MessageAnalysis, ContactRoleExtraction } from '../llm/tools/types';
+import type { Contact } from '../../types';
+import {
+  AnalyzedMessage,
+  DetectedTransaction,
+  HybridExtractionOptions,
+  HybridExtractionResult,
+  ExtractionMethod,
+  MessageInput,
+  ExistingTransactionRef,
+  PatternSummary,
+  CONFIDENCE_WEIGHTS,
+  DEFAULT_EXTRACTION_OPTIONS,
+} from './types';
+
+/**
+ * Hybrid Extractor Service
+ * Combines pattern matching and LLM analysis for transaction detection.
+ */
+export class HybridExtractorService {
+  private openAIService: OpenAIService | null = null;
+  private anthropicService: AnthropicService | null = null;
+  private configService: LLMConfigService;
+  private sanitizer: ContentSanitizer;
+
+  // Lazy-initialized tools
+  private analyzeMessageTool: AnalyzeMessageTool | null = null;
+  private extractContactRolesTool: ExtractContactRolesTool | null = null;
+  private clusterTransactionsTool: ClusterTransactionsTool | null = null;
+
+  // Track total tokens used across operations
+  private totalTokensUsed = { prompt: 0, completion: 0, total: 0 };
+
+  constructor(configService?: LLMConfigService) {
+    this.configService = configService ?? new LLMConfigService();
+    this.sanitizer = new ContentSanitizer();
+  }
+
+  /**
+   * Initialize LLM tools with the appropriate provider.
+   * Lazy initialization to avoid unnecessary API client creation.
+   */
+  private initializeTools(provider: LLMProvider, apiKey: string): void {
+    const service = this.getOrCreateService(provider, apiKey);
+
+    this.analyzeMessageTool = new AnalyzeMessageTool(service);
+    this.extractContactRolesTool = new ExtractContactRolesTool(service);
+    this.clusterTransactionsTool = new ClusterTransactionsTool(service);
+  }
+
+  /**
+   * Get or create the LLM service for a provider.
+   */
+  private getOrCreateService(
+    provider: LLMProvider,
+    apiKey: string
+  ): OpenAIService | AnthropicService {
+    if (provider === 'openai') {
+      if (!this.openAIService) {
+        this.openAIService = new OpenAIService();
+      }
+      this.openAIService.initialize(apiKey);
+      return this.openAIService;
+    } else {
+      if (!this.anthropicService) {
+        this.anthropicService = new AnthropicService();
+      }
+      this.anthropicService.initialize(apiKey);
+      return this.anthropicService;
+    }
+  }
+
+  /**
+   * Reset token tracking for a new extraction session.
+   */
+  private resetTokenTracking(): void {
+    this.totalTokensUsed = { prompt: 0, completion: 0, total: 0 };
+  }
+
+  /**
+   * Add tokens to the running total.
+   */
+  private addTokens(tokens?: { prompt: number; completion: number; total: number }): void {
+    if (tokens) {
+      this.totalTokensUsed.prompt += tokens.prompt;
+      this.totalTokensUsed.completion += tokens.completion;
+      this.totalTokensUsed.total += tokens.total;
+    }
+  }
+
+  // ===========================================================================
+  // Public API
+  // ===========================================================================
+
+  /**
+   * Analyze messages using hybrid approach.
+   * Always runs pattern matching first, then optionally LLM analysis.
+   */
+  async analyzeMessages(
+    messages: MessageInput[],
+    options: HybridExtractionOptions
+  ): Promise<AnalyzedMessage[]> {
+    const results: AnalyzedMessage[] = [];
+
+    // Get LLM config once for all messages if LLM is enabled
+    let llmConfig: LLMConfig | null = null;
+    if (options.useLLM && options.userId) {
+      llmConfig = await this.getLLMConfig(options);
+      if (llmConfig) {
+        this.initializeTools(llmConfig.provider, llmConfig.apiKey);
+      }
+    }
+
+    for (const msg of messages) {
+      const analyzed: AnalyzedMessage = {
+        id: msg.id,
+        subject: msg.subject,
+        sender: msg.sender,
+        recipients: msg.recipients,
+        date: msg.date,
+        body: msg.body,
+        isRealEstateRelated: false,
+        confidence: 0,
+        extractionMethod: 'pattern',
+      };
+
+      // Step 1: Pattern matching (always runs if enabled, fast and free)
+      if (options.usePatternMatching) {
+        const patternResult = transactionExtractorService.analyzeEmail({
+          subject: msg.subject,
+          body: msg.body,
+          from: msg.sender,
+          to: msg.recipients.join(', '),
+          date: msg.date,
+        });
+
+        analyzed.patternAnalysis = patternResult;
+        analyzed.isRealEstateRelated = patternResult.isRealEstateRelated;
+        analyzed.confidence = patternResult.confidence / 100; // Normalize to 0-1
+      }
+
+      // Step 2: LLM analysis (if enabled and configured)
+      if (options.useLLM && llmConfig && this.analyzeMessageTool) {
+        try {
+          const llmResult = await this.runLLMAnalysis(msg, llmConfig);
+          if (llmResult) {
+            analyzed.llmAnalysis = llmResult.data;
+            analyzed.extractionMethod = options.usePatternMatching ? 'hybrid' : 'llm';
+
+            // Merge results - LLM takes precedence for classification
+            if (llmResult.data) {
+              analyzed.isRealEstateRelated = llmResult.data.isRealEstateRelated;
+              analyzed.confidence = this.mergeConfidence(
+                analyzed.patternAnalysis?.confidence,
+                llmResult.data.confidence
+              );
+            }
+
+            // Track tokens
+            this.addTokens(llmResult.tokensUsed);
+          }
+        } catch (error) {
+          // LLM errors should never break the pipeline
+          console.warn('[HybridExtractor] LLM analysis failed, using pattern only:', error);
+        }
+      }
+
+      results.push(analyzed);
+    }
+
+    return results;
+  }
+
+  /**
+   * Cluster analyzed messages into detected transactions.
+   * Attempts LLM clustering first, falls back to pattern-based grouping.
+   */
+  async clusterIntoTransactions(
+    analyzedMessages: AnalyzedMessage[],
+    existingTransactions: ExistingTransactionRef[],
+    options: HybridExtractionOptions
+  ): Promise<DetectedTransaction[]> {
+    // Filter to real estate related messages only
+    const reMessages = analyzedMessages.filter((m) => m.isRealEstateRelated);
+
+    if (reMessages.length === 0) {
+      return [];
+    }
+
+    // Try LLM clustering first if enabled
+    if (options.useLLM && this.clusterTransactionsTool && options.userId) {
+      try {
+        const llmConfig = await this.getLLMConfig(options);
+        if (llmConfig) {
+          const clusterInput = {
+            analyzedMessages: reMessages.map((m) => ({
+              id: m.id,
+              subject: m.subject,
+              sender: m.sender,
+              recipients: m.recipients,
+              date: m.date,
+              analysis: m.llmAnalysis ?? this.convertPatternToLLMFormat(m.patternAnalysis!),
+            })),
+            existingTransactions: existingTransactions.map((t) => ({
+              id: t.id,
+              propertyAddress: t.propertyAddress,
+              transactionType: t.transactionType,
+            })),
+          };
+
+          const result = await this.clusterTransactionsTool.cluster(clusterInput, llmConfig);
+          this.addTokens(result.tokensUsed);
+
+          if (result.success && result.data) {
+            return result.data.clusters.map((cluster) => ({
+              id: uuidv4(),
+              propertyAddress: cluster.propertyAddress,
+              transactionType: cluster.transactionType,
+              stage: cluster.stage,
+              confidence: cluster.confidence,
+              extractionMethod: 'hybrid' as ExtractionMethod,
+              communicationIds: cluster.communicationIds,
+              dateRange: cluster.dateRange,
+              suggestedContacts: {
+                assignments: cluster.suggestedContacts.map((c) => ({
+                  name: c.name,
+                  email: c.email,
+                  role: (c.role as ContactRoleExtraction['assignments'][0]['role']) || 'other',
+                  confidence: 0.7,
+                  evidence: [],
+                })),
+              },
+              summary: cluster.summary,
+              cluster,
+            }));
+          }
+        }
+      } catch (error) {
+        console.warn('[HybridExtractor] LLM clustering failed, using pattern grouping:', error);
+      }
+    }
+
+    // Fallback: Use pattern-based grouping
+    return this.patternBasedClustering(reMessages);
+  }
+
+  /**
+   * Extract contact roles for a detected transaction.
+   * Uses LLM if available, otherwise returns existing contacts.
+   */
+  async extractContactRoles(
+    cluster: DetectedTransaction,
+    messages: AnalyzedMessage[],
+    knownContacts: Contact[],
+    options: HybridExtractionOptions
+  ): Promise<DetectedTransaction> {
+    if (!options.useLLM || !this.extractContactRolesTool || !options.userId) {
+      return cluster;
+    }
+
+    try {
+      const llmConfig = await this.getLLMConfig(options);
+      if (!llmConfig) {
+        return cluster;
+      }
+
+      const clusterMessages = messages.filter((m) =>
+        cluster.communicationIds.includes(m.id)
+      );
+
+      const input = {
+        communications: clusterMessages.map((m) => ({
+          subject: m.subject,
+          body: this.sanitizer.sanitize(m.body).sanitizedContent,
+          sender: m.sender,
+          recipients: m.recipients,
+          date: m.date,
+        })),
+        knownContacts: knownContacts.map((c) => ({
+          name: c.display_name || c.name || c.email || '',
+          email: c.email || undefined,
+          phone: c.phone || undefined,
+        })),
+        propertyAddress: cluster.propertyAddress,
+      };
+
+      const result = await this.extractContactRolesTool.extract(input, llmConfig);
+      this.addTokens(result.tokensUsed);
+
+      if (result.success && result.data) {
+        return {
+          ...cluster,
+          suggestedContacts: result.data,
+        };
+      }
+    } catch (error) {
+      console.warn('[HybridExtractor] Contact role extraction failed:', error);
+    }
+
+    return cluster;
+  }
+
+  /**
+   * Full extraction pipeline.
+   * Orchestrates message analysis, clustering, and contact extraction.
+   */
+  async extract(
+    messages: MessageInput[],
+    existingTransactions: ExistingTransactionRef[],
+    knownContacts: Contact[],
+    options: Partial<HybridExtractionOptions> = {}
+  ): Promise<HybridExtractionResult> {
+    const startTime = Date.now();
+    const mergedOptions: HybridExtractionOptions = {
+      ...DEFAULT_EXTRACTION_OPTIONS,
+      ...options,
+    };
+
+    let llmUsed = false;
+    let llmError: string | undefined;
+
+    // Reset token tracking for this extraction session
+    this.resetTokenTracking();
+
+    try {
+      // Check if LLM is available and configured
+      if (mergedOptions.useLLM && mergedOptions.userId) {
+        const llmConfig = await this.getLLMConfig(mergedOptions);
+        if (llmConfig) {
+          this.initializeTools(llmConfig.provider, llmConfig.apiKey);
+          llmUsed = true;
+        } else {
+          // LLM not configured, continue with pattern only
+          mergedOptions.useLLM = false;
+        }
+      }
+
+      // Step 1: Analyze all messages
+      const analyzedMessages = await this.analyzeMessages(messages, mergedOptions);
+
+      // Step 2: Cluster into transactions
+      let detectedTransactions = await this.clusterIntoTransactions(
+        analyzedMessages,
+        existingTransactions,
+        mergedOptions
+      );
+
+      // Step 3: Extract contact roles for each cluster
+      if (mergedOptions.useLLM && llmUsed) {
+        detectedTransactions = await Promise.all(
+          detectedTransactions.map((tx) =>
+            this.extractContactRoles(tx, analyzedMessages, knownContacts, mergedOptions)
+          )
+        );
+      }
+
+      const extractionMethod: ExtractionMethod =
+        mergedOptions.usePatternMatching && llmUsed
+          ? 'hybrid'
+          : llmUsed
+            ? 'llm'
+            : 'pattern';
+
+      return {
+        success: true,
+        analyzedMessages,
+        detectedTransactions,
+        extractionMethod,
+        llmUsed,
+        tokensUsed: llmUsed ? { ...this.totalTokensUsed } : undefined,
+        latencyMs: Date.now() - startTime,
+      };
+    } catch (error) {
+      llmError = error instanceof Error ? error.message : 'Unknown error';
+
+      // Fallback to pattern-only extraction
+      const patternOnlyOptions = { ...mergedOptions, useLLM: false };
+      const analyzedMessages = await this.analyzeMessages(messages, patternOnlyOptions);
+      const detectedTransactions = await this.clusterIntoTransactions(
+        analyzedMessages,
+        existingTransactions,
+        patternOnlyOptions
+      );
+
+      return {
+        success: true, // Still successful with fallback
+        analyzedMessages,
+        detectedTransactions,
+        extractionMethod: 'pattern',
+        llmUsed: false,
+        llmError,
+        latencyMs: Date.now() - startTime,
+      };
+    }
+  }
+
+  // ===========================================================================
+  // Private Methods
+  // ===========================================================================
+
+  /**
+   * Run LLM analysis on a single message.
+   */
+  private async runLLMAnalysis(
+    msg: MessageInput,
+    config: LLMConfig
+  ): Promise<{ data?: MessageAnalysis; tokensUsed?: { prompt: number; completion: number; total: number } } | null> {
+    if (!this.analyzeMessageTool) {
+      return null;
+    }
+
+    const result = await this.analyzeMessageTool.analyze(
+      {
+        subject: msg.subject,
+        body: msg.body,
+        sender: msg.sender,
+        recipients: msg.recipients,
+        date: msg.date,
+      },
+      config
+    );
+
+    if (result.success && result.data) {
+      return {
+        data: result.data,
+        tokensUsed: result.tokensUsed,
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * Get LLM configuration for the user.
+   * Returns null if LLM is not configured.
+   */
+  private async getLLMConfig(options: HybridExtractionOptions): Promise<LLMConfig | null> {
+    if (!options.userId) {
+      return null;
+    }
+
+    try {
+      const userConfig = await this.configService.getUserConfig(options.userId);
+
+      // Check if user has consent and available tokens
+      if (!userConfig.hasConsent) {
+        return null;
+      }
+
+      // Determine which provider to use
+      const provider = options.llmProvider ?? userConfig.preferredProvider;
+
+      // Check if the provider has an API key configured
+      const hasKey =
+        (provider === 'openai' && userConfig.hasOpenAI) ||
+        (provider === 'anthropic' && userConfig.hasAnthropic);
+
+      if (!hasKey) {
+        return null;
+      }
+
+      // Get the actual API key by using the config service's internal method
+      // Note: We need to get the decrypted key, which requires accessing
+      // the LLM settings directly. For now, we'll use a workaround by
+      // triggering a validation which initializes the service.
+      const settings = await this.getDecryptedApiKey(options.userId, provider);
+      if (!settings) {
+        return null;
+      }
+
+      return {
+        provider,
+        apiKey: settings,
+        model: provider === 'openai' ? userConfig.openAIModel : userConfig.anthropicModel,
+        maxTokens: 1500,
+        temperature: 0.1,
+      };
+    } catch (error) {
+      console.warn('[HybridExtractor] Failed to get LLM config:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get decrypted API key for a provider.
+   * This is a workaround since LLMConfigService doesn't expose raw keys.
+   */
+  private async getDecryptedApiKey(
+    userId: string,
+    provider: LLMProvider
+  ): Promise<string | null> {
+    // Import the database service and token encryption
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { getLLMSettingsByUserId } = require('../db/llmSettingsDbService');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const tokenEncryptionService = require('../tokenEncryptionService').default;
+
+    try {
+      const settings = getLLMSettingsByUserId(userId);
+      if (!settings) {
+        return null;
+      }
+
+      const encryptedKey =
+        provider === 'openai'
+          ? settings.openai_api_key_encrypted
+          : settings.anthropic_api_key_encrypted;
+
+      if (!encryptedKey) {
+        return null;
+      }
+
+      return tokenEncryptionService.decrypt(encryptedKey);
+    } catch (error) {
+      console.warn('[HybridExtractor] Failed to decrypt API key:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Merge confidence scores from pattern matching and LLM.
+   * Uses weighted average: LLM 60%, Pattern 40%.
+   */
+  private mergeConfidence(
+    patternConfidence: number | undefined,
+    llmConfidence: number
+  ): number {
+    if (patternConfidence === undefined) {
+      return llmConfidence;
+    }
+
+    // Pattern confidence is 0-100, normalize to 0-1
+    const normalizedPatternConfidence = patternConfidence / 100;
+
+    // Weighted average
+    return (
+      llmConfidence * CONFIDENCE_WEIGHTS.llm +
+      normalizedPatternConfidence * CONFIDENCE_WEIGHTS.pattern
+    );
+  }
+
+  /**
+   * Convert pattern analysis result to LLM format for clustering.
+   */
+  private convertPatternToLLMFormat(patternResult: AnalysisResult): MessageAnalysis {
+    return {
+      isRealEstateRelated: patternResult.isRealEstateRelated,
+      confidence: patternResult.confidence / 100,
+      transactionIndicators: {
+        type: patternResult.transactionType,
+        stage: null,
+      },
+      extractedEntities: {
+        addresses: patternResult.addresses.map((a) => ({
+          value: a,
+          confidence: 0.7,
+        })),
+        amounts: patternResult.amounts.map((a) => ({
+          value: a,
+          context: 'extracted',
+        })),
+        dates: patternResult.dates.map((d) => ({
+          value: d,
+          type: 'other' as const,
+        })),
+        contacts: patternResult.parties.map((p) => ({
+          name: p.name || '',
+          email: p.email,
+          suggestedRole: p.role,
+        })),
+      },
+      reasoning: 'Pattern matching analysis',
+    };
+  }
+
+  /**
+   * Pattern-based clustering fallback.
+   * Uses transactionExtractorService.groupByProperty.
+   */
+  private patternBasedClustering(messages: AnalyzedMessage[]): DetectedTransaction[] {
+    // Filter messages with pattern analysis
+    const messagesWithPatterns = messages.filter((m) => m.patternAnalysis);
+
+    if (messagesWithPatterns.length === 0) {
+      return [];
+    }
+
+    // Group by property address
+    const grouped = transactionExtractorService.groupByProperty(
+      messagesWithPatterns.map((m) => m.patternAnalysis!)
+    );
+
+    // Convert to detected transactions
+    return Object.entries(grouped)
+      .map(([address, emails]) => {
+        const summary = transactionExtractorService.generateTransactionSummary(emails);
+        if (!summary) {
+          return null;
+        }
+
+        const msgIds = messagesWithPatterns
+          .filter((m) => m.patternAnalysis?.addresses.includes(address))
+          .map((m) => m.id);
+
+        const patternSummary: PatternSummary = {
+          propertyAddress: summary.propertyAddress,
+          transactionType: summary.transactionType,
+          salePrice: summary.salePrice,
+          closingDate: summary.closingDate,
+          mlsNumbers: summary.mlsNumbers,
+          communicationsCount: summary.communicationsCount,
+          firstCommunication: summary.firstCommunication,
+          lastCommunication: summary.lastCommunication,
+          confidence: summary.confidence,
+        };
+
+        return {
+          id: uuidv4(),
+          propertyAddress: address,
+          transactionType: summary.transactionType,
+          stage: null,
+          confidence: summary.confidence / 100,
+          extractionMethod: 'pattern' as ExtractionMethod,
+          communicationIds: msgIds,
+          dateRange: {
+            start: new Date(summary.firstCommunication).toISOString(),
+            end: new Date(summary.lastCommunication).toISOString(),
+          },
+          suggestedContacts: { assignments: [] },
+          summary: `Transaction at ${address} with ${summary.communicationsCount} communications`,
+          patternSummary,
+        } as DetectedTransaction;
+      })
+      .filter((tx): tx is DetectedTransaction => tx !== null);
+  }
+}
+
+// Export singleton instance for convenience
+export const hybridExtractorService = new HybridExtractorService();
+export default hybridExtractorService;
