@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { LLMSettings } from "./settings/LLMSettings";
 
 interface ConnectionStatus {
   connected: boolean;
@@ -516,6 +517,14 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
                   </button>
                 </div>
               </div>
+            </div>
+
+            {/* AI Settings */}
+            <div className="mb-8">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                AI Settings
+              </h3>
+              <LLMSettings userId={userId} />
             </div>
 
             {/* Data & Privacy */}
