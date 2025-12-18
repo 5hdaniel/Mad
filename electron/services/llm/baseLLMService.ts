@@ -7,6 +7,23 @@ import {
   LLMProvider,
 } from './types';
 import { RateLimiter } from './rateLimiter';
+import {
+  createTokenEstimate,
+  createTokenUsage,
+  TokenEstimate,
+  TokenUsage,
+} from './tokenCounter';
+import type { LLMSettings } from '../../types/models';
+
+/**
+ * Interface for database operations needed by the service.
+ * Allows dependency injection for flexibility and testing.
+ */
+export interface LLMDbCallbacks {
+  getSettings: (userId: string) => LLMSettings | null;
+  incrementTokenUsage: (userId: string, tokens: number) => void;
+  resetMonthlyUsage: (userId: string) => void;
+}
 
 /**
  * Configuration for retry behavior.
@@ -37,6 +54,7 @@ export abstract class BaseLLMService {
   protected readonly defaultTimeout = 30000; // 30 seconds
   protected readonly rateLimiter: RateLimiter;
   protected readonly retryConfig: RetryConfig;
+  protected dbCallbacks?: LLMDbCallbacks;
 
   constructor(
     provider: LLMProvider,
@@ -147,6 +165,130 @@ export abstract class BaseLLMService {
    */
   getWaitTime(): number {
     return this.rateLimiter.getWaitTime();
+  }
+
+  /**
+   * Set the database callbacks for usage tracking.
+   * Must be called before tracking is enabled.
+   */
+  setDbCallbacks(callbacks: LLMDbCallbacks): void {
+    this.dbCallbacks = callbacks;
+  }
+
+  /**
+   * Estimate tokens before making an API call.
+   */
+  estimateTokens(
+    messages: LLMMessage[],
+    maxCompletionTokens: number,
+    model: string
+  ): TokenEstimate {
+    return createTokenEstimate(messages, maxCompletionTokens, this.provider, model);
+  }
+
+  /**
+   * Check if user has budget for estimated tokens.
+   */
+  async checkBudget(
+    userId: string,
+    estimate: TokenEstimate
+  ): Promise<{ allowed: boolean; remaining: number; reason?: string }> {
+    if (!this.dbCallbacks) {
+      return { allowed: true, remaining: Infinity }; // No tracking enabled
+    }
+
+    const settings = this.dbCallbacks.getSettings(userId);
+    if (!settings) {
+      return { allowed: true, remaining: Infinity }; // No settings = no limit
+    }
+
+    // Check monthly reset
+    if (this.shouldResetMonthly(settings.budget_reset_date)) {
+      this.dbCallbacks.resetMonthlyUsage(userId);
+    }
+
+    const limit = settings.use_platform_allowance
+      ? settings.platform_allowance_tokens
+      : settings.budget_limit_tokens;
+
+    if (!limit) {
+      return { allowed: true, remaining: Infinity }; // No limit set
+    }
+
+    const used = settings.use_platform_allowance
+      ? settings.platform_allowance_used
+      : settings.tokens_used_this_month;
+
+    const remaining = limit - used;
+
+    if (estimate.totalEstimate > remaining) {
+      return {
+        allowed: false,
+        remaining,
+        reason: `Estimated ${estimate.totalEstimate} tokens exceeds remaining budget of ${remaining}`,
+      };
+    }
+
+    return { allowed: true, remaining };
+  }
+
+  /**
+   * Record actual token usage after API call.
+   */
+  async recordUsage(userId: string, usage: TokenUsage): Promise<void> {
+    if (!this.dbCallbacks) return;
+
+    this.dbCallbacks.incrementTokenUsage(userId, usage.totalTokens);
+    this.log('info', `Recorded ${usage.totalTokens} tokens for user ${userId}`);
+  }
+
+  /**
+   * Complete with budget check and usage tracking.
+   */
+  async completeWithTracking(
+    userId: string,
+    messages: LLMMessage[],
+    config: LLMConfig
+  ): Promise<LLMResponse> {
+    const maxTokens = config.maxTokens ?? 1000;
+    const estimate = this.estimateTokens(messages, maxTokens, config.model);
+
+    // Check budget
+    const budgetCheck = await this.checkBudget(userId, estimate);
+    if (!budgetCheck.allowed) {
+      throw this.createError(
+        budgetCheck.reason ?? 'Budget exceeded',
+        'quota_exceeded',
+        402,
+        false
+      );
+    }
+
+    // Make the API call
+    const response = await this.completeWithRetry(messages, config);
+
+    // Record actual usage
+    const usage = createTokenUsage(
+      response.tokensUsed.prompt,
+      response.tokensUsed.completion,
+      this.provider,
+      config.model
+    );
+    await this.recordUsage(userId, usage);
+
+    return response;
+  }
+
+  /**
+   * Check if monthly usage should be reset.
+   */
+  private shouldResetMonthly(resetDate?: string): boolean {
+    if (!resetDate) return true;
+    const reset = new Date(resetDate);
+    const now = new Date();
+    return (
+      reset.getMonth() !== now.getMonth() || reset.getFullYear() !== now.getFullYear()
+    );
   }
 
   /**
