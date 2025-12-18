@@ -54,6 +54,8 @@ import {
 import { registerBackupHandlers } from "./backup-handlers";
 import { registerSyncHandlers, cleanupSyncHandlers } from "./sync-handlers";
 import { registerDriverHandlers } from "./driver-handlers";
+import { registerLLMHandlers } from "./llm-handlers";
+import { LLMConfigService } from "./services/llm/llmConfigService";
 import OutlookService from "./outlookService";
 
 // Configure logging for auto-updater
@@ -206,6 +208,10 @@ app.whenReady().then(async () => {
   registerBackupHandlers(mainWindow!);
   registerSyncHandlers(mainWindow!);
   registerDriverHandlers();
+
+  // Initialize LLM services and register handlers
+  const llmConfigService = new LLMConfigService();
+  registerLLMHandlers(llmConfigService);
 });
 
 app.on("window-all-closed", () => {
