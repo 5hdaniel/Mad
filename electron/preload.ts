@@ -648,6 +648,94 @@ contextBridge.exposeInMainWorld("api", {
 
   /**
    * ============================================
+   * LLM METHODS
+   * ============================================
+   * LLM configuration, API key management, and usage tracking
+   */
+  llm: {
+    /**
+     * Gets user's LLM configuration summary
+     * @param {string} userId - User ID
+     * @returns {Promise<LLMHandlerResponse<LLMUserConfig>>} Configuration result
+     */
+    getConfig: (userId: string) => ipcRenderer.invoke("llm:get-config", userId),
+
+    /**
+     * Sets API key for a provider
+     * @param {string} userId - User ID
+     * @param {'openai' | 'anthropic'} provider - LLM provider
+     * @param {string} apiKey - API key to store (will be encrypted)
+     * @returns {Promise<LLMHandlerResponse<void>>} Set result
+     */
+    setApiKey: (
+      userId: string,
+      provider: "openai" | "anthropic",
+      apiKey: string
+    ) => ipcRenderer.invoke("llm:set-api-key", userId, provider, apiKey),
+
+    /**
+     * Validates API key without storing
+     * @param {'openai' | 'anthropic'} provider - LLM provider
+     * @param {string} apiKey - API key to validate
+     * @returns {Promise<LLMHandlerResponse<boolean>>} Validation result
+     */
+    validateKey: (provider: "openai" | "anthropic", apiKey: string) =>
+      ipcRenderer.invoke("llm:validate-key", provider, apiKey),
+
+    /**
+     * Removes API key for a provider
+     * @param {string} userId - User ID
+     * @param {'openai' | 'anthropic'} provider - LLM provider
+     * @returns {Promise<LLMHandlerResponse<void>>} Remove result
+     */
+    removeApiKey: (userId: string, provider: "openai" | "anthropic") =>
+      ipcRenderer.invoke("llm:remove-api-key", userId, provider),
+
+    /**
+     * Updates LLM preferences
+     * @param {string} userId - User ID
+     * @param {Object} preferences - Preferences to update
+     * @returns {Promise<LLMHandlerResponse<void>>} Update result
+     */
+    updatePreferences: (
+      userId: string,
+      preferences: {
+        preferredProvider?: "openai" | "anthropic";
+        openAIModel?: string;
+        anthropicModel?: string;
+        enableAutoDetect?: boolean;
+        enableRoleExtraction?: boolean;
+        usePlatformAllowance?: boolean;
+        budgetLimit?: number;
+      }
+    ) => ipcRenderer.invoke("llm:update-preferences", userId, preferences),
+
+    /**
+     * Records user consent for LLM data processing
+     * @param {string} userId - User ID
+     * @param {boolean} consent - Whether user consents
+     * @returns {Promise<LLMHandlerResponse<void>>} Consent result
+     */
+    recordConsent: (userId: string, consent: boolean) =>
+      ipcRenderer.invoke("llm:record-consent", userId, consent),
+
+    /**
+     * Gets usage statistics
+     * @param {string} userId - User ID
+     * @returns {Promise<LLMHandlerResponse<LLMUsageStats>>} Usage stats
+     */
+    getUsage: (userId: string) => ipcRenderer.invoke("llm:get-usage", userId),
+
+    /**
+     * Checks if user can use LLM features
+     * @param {string} userId - User ID
+     * @returns {Promise<LLMHandlerResponse<{ canUse: boolean; reason?: string }>>} Availability result
+     */
+    canUse: (userId: string) => ipcRenderer.invoke("llm:can-use", userId),
+  },
+
+  /**
+   * ============================================
    * SYSTEM METHODS
    * ============================================
    * System-level operations including permissions, connections, and health checks

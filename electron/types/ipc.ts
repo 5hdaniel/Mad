@@ -21,6 +21,80 @@ import type {
 import type { ExportResult, ExtractionResult, SyncStatus } from "./database";
 
 // ============================================
+// LLM TYPE DEFINITIONS
+// ============================================
+
+/**
+ * LLM provider type
+ */
+export type LLMProvider = "openai" | "anthropic";
+
+/**
+ * Response wrapper for consistent error handling across all LLM handlers.
+ */
+export interface LLMHandlerResponse<T> {
+  success: boolean;
+  data?: T;
+  error?: {
+    message: string;
+    type: string;
+    retryable: boolean;
+  };
+}
+
+/**
+ * User-facing LLM configuration summary.
+ * Never exposes raw API keys or sensitive settings.
+ */
+export interface LLMUserConfig {
+  hasOpenAI: boolean;
+  hasAnthropic: boolean;
+  preferredProvider: LLMProvider;
+  openAIModel: string;
+  anthropicModel: string;
+  tokensUsed: number;
+  budgetLimit?: number;
+  platformAllowanceRemaining: number;
+  usePlatformAllowance: boolean;
+  autoDetectEnabled: boolean;
+  roleExtractionEnabled: boolean;
+  hasConsent: boolean;
+}
+
+/**
+ * Preferences that can be updated by the user.
+ */
+export interface LLMPreferences {
+  preferredProvider?: LLMProvider;
+  openAIModel?: string;
+  anthropicModel?: string;
+  enableAutoDetect?: boolean;
+  enableRoleExtraction?: boolean;
+  usePlatformAllowance?: boolean;
+  budgetLimit?: number;
+}
+
+/**
+ * Usage statistics for display.
+ */
+export interface LLMUsageStats {
+  tokensThisMonth: number;
+  budgetLimit?: number;
+  budgetRemaining?: number;
+  platformAllowance: number;
+  platformUsed: number;
+  resetDate?: string;
+}
+
+/**
+ * Result of canUseLLM check.
+ */
+export interface LLMAvailability {
+  canUse: boolean;
+  reason?: string;
+}
+
+// ============================================
 // IPC CHANNEL DEFINITIONS
 // ============================================
 
@@ -545,6 +619,34 @@ export interface WindowApi {
       userId: string,
       partialPreferences: Record<string, unknown>,
     ) => Promise<{ success: boolean }>;
+  };
+
+  // LLM methods
+  llm: {
+    getConfig: (userId: string) => Promise<LLMHandlerResponse<LLMUserConfig>>;
+    setApiKey: (
+      userId: string,
+      provider: LLMProvider,
+      apiKey: string,
+    ) => Promise<LLMHandlerResponse<void>>;
+    validateKey: (
+      provider: LLMProvider,
+      apiKey: string,
+    ) => Promise<LLMHandlerResponse<boolean>>;
+    removeApiKey: (
+      userId: string,
+      provider: LLMProvider,
+    ) => Promise<LLMHandlerResponse<void>>;
+    updatePreferences: (
+      userId: string,
+      preferences: LLMPreferences,
+    ) => Promise<LLMHandlerResponse<void>>;
+    recordConsent: (
+      userId: string,
+      consent: boolean,
+    ) => Promise<LLMHandlerResponse<void>>;
+    getUsage: (userId: string) => Promise<LLMHandlerResponse<LLMUsageStats>>;
+    canUse: (userId: string) => Promise<LLMHandlerResponse<LLMAvailability>>;
   };
 
   // User preference methods (stored in local database)
