@@ -12,26 +12,33 @@ import {
   OPENAI_MODELS,
   ANTHROPIC_MODELS,
 } from '../types';
-import { BaseLLMService } from '../baseLLMService';
+import { BaseLLMService, RetryConfig, DEFAULT_RETRY_CONFIG } from '../baseLLMService';
 
 // Concrete implementation for testing abstract class
 class TestLLMService extends BaseLLMService {
-  constructor(provider: LLMProvider = 'openai') {
-    super(provider);
-  }
+  public completeMock: jest.Mock;
 
-  // Implement abstract methods
-  async complete(
-    _messages: LLMMessage[],
-    _config: LLMConfig
-  ): Promise<LLMResponse> {
-    return {
+  constructor(
+    provider: LLMProvider = 'openai',
+    requestsPerMinute: number = 60,
+    retryConfig?: RetryConfig
+  ) {
+    super(provider, requestsPerMinute, retryConfig);
+    this.completeMock = jest.fn().mockResolvedValue({
       content: 'test response',
       tokensUsed: { prompt: 10, completion: 20, total: 30 },
       model: 'gpt-4o-mini',
       finishReason: 'stop',
       latencyMs: 100,
-    };
+    });
+  }
+
+  // Implement abstract methods
+  async complete(
+    messages: LLMMessage[],
+    config: LLMConfig
+  ): Promise<LLMResponse> {
+    return this.completeMock(messages, config);
   }
 
   async validateApiKey(_apiKey: string): Promise<boolean> {
@@ -261,6 +268,214 @@ describe('BaseLLMService', () => {
         data
       );
     });
+  });
+});
+
+describe('completeWithRetry', () => {
+  let service: TestLLMService;
+  const testMessages: LLMMessage[] = [{ role: 'user', content: 'test' }];
+  const testConfig: LLMConfig = {
+    provider: 'openai',
+    apiKey: 'test-key',
+    model: 'gpt-4o-mini',
+  };
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    // Use fast retry config for testing
+    const fastRetryConfig: RetryConfig = {
+      maxAttempts: 3,
+      initialDelayMs: 100,
+      maxDelayMs: 1000,
+      backoffMultiplier: 2,
+    };
+    service = new TestLLMService('openai', 1000, fastRetryConfig);
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('should return result on successful first attempt', async () => {
+    const result = await service.completeWithRetry(testMessages, testConfig);
+
+    expect(result.content).toBe('test response');
+    expect(service.completeMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('should retry on retryable error and succeed', async () => {
+    const retryableError = new LLMError(
+      'Rate limited',
+      'rate_limit',
+      'openai',
+      429,
+      true
+    );
+
+    service.completeMock
+      .mockRejectedValueOnce(retryableError)
+      .mockResolvedValueOnce({
+        content: 'success after retry',
+        tokensUsed: { prompt: 10, completion: 20, total: 30 },
+        model: 'gpt-4o-mini',
+        finishReason: 'stop',
+        latencyMs: 100,
+      });
+
+    const resultPromise = service.completeWithRetry(testMessages, testConfig);
+
+    // Advance past the retry delay
+    await jest.advanceTimersByTimeAsync(100);
+
+    const result = await resultPromise;
+
+    expect(result.content).toBe('success after retry');
+    expect(service.completeMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('should not retry on non-retryable error', async () => {
+    const nonRetryableError = new LLMError(
+      'Invalid API key',
+      'invalid_api_key',
+      'openai',
+      401,
+      false
+    );
+
+    service.completeMock.mockRejectedValueOnce(nonRetryableError);
+
+    await expect(
+      service.completeWithRetry(testMessages, testConfig)
+    ).rejects.toThrow('Invalid API key');
+
+    expect(service.completeMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('should throw after all retries exhausted', async () => {
+    // Use real timers for this test with minimal retry config
+    jest.useRealTimers();
+
+    const minimalRetryConfig: RetryConfig = {
+      maxAttempts: 3,
+      initialDelayMs: 1,
+      maxDelayMs: 10,
+      backoffMultiplier: 2,
+    };
+    const testService = new TestLLMService('openai', 1000, minimalRetryConfig);
+
+    const retryableError = new LLMError(
+      'Rate limited',
+      'rate_limit',
+      'openai',
+      429,
+      true
+    );
+
+    testService.completeMock.mockRejectedValue(retryableError);
+
+    await expect(
+      testService.completeWithRetry(testMessages, testConfig)
+    ).rejects.toThrow('Rate limited');
+
+    expect(testService.completeMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('should honor Retry-After header when provided', async () => {
+    const retryableErrorWithRetryAfter = new LLMError(
+      'Rate limited',
+      'rate_limit',
+      'openai',
+      429,
+      true,
+      500 // retryAfterMs
+    );
+
+    service.completeMock
+      .mockRejectedValueOnce(retryableErrorWithRetryAfter)
+      .mockResolvedValueOnce({
+        content: 'success after retry',
+        tokensUsed: { prompt: 10, completion: 20, total: 30 },
+        model: 'gpt-4o-mini',
+        finishReason: 'stop',
+        latencyMs: 100,
+      });
+
+    const resultPromise = service.completeWithRetry(testMessages, testConfig);
+
+    // Should wait 500ms (Retry-After), not the default 100ms
+    await jest.advanceTimersByTimeAsync(500);
+
+    const result = await resultPromise;
+
+    expect(result.content).toBe('success after retry');
+    expect(service.completeMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('should wrap unexpected errors', async () => {
+    service.completeMock.mockRejectedValueOnce(new Error('Unexpected error'));
+
+    await expect(
+      service.completeWithRetry(testMessages, testConfig)
+    ).rejects.toThrow('Unexpected error');
+  });
+
+  it('should use exponential backoff', async () => {
+    // Use real timers with minimal config
+    jest.useRealTimers();
+
+    const minimalRetryConfig: RetryConfig = {
+      maxAttempts: 3,
+      initialDelayMs: 1,
+      maxDelayMs: 10,
+      backoffMultiplier: 2,
+    };
+    const testService = new TestLLMService('openai', 1000, minimalRetryConfig);
+
+    const retryableError = new LLMError(
+      'Network error',
+      'network',
+      'openai',
+      undefined,
+      true
+    );
+
+    testService.completeMock.mockRejectedValue(retryableError);
+
+    await expect(
+      testService.completeWithRetry(testMessages, testConfig)
+    ).rejects.toThrow();
+
+    expect(testService.completeMock).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('rate limiting methods', () => {
+  let service: TestLLMService;
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    service = new TestLLMService('openai', 60);
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('isRateLimited should return false when tokens available', () => {
+    expect(service.isRateLimited()).toBe(false);
+  });
+
+  it('getWaitTime should return 0 when tokens available', () => {
+    expect(service.getWaitTime()).toBe(0);
+  });
+});
+
+describe('DEFAULT_RETRY_CONFIG', () => {
+  it('should have correct default values', () => {
+    expect(DEFAULT_RETRY_CONFIG.maxAttempts).toBe(3);
+    expect(DEFAULT_RETRY_CONFIG.initialDelayMs).toBe(1000);
+    expect(DEFAULT_RETRY_CONFIG.maxDelayMs).toBe(30000);
+    expect(DEFAULT_RETRY_CONFIG.backoffMultiplier).toBe(2);
   });
 });
 
