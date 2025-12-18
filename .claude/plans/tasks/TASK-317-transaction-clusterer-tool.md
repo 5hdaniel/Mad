@@ -640,15 +640,9 @@ Tools with optimization logic may need 10-20% more code but same turn count if w
 ### SR Engineer Metrics
 
 ```
-| Phase | Turns | Tokens | Time |
-|-------|-------|--------|------|
-| Planning (Plan) | 1 | ~5K | 3 min |
-| PR Review (Batch) | 4 | ~40K | 15 min |
-| Feedback/Revisions | 0 | 0 | 0 min |
-| **SR Total** | 5 | ~45K | 18 min |
+Batch Review: TASK-315, TASK-316, TASK-317 reviewed together in PR #161.
+Per-task metrics not recorded (batch review).
 ```
-
-Note: This was a batch review of TASK-315, TASK-316, and TASK-317 in a single PR. Metrics are shared across all three tasks (divide by 3 for per-task estimate).
 
 ### Review Summary
 
