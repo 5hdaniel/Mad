@@ -18,6 +18,7 @@ import {
   MessageAnalysis,
 } from './types';
 import { ContentSanitizer } from '../contentSanitizer';
+import { transactionClusteringPrompt } from '../prompts';
 
 type AnalyzedMessage = ClusterTransactionsInput['analyzedMessages'][0];
 
@@ -240,61 +241,12 @@ export class ClusterTransactionsTool {
 
   /**
    * Build the LLM prompt for complex clustering.
+   * Uses external prompt template from prompts/transactionClustering.ts
    */
   private buildPrompt(input: ClusterTransactionsInput): LLMMessage[] {
-    const systemPrompt = `You are a real estate transaction analyst. Group the provided email analyses into distinct transaction clusters.
-
-IMPORTANT: Return ONLY valid JSON matching this exact schema:
-{
-  "clusters": [
-    {
-      "propertyAddress": string,
-      "messageIds": [string],
-      "transactionType": "purchase" | "sale" | "lease" | null,
-      "stage": "prospecting" | "active" | "pending" | "closing" | "closed" | null,
-      "confidence": number (0-1),
-      "summary": string (1-2 sentence description)
-    }
-  ],
-  "unclustered": [string] (message IDs that don't clearly belong to any transaction)
-}
-
-Clustering rules:
-1. Primary grouping key is property address
-2. Messages about the same property belong together
-3. If address is unclear, use participant overlap as secondary signal
-4. Separate overlapping timeframes with different properties
-5. Mark ambiguous assignments with lower confidence`;
-
-    let userPrompt = `Group these analyzed emails into transaction clusters:\n\n`;
-
-    if (input.existingTransactions && input.existingTransactions.length > 0) {
-      userPrompt += `Existing transactions (for reference):\n`;
-      input.existingTransactions.forEach((t) => {
-        userPrompt += `- ${t.propertyAddress} (${t.transactionType || 'unknown type'})\n`;
-      });
-      userPrompt += '\n';
-    }
-
-    userPrompt += `Analyzed messages:\n\n`;
-    input.analyzedMessages.forEach((msg, i) => {
-      userPrompt += `Message ${i + 1} (ID: ${msg.id}):\n`;
-      userPrompt += `- Subject: ${this.sanitizer.sanitize(msg.subject).sanitizedContent}\n`;
-      userPrompt += `- From: ${msg.sender}\n`;
-      userPrompt += `- Date: ${msg.date}\n`;
-      userPrompt += `- Is RE: ${msg.analysis.isRealEstateRelated}, Confidence: ${msg.analysis.confidence}\n`;
-      if (msg.analysis.extractedEntities.addresses.length > 0) {
-        userPrompt += `- Addresses: ${msg.analysis.extractedEntities.addresses.map((a) => a.value).join(', ')}\n`;
-      }
-      if (msg.analysis.transactionIndicators.type) {
-        userPrompt += `- Type: ${msg.analysis.transactionIndicators.type}, Stage: ${msg.analysis.transactionIndicators.stage || 'unknown'}\n`;
-      }
-      userPrompt += '\n';
-    });
-
     return [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt },
+      { role: 'system', content: transactionClusteringPrompt.buildSystemPrompt() },
+      { role: 'user', content: transactionClusteringPrompt.buildUserPrompt(input) },
     ];
   }
 

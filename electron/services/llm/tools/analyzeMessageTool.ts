@@ -10,6 +10,7 @@ import { BaseLLMService } from '../baseLLMService';
 import { LLMConfig, LLMMessage } from '../types';
 import { MessageAnalysis, AnalyzeMessageInput, ToolResult } from './types';
 import { ContentSanitizer } from '../contentSanitizer';
+import { messageAnalysisPrompt } from '../prompts';
 
 export class AnalyzeMessageTool {
   private llmService: BaseLLMService;
@@ -50,7 +51,10 @@ export class AnalyzeMessageTool {
 
       return {
         success: true,
-        data: analysis,
+        data: {
+          ...analysis,
+          promptVersion: messageAnalysisPrompt.hash,
+        },
         tokensUsed: response.tokensUsed,
         latencyMs: Date.now() - startTime,
       };
@@ -65,44 +69,12 @@ export class AnalyzeMessageTool {
 
   /**
    * Build the LLM prompt for message analysis.
+   * Uses external prompt template from prompts/messageAnalysis.ts
    */
   private buildPrompt(input: AnalyzeMessageInput): LLMMessage[] {
-    const systemPrompt = `You are a real estate transaction analyst. Analyze the provided email and extract structured information.
-
-IMPORTANT: Return ONLY valid JSON matching this exact schema:
-{
-  "isRealEstateRelated": boolean,
-  "confidence": number (0-1),
-  "transactionIndicators": {
-    "type": "purchase" | "sale" | "lease" | null,
-    "stage": "prospecting" | "active" | "pending" | "closing" | "closed" | null
-  },
-  "extractedEntities": {
-    "addresses": [{ "value": string, "confidence": number }],
-    "amounts": [{ "value": number, "context": string }],
-    "dates": [{ "value": string (ISO format), "type": "closing" | "inspection" | "other" }],
-    "contacts": [{ "name": string, "email": string?, "phone": string?, "suggestedRole": string? }]
-  },
-  "reasoning": string (brief explanation of analysis)
-}
-
-Real estate indicators include: property addresses, MLS numbers, closing/escrow terms, buyer/seller mentions, offer amounts, inspection dates, title/deed references.
-
-If the email is NOT related to real estate, set isRealEstateRelated to false with low confidence and empty arrays for entities.`;
-
-    const userPrompt = `Analyze this email:
-
-From: ${input.sender}
-To: ${input.recipients.join(', ')}
-Date: ${input.date}
-Subject: ${input.subject}
-
-Body:
-${input.body}`;
-
     return [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt },
+      { role: 'system', content: messageAnalysisPrompt.buildSystemPrompt() },
+      { role: 'user', content: messageAnalysisPrompt.buildUserPrompt(input) },
     ];
   }
 
