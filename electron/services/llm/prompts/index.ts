@@ -1,6 +1,7 @@
 /**
  * Prompt Templates Index
  * TASK-318: Barrel export for all prompt templates
+ * TASK-319: Export prompt version service
  *
  * Provides centralized access to prompt templates, metadata, and utilities.
  */
@@ -28,3 +29,7 @@ export const ALL_PROMPTS: PromptMetadata[] = [
   contactRolesMetadata,
   transactionClusteringMetadata,
 ];
+
+// Re-export prompt version service for convenience
+export { PromptVersionService, getPromptVersionService } from '../promptVersionService';
+export type { PromptVersion } from '../promptVersionService';
