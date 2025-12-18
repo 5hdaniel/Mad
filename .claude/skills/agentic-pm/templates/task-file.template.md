@@ -235,3 +235,36 @@ Verification:
 
 **Suggestion for similar tasks:**
 <What should PM estimate differently next time? e.g., "Count each IPC handler as +1 turn", "Core file modifications need +2 turns buffer">
+
+---
+
+## SR Engineer Review (SR-Owned)
+
+**REQUIRED: SR Engineer MUST complete this section when reviewing/merging the PR.**
+
+*Review Date: <DATE>*
+
+### SR Engineer Metrics
+
+```
+| Phase | Turns | Tokens | Time |
+|-------|-------|--------|------|
+| PR Review | X | ~XK | X min |
+| Feedback/Revisions | X | ~XK | X min |
+| **SR Total** | X | ~XK | X min |
+```
+
+### Review Summary
+
+**Architecture Compliance:** PASS / FAIL
+**Security Review:** PASS / FAIL / N/A
+**Test Coverage:** Adequate / Needs Improvement
+
+**Review Notes:**
+<Key observations, concerns addressed, approval rationale>
+
+### Merge Information
+
+**PR Number:** #XXX
+**Merge Commit:** <hash>
+**Merged To:** develop / int/xxx

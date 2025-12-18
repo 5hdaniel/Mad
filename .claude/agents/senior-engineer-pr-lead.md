@@ -403,8 +403,14 @@ Before merging, verify:
 - [ ] CI has passed
 - [ ] Engineer Metrics present in PR (including Plan metrics)
 - [ ] Engineer Checklist complete in task file
-- [ ] Your SR Metrics added (including Plan metrics)
+- [ ] Your SR Metrics added to PR description (including Plan metrics)
+- [ ] **Task file updated with SR Engineer Review section** (metrics, review summary, merge info)
 - [ ] Code meets quality standards
+
+**REQUIRED: Update the task file's "SR Engineer Review" section with:**
+- SR Engineer Metrics (PR Review turns/tokens/time)
+- Review Summary (architecture, security, test coverage)
+- Merge Information (PR number, commit hash)
 
 **Then approve and merge the PR.**
 
