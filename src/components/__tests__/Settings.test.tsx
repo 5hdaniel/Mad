@@ -43,6 +43,27 @@ describe("Settings", () => {
     window.api.onMicrosoftMailboxConnected.mockReturnValue(jest.fn());
     window.api.onGoogleMailboxDisconnected.mockReturnValue(jest.fn());
     window.api.onMicrosoftMailboxDisconnected.mockReturnValue(jest.fn());
+
+    // LLM mocks for LLMSettings component
+    window.api.llm.getConfig.mockResolvedValue({
+      success: true,
+      data: {
+        hasOpenAIKey: false,
+        hasAnthropicKey: false,
+        consentGiven: true,
+        usePlatformAllowance: true,
+        enableAutoDetect: false,
+        enableRoleExtraction: false,
+      },
+    });
+    window.api.llm.getUsage.mockResolvedValue({
+      success: true,
+      data: {
+        tokensThisMonth: 0,
+        platformAllowance: 10000,
+        platformUsed: 0,
+      },
+    });
   });
 
   // Helper to get the export format combobox (has PDF option)
@@ -71,6 +92,7 @@ describe("Settings", () => {
 
       expect(screen.getByText("Email Connections")).toBeInTheDocument();
       expect(screen.getByText("Export")).toBeInTheDocument();
+      expect(screen.getByText("AI Settings")).toBeInTheDocument();
       expect(screen.getByText("Data & Privacy")).toBeInTheDocument();
       expect(screen.getByText("About")).toBeInTheDocument();
     });

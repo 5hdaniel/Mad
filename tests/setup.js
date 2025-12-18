@@ -94,6 +94,16 @@ if (typeof window !== 'undefined') {
       get: jest.fn(),
       update: jest.fn(),
     },
+    llm: {
+      getConfig: jest.fn(),
+      setApiKey: jest.fn(),
+      validateKey: jest.fn(),
+      removeApiKey: jest.fn(),
+      updatePreferences: jest.fn(),
+      recordConsent: jest.fn(),
+      getUsage: jest.fn(),
+      canUse: jest.fn(),
+    },
     user: {
       getPhoneType: jest.fn(),
       setPhoneType: jest.fn(),
