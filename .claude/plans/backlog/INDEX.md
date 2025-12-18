@@ -2,9 +2,9 @@
 
 This index tracks all backlog items with their current status and metadata.
 
-**Last Updated:** 2025-12-17
+**Last Updated:** 2025-12-18
 **Total Items:** 79
-**Pending:** 68 | **In Progress:** 0 | **Completed:** 10 | **Obsolete:** 2
+**Pending:** 65 | **In Progress:** 0 | **Completed:** 13 | **Obsolete:** 2
 
 ---
 
@@ -34,10 +34,10 @@ This index tracks all backlog items with their current status and metadata.
 ### By Sprint Assignment
 - **SPRINT-001 (Onboarding Refactor):** ✅ Completed
 - **SPRINT-002 (Tech Debt):** ✅ Completed (BACKLOG-058, 059, 060)
-- **SPRINT-003 (Process & Data Integrity):** BACKLOG-072, 038, 039, 035
-- **SPRINT-004 (AI MVP Foundation):** BACKLOG-073, 074 (planned after SPRINT-003)
-- **SPRINT-005 (AI MVP Core):** BACKLOG-075, 076 (planned)
-- **SPRINT-006 (AI MVP Polish):** BACKLOG-077, 078, 079 (planned)
+- **SPRINT-003 (Process & Data Integrity):** ✅ Completed (BACKLOG-072, 038, 039, 035)
+- **SPRINT-004 (AI MVP Foundation):** ✅ Completed (BACKLOG-073, 074)
+- **SPRINT-005 (AI MVP Core):** ✅ Completed (BACKLOG-075, 076)
+- **SPRINT-006 (AI MVP Polish):** BACKLOG-077, 078, 079 (TASK-401 to TASK-414)
 - **Unassigned:** All others
 
 ### AI MVP Project
@@ -160,9 +160,9 @@ This index tracks all backlog items with their current status and metadata.
 | SPRINT-001 | Onboarding Refactor | ✅ Completed | TASK-101 to TASK-116 |
 | SPRINT-002 | Tech Debt | ✅ Completed | BACKLOG-058, 059, 060 + 3 bonus fixes |
 | SPRINT-003 | Process & Data Integrity | ✅ Completed | BACKLOG-072, 038, 039, 035 (4 tasks, 53 turns, ~210K tokens*) |
-| SPRINT-004 | AI MVP Foundation | 📋 Planned | BACKLOG-073, 074 (14 tasks) |
-| SPRINT-005 | AI MVP Core | 📋 Planned | BACKLOG-075, 076 |
-| SPRINT-006 | AI MVP Polish | 📋 Planned | BACKLOG-077, 078, 079 |
+| SPRINT-004 | AI MVP Foundation | ✅ Completed | BACKLOG-073, 074 (14 tasks, TASK-301 to TASK-314) |
+| SPRINT-005 | AI MVP Core | ✅ Completed | BACKLOG-075, 076 (10 tasks, TASK-315 to TASK-324) |
+| SPRINT-006 | AI MVP Polish | 📋 Planned | BACKLOG-077, 078, 079 (14 tasks, TASK-401 to TASK-414) |
 
 ---
 
@@ -188,6 +188,12 @@ This index tracks all backlog items with their current status and metadata.
 - 2025-12-17: *INCIDENT*: Parallel agent execution burned ~14M tokens before manual intervention
 - 2025-12-17: Lesson learned: Database schema tasks must be SEQUENTIAL, never parallel
 - 2025-12-17: Added Category column and Variance tracking to INDEX.md for estimation accuracy analysis
+- 2025-12-18: SPRINT-004 completed - All 14 tasks merged (TASK-301 to TASK-314)
+- 2025-12-18: SPRINT-005 completed - All 10 tasks merged to develop (PR #169)
+- 2025-12-18: BACKLOG-075, 076 marked complete (AI Analysis Tools + Hybrid Pipeline)
+- 2025-12-18: Created SPRINT-006 plan for AI MVP Polish (BACKLOG-077, 078, 079)
+- 2025-12-18: Created 14 task files (TASK-401 to TASK-414) for SPRINT-006
+- 2025-12-18: Integration branch strategy: int/ai-polish for SPRINT-006
 
 ---
 
