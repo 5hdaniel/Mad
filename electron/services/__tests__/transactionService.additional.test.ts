@@ -22,6 +22,33 @@ jest.mock("../outlookFetchService");
 jest.mock("../transactionExtractorService");
 jest.mock("../logService");
 
+// Mock hybrid extraction services
+jest.mock("../extraction/extractionStrategyService", () => ({
+  ExtractionStrategyService: jest.fn().mockImplementation(() => ({
+    selectStrategy: jest.fn().mockResolvedValue({
+      method: "pattern",
+      reason: "Test: LLM not available",
+      fallbackMethod: "pattern",
+    }),
+  })),
+}));
+
+jest.mock("../llm/llmConfigService", () => ({
+  LLMConfigService: jest.fn().mockImplementation(() => ({
+    getUserConfig: jest.fn().mockResolvedValue({
+      hasConsent: false,
+      hasOpenAI: false,
+      hasAnthropic: false,
+    }),
+  })),
+}));
+
+jest.mock("../extraction/hybridExtractorService", () => ({
+  HybridExtractorService: jest.fn().mockImplementation(() => ({
+    extract: jest.fn(),
+  })),
+}));
+
 describe("TransactionService - Additional Coverage", () => {
   const mockUserId = "test-user-id";
   const mockTransactionId = "test-transaction-id";
