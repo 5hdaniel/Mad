@@ -414,6 +414,33 @@ Before merging, verify:
 
 **Then approve and merge the PR.**
 
+#### Batch Review Protocol
+
+When reviewing multiple tasks/PRs at once (e.g., end of phase):
+
+1. **You MAY review all PRs in a single session** for efficiency
+2. **You MUST still record per-task metrics** - break down your review time by task:
+
+```markdown
+## Batch Review Metrics
+
+| Task | PR Review | Feedback | Total |
+|------|-----------|----------|-------|
+| TASK-309 | 2 turns, ~8K, 5m | 0 | 2 turns, ~8K, 5m |
+| TASK-310 | 2 turns, ~8K, 5m | 0 | 2 turns, ~8K, 5m |
+| TASK-313 | 1 turn, ~4K, 3m | 0 | 1 turn, ~4K, 3m |
+| TASK-314 | 1 turn, ~4K, 3m | 0 | 1 turn, ~4K, 3m |
+| **Batch Total** | 6 turns | ~24K | 16m |
+```
+
+3. **Update each task file** with its individual SR metrics
+4. **Notify PM** with the complete breakdown
+
+**Why per-task metrics matter:**
+- Enables analysis of which task types take longer to review
+- Feeds into PM estimation accuracy tracking
+- Identifies tasks that need more review attention
+
 #### 5. Notify PM After Merge (REQUIRED)
 
 **After merging, you MUST notify PM to:**
