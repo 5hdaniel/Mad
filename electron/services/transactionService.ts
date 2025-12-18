@@ -4,6 +4,7 @@ import type {
   UpdateTransaction,
   NewCommunication,
   OAuthProvider,
+  Contact,
 } from "../types";
 
 import gmailFetchService from "./gmailFetchService";
@@ -12,6 +13,19 @@ import transactionExtractorService from "./transactionExtractorService";
 import databaseService from "./databaseService";
 import logService from "./logService";
 import supabaseService from "./supabaseService";
+
+// Hybrid extraction imports
+import { HybridExtractorService } from "./extraction/hybridExtractorService";
+import {
+  ExtractionStrategyService,
+  ExtractionStrategy,
+} from "./extraction/extractionStrategyService";
+import { LLMConfigService } from "./llm/llmConfigService";
+import type {
+  ExtractionMethod,
+  DetectedTransaction,
+  MessageInput,
+} from "./extraction/types";
 
 // ============================================
 // TYPES
@@ -149,7 +163,37 @@ class TransactionService {
   private scanCancelled: boolean = false;
   private currentScanUserId: string | null = null;
 
+  // Lazy-initialized hybrid extraction services
+  private hybridExtractor: HybridExtractorService | null = null;
+  private strategyService: ExtractionStrategyService | null = null;
+  private llmConfigService: LLMConfigService | null = null;
+
   constructor() {}
+
+  /**
+   * Lazy initialization of hybrid extraction services.
+   * Avoids startup cost when LLM features are not used.
+   */
+  private getHybridServices(): {
+    extractor: HybridExtractorService;
+    strategy: ExtractionStrategyService;
+    config: LLMConfigService;
+  } {
+    if (!this.llmConfigService) {
+      this.llmConfigService = new LLMConfigService();
+    }
+    if (!this.strategyService) {
+      this.strategyService = new ExtractionStrategyService(this.llmConfigService);
+    }
+    if (!this.hybridExtractor) {
+      this.hybridExtractor = new HybridExtractorService(this.llmConfigService);
+    }
+    return {
+      extractor: this.hybridExtractor,
+      strategy: this.strategyService,
+      config: this.llmConfigService,
+    };
+  }
 
   /**
    * Cancel the current scan for a user
@@ -317,83 +361,96 @@ class TransactionService {
       // Check for cancellation before analysis
       this.checkCancelled();
 
-      // Step 2: Analyze emails
-      if (onProgress)
-        onProgress({
-          step: "analyzing",
-          message: `Analyzing ${emails.length} emails...`,
-        });
-
-      const analyzed = transactionExtractorService.batchAnalyze(emails);
-
-      // Filter to only real estate related emails
-      const realEstateEmails = analyzed.filter(
-        (a: any) => a.isRealEstateRelated,
-      );
+      // Step 2: Determine extraction strategy
+      const { strategy: strategyService } = this.getHybridServices();
+      const strategy = await strategyService.selectStrategy(userId, {
+        messageCount: emails.length,
+      });
 
       await logService.info(
-        `Found ${realEstateEmails.length} real estate related emails`,
+        `Using ${strategy.method} extraction strategy: ${strategy.reason}`,
         "TransactionService.scanAndExtractTransactions",
         {
-          realEstateCount: realEstateEmails.length,
-          totalEmails: emails.length,
+          userId,
+          method: strategy.method,
+          provider: strategy.provider,
+          budgetRemaining: strategy.budgetRemaining,
+          estimatedTokenCost: strategy.estimatedTokenCost,
         },
       );
 
-      // Check for cancellation before grouping
-      this.checkCancelled();
+      // Step 3: Run extraction based on strategy
+      let extractionResult: {
+        detectedTransactions: (DetectedTransaction & { emails?: AnalyzedEmail[] })[];
+        realEstateCount: number;
+        extractionMethod: ExtractionMethod;
+      };
 
-      // Step 3: Group by property
-      if (onProgress)
-        onProgress({ step: "grouping", message: "Grouping by property..." });
-
-      const grouped =
-        transactionExtractorService.groupByProperty(realEstateEmails);
-      const propertyAddresses = Object.keys(grouped);
+      if (strategy.method === "pattern") {
+        // Use pattern-only extraction path
+        extractionResult = await this._patternOnlyExtraction(
+          emails,
+          userId,
+          onProgress,
+        );
+      } else {
+        // Use hybrid extraction (hybrid or llm mode)
+        try {
+          extractionResult = await this._hybridExtraction(
+            emails,
+            userId,
+            strategy,
+            onProgress,
+          );
+        } catch (hybridError) {
+          // If hybrid extraction fails, fall back to pattern-only
+          await logService.warn(
+            "Hybrid extraction failed, falling back to pattern-only",
+            "TransactionService.scanAndExtractTransactions",
+            {
+              error: hybridError instanceof Error ? hybridError.message : String(hybridError),
+              userId,
+            },
+          );
+          extractionResult = await this._patternOnlyExtraction(
+            emails,
+            userId,
+            onProgress,
+          );
+        }
+      }
 
       await logService.info(
-        `Found ${propertyAddresses.length} properties`,
+        `Found ${extractionResult.realEstateCount} real estate related emails`,
         "TransactionService.scanAndExtractTransactions",
-        { propertyCount: propertyAddresses.length },
+        {
+          realEstateCount: extractionResult.realEstateCount,
+          totalEmails: emails.length,
+          extractionMethod: extractionResult.extractionMethod,
+        },
       );
 
       // Check for cancellation before saving
       this.checkCancelled();
 
-      // Step 4: Create transactions and save communications
+      // Step 4: Save transactions with detection metadata
       if (onProgress)
         onProgress({ step: "saving", message: "Saving transactions..." });
 
-      const transactions: TransactionWithSummary[] = [];
+      const transactions = await this._saveDetectedTransactions(
+        userId,
+        extractionResult,
+        emails,
+      );
 
-      for (const address of propertyAddresses) {
-        // Check for cancellation for each property save
-        this.checkCancelled();
-
-        const emailGroup = grouped[address];
-        const summary =
-          transactionExtractorService.generateTransactionSummary(emailGroup);
-
-        // Create transaction in database if summary is valid
-        if (!summary) continue;
-        const transactionId = await this._createTransactionFromSummary(
-          userId,
-          summary,
-        );
-
-        // Save communications
-        await this._saveCommunications(
-          userId,
-          transactionId,
-          emailGroup as any,
-          emails as any,
-        );
-
-        transactions.push({
-          id: transactionId,
-          ...summary,
-        });
-      }
+      await logService.info(
+        `Found ${transactions.length} properties`,
+        "TransactionService.scanAndExtractTransactions",
+        {
+          propertyCount: transactions.length,
+          extractionMethod: extractionResult.extractionMethod,
+        },
+      );
 
       // Step 5: Complete
       if (onProgress)
@@ -403,7 +460,7 @@ class TransactionService {
         success: true,
         transactionsFound: transactions.length,
         emailsScanned: emails.length,
-        realEstateEmailsFound: realEstateEmails.length,
+        realEstateEmailsFound: extractionResult.realEstateCount,
         transactions,
       };
     } catch (error) {
@@ -597,6 +654,334 @@ class TransactionService {
       state: parts[2] ? parts[2].split(" ")[0] : null,
       zip: parts[2] ? parts[2].split(" ")[1] : null,
     };
+  }
+
+  // ============================================
+  // HYBRID EXTRACTION METHODS
+  // ============================================
+
+  /**
+   * Hybrid extraction path using AI + pattern matching.
+   * Uses HybridExtractorService for combined analysis.
+   * @private
+   */
+  private async _hybridExtraction(
+    emails: EmailMessage[],
+    userId: string,
+    strategy: ExtractionStrategy,
+    onProgress: ((progress: ProgressUpdate) => void) | null,
+  ): Promise<{
+    detectedTransactions: DetectedTransaction[];
+    realEstateCount: number;
+    extractionMethod: ExtractionMethod;
+  }> {
+    const { extractor } = this.getHybridServices();
+
+    if (onProgress) {
+      onProgress({
+        step: "analyzing",
+        message: `Analyzing ${emails.length} emails with AI...`,
+      });
+    }
+
+    // Prepare messages for hybrid extraction
+    const messages: MessageInput[] = emails.map((email, i) => ({
+      id: `msg_${i}_${Date.now()}`,
+      subject: email.subject || "",
+      body: email.bodyPlain || email.body || "",
+      sender: email.from || "",
+      recipients: (email.to || "").split(",").map((e: string) => e.trim()),
+      date:
+        email.date instanceof Date
+          ? email.date.toISOString()
+          : String(email.date || new Date().toISOString()),
+    }));
+
+    // Get existing transactions for context
+    const existingTransactions = await databaseService.getTransactions({
+      user_id: userId,
+    });
+    const txContext = existingTransactions.map((tx) => ({
+      id: tx.id,
+      propertyAddress: tx.property_address,
+      transactionType: tx.transaction_type,
+    }));
+
+    // Get known contacts for role matching
+    const contacts: Contact[] = await databaseService.getContacts({
+      user_id: userId,
+    });
+
+    // Check for cancellation before LLM call
+    this.checkCancelled();
+
+    // Run hybrid extraction
+    const result = await extractor.extract(messages, txContext, contacts, {
+      usePatternMatching: true,
+      useLLM: strategy.method !== "pattern",
+      llmProvider: strategy.provider,
+      userId,
+    });
+
+    // Check for cancellation after extraction
+    this.checkCancelled();
+
+    if (onProgress) {
+      onProgress({
+        step: "grouping",
+        message: `Found ${result.detectedTransactions.length} potential transactions...`,
+      });
+    }
+
+    const realEstateCount = result.analyzedMessages.filter(
+      (m) => m.isRealEstateRelated,
+    ).length;
+
+    await logService.info(
+      `Hybrid extraction completed`,
+      "TransactionService._hybridExtraction",
+      {
+        userId,
+        method: result.extractionMethod,
+        llmUsed: result.llmUsed,
+        transactionsFound: result.detectedTransactions.length,
+        realEstateCount,
+        latencyMs: result.latencyMs,
+      },
+    );
+
+    return {
+      detectedTransactions: result.detectedTransactions,
+      realEstateCount,
+      extractionMethod: result.extractionMethod,
+    };
+  }
+
+  /**
+   * Pattern-only extraction (existing behavior refactored).
+   * Uses transactionExtractorService for pattern matching only.
+   * @private
+   */
+  private async _patternOnlyExtraction(
+    emails: EmailMessage[],
+    _userId: string,
+    onProgress: ((progress: ProgressUpdate) => void) | null,
+  ): Promise<{
+    detectedTransactions: (DetectedTransaction & { emails?: AnalyzedEmail[] })[];
+    realEstateCount: number;
+    extractionMethod: ExtractionMethod;
+  }> {
+    if (onProgress) {
+      onProgress({
+        step: "analyzing",
+        message: `Analyzing ${emails.length} emails...`,
+      });
+    }
+
+    // batchAnalyze expects Email[] with required date field
+    // EmailMessage has optional date, so we provide a default
+    const emailsWithDate = emails.map((email) => ({
+      ...email,
+      date: email.date || new Date().toISOString(),
+    }));
+
+    // batchAnalyze returns AnalysisResult[] from transactionExtractorService
+    const analyzed = transactionExtractorService.batchAnalyze(emailsWithDate);
+    const realEstateResults = analyzed.filter((a) => a.isRealEstateRelated);
+
+    // Check for cancellation
+    this.checkCancelled();
+
+    if (onProgress) {
+      onProgress({ step: "grouping", message: "Grouping by property..." });
+    }
+
+    const grouped = transactionExtractorService.groupByProperty(realEstateResults);
+
+    // Convert to DetectedTransaction format for consistency
+    const detectedTransactions: (DetectedTransaction & { emails?: AnalyzedEmail[] })[] = Object.entries(grouped)
+      .map(([address, emailGroup]) => {
+        const summary =
+          transactionExtractorService.generateTransactionSummary(emailGroup);
+        if (!summary) return null;
+
+        // Convert AnalysisResult[] to AnalyzedEmail[] for communications saving
+        // Handle both KeywordMatch[] (from actual service) and string (from test mocks)
+        const analyzedEmails: AnalyzedEmail[] = emailGroup.map((result) => {
+          // Handle keywords - could be KeywordMatch[] or string (legacy/mocks)
+          let keywordsStr: string | undefined;
+          if (Array.isArray(result.keywords)) {
+            keywordsStr = result.keywords.map((k) => k.keyword).join(", ");
+          } else if (typeof result.keywords === "string") {
+            keywordsStr = result.keywords;
+          }
+
+          // Handle parties - could be Party[] or string (legacy/mocks)
+          let partiesStr: string | undefined;
+          if (Array.isArray(result.parties)) {
+            partiesStr = result.parties.map((p) => p.name || p.email).join(", ");
+          } else if (typeof result.parties === "string") {
+            partiesStr = result.parties;
+          }
+
+          return {
+            subject: result.subject,
+            from: result.from || "",
+            date: result.date,
+            isRealEstateRelated: result.isRealEstateRelated,
+            keywords: keywordsStr,
+            parties: partiesStr,
+            confidence: result.confidence,
+          };
+        });
+
+        return {
+          id: `pat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          propertyAddress: address,
+          transactionType: summary.transactionType || null,
+          stage: null,
+          confidence: (summary.confidence || 0) / 100, // Normalize to 0-1
+          extractionMethod: "pattern" as ExtractionMethod,
+          communicationIds: [],
+          dateRange: {
+            start: new Date(summary.firstCommunication).toISOString(),
+            end: new Date(summary.lastCommunication).toISOString(),
+          },
+          suggestedContacts: { assignments: [] },
+          summary: `Transaction at ${address}`,
+          patternSummary: {
+            propertyAddress: summary.propertyAddress,
+            transactionType: summary.transactionType,
+            salePrice: summary.salePrice,
+            closingDate: summary.closingDate
+              ? typeof summary.closingDate === "string"
+                ? summary.closingDate
+                : new Date(summary.closingDate).toISOString()
+              : null,
+            mlsNumbers: summary.mlsNumbers || [],
+            communicationsCount: summary.communicationsCount,
+            firstCommunication: summary.firstCommunication,
+            lastCommunication: summary.lastCommunication,
+            confidence: summary.confidence || 0,
+          },
+          // Store emails for saving communications later
+          emails: analyzedEmails,
+        } as DetectedTransaction & { emails: AnalyzedEmail[] };
+      })
+      .filter((tx): tx is DetectedTransaction & { emails: AnalyzedEmail[] } => tx !== null);
+
+    return {
+      detectedTransactions,
+      realEstateCount: realEstateResults.length,
+      extractionMethod: "pattern",
+    };
+  }
+
+  /**
+   * Save detected transactions with detection metadata.
+   * Sets detection_source, detection_status, detection_method, etc.
+   * @private
+   */
+  private async _saveDetectedTransactions(
+    userId: string,
+    extractionResult: {
+      detectedTransactions: (DetectedTransaction & { emails?: AnalyzedEmail[] })[];
+      realEstateCount: number;
+      extractionMethod: ExtractionMethod;
+    },
+    originalEmails: EmailMessage[],
+  ): Promise<TransactionWithSummary[]> {
+    const transactions: TransactionWithSummary[] = [];
+
+    for (const detected of extractionResult.detectedTransactions) {
+      // Check for cancellation for each transaction save
+      this.checkCancelled();
+
+      // Parse address components
+      const addressParts = this._parseAddress(detected.propertyAddress);
+
+      // Helper to convert date to ISO string safely
+      const toISOString = (date: string | Date | number | undefined | null): string | undefined => {
+        if (!date) return undefined;
+        if (date instanceof Date) return date.toISOString();
+        if (typeof date === "string") return date;
+        if (typeof date === "number") return new Date(date).toISOString();
+        return undefined;
+      };
+
+      // Map extraction method to detection_source
+      // 'pattern' | 'llm' -> 'auto', 'hybrid' -> 'hybrid'
+      const detectionSource: "manual" | "auto" | "hybrid" =
+        extractionResult.extractionMethod === "hybrid" ? "hybrid" : "auto";
+
+      // Map DetectedTransaction.transactionType to Transaction.transaction_type
+      // DetectedTransaction uses 'purchase' | 'sale' | 'lease' | null
+      // Transaction uses 'purchase' | 'sale' | 'other'
+      let txType: "purchase" | "sale" | "other" | undefined;
+      if (detected.transactionType === "purchase" || detected.transactionType === "sale") {
+        txType = detected.transactionType;
+      } else if (detected.transactionType === "lease") {
+        txType = "other"; // Map lease to other
+      } else {
+        txType = undefined;
+      }
+
+      const transactionData: Partial<NewTransaction> = {
+        user_id: userId,
+        property_address: detected.propertyAddress,
+        property_street: addressParts.street || undefined,
+        property_city: addressParts.city || undefined,
+        property_state: addressParts.state || undefined,
+        property_zip: addressParts.zip || undefined,
+        transaction_type: txType,
+        transaction_status: "pending", // New from AI detection
+        status: "active",
+        closing_date: toISOString(detected.dateRange?.end),
+        closing_date_verified: false,
+        extraction_confidence: Math.round(detected.confidence * 100),
+        first_communication_date: toISOString(detected.dateRange?.start),
+        last_communication_date: toISOString(detected.dateRange?.end),
+        total_communications_count: detected.communicationIds?.length || 0,
+        export_status: "not_exported",
+        export_count: 0,
+        offer_count: 0,
+        failed_offers_count: 0,
+        // New AI detection fields
+        detection_source: detectionSource,
+        detection_status: "pending", // Awaiting user confirmation
+        detection_confidence: detected.confidence,
+        detection_method: extractionResult.extractionMethod,
+        suggested_contacts: detected.suggestedContacts
+          ? JSON.stringify(detected.suggestedContacts)
+          : undefined,
+      };
+
+      const transaction = await databaseService.createTransaction(
+        transactionData as NewTransaction,
+      );
+
+      // Save communications if available
+      // For pattern extraction, emails are attached to detected transaction
+      // For hybrid extraction, we need to find matching emails
+      const emailsToSave = detected.emails || [];
+      if (emailsToSave.length > 0) {
+        await this._saveCommunications(
+          userId,
+          transaction.id,
+          emailsToSave,
+          originalEmails,
+        );
+      }
+
+      // Create result - use transaction.id and omit detected.id to avoid duplication
+      const { id: _detectedId, ...detectedWithoutId } = detected;
+      transactions.push({
+        id: transaction.id,
+        ...detectedWithoutId,
+      } as TransactionWithSummary);
+    }
+
+    return transactions;
   }
 
   /**
