@@ -91,6 +91,7 @@
     "wait-on": "^8.0.1"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.2",
     "@azure/msal-node": "^2.15.0",
     "@microsoft/microsoft-graph-client": "^3.0.7",
     "@supabase/supabase-js": "^2.38.0",
