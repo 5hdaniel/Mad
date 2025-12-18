@@ -17,6 +17,7 @@ import {
   ContactRoleAssignment,
 } from './types';
 import { ContentSanitizer } from '../contentSanitizer';
+import { contactRolesPrompt } from '../prompts';
 
 const VALID_ROLES: ContactRole[] = [
   'buyer',
@@ -96,70 +97,12 @@ export class ExtractContactRolesTool {
 
   /**
    * Build the LLM prompt for contact role extraction.
+   * Uses external prompt template from prompts/contactRoles.ts
    */
   private buildPrompt(input: ExtractContactRolesInput): LLMMessage[] {
-    const systemPrompt = `You are a real estate transaction analyst. Analyze the provided email communications and identify the role of each participant.
-
-IMPORTANT: Return ONLY valid JSON matching this exact schema:
-{
-  "assignments": [
-    {
-      "name": string,
-      "email": string | null,
-      "phone": string | null,
-      "role": "buyer" | "seller" | "buyer_agent" | "seller_agent" | "escrow" | "title" | "lender" | "inspector" | "appraiser" | "attorney" | "other",
-      "confidence": number (0-1),
-      "evidence": [string] (direct quotes from emails supporting this role assignment)
-    }
-  ],
-  "transactionContext": {
-    "propertyAddress": string | null,
-    "transactionType": "purchase" | "sale" | "lease" | null
-  }
-}
-
-Role definitions:
-- buyer: The person/entity purchasing the property
-- seller: The person/entity selling the property
-- buyer_agent: Real estate agent representing the buyer
-- seller_agent: Real estate agent representing the seller (listing agent)
-- escrow: Escrow officer or company
-- title: Title company representative
-- lender: Mortgage lender or loan officer
-- inspector: Home inspector
-- appraiser: Property appraiser
-- attorney: Real estate attorney
-- other: Any other transaction participant
-
-Provide evidence by quoting relevant text that indicates each person's role. Keep evidence quotes short and relevant.`;
-
-    let userPrompt = `Analyze these email communications and identify participant roles:\n\n`;
-
-    if (input.propertyAddress) {
-      userPrompt += `Property: ${input.propertyAddress}\n\n`;
-    }
-
-    if (input.knownContacts && input.knownContacts.length > 0) {
-      userPrompt += `Known contacts (match if possible):\n`;
-      input.knownContacts.forEach((c) => {
-        userPrompt += `- ${c.name}${c.email ? ` (${c.email})` : ''}${c.phone ? ` ${c.phone}` : ''}\n`;
-      });
-      userPrompt += '\n';
-    }
-
-    userPrompt += `Communications:\n\n`;
-    input.communications.forEach((comm, i) => {
-      userPrompt += `--- Email ${i + 1} ---\n`;
-      userPrompt += `From: ${comm.sender}\n`;
-      userPrompt += `To: ${comm.recipients.join(', ')}\n`;
-      userPrompt += `Date: ${comm.date}\n`;
-      userPrompt += `Subject: ${comm.subject}\n\n`;
-      userPrompt += `${comm.body}\n\n`;
-    });
-
     return [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt },
+      { role: 'system', content: contactRolesPrompt.buildSystemPrompt() },
+      { role: 'user', content: contactRolesPrompt.buildUserPrompt(input) },
     ];
   }
 
