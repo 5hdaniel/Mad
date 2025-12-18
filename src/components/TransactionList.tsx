@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import type { Transaction, OAuthProvider } from "@/types";
 import AuditTransactionModal from "./AuditTransactionModal";
 import ExportModal from "./ExportModal";
@@ -43,6 +43,22 @@ function TransactionList({
     null,
   );
 
+  // Detection status filter - read initial value from URL params
+  const [detectionFilter, setDetectionFilter] = useState<
+    "all" | "confirmed" | "pending" | "rejected"
+  >(() => {
+    const params = new URLSearchParams(window.location.search);
+    const filter = params.get("detection");
+    if (
+      filter === "confirmed" ||
+      filter === "pending" ||
+      filter === "rejected"
+    ) {
+      return filter;
+    }
+    return "all";
+  });
+
   useEffect(() => {
     loadTransactions();
 
@@ -56,6 +72,34 @@ function TransactionList({
       if (cleanup) cleanup();
     };
   }, []);
+
+  // Sync detection filter to URL params
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (detectionFilter === "all") {
+      params.delete("detection");
+    } else {
+      params.set("detection", detectionFilter);
+    }
+    const newUrl = params.toString()
+      ? `${window.location.pathname}?${params.toString()}`
+      : window.location.pathname;
+    window.history.replaceState({}, "", newUrl);
+  }, [detectionFilter]);
+
+  // Compute detection status counts
+  const detectionCounts = useMemo(
+    () => ({
+      all: transactions.length,
+      confirmed: transactions.filter((t) => t.detection_status === "confirmed")
+        .length,
+      pending: transactions.filter((t) => t.detection_status === "pending")
+        .length,
+      rejected: transactions.filter((t) => t.detection_status === "rejected")
+        .length,
+    }),
+    [transactions],
+  );
 
   const loadTransactions = async (): Promise<void> => {
     try {
@@ -149,7 +193,9 @@ function TransactionList({
       statusFilter === "all" ||
       (statusFilter === "active" && t.status === "active") ||
       (statusFilter === "closed" && t.status === "closed");
-    return matchesSearch && matchesStatus;
+    const matchesDetection =
+      detectionFilter === "all" || t.detection_status === detectionFilter;
+    return matchesSearch && matchesStatus && matchesDetection;
   });
 
   const handleQuickExport = (
@@ -236,6 +282,62 @@ function TransactionList({
             }`}
           >
             All ({transactions.length})
+          </button>
+        </div>
+
+        {/* Detection Status Filter Tabs */}
+        <div className="inline-flex items-center bg-gray-100 rounded-lg p-1 mb-3 ml-4">
+          <button
+            onClick={() => setDetectionFilter("all")}
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+              detectionFilter === "all"
+                ? "bg-white text-gray-800 shadow-sm"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            All
+            <span className="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-gray-200">
+              {detectionCounts.all}
+            </span>
+          </button>
+          <button
+            onClick={() => setDetectionFilter("confirmed")}
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+              detectionFilter === "confirmed"
+                ? "bg-white text-green-600 shadow-sm"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            Confirmed
+            <span className="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-green-100 text-green-700">
+              {detectionCounts.confirmed}
+            </span>
+          </button>
+          <button
+            onClick={() => setDetectionFilter("pending")}
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+              detectionFilter === "pending"
+                ? "bg-white text-amber-600 shadow-sm"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            Pending Review
+            <span className="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-amber-100 text-amber-700">
+              {detectionCounts.pending}
+            </span>
+          </button>
+          <button
+            onClick={() => setDetectionFilter("rejected")}
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+              detectionFilter === "rejected"
+                ? "bg-white text-red-600 shadow-sm"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            Rejected
+            <span className="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-red-100 text-red-700">
+              {detectionCounts.rejected}
+            </span>
           </button>
         </div>
 
