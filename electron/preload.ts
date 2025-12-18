@@ -611,6 +611,71 @@ contextBridge.exposeInMainWorld("api", {
      */
     getLearningStats: (userId: string, fieldName: string) =>
       ipcRenderer.invoke("feedback:get-learning-stats", userId, fieldName),
+
+    /**
+     * Records transaction feedback (approve/reject/edit) for LLM-detected transactions
+     * @param {string} userId - User ID
+     * @param {Object} feedback - Transaction feedback data
+     * @returns {Promise<{success: boolean, error?: string}>} Recording result
+     */
+    recordTransaction: (
+      userId: string,
+      feedback: {
+        detectedTransactionId: string;
+        action: "confirm" | "reject" | "merge";
+        corrections?: {
+          propertyAddress?: string;
+          transactionType?: string;
+          addCommunications?: string[];
+          removeCommunications?: string[];
+        };
+        modelVersion?: string;
+        promptVersion?: string;
+      },
+    ) => ipcRenderer.invoke("feedback:record-transaction", userId, feedback),
+
+    /**
+     * Records role feedback for contact role corrections
+     * @param {string} userId - User ID
+     * @param {Object} feedback - Role feedback data
+     * @returns {Promise<{success: boolean, error?: string}>} Recording result
+     */
+    recordRole: (
+      userId: string,
+      feedback: {
+        transactionId: string;
+        contactId: string;
+        originalRole: string;
+        correctedRole: string;
+        modelVersion?: string;
+        promptVersion?: string;
+      },
+    ) => ipcRenderer.invoke("feedback:record-role", userId, feedback),
+
+    /**
+     * Records communication relevance feedback
+     * @param {string} userId - User ID
+     * @param {Object} feedback - Communication feedback data
+     * @returns {Promise<{success: boolean, error?: string}>} Recording result
+     */
+    recordRelevance: (
+      userId: string,
+      feedback: {
+        communicationId: string;
+        wasRelevant: boolean;
+        correctTransactionId?: string;
+        modelVersion?: string;
+        promptVersion?: string;
+      },
+    ) => ipcRenderer.invoke("feedback:record-relevance", userId, feedback),
+
+    /**
+     * Gets aggregated feedback statistics for a user
+     * @param {string} userId - User ID
+     * @returns {Promise<{success: boolean, data?: object, error?: string}>} Feedback stats
+     */
+    getStats: (userId: string) =>
+      ipcRenderer.invoke("feedback:get-stats", userId),
   },
 
   /**
