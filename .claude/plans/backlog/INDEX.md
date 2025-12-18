@@ -54,8 +54,10 @@ This index tracks all backlog items with their current status and metadata.
 
 ## Full Index
 
-| ID | Title | Priority | Status | Sprint | Est. Turns | Est. Tokens | Est. Time | Impl Turns | Impl Tokens | Impl Time | PR Turns | PR Tokens | PR Time | Debug Turns | Debug Tokens | Debug Time | Total Turns | Total Tokens | Total Time | File |
-|----|-------|----------|--------|--------|------------|-------------|-----------|------------|-------------|-----------|----------|-----------|---------|-------------|--------------|------------|-------------|--------------|------------|------|
+**Categories:** `schema` | `service` | `ipc` | `ui` | `refactor` | `test` | `config` | `docs` | `infra`
+
+| ID | Title | Category | Priority | Status | Sprint | Est. Turns | Est. Tokens | Est. Time | Impl Turns | Impl Tokens | Impl Time | PR Turns | PR Tokens | PR Time | Debug Turns | Debug Tokens | Debug Time | Total Turns | Total Tokens | Total Time | Variance | File |
+|----|-------|----------|----------|--------|--------|------------|-------------|-----------|------------|-------------|-----------|----------|-----------|---------|-------------|--------------|------------|-------------|--------------|------------|----------|------|
 | BACKLOG-001 | Add ES Module Type to package.json | Low | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-001.md](BACKLOG-001.md) |
 | BACKLOG-002 | Code-Split Large JS Bundle | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-002.md](BACKLOG-002.md) |
 | BACKLOG-003 | Improve First-Sync Time Estimation | Low | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-003.md](BACKLOG-003.md) |
@@ -90,11 +92,11 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-032 | Handle Backup Already in Progress | Critical | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-033 | Check Supabase Terms Acceptance | High | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-034 | Phone Type Card Layout | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
-| BACKLOG-035 | Remove Orphaned Table | Critical | ✅ Completed | SPRINT-003 | 5-8 | 20-30K | ~30m | 10 | ~40K | ~20m | - | - | - | - | - | - | 10 | ~40K | ~20m | [BACKLOG-035.md](BACKLOG-035.md) |
+| BACKLOG-035 | Remove Orphaned Table | schema | Critical | ✅ Completed | SPRINT-003 | 5-8 | 20-30K | ~30m | 10 | ~40K | ~20m | - | - | - | - | - | - | 10 | ~40K | ~20m | +25% | [BACKLOG-035.md](BACKLOG-035.md) |
 | BACKLOG-036 | Fix Sync Phase UI Text | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-037 | Don't Fail Sync on Disconnect | High | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
-| BACKLOG-038 | Schema Mismatch contacts.name | Critical | ✅ Completed | SPRINT-003 | 10-15 | 40-60K | ~1.5h | 8 | ~30K | ~15m | - | - | - | - | - | - | 8 | ~30K | ~15m | [BACKLOG-038.md](BACKLOG-038.md) |
-| BACKLOG-039 | Schema Mismatch transactions.status | Critical | ✅ Completed | SPRINT-003 | 10-15 | 40-60K | ~1.5h | 25 | ~100K | ~45m | - | - | - | - | - | - | 25 | ~100K | ~45m | [BACKLOG-039.md](BACKLOG-039.md) |
+| BACKLOG-038 | Schema Mismatch contacts.name | schema | Critical | ✅ Completed | SPRINT-003 | 10-15 | 40-60K | ~1.5h | 8 | ~30K | ~15m | - | - | - | - | - | - | 8 | ~30K | ~15m | -36% | [BACKLOG-038.md](BACKLOG-038.md) |
+| BACKLOG-039 | Schema Mismatch transactions.status | schema | Critical | ✅ Completed | SPRINT-003 | 10-15 | 40-60K | ~1.5h | 25 | ~100K | ~45m | - | - | - | - | - | - | 25 | ~100K | ~45m | +100% | [BACKLOG-039.md](BACKLOG-039.md) |
 | BACKLOG-040 | ContactsService macOS Paths | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-041 | Create UX Engineer Agent | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-042 | Lookback Period Not Persistent | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
@@ -113,9 +115,9 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-055 | AI House Viewing Extraction | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-056 | macOS Code Signing Fix | High | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-057 | Login Auth Timeout Retry | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
-| BACKLOG-058 | Split databaseService.ts | Critical | ✅ Completed | SPRINT-002 | 60-80 | 200-300K | - | ~25 | ~100K | ~2h | 2 | ~15K | ~15m | 5 | ~20K | ~30m | ~32 | ~135K | ~3h | [BACKLOG-058.md](BACKLOG-058.md) |
-| BACKLOG-059 | Fix Skipped Tests (27+) | Critical | ✅ Completed | SPRINT-002 | 12-18 | 48-72K | - | 10 | ~45K | - | 1 | ~12K | - | 3 | ~8K | - | 14 | ~65K | - | [BACKLOG-059.md](BACKLOG-059.md) |
-| BACKLOG-060 | Fix N+1 Query Pattern | High | ✅ Completed | SPRINT-002 | 10-15 | 40-60K | - | - | - | - | - | - | - | - | - | - | 14 | ~55K | - | [BACKLOG-060.md](BACKLOG-060.md) |
+| BACKLOG-058 | Split databaseService.ts | refactor | Critical | ✅ Completed | SPRINT-002 | 60-80 | 200-300K | - | ~25 | ~100K | ~2h | 2 | ~15K | ~15m | 5 | ~20K | ~30m | ~32 | ~135K | ~3h | -54% | [BACKLOG-058.md](BACKLOG-058.md) |
+| BACKLOG-059 | Fix Skipped Tests (27+) | test | Critical | ✅ Completed | SPRINT-002 | 12-18 | 48-72K | - | 10 | ~45K | - | 1 | ~12K | - | 3 | ~8K | - | 14 | ~65K | - | -7% | [BACKLOG-059.md](BACKLOG-059.md) |
+| BACKLOG-060 | Fix N+1 Query Pattern | refactor | High | ✅ Completed | SPRINT-002 | 10-15 | 40-60K | - | - | - | - | - | - | - | - | - | - | 14 | ~55K | - | +12% | [BACKLOG-060.md](BACKLOG-060.md) |
 | BACKLOG-061 | Refactor Transactions.tsx | High | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-062 | Refactor Contacts.tsx | High | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-063 | Refactor useAppStateMachine.ts | High | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
@@ -127,7 +129,7 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-069 | Telemetry & Analytics | Low | Deferred | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-070 | Enterprise User Management | Low | Deferred | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-071 | Atomic Transaction Creation | Low | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
-| BACKLOG-072 | Enforce Engineer Workflow Compliance | Critical | ✅ Completed | SPRINT-003 | 23-35 | 90-140K | ~3h | 8 | ~32K | 15m | 1 | ~12K | 8m | 2 | ~8K | 5m | 11 | ~52K | 28m | [BACKLOG-072.md](BACKLOG-072.md) |
+| BACKLOG-072 | Enforce Engineer Workflow Compliance | config | Critical | ✅ Completed | SPRINT-003 | 23-35 | 90-140K | ~3h | 8 | ~32K | 15m | 1 | ~12K | 8m | 2 | ~8K | 5m | 11 | ~52K | 28m | -62% | [BACKLOG-072.md](BACKLOG-072.md) |
 | BACKLOG-073 | AI MVP Phase 0 - Schema Foundation | Critical | Pending | SPRINT-004 | 22 | ~50K | ~1.5h | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-073.md](BACKLOG-073.md) |
 | BACKLOG-074 | AI MVP Phase 1 - LLM Infrastructure | Critical | Pending | SPRINT-004 | 28 | ~70K | ~2h | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-074.md](BACKLOG-074.md) |
 | BACKLOG-075 | AI MVP Phase 2 - AI Analysis Tools | High | Pending | SPRINT-005 | 28 | ~70K | ~2h | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-075.md](BACKLOG-075.md) |
@@ -185,3 +187,55 @@ This index tracks all backlog items with their current status and metadata.
 - 2025-12-17: BACKLOG-035 (TASK-204) completed - Orphaned tables + closing_date fix (PR #142 merged)
 - 2025-12-17: *INCIDENT*: Parallel agent execution burned ~14M tokens before manual intervention
 - 2025-12-17: Lesson learned: Database schema tasks must be SEQUENTIAL, never parallel
+- 2025-12-17: Added Category column and Variance tracking to INDEX.md for estimation accuracy analysis
+
+---
+
+## Estimation Accuracy Analysis
+
+**Purpose:** Track PM estimation accuracy by category to improve future predictions.
+
+### By Category (Updated after each sprint)
+
+| Category | Tasks | Avg Variance | Trend | Adjustment Factor |
+|----------|-------|--------------|-------|-------------------|
+| schema | 3 | +30% | under | 1.3x |
+| refactor | 2 | -21% | over | 0.8x |
+| test | 1 | -7% | accurate | 1.0x |
+| config | 1 | -62% | over | 0.5x |
+| service | 0 | - | - | TBD |
+| ipc | 0 | - | - | TBD |
+| ui | 0 | - | - | TBD |
+
+**Note:** Need 5+ tasks per category for reliable trends.
+
+### Variance Breakdown (All Completed Tasks)
+
+| Task | Category | Est | Actual | Variance | Root Cause |
+|------|----------|-----|--------|----------|------------|
+| BACKLOG-035 | schema | 5-8 | 10 | +25% | Migration complexity underestimated |
+| BACKLOG-038 | schema | 10-15 | 8 | -36% | Simpler than expected |
+| BACKLOG-039 | schema | 10-15 | 25 | +100% | Unexpected edge cases in status enum |
+| BACKLOG-058 | refactor | 60-80 | 32 | -54% | Clean extraction, fewer dependencies |
+| BACKLOG-059 | test | 12-18 | 14 | -7% | Accurate estimate |
+| BACKLOG-060 | refactor | 10-15 | 14 | +12% | Accurate estimate |
+| BACKLOG-072 | config | 23-35 | 11 | -62% | Workflow docs simpler than expected |
+
+### Learnings
+
+1. **Schema tasks are unpredictable** - variance from -36% to +100%
+2. **Refactor tasks tend to be overestimated** - avg -21%
+3. **Config/docs tasks are overestimated** - avg -62%
+4. **Need more data on: service, ipc, ui categories**
+
+### PM Estimation Guidelines (Update as patterns emerge)
+
+| Category | Base Estimate | Adjustment | Notes |
+|----------|---------------|------------|-------|
+| schema | PM estimate | × 1.3 | High variance, add buffer |
+| refactor | PM estimate | × 0.8 | Tend to overestimate |
+| test | PM estimate | × 1.0 | Usually accurate |
+| config | PM estimate | × 0.5 | Significantly overestimate |
+| service | PM estimate | × 1.0 | TBD - need data |
+| ipc | PM estimate | × 1.5 | TBD - suspected underestimate |
+| ui | PM estimate | × 1.0 | TBD - need data |

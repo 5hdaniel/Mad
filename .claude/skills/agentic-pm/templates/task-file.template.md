@@ -111,6 +111,38 @@ This task's PR MUST pass:
 
 ---
 
+## PM Estimate Breakdown (PM-Owned)
+
+**Category:** `<schema | service | ipc | ui | refactor | test | config | docs>`
+
+**Estimated Totals:**
+- **Turns:** X-Y
+- **Tokens:** ~XK-YK
+- **Time:** ~Xm-Ym
+
+**Estimation Assumptions:**
+
+| Factor | Assumption | Est. Turns |
+|--------|------------|------------|
+| Files to create | X new files | +X |
+| Files to modify | X files (scope: small/medium/large) | +X |
+| Code volume | ~X lines | +X |
+| Functions/handlers | X functions | +X |
+| Core files touched | Yes/No (main.ts, preload.ts, App.tsx) | +X |
+| New patterns | Yes/No (following existing vs new pattern) | +X |
+| Test complexity | Low/Medium/High | +X |
+| Dependencies | X services to integrate | +X |
+
+**Confidence:** Low / Medium / High
+
+**Risk factors:**
+- <uncertainty 1>
+- <uncertainty 2>
+
+**Similar past tasks:** <TASK-XXX (actual: Y turns) if applicable>
+
+---
+
 ## Implementation Summary (Engineer-Owned)
 
 **REQUIRED: You MUST complete this section before opening your PR.**
@@ -181,3 +213,25 @@ Verification:
 
 **Reviewer notes:**
 <Anything the reviewer should pay attention to>
+
+### Estimate vs Actual Analysis
+
+**REQUIRED: Compare PM estimates to actuals to improve future predictions.**
+
+| Factor | PM Assumed | Actual | Delta | Why Different? |
+|--------|------------|--------|-------|----------------|
+| Files to create | X | X | 0 | - |
+| Files to modify | X | X | +/- X | <reason> |
+| Code volume | ~X lines | ~X lines | +/- X | <reason> |
+| Functions/handlers | X | X | +/- X | <reason> |
+| Core files touched | Yes/No | Yes/No | - | <reason if changed> |
+| New patterns | Yes/No | Yes/No | - | <reason if changed> |
+| Test complexity | Low/Med/High | Low/Med/High | - | <reason if changed> |
+
+**Total Variance:** Est X-Y turns → Actual Z turns (X% over/under)
+
+**Root cause of variance:**
+<1-2 sentence explanation of why estimate was off, e.g., "PM counted 3 handlers but task needed 8", "Unexpected type complexity in preload bridge">
+
+**Suggestion for similar tasks:**
+<What should PM estimate differently next time? e.g., "Count each IPC handler as +1 turn", "Core file modifications need +2 turns buffer">
