@@ -111,4 +111,31 @@ useEffect(() => {
 
 ## Implementation Summary (Engineer-Owned)
 
-*To be completed by engineer*
+### Changes Made
+
+**File Modified:** `src/components/TransactionList.tsx`
+
+1. **Added useMemo import** - For optimized filter count computation
+2. **Added detectionFilter state** - Tracks active filter (all/confirmed/pending/rejected) with URL param initialization
+3. **Added URL param sync effect** - Updates URL when filter changes for bookmarkable filters
+4. **Added detectionCounts useMemo** - Computes counts for each detection status efficiently
+5. **Updated filteredTransactions** - Added detection status filtering alongside existing status and search filters
+6. **Added Detection Filter Tabs UI** - Four tabs (All, Confirmed, Pending Review, Rejected) with count badges, styled consistently with existing status filter toggle
+
+### Engineer Checklist
+- [x] TypeScript type-check passes
+- [x] ESLint passes (no new errors)
+- [x] Existing tests pass
+- [x] Changes follow existing code patterns
+- [x] No business logic in entry files
+- [x] URL param sync implemented for bookmarkable filters
+
+### Results
+- **Estimated:** 3 turns, ~12K tokens, ~20m
+- **Actual:** 3 turns, ~12K tokens, ~15m (Plan: 1 turn, Impl: 2 turns)
+
+### Deviations
+None - implementation matched plan exactly.
+
+### Issues
+None encountered.
