@@ -1,6 +1,23 @@
-import React, { useState, useEffect } from "react";
-import type { Transaction, Communication } from "@/types";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
+import type { Transaction, Communication, Contact } from "@/types";
 import ExportModal from "./ExportModal";
+
+/**
+ * Interface for AI-suggested contact assignment
+ */
+interface SuggestedContact {
+  role: string;
+  contact_id: string;
+  is_primary?: boolean;
+  notes?: string;
+}
+
+/**
+ * Interface for resolved suggested contact with contact details
+ */
+interface ResolvedSuggestedContact extends SuggestedContact {
+  contact?: Contact;
+}
 
 interface ContactAssignment {
   id: string;
@@ -44,6 +61,59 @@ function TransactionDetails({
   const [showUnlinkConfirm, setShowUnlinkConfirm] =
     useState<Communication | null>(null);
   const [viewingEmail, setViewingEmail] = useState<Communication | null>(null);
+  const [resolvedSuggestions, setResolvedSuggestions] = useState<ResolvedSuggestedContact[]>([]);
+  const [processingContactId, setProcessingContactId] = useState<string | null>(null);
+  const [processingAll, setProcessingAll] = useState<boolean>(false);
+
+  /**
+   * Parse and memoize suggested contacts from transaction
+   */
+  const suggestedContacts = useMemo((): SuggestedContact[] => {
+    if (!transaction.suggested_contacts) return [];
+    try {
+      const parsed = JSON.parse(transaction.suggested_contacts);
+      if (Array.isArray(parsed)) {
+        return parsed.filter(
+          (sc: SuggestedContact) => sc.role && sc.contact_id
+        );
+      }
+      return [];
+    } catch {
+      return [];
+    }
+  }, [transaction.suggested_contacts]);
+
+  /**
+   * Resolve contact details for all suggested contacts
+   */
+  useEffect(() => {
+    const resolveContacts = async () => {
+      if (suggestedContacts.length === 0) {
+        setResolvedSuggestions([]);
+        return;
+      }
+
+      try {
+        const contactsResult = await window.api.contacts.getAll(transaction.user_id);
+        if (contactsResult.success && contactsResult.contacts) {
+          const contactMap = new Map(
+            contactsResult.contacts.map((c: Contact) => [c.id, c])
+          );
+          const resolved = suggestedContacts.map((sc) => ({
+            ...sc,
+            contact: contactMap.get(sc.contact_id),
+          }));
+          setResolvedSuggestions(resolved);
+        }
+      } catch (err) {
+        console.error("Failed to resolve suggested contacts:", err);
+        // Still show suggestions without contact details
+        setResolvedSuggestions(suggestedContacts.map((sc) => ({ ...sc })));
+      }
+    };
+
+    resolveContacts();
+  }, [suggestedContacts, transaction.user_id]);
 
   useEffect(() => {
     loadDetails();
@@ -130,6 +200,191 @@ function TransactionDetails({
       setUnlinkingCommId(null);
     }
   };
+
+  /**
+   * Helper to update suggested_contacts in database after processing
+   */
+  const updateSuggestedContacts = useCallback(async (
+    remainingSuggestions: SuggestedContact[]
+  ): Promise<void> => {
+    const newValue = remainingSuggestions.length > 0
+      ? JSON.stringify(remainingSuggestions)
+      : null;
+    await window.api.transactions.update(transaction.id, {
+      suggested_contacts: newValue,
+    });
+  }, [transaction.id]);
+
+  /**
+   * Handle accepting a single suggested contact
+   */
+  const handleAcceptSuggestion = useCallback(async (
+    suggestion: ResolvedSuggestedContact
+  ): Promise<void> => {
+    if (processingContactId || processingAll) return;
+
+    try {
+      setProcessingContactId(suggestion.contact_id);
+
+      // Assign the contact to the transaction
+      await window.api.transactions.assignContact(
+        transaction.id,
+        suggestion.contact_id,
+        suggestion.role,
+        undefined, // roleCategory
+        suggestion.is_primary || false,
+        suggestion.notes
+      );
+
+      // Record feedback (accepted as-is)
+      if (window.api.feedback?.recordRole) {
+        await window.api.feedback.recordRole(transaction.user_id, {
+          transactionId: transaction.id,
+          contactId: suggestion.contact_id,
+          originalRole: suggestion.role,
+          correctedRole: suggestion.role,
+        });
+      }
+
+      // Remove from local state
+      setResolvedSuggestions((prev) =>
+        prev.filter((s) => s.contact_id !== suggestion.contact_id)
+      );
+
+      // Update database
+      const remaining = resolvedSuggestions.filter(
+        (s) => s.contact_id !== suggestion.contact_id
+      );
+      await updateSuggestedContacts(remaining);
+
+      // Refresh transaction data
+      await loadDetails();
+      if (onTransactionUpdated) {
+        onTransactionUpdated();
+      }
+    } catch (err) {
+      console.error("Failed to accept suggestion:", err);
+      alert("Failed to accept contact suggestion. Please try again.");
+    } finally {
+      setProcessingContactId(null);
+    }
+  }, [
+    processingContactId,
+    processingAll,
+    transaction.id,
+    transaction.user_id,
+    resolvedSuggestions,
+    updateSuggestedContacts,
+    onTransactionUpdated,
+  ]);
+
+  /**
+   * Handle rejecting a single suggested contact
+   */
+  const handleRejectSuggestion = useCallback(async (
+    suggestion: ResolvedSuggestedContact
+  ): Promise<void> => {
+    if (processingContactId || processingAll) return;
+
+    try {
+      setProcessingContactId(suggestion.contact_id);
+
+      // Record feedback (rejected - empty correctedRole indicates rejection)
+      if (window.api.feedback?.recordRole) {
+        await window.api.feedback.recordRole(transaction.user_id, {
+          transactionId: transaction.id,
+          contactId: suggestion.contact_id,
+          originalRole: suggestion.role,
+          correctedRole: "", // Empty indicates rejection
+        });
+      }
+
+      // Remove from local state
+      setResolvedSuggestions((prev) =>
+        prev.filter((s) => s.contact_id !== suggestion.contact_id)
+      );
+
+      // Update database
+      const remaining = resolvedSuggestions.filter(
+        (s) => s.contact_id !== suggestion.contact_id
+      );
+      await updateSuggestedContacts(remaining);
+
+      // Notify parent
+      if (onTransactionUpdated) {
+        onTransactionUpdated();
+      }
+    } catch (err) {
+      console.error("Failed to reject suggestion:", err);
+      alert("Failed to reject contact suggestion. Please try again.");
+    } finally {
+      setProcessingContactId(null);
+    }
+  }, [
+    processingContactId,
+    processingAll,
+    transaction.id,
+    transaction.user_id,
+    resolvedSuggestions,
+    updateSuggestedContacts,
+    onTransactionUpdated,
+  ]);
+
+  /**
+   * Handle accepting all suggested contacts
+   */
+  const handleAcceptAll = useCallback(async (): Promise<void> => {
+    if (processingContactId || processingAll || resolvedSuggestions.length === 0) return;
+
+    try {
+      setProcessingAll(true);
+
+      for (const suggestion of resolvedSuggestions) {
+        // Assign the contact
+        await window.api.transactions.assignContact(
+          transaction.id,
+          suggestion.contact_id,
+          suggestion.role,
+          undefined,
+          suggestion.is_primary || false,
+          suggestion.notes
+        );
+
+        // Record feedback
+        if (window.api.feedback?.recordRole) {
+          await window.api.feedback.recordRole(transaction.user_id, {
+            transactionId: transaction.id,
+            contactId: suggestion.contact_id,
+            originalRole: suggestion.role,
+            correctedRole: suggestion.role,
+          });
+        }
+      }
+
+      // Clear all suggestions
+      await updateSuggestedContacts([]);
+      setResolvedSuggestions([]);
+
+      // Refresh transaction data
+      await loadDetails();
+      if (onTransactionUpdated) {
+        onTransactionUpdated();
+      }
+    } catch (err) {
+      console.error("Failed to accept all suggestions:", err);
+      alert("Failed to accept all suggestions. Please try again.");
+    } finally {
+      setProcessingAll(false);
+    }
+  }, [
+    processingContactId,
+    processingAll,
+    resolvedSuggestions,
+    transaction.id,
+    transaction.user_id,
+    updateSuggestedContacts,
+    onTransactionUpdated,
+  ]);
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[60] p-4">
@@ -383,6 +638,224 @@ function TransactionDetails({
 
           {activeTab === "contacts" && (
             <div>
+              {/* AI Suggested Contacts Section */}
+              {resolvedSuggestions.length > 0 && (
+                <div className="mb-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <svg
+                        className="w-5 h-5 text-purple-600"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+                        />
+                      </svg>
+                      <h4 className="text-lg font-semibold text-gray-900">
+                        AI Suggested Contacts
+                      </h4>
+                      <span className="inline-block px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded-full">
+                        {resolvedSuggestions.length} suggestion{resolvedSuggestions.length !== 1 ? "s" : ""}
+                      </span>
+                    </div>
+                    <button
+                      onClick={handleAcceptAll}
+                      disabled={processingAll || !!processingContactId}
+                      className="px-3 py-1.5 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                    >
+                      {processingAll ? (
+                        <>
+                          <svg
+                            className="w-4 h-4 animate-spin"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                          >
+                            <circle
+                              className="opacity-25"
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              stroke="currentColor"
+                              strokeWidth="4"
+                            ></circle>
+                            <path
+                              className="opacity-75"
+                              fill="currentColor"
+                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                            ></path>
+                          </svg>
+                          Processing...
+                        </>
+                      ) : (
+                        <>
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M5 13l4 4L19 7"
+                            />
+                          </svg>
+                          Accept All
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  <div className="space-y-3">
+                    {resolvedSuggestions.map((suggestion) => {
+                      const isProcessing = processingContactId === suggestion.contact_id;
+                      const contact = suggestion.contact;
+                      const displayName = contact?.display_name || contact?.name || "Unknown Contact";
+                      const displayEmail = contact?.email || "";
+                      const displayCompany = contact?.company || "";
+
+                      return (
+                        <div
+                          key={suggestion.contact_id}
+                          className="bg-purple-50 border border-purple-200 rounded-lg p-4"
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className="inline-block px-3 py-1 bg-purple-100 text-purple-800 text-xs font-semibold rounded-full">
+                                  {suggestion.role}
+                                </span>
+                                {suggestion.is_primary && (
+                                  <span className="inline-block px-2 py-1 bg-blue-100 text-blue-800 text-xs font-semibold rounded-full">
+                                    Primary
+                                  </span>
+                                )}
+                                <span className="inline-block px-2 py-0.5 bg-yellow-100 text-yellow-800 text-xs font-medium rounded-full">
+                                  AI Suggested
+                                </span>
+                              </div>
+                              <h5 className="font-semibold text-gray-900 text-lg">
+                                {displayName}
+                              </h5>
+                              {displayEmail && (
+                                <p className="text-sm text-gray-600 mt-1">
+                                  <svg
+                                    className="w-4 h-4 inline mr-1"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                                    />
+                                  </svg>
+                                  {displayEmail}
+                                </p>
+                              )}
+                              {displayCompany && (
+                                <p className="text-sm text-gray-600 mt-1">
+                                  <svg
+                                    className="w-4 h-4 inline mr-1"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
+                                    />
+                                  </svg>
+                                  {displayCompany}
+                                </p>
+                              )}
+                              {suggestion.notes && (
+                                <p className="text-sm text-gray-700 mt-2 italic">
+                                  Note: {suggestion.notes}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 ml-4">
+                              <button
+                                onClick={() => handleAcceptSuggestion(suggestion)}
+                                disabled={isProcessing || processingAll}
+                                className="p-2 text-green-600 hover:bg-green-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Accept suggestion"
+                              >
+                                {isProcessing ? (
+                                  <svg
+                                    className="w-5 h-5 animate-spin"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <circle
+                                      className="opacity-25"
+                                      cx="12"
+                                      cy="12"
+                                      r="10"
+                                      stroke="currentColor"
+                                      strokeWidth="4"
+                                    ></circle>
+                                    <path
+                                      className="opacity-75"
+                                      fill="currentColor"
+                                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                    ></path>
+                                  </svg>
+                                ) : (
+                                  <svg
+                                    className="w-5 h-5"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M5 13l4 4L19 7"
+                                    />
+                                  </svg>
+                                )}
+                              </button>
+                              <button
+                                onClick={() => handleRejectSuggestion(suggestion)}
+                                disabled={isProcessing || processingAll}
+                                className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Reject suggestion"
+                              >
+                                <svg
+                                  className="w-5 h-5"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M6 18L18 6M6 6l12 12"
+                                  />
+                                </svg>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               <h4 className="text-lg font-semibold text-gray-900 mb-4">
                 Contact Assignments
               </h4>
