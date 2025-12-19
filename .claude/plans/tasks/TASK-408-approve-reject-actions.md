@@ -115,4 +115,39 @@ function TransactionActions({ transaction, onUpdate }: Props) {
 
 ## Implementation Summary (Engineer-Owned)
 
-*To be completed by engineer*
+**Implementation Date:** 2025-12-18
+**Branch:** feature/TASK-408-approve-reject-actions
+
+### Files Modified
+1. `src/components/TransactionList.tsx` - Added TransactionActions and RejectReasonModal components
+2. `electron/types/ipc.ts` - Added feedback API types to WindowApi interface
+3. `tests/setup.js` - Added feedback API mock for tests
+4. `src/components/__tests__/TransactionList.test.tsx` - Created new test file (8 tests)
+
+### Implementation Details
+- **TransactionActions Component**: Renders approve/reject buttons for transactions with `detection_status === 'pending'`
+- **RejectReasonModal Component**: Modal with textarea for optional rejection reason
+- **Approve Flow**: Updates `detection_status` to 'confirmed', sets `reviewed_at`, calls `feedback.recordTransaction` with action='confirm'
+- **Reject Flow**: Opens modal, on submit updates `detection_status` to 'rejected', sets `rejection_reason`, calls `feedback.recordTransaction` with action='reject'
+- **Button Styling**: Matches existing action buttons (emerald-500 for approve, red-500 for reject)
+- **Loading States**: Shows spinner during API calls
+
+### Acceptance Criteria Status
+- [x] Approve button updates detection_status='confirmed', records feedback
+- [x] Reject button shows reason modal, updates status, records feedback
+- [ ] Edit button opens AuditTransactionModal in edit mode (TASK-409 scope)
+- [x] Actions only show for pending transactions
+- [x] Feedback recorded via window.api.feedback
+- [x] All CI checks pass
+
+### Test Results
+- 8 new tests created covering:
+  - Button visibility for pending vs non-pending transactions
+  - Approve API calls and state refresh
+  - Reject modal opening/closing
+  - Reject with and without reason
+  - Detection status badges
+
+### Notes
+- Edit button deferred to TASK-409 as specified in Non-Goals
+- Pre-existing flaky test in appleDriverService.test.ts unrelated to changes

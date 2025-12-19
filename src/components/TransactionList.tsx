@@ -87,6 +87,221 @@ function PendingReviewBadge() {
   );
 }
 
+// ============================================
+// REJECT REASON MODAL COMPONENT
+// ============================================
+
+interface RejectReasonModalProps {
+  onConfirm: (reason: string) => void;
+  onCancel: () => void;
+}
+
+/**
+ * Modal for collecting rejection reason when user rejects an AI-detected transaction
+ */
+function RejectReasonModal({ onConfirm, onCancel }: RejectReasonModalProps) {
+  const [reason, setReason] = useState("");
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onConfirm(reason);
+  };
+
+  return (
+    <div
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+      onClick={onCancel}
+    >
+      <div
+        className="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">
+          Reject Transaction
+        </h3>
+        <form onSubmit={handleSubmit}>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Why are you rejecting this transaction? (optional)
+          </label>
+          <textarea
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+            rows={3}
+            placeholder="e.g., Not a real estate transaction, duplicate entry..."
+            autoFocus
+          />
+          <div className="flex justify-end gap-3 mt-4">
+            <button
+              type="button"
+              onClick={onCancel}
+              className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-medium"
+            >
+              Reject
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ============================================
+// TRANSACTION ACTIONS COMPONENT
+// ============================================
+
+interface TransactionActionsProps {
+  transaction: Transaction;
+  userId: string;
+  onUpdate: () => void;
+}
+
+/**
+ * Action buttons for approving/rejecting AI-detected pending transactions
+ * Only renders for transactions with detection_status === 'pending'
+ */
+function TransactionActions({
+  transaction,
+  userId,
+  onUpdate,
+}: TransactionActionsProps) {
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [isApproving, setIsApproving] = useState(false);
+  const [isRejecting, setIsRejecting] = useState(false);
+
+  // Only show actions for pending AI-detected transactions
+  if (transaction.detection_status !== "pending") {
+    return null;
+  }
+
+  const handleApprove = async (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation(); // Prevent opening transaction details
+    setIsApproving(true);
+    try {
+      // Update transaction status to confirmed
+      await window.api.transactions.update(transaction.id, {
+        detection_status: "confirmed",
+        reviewed_at: new Date().toISOString(),
+      });
+
+      // Record feedback for learning
+      await window.api.feedback.recordTransaction(userId, {
+        detectedTransactionId: transaction.id,
+        action: "confirm",
+      });
+
+      onUpdate();
+    } catch (error) {
+      console.error("Failed to approve transaction:", error);
+    } finally {
+      setIsApproving(false);
+    }
+  };
+
+  const handleReject = async (reason: string) => {
+    setIsRejecting(true);
+    try {
+      // Update transaction status to rejected
+      await window.api.transactions.update(transaction.id, {
+        detection_status: "rejected",
+        rejection_reason: reason || undefined,
+        reviewed_at: new Date().toISOString(),
+      });
+
+      // Record feedback for learning
+      await window.api.feedback.recordTransaction(userId, {
+        detectedTransactionId: transaction.id,
+        action: "reject",
+        corrections: reason ? { reason } : undefined,
+      });
+
+      setShowRejectModal(false);
+      onUpdate();
+    } catch (error) {
+      console.error("Failed to reject transaction:", error);
+    } finally {
+      setIsRejecting(false);
+    }
+  };
+
+  const handleRejectClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation(); // Prevent opening transaction details
+    setShowRejectModal(true);
+  };
+
+  return (
+    <>
+      <div className="flex items-center gap-1">
+        {/* Approve Button */}
+        <button
+          onClick={handleApprove}
+          disabled={isApproving}
+          className="p-2 rounded-lg font-semibold transition-all bg-emerald-500 text-white hover:bg-emerald-600 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+          title="Approve transaction"
+        >
+          {isApproving ? (
+            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M5 13l4 4L19 7"
+              />
+            </svg>
+          )}
+        </button>
+
+        {/* Reject Button */}
+        <button
+          onClick={handleRejectClick}
+          disabled={isRejecting}
+          className="p-2 rounded-lg font-semibold transition-all bg-red-500 text-white hover:bg-red-600 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+          title="Reject transaction"
+        >
+          {isRejecting ? (
+            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          )}
+        </button>
+      </div>
+
+      {/* Reject Reason Modal */}
+      {showRejectModal && (
+        <RejectReasonModal
+          onConfirm={handleReject}
+          onCancel={() => setShowRejectModal(false)}
+        />
+      )}
+    </>
+  );
+}
+
 interface TransactionListComponentProps {
   userId: string;
   provider: OAuthProvider;
@@ -765,6 +980,12 @@ function TransactionList({
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    {/* Approve/Reject Actions for pending transactions */}
+                    <TransactionActions
+                      transaction={transaction}
+                      userId={userId}
+                      onUpdate={loadTransactions}
+                    />
                     {/* Quick Export Button */}
                     <button
                       onClick={(e) => handleQuickExport(transaction, e)}
