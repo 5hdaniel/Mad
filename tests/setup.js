@@ -104,6 +104,17 @@ if (typeof window !== 'undefined') {
       getUsage: jest.fn(),
       canUse: jest.fn(),
     },
+    feedback: {
+      submit: jest.fn(),
+      getForTransaction: jest.fn(),
+      getMetrics: jest.fn(),
+      getSuggestion: jest.fn(),
+      getLearningStats: jest.fn(),
+      recordTransaction: jest.fn(),
+      recordRole: jest.fn(),
+      recordRelevance: jest.fn(),
+      getStats: jest.fn(),
+    },
     user: {
       getPhoneType: jest.fn(),
       setPhoneType: jest.fn(),
