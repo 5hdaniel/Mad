@@ -16,13 +16,13 @@ Modify AuditTransactionModal to support editing existing transactions, pre-filli
 
 ## Acceptance Criteria
 
-- [ ] Accept `editTransaction?: Transaction` prop
-- [ ] Pre-fill all fields when editing
-- [ ] Skip address verification if already verified
-- [ ] Pre-populate suggested contacts from transaction.suggested_contacts JSON
-- [ ] Save updates existing transaction instead of creating new
-- [ ] Record feedback if changes made
-- [ ] All CI checks pass
+- [x] Accept `editTransaction?: Transaction` prop
+- [x] Pre-fill all fields when editing
+- [x] Skip address verification if already verified
+- [x] Pre-populate suggested contacts from transaction.suggested_contacts JSON
+- [x] Save updates existing transaction instead of creating new
+- [x] Record feedback if changes made
+- [x] All CI checks pass
 
 ## Implementation Notes
 
@@ -115,4 +115,66 @@ const handleSave = async () => {
 
 ## Implementation Summary (Engineer-Owned)
 
-*To be completed by engineer*
+### Changes Made
+
+**Files Modified:**
+1. `src/components/AuditTransactionModal.tsx` - Added edit mode support
+2. `src/components/__tests__/AuditTransactionModal.test.tsx` - Added 10 unit tests for edit mode
+
+### Implementation Details
+
+1. **Props Interface Update**
+   - Added `editTransaction?: Transaction` optional prop
+   - Added `isEditing` boolean derived from prop presence
+
+2. **Pre-fill Logic**
+   - Added `useEffect` to initialize form state from `editTransaction`
+   - Parses `property_coordinates` JSON safely
+   - Parses `suggested_contacts` JSON and converts to `ContactAssignments` format
+   - Stores original values in `originalAddressData` for change detection
+
+3. **Save/Update Logic**
+   - Created `getAddressChanges()` function to detect field changes
+   - Modified `handleCreateTransaction()` to branch on `isEditing`:
+     - Edit mode: calls `window.api.transactions.update()`
+     - Create mode: calls `window.api.transactions.createAudited()`
+   - Records feedback via `window.api.feedback.recordTransaction()` when changes detected
+
+4. **UI Updates**
+   - Modal title: "Edit Transaction" vs "Audit New Transaction"
+   - Step 1 subtitle: "Review Property Address" vs "Verify Property Address"
+   - Submit button: "Save Changes" vs "Create Transaction"
+   - Loading text: "Saving..." vs "Creating..."
+
+### Test Coverage (10 new tests)
+- Edit mode title display
+- Address pre-fill
+- Transaction type pre-fill
+- Step 1 subtitle in edit mode
+- Update API usage
+- Save Changes button text
+- suggested_contacts JSON parsing
+- Invalid JSON graceful handling
+- Saving... loading text
+- Required API availability
+
+### Engineer Checklist
+- [x] TypeScript type-check passes
+- [x] ESLint passes (no new errors)
+- [x] All tests pass (398 total, 35 in AuditTransactionModal)
+- [x] Implementation follows existing patterns
+- [x] No business logic in entry files
+
+### Metrics
+
+| Phase | Turns | Tokens (est.) | Time |
+|-------|-------|---------------|------|
+| Planning | 1 | ~4K | 3 min |
+| Implementation | 3 | ~12K | 12 min |
+| Testing/CI | 2 | ~8K | 8 min |
+| **Total** | 6 | ~24K | 23 min |
+
+**Estimated vs Actual:**
+- Estimated: 2 turns, ~10K tokens, ~15m
+- Actual: 6 turns, ~24K tokens, ~23 min
+- Note: Actual higher due to comprehensive test coverage and TypeScript fixes
