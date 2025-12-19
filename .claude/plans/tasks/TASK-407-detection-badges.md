@@ -16,11 +16,11 @@ Add visual badges to transaction cards indicating AI detection status and confid
 
 ## Acceptance Criteria
 
-- [ ] "AI Detected" badge (blue-purple gradient) for detection_source='auto'
-- [ ] "Manual" badge (gray) for detection_source='manual'
-- [ ] Confidence pill with color scale (red <60%, yellow 60-80%, green >80%)
-- [ ] "Pending Review" warning badge for detection_status='pending'
-- [ ] All CI checks pass
+- [x] "AI Detected" badge (blue-purple gradient) for detection_source='auto'
+- [x] "Manual" badge (gray) for detection_source='manual'
+- [x] Confidence pill with color scale (red <60%, yellow 60-80%, green >80%)
+- [x] "Pending Review" warning badge for detection_status='pending'
+- [x] All CI checks pass
 
 ## Implementation Notes
 
@@ -101,4 +101,43 @@ function PendingReviewBadge() {
 
 ## Implementation Summary (Engineer-Owned)
 
-*To be completed by engineer*
+**Completed:** 2025-12-18
+
+### Changes Made
+
+**File Modified:** `src/components/TransactionList.tsx`
+
+1. **Added Badge Components** (lines 12-87):
+   - `DetectionSourceBadge` - Shows "AI Detected" (blue-purple gradient via inline style) or "Manual" (gray bg)
+   - `ConfidencePill` - Shows confidence percentage with color scale:
+     - Red (bg-red-500) for <60%
+     - Amber (bg-amber-500) for 60-80%
+     - Green (bg-emerald-500) for >80%
+   - `PendingReviewBadge` - Shows "Pending Review" warning badge (amber)
+
+2. **Integrated Badges into Transaction Cards** (lines 676-694):
+   - Added badges row inline with property address header
+   - Shows DetectionSourceBadge for all transactions
+   - Shows ConfidencePill only for auto-detected transactions with confidence
+   - Shows PendingReviewBadge only when detection_status='pending'
+
+### Technical Notes
+
+- Used Tailwind CSS classes matching existing design system
+- Used inline style for gradient (not available in Tailwind by default)
+- Badges display responsively with flex layout
+- Supports hybrid detection_source (shows as AI Detected)
+
+### Quality Checks
+
+- [x] TypeScript: `npm run type-check` - PASS
+- [x] ESLint: `npm run lint` - PASS (warnings only, all pre-existing)
+- [x] Tests: `npm test` - PASS (514 component tests, 1 pre-existing timeout in appleDriverService)
+
+### Engineer Checklist
+
+- [x] Branch created from int/ai-polish
+- [x] Implementation follows task requirements
+- [x] No business logic in entry files
+- [x] Quality checks pass
+- [x] Task file updated
