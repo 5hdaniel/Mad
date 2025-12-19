@@ -16,13 +16,13 @@ Create end-to-end tests for error handling paths: API timeout, invalid key, rate
 
 ## Acceptance Criteria
 
-- [ ] Test handles API timeout gracefully
-- [ ] Test shows error when API key invalid
-- [ ] Test shows rate limit exceeded message
-- [ ] Test falls back to pattern on malformed response
-- [ ] Test retries on transient failure
-- [ ] Test displays fallback notification to user
-- [ ] All CI checks pass
+- [x] Test handles API timeout gracefully
+- [x] Test shows error when API key invalid
+- [x] Test shows rate limit exceeded message
+- [x] Test falls back to pattern on malformed response
+- [x] Test retries on transient failure
+- [x] Test displays fallback notification to user
+- [x] All CI checks pass
 
 ## Implementation Notes
 
@@ -161,8 +161,8 @@ async function setupMockLLM(page, options = {}) {
 - Verify user-facing error messages
 
 ### CI Requirements
-- [ ] All E2E tests pass
-- [ ] Tests complete in <60s
+- [x] All E2E tests pass
+- [x] Tests complete in <60s (actual: ~4s)
 
 ## PR Preparation
 
@@ -198,4 +198,66 @@ async function setupMockLLM(page, options = {}) {
 
 ## Implementation Summary (Engineer-Owned)
 
-*To be completed by engineer*
+### Changes Made
+Created comprehensive E2E failure scenario test suite in `tests/e2e/llmFailures.test.ts` with 27 tests covering:
+
+1. **API Timeout Handling** (2 tests)
+   - Verifies graceful fallback to pattern matching on timeout
+   - Confirms extraction method indicator shows 'pattern' after timeout
+
+2. **Invalid API Key** (3 tests)
+   - Tests key validation returns proper error structure
+   - Verifies fallback to pattern matching on 401 errors
+   - Validates error response structure
+
+3. **Rate Limit Exceeded** (3 tests)
+   - Tests handling of 429 rate limit errors
+   - Verifies error structure includes retry timing
+   - Tests budget exhaustion fallback
+
+4. **Malformed Response Handling** (4 tests)
+   - JSON parse error handling
+   - Invalid/incomplete response structure
+   - Null/undefined response fallback
+   - Empty string response handling
+
+5. **Retry on Transient Failure** (4 tests)
+   - Succeeds after transient failures
+   - Correct server error structure
+   - Retryable vs non-retryable error identification
+   - Multiple consecutive failure handling
+
+6. **Fallback Notification** (5 tests)
+   - Indicates when LLM not used due to config
+   - Indicates when LLM not used due to consent
+   - Indicates fallback after LLM failure
+   - Produces valid results on fallback
+   - Provides extraction method for UI display
+
+7. **Additional Error Scenarios** (5 tests)
+   - Quota exceeded handling
+   - Network connectivity errors
+   - Connection reset errors
+   - Partial pipeline failures
+
+8. **Platform Allowance Exhaustion** (1 test)
+   - Falls back when platform allowance exhausted
+
+### Test Approach
+Used Jest with mocked LLM services instead of Playwright (matching project testing patterns). Tests simulate E2E scenarios through full service integration with controlled failure injection.
+
+### Files Changed
+- `tests/e2e/llmFailures.test.ts` - New file (674 lines, 27 tests)
+
+### Verification
+- All 27 tests pass consistently (ran 3x for flakiness check)
+- Tests complete in ~4 seconds (well under 60s requirement)
+- TypeScript type-check passes
+- ESLint passes (no errors)
+
+### Deviations
+- Used Jest instead of Playwright as noted in task file
+- Fixed 4 test expectations that incorrectly checked `result.extractionMethod` instead of `result.analyzedMessages[0].extractionMethod` for fallback verification
+
+### Known Issues
+- Pre-existing flaky test in `appleDriverService.test.ts` (Windows-specific timeout, unrelated to this task)
