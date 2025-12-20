@@ -1,6 +1,8 @@
 import {
   groupEmailsByThread,
   getFirstEmailsFromThreads,
+  getEmailsToPropagate,
+  findThreadByEmailId,
 } from '../threadGroupingService';
 import type { Message } from '../../../types';
 
@@ -139,6 +141,74 @@ describe('threadGroupingService', () => {
       const firstEmails = getFirstEmailsFromThreads(result);
 
       expect(firstEmails.length).toBe(2);
+    });
+  });
+
+  // TASK-506: Propagation helper tests
+  describe('getEmailsToPropagate', () => {
+    it('should return all emails except first in thread', () => {
+      const result = groupEmailsByThread([
+        createMessage({ id: '1', thread_id: 'T1', sent_at: '2024-01-01' }), // First
+        createMessage({ id: '2', thread_id: 'T1', sent_at: '2024-01-02' }),
+        createMessage({ id: '3', thread_id: 'T1', sent_at: '2024-01-03' }),
+      ]);
+
+      const toPropagate = getEmailsToPropagate(result, 'T1');
+
+      expect(toPropagate.length).toBe(2);
+      expect(toPropagate).toContain('2');
+      expect(toPropagate).toContain('3');
+      expect(toPropagate).not.toContain('1'); // First email excluded
+    });
+
+    it('should return empty array for unknown thread', () => {
+      const result = groupEmailsByThread([
+        createMessage({ id: '1', thread_id: 'T1' }),
+      ]);
+
+      const toPropagate = getEmailsToPropagate(result, 'T999');
+
+      expect(toPropagate).toEqual([]);
+    });
+
+    it('should return empty array for single-email thread', () => {
+      const result = groupEmailsByThread([
+        createMessage({ id: '1', thread_id: 'T1' }),
+      ]);
+
+      const toPropagate = getEmailsToPropagate(result, 'T1');
+
+      expect(toPropagate).toEqual([]);
+    });
+  });
+
+  describe('findThreadByEmailId', () => {
+    it('should find thread containing email', () => {
+      const result = groupEmailsByThread([
+        createMessage({ id: '1', thread_id: 'T1' }),
+        createMessage({ id: '2', thread_id: 'T1' }),
+        createMessage({ id: '3', thread_id: 'T2' }),
+      ]);
+
+      expect(findThreadByEmailId(result, '1')).toBe('T1');
+      expect(findThreadByEmailId(result, '2')).toBe('T1');
+      expect(findThreadByEmailId(result, '3')).toBe('T2');
+    });
+
+    it('should return undefined for unknown email', () => {
+      const result = groupEmailsByThread([
+        createMessage({ id: '1', thread_id: 'T1' }),
+      ]);
+
+      expect(findThreadByEmailId(result, 'unknown')).toBeUndefined();
+    });
+
+    it('should return undefined for orphan email', () => {
+      const result = groupEmailsByThread([
+        createMessage({ id: '1', thread_id: undefined }),
+      ]);
+
+      expect(findThreadByEmailId(result, '1')).toBeUndefined();
     });
   });
 });

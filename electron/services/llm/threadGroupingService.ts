@@ -22,6 +22,17 @@ export interface ThreadGroup {
   hasTransaction?: boolean;
 }
 
+/**
+ * Result of propagating a transaction to thread emails
+ */
+export interface PropagationResult {
+  transactionId: string;
+  threadId: string;
+  sourceEmailId: string;
+  propagatedEmailIds: string[];
+  propagatedCount: number;
+}
+
 export interface ThreadGroupingResult {
   threads: Map<string, ThreadGroup>;
   orphanEmails: Message[]; // Emails without thread_id
@@ -125,4 +136,44 @@ export function getFirstEmailsFromThreads(
 
   // Include orphan emails (they get analyzed individually)
   return [...firstEmails, ...result.orphanEmails];
+}
+
+/**
+ * Get email IDs that should receive propagated transaction link.
+ * Returns all emails in the thread EXCEPT the first (which was analyzed).
+ *
+ * @param threadGrouping - ThreadGroupingResult from groupEmailsByThread
+ * @param threadId - The thread ID to get emails from
+ * @returns Array of email IDs to propagate to (excludes first email)
+ */
+export function getEmailsToPropagate(
+  threadGrouping: ThreadGroupingResult,
+  threadId: string
+): string[] {
+  const thread = threadGrouping.threads.get(threadId);
+  if (!thread) return [];
+
+  // Return all email IDs except the first (which was analyzed)
+  return thread.emails
+    .filter((e) => e.id !== thread.firstEmail.id)
+    .map((e) => e.id);
+}
+
+/**
+ * Find the thread ID that contains a specific email.
+ *
+ * @param threadGrouping - ThreadGroupingResult from groupEmailsByThread
+ * @param emailId - The email ID to find
+ * @returns The thread ID or undefined if not found
+ */
+export function findThreadByEmailId(
+  threadGrouping: ThreadGroupingResult,
+  emailId: string
+): string | undefined {
+  for (const [threadId, thread] of threadGrouping.threads) {
+    if (thread.emails.some((e) => e.id === emailId)) {
+      return threadId;
+    }
+  }
+  return undefined;
 }
