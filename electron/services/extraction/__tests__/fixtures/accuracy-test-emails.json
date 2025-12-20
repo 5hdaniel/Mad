@@ -1,0 +1,1119 @@
+{
+  "metadata": {
+    "description": "Comprehensive test dataset for extraction accuracy validation",
+    "version": "2.0.0",
+    "totalEmails": 60,
+    "transactionEmails": 24,
+    "spamEmails": 8,
+    "normalEmails": 20,
+    "edgeCaseEmails": 8,
+    "threads": 52,
+    "notes": "Includes edge cases, longer threads, ambiguous emails, and regional variations"
+  },
+  "emails": [
+    {
+      "id": "tx_001",
+      "thread_id": "thread_closing_1",
+      "subject": "Closing documents for 123 Main Street",
+      "body": "Dear Client,\n\nAttached are the closing documents for your purchase of 123 Main Street, Springfield. The closing is scheduled for January 15th at 2:00 PM.\n\nPlease review the HUD-1 statement and bring a certified check for $15,450.00.\n\nBest regards,\nTitle Company",
+      "sender": "closing@titleco.com",
+      "recipients": ["buyer@email.com"],
+      "labels": ["INBOX", "IMPORTANT"],
+      "sent_at": "2024-01-10T10:00:00Z",
+      "label": "transaction",
+      "stage": "closing",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": true,
+        "transactionType": "purchase",
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": true
+      }
+    },
+    {
+      "id": "tx_002",
+      "thread_id": "thread_closing_1",
+      "subject": "Re: Closing documents for 123 Main Street",
+      "body": "Thank you for sending these. I have reviewed the documents and everything looks correct.\n\nSee you on the 15th!",
+      "sender": "buyer@email.com",
+      "recipients": ["closing@titleco.com"],
+      "labels": ["INBOX", "SENT"],
+      "sent_at": "2024-01-11T14:30:00Z",
+      "label": "transaction",
+      "stage": "closing",
+      "difficulty": "medium",
+      "expected": {
+        "isTransaction": true,
+        "transactionType": "purchase",
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": false
+      }
+    },
+    {
+      "id": "tx_003",
+      "thread_id": "thread_closing_1",
+      "subject": "Re: Closing documents for 123 Main Street",
+      "body": "Perfect! I'll have everything ready. Please remember to bring two forms of ID.\n\nSee you then.",
+      "sender": "closing@titleco.com",
+      "recipients": ["buyer@email.com"],
+      "labels": ["INBOX"],
+      "sent_at": "2024-01-11T15:00:00Z",
+      "label": "transaction",
+      "stage": "closing",
+      "difficulty": "hard",
+      "expected": {
+        "isTransaction": true,
+        "transactionType": "purchase",
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": false
+      }
+    },
+    {
+      "id": "tx_004",
+      "thread_id": "thread_offer_1",
+      "subject": "Offer Accepted - 456 Oak Avenue",
+      "body": "Great news! The sellers have accepted your offer of $485,000 for 456 Oak Avenue.\n\nNext steps:\n1. Home inspection scheduled for Friday\n2. Appraisal will be ordered\n3. Earnest money due by end of week\n\nMLS# 12345678",
+      "sender": "agent@realty.com",
+      "recipients": ["buyer2@email.com"],
+      "labels": ["INBOX"],
+      "sent_at": "2024-01-08T09:15:00Z",
+      "label": "transaction",
+      "stage": "under_contract",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": true,
+        "transactionType": "purchase",
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": true
+      }
+    },
+    {
+      "id": "tx_005",
+      "thread_id": "thread_offer_1",
+      "subject": "Re: Offer Accepted - 456 Oak Avenue",
+      "body": "Wonderful news! I'll get the earnest money check ready. What's the deadline for the inspection contingency?",
+      "sender": "buyer2@email.com",
+      "recipients": ["agent@realty.com"],
+      "labels": ["INBOX", "SENT"],
+      "sent_at": "2024-01-08T10:30:00Z",
+      "label": "transaction",
+      "stage": "under_contract",
+      "difficulty": "medium",
+      "expected": {
+        "isTransaction": true,
+        "transactionType": "purchase",
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": true
+      }
+    },
+    {
+      "id": "tx_006",
+      "thread_id": "thread_offer_1",
+      "subject": "Re: Offer Accepted - 456 Oak Avenue",
+      "body": "The inspection contingency is 10 days from acceptance, so you have until January 18th. I've attached the timeline.",
+      "sender": "agent@realty.com",
+      "recipients": ["buyer2@email.com"],
+      "labels": ["INBOX"],
+      "sent_at": "2024-01-08T11:00:00Z",
+      "label": "transaction",
+      "stage": "under_contract",
+      "difficulty": "medium",
+      "expected": {
+        "isTransaction": true,
+        "transactionType": "purchase",
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": true
+      }
+    },
+    {
+      "id": "tx_007",
+      "thread_id": "thread_offer_1",
+      "subject": "Re: Offer Accepted - 456 Oak Avenue",
+      "body": "Got it, thanks! I'll be there for the inspection on Friday.",
+      "sender": "buyer2@email.com",
+      "recipients": ["agent@realty.com"],
+      "labels": ["INBOX", "SENT"],
+      "sent_at": "2024-01-08T11:15:00Z",
+      "label": "transaction",
+      "stage": "under_contract",
+      "difficulty": "hard",
+      "expected": {
+        "isTransaction": true,
+        "transactionType": "purchase",
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": false
+      }
+    },
+    {
+      "id": "tx_008",
+      "thread_id": "thread_listing_1",
+      "subject": "Listing Agreement - 789 Pine Road",
+      "body": "Please find attached the listing agreement for your property at 789 Pine Road.\n\nListing price: $325,000\nCommission: 6%\nListing period: 6 months\n\nPlease sign and return at your earliest convenience.",
+      "sender": "listing.agent@remax.com",
+      "recipients": ["seller@email.com"],
+      "labels": ["INBOX"],
+      "sent_at": "2024-01-05T11:00:00Z",
+      "label": "transaction",
+      "stage": "prospecting",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": true,
+        "transactionType": "sale",
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": true
+      }
+    },
+    {
+      "id": "tx_009",
+      "thread_id": "thread_lease_1",
+      "subject": "Lease Agreement Ready - Unit 5B, 100 Apartment Way",
+      "body": "Your lease agreement for Unit 5B at 100 Apartment Way is ready for signature.\n\nMonthly rent: $1,850\nLease term: 12 months\nSecurity deposit: $1,850\n\nPlease sign by Friday to secure your move-in date.",
+      "sender": "leasing@propertymanagement.com",
+      "recipients": ["tenant@email.com"],
+      "labels": ["INBOX"],
+      "sent_at": "2024-01-12T15:45:00Z",
+      "label": "transaction",
+      "stage": "closing",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": true,
+        "transactionType": "lease",
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": true
+      }
+    },
+    {
+      "id": "tx_010",
+      "thread_id": "thread_inspection_1",
+      "subject": "Home Inspection Report - 222 Elm Drive",
+      "body": "Attached is the inspection report for 222 Elm Drive.\n\nKey findings:\n- HVAC needs service\n- Minor roof repairs recommended\n- Electrical panel up to code\n\nOverall the property is in good condition for its age.",
+      "sender": "inspector@homeinspect.com",
+      "recipients": ["buyer3@email.com", "agent@realty.com"],
+      "labels": ["INBOX"],
+      "sent_at": "2024-01-09T16:20:00Z",
+      "label": "transaction",
+      "stage": "due_diligence",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": true,
+        "transactionType": "purchase",
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": true
+      }
+    },
+    {
+      "id": "tx_011",
+      "thread_id": "thread_escrow_1",
+      "subject": "Escrow Instructions - 333 Birch Lane",
+      "body": "Please find the escrow instructions for the purchase of 333 Birch Lane.\n\nPurchase price: $550,000\nEarnest money: $20,000\nClosing date: February 1st\n\nWire transfer instructions are attached.",
+      "sender": "escrow@titlecompany.com",
+      "recipients": ["buyer4@email.com"],
+      "labels": ["INBOX", "CATEGORY_PRIMARY"],
+      "sent_at": "2024-01-14T08:30:00Z",
+      "label": "transaction",
+      "stage": "closing",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": true,
+        "transactionType": "purchase",
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": true
+      }
+    },
+    {
+      "id": "tx_012",
+      "thread_id": "thread_walkthrough_1",
+      "subject": "Final Walkthrough Scheduled",
+      "body": "The final walkthrough for 444 Maple Street is scheduled for tomorrow at 3 PM.\n\nPlease confirm you can attend.",
+      "sender": "agent@coldwellbanker.com",
+      "recipients": ["buyer5@email.com"],
+      "labels": ["INBOX"],
+      "sent_at": "2024-01-13T11:45:00Z",
+      "label": "transaction",
+      "stage": "closing",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": true,
+        "transactionType": "purchase",
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": true
+      }
+    },
+    {
+      "id": "tx_013",
+      "thread_id": "thread_counteroffer_1",
+      "subject": "Counter Offer Received - 555 Cedar Court",
+      "body": "The sellers have submitted a counter offer for 555 Cedar Court.\n\nOriginal offer: $420,000\nCounter: $435,000\n\nThey are also requesting a 45-day close instead of 30. Please review and let me know how you'd like to proceed.",
+      "sender": "agent@berkshire.com",
+      "recipients": ["buyer6@email.com"],
+      "labels": ["INBOX", "IMPORTANT"],
+      "sent_at": "2024-01-15T09:00:00Z",
+      "label": "transaction",
+      "stage": "negotiation",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": true,
+        "transactionType": "purchase",
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": true
+      }
+    },
+    {
+      "id": "tx_014",
+      "thread_id": "thread_counteroffer_1",
+      "subject": "Re: Counter Offer Received - 555 Cedar Court",
+      "body": "Let's meet in the middle at $427,500 and I can do the 45-day close. Can you send that back?",
+      "sender": "buyer6@email.com",
+      "recipients": ["agent@berkshire.com"],
+      "labels": ["INBOX", "SENT"],
+      "sent_at": "2024-01-15T10:30:00Z",
+      "label": "transaction",
+      "stage": "negotiation",
+      "difficulty": "medium",
+      "expected": {
+        "isTransaction": true,
+        "transactionType": "purchase",
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": true
+      }
+    },
+    {
+      "id": "tx_015",
+      "thread_id": "thread_appraisal_1",
+      "subject": "Appraisal Complete - 666 Willow Way",
+      "body": "The appraisal for 666 Willow Way has been completed.\n\nAppraised value: $398,000\nContract price: $395,000\n\nGood news - the property appraised above the contract price. We're cleared to proceed to closing.",
+      "sender": "lender@mortgage.com",
+      "recipients": ["buyer7@email.com", "agent@realty.com"],
+      "labels": ["INBOX"],
+      "sent_at": "2024-01-16T14:00:00Z",
+      "label": "transaction",
+      "stage": "due_diligence",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": true,
+        "transactionType": "purchase",
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": true
+      }
+    },
+    {
+      "id": "tx_016",
+      "thread_id": "thread_title_1",
+      "subject": "Title Search Complete - 777 Spruce Street",
+      "body": "We have completed the title search for 777 Spruce Street.\n\nThe title is clear with no liens or encumbrances. Title insurance commitment is attached.\n\nPlease review and let us know if you have any questions.",
+      "sender": "title@firstamerican.com",
+      "recipients": ["buyer8@email.com"],
+      "labels": ["INBOX"],
+      "sent_at": "2024-01-17T11:30:00Z",
+      "label": "transaction",
+      "stage": "due_diligence",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": true,
+        "transactionType": "purchase",
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": true
+      }
+    },
+    {
+      "id": "tx_017",
+      "thread_id": "thread_keys_1",
+      "subject": "Congratulations! Keys Handoff for 888 Hickory Lane",
+      "body": "Congratulations on your new home!\n\nThe closing went smoothly. Here are your keys and garage door openers. The sellers have left the appliance manuals in the kitchen drawer.\n\nEnjoy your new home at 888 Hickory Lane!",
+      "sender": "agent@kw.com",
+      "recipients": ["newowner@email.com"],
+      "labels": ["INBOX", "STARRED"],
+      "sent_at": "2024-01-18T16:00:00Z",
+      "label": "transaction",
+      "stage": "closed",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": true,
+        "transactionType": "purchase",
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": true
+      }
+    },
+    {
+      "id": "tx_018",
+      "thread_id": "thread_prospecting_1",
+      "subject": "Thinking of selling your home?",
+      "body": "Hi there,\n\nI noticed your neighbor at 123 Oak Street just sold for $450,000. Have you considered selling? The market is very strong right now.\n\nI'd be happy to provide a free market analysis for your property at 125 Oak Street.\n\nBest,\nJane Smith, Realtor",
+      "sender": "jane@localrealty.com",
+      "recipients": ["homeowner@email.com"],
+      "labels": ["INBOX"],
+      "sent_at": "2024-01-19T10:00:00Z",
+      "label": "transaction",
+      "stage": "prospecting",
+      "difficulty": "medium",
+      "expected": {
+        "isTransaction": true,
+        "transactionType": "sale",
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": true
+      }
+    },
+    {
+      "id": "tx_019",
+      "thread_id": "thread_rural_1",
+      "subject": "Purchase Agreement - Rural Route 2 Box 45",
+      "body": "Please find attached the purchase agreement for the property at Rural Route 2 Box 45, Johnson County.\n\nThis 40-acre parcel includes the farmhouse, barn, and all outbuildings. Purchase price: $275,000.\n\nWell and septic inspection scheduled for next week.",
+      "sender": "agent@farmandranch.com",
+      "recipients": ["buyer9@email.com"],
+      "labels": ["INBOX"],
+      "sent_at": "2024-01-20T09:00:00Z",
+      "label": "transaction",
+      "stage": "under_contract",
+      "difficulty": "medium",
+      "expected": {
+        "isTransaction": true,
+        "transactionType": "purchase",
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": true
+      }
+    },
+    {
+      "id": "tx_020",
+      "thread_id": "thread_attorney_1",
+      "subject": "Attorney Review Period - 999 Washington Ave",
+      "body": "This email confirms that attorney review has begun for the property at 999 Washington Ave.\n\nPer New Jersey law, you have 3 business days for attorney review. I have received the contract and will review today.\n\nPlease do not schedule inspections until attorney review is complete.",
+      "sender": "attorney@lawfirm.com",
+      "recipients": ["buyer10@email.com"],
+      "labels": ["INBOX"],
+      "sent_at": "2024-01-21T08:00:00Z",
+      "label": "transaction",
+      "stage": "under_contract",
+      "difficulty": "medium",
+      "expected": {
+        "isTransaction": true,
+        "transactionType": "purchase",
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": true
+      }
+    },
+    {
+      "id": "tx_021",
+      "thread_id": "thread_commercial_1",
+      "subject": "LOI Accepted - 1500 Commerce Blvd",
+      "body": "Great news! The Letter of Intent for the commercial property at 1500 Commerce Blvd has been accepted.\n\nProperty details:\n- 15,000 sq ft office building\n- Purchase price: $2.4M\n- Due diligence period: 60 days\n\nOur attorneys will begin drafting the purchase agreement.",
+      "sender": "broker@cbre.com",
+      "recipients": ["investor@company.com"],
+      "labels": ["INBOX", "IMPORTANT"],
+      "sent_at": "2024-01-22T14:00:00Z",
+      "label": "transaction",
+      "stage": "negotiation",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": true,
+        "transactionType": "purchase",
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": true
+      }
+    },
+    {
+      "id": "tx_022",
+      "thread_id": "thread_renewal_1",
+      "subject": "Lease Renewal - Suite 200, 500 Business Park",
+      "body": "Your current lease for Suite 200 at 500 Business Park expires in 60 days.\n\nWe are pleased to offer the following renewal terms:\n- New rent: $28/sq ft (3% increase)\n- Term: 3 years\n- TI allowance: $5/sq ft\n\nPlease respond by February 15th.",
+      "sender": "leasing@commercialprop.com",
+      "recipients": ["tenant@business.com"],
+      "labels": ["INBOX"],
+      "sent_at": "2024-01-23T10:00:00Z",
+      "label": "transaction",
+      "stage": "negotiation",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": true,
+        "transactionType": "lease",
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": true
+      }
+    },
+    {
+      "id": "tx_023",
+      "thread_id": "thread_repair_1",
+      "subject": "Repair Request Response - 456 Oak Avenue",
+      "body": "The sellers have agreed to the following repairs based on the inspection:\n\n1. HVAC service and filter replacement - Seller will complete\n2. Roof repair estimate of $1,500 - Seller offers $1,000 credit at closing\n3. Outlet grounding - Seller will hire electrician\n\nPlease confirm this is acceptable.",
+      "sender": "agent@realty.com",
+      "recipients": ["buyer2@email.com"],
+      "labels": ["INBOX"],
+      "sent_at": "2024-01-24T11:00:00Z",
+      "label": "transaction",
+      "stage": "due_diligence",
+      "difficulty": "medium",
+      "expected": {
+        "isTransaction": true,
+        "transactionType": "purchase",
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": true
+      }
+    },
+    {
+      "id": "tx_024",
+      "thread_id": "thread_repair_1",
+      "subject": "Re: Repair Request Response - 456 Oak Avenue",
+      "body": "That works for me. Please send the amendment and I'll sign.",
+      "sender": "buyer2@email.com",
+      "recipients": ["agent@realty.com"],
+      "labels": ["INBOX", "SENT"],
+      "sent_at": "2024-01-24T11:30:00Z",
+      "label": "transaction",
+      "stage": "due_diligence",
+      "difficulty": "hard",
+      "expected": {
+        "isTransaction": true,
+        "transactionType": "purchase",
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": false
+      }
+    },
+    {
+      "id": "spam_001",
+      "thread_id": "thread_spam_1",
+      "subject": "URGENT: Verify your account now!",
+      "body": "Your account has been compromised! Click here immediately to verify your identity or your account will be suspended.\n\nClick: http://suspicious-link.com/verify",
+      "sender": "security@fake-bank.com",
+      "recipients": ["victim@email.com"],
+      "labels": ["SPAM"],
+      "sent_at": "2024-01-10T03:00:00Z",
+      "label": "spam",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": false,
+        "transactionType": null,
+        "shouldBeSpam": true,
+        "containsTransactionIndicators": false
+      }
+    },
+    {
+      "id": "spam_002",
+      "thread_id": "thread_spam_2",
+      "subject": "You've won $1,000,000!",
+      "body": "Congratulations! You have been selected to receive $1,000,000 USD. To claim your prize, send us your bank details immediately.",
+      "sender": "lottery@winner.com",
+      "recipients": ["user@email.com"],
+      "labels": ["SPAM", "CATEGORY_PROMOTIONS"],
+      "sent_at": "2024-01-11T02:15:00Z",
+      "label": "spam",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": false,
+        "transactionType": null,
+        "shouldBeSpam": true,
+        "containsTransactionIndicators": false
+      }
+    },
+    {
+      "id": "spam_003",
+      "thread_id": "thread_spam_3",
+      "subject": "Free iPhone 15 Pro - Limited Time!",
+      "body": "You've been selected to receive a FREE iPhone 15 Pro! Just pay shipping and handling. This offer expires TODAY!",
+      "sender": "deals@spam.com",
+      "recipients": ["user2@email.com"],
+      "labels": ["TRASH"],
+      "sent_at": "2024-01-12T01:30:00Z",
+      "label": "spam",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": false,
+        "transactionType": null,
+        "shouldBeSpam": true,
+        "containsTransactionIndicators": false
+      }
+    },
+    {
+      "id": "spam_004",
+      "thread_id": "thread_spam_4",
+      "subject": "Enlarge your portfolio today!",
+      "body": "Amazing investment opportunity! Double your money in just 7 days with our guaranteed returns program.",
+      "sender": "invest@scam.com",
+      "recipients": ["investor@email.com"],
+      "labels": ["SPAM"],
+      "sent_at": "2024-01-13T04:00:00Z",
+      "label": "spam",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": false,
+        "transactionType": null,
+        "shouldBeSpam": true,
+        "containsTransactionIndicators": false
+      }
+    },
+    {
+      "id": "spam_005",
+      "thread_id": "thread_spam_5",
+      "subject": "Your package could not be delivered",
+      "body": "We attempted to deliver your package but failed. Click here to reschedule: http://fake-delivery.com/track",
+      "sender": "delivery@fake-ups.com",
+      "recipients": ["user3@email.com"],
+      "labels": ["SPAM"],
+      "sent_at": "2024-01-14T05:00:00Z",
+      "label": "spam",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": false,
+        "transactionType": null,
+        "shouldBeSpam": true,
+        "containsTransactionIndicators": false
+      }
+    },
+    {
+      "id": "spam_006",
+      "thread_id": "thread_spam_6",
+      "subject": "Bitcoin opportunity - Act now!",
+      "body": "Make $10,000 per day trading Bitcoin from home! No experience needed. Limited spots available.",
+      "sender": "crypto@getrich.com",
+      "recipients": ["user4@email.com"],
+      "labels": ["SPAM"],
+      "sent_at": "2024-01-15T03:30:00Z",
+      "label": "spam",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": false,
+        "transactionType": null,
+        "shouldBeSpam": true,
+        "containsTransactionIndicators": false
+      }
+    },
+    {
+      "id": "spam_007",
+      "thread_id": "thread_spam_7",
+      "subject": "Weight loss secret doctors don't want you to know",
+      "body": "Lose 30 pounds in 30 days with this one weird trick! Order now and get free shipping.",
+      "sender": "health@spammy.com",
+      "recipients": ["user5@email.com"],
+      "labels": ["TRASH"],
+      "sent_at": "2024-01-16T02:00:00Z",
+      "label": "spam",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": false,
+        "transactionType": null,
+        "shouldBeSpam": true,
+        "containsTransactionIndicators": false
+      }
+    },
+    {
+      "id": "spam_008",
+      "thread_id": "thread_spam_8",
+      "subject": "Hot singles in your area!",
+      "body": "Meet attractive singles near you today! Click here to create your free profile.",
+      "sender": "dating@spam.com",
+      "recipients": ["user6@email.com"],
+      "labels": ["SPAM"],
+      "sent_at": "2024-01-17T04:00:00Z",
+      "label": "spam",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": false,
+        "transactionType": null,
+        "shouldBeSpam": true,
+        "containsTransactionIndicators": false
+      }
+    },
+    {
+      "id": "normal_001",
+      "thread_id": "thread_meeting_1",
+      "subject": "Team meeting tomorrow",
+      "body": "Hi everyone,\n\nReminder that we have our weekly team meeting tomorrow at 10 AM.\n\nAgenda:\n- Project updates\n- Q1 planning\n- AOB\n\nSee you there!",
+      "sender": "manager@company.com",
+      "recipients": ["team@company.com"],
+      "labels": ["INBOX"],
+      "sent_at": "2024-01-10T16:00:00Z",
+      "label": "normal",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": false,
+        "transactionType": null,
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": false
+      }
+    },
+    {
+      "id": "normal_002",
+      "thread_id": "thread_meeting_1",
+      "subject": "Re: Team meeting tomorrow",
+      "body": "Thanks for the reminder. I'll be there.",
+      "sender": "employee@company.com",
+      "recipients": ["manager@company.com"],
+      "labels": ["INBOX", "SENT"],
+      "sent_at": "2024-01-10T16:30:00Z",
+      "label": "normal",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": false,
+        "transactionType": null,
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": false
+      }
+    },
+    {
+      "id": "normal_003",
+      "thread_id": "thread_amazon_1",
+      "subject": "Your Amazon order has shipped",
+      "body": "Your order #123-456-789 has shipped and is on its way!\n\nEstimated delivery: January 15-17\nCarrier: UPS\nTracking: 1Z999AA10123456784",
+      "sender": "shipping@amazon.com",
+      "recipients": ["customer@email.com"],
+      "labels": ["INBOX", "CATEGORY_UPDATES"],
+      "sent_at": "2024-01-11T09:00:00Z",
+      "label": "normal",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": false,
+        "transactionType": null,
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": false
+      }
+    },
+    {
+      "id": "normal_004",
+      "thread_id": "thread_birthday_1",
+      "subject": "Happy Birthday!",
+      "body": "Happy Birthday! Hope you have a wonderful day filled with joy and celebration.\n\nBest wishes,\nThe Team",
+      "sender": "hr@company.com",
+      "recipients": ["birthday.person@company.com"],
+      "labels": ["INBOX"],
+      "sent_at": "2024-01-12T08:00:00Z",
+      "label": "normal",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": false,
+        "transactionType": null,
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": false
+      }
+    },
+    {
+      "id": "normal_005",
+      "thread_id": "thread_dentist_1",
+      "subject": "Dentist appointment reminder",
+      "body": "This is a reminder of your upcoming dental appointment:\n\nDate: January 16, 2024\nTime: 2:30 PM\nDoctor: Dr. Smith\n\nPlease arrive 15 minutes early.",
+      "sender": "appointments@dentalclinic.com",
+      "recipients": ["patient@email.com"],
+      "labels": ["INBOX"],
+      "sent_at": "2024-01-13T10:00:00Z",
+      "label": "normal",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": false,
+        "transactionType": null,
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": false
+      }
+    },
+    {
+      "id": "normal_006",
+      "thread_id": "thread_status_1",
+      "subject": "Project status update",
+      "body": "Hi team,\n\nHere's the weekly status update:\n\n- Phase 1: Complete\n- Phase 2: In progress (75%)\n- Phase 3: Starting next week\n\nLet me know if you have questions.",
+      "sender": "pm@company.com",
+      "recipients": ["team@company.com"],
+      "labels": ["INBOX", "IMPORTANT"],
+      "sent_at": "2024-01-14T14:00:00Z",
+      "label": "normal",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": false,
+        "transactionType": null,
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": false
+      }
+    },
+    {
+      "id": "normal_007",
+      "thread_id": "thread_lunch_1",
+      "subject": "Lunch plans?",
+      "body": "Hey! Want to grab lunch tomorrow? There's a new Italian place that opened up near the office.",
+      "sender": "friend@email.com",
+      "recipients": ["user@email.com"],
+      "labels": ["INBOX"],
+      "sent_at": "2024-01-14T17:00:00Z",
+      "label": "normal",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": false,
+        "transactionType": null,
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": false
+      }
+    },
+    {
+      "id": "normal_008",
+      "thread_id": "thread_receipt_1",
+      "subject": "Your receipt from Starbucks",
+      "body": "Thank you for your purchase!\n\nOrder: Grande Latte\nTotal: $5.75\nPayment: Visa ending in 1234\n\nEarn stars with every purchase!",
+      "sender": "receipts@starbucks.com",
+      "recipients": ["customer@email.com"],
+      "labels": ["INBOX", "CATEGORY_UPDATES"],
+      "sent_at": "2024-01-15T08:30:00Z",
+      "label": "normal",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": false,
+        "transactionType": null,
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": false
+      }
+    },
+    {
+      "id": "normal_009",
+      "thread_id": "thread_gym_1",
+      "subject": "Your gym membership renewal",
+      "body": "Your Planet Fitness membership will auto-renew on February 1st.\n\nMonthly fee: $22.99\nPayment method: Card ending in 5678\n\nVisit our app to update payment info.",
+      "sender": "membership@planetfitness.com",
+      "recipients": ["member@email.com"],
+      "labels": ["INBOX"],
+      "sent_at": "2024-01-16T09:00:00Z",
+      "label": "normal",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": false,
+        "transactionType": null,
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": false
+      }
+    },
+    {
+      "id": "normal_010",
+      "thread_id": "thread_flight_1",
+      "subject": "Flight confirmation - LAX to JFK",
+      "body": "Your flight is confirmed!\n\nFlight: AA 123\nDate: January 20, 2024\nDeparture: 8:00 AM LAX\nArrival: 4:30 PM JFK\n\nCheck in online 24 hours before departure.",
+      "sender": "reservations@aa.com",
+      "recipients": ["traveler@email.com"],
+      "labels": ["INBOX", "CATEGORY_UPDATES"],
+      "sent_at": "2024-01-17T10:00:00Z",
+      "label": "normal",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": false,
+        "transactionType": null,
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": false
+      }
+    },
+    {
+      "id": "normal_011",
+      "thread_id": "thread_utility_1",
+      "subject": "Your electric bill is ready",
+      "body": "Your January electric bill is now available.\n\nAmount due: $127.43\nDue date: February 5, 2024\n\nView your bill online or set up autopay.",
+      "sender": "billing@electriccompany.com",
+      "recipients": ["customer@email.com"],
+      "labels": ["INBOX"],
+      "sent_at": "2024-01-18T07:00:00Z",
+      "label": "normal",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": false,
+        "transactionType": null,
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": false
+      }
+    },
+    {
+      "id": "normal_012",
+      "thread_id": "thread_linkedin_1",
+      "subject": "John Smith viewed your profile",
+      "body": "John Smith, CEO at Tech Company, viewed your profile.\n\nSee who's viewing your profile and what they're looking for.",
+      "sender": "notifications@linkedin.com",
+      "recipients": ["professional@email.com"],
+      "labels": ["INBOX", "CATEGORY_SOCIAL"],
+      "sent_at": "2024-01-19T11:00:00Z",
+      "label": "normal",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": false,
+        "transactionType": null,
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": false
+      }
+    },
+    {
+      "id": "edge_001",
+      "thread_id": "thread_edge_zillow",
+      "subject": "Zillow: New homes in your area",
+      "body": "Based on your saved search, here are 5 new listings near Springfield:\n\n1. 123 Main St - $450,000 - 3 bed, 2 bath\n2. 456 Oak Ave - $525,000 - 4 bed, 3 bath\n3. 789 Pine Rd - $375,000 - 2 bed, 2 bath\n\nSee all listings on Zillow.",
+      "sender": "alerts@zillow.com",
+      "recipients": ["househunter@email.com"],
+      "labels": ["INBOX", "CATEGORY_PROMOTIONS"],
+      "sent_at": "2024-01-20T08:00:00Z",
+      "label": "edge_case",
+      "difficulty": "hard",
+      "expected": {
+        "isTransaction": false,
+        "transactionType": null,
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": true
+      }
+    },
+    {
+      "id": "edge_002",
+      "thread_id": "thread_edge_newsletter",
+      "subject": "Weekly Real Estate Market Update",
+      "body": "This week in real estate news:\n\n- Interest rates holding steady at 6.5%\n- New housing starts increase 5%\n- Market trends for Q1 looking positive\n\nRead more on our website.",
+      "sender": "newsletter@realestate-news.com",
+      "recipients": ["subscriber@email.com"],
+      "labels": ["INBOX", "CATEGORY_PROMOTIONS"],
+      "sent_at": "2024-01-08T07:00:00Z",
+      "label": "edge_case",
+      "difficulty": "hard",
+      "expected": {
+        "isTransaction": false,
+        "transactionType": null,
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": false
+      }
+    },
+    {
+      "id": "edge_003",
+      "thread_id": "thread_edge_preapproval",
+      "subject": "Congratulations! You're pre-approved for a mortgage",
+      "body": "Great news! Based on your application, you are pre-approved for:\n\nLoan amount: Up to $400,000\nRate: 6.25% (30-year fixed)\nMonthly payment estimate: $2,463\n\nThis pre-approval is valid for 90 days. Start house hunting today!",
+      "sender": "mortgages@bankofamerica.com",
+      "recipients": ["borrower@email.com"],
+      "labels": ["INBOX", "IMPORTANT"],
+      "sent_at": "2024-01-21T09:00:00Z",
+      "label": "edge_case",
+      "difficulty": "hard",
+      "expected": {
+        "isTransaction": false,
+        "transactionType": null,
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": true
+      }
+    },
+    {
+      "id": "edge_004",
+      "thread_id": "thread_edge_webuycash",
+      "subject": "We buy houses CASH - any condition!",
+      "body": "Tired of waiting to sell your house? We buy houses in ANY condition for CASH!\n\n- No repairs needed\n- Close in 7 days\n- No realtor fees\n\nGet your free, no-obligation offer today.",
+      "sender": "offers@webuyhouses.com",
+      "recipients": ["homeowner@email.com"],
+      "labels": ["INBOX", "CATEGORY_PROMOTIONS"],
+      "sent_at": "2024-01-22T10:00:00Z",
+      "label": "edge_case",
+      "difficulty": "hard",
+      "expected": {
+        "isTransaction": false,
+        "transactionType": null,
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": true
+      }
+    },
+    {
+      "id": "edge_005",
+      "thread_id": "thread_edge_nar",
+      "subject": "NAR Membership Renewal Due",
+      "body": "Your National Association of Realtors membership expires on January 31st.\n\nRenewal fee: $156\nLocal dues: $275\nMLS access: $99\n\nRenew now to maintain your MLS access and Realtor designation.",
+      "sender": "membership@nar.realtor",
+      "recipients": ["agent@realty.com"],
+      "labels": ["INBOX"],
+      "sent_at": "2024-01-23T08:00:00Z",
+      "label": "edge_case",
+      "difficulty": "hard",
+      "expected": {
+        "isTransaction": false,
+        "transactionType": null,
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": true
+      }
+    },
+    {
+      "id": "edge_006",
+      "thread_id": "thread_edge_hoa",
+      "subject": "HOA Meeting Notice - 123 Main Street",
+      "body": "Notice of Annual HOA Meeting\n\nDate: February 15, 2024\nTime: 7:00 PM\nLocation: Community Center\n\nAgenda includes:\n- 2024 Budget approval\n- Pool renovation proposal\n- Election of board members\n\nAll homeowners are encouraged to attend.",
+      "sender": "board@sunriseestates.hoa",
+      "recipients": ["resident@email.com"],
+      "labels": ["INBOX"],
+      "sent_at": "2024-01-24T14:00:00Z",
+      "label": "edge_case",
+      "difficulty": "hard",
+      "expected": {
+        "isTransaction": false,
+        "transactionType": null,
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": true
+      }
+    },
+    {
+      "id": "edge_007",
+      "thread_id": "thread_edge_maintenance",
+      "subject": "Maintenance Request Completed - Unit 5B",
+      "body": "Your maintenance request has been completed.\n\nUnit: 5B, 100 Apartment Way\nIssue: Leaking faucet in bathroom\nResolution: Replaced washer and tightened connection\n\nPlease let us know if you have any further issues.",
+      "sender": "maintenance@propertymanagement.com",
+      "recipients": ["tenant@email.com"],
+      "labels": ["INBOX"],
+      "sent_at": "2024-01-25T16:00:00Z",
+      "label": "edge_case",
+      "difficulty": "medium",
+      "expected": {
+        "isTransaction": false,
+        "transactionType": null,
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": false
+      }
+    },
+    {
+      "id": "edge_008",
+      "thread_id": "thread_edge_refinance",
+      "subject": "Lower your monthly payment - Refinance now!",
+      "body": "Interest rates have dropped! You could save $300/month by refinancing your mortgage.\n\nCurrent rate: 7.5%\nNew rate available: 6.25%\nEstimated savings: $3,600/year\n\nNo cost to apply. Get your free quote today!",
+      "sender": "offers@refinancenow.com",
+      "recipients": ["homeowner@email.com"],
+      "labels": ["INBOX", "CATEGORY_PROMOTIONS"],
+      "sent_at": "2024-01-26T09:00:00Z",
+      "label": "edge_case",
+      "difficulty": "hard",
+      "expected": {
+        "isTransaction": false,
+        "transactionType": null,
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": true
+      }
+    },
+    {
+      "id": "normal_013",
+      "thread_id": "thread_doctor_1",
+      "subject": "Your lab results are ready",
+      "body": "Your recent lab results from January 15th are now available in your patient portal.\n\nPlease log in to view your results or schedule a follow-up appointment if needed.",
+      "sender": "results@medicalcenter.com",
+      "recipients": ["patient@email.com"],
+      "labels": ["INBOX"],
+      "sent_at": "2024-01-27T11:00:00Z",
+      "label": "normal",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": false,
+        "transactionType": null,
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": false
+      }
+    },
+    {
+      "id": "normal_014",
+      "thread_id": "thread_netflix_1",
+      "subject": "New on Netflix this week",
+      "body": "Check out what's new on Netflix!\n\n- New movie: The Big Adventure\n- New series: Mystery Manor Season 2\n- Documentary: Planet Earth III\n\nWatch now on Netflix.",
+      "sender": "info@netflix.com",
+      "recipients": ["subscriber@email.com"],
+      "labels": ["INBOX", "CATEGORY_PROMOTIONS"],
+      "sent_at": "2024-01-28T10:00:00Z",
+      "label": "normal",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": false,
+        "transactionType": null,
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": false
+      }
+    },
+    {
+      "id": "normal_015",
+      "thread_id": "thread_bank_1",
+      "subject": "Your January statement is ready",
+      "body": "Your monthly statement for account ending in 4567 is now available.\n\nPeriod: January 1-31, 2024\nEnding balance: $5,234.56\n\nView your statement online.",
+      "sender": "statements@chase.com",
+      "recipients": ["customer@email.com"],
+      "labels": ["INBOX", "CATEGORY_UPDATES"],
+      "sent_at": "2024-01-29T06:00:00Z",
+      "label": "normal",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": false,
+        "transactionType": null,
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": false
+      }
+    },
+    {
+      "id": "normal_016",
+      "thread_id": "thread_weather_1",
+      "subject": "Severe Weather Alert for your area",
+      "body": "Winter Storm Warning in effect for Springfield County.\n\nExpected: 6-10 inches of snow\nTiming: Tonight through tomorrow morning\n\nStock up on essentials and avoid travel if possible.",
+      "sender": "alerts@weather.gov",
+      "recipients": ["resident@email.com"],
+      "labels": ["INBOX", "IMPORTANT"],
+      "sent_at": "2024-01-30T15:00:00Z",
+      "label": "normal",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": false,
+        "transactionType": null,
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": false
+      }
+    },
+    {
+      "id": "normal_017",
+      "thread_id": "thread_carservice_1",
+      "subject": "Your car is due for service",
+      "body": "According to our records, your 2022 Honda Accord is due for its 30,000 mile service.\n\nRecommended service:\n- Oil change\n- Tire rotation\n- Brake inspection\n\nSchedule your appointment online or call us.",
+      "sender": "service@hondadealership.com",
+      "recipients": ["carowner@email.com"],
+      "labels": ["INBOX"],
+      "sent_at": "2024-01-31T09:00:00Z",
+      "label": "normal",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": false,
+        "transactionType": null,
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": false
+      }
+    },
+    {
+      "id": "normal_018",
+      "thread_id": "thread_school_1",
+      "subject": "Parent-Teacher Conference Schedule",
+      "body": "Dear Parents,\n\nParent-teacher conferences are scheduled for February 5-6.\n\nPlease sign up for a time slot using the link below. Each conference is 15 minutes.\n\nWe look forward to meeting with you!",
+      "sender": "principal@elementaryschool.edu",
+      "recipients": ["parent@email.com"],
+      "labels": ["INBOX"],
+      "sent_at": "2024-02-01T08:00:00Z",
+      "label": "normal",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": false,
+        "transactionType": null,
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": false
+      }
+    },
+    {
+      "id": "normal_019",
+      "thread_id": "thread_grocery_1",
+      "subject": "Your grocery order is on its way",
+      "body": "Great news! Your Instacart order is being delivered.\n\nShopper: Maria\nEstimated arrival: 2:30 PM\n\nTrack your delivery in the app.",
+      "sender": "orders@instacart.com",
+      "recipients": ["customer@email.com"],
+      "labels": ["INBOX", "CATEGORY_UPDATES"],
+      "sent_at": "2024-02-02T14:00:00Z",
+      "label": "normal",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": false,
+        "transactionType": null,
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": false
+      }
+    },
+    {
+      "id": "normal_020",
+      "thread_id": "thread_insurance_1",
+      "subject": "Your auto insurance policy renewal",
+      "body": "Your auto insurance policy renews on March 1, 2024.\n\nCurrent premium: $1,245/year\nPayment due: February 15, 2024\n\nLog in to review your coverage or make changes.",
+      "sender": "renewals@geico.com",
+      "recipients": ["policyholder@email.com"],
+      "labels": ["INBOX"],
+      "sent_at": "2024-02-03T10:00:00Z",
+      "label": "normal",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": false,
+        "transactionType": null,
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": false
+      }
+    }
+  ]
+}
