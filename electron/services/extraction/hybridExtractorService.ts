@@ -37,9 +37,16 @@ import {
   MessageInput,
   ExistingTransactionRef,
   PatternSummary,
+  SpamFilterStats,
   CONFIDENCE_WEIGHTS,
   DEFAULT_EXTRACTION_OPTIONS,
 } from './types';
+import {
+  isGmailSpam,
+  isOutlookJunk,
+  SpamFilterResult,
+} from '../llm/spamFilterService';
+import logService from '../logService';
 
 /**
  * Hybrid Extractor Service
@@ -114,6 +121,81 @@ export class HybridExtractorService {
       this.totalTokensUsed.completion += tokens.completion;
       this.totalTokensUsed.total += tokens.total;
     }
+  }
+
+  // ===========================================================================
+  // Spam Filtering (TASK-503)
+  // ===========================================================================
+
+  /**
+   * Check if a message should be filtered as spam.
+   * Checks Gmail labels or Outlook folder.
+   */
+  private checkSpam(message: MessageInput): SpamFilterResult {
+    // Gmail check - if labels are present
+    if (message.labels && message.labels.length > 0) {
+      return isGmailSpam(message.labels);
+    }
+
+    // Outlook check - if folder info is present
+    if (message.parentFolderName) {
+      return isOutlookJunk({
+        inferenceClassification: message.inferenceClassification,
+        parentFolderName: message.parentFolderName,
+      });
+    }
+
+    return { isSpam: false };
+  }
+
+  /**
+   * Filter out spam messages before processing.
+   * Returns non-spam messages and filtering stats.
+   */
+  filterSpam(messages: MessageInput[]): {
+    filtered: MessageInput[];
+    stats: SpamFilterStats;
+  } {
+    const filtered: MessageInput[] = [];
+    let gmailSpam = 0;
+    let outlookJunk = 0;
+
+    for (const message of messages) {
+      const spamResult = this.checkSpam(message);
+      if (spamResult.isSpam) {
+        // Track which provider detected the spam
+        if (spamResult.reason?.includes('Gmail')) {
+          gmailSpam++;
+        } else if (spamResult.reason?.includes('Outlook')) {
+          outlookJunk++;
+        }
+        logService.debug('Skipping spam email', 'HybridExtractor', {
+          messageId: message.id,
+          reason: spamResult.reason,
+        });
+      } else {
+        filtered.push(message);
+      }
+    }
+
+    const spamFiltered = gmailSpam + outlookJunk;
+    const stats: SpamFilterStats = {
+      totalEmails: messages.length,
+      spamFiltered,
+      gmailSpam,
+      outlookJunk,
+      percentFiltered: messages.length > 0
+        ? Math.round((spamFiltered / messages.length) * 100)
+        : 0,
+    };
+
+    logService.info('Spam filter results', 'HybridExtractor', {
+      total: messages.length,
+      processed: filtered.length,
+      skippedSpam: spamFiltered,
+    });
+
+    return { filtered, stats };
   }
 
   // ===========================================================================
