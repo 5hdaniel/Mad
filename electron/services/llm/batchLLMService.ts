@@ -50,6 +50,52 @@ export interface BatchingResult {
 }
 
 // ============================================================================
+// Response Parser Types (TASK-508)
+// ============================================================================
+
+/**
+ * Analysis result for a single email from batch processing
+ */
+export interface BatchAnalysisResult {
+  emailId: string;
+  isRealEstateRelated: boolean;
+  confidence: number;
+  transactionType?: 'purchase' | 'sale' | 'lease' | null;
+  propertyAddress?: string;
+  reasoning?: string;
+  rawResponse?: unknown;
+}
+
+/**
+ * Result of parsing a batch LLM response
+ */
+export interface BatchParseResult {
+  results: BatchAnalysisResult[];
+  errors: Array<{ emailId: string; error: string }>;
+  stats: {
+    total: number;
+    successful: number;
+    failed: number;
+    realEstateFound: number;
+  };
+}
+
+/**
+ * Raw LLM response item structure (handles field name variations)
+ */
+interface LLMBatchResponseItem {
+  id?: string;
+  isRealEstateRelated?: boolean;
+  is_real_estate_related?: boolean;
+  confidence?: number;
+  transactionType?: string;
+  transaction_type?: string;
+  propertyAddress?: string;
+  property_address?: string;
+  reasoning?: string;
+}
+
+// ============================================================================
 // Constants
 // ============================================================================
 
@@ -213,4 +259,152 @@ export function formatBatchPrompt(batch: EmailBatch): string {
   lines.push(`Respond with only the JSON array, no additional text.`);
 
   return lines.join('\n');
+}
+
+// ============================================================================
+// Response Parsing (TASK-508)
+// ============================================================================
+
+/**
+ * Extract JSON array from LLM response, handling markdown code blocks.
+ *
+ * @param response - Raw LLM response text
+ * @returns Extracted JSON array string or null
+ */
+export function extractJsonArray(response: string): string | null {
+  if (!response || typeof response !== 'string') {
+    return null;
+  }
+
+  // Step 1: Remove markdown code blocks (```json ... ``` or ``` ... ```)
+  let cleaned = response
+    .replace(/```json\s*/gi, '')
+    .replace(/```\s*/g, '');
+
+  // Step 2: Find JSON array
+  const match = cleaned.match(/\[[\s\S]*\]/);
+  return match ? match[0] : null;
+}
+
+/**
+ * Parse batch LLM response and map results to individual emails.
+ *
+ * @param batch - The original email batch
+ * @param llmResponse - Raw LLM response text
+ * @returns Parse result with mapped results and any errors
+ */
+export function parseBatchResponse(
+  batch: EmailBatch,
+  llmResponse: string
+): BatchParseResult {
+  const results: BatchAnalysisResult[] = [];
+  const errors: Array<{ emailId: string; error: string }> = [];
+
+  try {
+    // Extract JSON array from response
+    const jsonString = extractJsonArray(llmResponse);
+    if (!jsonString) {
+      throw new Error('No JSON array found in response');
+    }
+
+    const parsedResults: LLMBatchResponseItem[] = JSON.parse(jsonString);
+
+    if (!Array.isArray(parsedResults)) {
+      throw new Error('Response is not an array');
+    }
+
+    // Warn on length mismatch (don't fail)
+    if (parsedResults.length !== batch.emails.length) {
+      console.warn(
+        `[BatchParser] Response count mismatch: expected ${batch.emails.length}, got ${parsedResults.length}`
+      );
+    }
+
+    // Map results to emails by index
+    for (let i = 0; i < batch.emails.length; i++) {
+      const email = batch.emails[i];
+      const result = parsedResults[i];
+
+      if (!result) {
+        errors.push({
+          emailId: email.id,
+          error: `No result at index ${i}`,
+        });
+        continue;
+      }
+
+      // Handle both camelCase and snake_case field names
+      const isRealEstateRelated = Boolean(
+        result.isRealEstateRelated ?? result.is_real_estate_related ?? false
+      );
+      const transactionType =
+        (result.transactionType || result.transaction_type) as
+          | 'purchase'
+          | 'sale'
+          | 'lease'
+          | undefined;
+      const propertyAddress = result.propertyAddress || result.property_address;
+
+      results.push({
+        emailId: email.id,
+        isRealEstateRelated,
+        confidence: result.confidence ?? 0,
+        transactionType: transactionType || null,
+        propertyAddress,
+        reasoning: result.reasoning,
+        rawResponse: result,
+      });
+    }
+  } catch (error) {
+    // If batch parsing fails, mark all emails as errors
+    for (const email of batch.emails) {
+      errors.push({
+        emailId: email.id,
+        error: error instanceof Error ? error.message : 'Unknown parse error',
+      });
+    }
+  }
+
+  return {
+    results,
+    errors,
+    stats: {
+      total: batch.emails.length,
+      successful: results.length,
+      failed: errors.length,
+      realEstateFound: results.filter((r) => r.isRealEstateRelated).length,
+    },
+  };
+}
+
+/**
+ * Fallback: Process failed batch emails individually.
+ * Used when batch parsing fails but we want to retry emails one-by-one.
+ *
+ * @param errors - List of failed emails from batch parsing
+ * @param emailMap - Map of email ID to email data
+ * @param analyzeFn - Function to analyze a single email
+ * @returns Results from individual analysis
+ */
+export async function processBatchErrors(
+  errors: Array<{ emailId: string; error: string }>,
+  emailMap: Map<string, MessageInput>,
+  analyzeFn: (email: MessageInput) => Promise<BatchAnalysisResult>
+): Promise<BatchAnalysisResult[]> {
+  const fallbackResults: BatchAnalysisResult[] = [];
+
+  for (const errorItem of errors) {
+    const email = emailMap.get(errorItem.emailId);
+    if (!email) continue;
+
+    try {
+      const result = await analyzeFn(email);
+      fallbackResults.push(result);
+    } catch {
+      // Skip if individual analysis also fails
+      console.warn(`[BatchParser] Fallback failed for email ${errorItem.emailId}`);
+    }
+  }
+
+  return fallbackResults;
 }
