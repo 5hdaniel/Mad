@@ -2,6 +2,61 @@
 
 This guide is for all Claude agents working on Magic Audit. Follow these standards for all development work.
 
+---
+
+## MANDATORY: Agent Workflow for Sprint Tasks
+
+**CRITICAL: READ THIS BEFORE ANY SPRINT/TASK WORK**
+
+When working on tasks from `.claude/plans/tasks/`, you MUST use the proper agent workflow. Direct implementation is PROHIBITED.
+
+### Required Workflow
+
+```
+1. PM assigns task → 2. Engineer agent implements → 3. SR Engineer agent reviews → 4. Merge
+```
+
+### Step-by-Step
+
+1. **DO NOT implement tasks directly.** When you see a TASK-XXX file:
+   - Invoke the `engineer` agent with `subagent_type="engineer"`
+   - Pass the task file path and context
+   - Let the engineer agent handle implementation
+
+2. **DO NOT merge PRs without review.** Before any PR merge:
+   - Invoke the `senior-engineer-pr-lead` agent with `subagent_type="senior-engineer-pr-lead"`
+   - Let the SR Engineer validate architecture, tests, and quality gates
+   - Only merge after SR Engineer approval
+
+### Example: Correct Workflow
+
+```
+User: "Implement TASK-510"
+
+WRONG (what you've been doing):
+- Read the task file
+- Write the code yourself
+- Create PR and merge
+
+RIGHT (what you must do):
+- Invoke Task tool with subagent_type="engineer"
+- Prompt: "Implement TASK-510 from .claude/plans/tasks/TASK-510-xxx.md"
+- Wait for engineer to complete and hand off to SR Engineer
+- Invoke Task tool with subagent_type="senior-engineer-pr-lead" for PR review
+- Only merge after SR Engineer approval
+```
+
+### Why This Matters
+
+- **Metrics tracking**: Engineer agent tracks turns/tokens/time
+- **Quality gates**: SR Engineer validates architecture and tests
+- **Audit trail**: Proper handoffs create accountability
+- **Consistency**: Same workflow every sprint
+
+**FAILURE TO FOLLOW THIS WORKFLOW IS A PROCESS VIOLATION.**
+
+---
+
 ## Project Overview
 
 Magic Audit is an Electron-based desktop application for real estate transaction auditing. It features:

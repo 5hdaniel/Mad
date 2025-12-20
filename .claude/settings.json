@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/task-workflow-reminder.js",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
