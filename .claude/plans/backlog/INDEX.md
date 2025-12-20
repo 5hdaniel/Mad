@@ -2,9 +2,9 @@
 
 This index tracks all backlog items with their current status and metadata.
 
-**Last Updated:** 2025-12-17
+**Last Updated:** 2025-12-20
 **Total Items:** 79
-**Pending:** 68 | **In Progress:** 0 | **Completed:** 10 | **Obsolete:** 2
+**Pending:** 66 | **In Progress:** 0 | **Completed:** 12 | **Obsolete:** 2
 
 ---
 
@@ -26,7 +26,7 @@ This index tracks all backlog items with their current status and metadata.
 ## Quick Filters
 
 ### By Priority
-- **Critical:** BACKLOG-030, 032, 035, 038, 039, 044, 045, 058, 059, 072, 073, 074
+- **Critical:** BACKLOG-030 (done), 032, 035 (done), 038 (done), 039 (done), 044 (done), 045 (done), 058 (done), 059 (done), 072 (done), 073 (done), 074 (done)
 - **High:** BACKLOG-008, 009, 013, 016, 018, 020, 021, 023, 026, 031, 033, 037, 056, 060, 061, 062, 063, 067, 075, 076
 - **Medium:** Multiple (see full index), 077, 078, 079
 - **Low/Deferred:** BACKLOG-001, 003, 004, 010, 017, 069, 070
@@ -101,8 +101,8 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-041 | Create UX Engineer Agent | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-042 | Lookback Period Not Persistent | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-043 | Settings Screen Not Scrollable | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
-| BACKLOG-044 | Multiple Contacts Per Role | Critical | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
-| BACKLOG-045 | Block Contact Deletion | Critical | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| BACKLOG-044 | Multiple Contacts Per Role | ui | Critical | ✅ Completed | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | Backend + UI implemented |
+| BACKLOG-045 | Block Contact Deletion | service | Critical | ✅ Completed | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | getTransactionsByContact + tests |
 | BACKLOG-046 | DB Init Circuit Breaker | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-047 | Contact Deletion Query Fix | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-048 | Transaction Edit Preserve Tab | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
@@ -186,6 +186,8 @@ This index tracks all backlog items with their current status and metadata.
 - 2025-12-17: BACKLOG-039 (TASK-203) completed - Transaction status (PR #140 merged)
 - 2025-12-17: BACKLOG-035 (TASK-204) completed - Orphaned tables + closing_date fix (PR #142 merged)
 - 2025-12-17: *INCIDENT*: Parallel agent execution burned ~14M tokens before manual intervention
+- 2025-12-20: BACKLOG-044 (Multiple Contacts Per Role) marked complete - already implemented in UI + backend
+- 2025-12-20: BACKLOG-045 (Block Contact Deletion) marked complete - getTransactionsByContact + tests exist
 - 2025-12-17: Lesson learned: Database schema tasks must be SEQUENTIAL, never parallel
 - 2025-12-17: Added Category column and Variance tracking to INDEX.md for estimation accuracy analysis
 
