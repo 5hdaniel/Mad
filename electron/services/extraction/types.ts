@@ -156,6 +156,10 @@ export interface MessageInput {
   sender: string;
   recipients: string[];
   date: string;
+  // TASK-503: Spam detection fields
+  labels?: string[]; // Gmail labels
+  inferenceClassification?: string; // Outlook focused/other
+  parentFolderName?: string; // Outlook folder name
 }
 
 /**
@@ -165,6 +169,21 @@ export interface ExistingTransactionRef {
   id: string;
   propertyAddress: string;
   transactionType?: string;
+}
+
+// ============================================================================
+// Spam Filter Types (TASK-503)
+// ============================================================================
+
+/**
+ * Statistics from spam filtering step.
+ */
+export interface SpamFilterStats {
+  totalEmails: number;
+  spamFiltered: number;
+  gmailSpam: number;
+  outlookJunk: number;
+  percentFiltered: number;
 }
 
 // ============================================================================
