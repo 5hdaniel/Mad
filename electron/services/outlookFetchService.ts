@@ -40,6 +40,9 @@ interface GraphMessage {
   hasAttachments: boolean;
   body?: GraphEmailBody;
   bodyPreview?: string;
+  // TASK-502: Added for junk detection
+  inferenceClassification?: 'focused' | 'other';
+  parentFolderId?: string;
 }
 
 /**
@@ -91,6 +94,9 @@ interface ParsedEmail {
   hasAttachments: boolean;
   attachmentCount: number;
   raw: GraphMessage;
+  // TASK-502: Added for junk detection
+  inferenceClassification?: string;
+  parentFolderId?: string;
 }
 
 /**
@@ -266,7 +272,7 @@ class OutlookFetchService {
       const filterString =
         filters.length > 0 ? `$filter=${filters.join(" and ")}` : "";
       const selectFields =
-        "$select=id,subject,from,toRecipients,ccRecipients,bccRecipients,receivedDateTime,sentDateTime,hasAttachments,body,bodyPreview,conversationId";
+        "$select=id,subject,from,toRecipients,ccRecipients,bccRecipients,receivedDateTime,sentDateTime,hasAttachments,body,bodyPreview,conversationId,inferenceClassification,parentFolderId";
 
       logService.info("Searching emails", "OutlookFetch");
 
@@ -432,6 +438,9 @@ class OutlookFetchService {
       hasAttachments: message.hasAttachments || false,
       attachmentCount: 0, // Would need separate call to get attachment count
       raw: message,
+      // TASK-502: Added for junk detection
+      inferenceClassification: message.inferenceClassification,
+      parentFolderId: message.parentFolderId,
     };
   }
 
