@@ -156,6 +156,12 @@ export interface MessageInput {
   sender: string;
   recipients: string[];
   date: string;
+  // TASK-503: Spam detection fields
+  labels?: string[]; // Gmail labels
+  inferenceClassification?: string; // Outlook focused/other
+  parentFolderName?: string; // Outlook folder name
+  // TASK-505: Thread grouping field
+  thread_id?: string; // Thread/conversation ID for grouping
 }
 
 /**
@@ -165,6 +171,66 @@ export interface ExistingTransactionRef {
   id: string;
   propertyAddress: string;
   transactionType?: string;
+}
+
+// ============================================================================
+// Spam Filter Types (TASK-503)
+// ============================================================================
+
+/**
+ * Statistics from spam filtering step.
+ */
+export interface SpamFilterStats {
+  totalEmails: number;
+  spamFiltered: number;
+  gmailSpam: number;
+  outlookJunk: number;
+  percentFiltered: number;
+}
+
+// ============================================================================
+// Optimized Pipeline Types (TASK-509)
+// ============================================================================
+
+import type { BatchAnalysisResult, BatchParseResult } from '../llm/batchLLMService';
+import type { PropagationResult } from '../llm/threadGroupingService';
+
+/**
+ * Statistics from the optimized extraction pipeline.
+ */
+export interface OptimizedPipelineStats {
+  /** Original number of emails before any filtering */
+  originalEmails: number;
+  /** Number of emails filtered as spam */
+  spamFiltered: number;
+  /** Number of unique threads/first-emails analyzed */
+  threadsAnalyzed: number;
+  /** Number of LLM batches sent */
+  batchesSent: number;
+  /** Number of real estate related emails found */
+  realEstateFound: number;
+  /** Number of emails linked via thread propagation */
+  emailsLinkedByPropagation: number;
+  /** Total processing time in milliseconds */
+  processingTimeMs: number;
+  /** Estimated cost reduction percentage */
+  costReductionPercent: string;
+}
+
+/**
+ * Result of running the optimized extraction pipeline.
+ * TASK-509: Combines spam filtering, thread grouping, and batching.
+ */
+export interface OptimizedAnalysisResult {
+  success: boolean;
+  /** Analysis results for each email processed */
+  results: BatchAnalysisResult[];
+  /** Results of propagating transactions to thread emails */
+  propagation: PropagationResult[];
+  /** Pipeline statistics and cost savings */
+  stats: OptimizedPipelineStats;
+  /** Error message if pipeline failed */
+  error?: string;
 }
 
 // ============================================================================

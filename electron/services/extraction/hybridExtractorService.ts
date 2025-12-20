@@ -37,9 +37,35 @@ import {
   MessageInput,
   ExistingTransactionRef,
   PatternSummary,
+  SpamFilterStats,
+  OptimizedAnalysisResult,
   CONFIDENCE_WEIGHTS,
   DEFAULT_EXTRACTION_OPTIONS,
 } from './types';
+import {
+  createBatches,
+  formatBatchPrompt,
+  parseBatchResponse,
+  processBatchErrors,
+  BatchAnalysisResult,
+  BatchParseResult,
+  EmailBatch,
+} from '../llm/batchLLMService';
+import { BATCH_ANALYSIS_SYSTEM_PROMPT } from '../llm/prompts/batchAnalysis';
+import {
+  isGmailSpam,
+  isOutlookJunk,
+  SpamFilterResult,
+} from '../llm/spamFilterService';
+import {
+  groupEmailsByThread,
+  getFirstEmailsFromThreads,
+  getEmailsToPropagate,
+  findThreadByEmailId,
+  ThreadGroupingResult,
+  PropagationResult,
+} from '../llm/threadGroupingService';
+import logService from '../logService';
 
 /**
  * Hybrid Extractor Service
@@ -58,6 +84,9 @@ export class HybridExtractorService {
 
   // Track total tokens used across operations
   private totalTokensUsed = { prompt: 0, completion: 0, total: 0 };
+
+  // TASK-505: Store thread grouping for propagation (TASK-506)
+  private threadGroupingResult: ThreadGroupingResult | null = null;
 
   constructor(configService?: LLMConfigService) {
     this.configService = configService ?? new LLMConfigService();
@@ -113,6 +142,273 @@ export class HybridExtractorService {
       this.totalTokensUsed.prompt += tokens.prompt;
       this.totalTokensUsed.completion += tokens.completion;
       this.totalTokensUsed.total += tokens.total;
+    }
+  }
+
+  // ===========================================================================
+  // Spam Filtering (TASK-503)
+  // ===========================================================================
+
+  /**
+   * Check if a message should be filtered as spam.
+   * Checks Gmail labels or Outlook folder.
+   */
+  private checkSpam(message: MessageInput): SpamFilterResult {
+    // Gmail check - if labels are present
+    if (message.labels && message.labels.length > 0) {
+      return isGmailSpam(message.labels);
+    }
+
+    // Outlook check - if folder info is present
+    if (message.parentFolderName) {
+      return isOutlookJunk({
+        inferenceClassification: message.inferenceClassification,
+        parentFolderName: message.parentFolderName,
+      });
+    }
+
+    return { isSpam: false };
+  }
+
+  /**
+   * Filter out spam messages before processing.
+   * Returns non-spam messages and filtering stats.
+   */
+  filterSpam(messages: MessageInput[]): {
+    filtered: MessageInput[];
+    stats: SpamFilterStats;
+  } {
+    const filtered: MessageInput[] = [];
+    let gmailSpam = 0;
+    let outlookJunk = 0;
+
+    for (const message of messages) {
+      const spamResult = this.checkSpam(message);
+      if (spamResult.isSpam) {
+        // Track which provider detected the spam
+        if (spamResult.reason?.includes('Gmail')) {
+          gmailSpam++;
+        } else if (spamResult.reason?.includes('Outlook')) {
+          outlookJunk++;
+        }
+        logService.debug('Skipping spam email', 'HybridExtractor', {
+          messageId: message.id,
+          reason: spamResult.reason,
+        });
+      } else {
+        filtered.push(message);
+      }
+    }
+
+    const spamFiltered = gmailSpam + outlookJunk;
+    const stats: SpamFilterStats = {
+      totalEmails: messages.length,
+      spamFiltered,
+      gmailSpam,
+      outlookJunk,
+      percentFiltered: messages.length > 0
+        ? Math.round((spamFiltered / messages.length) * 100)
+        : 0,
+    };
+
+    logService.info('Spam filter results', 'HybridExtractor', {
+      total: messages.length,
+      processed: filtered.length,
+      skippedSpam: spamFiltered,
+    });
+
+    return { filtered, stats };
+  }
+
+  // ===========================================================================
+  // Thread Grouping (TASK-505)
+  // ===========================================================================
+
+  /**
+   * Get the thread grouping result from the last analysis.
+   * Used for transaction propagation in TASK-506.
+   */
+  getThreadGroupingResult(): ThreadGroupingResult | null {
+    return this.threadGroupingResult;
+  }
+
+  /**
+   * Group messages by thread and return only first emails for analysis.
+   * Stores the grouping result for later propagation.
+   */
+  groupAndSelectFirstEmails(messages: MessageInput[]): {
+    emailsToAnalyze: MessageInput[];
+    stats: {
+      totalEmails: number;
+      totalThreads: number;
+      emailsToAnalyze: number;
+      reductionPercent: number;
+    };
+  } {
+    // Convert MessageInput to Message-like for grouping
+    // The grouping only needs id, thread_id, and date fields
+    const messagesForGrouping = messages.map((m) => ({
+      id: m.id,
+      thread_id: m.thread_id,
+      sent_at: m.date,
+      received_at: m.date,
+      created_at: m.date,
+    }));
+
+    this.threadGroupingResult = groupEmailsByThread(messagesForGrouping as any);
+
+    const firstEmailIds = new Set(
+      getFirstEmailsFromThreads(this.threadGroupingResult).map((e) => e.id)
+    );
+
+    // Filter original messages to only first emails
+    const emailsToAnalyze = messages.filter((m) => firstEmailIds.has(m.id));
+
+    const stats = {
+      totalEmails: messages.length,
+      totalThreads: this.threadGroupingResult.stats.totalThreads,
+      emailsToAnalyze: emailsToAnalyze.length,
+      reductionPercent:
+        messages.length > 0
+          ? Math.round((1 - emailsToAnalyze.length / messages.length) * 100)
+          : 0,
+    };
+
+    logService.info('Thread grouping results', 'HybridExtractor', {
+      totalEmails: stats.totalEmails,
+      threads: stats.totalThreads,
+      orphans: this.threadGroupingResult.stats.orphanCount,
+      avgPerThread: this.threadGroupingResult.stats.avgEmailsPerThread.toFixed(1),
+    });
+
+    logService.info('Emails to analyze (first per thread)', 'HybridExtractor', {
+      original: messages.length,
+      toAnalyze: emailsToAnalyze.length,
+      reduction: `${stats.reductionPercent}%`,
+    });
+
+    return { emailsToAnalyze, stats };
+  }
+
+  // ===========================================================================
+  // Transaction Propagation (TASK-506)
+  // ===========================================================================
+
+  /**
+   * Propagate transaction detection to all emails in the same thread.
+   * Uses DetectedTransaction[] from clustering (not raw AnalysisResult[]).
+   *
+   * When a transaction is detected from the first email of a thread,
+   * this links all other emails in that thread to the same transaction.
+   */
+  async propagateTransactionsToThreads(
+    detectedTransactions: DetectedTransaction[],
+    threadGrouping: ThreadGroupingResult
+  ): Promise<PropagationResult[]> {
+    const propagationResults: PropagationResult[] = [];
+
+    for (const transaction of detectedTransactions) {
+      // Get the first email that was analyzed (communication that triggered detection)
+      const analyzedEmailId = transaction.communicationIds[0];
+      if (!analyzedEmailId) continue;
+
+      // Find which thread this email belongs to
+      const threadId = findThreadByEmailId(threadGrouping, analyzedEmailId);
+      if (!threadId) continue;
+
+      // Get other emails in this thread that weren't analyzed
+      const emailsToPropagate = getEmailsToPropagate(threadGrouping, threadId);
+      if (emailsToPropagate.length === 0) continue;
+
+      // Check existing links before overwriting (per SR Engineer review)
+      const safeToPropagate = await this.filterAlreadyLinked(
+        emailsToPropagate,
+        transaction.id
+      );
+
+      if (safeToPropagate.length > 0) {
+        // Link all thread emails to this transaction
+        await this.linkEmailsToTransaction(safeToPropagate, transaction.id);
+
+        propagationResults.push({
+          transactionId: transaction.id,
+          threadId: threadId,
+          sourceEmailId: analyzedEmailId,
+          propagatedEmailIds: safeToPropagate,
+          propagatedCount: safeToPropagate.length,
+        });
+      }
+    }
+
+    logService.info('Transaction propagation complete', 'HybridExtractor', {
+      transactionsFound: detectedTransactions.length,
+      threadsPropagated: propagationResults.length,
+      emailsLinked: propagationResults.reduce((sum, p) => sum + p.propagatedCount, 0),
+    });
+
+    return propagationResults;
+  }
+
+  /**
+   * Filter out emails already linked to a different transaction.
+   * Prevents overwriting existing transaction links.
+   */
+  private async filterAlreadyLinked(
+    emailIds: string[],
+    transactionId: string
+  ): Promise<string[]> {
+    // Lazy import to avoid circular dependencies
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { getCommunicationById } = require('../db/communicationDbService');
+
+    const safeIds: string[] = [];
+
+    for (const emailId of emailIds) {
+      try {
+        const existing = await getCommunicationById(emailId);
+        if (!existing?.transaction_id || existing.transaction_id === transactionId) {
+          safeIds.push(emailId);
+        } else {
+          logService.warn('Email already linked to different transaction', 'HybridExtractor', {
+            emailId,
+            existingTransactionId: existing.transaction_id,
+            newTransactionId: transactionId,
+          });
+        }
+      } catch {
+        // If we can't check, assume it's safe to link
+        safeIds.push(emailId);
+      }
+    }
+
+    return safeIds;
+  }
+
+  /**
+   * Link emails to a transaction in the database.
+   */
+  private async linkEmailsToTransaction(
+    emailIds: string[],
+    transactionId: string
+  ): Promise<void> {
+    // Lazy import to avoid circular dependencies
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { linkCommunicationToTransaction } = require('../db/communicationDbService');
+
+    for (const emailId of emailIds) {
+      try {
+        await linkCommunicationToTransaction(emailId, transactionId);
+        logService.debug('Linked email to transaction', 'HybridExtractor', {
+          emailId,
+          transactionId,
+        });
+      } catch (error) {
+        logService.warn('Failed to link email to transaction', 'HybridExtractor', {
+          emailId,
+          transactionId,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
     }
   }
 
@@ -660,6 +956,248 @@ export class HybridExtractorService {
         } as DetectedTransaction;
       })
       .filter((tx): tx is DetectedTransaction => tx !== null);
+  }
+
+  // ===========================================================================
+  // Optimized Pipeline (TASK-509)
+  // ===========================================================================
+
+  /** Current user ID for LLM config lookup */
+  private currentUserId?: string;
+
+  /**
+   * Analyze messages using the optimized pipeline.
+   * Combines spam filtering, thread grouping, and batching for cost efficiency.
+   *
+   * TASK-509: This is the new optimized entry point.
+   */
+  async analyzeMessagesOptimized(
+    messages: MessageInput[],
+    userId: string
+  ): Promise<OptimizedAnalysisResult> {
+    const startTime = Date.now();
+    this.currentUserId = userId;
+
+    try {
+      // STEP 1: Spam Filter
+      const { filtered: nonSpamMessages, stats: spamStats } = this.filterSpam(messages);
+
+      logService.info('Step 1: Spam filtering complete', 'OptimizedPipeline', {
+        original: messages.length,
+        afterFilter: nonSpamMessages.length,
+        spamRemoved: spamStats.spamFiltered,
+      });
+
+      // STEP 2: Thread Grouping
+      const { emailsToAnalyze, stats: threadStats } = this.groupAndSelectFirstEmails(nonSpamMessages);
+
+      logService.info('Step 2: Thread grouping complete', 'OptimizedPipeline', {
+        threads: threadStats.totalThreads,
+        emailsToAnalyze: emailsToAnalyze.length,
+        reduction: `${threadStats.reductionPercent}%`,
+      });
+
+      // STEP 3: Batching
+      const batchingResult = createBatches(emailsToAnalyze);
+
+      logService.info('Step 3: Batching complete', 'OptimizedPipeline', {
+        batches: batchingResult.stats.totalBatches,
+        avgPerBatch: batchingResult.stats.avgEmailsPerBatch,
+        estimatedTokens: batchingResult.stats.estimatedTotalTokens,
+      });
+
+      // STEP 4: Process Batches
+      const allResults: BatchAnalysisResult[] = [];
+
+      for (const batch of batchingResult.batches) {
+        logService.debug(`Processing batch ${batch.batchId}`, 'OptimizedPipeline', {
+          emailCount: batch.emails.length,
+          estimatedTokens: batch.estimatedTokens,
+        });
+
+        const batchResult = await this.processBatch(batch, userId);
+        allResults.push(...batchResult.results);
+
+        // Handle errors with fallback
+        if (batchResult.errors.length > 0) {
+          logService.warn('Batch had errors, using fallback', 'OptimizedPipeline', {
+            batchId: batch.batchId,
+            errorCount: batchResult.errors.length,
+          });
+          const fallbackResults = await this.processFallback(batch, batchResult.errors);
+          allResults.push(...fallbackResults);
+        }
+      }
+
+      logService.info('Step 4: Batch processing complete', 'OptimizedPipeline', {
+        totalResults: allResults.length,
+        realEstateFound: allResults.filter((r) => r.isRealEstateRelated).length,
+      });
+
+      // STEP 5: Propagate to Threads
+      // Convert BatchAnalysisResult to DetectedTransaction for propagation
+      const detectedTransactions = this.convertToDetectedTransactions(allResults);
+      const propagationResults = this.threadGroupingResult
+        ? await this.propagateTransactionsToThreads(detectedTransactions, this.threadGroupingResult)
+        : [];
+
+      const endTime = Date.now();
+
+      // Calculate cost reduction
+      const originalApiCalls = messages.length;
+      const actualApiCalls = batchingResult.stats.totalBatches;
+      const costReductionPercent =
+        originalApiCalls > 0
+          ? ((1 - actualApiCalls / originalApiCalls) * 100).toFixed(1)
+          : '0.0';
+
+      logService.info('Step 5: Pipeline complete', 'OptimizedPipeline', {
+        processingTimeMs: endTime - startTime,
+        costReduction: `${costReductionPercent}%`,
+        originalCalls: originalApiCalls,
+        actualCalls: actualApiCalls,
+      });
+
+      return {
+        success: true,
+        results: allResults,
+        propagation: propagationResults,
+        stats: {
+          originalEmails: messages.length,
+          spamFiltered: spamStats.spamFiltered,
+          threadsAnalyzed: batchingResult.stats.totalEmails,
+          batchesSent: batchingResult.stats.totalBatches,
+          realEstateFound: allResults.filter((r) => r.isRealEstateRelated).length,
+          emailsLinkedByPropagation: propagationResults.reduce(
+            (sum, p) => sum + p.propagatedCount,
+            0
+          ),
+          processingTimeMs: endTime - startTime,
+          costReductionPercent,
+        },
+      };
+    } catch (error) {
+      const endTime = Date.now();
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+      logService.error('Optimized pipeline failed', 'OptimizedPipeline', {
+        error: errorMessage,
+        processingTimeMs: endTime - startTime,
+      });
+
+      return {
+        success: false,
+        results: [],
+        propagation: [],
+        stats: {
+          originalEmails: messages.length,
+          spamFiltered: 0,
+          threadsAnalyzed: 0,
+          batchesSent: 0,
+          realEstateFound: 0,
+          emailsLinkedByPropagation: 0,
+          processingTimeMs: endTime - startTime,
+          costReductionPercent: '0.0',
+        },
+        error: errorMessage,
+      };
+    }
+  }
+
+  /**
+   * Process a batch of emails through LLM.
+   */
+  private async processBatch(batch: EmailBatch, userId: string): Promise<BatchParseResult> {
+    const prompt = formatBatchPrompt(batch);
+
+    // Get LLM config using existing pattern
+    const llmConfig = await this.getLLMConfig({ userId, useLLM: true, usePatternMatching: true });
+    if (!llmConfig) {
+      // Return all errors if LLM not configured
+      return {
+        results: [],
+        errors: batch.emails.map((e) => ({ emailId: e.id, error: 'LLM not configured' })),
+        stats: { total: batch.emails.length, successful: 0, failed: batch.emails.length, realEstateFound: 0 },
+      };
+    }
+
+    // Use existing service pattern
+    const service = this.getOrCreateService(llmConfig.provider, llmConfig.apiKey);
+
+    try {
+      // Build messages array with system prompt and user prompt
+      const messages = [
+        { role: 'system' as const, content: BATCH_ANALYSIS_SYSTEM_PROMPT },
+        { role: 'user' as const, content: prompt },
+      ];
+
+      // Call LLM with batch prompt
+      const response = await service.complete(messages, {
+        ...llmConfig,
+        maxTokens: 4000,
+        temperature: 0.1,
+      });
+
+      return parseBatchResponse(batch, response.content);
+    } catch (error) {
+      // Return all as errors if LLM call fails
+      const errorMessage = error instanceof Error ? error.message : 'LLM call failed';
+      return {
+        results: [],
+        errors: batch.emails.map((e) => ({ emailId: e.id, error: errorMessage })),
+        stats: { total: batch.emails.length, successful: 0, failed: batch.emails.length, realEstateFound: 0 },
+      };
+    }
+  }
+
+  /**
+   * Process failed batch emails individually.
+   */
+  private async processFallback(
+    batch: EmailBatch,
+    errors: Array<{ emailId: string; error: string }>
+  ): Promise<BatchAnalysisResult[]> {
+    const emailMap = new Map(batch.emails.map((e) => [e.id, e]));
+
+    return processBatchErrors(errors, emailMap, async (email): Promise<BatchAnalysisResult> => {
+      // Use pattern matching for fallback (no LLM cost)
+      const patternResult = transactionExtractorService.analyzeEmail({
+        subject: email.subject,
+        body: email.body,
+        from: email.sender,
+        to: email.recipients.join(', '),
+        date: email.date,
+      });
+
+      return {
+        emailId: email.id,
+        isRealEstateRelated: patternResult.isRealEstateRelated,
+        confidence: patternResult.confidence / 100,
+        transactionType: patternResult.transactionType || null,
+        propertyAddress: patternResult.addresses[0] || undefined,
+        reasoning: 'Pattern matching fallback',
+      };
+    });
+  }
+
+  /**
+   * Convert batch analysis results to detected transactions for propagation.
+   */
+  private convertToDetectedTransactions(results: BatchAnalysisResult[]): DetectedTransaction[] {
+    return results
+      .filter((r) => r.isRealEstateRelated && r.propertyAddress)
+      .map((r) => ({
+        id: uuidv4(),
+        propertyAddress: r.propertyAddress!,
+        transactionType: r.transactionType || null,
+        stage: null,
+        confidence: r.confidence,
+        extractionMethod: 'llm' as ExtractionMethod,
+        communicationIds: [r.emailId],
+        dateRange: { start: new Date().toISOString(), end: new Date().toISOString() },
+        suggestedContacts: { assignments: [] },
+        summary: r.reasoning || 'Detected via batch analysis',
+      }));
   }
 }
 
