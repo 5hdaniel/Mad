@@ -189,6 +189,51 @@ export interface SpamFilterStats {
 }
 
 // ============================================================================
+// Optimized Pipeline Types (TASK-509)
+// ============================================================================
+
+import type { BatchAnalysisResult, BatchParseResult } from '../llm/batchLLMService';
+import type { PropagationResult } from '../llm/threadGroupingService';
+
+/**
+ * Statistics from the optimized extraction pipeline.
+ */
+export interface OptimizedPipelineStats {
+  /** Original number of emails before any filtering */
+  originalEmails: number;
+  /** Number of emails filtered as spam */
+  spamFiltered: number;
+  /** Number of unique threads/first-emails analyzed */
+  threadsAnalyzed: number;
+  /** Number of LLM batches sent */
+  batchesSent: number;
+  /** Number of real estate related emails found */
+  realEstateFound: number;
+  /** Number of emails linked via thread propagation */
+  emailsLinkedByPropagation: number;
+  /** Total processing time in milliseconds */
+  processingTimeMs: number;
+  /** Estimated cost reduction percentage */
+  costReductionPercent: string;
+}
+
+/**
+ * Result of running the optimized extraction pipeline.
+ * TASK-509: Combines spam filtering, thread grouping, and batching.
+ */
+export interface OptimizedAnalysisResult {
+  success: boolean;
+  /** Analysis results for each email processed */
+  results: BatchAnalysisResult[];
+  /** Results of propagating transactions to thread emails */
+  propagation: PropagationResult[];
+  /** Pipeline statistics and cost savings */
+  stats: OptimizedPipelineStats;
+  /** Error message if pipeline failed */
+  error?: string;
+}
+
+// ============================================================================
 // Constants
 // ============================================================================
 
