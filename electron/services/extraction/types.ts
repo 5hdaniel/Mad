@@ -160,6 +160,8 @@ export interface MessageInput {
   labels?: string[]; // Gmail labels
   inferenceClassification?: string; // Outlook focused/other
   parentFolderName?: string; // Outlook folder name
+  // TASK-505: Thread grouping field
+  thread_id?: string; // Thread/conversation ID for grouping
 }
 
 /**

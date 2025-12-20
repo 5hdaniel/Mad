@@ -46,6 +46,11 @@ import {
   isOutlookJunk,
   SpamFilterResult,
 } from '../llm/spamFilterService';
+import {
+  groupEmailsByThread,
+  getFirstEmailsFromThreads,
+  ThreadGroupingResult,
+} from '../llm/threadGroupingService';
 import logService from '../logService';
 
 /**
@@ -65,6 +70,9 @@ export class HybridExtractorService {
 
   // Track total tokens used across operations
   private totalTokensUsed = { prompt: 0, completion: 0, total: 0 };
+
+  // TASK-505: Store thread grouping for propagation (TASK-506)
+  private threadGroupingResult: ThreadGroupingResult | null = null;
 
   constructor(configService?: LLMConfigService) {
     this.configService = configService ?? new LLMConfigService();
@@ -196,6 +204,76 @@ export class HybridExtractorService {
     });
 
     return { filtered, stats };
+  }
+
+  // ===========================================================================
+  // Thread Grouping (TASK-505)
+  // ===========================================================================
+
+  /**
+   * Get the thread grouping result from the last analysis.
+   * Used for transaction propagation in TASK-506.
+   */
+  getThreadGroupingResult(): ThreadGroupingResult | null {
+    return this.threadGroupingResult;
+  }
+
+  /**
+   * Group messages by thread and return only first emails for analysis.
+   * Stores the grouping result for later propagation.
+   */
+  groupAndSelectFirstEmails(messages: MessageInput[]): {
+    emailsToAnalyze: MessageInput[];
+    stats: {
+      totalEmails: number;
+      totalThreads: number;
+      emailsToAnalyze: number;
+      reductionPercent: number;
+    };
+  } {
+    // Convert MessageInput to Message-like for grouping
+    // The grouping only needs id, thread_id, and date fields
+    const messagesForGrouping = messages.map((m) => ({
+      id: m.id,
+      thread_id: m.thread_id,
+      sent_at: m.date,
+      received_at: m.date,
+      created_at: m.date,
+    }));
+
+    this.threadGroupingResult = groupEmailsByThread(messagesForGrouping as any);
+
+    const firstEmailIds = new Set(
+      getFirstEmailsFromThreads(this.threadGroupingResult).map((e) => e.id)
+    );
+
+    // Filter original messages to only first emails
+    const emailsToAnalyze = messages.filter((m) => firstEmailIds.has(m.id));
+
+    const stats = {
+      totalEmails: messages.length,
+      totalThreads: this.threadGroupingResult.stats.totalThreads,
+      emailsToAnalyze: emailsToAnalyze.length,
+      reductionPercent:
+        messages.length > 0
+          ? Math.round((1 - emailsToAnalyze.length / messages.length) * 100)
+          : 0,
+    };
+
+    logService.info('Thread grouping results', 'HybridExtractor', {
+      totalEmails: stats.totalEmails,
+      threads: stats.totalThreads,
+      orphans: this.threadGroupingResult.stats.orphanCount,
+      avgPerThread: this.threadGroupingResult.stats.avgEmailsPerThread.toFixed(1),
+    });
+
+    logService.info('Emails to analyze (first per thread)', 'HybridExtractor', {
+      original: messages.length,
+      toAnalyze: emailsToAnalyze.length,
+      reduction: `${stats.reductionPercent}%`,
+    });
+
+    return { emailsToAnalyze, stats };
   }
 
   // ===========================================================================
