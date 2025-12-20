@@ -2,7 +2,11 @@ import {
   createBatches,
   estimateEmailTokens,
   formatBatchPrompt,
+  extractJsonArray,
+  parseBatchResponse,
+  processBatchErrors,
   DEFAULT_BATCH_CONFIG,
+  EmailBatch,
 } from '../batchLLMService';
 import type { MessageInput } from '../../extraction/types';
 
@@ -280,6 +284,241 @@ describe('batchLLMService', () => {
       const bodyMatch = prompt.match(/Body:\n(x+)/);
       expect(bodyMatch).toBeTruthy();
       expect(bodyMatch![1].length).toBe(2000);
+    });
+  });
+
+  // TASK-508: Response Parser Tests
+  describe('extractJsonArray', () => {
+    it('should extract JSON array from plain response', () => {
+      const response = '[{"id": "1"}, {"id": "2"}]';
+      const result = extractJsonArray(response);
+
+      expect(result).toBe('[{"id": "1"}, {"id": "2"}]');
+    });
+
+    it('should extract JSON array from markdown code block', () => {
+      const response = '```json\n[{"id": "1"}]\n```';
+      const result = extractJsonArray(response);
+
+      expect(result).toBe('[{"id": "1"}]');
+    });
+
+    it('should extract JSON array from plain code block', () => {
+      const response = '```\n[{"id": "1"}]\n```';
+      const result = extractJsonArray(response);
+
+      expect(result).toBe('[{"id": "1"}]');
+    });
+
+    it('should extract array with text before and after', () => {
+      const response = 'Here are the results:\n[{"id": "1"}]\nDone!';
+      const result = extractJsonArray(response);
+
+      expect(result).toBe('[{"id": "1"}]');
+    });
+
+    it('should return null for empty response', () => {
+      expect(extractJsonArray('')).toBeNull();
+      expect(extractJsonArray(null as any)).toBeNull();
+      expect(extractJsonArray(undefined as any)).toBeNull();
+    });
+
+    it('should return null for response without array', () => {
+      const response = 'No JSON here, just text';
+      expect(extractJsonArray(response)).toBeNull();
+    });
+  });
+
+  describe('parseBatchResponse', () => {
+    const createMockBatch = (emailCount: number): EmailBatch => ({
+      batchId: 'test-batch',
+      emails: Array(emailCount)
+        .fill(null)
+        .map((_, i) => createEmail({ id: `email_${i + 1}` })),
+      estimatedTokens: 1000,
+    });
+
+    it('should parse valid JSON array response', () => {
+      const batch = createMockBatch(3);
+      const response = `[
+        { "isRealEstateRelated": true, "confidence": 0.9, "transactionType": "purchase" },
+        { "isRealEstateRelated": false, "confidence": 0.1 },
+        { "isRealEstateRelated": true, "confidence": 0.85, "propertyAddress": "123 Main St" }
+      ]`;
+
+      const result = parseBatchResponse(batch, response);
+
+      expect(result.results.length).toBe(3);
+      expect(result.errors.length).toBe(0);
+      expect(result.stats.successful).toBe(3);
+      expect(result.stats.failed).toBe(0);
+      expect(result.stats.realEstateFound).toBe(2);
+
+      expect(result.results[0]).toMatchObject({
+        emailId: 'email_1',
+        isRealEstateRelated: true,
+        confidence: 0.9,
+        transactionType: 'purchase',
+      });
+
+      expect(result.results[2]).toMatchObject({
+        emailId: 'email_3',
+        propertyAddress: '123 Main St',
+      });
+    });
+
+    it('should handle response with markdown code blocks', () => {
+      const batch = createMockBatch(1);
+      const response = '```json\n[{"isRealEstateRelated": true, "confidence": 0.8}]\n```';
+
+      const result = parseBatchResponse(batch, response);
+
+      expect(result.results.length).toBe(1);
+      expect(result.errors.length).toBe(0);
+      expect(result.results[0].isRealEstateRelated).toBe(true);
+    });
+
+    it('should handle snake_case field names', () => {
+      const batch = createMockBatch(1);
+      const response = `[{
+        "is_real_estate_related": true,
+        "confidence": 0.7,
+        "transaction_type": "sale",
+        "property_address": "456 Oak Ave"
+      }]`;
+
+      const result = parseBatchResponse(batch, response);
+
+      expect(result.results[0]).toMatchObject({
+        isRealEstateRelated: true,
+        transactionType: 'sale',
+        propertyAddress: '456 Oak Ave',
+      });
+    });
+
+    it('should handle parse errors gracefully', () => {
+      const batch = createMockBatch(3);
+      const response = 'invalid json';
+
+      const result = parseBatchResponse(batch, response);
+
+      expect(result.errors.length).toBe(3);
+      expect(result.results.length).toBe(0);
+      expect(result.stats.failed).toBe(3);
+      expect(result.errors[0].error).toContain('No JSON array found');
+    });
+
+    it('should handle missing results for some emails', () => {
+      const batch = createMockBatch(3);
+      const response = `[
+        { "isRealEstateRelated": true, "confidence": 0.9 },
+        { "isRealEstateRelated": false, "confidence": 0.1 }
+      ]`; // Only 2 results for 3 emails
+
+      const result = parseBatchResponse(batch, response);
+
+      expect(result.results.length).toBe(2);
+      expect(result.errors.length).toBe(1);
+      expect(result.errors[0]).toMatchObject({
+        emailId: 'email_3',
+        error: 'No result at index 2',
+      });
+    });
+
+    it('should handle empty response', () => {
+      const batch = createMockBatch(2);
+      const response = '';
+
+      const result = parseBatchResponse(batch, response);
+
+      expect(result.errors.length).toBe(2);
+      expect(result.results.length).toBe(0);
+    });
+
+    it('should preserve raw response in results', () => {
+      const batch = createMockBatch(1);
+      const response = '[{"isRealEstateRelated": true, "confidence": 0.9, "extra": "data"}]';
+
+      const result = parseBatchResponse(batch, response);
+
+      expect(result.results[0].rawResponse).toEqual({
+        isRealEstateRelated: true,
+        confidence: 0.9,
+        extra: 'data',
+      });
+    });
+  });
+
+  describe('processBatchErrors', () => {
+    it('should process errors with fallback analyzer', async () => {
+      const errors = [
+        { emailId: 'email_1', error: 'Parse failed' },
+        { emailId: 'email_2', error: 'Parse failed' },
+      ];
+
+      const emailMap = new Map<string, MessageInput>([
+        ['email_1', createEmail({ id: 'email_1' })],
+        ['email_2', createEmail({ id: 'email_2' })],
+      ]);
+
+      const mockAnalyzer = jest.fn().mockResolvedValue({
+        emailId: 'mock',
+        isRealEstateRelated: true,
+        confidence: 0.8,
+      });
+
+      const results = await processBatchErrors(errors, emailMap, mockAnalyzer);
+
+      expect(mockAnalyzer).toHaveBeenCalledTimes(2);
+      expect(results.length).toBe(2);
+    });
+
+    it('should skip emails not in map', async () => {
+      const errors = [
+        { emailId: 'email_1', error: 'Parse failed' },
+        { emailId: 'unknown', error: 'Parse failed' },
+      ];
+
+      const emailMap = new Map<string, MessageInput>([
+        ['email_1', createEmail({ id: 'email_1' })],
+      ]);
+
+      const mockAnalyzer = jest.fn().mockResolvedValue({
+        emailId: 'mock',
+        isRealEstateRelated: false,
+        confidence: 0.5,
+      });
+
+      const results = await processBatchErrors(errors, emailMap, mockAnalyzer);
+
+      expect(mockAnalyzer).toHaveBeenCalledTimes(1);
+      expect(results.length).toBe(1);
+    });
+
+    it('should continue on analyzer failure', async () => {
+      const errors = [
+        { emailId: 'email_1', error: 'Parse failed' },
+        { emailId: 'email_2', error: 'Parse failed' },
+      ];
+
+      const emailMap = new Map<string, MessageInput>([
+        ['email_1', createEmail({ id: 'email_1' })],
+        ['email_2', createEmail({ id: 'email_2' })],
+      ]);
+
+      const mockAnalyzer = jest
+        .fn()
+        .mockRejectedValueOnce(new Error('API error'))
+        .mockResolvedValueOnce({
+          emailId: 'email_2',
+          isRealEstateRelated: true,
+          confidence: 0.9,
+        });
+
+      const results = await processBatchErrors(errors, emailMap, mockAnalyzer);
+
+      expect(results.length).toBe(1);
+      expect(results[0].emailId).toBe('email_2');
     });
   });
 });
