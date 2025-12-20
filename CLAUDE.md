@@ -57,6 +57,35 @@ RIGHT (what you must do):
 
 ---
 
+## MANDATORY: Follow Instructions Exactly
+
+**Do ONLY what is explicitly requested. Nothing more.**
+
+### Rules
+
+1. **No extras**: If asked to merge with `--merge`, do NOT add `--delete-branch` or any other flags.
+
+2. **Ask first**: Before doing anything not explicitly requested, ASK:
+   - "Should I delete the branch after merge?"
+   - "Should I also push to remote?"
+   - "Should I update X while I'm here?"
+
+3. **Branch deletion**: NEVER delete branches unless explicitly asked. Integration branches (`int/*`) especially may be needed for reference.
+
+4. **Merge command**: Use exactly `gh pr merge <PR> --merge` unless told otherwise.
+
+### Why This Matters
+
+Adding unrequested actions:
+- Creates confusion about what was done
+- Can lose work (deleted branches)
+- Shows disregard for instructions
+- Erodes trust
+
+**When in doubt, ASK.**
+
+---
+
 ## Project Overview
 
 Magic Audit is an Electron-based desktop application for real estate transaction auditing. It features:
