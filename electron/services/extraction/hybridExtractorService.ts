@@ -49,7 +49,10 @@ import {
 import {
   groupEmailsByThread,
   getFirstEmailsFromThreads,
+  getEmailsToPropagate,
+  findThreadByEmailId,
   ThreadGroupingResult,
+  PropagationResult,
 } from '../llm/threadGroupingService';
 import logService from '../logService';
 
@@ -274,6 +277,128 @@ export class HybridExtractorService {
     });
 
     return { emailsToAnalyze, stats };
+  }
+
+  // ===========================================================================
+  // Transaction Propagation (TASK-506)
+  // ===========================================================================
+
+  /**
+   * Propagate transaction detection to all emails in the same thread.
+   * Uses DetectedTransaction[] from clustering (not raw AnalysisResult[]).
+   *
+   * When a transaction is detected from the first email of a thread,
+   * this links all other emails in that thread to the same transaction.
+   */
+  async propagateTransactionsToThreads(
+    detectedTransactions: DetectedTransaction[],
+    threadGrouping: ThreadGroupingResult
+  ): Promise<PropagationResult[]> {
+    const propagationResults: PropagationResult[] = [];
+
+    for (const transaction of detectedTransactions) {
+      // Get the first email that was analyzed (communication that triggered detection)
+      const analyzedEmailId = transaction.communicationIds[0];
+      if (!analyzedEmailId) continue;
+
+      // Find which thread this email belongs to
+      const threadId = findThreadByEmailId(threadGrouping, analyzedEmailId);
+      if (!threadId) continue;
+
+      // Get other emails in this thread that weren't analyzed
+      const emailsToPropagate = getEmailsToPropagate(threadGrouping, threadId);
+      if (emailsToPropagate.length === 0) continue;
+
+      // Check existing links before overwriting (per SR Engineer review)
+      const safeToPropagate = await this.filterAlreadyLinked(
+        emailsToPropagate,
+        transaction.id
+      );
+
+      if (safeToPropagate.length > 0) {
+        // Link all thread emails to this transaction
+        await this.linkEmailsToTransaction(safeToPropagate, transaction.id);
+
+        propagationResults.push({
+          transactionId: transaction.id,
+          threadId: threadId,
+          sourceEmailId: analyzedEmailId,
+          propagatedEmailIds: safeToPropagate,
+          propagatedCount: safeToPropagate.length,
+        });
+      }
+    }
+
+    logService.info('Transaction propagation complete', 'HybridExtractor', {
+      transactionsFound: detectedTransactions.length,
+      threadsPropagated: propagationResults.length,
+      emailsLinked: propagationResults.reduce((sum, p) => sum + p.propagatedCount, 0),
+    });
+
+    return propagationResults;
+  }
+
+  /**
+   * Filter out emails already linked to a different transaction.
+   * Prevents overwriting existing transaction links.
+   */
+  private async filterAlreadyLinked(
+    emailIds: string[],
+    transactionId: string
+  ): Promise<string[]> {
+    // Lazy import to avoid circular dependencies
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { getCommunicationById } = require('../db/communicationDbService');
+
+    const safeIds: string[] = [];
+
+    for (const emailId of emailIds) {
+      try {
+        const existing = await getCommunicationById(emailId);
+        if (!existing?.transaction_id || existing.transaction_id === transactionId) {
+          safeIds.push(emailId);
+        } else {
+          logService.warn('Email already linked to different transaction', 'HybridExtractor', {
+            emailId,
+            existingTransactionId: existing.transaction_id,
+            newTransactionId: transactionId,
+          });
+        }
+      } catch {
+        // If we can't check, assume it's safe to link
+        safeIds.push(emailId);
+      }
+    }
+
+    return safeIds;
+  }
+
+  /**
+   * Link emails to a transaction in the database.
+   */
+  private async linkEmailsToTransaction(
+    emailIds: string[],
+    transactionId: string
+  ): Promise<void> {
+    // Lazy import to avoid circular dependencies
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { linkCommunicationToTransaction } = require('../db/communicationDbService');
+
+    for (const emailId of emailIds) {
+      try {
+        await linkCommunicationToTransaction(emailId, transactionId);
+        logService.debug('Linked email to transaction', 'HybridExtractor', {
+          emailId,
+          transactionId,
+        });
+      } catch (error) {
+        logService.warn('Failed to link email to transaction', 'HybridExtractor', {
+          emailId,
+          transactionId,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
+    }
   }
 
   // ===========================================================================
