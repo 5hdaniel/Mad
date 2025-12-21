@@ -122,6 +122,27 @@ feature/*, fix/*, claude/* (your work)
 
 **CRITICAL: Always use traditional merges (not squash) to preserve commit history.**
 
+### Integration Branch Rules (MANDATORY)
+
+Integration branches (`int/*`) collect related feature work before merging to develop.
+
+**Before starting any new sprint:**
+```bash
+git branch -a | grep "int/"
+```
+
+**If integration branches exist with unmerged work:**
+
+| Option | When to Use |
+|--------|-------------|
+| Base new sprint on the int/* branch | When existing work is related or foundational |
+| Merge int/* to develop first | When existing work is complete and tested |
+| Sync both branches regularly | When parallel work is truly needed |
+
+**Never branch new sprint work from develop when develop is behind an active int/* branch.**
+
+This prevents fixes from being lost (as happened with the onboarding fix in `int/ai-polish` when `int/cost-optimization` branched from stale develop).
+
 ## Starting New Work
 
 ### Step 1: Create Feature Branch

@@ -4,6 +4,24 @@
 
 Select a subset of backlog items that form a coherent increment and can be integrated safely.
 
+## Pre-Sprint Checklist (MANDATORY)
+
+Before starting any sprint, check for existing integration branches:
+
+```bash
+git branch -a | grep "int/"
+```
+
+**If integration branches exist with unmerged work:**
+
+| Option | When to Use |
+|--------|-------------|
+| Base new sprint on the int/* branch | When the existing work is related or foundational |
+| Merge int/* to develop first | When the existing work is complete and tested |
+| Sync both branches regularly | When parallel work is truly needed |
+
+**Never branch new sprint work from develop when develop is behind an active int/* branch.**
+
 ## Rules
 
 - Do not schedule conflicting tasks in parallel unless you introduce:
