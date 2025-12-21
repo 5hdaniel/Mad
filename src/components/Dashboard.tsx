@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import Joyride from "react-joyride";
 import { useTour } from "../hooks/useTour";
 import {
@@ -39,9 +39,13 @@ function Dashboard({
     "hasSeenDashboardTour",
   );
 
+  // Track last reported tour state to prevent unnecessary updates
+  const lastReportedTourStateRef = useRef<boolean | null>(null);
+
   // Notify parent component when tour state changes
   useEffect(() => {
-    if (onTourStateChange) {
+    if (onTourStateChange && lastReportedTourStateRef.current !== runTour) {
+      lastReportedTourStateRef.current = runTour;
       onTourStateChange(runTour);
     }
   }, [runTour, onTourStateChange]);
