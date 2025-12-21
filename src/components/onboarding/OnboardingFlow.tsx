@@ -7,7 +7,7 @@
  * @module onboarding/OnboardingFlow
  */
 
-import React, { useCallback, useEffect } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import { useOnboardingFlow, type OnboardingAppState } from "./hooks";
 import { OnboardingShell } from "./shell/OnboardingShell";
 import { ProgressIndicator } from "./shell/ProgressIndicator";
@@ -162,11 +162,15 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
     isNextDisabled,
   } = flow;
 
+  // Track if we've already navigated to prevent infinite loops
+  const hasNavigatedRef = useRef(false);
+
   // When all steps are filtered out (returning user with everything complete),
   // navigate to dashboard. This handles the case where a returning user's data
   // loads and all onboarding steps are already complete.
   useEffect(() => {
-    if (steps.length === 0) {
+    if (steps.length === 0 && !hasNavigatedRef.current) {
+      hasNavigatedRef.current = true;
       app.goToStep("dashboard");
     }
   }, [steps.length, app]);
