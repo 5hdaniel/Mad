@@ -277,7 +277,9 @@ export function useAppStateMachine(): AppStateMachine {
         // Check what's missing to determine the right starting point
         // Note: hasCompletedEmailOnboarding means user finished the email step (connected OR skipped)
         const needsPhoneSelection = !hasSelectedPhoneType;
-        const needsEmailOnboarding = !hasCompletedEmailOnboarding;
+        // User needs email onboarding if: not completed AND not already connected
+        // (connected users don't need to see the email step even if flag isn't set)
+        const needsEmailOnboarding = !hasCompletedEmailOnboarding && !hasEmailConnected;
         const needsDrivers = isWindows && needsDriverSetup;
         const needsPermissions = isMacOS && !hasPermissions;
 

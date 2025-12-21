@@ -649,6 +649,71 @@ export interface WindowApi {
     canUse: (userId: string) => Promise<LLMHandlerResponse<LLMAvailability>>;
   };
 
+  // Feedback methods for AI transaction detection
+  feedback: {
+    submit: (
+      userId: string,
+      feedbackData: Record<string, unknown>,
+    ) => Promise<{ success: boolean; feedbackId?: string; error?: string }>;
+    getForTransaction: (
+      transactionId: string,
+    ) => Promise<{ success: boolean; feedback?: unknown[]; error?: string }>;
+    getMetrics: (
+      userId: string,
+      fieldName: string,
+    ) => Promise<{ success: boolean; metrics?: unknown; error?: string }>;
+    getSuggestion: (
+      userId: string,
+      fieldName: string,
+      extractedValue: unknown,
+      confidence: number,
+    ) => Promise<{ success: boolean; suggestion?: unknown; confidence?: number; error?: string }>;
+    getLearningStats: (
+      userId: string,
+      fieldName: string,
+    ) => Promise<{ success: boolean; stats?: unknown; error?: string }>;
+    recordTransaction: (
+      userId: string,
+      feedback: {
+        detectedTransactionId: string;
+        action: "confirm" | "reject" | "merge";
+        corrections?: {
+          propertyAddress?: string;
+          transactionType?: string;
+          addCommunications?: string[];
+          removeCommunications?: string[];
+          reason?: string;
+        };
+        modelVersion?: string;
+        promptVersion?: string;
+      },
+    ) => Promise<{ success: boolean; error?: string }>;
+    recordRole: (
+      userId: string,
+      feedback: {
+        transactionId: string;
+        contactId: string;
+        originalRole: string;
+        correctedRole: string;
+        modelVersion?: string;
+        promptVersion?: string;
+      },
+    ) => Promise<{ success: boolean; error?: string }>;
+    recordRelevance: (
+      userId: string,
+      feedback: {
+        communicationId: string;
+        wasRelevant: boolean;
+        correctTransactionId?: string;
+        modelVersion?: string;
+        promptVersion?: string;
+      },
+    ) => Promise<{ success: boolean; error?: string }>;
+    getStats: (
+      userId: string,
+    ) => Promise<{ success: boolean; data?: unknown; error?: string }>;
+  };
+
   // User preference methods (stored in local database)
   user: {
     getPhoneType: (userId: string) => Promise<{

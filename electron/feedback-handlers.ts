@@ -7,6 +7,12 @@ import { ipcMain } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import databaseService from "./services/databaseService";
 import type { UserFeedback } from "./types/models";
+import {
+  getFeedbackService,
+  TransactionFeedback,
+  RoleFeedback,
+  CommunicationFeedback,
+} from "./services/feedbackService";
 
 // Services (still JS - to be migrated)
 const feedbackLearningService =
@@ -30,6 +36,7 @@ interface FeedbackResponse {
   metrics?: unknown[];
   suggestion?: unknown;
   stats?: unknown;
+  data?: unknown;
 }
 
 /**
@@ -301,6 +308,98 @@ export const registerFeedbackHandlers = (): void => {
           success: false,
           error: error instanceof Error ? error.message : "Unknown error",
           stats: null,
+        };
+      }
+    },
+  );
+
+  // ============================================
+  // LLM FEEDBACK HANDLERS
+  // For recording user feedback on LLM-detected transactions
+  // ============================================
+
+  // Record transaction feedback (approve/reject/edit)
+  ipcMain.handle(
+    "feedback:record-transaction",
+    async (
+      _event: IpcMainInvokeEvent,
+      userId: string,
+      feedback: TransactionFeedback,
+    ): Promise<FeedbackResponse> => {
+      try {
+        const feedbackService = getFeedbackService();
+        await feedbackService.recordTransactionFeedback(userId, feedback);
+        return { success: true };
+      } catch (error) {
+        console.error("[Feedback] Error recording transaction feedback:", error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // Record role feedback (contact role corrections)
+  ipcMain.handle(
+    "feedback:record-role",
+    async (
+      _event: IpcMainInvokeEvent,
+      userId: string,
+      feedback: RoleFeedback,
+    ): Promise<FeedbackResponse> => {
+      try {
+        const feedbackService = getFeedbackService();
+        await feedbackService.recordRoleFeedback(userId, feedback);
+        return { success: true };
+      } catch (error) {
+        console.error("[Feedback] Error recording role feedback:", error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // Record communication relevance feedback
+  ipcMain.handle(
+    "feedback:record-relevance",
+    async (
+      _event: IpcMainInvokeEvent,
+      userId: string,
+      feedback: CommunicationFeedback,
+    ): Promise<FeedbackResponse> => {
+      try {
+        const feedbackService = getFeedbackService();
+        await feedbackService.recordCommunicationFeedback(userId, feedback);
+        return { success: true };
+      } catch (error) {
+        console.error("[Feedback] Error recording relevance feedback:", error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // Get aggregated feedback statistics
+  ipcMain.handle(
+    "feedback:get-stats",
+    async (
+      _event: IpcMainInvokeEvent,
+      userId: string,
+    ): Promise<FeedbackResponse> => {
+      try {
+        const feedbackService = getFeedbackService();
+        const stats = await feedbackService.getFeedbackStats(userId);
+        return { success: true, data: stats };
+      } catch (error) {
+        console.error("[Feedback] Error getting stats:", error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
         };
       }
     },

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import type { Transaction, OAuthProvider } from "@/types";
 import AuditTransactionModal from "./AuditTransactionModal";
 import ExportModal from "./ExportModal";
@@ -7,6 +7,299 @@ import TransactionDetails from "./TransactionDetails";
 interface ScanProgress {
   step: string;
   message: string;
+}
+
+// ============================================
+// DETECTION BADGE COMPONENTS
+// ============================================
+
+/**
+ * Badge showing whether transaction was AI-detected or manually created
+ */
+function DetectionSourceBadge({
+  source,
+}: {
+  source: "auto" | "manual" | "hybrid" | undefined;
+}) {
+  if (!source || source === "manual") {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-500 text-white">
+        Manual
+      </span>
+    );
+  }
+
+  // AI-detected or hybrid shows the gradient badge
+  return (
+    <span
+      className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium text-white"
+      style={{ background: "linear-gradient(135deg, #3B82F6, #8B5CF6)" }}
+    >
+      AI Detected
+    </span>
+  );
+}
+
+/**
+ * Confidence pill with color scale based on confidence level
+ * Red (<60%), Yellow (60-80%), Green (>80%)
+ */
+function ConfidencePill({ confidence }: { confidence: number | undefined }) {
+  if (confidence === undefined || confidence === null) {
+    return null;
+  }
+
+  // Convert from 0-1 to percentage if needed
+  const percentage =
+    confidence <= 1 ? Math.round(confidence * 100) : Math.round(confidence);
+
+  let bgColor: string;
+  let textColor: string;
+
+  if (percentage < 60) {
+    bgColor = "bg-red-500";
+    textColor = "text-white";
+  } else if (percentage < 80) {
+    bgColor = "bg-amber-500";
+    textColor = "text-white";
+  } else {
+    bgColor = "bg-emerald-500";
+    textColor = "text-white";
+  }
+
+  return (
+    <span
+      className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${bgColor} ${textColor}`}
+    >
+      {percentage}% confident
+    </span>
+  );
+}
+
+/**
+ * Warning badge for transactions pending user review
+ */
+function PendingReviewBadge() {
+  return (
+    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-500 text-white">
+      Pending Review
+    </span>
+  );
+}
+
+// ============================================
+// REJECT REASON MODAL COMPONENT
+// ============================================
+
+interface RejectReasonModalProps {
+  onConfirm: (reason: string) => void;
+  onCancel: () => void;
+}
+
+/**
+ * Modal for collecting rejection reason when user rejects an AI-detected transaction
+ */
+function RejectReasonModal({ onConfirm, onCancel }: RejectReasonModalProps) {
+  const [reason, setReason] = useState("");
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onConfirm(reason);
+  };
+
+  return (
+    <div
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+      onClick={onCancel}
+    >
+      <div
+        className="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">
+          Reject Transaction
+        </h3>
+        <form onSubmit={handleSubmit}>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Why are you rejecting this transaction? (optional)
+          </label>
+          <textarea
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+            rows={3}
+            placeholder="e.g., Not a real estate transaction, duplicate entry..."
+            autoFocus
+          />
+          <div className="flex justify-end gap-3 mt-4">
+            <button
+              type="button"
+              onClick={onCancel}
+              className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-medium"
+            >
+              Reject
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ============================================
+// TRANSACTION ACTIONS COMPONENT
+// ============================================
+
+interface TransactionActionsProps {
+  transaction: Transaction;
+  userId: string;
+  onUpdate: () => void;
+}
+
+/**
+ * Action buttons for approving/rejecting AI-detected pending transactions
+ * Only renders for transactions with detection_status === 'pending'
+ */
+function TransactionActions({
+  transaction,
+  userId,
+  onUpdate,
+}: TransactionActionsProps) {
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [isApproving, setIsApproving] = useState(false);
+  const [isRejecting, setIsRejecting] = useState(false);
+
+  // Only show actions for pending AI-detected transactions
+  if (transaction.detection_status !== "pending") {
+    return null;
+  }
+
+  const handleApprove = async (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation(); // Prevent opening transaction details
+    setIsApproving(true);
+    try {
+      // Update transaction status to confirmed
+      await window.api.transactions.update(transaction.id, {
+        detection_status: "confirmed",
+        reviewed_at: new Date().toISOString(),
+      });
+
+      // Record feedback for learning
+      await window.api.feedback.recordTransaction(userId, {
+        detectedTransactionId: transaction.id,
+        action: "confirm",
+      });
+
+      onUpdate();
+    } catch (error) {
+      console.error("Failed to approve transaction:", error);
+    } finally {
+      setIsApproving(false);
+    }
+  };
+
+  const handleReject = async (reason: string) => {
+    setIsRejecting(true);
+    try {
+      // Update transaction status to rejected
+      await window.api.transactions.update(transaction.id, {
+        detection_status: "rejected",
+        rejection_reason: reason || undefined,
+        reviewed_at: new Date().toISOString(),
+      });
+
+      // Record feedback for learning
+      await window.api.feedback.recordTransaction(userId, {
+        detectedTransactionId: transaction.id,
+        action: "reject",
+        corrections: reason ? { reason } : undefined,
+      });
+
+      setShowRejectModal(false);
+      onUpdate();
+    } catch (error) {
+      console.error("Failed to reject transaction:", error);
+    } finally {
+      setIsRejecting(false);
+    }
+  };
+
+  const handleRejectClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation(); // Prevent opening transaction details
+    setShowRejectModal(true);
+  };
+
+  return (
+    <>
+      <div className="flex items-center gap-1">
+        {/* Approve Button */}
+        <button
+          onClick={handleApprove}
+          disabled={isApproving}
+          className="p-2 rounded-lg font-semibold transition-all bg-emerald-500 text-white hover:bg-emerald-600 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+          title="Approve transaction"
+        >
+          {isApproving ? (
+            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M5 13l4 4L19 7"
+              />
+            </svg>
+          )}
+        </button>
+
+        {/* Reject Button */}
+        <button
+          onClick={handleRejectClick}
+          disabled={isRejecting}
+          className="p-2 rounded-lg font-semibold transition-all bg-red-500 text-white hover:bg-red-600 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+          title="Reject transaction"
+        >
+          {isRejecting ? (
+            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          )}
+        </button>
+      </div>
+
+      {/* Reject Reason Modal */}
+      {showRejectModal && (
+        <RejectReasonModal
+          onConfirm={handleReject}
+          onCancel={() => setShowRejectModal(false)}
+        />
+      )}
+    </>
+  );
 }
 
 interface TransactionListComponentProps {
@@ -43,6 +336,22 @@ function TransactionList({
     null,
   );
 
+  // Detection status filter - read initial value from URL params
+  const [detectionFilter, setDetectionFilter] = useState<
+    "all" | "confirmed" | "pending" | "rejected"
+  >(() => {
+    const params = new URLSearchParams(window.location.search);
+    const filter = params.get("detection");
+    if (
+      filter === "confirmed" ||
+      filter === "pending" ||
+      filter === "rejected"
+    ) {
+      return filter;
+    }
+    return "all";
+  });
+
   useEffect(() => {
     loadTransactions();
 
@@ -56,6 +365,34 @@ function TransactionList({
       if (cleanup) cleanup();
     };
   }, []);
+
+  // Sync detection filter to URL params
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (detectionFilter === "all") {
+      params.delete("detection");
+    } else {
+      params.set("detection", detectionFilter);
+    }
+    const newUrl = params.toString()
+      ? `${window.location.pathname}?${params.toString()}`
+      : window.location.pathname;
+    window.history.replaceState({}, "", newUrl);
+  }, [detectionFilter]);
+
+  // Compute detection status counts
+  const detectionCounts = useMemo(
+    () => ({
+      all: transactions.length,
+      confirmed: transactions.filter((t) => t.detection_status === "confirmed")
+        .length,
+      pending: transactions.filter((t) => t.detection_status === "pending")
+        .length,
+      rejected: transactions.filter((t) => t.detection_status === "rejected")
+        .length,
+    }),
+    [transactions],
+  );
 
   const loadTransactions = async (): Promise<void> => {
     try {
@@ -149,7 +486,9 @@ function TransactionList({
       statusFilter === "all" ||
       (statusFilter === "active" && t.status === "active") ||
       (statusFilter === "closed" && t.status === "closed");
-    return matchesSearch && matchesStatus;
+    const matchesDetection =
+      detectionFilter === "all" || t.detection_status === detectionFilter;
+    return matchesSearch && matchesStatus && matchesDetection;
   });
 
   const handleQuickExport = (
@@ -236,6 +575,62 @@ function TransactionList({
             }`}
           >
             All ({transactions.length})
+          </button>
+        </div>
+
+        {/* Detection Status Filter Tabs */}
+        <div className="inline-flex items-center bg-gray-100 rounded-lg p-1 mb-3 ml-4">
+          <button
+            onClick={() => setDetectionFilter("all")}
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+              detectionFilter === "all"
+                ? "bg-white text-gray-800 shadow-sm"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            All
+            <span className="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-gray-200">
+              {detectionCounts.all}
+            </span>
+          </button>
+          <button
+            onClick={() => setDetectionFilter("confirmed")}
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+              detectionFilter === "confirmed"
+                ? "bg-white text-green-600 shadow-sm"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            Confirmed
+            <span className="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-green-100 text-green-700">
+              {detectionCounts.confirmed}
+            </span>
+          </button>
+          <button
+            onClick={() => setDetectionFilter("pending")}
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+              detectionFilter === "pending"
+                ? "bg-white text-amber-600 shadow-sm"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            Pending Review
+            <span className="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-amber-100 text-amber-700">
+              {detectionCounts.pending}
+            </span>
+          </button>
+          <button
+            onClick={() => setDetectionFilter("rejected")}
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+              detectionFilter === "rejected"
+                ? "bg-white text-red-600 shadow-sm"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            Rejected
+            <span className="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-red-100 text-red-700">
+              {detectionCounts.rejected}
+            </span>
           </button>
         </div>
 
@@ -493,9 +888,26 @@ function TransactionList({
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1">
-                    <h3 className="font-semibold text-gray-900 mb-1">
-                      {transaction.property_address}
-                    </h3>
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-semibold text-gray-900">
+                        {transaction.property_address}
+                      </h3>
+                      {/* Detection Status Badges */}
+                      <div className="flex items-center gap-1.5">
+                        <DetectionSourceBadge
+                          source={transaction.detection_source}
+                        />
+                        {transaction.detection_source === "auto" &&
+                          transaction.detection_confidence !== undefined && (
+                            <ConfidencePill
+                              confidence={transaction.detection_confidence}
+                            />
+                          )}
+                        {transaction.detection_status === "pending" && (
+                          <PendingReviewBadge />
+                        )}
+                      </div>
+                    </div>
                     <div className="flex items-center gap-4 text-sm text-gray-600">
                       {transaction.transaction_type && (
                         <span className="flex items-center gap-1">
@@ -568,6 +980,12 @@ function TransactionList({
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    {/* Approve/Reject Actions for pending transactions */}
+                    <TransactionActions
+                      transaction={transaction}
+                      userId={userId}
+                      onUpdate={loadTransactions}
+                    />
                     {/* Quick Export Button */}
                     <button
                       onClick={(e) => handleQuickExport(transaction, e)}

@@ -19,6 +19,7 @@ interface AuditTransactionModalProps {
   provider?: string; // Optional - not currently used
   onClose: () => void;
   onSuccess: (transaction: Transaction) => void;
+  editTransaction?: Transaction; // For edit mode - pre-fill from existing transaction
 }
 
 interface AddressData {
@@ -104,11 +105,16 @@ function AuditTransactionModal({
   provider: _provider,
   onClose,
   onSuccess,
+  editTransaction,
 }: AuditTransactionModalProps): React.ReactElement {
   const { isMacOS, isWindows } = usePlatform();
+  const isEditing = !!editTransaction;
   const [step, setStep] = useState<number>(1); // 1: Address, 2: Client & Agents, 3: Professional Services
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Track original values for change detection in edit mode
+  const [originalAddressData, setOriginalAddressData] = useState<AddressData | null>(null);
 
   // Step 1: Address Data
   const [addressData, setAddressData] = useState<AddressData>({
@@ -156,6 +162,62 @@ function AuditTransactionModal({
     };
     initializeAPI();
   }, []);
+
+  /**
+   * Pre-fill form when editing an existing transaction
+   */
+  React.useEffect(() => {
+    if (editTransaction) {
+      // Parse coordinates if present
+      let coordinates: Coordinates | null = null;
+      if (editTransaction.property_coordinates) {
+        try {
+          coordinates = JSON.parse(editTransaction.property_coordinates);
+        } catch {
+          // Invalid JSON, leave as null
+        }
+      }
+
+      const prefillData: AddressData = {
+        property_address: editTransaction.property_address || "",
+        property_street: editTransaction.property_street || "",
+        property_city: editTransaction.property_city || "",
+        property_state: editTransaction.property_state || "",
+        property_zip: editTransaction.property_zip || "",
+        property_coordinates: coordinates,
+        transaction_type: editTransaction.transaction_type || "purchase",
+      };
+
+      setAddressData(prefillData);
+      setOriginalAddressData(prefillData);
+
+      // Parse and set suggested contacts if present
+      if (editTransaction.suggested_contacts) {
+        try {
+          const suggestedContacts = JSON.parse(editTransaction.suggested_contacts);
+          // Convert suggested contacts to ContactAssignments format
+          const assignments: ContactAssignments = {};
+          if (Array.isArray(suggestedContacts)) {
+            suggestedContacts.forEach((sc: { role?: string; contact_id?: string; is_primary?: boolean; notes?: string }) => {
+              if (sc.role && sc.contact_id) {
+                if (!assignments[sc.role]) {
+                  assignments[sc.role] = [];
+                }
+                assignments[sc.role].push({
+                  contactId: sc.contact_id,
+                  isPrimary: sc.is_primary || false,
+                  notes: sc.notes || "",
+                });
+              }
+            });
+          }
+          setContactAssignments(assignments);
+        } catch {
+          // Invalid JSON, leave assignments empty
+        }
+      }
+    }
+  }, [editTransaction]);
 
   /**
    * Handle address input change with autocomplete
@@ -335,7 +397,55 @@ function AuditTransactionModal({
   };
 
   /**
-   * Create the transaction with all contact assignments
+   * Detect changes between original and current address data
+   */
+  const getAddressChanges = (): Record<string, { original: string; corrected: string }> | null => {
+    if (!originalAddressData) return null;
+
+    const changes: Record<string, { original: string; corrected: string }> = {};
+
+    if (addressData.property_address !== originalAddressData.property_address) {
+      changes.property_address = {
+        original: originalAddressData.property_address,
+        corrected: addressData.property_address,
+      };
+    }
+    if (addressData.transaction_type !== originalAddressData.transaction_type) {
+      changes.transaction_type = {
+        original: originalAddressData.transaction_type,
+        corrected: addressData.transaction_type,
+      };
+    }
+    if (addressData.property_street !== originalAddressData.property_street) {
+      changes.property_street = {
+        original: originalAddressData.property_street,
+        corrected: addressData.property_street,
+      };
+    }
+    if (addressData.property_city !== originalAddressData.property_city) {
+      changes.property_city = {
+        original: originalAddressData.property_city,
+        corrected: addressData.property_city,
+      };
+    }
+    if (addressData.property_state !== originalAddressData.property_state) {
+      changes.property_state = {
+        original: originalAddressData.property_state,
+        corrected: addressData.property_state,
+      };
+    }
+    if (addressData.property_zip !== originalAddressData.property_zip) {
+      changes.property_zip = {
+        original: originalAddressData.property_zip,
+        corrected: addressData.property_zip,
+      };
+    }
+
+    return Object.keys(changes).length > 0 ? changes : null;
+  };
+
+  /**
+   * Create or update the transaction with all contact assignments
    */
   const handleCreateTransaction = async (): Promise<void> => {
     // Prevent duplicate submissions
@@ -359,25 +469,67 @@ function AuditTransactionModal({
           })),
       );
 
-      // Call API to create audited transaction
-      const result = await window.api.transactions.createAudited(
-        userId.toString(),
-        {
-          ...addressData,
-          contact_assignments: assignments,
-        },
-      );
+      let result: { success: boolean; transaction?: Transaction; error?: string };
+
+      if (isEditing && editTransaction) {
+        // Update existing transaction
+        const updateData = {
+          property_address: addressData.property_address,
+          property_street: addressData.property_street,
+          property_city: addressData.property_city,
+          property_state: addressData.property_state,
+          property_zip: addressData.property_zip,
+          property_coordinates: addressData.property_coordinates
+            ? JSON.stringify(addressData.property_coordinates)
+            : undefined,
+          transaction_type: addressData.transaction_type as Transaction["transaction_type"],
+          detection_status: "confirmed" as const,
+          reviewed_at: new Date().toISOString(),
+        };
+
+        const updateResult = await window.api.transactions.update(
+          editTransaction.id,
+          updateData,
+        );
+
+        // Record feedback if changes were made
+        const changes = getAddressChanges();
+        if (changes && window.api.feedback?.recordTransaction) {
+          await window.api.feedback.recordTransaction(userId.toString(), {
+            detectedTransactionId: editTransaction.id,
+            action: "confirm",
+            corrections: changes,
+          });
+        }
+
+        result = {
+          success: updateResult.success,
+          transaction: updateResult.success
+            ? { ...editTransaction, ...updateData } as Transaction
+            : undefined,
+          error: updateResult.error,
+        };
+      } else {
+        // Call API to create audited transaction
+        result = await window.api.transactions.createAudited(
+          userId.toString(),
+          {
+            ...addressData,
+            contact_assignments: assignments,
+          },
+        );
+      }
 
       if (result.success && result.transaction) {
         onSuccess(result.transaction);
         onClose(); // Close modal immediately after success
       } else {
-        setError(result.error || "Failed to create transaction");
+        setError(result.error || `Failed to ${isEditing ? "update" : "create"} transaction`);
         setLoading(false); // Only reset loading on error
       }
     } catch (err: unknown) {
       const errorMessage =
-        err instanceof Error ? err.message : "Failed to create transaction";
+        err instanceof Error ? err.message : `Failed to ${isEditing ? "update" : "create"} transaction`;
       setError(errorMessage);
       setLoading(false); // Only reset loading on error
     }
@@ -390,10 +542,10 @@ function AuditTransactionModal({
         <div className="flex-shrink-0 bg-gradient-to-r from-indigo-500 to-purple-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
           <div>
             <h2 className="text-xl font-bold text-white">
-              Audit New Transaction
+              {isEditing ? "Edit Transaction" : "Audit New Transaction"}
             </h2>
             <p className="text-indigo-100 text-sm">
-              {step === 1 && "Step 1: Verify Property Address"}
+              {step === 1 && (isEditing ? "Step 1: Review Property Address" : "Step 1: Verify Property Address")}
               {step === 2 && "Step 2: Assign Client & Agents"}
               {step === 3 && "Step 3: Assign Professional Services"}
             </p>
@@ -521,10 +673,10 @@ function AuditTransactionModal({
               {loading ? (
                 <span className="flex items-center gap-2">
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  Creating...
+                  {isEditing ? "Saving..." : "Creating..."}
                 </span>
               ) : step === 3 ? (
-                "Create Transaction"
+                isEditing ? "Save Changes" : "Create Transaction"
               ) : (
                 "Continue →"
               )}
