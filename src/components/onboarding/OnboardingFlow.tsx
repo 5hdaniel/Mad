@@ -7,7 +7,7 @@
  * @module onboarding/OnboardingFlow
  */
 
-import React, { useCallback } from "react";
+import React, { useCallback, useEffect } from "react";
 import { useOnboardingFlow, type OnboardingAppState } from "./hooks";
 import { OnboardingShell } from "./shell/OnboardingShell";
 import { ProgressIndicator } from "./shell/ProgressIndicator";
@@ -162,7 +162,16 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
     isNextDisabled,
   } = flow;
 
-  // Guard against no steps (shouldn't happen)
+  // When all steps are filtered out (returning user with everything complete),
+  // navigate to dashboard. This handles the case where a returning user's data
+  // loads and all onboarding steps are already complete.
+  useEffect(() => {
+    if (steps.length === 0) {
+      app.goToStep("dashboard");
+    }
+  }, [steps.length, app]);
+
+  // Guard against no steps (shouldn't happen, but safety check)
   if (!currentStep) {
     return null;
   }
