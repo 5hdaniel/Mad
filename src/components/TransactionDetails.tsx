@@ -197,8 +197,11 @@ function TransactionDetails({
     if (!userId) return;
     setIsApproving(true);
     try {
+      // Set detection_status to confirmed AND status to active
+      // This moves the transaction from "Pending Review" to "Active" tab
       await window.api.transactions.update(transaction.id, {
         detection_status: "confirmed",
+        status: "active",
         reviewed_at: new Date().toISOString(),
       });
       await window.api.feedback.recordTransaction(userId, {
