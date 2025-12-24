@@ -2441,8 +2441,10 @@ class DatabaseService implements IDatabaseService {
       INSERT INTO transactions (
         id, user_id, property_address, property_street, property_city,
         property_state, property_zip, property_coordinates,
-        transaction_type, status, closing_deadline
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        transaction_type, status, closing_deadline,
+        detection_source, detection_status, detection_confidence,
+        detection_method, suggested_contacts
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     const params = [
@@ -2467,6 +2469,12 @@ class DatabaseService implements IDatabaseService {
         return "active"; // Default fallback
       })(),
       transactionData.closing_deadline || transactionData.closing_deadline || null,
+      // AI detection fields (Migration 11)
+      transactionData.detection_source || "manual",
+      transactionData.detection_status || "confirmed",
+      transactionData.detection_confidence ?? null,
+      transactionData.detection_method || null,
+      transactionData.suggested_contacts || null,
     ];
 
     this._run(sql, params);
@@ -2689,6 +2697,14 @@ class DatabaseService implements IDatabaseService {
       "offer_count",
       "failed_offers_count",
       "key_dates",
+      // AI detection fields (Migration 11)
+      "detection_source",
+      "detection_status",
+      "detection_confidence",
+      "detection_method",
+      "suggested_contacts",
+      "reviewed_at",
+      "rejection_reason",
     ];
 
     const fields: string[] = [];
