@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import type { Transaction, Communication, Contact } from "@/types";
 import ExportModal from "./ExportModal";
+import AuditTransactionModal from "./AuditTransactionModal";
 
 /**
  * Interface for AI-suggested contact assignment
@@ -76,6 +77,7 @@ function TransactionDetails({
   const [isRejecting, setIsRejecting] = useState<boolean>(false);
   const [showRejectReasonModal, setShowRejectReasonModal] = useState<boolean>(false);
   const [rejectReason, setRejectReason] = useState<string>("");
+  const [showEditModal, setShowEditModal] = useState<boolean>(false);
 
   /**
    * Parse and memoize suggested contacts from transaction
@@ -454,13 +456,24 @@ function TransactionDetails({
   return (
     <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[60] p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
-        {/* Header */}
-        <div className="flex-shrink-0 bg-gradient-to-r from-green-500 to-teal-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
+        {/* Header - amber/orange for pending, green for regular */}
+        <div className={`flex-shrink-0 px-6 py-4 flex items-center justify-between rounded-t-xl ${
+          isPendingReview
+            ? "bg-gradient-to-r from-amber-500 to-orange-500"
+            : "bg-gradient-to-r from-green-500 to-teal-600"
+        }`}>
           <div>
-            <h3 className="text-xl font-bold text-white">
-              Transaction Details
-            </h3>
-            <p className="text-green-100 text-sm">
+            <div className="flex items-center gap-2">
+              <h3 className="text-xl font-bold text-white">
+                {isPendingReview ? "Review Transaction" : "Transaction Details"}
+              </h3>
+              {isPendingReview && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-white/20 text-white">
+                  Pending Review
+                </span>
+              )}
+            </div>
+            <p className={`text-sm ${isPendingReview ? "text-amber-100" : "text-green-100"}`}>
               {transaction.property_address}
             </p>
           </div>
@@ -481,6 +494,16 @@ function TransactionDetails({
                     </svg>
                   )}
                   Reject
+                </button>
+                {/* Edit Button */}
+                <button
+                  onClick={() => setShowEditModal(true)}
+                  className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-white text-amber-600 hover:bg-opacity-90 shadow-md hover:shadow-lg"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                  Edit
                 </button>
                 {/* Approve Button */}
                 <button
@@ -1413,6 +1436,22 @@ function TransactionDetails({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Edit Transaction Modal */}
+      {showEditModal && (
+        <AuditTransactionModal
+          userId={parseInt(transaction.user_id, 10)}
+          onClose={() => setShowEditModal(false)}
+          onSuccess={() => {
+            setShowEditModal(false);
+            loadDetails();
+            if (onTransactionUpdated) {
+              onTransactionUpdated();
+            }
+          }}
+          editTransaction={transaction}
+        />
       )}
     </div>
   );
