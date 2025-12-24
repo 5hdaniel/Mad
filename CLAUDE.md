@@ -143,6 +143,31 @@ git branch -a | grep "int/"
 
 This prevents fixes from being lost (as happened with the onboarding fix in `int/ai-polish` when `int/cost-optimization` branched from stale develop).
 
+### Bug Fix Workflow (MANDATORY)
+
+**Before investigating any reported bug:**
+```bash
+# Check for existing fix branches that may address this issue
+git branch -a | grep "fix/"
+```
+
+If an existing fix branch seems related:
+1. Check its commits: `git log fix/<branch-name> --oneline -5`
+2. Compare to develop: `git diff develop...fix/<branch-name> --stat`
+3. If it contains the fix, **merge it** instead of starting over
+
+**After creating a fix branch:**
+
+A fix is NOT complete until it's merged. The workflow is:
+1. Create branch → 2. Commit fix → 3. Push → 4. Create PR → 5. **Merge to develop**
+
+Do NOT move on to other work until the fix is merged. Unmerged fix branches become orphaned and the same bug gets "fixed" multiple times.
+
+**Cleanup:** After merging, delete the local fix branch:
+```bash
+git branch -d fix/<branch-name>
+```
+
 ## Starting New Work
 
 ### Step 1: Create Feature Branch
