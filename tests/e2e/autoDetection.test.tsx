@@ -568,18 +568,18 @@ describe('Auto-Detection E2E Flow', () => {
       const rejectButton = screen.getByRole('button', { name: /^reject$/i });
       await user.click(rejectButton);
 
-      // Wait for reject confirmation modal
+      // Wait for reject confirmation modal (there are multiple "Reject Transaction" elements - h3 and button)
       await waitFor(() => {
-        expect(screen.getByText('Reject Transaction')).toBeInTheDocument();
+        const rejectElements = screen.getAllByText('Reject Transaction');
+        expect(rejectElements.length).toBeGreaterThanOrEqual(1);
       });
 
       // Enter rejection reason
       const reasonInput = screen.getByPlaceholderText(/not a real estate transaction/i);
       await user.type(reasonInput, 'This is a commercial property listing');
 
-      // Submit rejection - find submit button within modal
-      const modal = screen.getByText('Reject Transaction').closest('div')?.parentElement;
-      const submitButton = within(modal!).getByRole('button', { name: /^reject$/i });
+      // Submit rejection - find the button with "Reject Transaction" text
+      const submitButton = screen.getByRole('button', { name: /reject transaction/i });
       await user.click(submitButton);
 
       // Verify transaction update was called with rejection
