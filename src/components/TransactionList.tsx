@@ -205,6 +205,7 @@ function TransactionList({
   // Bulk action state
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const [showBulkExportModal, setShowBulkExportModal] = useState(false);
+  const [showStatusInfo, setShowStatusInfo] = useState(false);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [isBulkExporting, setIsBulkExporting] = useState(false);
   const [isBulkUpdating, setIsBulkUpdating] = useState(false);
@@ -629,6 +630,64 @@ function TransactionList({
               </span>
             )}
           </button>
+
+          {/* Status Info Button */}
+          <div className="relative ml-2">
+            <button
+              onClick={() => setShowStatusInfo(!showStatusInfo)}
+              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-all"
+              title="What do these statuses mean?"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </button>
+
+            {/* Status Info Tooltip */}
+            {showStatusInfo && (
+              <>
+                {/* Backdrop */}
+                <div
+                  className="fixed inset-0 z-10"
+                  onClick={() => setShowStatusInfo(false)}
+                />
+                {/* Tooltip */}
+                <div className="absolute left-0 top-full mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-200 p-4 z-20">
+                  <h4 className="font-semibold text-gray-900 mb-3">Transaction Statuses</h4>
+                  <div className="space-y-3">
+                    <div className="flex items-start gap-3">
+                      <span className="w-3 h-3 rounded-full bg-amber-500 mt-1 flex-shrink-0" />
+                      <div>
+                        <p className="font-medium text-gray-900">Pending Review</p>
+                        <p className="text-sm text-gray-600">Auto-detected transaction awaiting your approval</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <span className="w-3 h-3 rounded-full bg-blue-500 mt-1 flex-shrink-0" />
+                      <div>
+                        <p className="font-medium text-gray-900">Active</p>
+                        <p className="text-sm text-gray-600">Confirmed real estate transaction in progress</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <span className="w-3 h-3 rounded-full bg-gray-500 mt-1 flex-shrink-0" />
+                      <div>
+                        <p className="font-medium text-gray-900">Closed</p>
+                        <p className="text-sm text-gray-600">Completed transaction (deal closed)</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <span className="w-3 h-3 rounded-full bg-red-500 mt-1 flex-shrink-0" />
+                      <div>
+                        <p className="font-medium text-gray-900">Rejected</p>
+                        <p className="text-sm text-gray-600">Not a real transaction (false positive)</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center gap-3">
