@@ -307,9 +307,10 @@ describe('Auto-Detection E2E Flow', () => {
         expect(screen.getByText('123 AI Detected Lane, San Francisco, CA 94102')).toBeInTheDocument();
       });
 
-      // Verify AI Detected badge appears
-      const aiDetectedBadges = screen.getAllByText('AI Detected');
-      expect(aiDetectedBadges.length).toBeGreaterThan(0);
+      // Verify Pending Review badge/label appears for auto-detected transactions
+      // (AI detection is the default - no separate badge, but they appear in Pending Review)
+      const pendingReviewElements = screen.getAllByText('Pending Review');
+      expect(pendingReviewElements.length).toBeGreaterThan(0);
     });
   });
 

@@ -2,6 +2,9 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import type { Transaction, Communication, Contact } from "@/types";
 import ExportModal from "./ExportModal";
 import AuditTransactionModal from "./AuditTransactionModal";
+import { ToastContainer } from "./Toast";
+import { useToast } from "../hooks/useToast";
+import { useTransactionStatusUpdate } from "../hooks/useTransactionStatusUpdate";
 
 /**
  * Interface for AI-suggested contact assignment
@@ -72,13 +75,17 @@ function TransactionDetails({
   const [processingContactId, setProcessingContactId] = useState<string | null>(null);
   const [processingAll, setProcessingAll] = useState<boolean>(false);
 
-  // Pending review state
-  const [isApproving, setIsApproving] = useState<boolean>(false);
-  const [isRejecting, setIsRejecting] = useState<boolean>(false);
-  const [isRestoring, setIsRestoring] = useState<boolean>(false);
+  // Pending review state - using custom hook
   const [showRejectReasonModal, setShowRejectReasonModal] = useState<boolean>(false);
   const [rejectReason, setRejectReason] = useState<string>("");
   const [showEditModal, setShowEditModal] = useState<boolean>(false);
+
+  // Toast notifications
+  const { toasts, showSuccess, showError, removeToast } = useToast();
+
+  // Transaction status update hook - handles approve/reject/restore with validation
+  const { state: statusState, approve, reject, restore } = useTransactionStatusUpdate(userId);
+  const { isApproving, isRejecting, isRestoring } = statusState;
 
   // Check if transaction was rejected
   const isRejected = transaction.detection_status === "rejected";
@@ -192,97 +199,62 @@ function TransactionDetails({
       }
     } catch (err) {
       console.error("Failed to delete transaction:", err);
-      alert("Failed to delete transaction. Please try again.");
+      showError("Failed to delete transaction. Please try again.");
     }
   };
 
-  // Approve pending transaction
-  const handleApprove = async (): Promise<void> => {
-    if (!userId) return;
-    setIsApproving(true);
-    try {
-      // Set detection_status to confirmed AND status to active
-      // This moves the transaction from "Pending Review" to "Active" tab
-      await window.api.transactions.update(transaction.id, {
-        detection_status: "confirmed",
-        status: "active",
-        reviewed_at: new Date().toISOString(),
-      });
-      await window.api.feedback.recordTransaction(userId, {
-        detectedTransactionId: transaction.id,
-        action: "confirm",
-      });
-      onClose();
-      if (onTransactionUpdated) {
-        onTransactionUpdated();
-      }
-    } catch (error) {
-      console.error("Failed to approve transaction:", error);
-      alert("Failed to approve transaction. Please try again.");
-    } finally {
-      setIsApproving(false);
-    }
-  };
+  /**
+   * Approve pending transaction
+   * Uses the useTransactionStatusUpdate hook for validation and feedback recording
+   */
+  const handleApprove = useCallback(async (): Promise<void> => {
+    const success = await approve(transaction.id, {
+      onSuccess: () => {
+        showSuccess("Transaction approved successfully!");
+        onClose();
+        onTransactionUpdated?.();
+      },
+      onError: (error) => {
+        showError(error);
+      },
+    });
+  }, [approve, transaction.id, onClose, onTransactionUpdated, showSuccess, showError]);
 
-  // Reject transaction (works for both pending and active)
-  const handleReject = async (): Promise<void> => {
-    setIsRejecting(true);
-    try {
-      await window.api.transactions.update(transaction.id, {
-        detection_status: "rejected",
-        rejection_reason: rejectReason || undefined,
-        reviewed_at: new Date().toISOString(),
-      });
-      // Record feedback for learning (if userId available)
-      if (userId) {
-        await window.api.feedback.recordTransaction(userId, {
-          detectedTransactionId: transaction.id,
-          action: "reject",
-          corrections: rejectReason ? { reason: rejectReason } : undefined,
-        });
-      }
-      setShowRejectReasonModal(false);
-      onClose();
-      if (onTransactionUpdated) {
-        onTransactionUpdated();
-      }
-    } catch (error) {
-      console.error("Failed to reject transaction:", error);
-      alert("Failed to reject transaction. Please try again.");
-    } finally {
-      setIsRejecting(false);
-    }
-  };
+  /**
+   * Reject transaction (works for both pending and active)
+   * Uses the useTransactionStatusUpdate hook for validation and feedback recording
+   */
+  const handleReject = useCallback(async (): Promise<void> => {
+    const success = await reject(transaction.id, rejectReason, {
+      onSuccess: () => {
+        showSuccess("Transaction rejected");
+        setShowRejectReasonModal(false);
+        setRejectReason("");
+        onClose();
+        onTransactionUpdated?.();
+      },
+      onError: (error) => {
+        showError(error);
+      },
+    });
+  }, [reject, transaction.id, rejectReason, onClose, onTransactionUpdated, showSuccess, showError]);
 
-  // Restore rejected transaction to active
-  const handleRestore = async (): Promise<void> => {
-    setIsRestoring(true);
-    try {
-      await window.api.transactions.update(transaction.id, {
-        detection_status: "confirmed",
-        status: "active",
-        reviewed_at: new Date().toISOString(),
-        rejection_reason: null, // Clear the rejection reason
-      });
-      // Record feedback for learning (restored = confirm after prior rejection)
-      if (userId) {
-        await window.api.feedback.recordTransaction(userId, {
-          detectedTransactionId: transaction.id,
-          action: "confirm",
-          corrections: { reason: "Restored from rejection" },
-        });
-      }
-      onClose();
-      if (onTransactionUpdated) {
-        onTransactionUpdated();
-      }
-    } catch (error) {
-      console.error("Failed to restore transaction:", error);
-      alert("Failed to restore transaction. Please try again.");
-    } finally {
-      setIsRestoring(false);
-    }
-  };
+  /**
+   * Restore rejected transaction to active
+   * Uses the useTransactionStatusUpdate hook for validation and feedback recording
+   */
+  const handleRestore = useCallback(async (): Promise<void> => {
+    const success = await restore(transaction.id, {
+      onSuccess: () => {
+        showSuccess("Transaction restored to active");
+        onClose();
+        onTransactionUpdated?.();
+      },
+      onError: (error) => {
+        showError(error);
+      },
+    });
+  }, [restore, transaction.id, onClose, onTransactionUpdated, showSuccess, showError]);
 
   const handleUnlinkCommunication = async (
     comm: Communication,
@@ -295,13 +267,14 @@ function TransactionDetails({
         // Remove the communication from the local state
         setCommunications((prev) => prev.filter((c) => c.id !== comm.id));
         setShowUnlinkConfirm(null);
+        showSuccess("Email unlinked from transaction");
       } else {
         console.error("Failed to unlink communication:", result.error);
-        alert("Failed to unlink email. Please try again.");
+        showError("Failed to unlink email. Please try again.");
       }
     } catch (err) {
       console.error("Failed to unlink communication:", err);
-      alert("Failed to unlink email. Please try again.");
+      showError("Failed to unlink email. Please try again.");
     } finally {
       setUnlinkingCommId(null);
     }
@@ -368,9 +341,10 @@ function TransactionDetails({
       if (onTransactionUpdated) {
         onTransactionUpdated();
       }
+      showSuccess("Contact suggestion accepted");
     } catch (err) {
       console.error("Failed to accept suggestion:", err);
-      alert("Failed to accept contact suggestion. Please try again.");
+      showError("Failed to accept contact suggestion. Please try again.");
     } finally {
       setProcessingContactId(null);
     }
@@ -382,6 +356,8 @@ function TransactionDetails({
     resolvedSuggestions,
     updateSuggestedContacts,
     onTransactionUpdated,
+    showSuccess,
+    showError,
   ]);
 
   /**
@@ -420,9 +396,10 @@ function TransactionDetails({
       if (onTransactionUpdated) {
         onTransactionUpdated();
       }
+      showSuccess("Contact suggestion rejected");
     } catch (err) {
       console.error("Failed to reject suggestion:", err);
-      alert("Failed to reject contact suggestion. Please try again.");
+      showError("Failed to reject contact suggestion. Please try again.");
     } finally {
       setProcessingContactId(null);
     }
@@ -434,6 +411,8 @@ function TransactionDetails({
     resolvedSuggestions,
     updateSuggestedContacts,
     onTransactionUpdated,
+    showSuccess,
+    showError,
   ]);
 
   /**
@@ -476,9 +455,10 @@ function TransactionDetails({
       if (onTransactionUpdated) {
         onTransactionUpdated();
       }
+      showSuccess("All contact suggestions accepted");
     } catch (err) {
       console.error("Failed to accept all suggestions:", err);
-      alert("Failed to accept all suggestions. Please try again.");
+      showError("Failed to accept all suggestions. Please try again.");
     } finally {
       setProcessingAll(false);
     }
@@ -490,6 +470,8 @@ function TransactionDetails({
     transaction.user_id,
     updateSuggestedContacts,
     onTransactionUpdated,
+    showSuccess,
+    showError,
   ]);
 
   // Determine header style based on state
@@ -1555,6 +1537,9 @@ function TransactionDetails({
           editTransaction={transaction}
         />
       )}
+
+      {/* Toast Notifications */}
+      <ToastContainer toasts={toasts} onDismiss={removeToast} />
     </div>
   );
 }
