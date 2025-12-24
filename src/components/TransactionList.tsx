@@ -403,6 +403,9 @@ function TransactionList({
   const handleTransactionClick = (transaction: Transaction): void => {
     if (selectionMode) {
       toggleSelection(transaction.id);
+    } else if (transaction.detection_status === "pending") {
+      // Pending transactions open in review mode with approve/reject buttons
+      setPendingReviewTransaction(transaction);
     } else {
       setSelectedTransaction(transaction);
     }
