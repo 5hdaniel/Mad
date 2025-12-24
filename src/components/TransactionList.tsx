@@ -41,49 +41,35 @@ function ManualEntryBadge({
 }
 
 /**
- * Confidence pill with color scale based on confidence level
- * Red (<60%), Yellow (60-80%), Green (>80%)
+ * Confidence indicator bar with color gradient
  */
-function ConfidencePill({ confidence }: { confidence: number | undefined }) {
+function ConfidenceBar({ confidence }: { confidence: number | undefined }) {
   if (confidence === undefined || confidence === null) {
     return null;
   }
 
-  // Convert from 0-1 to percentage if needed
   const percentage =
     confidence <= 1 ? Math.round(confidence * 100) : Math.round(confidence);
 
-  let bgColor: string;
-  let textColor: string;
-
+  let barColor: string;
   if (percentage < 60) {
-    bgColor = "bg-red-500";
-    textColor = "text-white";
+    barColor = "bg-red-500";
   } else if (percentage < 80) {
-    bgColor = "bg-amber-500";
-    textColor = "text-white";
+    barColor = "bg-amber-500";
   } else {
-    bgColor = "bg-emerald-500";
-    textColor = "text-white";
+    barColor = "bg-emerald-500";
   }
 
   return (
-    <span
-      className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${bgColor} ${textColor}`}
-    >
-      {percentage}% confident
-    </span>
-  );
-}
-
-/**
- * Warning badge for transactions pending user review
- */
-function PendingReviewBadge() {
-  return (
-    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-500 text-white">
-      Pending Review
-    </span>
+    <div className="flex items-center gap-2">
+      <div className="w-20 h-2 bg-gray-200 rounded-full overflow-hidden">
+        <div
+          className={`h-full ${barColor} rounded-full transition-all`}
+          style={{ width: `${percentage}%` }}
+        />
+      </div>
+      <span className="text-sm font-medium text-gray-600">{percentage}%</span>
+    </div>
   );
 }
 
@@ -153,49 +139,45 @@ function RejectReasonModal({ onConfirm, onCancel }: RejectReasonModalProps) {
 }
 
 // ============================================
-// TRANSACTION ACTIONS COMPONENT
+// PENDING REVIEW WRAPPER COMPONENT
 // ============================================
 
-interface TransactionActionsProps {
+interface PendingReviewWrapperProps {
   transaction: Transaction;
   userId: string;
   onUpdate: () => void;
+  children: React.ReactNode;
 }
 
 /**
- * Action buttons for approving/rejecting AI-detected pending transactions
- * Only renders for transactions with detection_status === 'pending'
+ * Wrapper component for pending transactions - like product packaging
+ * Displays review header above the transaction card with:
+ * - Left: Confidence bar
+ * - Center: "Pending Review" label
+ * - Right: Approve/Reject buttons
  */
-function TransactionActions({
+function PendingReviewWrapper({
   transaction,
   userId,
   onUpdate,
-}: TransactionActionsProps) {
+  children,
+}: PendingReviewWrapperProps) {
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
 
-  // Only show actions for pending AI-detected transactions
-  if (transaction.detection_status !== "pending") {
-    return null;
-  }
-
   const handleApprove = async (e: React.MouseEvent<HTMLButtonElement>) => {
-    e.stopPropagation(); // Prevent opening transaction details
+    e.stopPropagation();
     setIsApproving(true);
     try {
-      // Update transaction status to confirmed
       await window.api.transactions.update(transaction.id, {
         detection_status: "confirmed",
         reviewed_at: new Date().toISOString(),
       });
-
-      // Record feedback for learning
       await window.api.feedback.recordTransaction(userId, {
         detectedTransactionId: transaction.id,
         action: "confirm",
       });
-
       onUpdate();
     } catch (error) {
       console.error("Failed to approve transaction:", error);
@@ -207,20 +189,16 @@ function TransactionActions({
   const handleReject = async (reason: string) => {
     setIsRejecting(true);
     try {
-      // Update transaction status to rejected
       await window.api.transactions.update(transaction.id, {
         detection_status: "rejected",
         rejection_reason: reason || undefined,
         reviewed_at: new Date().toISOString(),
       });
-
-      // Record feedback for learning
       await window.api.feedback.recordTransaction(userId, {
         detectedTransactionId: transaction.id,
         action: "reject",
         corrections: reason ? { reason } : undefined,
       });
-
       setShowRejectModal(false);
       onUpdate();
     } catch (error) {
@@ -231,64 +209,68 @@ function TransactionActions({
   };
 
   const handleRejectClick = (e: React.MouseEvent<HTMLButtonElement>) => {
-    e.stopPropagation(); // Prevent opening transaction details
+    e.stopPropagation();
     setShowRejectModal(true);
   };
 
   return (
-    <>
-      <div className="flex items-center gap-1">
-        {/* Approve Button */}
-        <button
-          onClick={handleApprove}
-          disabled={isApproving}
-          className="p-2 rounded-lg font-semibold transition-all bg-emerald-500 text-white hover:bg-emerald-600 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-          title="Approve transaction"
-        >
-          {isApproving ? (
-            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-          ) : (
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M5 13l4 4L19 7"
-              />
-            </svg>
-          )}
-        </button>
+    <div className="relative">
+      {/* Review Header - The "packaging" */}
+      <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 border-b-0 rounded-t-xl px-4 py-3">
+        <div className="flex items-center justify-between">
+          {/* Left: Confidence */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium text-amber-700 uppercase tracking-wide">
+              Confidence
+            </span>
+            <ConfidenceBar confidence={transaction.detection_confidence} />
+          </div>
 
-        {/* Reject Button */}
-        <button
-          onClick={handleRejectClick}
-          disabled={isRejecting}
-          className="p-2 rounded-lg font-semibold transition-all bg-red-500 text-white hover:bg-red-600 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-          title="Reject transaction"
-        >
-          {isRejecting ? (
-            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-          ) : (
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+          {/* Center: Pending Review Label */}
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" />
+            <span className="text-sm font-semibold text-amber-800">
+              Pending Review
+            </span>
+          </div>
+
+          {/* Right: Approve/Reject Buttons */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleRejectClick}
+              disabled={isRejecting}
+              className="px-3 py-1.5 rounded-lg text-sm font-semibold transition-all bg-white border-2 border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          )}
-        </button>
+              {isRejecting ? (
+                <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              )}
+              Reject
+            </button>
+            <button
+              onClick={handleApprove}
+              disabled={isApproving}
+              className="px-3 py-1.5 rounded-lg text-sm font-semibold transition-all bg-emerald-500 text-white hover:bg-emerald-600 shadow-sm hover:shadow disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+            >
+              {isApproving ? (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              )}
+              Approve
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Transaction Card - The "product" */}
+      <div className="border-2 border-amber-300 border-t-0 rounded-b-xl overflow-hidden">
+        {children}
       </div>
 
       {/* Reject Reason Modal */}
@@ -298,7 +280,7 @@ function TransactionActions({
           onCancel={() => setShowRejectModal(false)}
         />
       )}
-    </>
+    </div>
   );
 }
 
@@ -1083,93 +1065,105 @@ function TransactionList({
           </div>
         ) : (
           <div className="grid gap-6">
-            {filteredTransactions.map((transaction) => (
-              <div
-                key={transaction.id}
-                className={`bg-white border-2 rounded-xl p-6 hover:shadow-xl transition-all cursor-pointer transform hover:scale-[1.01] ${
-                  selectionMode && isSelected(transaction.id)
-                    ? "border-blue-500 bg-blue-50"
-                    : "border-gray-200 hover:border-blue-400"
-                }`}
-                onClick={() => handleTransactionClick(transaction)}
-              >
-                <div className="flex items-start justify-between gap-4">
-                  {/* Selection checkbox */}
-                  {selectionMode && (
-                    <div
-                      className="flex-shrink-0 mt-1"
-                      onClick={(e) => handleCheckboxClick(e, transaction.id)}
-                    >
+            {filteredTransactions.map((transaction) => {
+              const isPending = transaction.detection_status === "pending";
+
+              // Transaction card content - reused for both pending and non-pending
+              const cardContent = (
+                <div
+                  className={`bg-white p-6 hover:shadow-xl transition-all cursor-pointer ${
+                    isPending
+                      ? "" // No border/rounding when wrapped
+                      : `border-2 rounded-xl transform hover:scale-[1.01] ${
+                          selectionMode && isSelected(transaction.id)
+                            ? "border-blue-500 bg-blue-50"
+                            : "border-gray-200 hover:border-blue-400"
+                        }`
+                  }`}
+                  onClick={() => handleTransactionClick(transaction)}
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    {/* Selection checkbox */}
+                    {selectionMode && (
                       <div
-                        className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all ${
-                          isSelected(transaction.id)
-                            ? "bg-blue-500 border-blue-500"
-                            : "border-gray-300 hover:border-blue-400"
-                        }`}
+                        className="flex-shrink-0 mt-1"
+                        onClick={(e) => handleCheckboxClick(e, transaction.id)}
                       >
-                        {isSelected(transaction.id) && (
-                          <svg
-                            className="w-4 h-4 text-white"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={3}
-                              d="M5 13l4 4L19 7"
-                            />
-                          </svg>
-                        )}
+                        <div
+                          className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all ${
+                            isSelected(transaction.id)
+                              ? "bg-blue-500 border-blue-500"
+                              : "border-gray-300 hover:border-blue-400"
+                          }`}
+                        >
+                          {isSelected(transaction.id) && (
+                            <svg
+                              className="w-4 h-4 text-white"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={3}
+                                d="M5 13l4 4L19 7"
+                              />
+                            </svg>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  )}
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-semibold text-gray-900">
-                        {transaction.property_address}
-                      </h3>
-                      {/* Detection Status Badges */}
-                      <div className="flex items-center gap-1.5">
+                    )}
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="font-semibold text-gray-900">
+                          {transaction.property_address}
+                        </h3>
                         {/* Manual badge for manually entered transactions */}
                         <ManualEntryBadge
                           source={transaction.detection_source}
                         />
-                        {/* Pending review UI - only show for pending transactions */}
-                        {transaction.detection_status === "pending" && (
-                          <>
-                            <PendingReviewBadge />
-                            {transaction.detection_confidence !== undefined && (
-                              <ConfidencePill
-                                confidence={transaction.detection_confidence}
+                      </div>
+                      <div className="flex items-center gap-4 text-sm text-gray-600">
+                        {transaction.transaction_type && (
+                          <span className="flex items-center gap-1">
+                            <span
+                              className={`w-2 h-2 rounded-full ${
+                                transaction.transaction_type === "purchase"
+                                  ? "bg-green-500"
+                                  : "bg-blue-500"
+                              }`}
+                            ></span>
+                            {transaction.transaction_type === "purchase"
+                              ? "Purchase"
+                              : "Sale"}
+                          </span>
+                        )}
+                        {transaction.sale_price && (
+                          <span className="font-semibold text-gray-900">
+                            {formatCurrency(transaction.sale_price)}
+                          </span>
+                        )}
+                        {transaction.closing_date && (
+                          <span className="flex items-center gap-1">
+                            <svg
+                              className="w-4 h-4"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
                               />
-                            )}
-                          </>
+                            </svg>
+                            Closed: {formatDate(transaction.closing_date)}
+                          </span>
                         )}
                       </div>
-                    </div>
-                    <div className="flex items-center gap-4 text-sm text-gray-600">
-                      {transaction.transaction_type && (
-                        <span className="flex items-center gap-1">
-                          <span
-                            className={`w-2 h-2 rounded-full ${
-                              transaction.transaction_type === "purchase"
-                                ? "bg-green-500"
-                                : "bg-blue-500"
-                            }`}
-                          ></span>
-                          {transaction.transaction_type === "purchase"
-                            ? "Purchase"
-                            : "Sale"}
-                        </span>
-                      )}
-                      {transaction.sale_price && (
-                        <span className="font-semibold text-gray-900">
-                          {formatCurrency(transaction.sale_price)}
-                        </span>
-                      )}
-                      {transaction.closing_date && (
+                      <div className="mt-2 flex items-center gap-2 text-xs text-gray-500">
                         <span className="flex items-center gap-1">
                           <svg
                             className="w-4 h-4"
@@ -1181,94 +1175,82 @@ function TransactionList({
                               strokeLinecap="round"
                               strokeLinejoin="round"
                               strokeWidth={2}
-                              d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                              d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
                             />
                           </svg>
-                          Closed: {formatDate(transaction.closing_date)}
+                          {transaction.total_communications_count || 0} emails
                         </span>
-                      )}
+                        {transaction.extraction_confidence && (
+                          <span className="flex items-center gap-1">
+                            <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-blue-500 rounded-full"
+                                style={{
+                                  width: `${transaction.extraction_confidence}%`,
+                                }}
+                              ></div>
+                            </div>
+                            {transaction.extraction_confidence}% confidence
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <div className="mt-2 flex items-center gap-2 text-xs text-gray-500">
-                      <span className="flex items-center gap-1">
-                        <svg
-                          className="w-4 h-4"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
+                    <div className="flex items-center gap-2">
+                      {/* Quick Export Button - only for non-pending transactions */}
+                      {!isPending && (
+                        <button
+                          onClick={(e) => handleQuickExport(transaction, e)}
+                          className="px-3 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-green-500 text-white hover:bg-green-600 shadow-md hover:shadow-lg"
+                          title="Quick Export"
                         >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                          />
-                        </svg>
-                        {transaction.total_communications_count || 0} emails
-                      </span>
-                      {transaction.extraction_confidence && (
-                        <span className="flex items-center gap-1">
-                          <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-blue-500 rounded-full"
-                              style={{
-                                width: `${transaction.extraction_confidence}%`,
-                              }}
-                            ></div>
-                          </div>
-                          {transaction.extraction_confidence}% confidence
-                        </span>
+                          <svg
+                            className="w-5 h-5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                            />
+                          </svg>
+                          Export
+                        </button>
                       )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {/* Approve/Reject Actions - only for pending transactions */}
-                    {transaction.detection_status === "pending" && (
-                      <TransactionActions
-                        transaction={transaction}
-                        userId={userId}
-                        onUpdate={loadTransactions}
-                      />
-                    )}
-                    {/* Quick Export Button - hide for pending transactions */}
-                    {transaction.detection_status !== "pending" && (
-                      <button
-                        onClick={(e) => handleQuickExport(transaction, e)}
-                        className="px-3 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-green-500 text-white hover:bg-green-600 shadow-md hover:shadow-lg"
-                        title="Quick Export"
+                      <svg
+                        className="w-5 h-5 text-gray-400"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
                       >
-                        <svg
-                          className="w-5 h-5"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                          />
-                        </svg>
-                        Export
-                      </button>
-                    )}
-                    <svg
-                      className="w-5 h-5 text-gray-400"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 5l7 7-7 7"
-                      />
-                    </svg>
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M9 5l7 7-7 7"
+                        />
+                      </svg>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+
+              // Wrap pending transactions in the review wrapper
+              return isPending ? (
+                <PendingReviewWrapper
+                  key={transaction.id}
+                  transaction={transaction}
+                  userId={userId}
+                  onUpdate={loadTransactions}
+                >
+                  {cardContent}
+                </PendingReviewWrapper>
+              ) : (
+                <div key={transaction.id}>{cardContent}</div>
+              );
+            })}
           </div>
         )}
       </div>
