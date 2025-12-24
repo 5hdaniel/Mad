@@ -3,6 +3,12 @@ import type { Transaction, OAuthProvider } from "@/types";
 import AuditTransactionModal from "./AuditTransactionModal";
 import ExportModal from "./ExportModal";
 import TransactionDetails from "./TransactionDetails";
+import {
+  BulkActionBar,
+  BulkDeleteConfirmModal,
+  BulkExportModal,
+} from "./BulkActionBar";
+import { useSelection } from "../hooks/useSelection";
 
 interface ScanProgress {
   step: string;
@@ -14,28 +20,22 @@ interface ScanProgress {
 // ============================================
 
 /**
- * Badge showing whether transaction was AI-detected or manually created
+ * Badge showing manual entry - only shown for manually created transactions
+ * (AI-detected is the default, no badge needed)
  */
-function DetectionSourceBadge({
+function ManualEntryBadge({
   source,
 }: {
   source: "auto" | "manual" | "hybrid" | undefined;
 }) {
-  if (!source || source === "manual") {
-    return (
-      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-500 text-white">
-        Manual
-      </span>
-    );
+  // Only show badge for manually entered transactions
+  if (source !== "manual") {
+    return null;
   }
 
-  // AI-detected or hybrid shows the gradient badge
   return (
-    <span
-      className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium text-white"
-      style={{ background: "linear-gradient(135deg, #3B82F6, #8B5CF6)" }}
-    >
-      AI Detected
+    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-500 text-white">
+      Manual
     </span>
   );
 }
@@ -326,9 +326,6 @@ function TransactionList({
   const [selectedTransaction, setSelectedTransaction] =
     useState<Transaction | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<"active" | "closed" | "all">(
-    "active",
-  );
   const [showAuditCreate, setShowAuditCreate] = useState<boolean>(false);
   const [quickExportTransaction, setQuickExportTransaction] =
     useState<Transaction | null>(null);
@@ -336,21 +333,41 @@ function TransactionList({
     null,
   );
 
-  // Detection status filter - read initial value from URL params
-  const [detectionFilter, setDetectionFilter] = useState<
-    "all" | "confirmed" | "pending" | "rejected"
+  // Consolidated filter - combines status and detection into one
+  const [filter, setFilter] = useState<
+    "all" | "pending" | "active" | "closed" | "rejected"
   >(() => {
     const params = new URLSearchParams(window.location.search);
-    const filter = params.get("detection");
+    const urlFilter = params.get("filter");
     if (
-      filter === "confirmed" ||
-      filter === "pending" ||
-      filter === "rejected"
+      urlFilter === "pending" ||
+      urlFilter === "active" ||
+      urlFilter === "closed" ||
+      urlFilter === "rejected"
     ) {
-      return filter;
+      return urlFilter;
     }
     return "all";
   });
+
+  // Selection state for bulk operations
+  const {
+    selectedIds,
+    toggleSelection,
+    selectAll,
+    deselectAll,
+    isSelected,
+    count: selectedCount,
+  } = useSelection();
+
+  // Bulk action state
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+  const [showBulkExportModal, setShowBulkExportModal] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [isBulkExporting, setIsBulkExporting] = useState(false);
+  const [isBulkUpdating, setIsBulkUpdating] = useState(false);
+  const [bulkActionSuccess, setBulkActionSuccess] = useState<string | null>(null);
+  const [selectionMode, setSelectionMode] = useState(false);
 
   useEffect(() => {
     loadTransactions();
@@ -366,28 +383,30 @@ function TransactionList({
     };
   }, []);
 
-  // Sync detection filter to URL params
+  // Sync filter to URL params
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (detectionFilter === "all") {
-      params.delete("detection");
+    if (filter === "all") {
+      params.delete("filter");
     } else {
-      params.set("detection", detectionFilter);
+      params.set("filter", filter);
     }
     const newUrl = params.toString()
       ? `${window.location.pathname}?${params.toString()}`
       : window.location.pathname;
     window.history.replaceState({}, "", newUrl);
-  }, [detectionFilter]);
+  }, [filter]);
 
-  // Compute detection status counts
-  const detectionCounts = useMemo(
+  // Compute filter counts
+  const filterCounts = useMemo(
     () => ({
       all: transactions.length,
-      confirmed: transactions.filter((t) => t.detection_status === "confirmed")
-        .length,
       pending: transactions.filter((t) => t.detection_status === "pending")
         .length,
+      active: transactions.filter(
+        (t) => t.status === "active" && t.detection_status !== "pending" && t.detection_status !== "rejected"
+      ).length,
+      closed: transactions.filter((t) => t.status === "closed").length,
       rejected: transactions.filter((t) => t.detection_status === "rejected")
         .length,
     }),
@@ -482,13 +501,30 @@ function TransactionList({
     const matchesSearch = t.property_address
       ?.toLowerCase()
       .includes(searchQuery.toLowerCase());
-    const matchesStatus =
-      statusFilter === "all" ||
-      (statusFilter === "active" && t.status === "active") ||
-      (statusFilter === "closed" && t.status === "closed");
-    const matchesDetection =
-      detectionFilter === "all" || t.detection_status === detectionFilter;
-    return matchesSearch && matchesStatus && matchesDetection;
+
+    let matchesFilter = false;
+    switch (filter) {
+      case "all":
+        matchesFilter = true;
+        break;
+      case "pending":
+        matchesFilter = t.detection_status === "pending";
+        break;
+      case "active":
+        // Active = status is active AND not pending review AND not rejected
+        matchesFilter = t.status === "active" &&
+          t.detection_status !== "pending" &&
+          t.detection_status !== "rejected";
+        break;
+      case "closed":
+        matchesFilter = t.status === "closed";
+        break;
+      case "rejected":
+        matchesFilter = t.detection_status === "rejected";
+        break;
+    }
+
+    return matchesSearch && matchesFilter;
   });
 
   const handleQuickExport = (
@@ -509,6 +545,139 @@ function TransactionList({
     setTimeout(() => setQuickExportSuccess(null), 5000);
     // Reload transactions to update export status
     loadTransactions();
+  };
+
+  // Toggle bulk edit mode
+  const handleToggleBulkEdit = (): void => {
+    if (selectionMode) {
+      deselectAll();
+      setSelectionMode(false);
+    } else {
+      setSelectionMode(true);
+    }
+  };
+
+  // Handle transaction card click (either select or open details)
+  const handleTransactionClick = (transaction: Transaction): void => {
+    if (selectionMode) {
+      toggleSelection(transaction.id);
+    } else {
+      setSelectedTransaction(transaction);
+    }
+  };
+
+  // Handle checkbox click separately to prevent event bubbling
+  const handleCheckboxClick = (e: React.MouseEvent, transactionId: string): void => {
+    e.stopPropagation();
+    toggleSelection(transactionId);
+  };
+
+  // Bulk delete handler
+  const handleBulkDelete = async (): Promise<void> => {
+    if (selectedCount === 0) return;
+
+    setIsBulkDeleting(true);
+    try {
+      const result = await (window.api.transactions as any).bulkDelete(
+        Array.from(selectedIds),
+      );
+
+      if (result.success) {
+        setBulkActionSuccess(
+          `Successfully deleted ${result.deletedCount || selectedCount} transaction${(result.deletedCount || selectedCount) > 1 ? "s" : ""}`,
+        );
+        deselectAll();
+        setSelectionMode(false);
+        await loadTransactions();
+      } else {
+        setError(result.error || "Failed to delete transactions");
+      }
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setIsBulkDeleting(false);
+      setShowBulkDeleteConfirm(false);
+      setTimeout(() => setBulkActionSuccess(null), 5000);
+    }
+  };
+
+  // Bulk export handler
+  const handleBulkExport = async (format: string): Promise<void> => {
+    if (selectedCount === 0) return;
+
+    setIsBulkExporting(true);
+    try {
+      const selectedTransactionIds = Array.from(selectedIds);
+      let successCount = 0;
+      const errors: string[] = [];
+
+      for (const transactionId of selectedTransactionIds) {
+        try {
+          const result = await window.api.transactions.exportEnhanced(
+            transactionId,
+            { exportFormat: format },
+          );
+          if (result.success) {
+            successCount++;
+          } else {
+            errors.push(result.error || `Failed to export transaction`);
+          }
+        } catch (err) {
+          errors.push((err as Error).message);
+        }
+      }
+
+      if (successCount > 0) {
+        setBulkActionSuccess(
+          `Successfully exported ${successCount} transaction${successCount > 1 ? "s" : ""}${errors.length > 0 ? ` (${errors.length} failed)` : ""}`,
+        );
+        deselectAll();
+        setSelectionMode(false);
+        await loadTransactions();
+      } else {
+        setError("Failed to export transactions");
+      }
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setIsBulkExporting(false);
+      setShowBulkExportModal(false);
+      setTimeout(() => setBulkActionSuccess(null), 5000);
+    }
+  };
+
+  // Bulk status change handler
+  const handleBulkStatusChange = async (status: "active" | "closed"): Promise<void> => {
+    if (selectedCount === 0) return;
+
+    setIsBulkUpdating(true);
+    try {
+      const result = await (window.api.transactions as any).bulkUpdateStatus(
+        Array.from(selectedIds),
+        status,
+      );
+
+      if (result.success) {
+        setBulkActionSuccess(
+          `Successfully updated ${result.updatedCount || selectedCount} transaction${(result.updatedCount || selectedCount) > 1 ? "s" : ""} to ${status}`,
+        );
+        deselectAll();
+        setSelectionMode(false);
+        await loadTransactions();
+      } else {
+        setError(result.error || "Failed to update transactions");
+      }
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setIsBulkUpdating(false);
+      setTimeout(() => setBulkActionSuccess(null), 5000);
+    }
+  };
+
+  // Handle select all for filtered transactions
+  const handleSelectAll = (): void => {
+    selectAll(filteredTransactions);
   };
 
   return (
@@ -544,93 +713,76 @@ function TransactionList({
 
       {/* Toolbar */}
       <div className="flex-shrink-0 p-6 bg-white shadow-md">
-        {/* Status Filter Toggle */}
+        {/* Consolidated Filter Tabs */}
         <div className="inline-flex items-center bg-gray-200 rounded-lg p-1 mb-3">
           <button
-            onClick={() => setStatusFilter("active")}
+            onClick={() => setFilter("all")}
             className={`px-4 py-2 rounded-md font-medium transition-all ${
-              statusFilter === "active"
-                ? "bg-white text-blue-600 shadow-sm"
-                : "text-gray-600 hover:text-gray-900"
-            }`}
-          >
-            Active ({transactions.filter((t) => t.status === "active").length})
-          </button>
-          <button
-            onClick={() => setStatusFilter("closed")}
-            className={`px-4 py-2 rounded-md font-medium transition-all ${
-              statusFilter === "closed"
-                ? "bg-white text-gray-800 shadow-sm"
-                : "text-gray-600 hover:text-gray-900"
-            }`}
-          >
-            Closed ({transactions.filter((t) => t.status === "closed").length})
-          </button>
-          <button
-            onClick={() => setStatusFilter("all")}
-            className={`px-4 py-2 rounded-md font-medium transition-all ${
-              statusFilter === "all"
+              filter === "all"
                 ? "bg-white text-purple-600 shadow-sm"
                 : "text-gray-600 hover:text-gray-900"
             }`}
           >
-            All ({transactions.length})
-          </button>
-        </div>
-
-        {/* Detection Status Filter Tabs */}
-        <div className="inline-flex items-center bg-gray-100 rounded-lg p-1 mb-3 ml-4">
-          <button
-            onClick={() => setDetectionFilter("all")}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-              detectionFilter === "all"
-                ? "bg-white text-gray-800 shadow-sm"
-                : "text-gray-500 hover:text-gray-700"
-            }`}
-          >
             All
-            <span className="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-gray-200">
-              {detectionCounts.all}
+            <span className="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-gray-300">
+              {filterCounts.all}
             </span>
           </button>
           <button
-            onClick={() => setDetectionFilter("confirmed")}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-              detectionFilter === "confirmed"
-                ? "bg-white text-green-600 shadow-sm"
-                : "text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            Confirmed
-            <span className="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-green-100 text-green-700">
-              {detectionCounts.confirmed}
-            </span>
-          </button>
-          <button
-            onClick={() => setDetectionFilter("pending")}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-              detectionFilter === "pending"
+            onClick={() => setFilter("pending")}
+            className={`px-4 py-2 rounded-md font-medium transition-all ${
+              filter === "pending"
                 ? "bg-white text-amber-600 shadow-sm"
-                : "text-gray-500 hover:text-gray-700"
+                : "text-gray-600 hover:text-gray-900"
             }`}
           >
             Pending Review
-            <span className="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-amber-100 text-amber-700">
-              {detectionCounts.pending}
+            {filterCounts.pending > 0 && (
+              <span className="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-amber-100 text-amber-700">
+                {filterCounts.pending}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setFilter("active")}
+            className={`px-4 py-2 rounded-md font-medium transition-all ${
+              filter === "active"
+                ? "bg-white text-blue-600 shadow-sm"
+                : "text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            Active
+            <span className="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700">
+              {filterCounts.active}
             </span>
           </button>
           <button
-            onClick={() => setDetectionFilter("rejected")}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-              detectionFilter === "rejected"
+            onClick={() => setFilter("closed")}
+            className={`px-4 py-2 rounded-md font-medium transition-all ${
+              filter === "closed"
+                ? "bg-white text-gray-800 shadow-sm"
+                : "text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            Closed
+            <span className="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-gray-300">
+              {filterCounts.closed}
+            </span>
+          </button>
+          <button
+            onClick={() => setFilter("rejected")}
+            className={`px-4 py-2 rounded-md font-medium transition-all ${
+              filter === "rejected"
                 ? "bg-white text-red-600 shadow-sm"
-                : "text-gray-500 hover:text-gray-700"
+                : "text-gray-600 hover:text-gray-900"
             }`}
           >
             Rejected
-            <span className="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-red-100 text-red-700">
-              {detectionCounts.rejected}
-            </span>
+            {filterCounts.rejected > 0 && (
+              <span className="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-red-100 text-red-700">
+                {filterCounts.rejected}
+              </span>
+            )}
           </button>
         </div>
 
@@ -658,6 +810,31 @@ function TransactionList({
               />
             </svg>
           </div>
+
+          {/* Bulk Edit Button */}
+          <button
+            onClick={handleToggleBulkEdit}
+            className={`px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 ${
+              selectionMode
+                ? "bg-blue-500 text-white hover:bg-blue-600"
+                : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+            }`}
+          >
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
+              />
+            </svg>
+            {selectionMode ? "Cancel" : "Bulk Edit"}
+          </button>
 
           {/* Audit New Transaction Button */}
           <button
@@ -820,6 +997,32 @@ function TransactionList({
             </div>
           </div>
         )}
+
+        {/* Bulk Action Success */}
+        {bulkActionSuccess && (
+          <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+            <div className="flex items-start gap-2">
+              <svg
+                className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-green-900">
+                  {bulkActionSuccess}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Transactions List */}
@@ -883,10 +1086,45 @@ function TransactionList({
             {filteredTransactions.map((transaction) => (
               <div
                 key={transaction.id}
-                className="bg-white border-2 border-gray-200 rounded-xl p-6 hover:border-blue-400 hover:shadow-xl transition-all cursor-pointer transform hover:scale-[1.01]"
-                onClick={() => setSelectedTransaction(transaction)}
+                className={`bg-white border-2 rounded-xl p-6 hover:shadow-xl transition-all cursor-pointer transform hover:scale-[1.01] ${
+                  selectionMode && isSelected(transaction.id)
+                    ? "border-blue-500 bg-blue-50"
+                    : "border-gray-200 hover:border-blue-400"
+                }`}
+                onClick={() => handleTransactionClick(transaction)}
               >
                 <div className="flex items-start justify-between gap-4">
+                  {/* Selection checkbox */}
+                  {selectionMode && (
+                    <div
+                      className="flex-shrink-0 mt-1"
+                      onClick={(e) => handleCheckboxClick(e, transaction.id)}
+                    >
+                      <div
+                        className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all ${
+                          isSelected(transaction.id)
+                            ? "bg-blue-500 border-blue-500"
+                            : "border-gray-300 hover:border-blue-400"
+                        }`}
+                      >
+                        {isSelected(transaction.id) && (
+                          <svg
+                            className="w-4 h-4 text-white"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={3}
+                              d="M5 13l4 4L19 7"
+                            />
+                          </svg>
+                        )}
+                      </div>
+                    </div>
+                  )}
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <h3 className="font-semibold text-gray-900">
@@ -894,17 +1132,20 @@ function TransactionList({
                       </h3>
                       {/* Detection Status Badges */}
                       <div className="flex items-center gap-1.5">
-                        <DetectionSourceBadge
+                        {/* Manual badge for manually entered transactions */}
+                        <ManualEntryBadge
                           source={transaction.detection_source}
                         />
-                        {transaction.detection_source === "auto" &&
-                          transaction.detection_confidence !== undefined && (
-                            <ConfidencePill
-                              confidence={transaction.detection_confidence}
-                            />
-                          )}
+                        {/* Pending review UI - only show for pending transactions */}
                         {transaction.detection_status === "pending" && (
-                          <PendingReviewBadge />
+                          <>
+                            <PendingReviewBadge />
+                            {transaction.detection_confidence !== undefined && (
+                              <ConfidencePill
+                                confidence={transaction.detection_confidence}
+                              />
+                            )}
+                          </>
                         )}
                       </div>
                     </div>
@@ -980,33 +1221,37 @@ function TransactionList({
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    {/* Approve/Reject Actions for pending transactions */}
-                    <TransactionActions
-                      transaction={transaction}
-                      userId={userId}
-                      onUpdate={loadTransactions}
-                    />
-                    {/* Quick Export Button */}
-                    <button
-                      onClick={(e) => handleQuickExport(transaction, e)}
-                      className="px-3 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-green-500 text-white hover:bg-green-600 shadow-md hover:shadow-lg"
-                      title="Quick Export"
-                    >
-                      <svg
-                        className="w-5 h-5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
+                    {/* Approve/Reject Actions - only for pending transactions */}
+                    {transaction.detection_status === "pending" && (
+                      <TransactionActions
+                        transaction={transaction}
+                        userId={userId}
+                        onUpdate={loadTransactions}
+                      />
+                    )}
+                    {/* Quick Export Button - hide for pending transactions */}
+                    {transaction.detection_status !== "pending" && (
+                      <button
+                        onClick={(e) => handleQuickExport(transaction, e)}
+                        className="px-3 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-green-500 text-white hover:bg-green-600 shadow-md hover:shadow-lg"
+                        title="Quick Export"
                       >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                        />
-                      </svg>
-                      Export
-                    </button>
+                        <svg
+                          className="w-5 h-5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                          />
+                        </svg>
+                        Export
+                      </button>
+                    )}
                     <svg
                       className="w-5 h-5 text-gray-400"
                       fill="none"
@@ -1057,6 +1302,43 @@ function TransactionList({
           userId={quickExportTransaction.user_id}
           onClose={() => setQuickExportTransaction(null)}
           onExportComplete={handleQuickExportComplete}
+        />
+      )}
+
+      {/* Bulk Action Bar */}
+      {selectionMode && (
+        <BulkActionBar
+          selectedCount={selectedCount}
+          totalCount={filteredTransactions.length}
+          onSelectAll={handleSelectAll}
+          onDeselectAll={deselectAll}
+          onBulkDelete={() => setShowBulkDeleteConfirm(true)}
+          onBulkExport={() => setShowBulkExportModal(true)}
+          onBulkStatusChange={handleBulkStatusChange}
+          onClose={handleToggleBulkEdit}
+          isDeleting={isBulkDeleting}
+          isExporting={isBulkExporting}
+          isUpdating={isBulkUpdating}
+        />
+      )}
+
+      {/* Bulk Delete Confirmation Modal */}
+      {showBulkDeleteConfirm && (
+        <BulkDeleteConfirmModal
+          selectedCount={selectedCount}
+          onConfirm={handleBulkDelete}
+          onCancel={() => setShowBulkDeleteConfirm(false)}
+          isDeleting={isBulkDeleting}
+        />
+      )}
+
+      {/* Bulk Export Modal */}
+      {showBulkExportModal && (
+        <BulkExportModal
+          selectedCount={selectedCount}
+          onConfirm={handleBulkExport}
+          onCancel={() => setShowBulkExportModal(false)}
+          isExporting={isBulkExporting}
         />
       )}
     </div>

@@ -8,7 +8,7 @@
 import React, { useCallback } from "react";
 import Profile from "../components/Profile";
 import Settings from "../components/Settings";
-import Transactions from "../components/Transactions";
+import TransactionList from "../components/TransactionList";
 import Contacts from "../components/Contacts";
 import WelcomeTerms from "../components/WelcomeTerms";
 import AuditTransactionModal from "../components/AuditTransactionModal";
@@ -98,9 +98,9 @@ export function AppModals({ app }: AppModalsProps) {
       {/* Transactions View */}
       {modalState.showTransactions && currentUser && authProvider && (
         <div className="fixed inset-0 z-[60]">
-          <Transactions
+          <TransactionList
             userId={currentUser.id}
-            provider={authProvider}
+            provider={authProvider as "google" | "microsoft"}
             onClose={closeTransactions}
           />
         </div>
