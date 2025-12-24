@@ -3,8 +3,8 @@
 This index tracks all backlog items with their current status and metadata.
 
 **Last Updated:** 2025-12-23
-**Total Items:** 80
-**Pending:** 65 | **In Progress:** 0 | **Completed:** 14 | **Obsolete:** 2
+**Total Items:** 82
+**Pending:** 67 | **In Progress:** 0 | **Completed:** 14 | **Obsolete:** 2
 
 ---
 
@@ -138,6 +138,8 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-078 | AI MVP Phase 5 - UI Enhancements | Medium | Pending | SPRINT-006 | 13 | ~40K | ~1.5h | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-078.md](BACKLOG-078.md) |
 | BACKLOG-079 | AI MVP Phase 6 - Integration Testing | Medium | Pending | SPRINT-006 | 13 | ~40K | ~1.5h | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-079.md](BACKLOG-079.md) |
 | BACKLOG-089 | Password Manager Support in Authentication | ui | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-089.md](BACKLOG-089.md) |
+| BACKLOG-090 | Incremental Sync - Only Process New Data | service | High | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-090.md](BACKLOG-090.md) |
+| BACKLOG-091 | Prevent Duplicate Emails Across Providers | service | High | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-091.md](BACKLOG-091.md) |
 
 ---
 
