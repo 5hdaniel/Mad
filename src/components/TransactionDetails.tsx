@@ -75,9 +75,13 @@ function TransactionDetails({
   // Pending review state
   const [isApproving, setIsApproving] = useState<boolean>(false);
   const [isRejecting, setIsRejecting] = useState<boolean>(false);
+  const [isRestoring, setIsRestoring] = useState<boolean>(false);
   const [showRejectReasonModal, setShowRejectReasonModal] = useState<boolean>(false);
   const [rejectReason, setRejectReason] = useState<string>("");
   const [showEditModal, setShowEditModal] = useState<boolean>(false);
+
+  // Check if transaction was rejected
+  const isRejected = transaction.detection_status === "rejected";
 
   /**
    * Parse and memoize suggested contacts from transaction
@@ -245,6 +249,28 @@ function TransactionDetails({
       alert("Failed to reject transaction. Please try again.");
     } finally {
       setIsRejecting(false);
+    }
+  };
+
+  // Restore rejected transaction to active
+  const handleRestore = async (): Promise<void> => {
+    setIsRestoring(true);
+    try {
+      await window.api.transactions.update(transaction.id, {
+        detection_status: "confirmed",
+        status: "active",
+        reviewed_at: new Date().toISOString(),
+        rejection_reason: null, // Clear the rejection reason
+      });
+      onClose();
+      if (onTransactionUpdated) {
+        onTransactionUpdated();
+      }
+    } catch (error) {
+      console.error("Failed to restore transaction:", error);
+      alert("Failed to restore transaction. Please try again.");
+    } finally {
+      setIsRestoring(false);
     }
   };
 
@@ -456,27 +482,47 @@ function TransactionDetails({
     onTransactionUpdated,
   ]);
 
+  // Determine header style based on state
+  const getHeaderStyle = () => {
+    if (isPendingReview) return "bg-gradient-to-r from-amber-500 to-orange-500";
+    if (isRejected) return "bg-gradient-to-r from-red-500 to-red-600";
+    return "bg-gradient-to-r from-green-500 to-teal-600";
+  };
+
+  const getHeaderTextStyle = () => {
+    if (isPendingReview) return "text-amber-100";
+    if (isRejected) return "text-red-100";
+    return "text-green-100";
+  };
+
+  const getHeaderTitle = () => {
+    if (isPendingReview) return "Review Transaction";
+    if (isRejected) return "Rejected Transaction";
+    return "Transaction Details";
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[60] p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
-        {/* Header - amber/orange for pending, green for regular */}
-        <div className={`flex-shrink-0 px-6 py-4 flex items-center justify-between rounded-t-xl ${
-          isPendingReview
-            ? "bg-gradient-to-r from-amber-500 to-orange-500"
-            : "bg-gradient-to-r from-green-500 to-teal-600"
-        }`}>
+        {/* Header - amber for pending, red for rejected, green for regular */}
+        <div className={`flex-shrink-0 px-6 py-4 flex items-center justify-between rounded-t-xl ${getHeaderStyle()}`}>
           <div>
             <div className="flex items-center gap-2">
               <h3 className="text-xl font-bold text-white">
-                {isPendingReview ? "Review Transaction" : "Transaction Details"}
+                {getHeaderTitle()}
               </h3>
               {isPendingReview && (
                 <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-white/20 text-white">
                   Pending Review
                 </span>
               )}
+              {isRejected && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-white/20 text-white">
+                  Rejected
+                </span>
+              )}
             </div>
-            <p className={`text-sm ${isPendingReview ? "text-amber-100" : "text-green-100"}`}>
+            <p className={`text-sm ${getHeaderTextStyle()}`}>
               {transaction.property_address}
             </p>
           </div>
@@ -522,6 +568,34 @@ function TransactionDetails({
                     </svg>
                   )}
                   Approve
+                </button>
+              </>
+            ) : isRejected ? (
+              <>
+                {/* Restore to Active Button */}
+                <button
+                  onClick={handleRestore}
+                  disabled={isRestoring}
+                  className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-emerald-500 text-white hover:bg-emerald-600 shadow-md hover:shadow-lg disabled:opacity-50"
+                >
+                  {isRestoring ? (
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  )}
+                  Restore to Active
+                </button>
+                {/* Delete Button */}
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-white text-red-600 hover:bg-opacity-90 shadow-md hover:shadow-lg"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                  Delete
                 </button>
               </>
             ) : (
