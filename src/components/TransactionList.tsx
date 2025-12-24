@@ -42,6 +42,7 @@ function ManualEntryBadge({
 
 /**
  * Confidence indicator bar with color gradient
+ * Only shown for pending transactions
  */
 function ConfidenceBar({ confidence }: { confidence: number | undefined }) {
   if (confidence === undefined || confidence === null) {
@@ -74,68 +75,175 @@ function ConfidenceBar({ confidence }: { confidence: number | undefined }) {
 }
 
 // ============================================
-// PENDING REVIEW WRAPPER COMPONENT
+// UNIFIED TRANSACTION STATUS WRAPPER
 // ============================================
 
-interface PendingReviewWrapperProps {
+type TransactionStatusType = "pending" | "active" | "closed" | "rejected";
+
+interface StatusConfig {
+  label: string;
+  headerBg: string;
+  headerBorder: string;
+  textColor: string;
+  buttonBg: string;
+  buttonHover: string;
+  buttonText: string;
+  icon: React.ReactNode;
+  showConfidence: boolean;
+}
+
+/**
+ * Get status configuration based on transaction state
+ */
+function getStatusConfig(transaction: Transaction): StatusConfig {
+  const detectionStatus = transaction.detection_status;
+  const status = transaction.status;
+
+  // Pending Review - Amber
+  if (detectionStatus === "pending") {
+    return {
+      label: "Pending Review",
+      headerBg: "bg-gradient-to-r from-amber-50 to-orange-50",
+      headerBorder: "border-amber-300",
+      textColor: "text-amber-800",
+      buttonBg: "bg-amber-500",
+      buttonHover: "hover:bg-amber-600",
+      buttonText: "Review & Edit",
+      icon: (
+        <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" />
+      ),
+      showConfidence: true,
+    };
+  }
+
+  // Rejected - Red
+  if (detectionStatus === "rejected") {
+    return {
+      label: "Rejected",
+      headerBg: "bg-gradient-to-r from-red-50 to-rose-50",
+      headerBorder: "border-red-300",
+      textColor: "text-red-800",
+      buttonBg: "bg-red-500",
+      buttonHover: "hover:bg-red-600",
+      buttonText: "Restore",
+      icon: (
+        <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      ),
+      showConfidence: false,
+    };
+  }
+
+  // Closed - Gray
+  if (status === "closed") {
+    return {
+      label: "Closed",
+      headerBg: "bg-gradient-to-r from-gray-50 to-slate-50",
+      headerBorder: "border-gray-300",
+      textColor: "text-gray-700",
+      buttonBg: "bg-gray-500",
+      buttonHover: "hover:bg-gray-600",
+      buttonText: "Export",
+      icon: (
+        <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      ),
+      showConfidence: false,
+    };
+  }
+
+  // Active - Green (default)
+  return {
+    label: "Active",
+    headerBg: "bg-gradient-to-r from-green-50 to-emerald-50",
+    headerBorder: "border-green-300",
+    textColor: "text-green-800",
+    buttonBg: "bg-green-500",
+    buttonHover: "hover:bg-green-600",
+    buttonText: "Export",
+    icon: (
+      <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+      </svg>
+    ),
+    showConfidence: false,
+  };
+}
+
+interface TransactionStatusWrapperProps {
   transaction: Transaction;
-  onReviewClick: () => void;
+  onActionClick: (e: React.MouseEvent<HTMLButtonElement>) => void;
   children: React.ReactNode;
 }
 
 /**
- * Wrapper component for pending transactions - like product packaging
- * Displays review header above the transaction card with:
- * - Left: Confidence bar
- * - Center: "Pending Review" label
- * - Right: "Review & Edit" button
+ * Unified wrapper component for ALL transaction statuses
+ * Provides consistent "packaging" look with status-appropriate styling
  */
-function PendingReviewWrapper({
+function TransactionStatusWrapper({
   transaction,
-  onReviewClick,
+  onActionClick,
   children,
-}: PendingReviewWrapperProps) {
-  const handleReviewClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+}: TransactionStatusWrapperProps) {
+  const config = getStatusConfig(transaction);
+
+  const handleActionClick = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
-    onReviewClick();
+    onActionClick(e);
   };
 
   return (
     <div className="relative">
-      {/* Review Header - The "packaging" */}
-      <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 border-b-0 rounded-t-xl px-4 py-3">
+      {/* Status Header */}
+      <div className={`${config.headerBg} border-2 ${config.headerBorder} border-b-0 rounded-t-xl px-4 py-3`}>
         <div className="flex items-center justify-between">
-          {/* Left: Confidence */}
+          {/* Left: Status Label with Icon */}
           <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-amber-700 uppercase tracking-wide">
-              Confidence
-            </span>
-            <ConfidenceBar confidence={transaction.detection_confidence} />
-          </div>
-
-          {/* Center: Pending Review Label */}
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" />
-            <span className="text-sm font-semibold text-amber-800">
-              Pending Review
+            {config.icon}
+            <span className={`text-sm font-semibold ${config.textColor}`}>
+              {config.label}
             </span>
           </div>
 
-          {/* Right: Review & Edit Button */}
+          {/* Center: Confidence (only for pending) */}
+          {config.showConfidence && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-amber-700 uppercase tracking-wide">
+                Confidence
+              </span>
+              <ConfidenceBar confidence={transaction.detection_confidence} />
+            </div>
+          )}
+
+          {/* Right: Action Button */}
           <button
-            onClick={handleReviewClick}
-            className="px-4 py-1.5 rounded-lg text-sm font-semibold transition-all bg-amber-500 text-white hover:bg-amber-600 shadow-sm hover:shadow flex items-center gap-1.5"
+            onClick={handleActionClick}
+            className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${config.buttonBg} ${config.buttonHover} text-white shadow-sm hover:shadow flex items-center gap-1.5`}
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-            </svg>
-            Review & Edit
+            {config.buttonText === "Review & Edit" && (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+            )}
+            {config.buttonText === "Export" && (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            )}
+            {config.buttonText === "Restore" && (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            )}
+            {config.buttonText}
           </button>
         </div>
       </div>
 
-      {/* Transaction Card - The "product" */}
-      <div className="border-2 border-amber-300 border-t-0 rounded-b-xl overflow-hidden">
+      {/* Transaction Card Content */}
+      <div className={`border-2 ${config.headerBorder} border-t-0 rounded-b-xl overflow-hidden`}>
         {children}
       </div>
     </div>
@@ -989,18 +1097,27 @@ function TransactionList({
           <div className="grid gap-6">
             {filteredTransactions.map((transaction) => {
               const isPending = transaction.detection_status === "pending";
+              const isRejected = transaction.detection_status === "rejected";
 
-              // Transaction card content - reused for both pending and non-pending
+              // Handle wrapper action button click based on status
+              const handleWrapperAction = (e: React.MouseEvent<HTMLButtonElement>) => {
+                if (isPending) {
+                  // Open review modal for pending
+                  setPendingReviewTransaction(transaction);
+                } else if (isRejected) {
+                  // Open details to restore for rejected
+                  setSelectedTransaction(transaction);
+                } else {
+                  // Open export modal for active/closed
+                  handleQuickExport(transaction, e);
+                }
+              };
+
+              // Transaction card content - simple white card (wrapper provides styling)
               const cardContent = (
                 <div
                   className={`bg-white p-6 hover:shadow-xl transition-all cursor-pointer ${
-                    isPending
-                      ? "" // No border/rounding when wrapped
-                      : `border-2 rounded-xl transform hover:scale-[1.01] ${
-                          selectionMode && isSelected(transaction.id)
-                            ? "border-blue-500 bg-blue-50"
-                            : "border-gray-200 hover:border-blue-400"
-                        }`
+                    selectionMode && isSelected(transaction.id) ? "bg-blue-50" : ""
                   }`}
                   onClick={() => handleTransactionClick(transaction)}
                 >
@@ -1117,30 +1234,8 @@ function TransactionList({
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      {/* Quick Export Button - only for non-pending transactions */}
-                      {!isPending && (
-                        <button
-                          onClick={(e) => handleQuickExport(transaction, e)}
-                          className="px-3 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-green-500 text-white hover:bg-green-600 shadow-md hover:shadow-lg"
-                          title="Quick Export"
-                        >
-                          <svg
-                            className="w-5 h-5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                            />
-                          </svg>
-                          Export
-                        </button>
-                      )}
+                    {/* Arrow indicator */}
+                    <div className="flex items-center">
                       <svg
                         className="w-5 h-5 text-gray-400"
                         fill="none"
@@ -1159,17 +1254,15 @@ function TransactionList({
                 </div>
               );
 
-              // Wrap pending transactions in the review wrapper
-              return isPending ? (
-                <PendingReviewWrapper
+              // Wrap ALL transactions with the unified status wrapper
+              return (
+                <TransactionStatusWrapper
                   key={transaction.id}
                   transaction={transaction}
-                  onReviewClick={() => setPendingReviewTransaction(transaction)}
+                  onActionClick={handleWrapperAction}
                 >
                   {cardContent}
-                </PendingReviewWrapper>
-              ) : (
-                <div key={transaction.id}>{cardContent}</div>
+                </TransactionStatusWrapper>
               );
             })}
           </div>
