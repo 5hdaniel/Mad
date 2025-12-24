@@ -600,6 +600,21 @@ function TransactionDetails({
               </>
             ) : (
               <>
+                {/* Reject Button - allows marking active transaction as invalid */}
+                <button
+                  onClick={() => setShowRejectReasonModal(true)}
+                  disabled={isRejecting}
+                  className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-white text-orange-600 hover:bg-opacity-90 shadow-md hover:shadow-lg disabled:opacity-50"
+                >
+                  {isRejecting ? (
+                    <div className="w-5 h-5 border-2 border-orange-600 border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                    </svg>
+                  )}
+                  Reject
+                </button>
                 {/* Export Button */}
                 <button
                   onClick={() => setShowExportModal(true)}
