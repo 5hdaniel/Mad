@@ -36,6 +36,10 @@ interface TransactionDetailsComponentProps {
   transaction: Transaction;
   onClose: () => void;
   onTransactionUpdated?: () => void;
+  /** If true, shows approve/reject buttons instead of export/delete (for pending review) */
+  isPendingReview?: boolean;
+  /** User ID for feedback recording */
+  userId?: string;
 }
 
 /**
@@ -46,6 +50,8 @@ function TransactionDetails({
   transaction,
   onClose,
   onTransactionUpdated,
+  isPendingReview = false,
+  userId,
 }: TransactionDetailsComponentProps) {
   const [communications, setCommunications] = useState<Communication[]>([]);
   const [contactAssignments, setContactAssignments] = useState<
@@ -64,6 +70,12 @@ function TransactionDetails({
   const [resolvedSuggestions, setResolvedSuggestions] = useState<ResolvedSuggestedContact[]>([]);
   const [processingContactId, setProcessingContactId] = useState<string | null>(null);
   const [processingAll, setProcessingAll] = useState<boolean>(false);
+
+  // Pending review state
+  const [isApproving, setIsApproving] = useState<boolean>(false);
+  const [isRejecting, setIsRejecting] = useState<boolean>(false);
+  const [showRejectReasonModal, setShowRejectReasonModal] = useState<boolean>(false);
+  const [rejectReason, setRejectReason] = useState<string>("");
 
   /**
    * Parse and memoize suggested contacts from transaction
@@ -175,6 +187,59 @@ function TransactionDetails({
     } catch (err) {
       console.error("Failed to delete transaction:", err);
       alert("Failed to delete transaction. Please try again.");
+    }
+  };
+
+  // Approve pending transaction
+  const handleApprove = async (): Promise<void> => {
+    if (!userId) return;
+    setIsApproving(true);
+    try {
+      await window.api.transactions.update(transaction.id, {
+        detection_status: "confirmed",
+        reviewed_at: new Date().toISOString(),
+      });
+      await window.api.feedback.recordTransaction(userId, {
+        detectedTransactionId: transaction.id,
+        action: "confirm",
+      });
+      onClose();
+      if (onTransactionUpdated) {
+        onTransactionUpdated();
+      }
+    } catch (error) {
+      console.error("Failed to approve transaction:", error);
+      alert("Failed to approve transaction. Please try again.");
+    } finally {
+      setIsApproving(false);
+    }
+  };
+
+  // Reject pending transaction
+  const handleReject = async (): Promise<void> => {
+    if (!userId) return;
+    setIsRejecting(true);
+    try {
+      await window.api.transactions.update(transaction.id, {
+        detection_status: "rejected",
+        rejection_reason: rejectReason || undefined,
+        reviewed_at: new Date().toISOString(),
+      });
+      await window.api.feedback.recordTransaction(userId, {
+        detectedTransactionId: transaction.id,
+        action: "reject",
+        corrections: rejectReason ? { reason: rejectReason } : undefined,
+      });
+      setShowRejectReasonModal(false);
+      onClose();
+      if (onTransactionUpdated) {
+        onTransactionUpdated();
+      }
+    } catch (error) {
+      console.error("Failed to reject transaction:", error);
+      alert("Failed to reject transaction. Please try again.");
+    } finally {
+      setIsRejecting(false);
     }
   };
 
@@ -400,46 +465,83 @@ function TransactionDetails({
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {/* Export Button */}
-            <button
-              onClick={() => setShowExportModal(true)}
-              className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-white text-green-600 hover:bg-opacity-90 shadow-md hover:shadow-lg"
-            >
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                />
-              </svg>
-              Export
-            </button>
-            {/* Delete Button */}
-            <button
-              onClick={() => setShowDeleteConfirm(true)}
-              className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-white text-red-600 hover:bg-opacity-90 shadow-md hover:shadow-lg"
-            >
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                />
-              </svg>
-              Delete
-            </button>
+            {isPendingReview ? (
+              <>
+                {/* Reject Button */}
+                <button
+                  onClick={() => setShowRejectReasonModal(true)}
+                  disabled={isRejecting}
+                  className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-white text-red-600 hover:bg-opacity-90 shadow-md hover:shadow-lg disabled:opacity-50"
+                >
+                  {isRejecting ? (
+                    <div className="w-5 h-5 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  )}
+                  Reject
+                </button>
+                {/* Approve Button */}
+                <button
+                  onClick={handleApprove}
+                  disabled={isApproving}
+                  className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-emerald-500 text-white hover:bg-emerald-600 shadow-md hover:shadow-lg disabled:opacity-50"
+                >
+                  {isApproving ? (
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                  Approve
+                </button>
+              </>
+            ) : (
+              <>
+                {/* Export Button */}
+                <button
+                  onClick={() => setShowExportModal(true)}
+                  className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-white text-green-600 hover:bg-opacity-90 shadow-md hover:shadow-lg"
+                >
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                    />
+                  </svg>
+                  Export
+                </button>
+                {/* Delete Button */}
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-white text-red-600 hover:bg-opacity-90 shadow-md hover:shadow-lg"
+                >
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                    />
+                  </svg>
+                  Delete
+                </button>
+              </>
+            )}
             {/* Close Button */}
             <button
               onClick={onClose}
@@ -1249,6 +1351,65 @@ function TransactionDetails({
                   Close
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reject Reason Modal */}
+      {showRejectReasonModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[70] p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-bold text-gray-900">
+                Reject Transaction
+              </h3>
+            </div>
+            <p className="text-sm text-gray-600 mb-4">
+              Are you sure this is not a valid real estate transaction?
+            </p>
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Reason for rejection (optional)
+              </label>
+              <textarea
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                placeholder="e.g., Not a real estate transaction, duplicate entry..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 resize-none"
+                rows={3}
+              />
+            </div>
+            <div className="flex items-center gap-3 justify-end">
+              <button
+                onClick={() => {
+                  setShowRejectReasonModal(false);
+                  setRejectReason("");
+                }}
+                disabled={isRejecting}
+                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg font-medium transition-all disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleReject}
+                disabled={isRejecting}
+                className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg font-semibold transition-all disabled:opacity-50 flex items-center gap-2"
+              >
+                {isRejecting ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Rejecting...
+                  </>
+                ) : (
+                  "Reject Transaction"
+                )}
+              </button>
             </div>
           </div>
         </div>
