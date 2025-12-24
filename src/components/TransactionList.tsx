@@ -8,7 +8,9 @@ import {
   BulkDeleteConfirmModal,
   BulkExportModal,
 } from "./BulkActionBar";
+import { ToastContainer } from "./Toast";
 import { useSelection } from "../hooks/useSelection";
+import { useToast } from "../hooks/useToast";
 
 interface ScanProgress {
   step: string;
@@ -319,6 +321,9 @@ function TransactionList({
   const [isBulkUpdating, setIsBulkUpdating] = useState(false);
   const [bulkActionSuccess, setBulkActionSuccess] = useState<string | null>(null);
   const [selectionMode, setSelectionMode] = useState(false);
+
+  // Toast notifications - lifted from TransactionDetails so toasts persist after modal close
+  const { toasts, showSuccess, showError, removeToast } = useToast();
 
   useEffect(() => {
     loadTransactions();
@@ -1276,6 +1281,8 @@ function TransactionList({
           onClose={() => setSelectedTransaction(null)}
           onTransactionUpdated={loadTransactions}
           userId={userId}
+          onShowSuccess={showSuccess}
+          onShowError={showError}
         />
       )}
 
@@ -1287,6 +1294,8 @@ function TransactionList({
           onTransactionUpdated={loadTransactions}
           isPendingReview={true}
           userId={userId}
+          onShowSuccess={showSuccess}
+          onShowError={showError}
         />
       )}
 
@@ -1349,6 +1358,9 @@ function TransactionList({
           isExporting={isBulkExporting}
         />
       )}
+
+      {/* Toast Notifications - persists after modal close */}
+      <ToastContainer toasts={toasts} onDismiss={removeToast} />
     </div>
   );
 }
