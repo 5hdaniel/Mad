@@ -215,9 +215,11 @@ describe('Pipeline Performance Benchmarks', () => {
 
     it('should maintain consistent per-email processing time', () => {
       const results: Array<{ count: number; timePerEmail: number }> = [];
+      // Skip first batch as warm-up to avoid cold-start JIT/cache effects
       const counts = [100, 300, 600, 1000];
 
-      for (const count of counts) {
+      for (let i = 0; i < counts.length; i++) {
+        const count = counts[i];
         const emails = generateTestEmails(count);
 
         const start = performance.now();
@@ -226,16 +228,21 @@ describe('Pipeline Performance Benchmarks', () => {
         const elapsed = performance.now() - start;
 
         const timePerEmail = elapsed / count;
-        results.push({ count, timePerEmail });
         console.log(
           `${count} emails: ${timePerEmail.toFixed(4)}ms per email (total: ${elapsed.toFixed(2)}ms)`
         );
+
+        // Skip first iteration as warm-up (cold-start overhead skews results)
+        if (i > 0) {
+          results.push({ count, timePerEmail });
+        }
       }
 
       // Per-email time should be relatively consistent (within 3x of smallest)
+      // Use CI_TOLERANCE for slower CI machines (per SR Engineer review)
       const minTime = Math.min(...results.map((r) => r.timePerEmail));
       const maxTime = Math.max(...results.map((r) => r.timePerEmail));
-      expect(maxTime / minTime).toBeLessThan(3);
+      expect(maxTime / minTime).toBeLessThan(3 * CI_TOLERANCE);
     });
   });
 
