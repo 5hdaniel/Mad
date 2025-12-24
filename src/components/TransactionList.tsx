@@ -1182,6 +1182,7 @@ function TransactionList({
           transaction={selectedTransaction}
           onClose={() => setSelectedTransaction(null)}
           onTransactionUpdated={loadTransactions}
+          userId={userId}
         />
       )}
 

@@ -224,9 +224,8 @@ function TransactionDetails({
     }
   };
 
-  // Reject pending transaction
+  // Reject transaction (works for both pending and active)
   const handleReject = async (): Promise<void> => {
-    if (!userId) return;
     setIsRejecting(true);
     try {
       await window.api.transactions.update(transaction.id, {
@@ -234,11 +233,14 @@ function TransactionDetails({
         rejection_reason: rejectReason || undefined,
         reviewed_at: new Date().toISOString(),
       });
-      await window.api.feedback.recordTransaction(userId, {
-        detectedTransactionId: transaction.id,
-        action: "reject",
-        corrections: rejectReason ? { reason: rejectReason } : undefined,
-      });
+      // Record feedback for learning (if userId available)
+      if (userId) {
+        await window.api.feedback.recordTransaction(userId, {
+          detectedTransactionId: transaction.id,
+          action: "reject",
+          corrections: rejectReason ? { reason: rejectReason } : undefined,
+        });
+      }
       setShowRejectReasonModal(false);
       onClose();
       if (onTransactionUpdated) {
@@ -262,6 +264,14 @@ function TransactionDetails({
         reviewed_at: new Date().toISOString(),
         rejection_reason: null, // Clear the rejection reason
       });
+      // Record feedback for learning (restored = confirm after prior rejection)
+      if (userId) {
+        await window.api.feedback.recordTransaction(userId, {
+          detectedTransactionId: transaction.id,
+          action: "confirm",
+          corrections: { reason: "Restored from rejection" },
+        });
+      }
       onClose();
       if (onTransactionUpdated) {
         onTransactionUpdated();
