@@ -2,7 +2,7 @@
 
 This index tracks all backlog items with their current status and metadata.
 
-**Last Updated:** 2025-12-23
+**Last Updated:** 2025-12-24
 **Total Items:** 82
 **Pending:** 67 | **In Progress:** 0 | **Completed:** 14 | **Obsolete:** 2
 
@@ -140,6 +140,14 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-089 | Password Manager Support in Authentication | ui | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-089.md](BACKLOG-089.md) |
 | BACKLOG-090 | Incremental Sync - Only Process New Data | service | High | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-090.md](BACKLOG-090.md) |
 | BACKLOG-091 | Prevent Duplicate Emails Across Providers | service | High | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-091.md](BACKLOG-091.md) |
+| TASK-513 | Fix Toast Notification Persistence | refactor | High | Pending | SPRINT-008 | 4-6 | ~20K | 30-45m | - | - | - | - | - | - | - | - | - | - | - | - | [TASK-513-toast-fix.md](../tasks/TASK-513-toast-fix.md) |
+| TASK-514 | Extract TransactionStatusWrapper | refactor | Medium | Pending | SPRINT-008 | 6-8 | ~28K | 45-60m | - | - | - | - | - | - | - | - | - | - | - | - | [TASK-514-extract-transaction-status-wrapper.md](../tasks/TASK-514-extract-transaction-status-wrapper.md) |
+| TASK-515 | Extract TransactionCard | refactor | Medium | Pending | SPRINT-008 | 4-6 | ~20K | 30-45m | - | - | - | - | - | - | - | - | - | - | - | - | [TASK-515-extract-transaction-card.md](../tasks/TASK-515-extract-transaction-card.md) |
+| TASK-516 | Extract TransactionToolbar | refactor | Medium | Pending | SPRINT-008 | 8-10 | ~36K | 60-90m | - | - | - | - | - | - | - | - | - | - | - | - | [TASK-516-extract-transaction-toolbar.md](../tasks/TASK-516-extract-transaction-toolbar.md) |
+| TASK-517 | Extract useTransactionList Hook | refactor | Medium | Pending | SPRINT-008 | 4-6 | ~20K | 30-45m | - | - | - | - | - | - | - | - | - | - | - | - | [TASK-517-extract-use-transaction-list.md](../tasks/TASK-517-extract-use-transaction-list.md) |
+| TASK-518 | Extract useTransactionScan Hook | refactor | Medium | Pending | SPRINT-008 | 4-6 | ~20K | 30-45m | - | - | - | - | - | - | - | - | - | - | - | - | [TASK-518-extract-use-transaction-scan.md](../tasks/TASK-518-extract-use-transaction-scan.md) |
+| TASK-519 | Extract useBulkActions Hook | refactor | Medium | Pending | SPRINT-008 | 6-8 | ~28K | 45-60m | - | - | - | - | - | - | - | - | - | - | - | - | [TASK-519-extract-use-bulk-actions.md](../tasks/TASK-519-extract-use-bulk-actions.md) |
+| TASK-520 | Directory Structure + Barrel Exports | refactor | Low | Pending | SPRINT-008 | 3-4 | ~14K | 20-30m | - | - | - | - | - | - | - | - | - | - | - | - | [TASK-520-directory-restructure.md](../tasks/TASK-520-directory-restructure.md) |
 
 ---
 
@@ -166,6 +174,8 @@ This index tracks all backlog items with their current status and metadata.
 | SPRINT-004 | AI MVP Foundation | ✅ Completed | BACKLOG-073, 074 (14 tasks, TASK-301 to TASK-314) |
 | SPRINT-005 | AI MVP Core | ✅ Completed | BACKLOG-075, 076 (10 tasks, TASK-315 to TASK-324) |
 | SPRINT-006 | AI MVP Polish | 📋 Planned | BACKLOG-077, 078, 079 (14 tasks, TASK-401 to TASK-414) |
+| SPRINT-007 | LLM Cost Optimization | 📋 Planned | TASK-501 to TASK-512 |
+| SPRINT-008 | TransactionList Refactoring | 📋 Planned | TASK-513 to TASK-520 (8 tasks, ~186K tokens, 5-7 hrs) |
 
 ---
 
@@ -199,6 +209,9 @@ This index tracks all backlog items with their current status and metadata.
 - 2025-12-18: Created SPRINT-006 plan for AI MVP Polish (BACKLOG-077, 078, 079)
 - 2025-12-18: Created 14 task files (TASK-401 to TASK-414) for SPRINT-006
 - 2025-12-18: Integration branch strategy: int/ai-polish for SPRINT-006
+- 2025-12-24: Created SPRINT-008 (TransactionList Refactoring) - 8 tasks (TASK-513 to TASK-520)
+- 2025-12-24: SPRINT-008 targets: Toast fix, component extraction (3), hook extraction (3), directory structure
+- 2025-12-24: Estimates: 39-54 turns, ~186K tokens, 5-7 hours total
 
 ---
 

@@ -44,6 +44,10 @@ interface TransactionDetailsComponentProps {
   isPendingReview?: boolean;
   /** User ID for feedback recording */
   userId?: string;
+  /** Toast handler for success messages - if provided, uses parent's toast system */
+  onShowSuccess?: (message: string) => void;
+  /** Toast handler for error messages - if provided, uses parent's toast system */
+  onShowError?: (message: string) => void;
 }
 
 /**
@@ -56,6 +60,8 @@ function TransactionDetails({
   onTransactionUpdated,
   isPendingReview = false,
   userId,
+  onShowSuccess,
+  onShowError,
 }: TransactionDetailsComponentProps) {
   const [communications, setCommunications] = useState<Communication[]>([]);
   const [contactAssignments, setContactAssignments] = useState<
@@ -80,8 +86,10 @@ function TransactionDetails({
   const [rejectReason, setRejectReason] = useState<string>("");
   const [showEditModal, setShowEditModal] = useState<boolean>(false);
 
-  // Toast notifications
-  const { toasts, showSuccess, showError, removeToast } = useToast();
+  // Toast notifications - use props if provided, otherwise use local fallback
+  const localToast = useToast();
+  const showSuccess = onShowSuccess || localToast.showSuccess;
+  const showError = onShowError || localToast.showError;
 
   // Transaction status update hook - handles approve/reject/restore with validation
   const { state: statusState, approve, reject, restore } = useTransactionStatusUpdate(userId);
@@ -1538,8 +1546,10 @@ function TransactionDetails({
         />
       )}
 
-      {/* Toast Notifications */}
-      <ToastContainer toasts={toasts} onDismiss={removeToast} />
+      {/* Toast Notifications - only render if using local toast (no parent handlers provided) */}
+      {!onShowSuccess && !onShowError && (
+        <ToastContainer toasts={localToast.toasts} onDismiss={localToast.removeToast} />
+      )}
     </div>
   );
 }
