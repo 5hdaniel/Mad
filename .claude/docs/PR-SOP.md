@@ -145,6 +145,61 @@ log.error('Failed to sync', { context: 'SyncService', metadata: { error: err.mes
 
 🤖 **LLM Assist**: Claude can generate consistent, standardized log statements using the LogService pattern.
 
+### 2.4 React Effect Anti-Patterns
+
+Check for these common patterns that cause infinite loops or lost navigation:
+
+#### Callback Effects Must Use Ref Guards
+Any `useEffect` that calls a prop callback (e.g., `onXChange`, `onComplete`, `onUpdate`) MUST track the last-reported value:
+
+```typescript
+// BAD - causes infinite loops if parent re-renders on callback
+useEffect(() => {
+  onValueChange?.(value);
+}, [value, onValueChange]);
+
+// GOOD - ref guard prevents duplicate calls
+const lastValueRef = useRef<typeof value | null>(null);
+useEffect(() => {
+  if (onValueChange && lastValueRef.current !== value) {
+    lastValueRef.current = value;
+    onValueChange(value);
+  }
+}, [value, onValueChange]);
+```
+
+- [ ] All `useEffect` callbacks use ref guards
+
+#### Empty State Must Navigate (Not Return Null)
+Flow/wizard components that can have zero steps must actively navigate:
+
+```typescript
+// BAD - component returns null but user is stuck
+if (steps.length === 0) return null;
+
+// GOOD - actively navigates when nothing to show
+useEffect(() => {
+  if (steps.length === 0) app.goToStep("dashboard");
+}, [steps.length, app]);
+```
+
+- [ ] Flow components navigate on empty state (not just return null)
+
+#### Related Booleans Checked Together
+When checking completion flags, ensure ALL semantically-related states are considered:
+
+```typescript
+// BAD - incomplete check
+const needsEmailOnboarding = !hasCompletedEmailOnboarding;
+
+// GOOD - checks both completion flag AND actual state
+const needsEmailOnboarding = !hasCompletedEmailOnboarding && !hasEmailConnected;
+```
+
+- [ ] Related boolean flags are checked together
+
+🤖 **LLM Assist**: Claude can audit useEffect patterns and identify missing ref guards or incomplete conditionals.
+
 ---
 
 ## Phase 3: Security & Documentation

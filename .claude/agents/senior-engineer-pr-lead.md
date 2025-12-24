@@ -530,6 +530,58 @@ When conducting reviews, structure your feedback as:
 - Efficient Supabase sync patterns (minimal duplicate writes)
 - Cross-platform compatibility (macOS/Windows)
 
+### Effect Safety Patterns (MANDATORY)
+
+These patterns prevent infinite loops and navigation bugs that have caused production issues:
+
+**1. Callback Effects Must Use Ref Guards**
+
+Any `useEffect` that calls a prop callback MUST track the last-reported value:
+
+```typescript
+// BAD - causes infinite loops if parent re-renders on callback
+useEffect(() => {
+  onValueChange?.(value);
+}, [value, onValueChange]);
+
+// GOOD - ref guard prevents duplicate calls
+const lastValueRef = useRef<typeof value | null>(null);
+useEffect(() => {
+  if (onValueChange && lastValueRef.current !== value) {
+    lastValueRef.current = value;
+    onValueChange(value);
+  }
+}, [value, onValueChange]);
+```
+
+**2. Flow Components Must Navigate on Empty State**
+
+Components that can have zero steps must actively navigate, not passively return null:
+
+```typescript
+// BAD - component returns null but user is stuck
+if (steps.length === 0) return null;
+
+// GOOD - actively navigates when nothing to show
+useEffect(() => {
+  if (steps.length === 0) app.goToStep("dashboard");
+}, [steps.length, app]);
+```
+
+**3. Related Booleans Must Be Checked Together**
+
+Completion flags must be paired with their corresponding state:
+
+```typescript
+// BAD - user with connected email still routed to onboarding
+const needsEmailOnboarding = !hasCompletedEmailOnboarding;
+
+// GOOD - checks completion AND actual connection state
+const needsEmailOnboarding = !hasCompletedEmailOnboarding && !hasEmailConnected;
+```
+
+**Incident Reference:** These patterns were identified after the `int/ai-polish` incident where three related bugs caused infinite loops and empty screens for returning users.
+
 ## Codebase Architecture & Ownership
 
 As a senior engineer, you are responsible for keeping the codebase healthy, predictable, and easy to work in. You will actively enforce clear boundaries in code reviews and architectural decisions.
