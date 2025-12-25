@@ -12,7 +12,6 @@ import path from "path";
 import { promises as fs } from "fs";
 import sqlite3 from "sqlite3";
 import { promisify } from "util";
-import { exec } from "child_process";
 import os from "os";
 import { autoUpdater } from "electron-updater";
 import log from "electron-log";
@@ -37,6 +36,7 @@ import {
 
 // Import new authentication services
 import databaseService from "./services/databaseService";
+import { runAppleScript } from "./services/macOSPermissionHelper";
 import microsoftAuthService from "./services/microsoftAuthService";
 // NOTE: tokenEncryptionService removed - using session-only OAuth
 // Tokens stored in encrypted database, no additional keychain encryption needed
@@ -427,13 +427,12 @@ ipcMain.handle("open-system-settings", async () => {
         end tell
       `;
 
-      exec(`osascript -e '${script}'`, (error) => {
-        if (error) {
-          // Fallback: just open System Settings
-          shell.openExternal(
-            "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles",
-          );
-        }
+      // Run AppleScript safely via stdin (no shell injection risk)
+      runAppleScript(script).catch(() => {
+        // Fallback: just open System Settings
+        shell.openExternal(
+          "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles",
+        );
       });
 
       return { success: true };

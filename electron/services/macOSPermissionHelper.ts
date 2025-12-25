@@ -1,10 +1,50 @@
 import { app, shell, Notification } from "electron";
-import { exec } from "child_process";
-import { promisify } from "util";
+import { spawn } from "child_process";
 import { promises as fs } from "fs";
 import path from "path";
 
-const execAsync = promisify(exec);
+/**
+ * Execute AppleScript safely by passing the script via stdin to osascript.
+ * This avoids shell command injection risks from string interpolation.
+ *
+ * @param script - The AppleScript code to execute
+ * @returns Promise that resolves when script completes successfully
+ * @throws Error if osascript exits with non-zero code or encounters an error
+ */
+export function runAppleScript(script: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    // Use osascript with '-' to read script from stdin
+    const proc = spawn("osascript", ["-"], {
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+
+    let stderr = "";
+
+    proc.stderr.on("data", (data: Buffer) => {
+      stderr += data.toString();
+    });
+
+    proc.on("error", (error: Error) => {
+      reject(new Error(`Failed to spawn osascript: ${error.message}`));
+    });
+
+    proc.on("close", (code: number | null) => {
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(
+          new Error(
+            `osascript exited with code ${code}${stderr ? `: ${stderr.trim()}` : ""}`,
+          ),
+        );
+      }
+    });
+
+    // Write script to stdin and close
+    proc.stdin.write(script);
+    proc.stdin.end();
+  });
+}
 
 /**
  * macOS Permission Helper
@@ -59,7 +99,7 @@ class MacOSPermissionHelper {
         end tell
       `;
 
-      await execAsync(`osascript -e '${appleScript}'`);
+      await runAppleScript(appleScript);
 
       return {
         success: true,
