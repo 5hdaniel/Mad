@@ -218,6 +218,7 @@ This index tracks all backlog items with their current status and metadata.
 - 2025-12-24: TASK-516 (Extract TransactionToolbar) completed - PR #203 merged, 5 turns, ~20K tokens, 23m
 - 2025-12-24: Phase 3 (Component Extraction) complete - TransactionList reduced to ~625 lines
 - 2025-12-24: TASK-517 (Extract useTransactionList hook) completed - PR #204 merged, 4 turns, ~26K tokens, 12m
+- 2025-12-24: TASK-518 (Extract useTransactionScan hook) completed - PR #205 merged, 5 turns, ~24K tokens, 20m
 
 ---
 

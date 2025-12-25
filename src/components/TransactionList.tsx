@@ -19,6 +19,7 @@ import {
   type TransactionFilter,
 } from "./transaction/hooks/useTransactionList";
 import { useTransactionScan } from "./transaction/hooks/useTransactionScan";
+import { useBulkActions } from "./transaction/hooks/useBulkActions";
 
 interface TransactionListComponentProps {
   userId: string;
@@ -92,15 +93,37 @@ function TransactionList({
     count: selectedCount,
   } = useSelection();
 
-  // Bulk action state
+  // Bulk action UI state
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const [showBulkExportModal, setShowBulkExportModal] = useState(false);
   const [showStatusInfo, setShowStatusInfo] = useState(false);
-  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
-  const [isBulkExporting, setIsBulkExporting] = useState(false);
-  const [isBulkUpdating, setIsBulkUpdating] = useState(false);
   const [bulkActionSuccess, setBulkActionSuccess] = useState<string | null>(null);
   const [selectionMode, setSelectionMode] = useState(false);
+
+  // Bulk action handlers via hook
+  const handleExitSelectionMode = () => {
+    deselectAll();
+    setSelectionMode(false);
+  };
+
+  const {
+    isBulkDeleting,
+    isBulkExporting,
+    isBulkUpdating,
+    handleBulkDelete,
+    handleBulkExport,
+    handleBulkStatusChange,
+  } = useBulkActions(selectedIds, selectedCount, {
+    onComplete: loadTransactions,
+    showSuccess: (msg) => {
+      setBulkActionSuccess(msg);
+      setTimeout(() => setBulkActionSuccess(null), 5000);
+    },
+    showError: setError,
+    exitSelectionMode: handleExitSelectionMode,
+    closeBulkDeleteModal: () => setShowBulkDeleteConfirm(false),
+    closeBulkExportModal: () => setShowBulkExportModal(false),
+  });
 
   // Toast notifications - lifted from TransactionDetails so toasts persist after modal close
   const { toasts, showSuccess, showError, removeToast } = useToast();
@@ -183,109 +206,6 @@ function TransactionList({
   const handleCheckboxClick = (e: React.MouseEvent, transactionId: string): void => {
     e.stopPropagation();
     toggleSelection(transactionId);
-  };
-
-  // Bulk delete handler
-  const handleBulkDelete = async (): Promise<void> => {
-    if (selectedCount === 0) return;
-
-    setIsBulkDeleting(true);
-    try {
-      const result = await (window.api.transactions as any).bulkDelete(
-        Array.from(selectedIds),
-      );
-
-      if (result.success) {
-        setBulkActionSuccess(
-          `Successfully deleted ${result.deletedCount || selectedCount} transaction${(result.deletedCount || selectedCount) > 1 ? "s" : ""}`,
-        );
-        deselectAll();
-        setSelectionMode(false);
-        await loadTransactions();
-      } else {
-        setError(result.error || "Failed to delete transactions");
-      }
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setIsBulkDeleting(false);
-      setShowBulkDeleteConfirm(false);
-      setTimeout(() => setBulkActionSuccess(null), 5000);
-    }
-  };
-
-  // Bulk export handler
-  const handleBulkExport = async (format: string): Promise<void> => {
-    if (selectedCount === 0) return;
-
-    setIsBulkExporting(true);
-    try {
-      const selectedTransactionIds = Array.from(selectedIds);
-      let successCount = 0;
-      const errors: string[] = [];
-
-      for (const transactionId of selectedTransactionIds) {
-        try {
-          const result = await window.api.transactions.exportEnhanced(
-            transactionId,
-            { exportFormat: format },
-          );
-          if (result.success) {
-            successCount++;
-          } else {
-            errors.push(result.error || `Failed to export transaction`);
-          }
-        } catch (err) {
-          errors.push((err as Error).message);
-        }
-      }
-
-      if (successCount > 0) {
-        setBulkActionSuccess(
-          `Successfully exported ${successCount} transaction${successCount > 1 ? "s" : ""}${errors.length > 0 ? ` (${errors.length} failed)` : ""}`,
-        );
-        deselectAll();
-        setSelectionMode(false);
-        await loadTransactions();
-      } else {
-        setError("Failed to export transactions");
-      }
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setIsBulkExporting(false);
-      setShowBulkExportModal(false);
-      setTimeout(() => setBulkActionSuccess(null), 5000);
-    }
-  };
-
-  // Bulk status change handler
-  const handleBulkStatusChange = async (status: "active" | "closed"): Promise<void> => {
-    if (selectedCount === 0) return;
-
-    setIsBulkUpdating(true);
-    try {
-      const result = await (window.api.transactions as any).bulkUpdateStatus(
-        Array.from(selectedIds),
-        status,
-      );
-
-      if (result.success) {
-        setBulkActionSuccess(
-          `Successfully updated ${result.updatedCount || selectedCount} transaction${(result.updatedCount || selectedCount) > 1 ? "s" : ""} to ${status}`,
-        );
-        deselectAll();
-        setSelectionMode(false);
-        await loadTransactions();
-      } else {
-        setError(result.error || "Failed to update transactions");
-      }
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setIsBulkUpdating(false);
-      setTimeout(() => setBulkActionSuccess(null), 5000);
-    }
   };
 
   // Handle select all for filtered transactions
