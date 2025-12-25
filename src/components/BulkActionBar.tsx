@@ -12,7 +12,7 @@ interface BulkActionBarProps {
   onDeselectAll: () => void;
   onBulkDelete: () => void;
   onBulkExport: () => void;
-  onBulkStatusChange: (status: "active" | "closed") => void;
+  onBulkStatusChange: (status: "pending" | "active" | "closed" | "rejected") => void;
   onClose: () => void;
   isDeleting?: boolean;
   isExporting?: boolean;
@@ -152,6 +152,16 @@ export function BulkActionBar({
               <div className="absolute bottom-full mb-2 left-0 bg-gray-800 rounded-lg shadow-xl border border-gray-700 py-2 min-w-[160px]">
                 <button
                   onClick={() => {
+                    onBulkStatusChange("pending");
+                    setShowStatusDropdown(false);
+                  }}
+                  className="w-full px-4 py-2 text-left text-sm hover:bg-gray-700 flex items-center gap-2 whitespace-nowrap"
+                >
+                  <span className="w-2 h-2 bg-yellow-500 rounded-full flex-shrink-0"></span>
+                  Mark as Pending
+                </button>
+                <button
+                  onClick={() => {
                     onBulkStatusChange("active");
                     setShowStatusDropdown(false);
                   }}
@@ -169,6 +179,16 @@ export function BulkActionBar({
                 >
                   <span className="w-2 h-2 bg-gray-500 rounded-full flex-shrink-0"></span>
                   Mark as Closed
+                </button>
+                <button
+                  onClick={() => {
+                    onBulkStatusChange("rejected");
+                    setShowStatusDropdown(false);
+                  }}
+                  className="w-full px-4 py-2 text-left text-sm hover:bg-gray-700 flex items-center gap-2 whitespace-nowrap"
+                >
+                  <span className="w-2 h-2 bg-red-500 rounded-full flex-shrink-0"></span>
+                  Mark as Rejected
                 </button>
               </div>
             )}
