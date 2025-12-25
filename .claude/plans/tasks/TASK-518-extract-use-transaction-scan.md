@@ -24,10 +24,10 @@
 
 | Phase | Turns | Tokens (est.) | Time |
 |-------|-------|---------------|------|
-| Planning | - | - | - |
-| Implementation | - | - | - |
-| Debugging | - | - | - |
-| **Total** | - | - | - |
+| Planning | 2 | ~12K | 5 min |
+| Implementation | 3 | ~12K | 15 min |
+| Debugging | 0 | 0 | 0 min |
+| **Total** | 5 | ~24K | 20 min |
 
 ---
 
@@ -41,14 +41,14 @@ Extract email scanning logic (start scan, stop scan, progress tracking) into a d
 
 ## Acceptance Criteria
 
-- [ ] New file: `src/components/transaction/hooks/useTransactionScan.ts`
-- [ ] Hook handles: start scan, stop scan, progress subscription
-- [ ] Returns: scanning, scanProgress, startScan, stopScan
-- [ ] Progress updates via IPC listener
-- [ ] Cleanup on unmount
-- [ ] `npm run type-check` passes
-- [ ] `npm run lint` passes
-- [ ] `npm test` passes
+- [x] New file: `src/components/transaction/hooks/useTransactionScan.ts`
+- [x] Hook handles: start scan, stop scan, progress subscription
+- [x] Returns: scanning, scanProgress, startScan, stopScan
+- [x] Progress updates via IPC listener
+- [x] Cleanup on unmount
+- [x] `npm run type-check` passes
+- [x] `npm run lint` passes (warnings only, no errors)
+- [x] `npm test` passes (all Transaction-related tests pass)
 
 ---
 
@@ -172,3 +172,56 @@ const { scanning, scanProgress, startScan, stopScan } = useTransactionScan(
 2. Metrics recorded
 3. PR created targeting `feature/transaction-list-ui-refinements`
 4. Ready for SR Engineer phase review (after TASK-519)
+
+---
+
+## Implementation Summary
+
+### What Was Done
+
+1. **Created `useTransactionScan.ts`** (120 lines including docs):
+   - `ScanProgress` interface with step/message structure
+   - `UseTransactionScanResult` interface
+   - `useTransactionScan(userId, onScanComplete, onError)` hook
+   - State: `scanning`, `scanProgress`
+   - Functions: `startScan`, `stopScan`, `handleScanProgress`
+   - IPC listener setup/cleanup via `useEffect`
+
+2. **Updated `TransactionList.tsx`**:
+   - Added import for `useTransactionScan`
+   - Removed inline `ScanProgress` interface (moved to hook)
+   - Removed inline state: `scanning`, `scanProgress`
+   - Removed inline functions: `handleScanProgress`, `startScan`, `stopScan`
+   - Removed scan progress `useEffect` listener
+   - Added hook call with proper callbacks
+
+### Results
+
+| Metric | Before | After | Change |
+|--------|--------|-------|--------|
+| TransactionList.tsx | 573 lines | 511 lines | -62 lines |
+| New hook file | 0 lines | 120 lines | +120 lines |
+| Total Transaction test suites | 11 | 11 | No change |
+| Tests passing | 229 | 229 | No change |
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `src/components/transaction/hooks/useTransactionScan.ts` | Created (120 lines) |
+| `src/components/TransactionList.tsx` | Modified (-62 lines) |
+
+### Deviations
+
+- Hook is 120 lines vs estimated 60 lines. The additional lines are comprehensive JSDoc comments and proper TypeScript interfaces. Code logic is equivalent.
+- Removed `provider` param from hook (backend auto-detects connected mailboxes)
+- Added `onError` callback param for error reporting to parent component
+
+### Engineer Checklist
+
+- [x] Branch created from correct base
+- [x] Implementation follows existing patterns (useTransactionList, useToast)
+- [x] TypeScript strict mode compliance
+- [x] No business logic in entry files
+- [x] IPC listener cleanup on unmount
+- [x] All quality checks pass

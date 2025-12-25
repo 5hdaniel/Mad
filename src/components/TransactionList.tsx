@@ -18,11 +18,7 @@ import {
   useTransactionList,
   type TransactionFilter,
 } from "./transaction/hooks/useTransactionList";
-
-interface ScanProgress {
-  step: string;
-  message: string;
-}
+import { useTransactionScan } from "./transaction/hooks/useTransactionScan";
 
 interface TransactionListComponentProps {
   userId: string;
@@ -67,9 +63,12 @@ function TransactionList({
     setError,
   } = useTransactionList(userId, filter, searchQuery);
 
-  // Scan state
-  const [scanning, setScanning] = useState<boolean>(false);
-  const [scanProgress, setScanProgress] = useState<ScanProgress | null>(null);
+  // Scan functionality via hook
+  const { scanning, scanProgress, startScan, stopScan } = useTransactionScan(
+    userId,
+    loadTransactions,
+    setError
+  );
 
   // Modal state
   const [selectedTransaction, setSelectedTransaction] =
@@ -106,18 +105,6 @@ function TransactionList({
   // Toast notifications - lifted from TransactionDetails so toasts persist after modal close
   const { toasts, showSuccess, showError, removeToast } = useToast();
 
-  useEffect(() => {
-    // Listen for scan progress
-    let cleanup: (() => void) | undefined;
-    if (window.api?.onTransactionScanProgress) {
-      cleanup = window.api.onTransactionScanProgress(handleScanProgress);
-    }
-
-    return () => {
-      if (cleanup) cleanup();
-    };
-  }, []);
-
   // Sync filter to URL params
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -131,55 +118,6 @@ function TransactionList({
       : window.location.pathname;
     window.history.replaceState({}, "", newUrl);
   }, [filter]);
-
-  const handleScanProgress = (progress: unknown): void => {
-    const scanProgress = progress as ScanProgress;
-    setScanProgress(scanProgress);
-  };
-
-  const startScan = async (): Promise<void> => {
-    try {
-      setScanning(true);
-      setError(null);
-      setScanProgress({ step: "starting", message: "Starting scan..." });
-
-      const result = await window.api.transactions.scan(userId, {
-        // provider omitted - backend auto-detects all connected mailboxes
-        // startDate and maxEmails are read from user preferences in the backend
-      });
-
-      if (result.success) {
-        setScanProgress({
-          step: "complete",
-          message: `Found ${result.transactionsFound} transactions from ${result.emailsScanned} emails!`,
-        });
-
-        // Reload transactions
-        await loadTransactions();
-      } else {
-        setError(result.error || "Scan failed");
-      }
-    } catch (err) {
-      const errorMessage = (err as Error).message;
-      // Don't show error if it was a cancellation
-      if (!errorMessage.includes("cancelled")) {
-        setError(errorMessage);
-      }
-    } finally {
-      setScanning(false);
-      setTimeout(() => setScanProgress(null), 3000);
-    }
-  };
-
-  const stopScan = async (): Promise<void> => {
-    try {
-      await window.api.transactions.cancelScan(userId);
-      // Clear scan progress immediately without showing a message
-      setScanProgress(null);
-    } catch (err) {
-      console.error("Failed to stop scan:", err);
-    }
-  };
 
   const formatCurrency = (amount: number | null | undefined): string => {
     if (!amount) return "N/A";
