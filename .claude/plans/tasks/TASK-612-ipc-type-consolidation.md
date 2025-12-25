@@ -13,16 +13,34 @@
 ```markdown
 ## Engineer Metrics
 
-**Task Start Time:** [timestamp]
-**Task End Time:** [timestamp]
+**Task Start:** [YYYY-MM-DD HH:MM]
+**Task End:** [YYYY-MM-DD HH:MM]
+**Wall-Clock Time:** [X min] (actual elapsed)
 
-| Phase | Turns | Tokens (est.) | Time |
-|-------|-------|---------------|------|
+| Phase | Turns | Tokens (est.) | Active Time |
+|-------|-------|---------------|-------------|
 | Planning | - | - | - |
 | Implementation | - | - | - |
 | Debugging | - | - | - |
 | **Total** | - | - | - |
+
+**Estimated vs Actual:**
+- Est Turns: 2-3 → Actual: _ (variance: _%)
+- Est Wall-Clock: 10-15 min → Actual: _ min (variance: _%)
 ```
+
+---
+
+## PM Estimates (Calibrated - SPRINT-009)
+
+| Metric | Original | Calibrated (0.3x refactor) | Wall-Clock (3x) |
+|--------|----------|---------------------------|-----------------|
+| **Turns** | 8-10 | **2-3** | - |
+| **Tokens** | ~40K | ~12K | - |
+| **Time** | 1-1.5h | **10-15 min** | **10-15 min** |
+
+**Category:** refactor
+**Confidence:** High (based on TASK-602/603 actuals)
 
 ---
 

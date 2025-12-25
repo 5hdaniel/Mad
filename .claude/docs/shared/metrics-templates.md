@@ -1,7 +1,7 @@
 # Metrics Templates
 
 **Status:** Canonical reference for all metrics tracking
-**Last Updated:** 2024-12-24
+**Last Updated:** 2025-12-25
 
 ---
 
@@ -15,7 +15,39 @@ All sprint tasks require metrics tracking for:
 **Metric Types:**
 - **Turns**: Number of user messages/prompts (1 turn = 1 message)
 - **Tokens**: Estimated as Turns × 4K (adjust for long file reads: +2-5K each)
-- **Time**: Wall-clock active work time (exclude waiting for CI/responses)
+- **Active Time**: LLM computation/response time (what engineer reports)
+- **Wall-Clock Time**: Real elapsed time from task start to PR creation (includes API latency, exploration, tests)
+
+---
+
+## Estimation Multipliers (SPRINT-009 Calibrated)
+
+Based on actual data from SPRINT-008 and SPRINT-009:
+
+| Category | Turn Multiplier | Wall-Clock Multiplier | Notes |
+|----------|-----------------|----------------------|-------|
+| **refactor** | **0.3x** | 3x | Well-structured code extractions |
+| **security** | 1.0x | 3x | Audits require careful review |
+| **test** | 1.0x | 3x | Test writing is predictable |
+| **schema** | 1.3x | 3x | High variance, add buffer |
+| **config** | 0.5x | 3x | Usually overestimated |
+| **service** | 1.0x | 3x | TBD - need data |
+| **ipc** | 1.5x | 3x | Suspected underestimate |
+| **ui** | 1.0x | 3x | TBD - need data |
+
+**Example:**
+- PM estimates 10-14 turns for a refactor task
+- Apply 0.3x → Expect 3-4 actual turns
+- Apply 3x wall-clock → Expect 15-20 min real time
+
+### Wall-Clock Overhead Breakdown
+
+| Category | Impact | Notes |
+|----------|--------|-------|
+| API response latency | 30-90s per turn | Claude Opus responses |
+| File exploration | 5-15 min | Reading code before implementing |
+| Test execution | 5-10 min | npm test, CI |
+| Git operations | 3-5 min | Branch, commit, push |
 
 ---
 
@@ -28,11 +60,12 @@ Include this section in every PR for sprint tasks:
 
 ## Engineer Metrics: TASK-XXX
 
-**Engineer Start Time:** [HH:MM]
-**Engineer End Time:** [HH:MM]
+**Task Start:** [YYYY-MM-DD HH:MM]
+**Task End:** [YYYY-MM-DD HH:MM]
+**Wall-Clock Time:** [X min] (actual elapsed time)
 
-| Phase | Turns | Tokens | Time |
-|-------|-------|--------|------|
+| Phase | Turns | Tokens | Active Time |
+|-------|-------|--------|-------------|
 | Planning (Plan) | X | ~XK | X min |
 | Implementation (Impl) | X | ~XK | X min |
 | Debugging (Debug) | X | ~XK | X min |
@@ -42,8 +75,8 @@ Include this section in every PR for sprint tasks:
 **Implementation Notes:** [Approach summary, any deviations from plan]
 
 **Estimated vs Actual:**
-- Est: X-Y turns, XK-YK tokens
-- Actual: X turns, ~XK tokens (Plan: X, Impl: X, Debug: X)
+- Est Turns: X-Y → Actual: X (variance: X%)
+- Est Wall-Clock: X-Y min → Actual: X min (variance: X%)
 ```
 
 ### Phase Definitions
