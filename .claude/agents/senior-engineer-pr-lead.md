@@ -272,12 +272,14 @@ As a senior engineer, you are responsible for keeping the codebase healthy, pred
 
 ### Key Line Budgets
 
-| File | Max Lines |
-|------|-----------|
-| `App.tsx` | **70** |
-| `AppShell.tsx` | 150 |
-| `AppRouter.tsx` | 250 |
-| `useAppStateMachine.ts` | 300 |
+| File | Target | Trigger |
+|------|--------|---------|
+| `App.tsx` | **70** | >100 |
+| `AppShell.tsx` | 150 | >200 |
+| `AppRouter.tsx` | 250 | >300 |
+| `useAppStateMachine.ts` | 300 | >400 |
+
+*Target = ideal, Trigger = mandatory extraction*
 
 ### Architecture Enforcement in Reviews
 

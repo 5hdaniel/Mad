@@ -7,15 +7,19 @@
 
 ## Entry File Line Budgets
 
-These limits are enforced in PR reviews. Exceeding them triggers mandatory extraction.
+These limits are enforced in PR reviews.
 
-| File | Max Lines | Purpose | Extraction Trigger |
-|------|-----------|---------|-------------------|
-| `App.tsx` | **70** | Root composition, providers only | >100 lines |
-| `AppShell.tsx` | **150** | Window chrome, title bar, offline banner | >200 lines |
-| `AppRouter.tsx` | **250** | Screen routing/selection only | >300 lines |
-| `AppModals.tsx` | **120** | Modal rendering only | >150 lines |
-| `useAppStateMachine.ts` | **300** | Orchestrator, delegates to flows | Extract to `flows/` |
+| File | Target | Trigger | Purpose |
+|------|--------|---------|---------|
+| `App.tsx` | **70** | >100 | Root composition, providers only |
+| `AppShell.tsx` | **150** | >200 | Window chrome, title bar, offline banner |
+| `AppRouter.tsx` | **250** | >300 | Screen routing/selection only |
+| `AppModals.tsx` | **120** | >150 | Modal rendering only |
+| `useAppStateMachine.ts` | **300** | >400 | Orchestrator, delegates to flows |
+
+**How to read this:**
+- **Target**: Ideal line count - aim to stay at or below this
+- **Trigger**: Hard limit - exceeding this requires mandatory extraction before merge
 
 ---
 
