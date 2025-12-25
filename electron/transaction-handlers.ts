@@ -185,6 +185,16 @@ export const registerTransactionHandlers = (
         const transactions =
           await transactionService.getTransactions(validatedUserId);
 
+        // Debug: log detection fields being returned to frontend
+        if (transactions.length > 0) {
+          console.log("[DEBUG transactions:get-all] First transaction detection fields:", {
+            id: transactions[0].id,
+            detection_source: transactions[0].detection_source,
+            detection_status: transactions[0].detection_status,
+            detection_confidence: transactions[0].detection_confidence,
+          });
+        }
+
         return {
           success: true,
           transactions,
@@ -1112,10 +1122,10 @@ export const registerTransactionHandlers = (
           );
         }
 
-        // Validate status
-        if (!status || !["active", "closed"].includes(status)) {
+        // Validate status - allow all 4 transaction statuses
+        if (!status || !["pending", "active", "closed", "rejected"].includes(status)) {
           throw new ValidationError(
-            "Status must be 'active' or 'closed'",
+            "Status must be 'pending', 'active', 'closed', or 'rejected'",
             "status",
           );
         }

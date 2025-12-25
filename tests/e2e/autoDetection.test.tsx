@@ -307,9 +307,10 @@ describe('Auto-Detection E2E Flow', () => {
         expect(screen.getByText('123 AI Detected Lane, San Francisco, CA 94102')).toBeInTheDocument();
       });
 
-      // Verify AI Detected badge appears
-      const aiDetectedBadges = screen.getAllByText('AI Detected');
-      expect(aiDetectedBadges.length).toBeGreaterThan(0);
+      // Verify Pending Review badge/label appears for auto-detected transactions
+      // (AI detection is the default - no separate badge, but they appear in Pending Review)
+      const pendingReviewElements = screen.getAllByText('Pending Review');
+      expect(pendingReviewElements.length).toBeGreaterThan(0);
     });
   });
 
@@ -349,11 +350,10 @@ describe('Auto-Detection E2E Flow', () => {
         expect(screen.getByText('123 AI Detected Lane, San Francisco, CA 94102')).toBeInTheDocument();
       });
 
-      // Find the pending transaction card
-      const pendingCard = screen.getByText('123 AI Detected Lane, San Francisco, CA 94102').closest('.bg-white');
-
-      // Should have Pending Review badge
-      expect(within(pendingCard!).getByText('Pending Review')).toBeInTheDocument();
+      // Should have Pending Review label in the status wrapper header
+      // (The wrapper wraps the card, so "Pending Review" is in parent element)
+      const pendingReviewElements = screen.getAllByText('Pending Review');
+      expect(pendingReviewElements.length).toBeGreaterThan(0);
     });
 
     it('should display confidence pill for AI-detected transactions', async () => {
@@ -366,8 +366,9 @@ describe('Auto-Detection E2E Flow', () => {
         expect(screen.getByText('123 AI Detected Lane, San Francisco, CA 94102')).toBeInTheDocument();
       });
 
-      // Should show confidence percentage
-      expect(screen.getByText('85% confident')).toBeInTheDocument();
+      // Should show confidence label and percentage in the status wrapper header
+      expect(screen.getByText('Confidence')).toBeInTheDocument();
+      expect(screen.getByText('85%')).toBeInTheDocument();
     });
   });
 
@@ -381,6 +382,14 @@ describe('Auto-Detection E2E Flow', () => {
         success: true,
         transactions: [mockPendingTransaction],
       });
+      window.api.transactions.getDetails.mockResolvedValue({
+        success: true,
+        transaction: {
+          ...mockPendingTransaction,
+          communications: [],
+          contact_assignments: [],
+        },
+      });
       const user = userEvent.setup();
 
       renderTransactionList({ onClose: mockOnClose });
@@ -390,8 +399,17 @@ describe('Auto-Detection E2E Flow', () => {
         expect(screen.getByText('123 AI Detected Lane, San Francisco, CA 94102')).toBeInTheDocument();
       });
 
-      // Click approve button
-      const approveButton = screen.getByTitle('Approve transaction');
+      // Click "Review & Edit" button in the status wrapper to open TransactionDetails modal
+      const reviewButton = screen.getByRole('button', { name: /review & edit/i });
+      await user.click(reviewButton);
+
+      // Wait for modal to open with Approve button
+      await waitFor(() => {
+        expect(screen.getByText('Review Transaction')).toBeInTheDocument();
+      });
+
+      // Click approve button in the modal
+      const approveButton = screen.getByRole('button', { name: /^approve$/i });
       await user.click(approveButton);
 
       // Verify transaction update was called
@@ -425,6 +443,14 @@ describe('Auto-Detection E2E Flow', () => {
           success: true,
           transactions: [{ ...mockPendingTransaction, detection_status: 'confirmed' }],
         });
+      window.api.transactions.getDetails.mockResolvedValue({
+        success: true,
+        transaction: {
+          ...mockPendingTransaction,
+          communications: [],
+          contact_assignments: [],
+        },
+      });
       const user = userEvent.setup();
 
       renderTransactionList({ onClose: mockOnClose });
@@ -434,8 +460,17 @@ describe('Auto-Detection E2E Flow', () => {
         expect(screen.getByText('123 AI Detected Lane, San Francisco, CA 94102')).toBeInTheDocument();
       });
 
-      // Click approve button
-      const approveButton = screen.getByTitle('Approve transaction');
+      // Click "Review & Edit" button to open TransactionDetails modal
+      const reviewButton = screen.getByRole('button', { name: /review & edit/i });
+      await user.click(reviewButton);
+
+      // Wait for modal to open
+      await waitFor(() => {
+        expect(screen.getByText('Review Transaction')).toBeInTheDocument();
+      });
+
+      // Click approve button in the modal
+      const approveButton = screen.getByRole('button', { name: /^approve$/i });
       await user.click(approveButton);
 
       // Verify transactions were reloaded
@@ -503,6 +538,14 @@ describe('Auto-Detection E2E Flow', () => {
         success: true,
         transactions: [mockPendingTransaction],
       });
+      window.api.transactions.getDetails.mockResolvedValue({
+        success: true,
+        transaction: {
+          ...mockPendingTransaction,
+          communications: [],
+          contact_assignments: [],
+        },
+      });
       const user = userEvent.setup();
 
       renderTransactionList({ onClose: mockOnClose });
@@ -512,22 +555,31 @@ describe('Auto-Detection E2E Flow', () => {
         expect(screen.getByText('123 AI Detected Lane, San Francisco, CA 94102')).toBeInTheDocument();
       });
 
-      // Click reject button
-      const rejectButton = screen.getByTitle('Reject transaction');
+      // Click "Review & Edit" button to open TransactionDetails modal
+      const reviewButton = screen.getByRole('button', { name: /review & edit/i });
+      await user.click(reviewButton);
+
+      // Wait for modal to open
+      await waitFor(() => {
+        expect(screen.getByText('Review Transaction')).toBeInTheDocument();
+      });
+
+      // Click reject button in the modal header
+      const rejectButton = screen.getByRole('button', { name: /^reject$/i });
       await user.click(rejectButton);
 
-      // Wait for reject modal
+      // Wait for reject confirmation modal (there are multiple "Reject Transaction" elements - h3 and button)
       await waitFor(() => {
-        expect(screen.getByText('Reject Transaction')).toBeInTheDocument();
+        const rejectElements = screen.getAllByText('Reject Transaction');
+        expect(rejectElements.length).toBeGreaterThanOrEqual(1);
       });
 
       // Enter rejection reason
       const reasonInput = screen.getByPlaceholderText(/not a real estate transaction/i);
       await user.type(reasonInput, 'This is a commercial property listing');
 
-      // Submit rejection - find submit button within modal
-      const modal = screen.getByText('Reject Transaction').closest('div')?.parentElement;
-      const submitButton = within(modal!).getByRole('button', { name: /^reject$/i });
+      // Submit rejection - find the button with "Reject Transaction" text
+      const submitButton = screen.getByRole('button', { name: /reject transaction/i });
       await user.click(submitButton);
 
       // Verify transaction update was called with rejection

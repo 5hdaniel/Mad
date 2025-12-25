@@ -408,6 +408,10 @@ export interface ValidatedTransactionData {
   representation_start_date?: string;
   closing_date?: string;
   closing_date_verified?: number;
+  // AI detection fields
+  detection_status?: string;
+  reviewed_at?: string;
+  rejection_reason?: string | null;
 }
 
 /**
@@ -424,6 +428,10 @@ export interface RawTransactionData {
   representation_start_date?: unknown;
   closing_date?: unknown;
   closing_date_verified?: unknown;
+  // AI detection fields
+  detection_status?: unknown;
+  reviewed_at?: unknown;
+  rejection_reason?: unknown;
 }
 
 /**
@@ -583,6 +591,41 @@ export function validateTransactionData(
       );
     }
     validated.closing_date_verified = verified;
+  }
+
+  // Detection status (for AI-detected transactions)
+  if (data.detection_status !== undefined) {
+    const validDetectionStatuses = ["pending", "confirmed", "rejected"];
+    const detectionStatus =
+      typeof data.detection_status === "string"
+        ? data.detection_status.toLowerCase()
+        : "";
+    if (!validDetectionStatuses.includes(detectionStatus)) {
+      throw new ValidationError(
+        `Detection status must be one of: ${validDetectionStatuses.join(", ")}`,
+        "detection_status",
+      );
+    }
+    validated.detection_status = detectionStatus;
+  }
+
+  // Reviewed at timestamp (for AI-detected transactions)
+  if (data.reviewed_at !== undefined && data.reviewed_at !== null) {
+    if (typeof data.reviewed_at === "string" && data.reviewed_at.trim()) {
+      validated.reviewed_at = data.reviewed_at.trim();
+    }
+  }
+
+  // Rejection reason (for rejected AI-detected transactions)
+  if (data.rejection_reason !== undefined && data.rejection_reason !== null) {
+    validated.rejection_reason = validateString(
+      data.rejection_reason,
+      "rejection_reason",
+      {
+        required: false,
+        maxLength: 1000,
+      },
+    );
   }
 
   return validated;
