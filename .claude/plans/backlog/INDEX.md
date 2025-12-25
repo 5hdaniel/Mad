@@ -3,8 +3,8 @@
 This index tracks all backlog items with their current status and metadata.
 
 **Last Updated:** 2025-12-24
-**Total Items:** 82
-**Pending:** 67 | **In Progress:** 0 | **Completed:** 14 | **Obsolete:** 2
+**Total Items:** 100
+**Pending:** 85 | **In Progress:** 0 | **Completed:** 14 | **Obsolete:** 2
 
 ---
 
@@ -38,6 +38,7 @@ This index tracks all backlog items with their current status and metadata.
 - **SPRINT-004 (AI MVP Foundation):** ✅ Completed (BACKLOG-073, 074)
 - **SPRINT-005 (AI MVP Core):** ✅ Completed (BACKLOG-075, 076)
 - **SPRINT-006 (AI MVP Polish):** BACKLOG-077, 078, 079 (TASK-401 to TASK-414)
+- **SPRINT-009 (Codebase Standards):** 📋 Active - TASK-600 to TASK-617 (18 tasks)
 - **Unassigned:** All others
 
 ### AI MVP Project
@@ -148,6 +149,24 @@ This index tracks all backlog items with their current status and metadata.
 | TASK-518 | Extract useTransactionScan Hook | refactor | Medium | Pending | SPRINT-008 | 4-6 | ~20K | 30-45m | - | - | - | - | - | - | - | - | - | - | - | - | [TASK-518-extract-use-transaction-scan.md](../tasks/TASK-518-extract-use-transaction-scan.md) |
 | TASK-519 | Extract useBulkActions Hook | refactor | Medium | Pending | SPRINT-008 | 6-8 | ~28K | 45-60m | - | - | - | - | - | - | - | - | - | - | - | - | [TASK-519-extract-use-bulk-actions.md](../tasks/TASK-519-extract-use-bulk-actions.md) |
 | TASK-520 | Directory Structure + Barrel Exports | refactor | Low | Pending | SPRINT-008 | 3-4 | ~14K | 20-30m | - | - | - | - | - | - | - | - | - | - | - | - | [TASK-520-directory-restructure.md](../tasks/TASK-520-directory-restructure.md) |
+| TASK-600 | AppleScript Injection Fix | security | Critical | Pending | SPRINT-009 | 4-6 | ~20K | 30-45m | - | - | - | - | - | - | - | - | - | - | - | - | [TASK-600-applescript-injection-fix.md](../tasks/TASK-600-applescript-injection-fix.md) |
+| TASK-601 | PowerShell Spawn Audit | security | Critical | Pending | SPRINT-009 | 6-8 | ~30K | 45-60m | - | - | - | - | - | - | - | - | - | - | - | - | [TASK-601-powershell-spawn-audit.md](../tasks/TASK-601-powershell-spawn-audit.md) |
+| TASK-602 | main.ts Handler Extraction | refactor | High | Pending | SPRINT-009 | 12-16 | ~60K | 2-3h | - | - | - | - | - | - | - | - | - | - | - | - | [TASK-602-main-ts-handler-extraction.md](../tasks/TASK-602-main-ts-handler-extraction.md) |
+| TASK-603 | preload.ts Refactor | refactor | High | Pending | SPRINT-009 | 12-16 | ~60K | 2-3h | - | - | - | - | - | - | - | - | - | - | - | - | [TASK-603-preload-ts-refactor.md](../tasks/TASK-603-preload-ts-refactor.md) |
+| TASK-604 | Renderer Service Layer | refactor | High | Pending | SPRINT-009 | 10-14 | ~50K | 1.5-2h | - | - | - | - | - | - | - | - | - | - | - | - | [TASK-604-renderer-service-layer.md](../tasks/TASK-604-renderer-service-layer.md) |
+| TASK-605 | Transactions.tsx Split | refactor | High | Pending | SPRINT-009 | 14-18 | ~70K | 2-3h | - | - | - | - | - | - | - | - | - | - | - | - | [TASK-605-transactions-tsx-split.md](../tasks/TASK-605-transactions-tsx-split.md) |
+| TASK-606 | Contacts.tsx Split | refactor | High | Pending | SPRINT-009 | 12-16 | ~60K | 2-2.5h | - | - | - | - | - | - | - | - | - | - | - | - | [TASK-606-contacts-tsx-split.md](../tasks/TASK-606-contacts-tsx-split.md) |
+| TASK-607 | TransactionDetails.tsx Split | refactor | High | Pending | SPRINT-009 | 10-14 | ~50K | 1.5-2h | - | - | - | - | - | - | - | - | - | - | - | - | [TASK-607-transaction-details-split.md](../tasks/TASK-607-transaction-details-split.md) |
+| TASK-608 | Electron Services Split | refactor | High | Pending | SPRINT-009 | 10-14 | ~50K | 1.5-2h | - | - | - | - | - | - | - | - | - | - | - | - | [TASK-608-electron-services-split.md](../tasks/TASK-608-electron-services-split.md) |
+| TASK-609 | window.electron Migration | refactor | High | Pending | SPRINT-009 | 16-20 | ~80K | 2.5-3h | - | - | - | - | - | - | - | - | - | - | - | - | [TASK-609-window-electron-migration.md](../tasks/TASK-609-window-electron-migration.md) |
+| TASK-610 | Any Types Remediation | refactor | Medium | Pending | SPRINT-009 | 8-10 | ~40K | 1-1.5h | - | - | - | - | - | - | - | - | - | - | - | - | [TASK-610-any-types-remediation.md](../tasks/TASK-610-any-types-remediation.md) |
+| TASK-611 | SQL Field Whitelist | security | Medium | Pending | SPRINT-009 | 6-8 | ~30K | 45-60m | - | - | - | - | - | - | - | - | - | - | - | - | [TASK-611-sql-field-whitelist.md](../tasks/TASK-611-sql-field-whitelist.md) |
+| TASK-612 | IPC Type Consolidation | refactor | Medium | Pending | SPRINT-009 | 8-10 | ~40K | 1-1.5h | - | - | - | - | - | - | - | - | - | - | - | - | [TASK-612-ipc-type-consolidation.md](../tasks/TASK-612-ipc-type-consolidation.md) |
+| TASK-613 | Onboarding Types Split | refactor | Medium | Pending | SPRINT-009 | 4-6 | ~20K | 30-45m | - | - | - | - | - | - | - | - | - | - | - | - | [TASK-613-onboarding-types-split.md](../tasks/TASK-613-onboarding-types-split.md) |
+| TASK-614 | useAppStateMachine Tests | test | Low | Pending | SPRINT-009 | 6-8 | ~30K | 45-60m | - | - | - | - | - | - | - | - | - | - | - | - | [TASK-614-use-app-state-machine-tests.md](../tasks/TASK-614-use-app-state-machine-tests.md) |
+| TASK-615 | Duplicate Types Removal | refactor | Low | Pending | SPRINT-009 | 4-6 | ~20K | 30-45m | - | - | - | - | - | - | - | - | - | - | - | - | [TASK-615-duplicate-types-removal.md](../tasks/TASK-615-duplicate-types-removal.md) |
+| TASK-616 | Console.log to logService | refactor | Low | Pending | SPRINT-009 | 3-4 | ~15K | 20-30m | - | - | - | - | - | - | - | - | - | - | - | - | [TASK-616-console-log-to-logservice.md](../tasks/TASK-616-console-log-to-logservice.md) |
+| TASK-617 | Commented Code Removal | refactor | Low | Pending | SPRINT-009 | 4-6 | ~20K | 30-45m | - | - | - | - | - | - | - | - | - | - | - | - | [TASK-617-commented-code-removal.md](../tasks/TASK-617-commented-code-removal.md) |
 
 ---
 
@@ -176,6 +195,7 @@ This index tracks all backlog items with their current status and metadata.
 | SPRINT-006 | AI MVP Polish | 📋 Planned | BACKLOG-077, 078, 079 (14 tasks, TASK-401 to TASK-414) |
 | SPRINT-007 | LLM Cost Optimization | 📋 Planned | TASK-501 to TASK-512 |
 | SPRINT-008 | TransactionList Refactoring | ✅ Completed | TASK-513 to TASK-520 (8 tasks, 26 turns, ~146K tokens, ~2hrs) |
+| SPRINT-009 | Codebase Standards Remediation | 📋 Active | TASK-600 to TASK-617 (18 tasks) |
 
 ---
 
@@ -224,6 +244,9 @@ This index tracks all backlog items with their current status and metadata.
 - 2025-12-24: TASK-520 (Directory structure) completed - PR #207 merged, 1 turn, ~8K tokens, 15m
 - 2025-12-24: **SPRINT-008 COMPLETE** - TransactionList: 1,357→431 lines (-68%), 9 files extracted
 - 2025-12-24: TASK-521 (Expand bulk status to all 4 statuses) completed - PR #208 merged, 2 turns, ~12K tokens, 7m
+- 2025-12-24: Created SPRINT-009 (Codebase Standards Remediation) - 18 tasks (TASK-600 to TASK-617)
+- 2025-12-24: SPRINT-009 based on SR Engineer codebase audit: 2 CRITICAL (security), 8 HIGH (architecture), 4 MEDIUM (types), 4 LOW (cleanup)
+- 2025-12-24: SPRINT-009 targets: main.ts <500 lines, preload.ts <400 lines, Transactions.tsx <600 lines, 114 any types → <10
 
 ---
 
