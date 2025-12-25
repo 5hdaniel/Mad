@@ -12,16 +12,34 @@
 ```markdown
 ## Engineer Metrics
 
-**Task Start Time:** [timestamp]
-**Task End Time:** [timestamp]
+**Task Start:** [YYYY-MM-DD HH:MM]
+**Task End:** [YYYY-MM-DD HH:MM]
+**Wall-Clock Time:** [X min] (actual elapsed)
 
-| Phase | Turns | Tokens (est.) | Time |
-|-------|-------|---------------|------|
+| Phase | Turns | Tokens (est.) | Active Time |
+|-------|-------|---------------|-------------|
 | Planning | - | - | - |
 | Implementation | - | - | - |
 | Debugging | - | - | - |
 | **Total** | - | - | - |
+
+**Estimated vs Actual:**
+- Est Turns: 6-8 → Actual: _ (variance: _%)
+- Est Wall-Clock: 30-40 min → Actual: _ min (variance: _%)
 ```
+
+---
+
+## PM Estimates (Calibrated - SPRINT-009)
+
+| Metric | Original | Calibrated (1.0x security) | Wall-Clock (3x) |
+|--------|----------|---------------------------|-----------------|
+| **Turns** | 6-8 | **6-8** | - |
+| **Tokens** | ~30K | ~30K | - |
+| **Time** | 45-60m | **30-40 min** | **30-40 min** |
+
+**Category:** security
+**Confidence:** Medium (security tasks require careful review)
 
 ---
 
