@@ -23,3 +23,26 @@ export type { TransactionCardProps } from "./TransactionCard";
 // TransactionToolbar
 export { default as TransactionToolbar } from "./TransactionToolbar";
 export type { TransactionToolbarProps } from "./TransactionToolbar";
+
+// DetectionBadges
+export {
+  DetectionSourceBadge,
+  ConfidencePill,
+  PendingReviewBadge,
+} from "./DetectionBadges";
+
+// TransactionDetails
+export { TransactionDetails } from "./TransactionDetails";
+export type { TransactionDetailsProps } from "./TransactionDetails";
+
+// EditTransactionModal
+export { EditTransactionModal } from "./EditTransactionModal";
+export type { EditTransactionModalProps } from "./EditTransactionModal";
+
+// TransactionListCard
+export { TransactionListCard } from "./TransactionListCard";
+export type { TransactionListCardProps } from "./TransactionListCard";
+
+// TransactionsToolbar
+export { TransactionsToolbar } from "./TransactionsToolbar";
+export type { TransactionsToolbarProps } from "./TransactionsToolbar";
