@@ -5,6 +5,7 @@
 **Type:** Refactor
 **Branch:** `refactor/TASK-515-transaction-card` from `feature/transaction-list-ui-refinements`
 **Depends On:** TASK-514
+**Status:** COMPLETE
 
 ---
 
@@ -22,12 +23,19 @@
 
 ## Metrics Tracking (REQUIRED)
 
+### Engineer Metrics
 | Phase | Turns | Tokens (est.) | Time |
 |-------|-------|---------------|------|
-| Planning | - | - | - |
-| Implementation | - | - | - |
-| Debugging | - | - | - |
-| **Total** | - | - | - |
+| Planning | 1 | ~4K | 2 min |
+| Implementation | 1 | ~8K | 5 min |
+| Debugging | 0 | 0 | 0 min |
+| **Engineer Total** | 1 | ~12K | 7 min |
+
+### SR Engineer Metrics
+| Phase | Turns | Tokens (est.) | Time |
+|-------|-------|---------------|------|
+| PR Review | 1 | ~15K | 7 min |
+| **SR Total** | 1 | ~15K | 7 min |
 
 ---
 
@@ -41,14 +49,14 @@ Extract the transaction card content (property address, price, dates, selection 
 
 ## Acceptance Criteria
 
-- [ ] New file: `src/components/transaction/TransactionCard.tsx`
-- [ ] Card displays property address, transaction type, price, dates
-- [ ] Selection checkbox works in selection mode
-- [ ] Click handler opens transaction details
-- [ ] Manual badge displays for manual transactions
-- [ ] `npm run type-check` passes
-- [ ] `npm run lint` passes
-- [ ] `npm test` passes
+- [x] New file: `src/components/transaction/TransactionCard.tsx`
+- [x] Card displays property address, transaction type, price, dates
+- [x] Selection checkbox works in selection mode
+- [x] Click handler opens transaction details
+- [x] Manual badge displays for manual transactions
+- [x] `npm run type-check` passes
+- [x] `npm run lint` passes
+- [x] `npm test` passes (729 tests per PR)
 
 ---
 
@@ -155,3 +163,54 @@ interface TransactionCardProps {
 2. Metrics recorded
 3. PR created targeting `feature/transaction-list-ui-refinements`
 4. Ready for SR Engineer phase review (after TASK-516)
+
+---
+
+## SR Engineer Review
+
+**Review Date:** 2025-12-24
+**Reviewer:** SR Engineer (Claude)
+**PR:** #202
+**Merge Commit:** `78bb2dc13e72cfe28a424a2229ccbadb68cee07f`
+
+### Review Summary
+
+**Status:** APPROVED and MERGED
+
+**Architecture Assessment:**
+- Clean extraction following established TASK-514 pattern
+- New component at 187 lines (under 300 line budget)
+- Props interface well-designed with proper TypeScript typing and JSDoc
+- No architecture boundary violations
+- Correct import of `ManualEntryBadge` from sibling component
+
+**Code Quality:**
+- Type check passes cleanly
+- No new lint warnings introduced
+- All pre-existing functionality preserved
+
+**Line Reduction Verified:**
+- TransactionList.tsx: 1135 -> 1002 lines (-133 lines, 11.7% reduction)
+- TransactionCard.tsx: 187 lines (new)
+
+**Props Interface (Actual):**
+```typescript
+interface TransactionCardProps {
+  transaction: Transaction;
+  selectionMode: boolean;
+  isSelected: boolean;
+  onTransactionClick: () => void;
+  onCheckboxClick: (e: React.MouseEvent) => void;
+  formatCurrency: (amount: number | null | undefined) => string;
+  formatDate: (dateString: string | Date | null | undefined) => string;
+}
+```
+
+**Design Decision Notes:**
+- Slight deviation from task file's proposed interface justified
+- Uses simpler `isSelected` boolean + `onCheckboxClick` handler (cleaner than `onSelect` callback)
+- Passes `formatCurrency`/`formatDate` as props for better testability
+
+**Suggestions for Future:**
+- Consider `React.memo()` for render optimization
+- Format functions could be imported from shared utility in future
