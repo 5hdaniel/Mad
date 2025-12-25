@@ -442,7 +442,7 @@ function Transactions({ userId, provider, onClose }: TransactionsProps) {
   };
 
   // Bulk status change handler
-  const handleBulkStatusChange = async (status: "active" | "closed") => {
+  const handleBulkStatusChange = async (status: "pending" | "active" | "closed" | "rejected") => {
     if (selectedCount === 0) return;
 
     setIsBulkUpdating(true);

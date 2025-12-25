@@ -19,7 +19,7 @@ export interface UseBulkActionsResult {
   /** Handle bulk export of selected transactions */
   handleBulkExport: (format: string) => Promise<void>;
   /** Handle bulk status change of selected transactions */
-  handleBulkStatusChange: (status: "active" | "closed") => Promise<void>;
+  handleBulkStatusChange: (status: "pending" | "active" | "closed" | "rejected") => Promise<void>;
 }
 
 /**
@@ -162,7 +162,7 @@ export function useBulkActions(
    * Handle bulk status change of selected transactions
    */
   const handleBulkStatusChange = useCallback(
-    async (status: "active" | "closed"): Promise<void> => {
+    async (status: "pending" | "active" | "closed" | "rejected"): Promise<void> => {
       if (selectedCount === 0) return;
 
       setIsBulkUpdating(true);
