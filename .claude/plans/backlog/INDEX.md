@@ -236,14 +236,14 @@ This index tracks all backlog items with their current status and metadata.
 | Category | Tasks | Avg Variance | Trend | Adjustment Factor |
 |----------|-------|--------------|-------|-------------------|
 | schema | 3 | +30% | under | 1.3x |
-| refactor | 2 | -21% | over | 0.8x |
+| refactor | 10 | -52% | over | **0.5x** |
 | test | 1 | -7% | accurate | 1.0x |
 | config | 1 | -62% | over | 0.5x |
 | service | 0 | - | - | TBD |
 | ipc | 0 | - | - | TBD |
 | ui | 0 | - | - | TBD |
 
-**Note:** Need 5+ tasks per category for reliable trends.
+**Note:** Refactor category now has sufficient data (10 tasks) for reliable adjustment factor.
 
 ### Variance Breakdown (All Completed Tasks)
 
@@ -256,22 +256,34 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-059 | test | 12-18 | 14 | -7% | Accurate estimate |
 | BACKLOG-060 | refactor | 10-15 | 14 | +12% | Accurate estimate |
 | BACKLOG-072 | config | 23-35 | 11 | -62% | Workflow docs simpler than expected |
+| TASK-513 | refactor | 4-6 | 2 | -60% | Toast fix simpler than expected |
+| TASK-514 | refactor | 6-8 | 4 | -43% | Clean component boundaries |
+| TASK-515 | refactor | 4-6 | 1 | -80% | Trivial extraction |
+| TASK-516 | refactor | 8-10 | 5 | -44% | Well-structured source code |
+| TASK-517 | refactor | 4-6 | 4 | -20% | Hook extraction on target |
+| TASK-518 | refactor | 4-6 | 5 | 0% | Accurate estimate |
+| TASK-519 | refactor | 6-8 | 4 | -43% | Clean hook boundaries |
+| TASK-520 | refactor | 3-4 | 1 | -71% | Directory restructure trivial |
 
 ### Learnings
 
 1. **Schema tasks are unpredictable** - variance from -36% to +100%
-2. **Refactor tasks tend to be overestimated** - avg -21%
+2. **Refactor tasks are consistently overestimated** - avg -52% (use 0.5x multiplier)
 3. **Config/docs tasks are overestimated** - avg -62%
-4. **Need more data on: service, ipc, ui categories**
+4. **Well-structured source code accelerates refactoring** - SPRINT-008 showed clean component boundaries enable faster extraction
+5. **Sequential refactor tasks compound efficiency** - each task builds on prior work, reducing discovery time
+6. **Need more data on: service, ipc, ui categories**
 
 ### PM Estimation Guidelines (Update as patterns emerge)
 
 | Category | Base Estimate | Adjustment | Notes |
 |----------|---------------|------------|-------|
 | schema | PM estimate | × 1.3 | High variance, add buffer |
-| refactor | PM estimate | × 0.8 | Tend to overestimate |
+| refactor | PM estimate | **× 0.5** | Consistently overestimate (10 tasks, -52% avg) |
 | test | PM estimate | × 1.0 | Usually accurate |
 | config | PM estimate | × 0.5 | Significantly overestimate |
 | service | PM estimate | × 1.0 | TBD - need data |
 | ipc | PM estimate | × 1.5 | TBD - suspected underestimate |
 | ui | PM estimate | × 1.0 | TBD - need data |
+
+**SPRINT-008 Insight**: For refactor sprints targeting well-structured code with clear boundaries, consider × 0.4 or even × 0.3 multiplier.
