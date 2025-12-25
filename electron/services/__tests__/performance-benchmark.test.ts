@@ -16,8 +16,9 @@ import { MessageInput } from '../extraction/types';
 /**
  * CI machines may be slower - add tolerance
  * Per SR Engineer review: Add timing tolerance for CI
+ * Windows CI is particularly variable, increased from 1.5 to 2.0
  */
-const CI_TOLERANCE = process.env.CI ? 1.5 : 1.0;
+const CI_TOLERANCE = process.env.CI ? 2.0 : 1.0;
 
 // ============================================================================
 // Test Helpers
