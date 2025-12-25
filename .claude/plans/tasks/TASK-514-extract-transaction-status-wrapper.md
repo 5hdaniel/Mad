@@ -24,10 +24,10 @@
 
 | Phase | Turns | Tokens (est.) | Time |
 |-------|-------|---------------|------|
-| Planning | - | - | - |
-| Implementation | - | - | - |
-| Debugging | - | - | - |
-| **Total** | - | - | - |
+| Planning | 1 | ~4K | 2 min |
+| Implementation | 3 | ~12K | 10 min |
+| Debugging | 0 | 0 | 0 min |
+| **Total** | 4 | ~16K | 12 min |
 
 ---
 
@@ -41,14 +41,14 @@ Extract `TransactionStatusWrapper`, `getStatusConfig`, `ConfidenceBar`, and `Man
 
 ## Acceptance Criteria
 
-- [ ] New file: `src/components/transaction/TransactionStatusWrapper.tsx`
-- [ ] Contains: TransactionStatusWrapper, getStatusConfig, ConfidenceBar, ManualEntryBadge
-- [ ] All types properly exported
-- [ ] TransactionList.tsx imports from new file
-- [ ] No functional changes to UI behavior
-- [ ] `npm run type-check` passes
-- [ ] `npm run lint` passes
-- [ ] `npm test` passes
+- [x] New file: `src/components/transaction/TransactionStatusWrapper.tsx`
+- [x] Contains: TransactionStatusWrapper, getStatusConfig, ConfidenceBar, ManualEntryBadge
+- [x] All types properly exported
+- [x] TransactionList.tsx imports from new file
+- [x] No functional changes to UI behavior
+- [x] `npm run type-check` passes
+- [x] `npm run lint` passes (warnings only, no errors)
+- [x] `npm test` passes (9/9 TransactionList tests pass)
 
 ---
 
@@ -153,3 +153,49 @@ interface TransactionStatusWrapperProps {
 2. Metrics recorded
 3. PR created targeting `feature/transaction-list-ui-refinements`
 4. Ready for SR Engineer phase review (after TASK-516)
+
+---
+
+## Implementation Summary
+
+### What Was Done
+
+Extracted status-related components and functions from `TransactionList.tsx` into a dedicated file:
+
+**New File Created:** `src/components/transaction/TransactionStatusWrapper.tsx` (239 lines)
+- `ManualEntryBadge` - Badge for manually created transactions
+- `ConfidenceBar` - Confidence indicator for pending transactions
+- `TransactionStatusType` - Type alias for status types
+- `StatusConfig` interface - Configuration for status styling
+- `getStatusConfig` function - Returns status configuration based on transaction state
+- `TransactionStatusWrapperProps` interface - Props for the wrapper component
+- `TransactionStatusWrapper` component - Unified wrapper for all transaction statuses
+
+**Modified File:** `src/components/TransactionList.tsx`
+- Reduced from 1369 lines to 1134 lines (-235 lines)
+- Added import for extracted components
+- Removed inline component definitions
+
+### Verification
+
+- **type-check**: Passes
+- **lint**: Passes (warnings only, no errors - all warnings are pre-existing in other files)
+- **tests**: 9/9 TransactionList tests pass
+
+### Deviations
+
+None. Implementation followed task specification exactly.
+
+### Issues Encountered
+
+None.
+
+### Engineer Checklist
+
+- [x] Branch created from correct base (`feature/transaction-list-ui-refinements`)
+- [x] All acceptance criteria met
+- [x] Type-check passes
+- [x] Lint passes (no new errors)
+- [x] Tests pass
+- [x] No functional changes to UI behavior
+- [x] Metrics recorded
