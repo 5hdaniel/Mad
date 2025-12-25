@@ -205,7 +205,7 @@ Detailed explanation if needed.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 
-Co-Authored-By: Claude <co-author>
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
 "
 ```
 
@@ -268,15 +268,27 @@ gh pr merge <PR-NUMBER> --merge
 
 ## Architecture Boundaries
 
+**Full reference:** `.claude/docs/shared/architecture-guardrails.md`
+
+### Entry File Line Budgets
+
+| File | Max Lines |
+|------|-----------|
+| `App.tsx` | **70** |
+| `AppShell.tsx` | 150 |
+| `AppRouter.tsx` | 250 |
+| `useAppStateMachine.ts` | 300 |
+
 ### DO:
 - Keep business logic in services/hooks
 - Use typed interfaces for IPC communication
 - Isolate platform-specific code
+- Keep `App.tsx` purely compositional (~70 lines max)
 
 ### DON'T:
 - Add business logic to App.tsx or entry files
 - Scatter `window.api`/`window.electron` calls in components
-- Create files over ~300 lines without splitting
+- Exceed entry file line budgets without extraction
 
 ## Common Commands
 
@@ -332,9 +344,21 @@ npx prebuild-install --runtime=electron --target=35.7.5 --arch=x64 --platform=wi
 
 | Document | Location | Purpose |
 |----------|----------|---------|
+| **Docs Index** | `.claude/docs/INDEX.md` | Master index of all documentation |
 | **PR SOP** | `.claude/docs/PR-SOP.md` | Complete PR checklist (all phases) |
 | **Senior Engineer** | `.claude/agents/senior-engineer-pr-lead.md` | Architecture standards, advanced reviews |
 | **This Guide** | `CLAUDE.md` | Quick start, branching, workflow |
+
+### Shared References (Canonical Sources)
+
+| Topic | Location |
+|-------|----------|
+| Plan-First Protocol | `.claude/docs/shared/plan-first-protocol.md` |
+| Metrics Templates | `.claude/docs/shared/metrics-templates.md` |
+| Architecture Guardrails | `.claude/docs/shared/architecture-guardrails.md` |
+| Git Branching | `.claude/docs/shared/git-branching.md` |
+| Effect Safety Patterns | `.claude/docs/shared/effect-safety-patterns.md` |
+| Native Module Fixes | `.claude/docs/shared/native-module-fixes.md` |
 
 ## Getting Help
 

@@ -29,10 +29,18 @@ You are an **Agentic Project/Engineering Manager** (EM/TL/Release Manager hybrid
 
 | Document | Location | Purpose |
 |----------|----------|---------|
+| **Docs Index** | `.claude/docs/INDEX.md` | Master documentation index |
 | **Skill Definition** | `.claude/skills/agentic-pm/SKILL.md` | Full PM skill with modules |
 | **Engineer Workflow** | `.claude/docs/ENGINEER-WORKFLOW.md` | What engineers must complete |
 | **PR-SOP** | `.claude/docs/PR-SOP.md` | PR process engineers follow |
-| **CLAUDE.md** | `CLAUDE.md` | Git branching, commit conventions |
+
+### Shared References (Canonical Sources)
+
+| Topic | Location |
+|-------|----------|
+| Plan-First Protocol | `.claude/docs/shared/plan-first-protocol.md` |
+| Metrics Templates | `.claude/docs/shared/metrics-templates.md` |
+| Git Branching | `.claude/docs/shared/git-branching.md` |
 
 ## Skill Reference
 

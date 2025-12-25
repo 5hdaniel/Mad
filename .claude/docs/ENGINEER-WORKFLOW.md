@@ -43,32 +43,17 @@ git checkout -b fix/task-XXX-description
 
 ## Step 2: Plan-First Protocol (MANDATORY)
 
+**Full reference:** `.claude/docs/shared/plan-first-protocol.md`
+
 **Before ANY implementation**, invoke the Plan agent to create an implementation plan.
 
-Use the Task tool with `subagent_type="Plan"` and provide:
-- Task context (file, branch, objective, constraints)
-- Expected deliverables from task file
-- Architecture boundaries to respect
-
-**Track Plan Agent Metrics:**
-
-| Activity | Turns | Tokens (est.) | Time |
-|----------|-------|---------------|------|
-| Initial Plan | X | ~XK | X min |
-| Revision(s) | X | ~XK | X min |
-| **Plan Total** | X | ~XK | X min |
-
-**Review the plan** from your Engineer perspective:
-- [ ] Files to modify are correct
-- [ ] Implementation sequence is logical
-- [ ] Test strategy is complete
-- [ ] Architecture boundaries respected
-
-**If issues found**, re-invoke Plan agent with revision request.
+**Quick Steps:**
+1. Invoke Plan agent with task context
+2. Review plan for feasibility
+3. Track Plan agent metrics (turns, tokens, time)
+4. Only proceed after plan is approved
 
 **BLOCKING**: Do NOT start implementation until you have an approved plan.
-
-See `.claude/agents/engineer.md` for detailed Plan-First Protocol.
 
 ---
 
@@ -132,6 +117,8 @@ Turns: |||| |||| || (12)
 
 ## Step 6: Create PR with Metrics
 
+**Metrics format:** `.claude/docs/shared/metrics-templates.md`
+
 **Only create PR when:**
 - [ ] Plan agent approved and metrics recorded
 - [ ] All tests pass locally
@@ -152,30 +139,7 @@ git push -u origin your-branch-name
 gh pr create --base develop --title "..." --body "..."
 ```
 
-**PR Description MUST include Engineer Metrics:**
-
-```markdown
----
-
-## Engineer Metrics: TASK-XXX
-
-**Engineer Start Time:** [when you started]
-**Engineer End Time:** [when CI passed]
-
-| Phase | Turns | Tokens | Time |
-|-------|-------|--------|------|
-| Planning (Plan) | X | ~XK | X min |
-| Implementation (Impl) | X | ~XK | X min |
-| Debugging (Debug) | X | ~XK | X min |
-| **Engineer Total** | X | ~XK | X min |
-
-**Planning Notes:** [plan revisions if any, key decisions]
-**Implementation Notes:** [any context]
-
-**Estimated vs Actual:**
-- Est: X turns, XK tokens
-- Actual: X turns, ~XK tokens (Plan: X, Impl: X, Debug: X)
-```
+**PR Description MUST include Engineer Metrics** - see the metrics templates doc for exact format.
 
 ---
 

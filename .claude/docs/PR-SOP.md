@@ -511,8 +511,11 @@ gh run view <RUN-ID>
 
 ```bash
 # ALWAYS use traditional merge (--merge), NEVER squash
-gh pr merge <PR-NUMBER> --merge --delete-branch
+# Do NOT auto-delete branches - deletion is a separate, manual step
+gh pr merge <PR-NUMBER> --merge
 ```
+
+**Branch Deletion:** See `.claude/docs/shared/git-branching.md` for deletion policy. Do NOT use `--delete-branch` unless explicitly requested.
 
 ### Post-Merge
 - [ ] Verify merge completed successfully
