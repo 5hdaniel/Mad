@@ -223,6 +223,7 @@ This index tracks all backlog items with their current status and metadata.
 - 2025-12-24: Phase 4 (Hook Extraction) complete - TransactionList reduced to ~431 lines
 - 2025-12-24: TASK-520 (Directory structure) completed - PR #207 merged, 1 turn, ~8K tokens, 15m
 - 2025-12-24: **SPRINT-008 COMPLETE** - TransactionList: 1,357→431 lines (-68%), 9 files extracted
+- 2025-12-24: TASK-521 (Expand bulk status to all 4 statuses) completed - PR #208 merged, 2 turns, ~12K tokens, 7m
 
 ---
 
