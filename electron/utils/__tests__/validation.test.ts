@@ -1,6 +1,9 @@
 /**
  * Tests for Input Validation Utilities
  * Ensures transaction data validation works correctly, especially for dates and prices
+ *
+ * SECURITY TESTS (TASK-601): Includes tests for UDID and path validation
+ * that prevent command injection in spawn/exec calls.
  */
 
 import {
@@ -8,6 +11,10 @@ import {
   validateContactId,
   validateTransactionId,
   validateTransactionData,
+  validateDeviceUdid,
+  isValidDeviceUdid,
+  validateExecutablePath,
+  validateMsiPath,
 } from "../validation";
 
 describe("Contact Validation", () => {
@@ -307,6 +314,316 @@ describe("Transaction Validation", () => {
       // And they must have the correct values
       expect(validated.sale_price).toBe(500000);
       expect(validated.listing_price).toBe(525000);
+    });
+  });
+});
+
+// =============================================================================
+// SECURITY TESTS (TASK-601): Device UDID and Path Validation
+// =============================================================================
+// These tests verify that validators properly prevent command injection attacks
+// when UDIDs and paths are used in spawn/exec calls.
+
+describe("Security Validation - TASK-601", () => {
+  describe("validateDeviceUdid", () => {
+    describe("Valid UDID formats", () => {
+      it("should accept traditional 40-hex-char UDID format (pre-iPhone X)", () => {
+        const traditionalUdid = "a1b2c3d4e5f6789012345678901234567890abcd";
+        expect(validateDeviceUdid(traditionalUdid)).toBe(traditionalUdid);
+      });
+
+      it("should accept modern 8-4-16 UDID format (iPhone X+)", () => {
+        const modernUdid = "00000000-0000000000000000";
+        expect(validateDeviceUdid(modernUdid)).toBe(modernUdid);
+      });
+
+      it("should accept simulator UUID format", () => {
+        const simulatorUdid = "12345678-1234-1234-1234-123456789012";
+        expect(validateDeviceUdid(simulatorUdid)).toBe(simulatorUdid);
+      });
+
+      it("should trim whitespace from valid UDIDs", () => {
+        const udidWithSpaces = "  00000000-0000000000000000  ";
+        expect(validateDeviceUdid(udidWithSpaces)).toBe(
+          "00000000-0000000000000000",
+        );
+      });
+
+      it("should accept uppercase hex characters", () => {
+        const upperUdid = "A1B2C3D4E5F6789012345678901234567890ABCD";
+        expect(validateDeviceUdid(upperUdid)).toBe(upperUdid);
+      });
+
+      it("should accept mixed case hex characters", () => {
+        const mixedUdid = "a1B2c3D4e5F6789012345678901234567890AbCd";
+        expect(validateDeviceUdid(mixedUdid)).toBe(mixedUdid);
+      });
+    });
+
+    describe("Invalid UDID formats - Security", () => {
+      it("should reject command injection attempt with shell commands", () => {
+        expect(() => validateDeviceUdid("$(rm -rf /)")).toThrow(ValidationError);
+        expect(() => validateDeviceUdid("; rm -rf /")).toThrow(ValidationError);
+        expect(() => validateDeviceUdid("| cat /etc/passwd")).toThrow(
+          ValidationError,
+        );
+      });
+
+      it("should reject UDID with shell metacharacters", () => {
+        expect(() => validateDeviceUdid("udid`whoami`")).toThrow(
+          ValidationError,
+        );
+        expect(() => validateDeviceUdid("udid&&echo")).toThrow(ValidationError);
+        expect(() => validateDeviceUdid("udid||true")).toThrow(ValidationError);
+      });
+
+      it("should reject UDID with path traversal sequences", () => {
+        expect(() => validateDeviceUdid("../../../etc/passwd")).toThrow(
+          ValidationError,
+        );
+        expect(() => validateDeviceUdid("..\\..\\windows")).toThrow(
+          ValidationError,
+        );
+      });
+
+      it("should reject UDID with newline injection", () => {
+        expect(() => validateDeviceUdid("valid\n;malicious")).toThrow(
+          ValidationError,
+        );
+        expect(() => validateDeviceUdid("valid\r\nmalicious")).toThrow(
+          ValidationError,
+        );
+      });
+
+      it("should reject UDID that is too short", () => {
+        expect(() => validateDeviceUdid("short")).toThrow(ValidationError);
+        expect(() => validateDeviceUdid("0000000000")).toThrow(ValidationError);
+      });
+
+      it("should reject UDID that is too long", () => {
+        const tooLong = "a".repeat(50);
+        expect(() => validateDeviceUdid(tooLong)).toThrow(ValidationError);
+      });
+
+      it("should reject non-hexadecimal characters", () => {
+        expect(() =>
+          validateDeviceUdid("g1b2c3d4e5f6789012345678901234567890abcd"),
+        ).toThrow(ValidationError);
+        expect(() =>
+          validateDeviceUdid("!1b2c3d4e5f6789012345678901234567890abcd"),
+        ).toThrow(ValidationError);
+      });
+
+      it("should reject invalid hyphen placement", () => {
+        // Wrong number of hyphens for modern format
+        expect(() => validateDeviceUdid("00000000--0000000000000000")).toThrow(
+          ValidationError,
+        );
+        // Hyphen in wrong position
+        expect(() => validateDeviceUdid("0000-0000-0000000000000000")).toThrow(
+          ValidationError,
+        );
+      });
+    });
+
+    describe("Required parameter behavior", () => {
+      it("should throw when required and UDID is null", () => {
+        expect(() => validateDeviceUdid(null, true)).toThrow(
+          "Device UDID is required",
+        );
+      });
+
+      it("should throw when required and UDID is undefined", () => {
+        expect(() => validateDeviceUdid(undefined, true)).toThrow(
+          "Device UDID is required",
+        );
+      });
+
+      it("should throw when required and UDID is empty string", () => {
+        expect(() => validateDeviceUdid("", true)).toThrow(
+          "Device UDID is required",
+        );
+      });
+
+      it("should return empty string when not required and UDID is empty", () => {
+        expect(validateDeviceUdid("", false)).toBe("");
+        expect(validateDeviceUdid(null, false)).toBe("");
+      });
+
+      it("should reject non-string values", () => {
+        expect(() => validateDeviceUdid(12345)).toThrow(
+          "Device UDID must be a string",
+        );
+        expect(() => validateDeviceUdid({ udid: "value" })).toThrow(
+          "Device UDID must be a string",
+        );
+      });
+    });
+  });
+
+  describe("isValidDeviceUdid", () => {
+    it("should return true for valid UDIDs", () => {
+      expect(isValidDeviceUdid("00000000-0000000000000000")).toBe(true);
+      expect(
+        isValidDeviceUdid("a1b2c3d4e5f6789012345678901234567890abcd"),
+      ).toBe(true);
+    });
+
+    it("should return false for invalid UDIDs", () => {
+      expect(isValidDeviceUdid("$(rm -rf /)")).toBe(false);
+      expect(isValidDeviceUdid("short")).toBe(false);
+      expect(isValidDeviceUdid(null)).toBe(false);
+      expect(isValidDeviceUdid(undefined)).toBe(false);
+    });
+  });
+
+  describe("validateExecutablePath", () => {
+    const allowedPaths = [
+      "/app/resources/win/libimobiledevice",
+      "C:\\Program Files\\7-Zip",
+      "/home/user/safe",
+    ];
+
+    describe("Valid paths", () => {
+      it("should accept paths within allowed directories", () => {
+        expect(
+          validateExecutablePath(
+            "/app/resources/win/libimobiledevice/ideviceinfo.exe",
+            allowedPaths,
+          ),
+        ).toBe("/app/resources/win/libimobiledevice/ideviceinfo.exe");
+      });
+
+      it("should accept Windows paths within allowed directories", () => {
+        expect(
+          validateExecutablePath(
+            "C:\\Program Files\\7-Zip\\7z.exe",
+            allowedPaths,
+          ),
+        ).toBe("C:\\Program Files\\7-Zip\\7z.exe");
+      });
+
+      it("should trim whitespace from valid paths", () => {
+        expect(
+          validateExecutablePath(
+            "  /home/user/safe/script.sh  ",
+            allowedPaths,
+          ),
+        ).toBe("/home/user/safe/script.sh");
+      });
+    });
+
+    describe("Invalid paths - Security", () => {
+      it("should reject paths outside allowed directories", () => {
+        expect(() =>
+          validateExecutablePath("/etc/passwd", allowedPaths),
+        ).toThrow("Executable path is not in an allowed location");
+      });
+
+      it("should reject path traversal attacks", () => {
+        expect(() =>
+          validateExecutablePath(
+            "/app/resources/win/libimobiledevice/../../../etc/passwd",
+            allowedPaths,
+          ),
+        ).toThrow("Executable path contains path traversal sequences");
+      });
+
+      it("should reject shell metacharacters in paths", () => {
+        expect(() =>
+          validateExecutablePath(
+            "/app/resources/win/libimobiledevice/;rm -rf /",
+            allowedPaths,
+          ),
+        ).toThrow("Executable path contains dangerous characters");
+
+        expect(() =>
+          validateExecutablePath(
+            "/app/resources/win/libimobiledevice/$(whoami)",
+            allowedPaths,
+          ),
+        ).toThrow("Executable path contains dangerous characters");
+      });
+
+      it("should reject empty paths", () => {
+        expect(() => validateExecutablePath("", allowedPaths)).toThrow(
+          "Executable path is required",
+        );
+      });
+
+      it("should reject null/undefined paths", () => {
+        expect(() => validateExecutablePath(null, allowedPaths)).toThrow(
+          "Executable path is required",
+        );
+        expect(() => validateExecutablePath(undefined, allowedPaths)).toThrow(
+          "Executable path is required",
+        );
+      });
+
+      it("should reject newline injection in paths", () => {
+        expect(() =>
+          validateExecutablePath(
+            "/app/resources/win/libimobiledevice/file\n;malicious",
+            allowedPaths,
+          ),
+        ).toThrow("Executable path contains dangerous characters");
+      });
+    });
+  });
+
+  describe("validateMsiPath", () => {
+    const allowedPaths = [
+      "C:\\Users\\App\\AppData\\Roaming\\magic-audit",
+      "C:\\Program Files\\magic-audit\\resources",
+    ];
+
+    describe("Valid MSI paths", () => {
+      it("should accept MSI files within allowed directories", () => {
+        const msiPath =
+          "C:\\Users\\App\\AppData\\Roaming\\magic-audit\\drivers\\AppleMobileDeviceSupport64.msi";
+        expect(validateMsiPath(msiPath, allowedPaths)).toBe(msiPath);
+      });
+
+      it("should be case-insensitive for .msi extension", () => {
+        const msiPath =
+          "C:\\Users\\App\\AppData\\Roaming\\magic-audit\\drivers\\Driver.MSI";
+        expect(validateMsiPath(msiPath, allowedPaths)).toBe(msiPath);
+      });
+    });
+
+    describe("Invalid MSI paths - Security", () => {
+      it("should reject files that are not MSI", () => {
+        expect(() =>
+          validateMsiPath(
+            "C:\\Users\\App\\AppData\\Roaming\\magic-audit\\malware.exe",
+            allowedPaths,
+          ),
+        ).toThrow("Path must be an MSI file");
+      });
+
+      it("should reject MSI files outside allowed directories", () => {
+        expect(() =>
+          validateMsiPath("C:\\Windows\\System32\\evil.msi", allowedPaths),
+        ).toThrow("Executable path is not in an allowed location");
+      });
+
+      it("should reject path traversal in MSI paths", () => {
+        expect(() =>
+          validateMsiPath(
+            "C:\\Users\\App\\AppData\\Roaming\\magic-audit\\..\\..\\..\\evil.msi",
+            allowedPaths,
+          ),
+        ).toThrow("Executable path contains path traversal sequences");
+      });
+
+      it("should reject null/empty MSI paths", () => {
+        expect(() => validateMsiPath(null, allowedPaths)).toThrow(
+          "MSI path is required",
+        );
+        expect(() => validateMsiPath("", allowedPaths)).toThrow(
+          "MSI path is required",
+        );
+      });
     });
   });
 });

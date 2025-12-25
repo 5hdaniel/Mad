@@ -287,10 +287,28 @@ export async function installAppleDrivers(): Promise<DriverInstallResult> {
 /**
  * Run MSI installer with elevated privileges using PowerShell
  * This triggers the UAC prompt for admin elevation
+ *
+ * SECURITY AUDIT (TASK-601):
+ * This function uses spawn("powershell", ...) with msiPath embedded in the command.
+ *
+ * RISK ANALYSIS:
+ * - msiPath comes from getBundledDriverPath() which returns paths from:
+ *   1. getDownloadedDriverPath() - paths within app.getPath("userData")
+ *   2. Bundled resources (process.resourcesPath or __dirname)
+ * - The path is NOT user-controlled - it's constructed internally from known directories
+ * - The path is validated by fs.existsSync() before being used
+ *
+ * CONCLUSION: SAFE - No user-controlled input flows into the spawn command.
+ * The msiPath is always from trusted internal sources (bundled resources or app's
+ * userData directory with fixed subdirectory structure).
+ *
+ * DEFENSE-IN-DEPTH: The path is quoted in the PowerShell command to handle
+ * paths with spaces, and msiexec.exe is the target executable (a known Windows binary).
  */
 function runMsiInstaller(msiPath: string): Promise<DriverInstallResult> {
   return new Promise((resolve) => {
     // Build msiexec arguments
+    // SECURITY: msiPath is from trusted internal sources (bundled or userData)
     const msiArgs = `/i "${msiPath}" /qn /norestart REBOOT=ReallySuppress`;
 
     // Use PowerShell Start-Process with -Verb RunAs to trigger UAC elevation

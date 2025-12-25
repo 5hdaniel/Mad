@@ -11,6 +11,7 @@ import { EventEmitter } from "events";
 import log from "electron-log";
 import { iOSDevice, DeviceStorageInfo } from "../types/device";
 import { getCommand, canUseLibimobiledevice } from "./libimobiledeviceService";
+import { validateDeviceUdid, isValidDeviceUdid, ValidationError } from "../utils/validation";
 
 const execAsync = promisify(exec);
 
@@ -235,14 +236,25 @@ export class DeviceDetectionService extends EventEmitter {
           return;
         }
 
-        const udids = stdout
+        const rawUdids = stdout
           .trim()
           .split("\n")
           .filter((line) => line.trim().length > 0);
 
+        // SECURITY (TASK-601): Validate UDIDs returned from idevice_id
+        // While this command is trusted, we validate its output as defense-in-depth
+        // before using these UDIDs in subsequent spawn calls (getDeviceInfo, etc.)
+        const validUdids = rawUdids.filter((udid) => {
+          const valid = isValidDeviceUdid(udid);
+          if (!valid) {
+            log.warn(`[DeviceDetection] Ignoring invalid UDID format: ${udid}`);
+          }
+          return valid;
+        });
+
         // Only log device count changes, not every poll
         // The pollDevices() method will log when devices connect/disconnect
-        resolve(udids);
+        resolve(validUdids);
       });
 
       proc.on("error", (err) => {
@@ -256,6 +268,10 @@ export class DeviceDetectionService extends EventEmitter {
    * Gets detailed information about a specific device.
    * @param udid Device unique identifier
    * @returns Promise that resolves to device information
+   *
+   * SECURITY (TASK-601): UDID is validated before use in spawn() to prevent
+   * command injection. The UDID can come from listDevices() output or from
+   * external callers via IPC.
    */
   async getDeviceInfo(udid: string): Promise<iOSDevice> {
     // Mock mode returns fake device info
@@ -263,10 +279,23 @@ export class DeviceDetectionService extends EventEmitter {
       return { ...MOCK_DEVICE };
     }
 
+    // SECURITY: Validate UDID before spawning process
+    let validatedUdid: string;
+    try {
+      validatedUdid = validateDeviceUdid(udid);
+    } catch (error) {
+      log.error("[DeviceDetection] Invalid UDID:", error);
+      throw new Error(
+        error instanceof ValidationError
+          ? error.message
+          : "Invalid device UDID format",
+      );
+    }
+
     return new Promise((resolve, reject) => {
       const ideviceinfoCmd = getCommand("ideviceinfo");
-      log.debug(`[DeviceDetection] Running: ${ideviceinfoCmd} -u ${udid}`);
-      const proc = spawn(ideviceinfoCmd, ["-u", udid]);
+      log.debug(`[DeviceDetection] Running: ${ideviceinfoCmd} -u ${validatedUdid}`);
+      const proc = spawn(ideviceinfoCmd, ["-u", validatedUdid]);
       let stdout = "";
       let stderr = "";
 
@@ -334,15 +363,28 @@ export class DeviceDetectionService extends EventEmitter {
    * Uses ideviceinfo -q com.apple.disk_usage to query disk usage.
    * @param udid Device UDID
    * @returns Storage info with estimated backup size
+   *
+   * SECURITY (TASK-601): UDID is validated before use in spawn() to prevent
+   * command injection.
    */
   async getDeviceStorageInfo(udid: string): Promise<DeviceStorageInfo | null> {
     try {
+      // SECURITY: Validate UDID before spawning process
+      let validatedUdid: string;
+      try {
+        validatedUdid = validateDeviceUdid(udid);
+      } catch (error) {
+        log.error("[DeviceDetection] Invalid UDID for storage info:", error);
+        return null;
+      }
+
       const ideviceinfoCmd = getCommand("ideviceinfo");
-      log.debug(`[DeviceDetection] Getting storage info for device: ${udid}`);
+      log.debug(`[DeviceDetection] Getting storage info for device: ${validatedUdid}`);
 
       return new Promise((resolve) => {
         // Query disk usage domain for storage information
-        const proc = spawn(ideviceinfoCmd, ["-u", udid, "-q", "com.apple.disk_usage"]);
+        // SECURITY: validatedUdid has been validated
+        const proc = spawn(ideviceinfoCmd, ["-u", validatedUdid, "-q", "com.apple.disk_usage"]);
         let stdout = "";
         let stderr = "";
 

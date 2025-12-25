@@ -716,3 +716,244 @@ export function sanitizeObject(
 
   return cleaned;
 }
+
+// =============================================================================
+// SECURITY: Device and Spawn Input Validation
+// =============================================================================
+// These validators are CRITICAL for preventing command injection attacks.
+// All spawn/exec calls that take external input MUST validate that input first.
+//
+// SECURITY AUDIT (TASK-601):
+// - appleDriverService.ts: PowerShell spawn uses internal paths only (safe)
+// - backupService.ts: UDID from IPC - MUST validate before spawn
+// - deviceDetectionService.ts: UDID from IPC - MUST validate before spawn
+// =============================================================================
+
+/**
+ * iOS Device UDID format patterns.
+ *
+ * SECURITY: UDIDs are used as command-line arguments to ideviceinfo, idevicebackup2, etc.
+ * If not validated, a malicious UDID could inject shell commands.
+ *
+ * Valid UDID formats:
+ * - iOS devices (pre-iPhone X): 40 hexadecimal characters
+ *   Example: "a1b2c3d4e5f6789012345678901234567890abcd"
+ *
+ * - iOS devices (iPhone X+): 8-4-16 format with hyphens (25 chars total)
+ *   Example: "00000000-0000000000000000"
+ *
+ * - Simulator UDIDs: Standard UUID format (36 chars with hyphens)
+ *   Example: "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
+ */
+const UDID_PATTERNS = {
+  /** 40 hex chars - traditional iOS UDID format */
+  TRADITIONAL: /^[0-9a-fA-F]{40}$/,
+  /** 8-4-16 format - newer iOS devices (iPhone X+) */
+  MODERN: /^[0-9a-fA-F]{8}-[0-9a-fA-F]{16}$/,
+  /** UUID format - iOS Simulator */
+  SIMULATOR: /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/,
+};
+
+/**
+ * Validate iOS device UDID for use in spawn/exec commands.
+ *
+ * SECURITY: This is a CRITICAL security function. UDIDs are passed as arguments
+ * to libimobiledevice CLI tools (ideviceinfo, idevicebackup2, etc.). Without
+ * validation, a malicious UDID could contain shell metacharacters that enable
+ * command injection.
+ *
+ * @param udid - Device UDID to validate
+ * @param required - Whether the field is required (default: true)
+ * @returns Validated UDID string
+ * @throws ValidationError if validation fails
+ *
+ * @example
+ * // Valid UDIDs
+ * validateDeviceUdid("00000000-0000000000000000"); // Modern format
+ * validateDeviceUdid("a1b2c3d4e5f6789012345678901234567890abcd"); // Traditional
+ *
+ * // Invalid - would throw ValidationError
+ * validateDeviceUdid("$(rm -rf /)"); // Command injection attempt
+ * validateDeviceUdid("udid; cat /etc/passwd"); // Shell metacharacters
+ */
+export function validateDeviceUdid(
+  udid: unknown,
+  required: boolean = true,
+): string {
+  // Check for null/undefined/empty
+  if (udid === null || udid === undefined || udid === "") {
+    if (required) {
+      throw new ValidationError("Device UDID is required", "udid");
+    }
+    return "";
+  }
+
+  // Must be a string
+  if (typeof udid !== "string") {
+    throw new ValidationError("Device UDID must be a string", "udid");
+  }
+
+  const trimmed = udid.trim();
+
+  // Check length bounds (shortest is 25 for modern format, longest is 40 for traditional)
+  if (trimmed.length < 25 || trimmed.length > 40) {
+    throw new ValidationError(
+      "Device UDID has invalid length (expected 25-40 characters)",
+      "udid",
+    );
+  }
+
+  // Validate against known UDID patterns
+  const isValidFormat =
+    UDID_PATTERNS.TRADITIONAL.test(trimmed) ||
+    UDID_PATTERNS.MODERN.test(trimmed) ||
+    UDID_PATTERNS.SIMULATOR.test(trimmed);
+
+  if (!isValidFormat) {
+    throw new ValidationError(
+      "Device UDID has invalid format (must be hexadecimal with optional hyphens)",
+      "udid",
+    );
+  }
+
+  return trimmed;
+}
+
+/**
+ * Check if a UDID is valid without throwing.
+ *
+ * SECURITY: Use this for quick validation checks before spawning processes.
+ *
+ * @param udid - Device UDID to check
+ * @returns true if valid, false otherwise
+ *
+ * @example
+ * if (!isValidDeviceUdid(options.udid)) {
+ *   return { success: false, error: "Invalid device UDID" };
+ * }
+ */
+export function isValidDeviceUdid(udid: unknown): boolean {
+  try {
+    validateDeviceUdid(udid);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Validate an executable path for spawn/exec operations.
+ *
+ * SECURITY: Executable paths used with spawn() must be validated to prevent:
+ * - Path traversal attacks (../)
+ * - Execution of arbitrary binaries
+ * - Shell injection via path manipulation
+ *
+ * @param execPath - Path to the executable
+ * @param allowedBasePaths - Array of allowed base paths the executable must be under
+ * @returns Validated path string
+ * @throws ValidationError if path is invalid or not under allowed paths
+ *
+ * @example
+ * // Validate that an executable is in the expected location
+ * const validPath = validateExecutablePath(
+ *   "/app/resources/win/libimobiledevice/ideviceinfo.exe",
+ *   ["/app/resources/win/libimobiledevice", "C:\\Program Files\\7-Zip"]
+ * );
+ */
+export function validateExecutablePath(
+  execPath: unknown,
+  allowedBasePaths: string[],
+): string {
+  if (!execPath || typeof execPath !== "string") {
+    throw new ValidationError(
+      "Executable path is required and must be a string",
+      "execPath",
+    );
+  }
+
+  const trimmed = execPath.trim();
+
+  // Check for empty path
+  if (trimmed.length === 0) {
+    throw new ValidationError("Executable path cannot be empty", "execPath");
+  }
+
+  // Prevent path traversal attacks
+  if (trimmed.includes("..")) {
+    throw new ValidationError(
+      "Executable path contains path traversal sequences",
+      "execPath",
+    );
+  }
+
+  // Check for shell metacharacters that could enable injection
+  // These characters have special meaning in shell contexts
+  const dangerousChars = /[;&|`$(){}[\]<>!#*?~\n\r]/;
+  if (dangerousChars.test(trimmed)) {
+    throw new ValidationError(
+      "Executable path contains dangerous characters",
+      "execPath",
+    );
+  }
+
+  // Normalize path separators for cross-platform comparison
+  const normalizedPath = trimmed.replace(/\\/g, "/").toLowerCase();
+
+  // Verify path is under one of the allowed base paths
+  const isUnderAllowedPath = allowedBasePaths.some((basePath) => {
+    const normalizedBase = basePath.replace(/\\/g, "/").toLowerCase();
+    return normalizedPath.startsWith(normalizedBase);
+  });
+
+  if (!isUnderAllowedPath) {
+    throw new ValidationError(
+      "Executable path is not in an allowed location",
+      "execPath",
+    );
+  }
+
+  return trimmed;
+}
+
+/**
+ * Validate an MSI installer path for Windows driver installation.
+ *
+ * SECURITY: MSI paths are embedded in PowerShell commands. Invalid paths
+ * could enable command injection. This function ensures:
+ * - Path is within expected directories (app resources or userData)
+ * - No path traversal sequences
+ * - File has .msi extension
+ *
+ * @param msiPath - Path to the MSI file
+ * @param allowedBasePaths - Array of allowed base paths
+ * @returns Validated path string
+ * @throws ValidationError if validation fails
+ *
+ * @example
+ * validateMsiPath(
+ *   "C:\\Users\\App\\resources\\win\\AppleMobileDeviceSupport64.msi",
+ *   [app.getPath("userData"), process.resourcesPath]
+ * );
+ */
+export function validateMsiPath(
+  msiPath: unknown,
+  allowedBasePaths: string[],
+): string {
+  if (!msiPath || typeof msiPath !== "string") {
+    throw new ValidationError(
+      "MSI path is required and must be a string",
+      "msiPath",
+    );
+  }
+
+  const trimmed = msiPath.trim();
+
+  // Must end with .msi extension
+  if (!trimmed.toLowerCase().endsWith(".msi")) {
+    throw new ValidationError("Path must be an MSI file", "msiPath");
+  }
+
+  // Validate as executable path (reuse common checks)
+  return validateExecutablePath(trimmed, allowedBasePaths);
+}
