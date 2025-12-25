@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import type { Transaction, OAuthProvider } from "@/types";
 import AuditTransactionModal from "./AuditTransactionModal";
 import ExportModal from "./ExportModal";
@@ -14,6 +14,10 @@ import { useToast } from "../hooks/useToast";
 import TransactionStatusWrapper from "./transaction/TransactionStatusWrapper";
 import TransactionCard from "./transaction/TransactionCard";
 import TransactionToolbar from "./transaction/TransactionToolbar";
+import {
+  useTransactionList,
+  type TransactionFilter,
+} from "./transaction/hooks/useTransactionList";
 
 interface ScanProgress {
   step: string;
@@ -36,27 +40,9 @@ function TransactionList({
   provider,
   onClose,
 }: TransactionListComponentProps) {
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [scanning, setScanning] = useState<boolean>(false);
-  const [scanProgress, setScanProgress] = useState<ScanProgress | null>(null);
+  // UI state for search and filter
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [selectedTransaction, setSelectedTransaction] =
-    useState<Transaction | null>(null);
-  const [pendingReviewTransaction, setPendingReviewTransaction] =
-    useState<Transaction | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [showAuditCreate, setShowAuditCreate] = useState<boolean>(false);
-  const [quickExportTransaction, setQuickExportTransaction] =
-    useState<Transaction | null>(null);
-  const [quickExportSuccess, setQuickExportSuccess] = useState<string | null>(
-    null,
-  );
-
-  // Consolidated filter - combines status and detection into one
-  const [filter, setFilter] = useState<
-    "all" | "pending" | "active" | "closed" | "rejected"
-  >(() => {
+  const [filter, setFilter] = useState<TransactionFilter>(() => {
     const params = new URLSearchParams(window.location.search);
     const urlFilter = params.get("filter");
     if (
@@ -69,6 +55,33 @@ function TransactionList({
     }
     return "all";
   });
+
+  // Transaction data management via hook
+  const {
+    transactions,
+    filteredTransactions,
+    loading,
+    error,
+    filterCounts,
+    refetch: loadTransactions,
+    setError,
+  } = useTransactionList(userId, filter, searchQuery);
+
+  // Scan state
+  const [scanning, setScanning] = useState<boolean>(false);
+  const [scanProgress, setScanProgress] = useState<ScanProgress | null>(null);
+
+  // Modal state
+  const [selectedTransaction, setSelectedTransaction] =
+    useState<Transaction | null>(null);
+  const [pendingReviewTransaction, setPendingReviewTransaction] =
+    useState<Transaction | null>(null);
+  const [showAuditCreate, setShowAuditCreate] = useState<boolean>(false);
+  const [quickExportTransaction, setQuickExportTransaction] =
+    useState<Transaction | null>(null);
+  const [quickExportSuccess, setQuickExportSuccess] = useState<string | null>(
+    null,
+  );
 
   // Selection state for bulk operations
   const {
@@ -94,8 +107,6 @@ function TransactionList({
   const { toasts, showSuccess, showError, removeToast } = useToast();
 
   useEffect(() => {
-    loadTransactions();
-
     // Listen for scan progress
     let cleanup: (() => void) | undefined;
     if (window.api?.onTransactionScanProgress) {
@@ -120,39 +131,6 @@ function TransactionList({
       : window.location.pathname;
     window.history.replaceState({}, "", newUrl);
   }, [filter]);
-
-  // Compute filter counts
-  const filterCounts = useMemo(
-    () => ({
-      all: transactions.length,
-      pending: transactions.filter((t) => t.detection_status === "pending")
-        .length,
-      active: transactions.filter(
-        (t) => t.status === "active" && t.detection_status !== "pending" && t.detection_status !== "rejected"
-      ).length,
-      closed: transactions.filter((t) => t.status === "closed").length,
-      rejected: transactions.filter((t) => t.detection_status === "rejected")
-        .length,
-    }),
-    [transactions],
-  );
-
-  const loadTransactions = async (): Promise<void> => {
-    try {
-      setLoading(true);
-      const result = await window.api.transactions.getAll(userId);
-
-      if (result.success) {
-        setTransactions(result.transactions || []);
-      } else {
-        setError(result.error || "Failed to load transactions");
-      }
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleScanProgress = (progress: unknown): void => {
     const scanProgress = progress as ScanProgress;
@@ -220,36 +198,6 @@ function TransactionList({
       day: "numeric",
     });
   };
-
-  const filteredTransactions = transactions.filter((t) => {
-    const matchesSearch = t.property_address
-      ?.toLowerCase()
-      .includes(searchQuery.toLowerCase());
-
-    let matchesFilter = false;
-    switch (filter) {
-      case "all":
-        matchesFilter = true;
-        break;
-      case "pending":
-        matchesFilter = t.detection_status === "pending";
-        break;
-      case "active":
-        // Active = status is active AND not pending review AND not rejected
-        matchesFilter = t.status === "active" &&
-          t.detection_status !== "pending" &&
-          t.detection_status !== "rejected";
-        break;
-      case "closed":
-        matchesFilter = t.status === "closed";
-        break;
-      case "rejected":
-        matchesFilter = t.detection_status === "rejected";
-        break;
-    }
-
-    return matchesSearch && matchesFilter;
-  });
 
   const handleQuickExport = (
     transaction: Transaction,

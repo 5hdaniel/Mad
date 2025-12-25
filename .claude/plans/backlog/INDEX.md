@@ -215,6 +215,8 @@ This index tracks all backlog items with their current status and metadata.
 - 2025-12-24: TASK-513 (Toast Fix) completed - PR #200 merged, 2 turns, ~16K tokens, 20m
 - 2025-12-24: TASK-514 (Extract TransactionStatusWrapper) completed - PR #201 merged, 4 turns, ~16K tokens, 12m
 - 2025-12-24: TASK-515 (Extract TransactionCard) completed - PR #202 merged, 1 turn, ~12K tokens, 7m
+- 2025-12-24: TASK-516 (Extract TransactionToolbar) completed - PR #203 merged, 5 turns, ~20K tokens, 23m
+- 2025-12-24: Phase 3 (Component Extraction) complete - TransactionList reduced to ~625 lines
 
 ---
 
