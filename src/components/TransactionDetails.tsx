@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import type { Transaction, Communication, Contact } from "@/types";
 import ExportModal from "./ExportModal";
+import AuditTransactionModal from "./AuditTransactionModal";
+import { ToastContainer } from "./Toast";
+import { useToast } from "../hooks/useToast";
+import { useTransactionStatusUpdate } from "../hooks/useTransactionStatusUpdate";
 
 /**
  * Interface for AI-suggested contact assignment
@@ -36,6 +40,14 @@ interface TransactionDetailsComponentProps {
   transaction: Transaction;
   onClose: () => void;
   onTransactionUpdated?: () => void;
+  /** If true, shows approve/reject buttons instead of export/delete (for pending review) */
+  isPendingReview?: boolean;
+  /** User ID for feedback recording */
+  userId?: string;
+  /** Toast handler for success messages - if provided, uses parent's toast system */
+  onShowSuccess?: (message: string) => void;
+  /** Toast handler for error messages - if provided, uses parent's toast system */
+  onShowError?: (message: string) => void;
 }
 
 /**
@@ -46,6 +58,10 @@ function TransactionDetails({
   transaction,
   onClose,
   onTransactionUpdated,
+  isPendingReview = false,
+  userId,
+  onShowSuccess,
+  onShowError,
 }: TransactionDetailsComponentProps) {
   const [communications, setCommunications] = useState<Communication[]>([]);
   const [contactAssignments, setContactAssignments] = useState<
@@ -64,6 +80,23 @@ function TransactionDetails({
   const [resolvedSuggestions, setResolvedSuggestions] = useState<ResolvedSuggestedContact[]>([]);
   const [processingContactId, setProcessingContactId] = useState<string | null>(null);
   const [processingAll, setProcessingAll] = useState<boolean>(false);
+
+  // Pending review state - using custom hook
+  const [showRejectReasonModal, setShowRejectReasonModal] = useState<boolean>(false);
+  const [rejectReason, setRejectReason] = useState<string>("");
+  const [showEditModal, setShowEditModal] = useState<boolean>(false);
+
+  // Toast notifications - use props if provided, otherwise use local fallback
+  const localToast = useToast();
+  const showSuccess = onShowSuccess || localToast.showSuccess;
+  const showError = onShowError || localToast.showError;
+
+  // Transaction status update hook - handles approve/reject/restore with validation
+  const { state: statusState, approve, reject, restore } = useTransactionStatusUpdate(userId);
+  const { isApproving, isRejecting, isRestoring } = statusState;
+
+  // Check if transaction was rejected
+  const isRejected = transaction.detection_status === "rejected";
 
   /**
    * Parse and memoize suggested contacts from transaction
@@ -174,9 +207,62 @@ function TransactionDetails({
       }
     } catch (err) {
       console.error("Failed to delete transaction:", err);
-      alert("Failed to delete transaction. Please try again.");
+      showError("Failed to delete transaction. Please try again.");
     }
   };
+
+  /**
+   * Approve pending transaction
+   * Uses the useTransactionStatusUpdate hook for validation and feedback recording
+   */
+  const handleApprove = useCallback(async (): Promise<void> => {
+    const success = await approve(transaction.id, {
+      onSuccess: () => {
+        showSuccess("Transaction approved successfully!");
+        onClose();
+        onTransactionUpdated?.();
+      },
+      onError: (error) => {
+        showError(error);
+      },
+    });
+  }, [approve, transaction.id, onClose, onTransactionUpdated, showSuccess, showError]);
+
+  /**
+   * Reject transaction (works for both pending and active)
+   * Uses the useTransactionStatusUpdate hook for validation and feedback recording
+   */
+  const handleReject = useCallback(async (): Promise<void> => {
+    const success = await reject(transaction.id, rejectReason, {
+      onSuccess: () => {
+        showSuccess("Transaction rejected");
+        setShowRejectReasonModal(false);
+        setRejectReason("");
+        onClose();
+        onTransactionUpdated?.();
+      },
+      onError: (error) => {
+        showError(error);
+      },
+    });
+  }, [reject, transaction.id, rejectReason, onClose, onTransactionUpdated, showSuccess, showError]);
+
+  /**
+   * Restore rejected transaction to active
+   * Uses the useTransactionStatusUpdate hook for validation and feedback recording
+   */
+  const handleRestore = useCallback(async (): Promise<void> => {
+    const success = await restore(transaction.id, {
+      onSuccess: () => {
+        showSuccess("Transaction restored to active");
+        onClose();
+        onTransactionUpdated?.();
+      },
+      onError: (error) => {
+        showError(error);
+      },
+    });
+  }, [restore, transaction.id, onClose, onTransactionUpdated, showSuccess, showError]);
 
   const handleUnlinkCommunication = async (
     comm: Communication,
@@ -189,13 +275,14 @@ function TransactionDetails({
         // Remove the communication from the local state
         setCommunications((prev) => prev.filter((c) => c.id !== comm.id));
         setShowUnlinkConfirm(null);
+        showSuccess("Email unlinked from transaction");
       } else {
         console.error("Failed to unlink communication:", result.error);
-        alert("Failed to unlink email. Please try again.");
+        showError("Failed to unlink email. Please try again.");
       }
     } catch (err) {
       console.error("Failed to unlink communication:", err);
-      alert("Failed to unlink email. Please try again.");
+      showError("Failed to unlink email. Please try again.");
     } finally {
       setUnlinkingCommId(null);
     }
@@ -262,9 +349,10 @@ function TransactionDetails({
       if (onTransactionUpdated) {
         onTransactionUpdated();
       }
+      showSuccess("Contact suggestion accepted");
     } catch (err) {
       console.error("Failed to accept suggestion:", err);
-      alert("Failed to accept contact suggestion. Please try again.");
+      showError("Failed to accept contact suggestion. Please try again.");
     } finally {
       setProcessingContactId(null);
     }
@@ -276,6 +364,8 @@ function TransactionDetails({
     resolvedSuggestions,
     updateSuggestedContacts,
     onTransactionUpdated,
+    showSuccess,
+    showError,
   ]);
 
   /**
@@ -314,9 +404,10 @@ function TransactionDetails({
       if (onTransactionUpdated) {
         onTransactionUpdated();
       }
+      showSuccess("Contact suggestion rejected");
     } catch (err) {
       console.error("Failed to reject suggestion:", err);
-      alert("Failed to reject contact suggestion. Please try again.");
+      showError("Failed to reject contact suggestion. Please try again.");
     } finally {
       setProcessingContactId(null);
     }
@@ -328,6 +419,8 @@ function TransactionDetails({
     resolvedSuggestions,
     updateSuggestedContacts,
     onTransactionUpdated,
+    showSuccess,
+    showError,
   ]);
 
   /**
@@ -370,9 +463,10 @@ function TransactionDetails({
       if (onTransactionUpdated) {
         onTransactionUpdated();
       }
+      showSuccess("All contact suggestions accepted");
     } catch (err) {
       console.error("Failed to accept all suggestions:", err);
-      alert("Failed to accept all suggestions. Please try again.");
+      showError("Failed to accept all suggestions. Please try again.");
     } finally {
       setProcessingAll(false);
     }
@@ -384,62 +478,185 @@ function TransactionDetails({
     transaction.user_id,
     updateSuggestedContacts,
     onTransactionUpdated,
+    showSuccess,
+    showError,
   ]);
+
+  // Determine header style based on state
+  const getHeaderStyle = () => {
+    if (isPendingReview) return "bg-gradient-to-r from-amber-500 to-orange-500";
+    if (isRejected) return "bg-gradient-to-r from-red-500 to-red-600";
+    return "bg-gradient-to-r from-green-500 to-teal-600";
+  };
+
+  const getHeaderTextStyle = () => {
+    if (isPendingReview) return "text-amber-100";
+    if (isRejected) return "text-red-100";
+    return "text-green-100";
+  };
+
+  const getHeaderTitle = () => {
+    if (isPendingReview) return "Review Transaction";
+    if (isRejected) return "Rejected Transaction";
+    return "Transaction Details";
+  };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[60] p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
-        {/* Header */}
-        <div className="flex-shrink-0 bg-gradient-to-r from-green-500 to-teal-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
+        {/* Header - amber for pending, red for rejected, green for regular */}
+        <div className={`flex-shrink-0 px-6 py-4 flex items-center justify-between rounded-t-xl ${getHeaderStyle()}`}>
           <div>
-            <h3 className="text-xl font-bold text-white">
-              Transaction Details
-            </h3>
-            <p className="text-green-100 text-sm">
+            <div className="flex items-center gap-2">
+              <h3 className="text-xl font-bold text-white">
+                {getHeaderTitle()}
+              </h3>
+              {isPendingReview && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-white/20 text-white">
+                  Pending Review
+                </span>
+              )}
+              {isRejected && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-white/20 text-white">
+                  Rejected
+                </span>
+              )}
+            </div>
+            <p className={`text-sm ${getHeaderTextStyle()}`}>
               {transaction.property_address}
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {/* Export Button */}
-            <button
-              onClick={() => setShowExportModal(true)}
-              className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-white text-green-600 hover:bg-opacity-90 shadow-md hover:shadow-lg"
-            >
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                />
-              </svg>
-              Export
-            </button>
-            {/* Delete Button */}
-            <button
-              onClick={() => setShowDeleteConfirm(true)}
-              className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-white text-red-600 hover:bg-opacity-90 shadow-md hover:shadow-lg"
-            >
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                />
-              </svg>
-              Delete
-            </button>
+            {isPendingReview ? (
+              <>
+                {/* Reject Button */}
+                <button
+                  onClick={() => setShowRejectReasonModal(true)}
+                  disabled={isRejecting}
+                  className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-white text-red-600 hover:bg-opacity-90 shadow-md hover:shadow-lg disabled:opacity-50"
+                >
+                  {isRejecting ? (
+                    <div className="w-5 h-5 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  )}
+                  Reject
+                </button>
+                {/* Edit Button */}
+                <button
+                  onClick={() => setShowEditModal(true)}
+                  className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-white text-amber-600 hover:bg-opacity-90 shadow-md hover:shadow-lg"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                  Edit
+                </button>
+                {/* Approve Button */}
+                <button
+                  onClick={handleApprove}
+                  disabled={isApproving}
+                  className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-emerald-500 text-white hover:bg-emerald-600 shadow-md hover:shadow-lg disabled:opacity-50"
+                >
+                  {isApproving ? (
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                  Approve
+                </button>
+              </>
+            ) : isRejected ? (
+              <>
+                {/* Restore to Active Button */}
+                <button
+                  onClick={handleRestore}
+                  disabled={isRestoring}
+                  className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-emerald-500 text-white hover:bg-emerald-600 shadow-md hover:shadow-lg disabled:opacity-50"
+                >
+                  {isRestoring ? (
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  )}
+                  Restore to Active
+                </button>
+                {/* Delete Button */}
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-white text-red-600 hover:bg-opacity-90 shadow-md hover:shadow-lg"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                  Delete
+                </button>
+              </>
+            ) : (
+              <>
+                {/* Reject Button - allows marking active transaction as invalid */}
+                <button
+                  onClick={() => setShowRejectReasonModal(true)}
+                  disabled={isRejecting}
+                  className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-white text-orange-600 hover:bg-opacity-90 shadow-md hover:shadow-lg disabled:opacity-50"
+                >
+                  {isRejecting ? (
+                    <div className="w-5 h-5 border-2 border-orange-600 border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                    </svg>
+                  )}
+                  Reject
+                </button>
+                {/* Export Button */}
+                <button
+                  onClick={() => setShowExportModal(true)}
+                  className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-white text-green-600 hover:bg-opacity-90 shadow-md hover:shadow-lg"
+                >
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                    />
+                  </svg>
+                  Export
+                </button>
+                {/* Delete Button */}
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-white text-red-600 hover:bg-opacity-90 shadow-md hover:shadow-lg"
+                >
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                    />
+                  </svg>
+                  Delete
+                </button>
+              </>
+            )}
             {/* Close Button */}
             <button
               onClick={onClose}
@@ -1252,6 +1469,86 @@ function TransactionDetails({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Reject Reason Modal */}
+      {showRejectReasonModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[70] p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-bold text-gray-900">
+                Reject Transaction
+              </h3>
+            </div>
+            <p className="text-sm text-gray-600 mb-4">
+              Are you sure this is not a valid real estate transaction?
+            </p>
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Reason for rejection (optional)
+              </label>
+              <textarea
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                placeholder="e.g., Not a real estate transaction, duplicate entry..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 resize-none"
+                rows={3}
+              />
+            </div>
+            <div className="flex items-center gap-3 justify-end">
+              <button
+                onClick={() => {
+                  setShowRejectReasonModal(false);
+                  setRejectReason("");
+                }}
+                disabled={isRejecting}
+                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg font-medium transition-all disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleReject}
+                disabled={isRejecting}
+                className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg font-semibold transition-all disabled:opacity-50 flex items-center gap-2"
+              >
+                {isRejecting ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Rejecting...
+                  </>
+                ) : (
+                  "Reject Transaction"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Transaction Modal */}
+      {showEditModal && (
+        <AuditTransactionModal
+          userId={parseInt(transaction.user_id, 10)}
+          onClose={() => setShowEditModal(false)}
+          onSuccess={() => {
+            setShowEditModal(false);
+            loadDetails();
+            if (onTransactionUpdated) {
+              onTransactionUpdated();
+            }
+          }}
+          editTransaction={transaction}
+        />
+      )}
+
+      {/* Toast Notifications - only render if using local toast (no parent handlers provided) */}
+      {!onShowSuccess && !onShowError && (
+        <ToastContainer toasts={localToast.toasts} onDismiss={localToast.removeToast} />
       )}
     </div>
   );

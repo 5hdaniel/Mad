@@ -75,6 +75,80 @@ interface ScanProgress {
   message: string;
 }
 
+// ============================================
+// DETECTION BADGE COMPONENTS
+// ============================================
+
+/**
+ * Badge showing whether transaction was AI-detected or manually created
+ */
+function DetectionSourceBadge({
+  source,
+}: {
+  source: "auto" | "manual" | "hybrid" | undefined;
+}) {
+  if (!source || source === "manual") {
+    return null; // Don't show badge for manual transactions
+  }
+
+  // AI-detected or hybrid shows the gradient badge
+  return (
+    <span
+      className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium text-white"
+      style={{ background: "linear-gradient(135deg, #3B82F6, #8B5CF6)" }}
+    >
+      AI Detected
+    </span>
+  );
+}
+
+/**
+ * Confidence pill with color scale based on confidence level
+ * Red (<60%), Yellow (60-80%), Green (>80%)
+ */
+function ConfidencePill({ confidence }: { confidence: number | undefined }) {
+  if (confidence === undefined || confidence === null) {
+    return null;
+  }
+
+  // Convert from 0-1 to percentage if needed
+  const percentage =
+    confidence <= 1 ? Math.round(confidence * 100) : Math.round(confidence);
+
+  let bgColor: string;
+  let textColor: string;
+
+  if (percentage < 60) {
+    bgColor = "bg-red-500";
+    textColor = "text-white";
+  } else if (percentage < 80) {
+    bgColor = "bg-amber-500";
+    textColor = "text-white";
+  } else {
+    bgColor = "bg-emerald-500";
+    textColor = "text-white";
+  }
+
+  return (
+    <span
+      className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${bgColor} ${textColor}`}
+    >
+      {percentage}% confident
+    </span>
+  );
+}
+
+/**
+ * Warning badge for transactions pending user review
+ */
+function PendingReviewBadge() {
+  return (
+    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-500 text-white">
+      Pending Review
+    </span>
+  );
+}
+
 interface TransactionsProps {
   userId: string;
   provider?: string; // Optional - will auto-detect if not provided
@@ -368,7 +442,7 @@ function Transactions({ userId, provider, onClose }: TransactionsProps) {
   };
 
   // Bulk status change handler
-  const handleBulkStatusChange = async (status: "active" | "closed") => {
+  const handleBulkStatusChange = async (status: "pending" | "active" | "closed" | "rejected") => {
     if (selectedCount === 0) return;
 
     setIsBulkUpdating(true);
@@ -820,9 +894,26 @@ function Transactions({ userId, provider, onClose }: TransactionsProps) {
                     </div>
                   )}
                   <div className="flex-1">
-                    <h3 className="font-semibold text-gray-900 mb-1">
-                      {transaction.property_address}
-                    </h3>
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-semibold text-gray-900">
+                        {transaction.property_address}
+                      </h3>
+                      {/* Detection Status Badges */}
+                      <div className="flex items-center gap-1.5">
+                        <DetectionSourceBadge
+                          source={transaction.detection_source}
+                        />
+                        {transaction.detection_source === "auto" &&
+                          transaction.detection_confidence !== undefined && (
+                            <ConfidencePill
+                              confidence={transaction.detection_confidence}
+                            />
+                          )}
+                        {transaction.detection_status === "pending" && (
+                          <PendingReviewBadge />
+                        )}
+                      </div>
+                    </div>
                     <div className="flex items-center gap-4 text-sm text-gray-600">
                       {transaction.transaction_type && (
                         <span className="flex items-center gap-1">

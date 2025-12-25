@@ -2437,6 +2437,14 @@ class DatabaseService implements IDatabaseService {
   ): Promise<Transaction> {
     const id = crypto.randomUUID();
 
+    // Debug log to trace detection field values
+    console.log("[DEBUG createTransaction] detection fields:", {
+      detection_source: transactionData.detection_source,
+      detection_status: transactionData.detection_status,
+      detection_confidence: transactionData.detection_confidence,
+      detection_method: transactionData.detection_method,
+    });
+
     const sql = `
       INSERT INTO transactions (
         id, user_id, property_address, property_street, property_city,
@@ -2482,6 +2490,12 @@ class DatabaseService implements IDatabaseService {
     if (!transaction) {
       throw new DatabaseError("Failed to create transaction");
     }
+    // Debug: verify detection fields were saved
+    console.log("[DEBUG createTransaction] saved transaction detection fields:", {
+      detection_source: transaction.detection_source,
+      detection_status: transaction.detection_status,
+      detection_confidence: transaction.detection_confidence,
+    });
     return transaction;
   }
 

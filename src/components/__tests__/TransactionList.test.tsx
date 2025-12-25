@@ -1,6 +1,8 @@
 /**
  * Tests for TransactionList.tsx
- * Covers approve/reject actions for AI-detected pending transactions
+ * Covers pending review UI and badge display
+ *
+ * Note: Approve/Reject actions are now in TransactionDetails modal, not on cards
  */
 
 import React from "react";
@@ -69,12 +71,20 @@ describe("TransactionList", () => {
       transactions: [pendingTransaction, confirmedTransaction, manualTransaction],
     });
     window.api.transactions.update.mockResolvedValue({ success: true });
+    window.api.transactions.getDetails.mockResolvedValue({
+      success: true,
+      transaction: {
+        ...pendingTransaction,
+        communications: [],
+        contact_assignments: [],
+      },
+    });
     window.api.feedback.recordTransaction.mockResolvedValue({ success: true });
     window.api.onTransactionScanProgress.mockReturnValue(jest.fn());
   });
 
-  describe("Approve/Reject Action Buttons", () => {
-    it("should show approve and reject buttons only for pending transactions", async () => {
+  describe("Pending Review UI", () => {
+    it("should show Review & Edit button only for pending transactions", async () => {
       render(
         <TransactionList
           userId={mockUserId}
@@ -88,43 +98,15 @@ describe("TransactionList", () => {
         expect(screen.getByText("123 Pending Street")).toBeInTheDocument();
       });
 
-      // Get all transaction cards
-      const pendingCard = screen
-        .getByText("123 Pending Street")
-        .closest(".bg-white");
-      const confirmedCard = screen
-        .getByText("456 Confirmed Avenue")
-        .closest(".bg-white");
-      const manualCard = screen
-        .getByText("789 Manual Road")
-        .closest(".bg-white");
+      // Pending transaction should have "Review & Edit" button in wrapper
+      const reviewButtons = screen.getAllByRole("button", { name: /review & edit/i });
+      expect(reviewButtons.length).toBeGreaterThan(0);
 
-      // Pending transaction should have approve/reject buttons
-      expect(
-        within(pendingCard!).getByTitle("Approve transaction"),
-      ).toBeInTheDocument();
-      expect(
-        within(pendingCard!).getByTitle("Reject transaction"),
-      ).toBeInTheDocument();
-
-      // Confirmed transaction should NOT have approve/reject buttons
-      expect(
-        within(confirmedCard!).queryByTitle("Approve transaction"),
-      ).not.toBeInTheDocument();
-      expect(
-        within(confirmedCard!).queryByTitle("Reject transaction"),
-      ).not.toBeInTheDocument();
-
-      // Manual transaction should NOT have approve/reject buttons
-      expect(
-        within(manualCard!).queryByTitle("Approve transaction"),
-      ).not.toBeInTheDocument();
-      expect(
-        within(manualCard!).queryByTitle("Reject transaction"),
-      ).not.toBeInTheDocument();
+      // Confirmed and manual transactions should have Export button (not Review)
+      expect(screen.getAllByRole("button", { name: /export/i }).length).toBeGreaterThan(0);
     });
 
-    it("should call APIs when approve button is clicked", async () => {
+    it("should open TransactionDetails in pending review mode when Review & Edit is clicked", async () => {
       const user = userEvent.setup();
 
       render(
@@ -140,35 +122,45 @@ describe("TransactionList", () => {
         expect(screen.getByText("123 Pending Street")).toBeInTheDocument();
       });
 
-      // Click approve button
-      const approveButton = screen.getByTitle("Approve transaction");
-      await user.click(approveButton);
+      // Click Review & Edit button
+      const reviewButton = screen.getByRole("button", { name: /review & edit/i });
+      await user.click(reviewButton);
 
-      // Verify transaction update was called
+      // TransactionDetails modal should open with approve/reject buttons
       await waitFor(() => {
-        expect(window.api.transactions.update).toHaveBeenCalledWith(
-          "txn-pending",
-          expect.objectContaining({
-            detection_status: "confirmed",
-            reviewed_at: expect.any(String),
-          }),
-        );
+        expect(screen.getByText("Review Transaction")).toBeInTheDocument();
       });
 
-      // Verify feedback was recorded
-      expect(window.api.feedback.recordTransaction).toHaveBeenCalledWith(
-        mockUserId,
-        {
-          detectedTransactionId: "txn-pending",
-          action: "confirm",
-        },
-      );
-
-      // Verify transactions were reloaded
-      expect(window.api.transactions.getAll).toHaveBeenCalledTimes(2);
+      // Should show Approve and Reject buttons in the modal header
+      // Using getAllByRole since there may be multiple buttons with similar names
+      const approveButtons = screen.getAllByRole("button", { name: /approve/i });
+      const rejectButtons = screen.getAllByRole("button", { name: /reject/i });
+      expect(approveButtons.length).toBeGreaterThan(0);
+      expect(rejectButtons.length).toBeGreaterThan(0);
     });
 
-    it("should open reject modal when reject button is clicked", async () => {
+    it("should show pending review wrapper with confidence bar", async () => {
+      render(
+        <TransactionList
+          userId={mockUserId}
+          provider={mockProvider}
+          onClose={mockOnClose}
+        />,
+      );
+
+      // Wait for transactions to load
+      await waitFor(() => {
+        expect(screen.getByText("123 Pending Street")).toBeInTheDocument();
+      });
+
+      // Should show confidence label
+      expect(screen.getByText("Confidence")).toBeInTheDocument();
+
+      // Should show confidence percentage (85% from mock data)
+      expect(screen.getByText("85%")).toBeInTheDocument();
+    });
+
+    it("should open TransactionDetails modal when clicking on pending transaction", async () => {
       const user = userEvent.setup();
 
       render(
@@ -184,176 +176,17 @@ describe("TransactionList", () => {
         expect(screen.getByText("123 Pending Street")).toBeInTheDocument();
       });
 
-      // Click reject button
-      const rejectButton = screen.getByTitle("Reject transaction");
-      await user.click(rejectButton);
+      // Click on the pending transaction card itself (not the Review button)
+      const pendingCard = screen.getByText("123 Pending Street");
+      await user.click(pendingCard);
 
-      // Verify modal appears
+      // TransactionDetails modal should open
       await waitFor(() => {
-        expect(screen.getByText("Reject Transaction")).toBeInTheDocument();
+        expect(screen.getByText("Review Transaction")).toBeInTheDocument();
       });
 
-      // Verify modal has required elements
-      expect(
-        screen.getByPlaceholderText(
-          /not a real estate transaction/i,
-        ),
-      ).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: /cancel/i })).toBeInTheDocument();
-      // Use more specific selector for the submit button (type="submit")
-      const modal = screen.getByText("Reject Transaction").closest("div");
-      expect(within(modal!).getByRole("button", { name: /^reject$/i })).toBeInTheDocument();
-    });
-
-    it("should call APIs when reject is submitted with reason", async () => {
-      const user = userEvent.setup();
-
-      render(
-        <TransactionList
-          userId={mockUserId}
-          provider={mockProvider}
-          onClose={mockOnClose}
-        />,
-      );
-
-      // Wait for transactions to load
-      await waitFor(() => {
-        expect(screen.getByText("123 Pending Street")).toBeInTheDocument();
-      });
-
-      // Open reject modal
-      const rejectButton = screen.getByTitle("Reject transaction");
-      await user.click(rejectButton);
-
-      // Wait for modal
-      await waitFor(() => {
-        expect(screen.getByText("Reject Transaction")).toBeInTheDocument();
-      });
-
-      // Enter reason
-      const textarea = screen.getByPlaceholderText(
-        /not a real estate transaction/i,
-      );
-      await user.type(textarea, "This is spam");
-
-      // Submit rejection - find submit button within modal
-      const modal = screen.getByText("Reject Transaction").closest("div")?.parentElement;
-      const submitButton = within(modal!).getByRole("button", { name: /^reject$/i });
-      await user.click(submitButton);
-
-      // Verify transaction update was called with rejection
-      await waitFor(() => {
-        expect(window.api.transactions.update).toHaveBeenCalledWith(
-          "txn-pending",
-          expect.objectContaining({
-            detection_status: "rejected",
-            rejection_reason: "This is spam",
-            reviewed_at: expect.any(String),
-          }),
-        );
-      });
-
-      // Verify feedback was recorded with reason
-      expect(window.api.feedback.recordTransaction).toHaveBeenCalledWith(
-        mockUserId,
-        {
-          detectedTransactionId: "txn-pending",
-          action: "reject",
-          corrections: { reason: "This is spam" },
-        },
-      );
-    });
-
-    it("should close reject modal when cancel is clicked", async () => {
-      const user = userEvent.setup();
-
-      render(
-        <TransactionList
-          userId={mockUserId}
-          provider={mockProvider}
-          onClose={mockOnClose}
-        />,
-      );
-
-      // Wait for transactions to load
-      await waitFor(() => {
-        expect(screen.getByText("123 Pending Street")).toBeInTheDocument();
-      });
-
-      // Open reject modal
-      const rejectButton = screen.getByTitle("Reject transaction");
-      await user.click(rejectButton);
-
-      // Wait for modal
-      await waitFor(() => {
-        expect(screen.getByText("Reject Transaction")).toBeInTheDocument();
-      });
-
-      // Click cancel
-      const cancelButton = screen.getByRole("button", { name: /cancel/i });
-      await user.click(cancelButton);
-
-      // Modal should be closed
-      await waitFor(() => {
-        expect(screen.queryByText("Reject Transaction")).not.toBeInTheDocument();
-      });
-
-      // APIs should not have been called
-      expect(window.api.transactions.update).not.toHaveBeenCalled();
-      expect(window.api.feedback.recordTransaction).not.toHaveBeenCalled();
-    });
-
-    it("should allow rejection without providing a reason", async () => {
-      const user = userEvent.setup();
-
-      render(
-        <TransactionList
-          userId={mockUserId}
-          provider={mockProvider}
-          onClose={mockOnClose}
-        />,
-      );
-
-      // Wait for transactions to load
-      await waitFor(() => {
-        expect(screen.getByText("123 Pending Street")).toBeInTheDocument();
-      });
-
-      // Open reject modal
-      const rejectButton = screen.getByTitle("Reject transaction");
-      await user.click(rejectButton);
-
-      // Wait for modal
-      await waitFor(() => {
-        expect(screen.getByText("Reject Transaction")).toBeInTheDocument();
-      });
-
-      // Submit without entering a reason - find submit button within modal
-      const modal = screen.getByText("Reject Transaction").closest("div")?.parentElement;
-      const submitButton = within(modal!).getByRole("button", { name: /^reject$/i });
-      await user.click(submitButton);
-
-      // Verify transaction update was called without rejection_reason
-      await waitFor(() => {
-        expect(window.api.transactions.update).toHaveBeenCalledWith(
-          "txn-pending",
-          expect.objectContaining({
-            detection_status: "rejected",
-            rejection_reason: undefined,
-            reviewed_at: expect.any(String),
-          }),
-        );
-      });
-
-      // Verify feedback was recorded without reason in corrections
-      expect(window.api.feedback.recordTransaction).toHaveBeenCalledWith(
-        mockUserId,
-        {
-          detectedTransactionId: "txn-pending",
-          action: "reject",
-          corrections: undefined,
-        },
-      );
+      // Verify getDetails was called
+      expect(window.api.transactions.getDetails).toHaveBeenCalledWith("txn-pending");
     });
   });
 
@@ -371,12 +204,30 @@ describe("TransactionList", () => {
         expect(screen.getByText("123 Pending Street")).toBeInTheDocument();
       });
 
-      // Pending transaction should have Pending Review badge - use getAllByText since there's also a filter tab
+      // Pending transaction should have Pending Review label in wrapper
       const pendingReviewElements = screen.getAllByText("Pending Review");
       expect(pendingReviewElements.length).toBeGreaterThan(0);
     });
 
-    it("should show AI Detected badge for auto-detected transactions", async () => {
+    it("should show Manual badge for manually entered transactions", async () => {
+      render(
+        <TransactionList
+          userId={mockUserId}
+          provider={mockProvider}
+          onClose={mockOnClose}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText("789 Manual Road")).toBeInTheDocument();
+      });
+
+      // Manual transaction should have Manual badge
+      const manualBadges = screen.getAllByText("Manual");
+      expect(manualBadges.length).toBeGreaterThan(0);
+    });
+
+    it("should NOT show Manual badge for auto-detected transactions", async () => {
       render(
         <TransactionList
           userId={mockUserId}
@@ -389,9 +240,66 @@ describe("TransactionList", () => {
         expect(screen.getByText("123 Pending Street")).toBeInTheDocument();
       });
 
-      // AI-detected transactions should have AI Detected badge
-      const aiDetectedBadges = screen.getAllByText("AI Detected");
-      expect(aiDetectedBadges.length).toBeGreaterThan(0);
+      // Get the pending transaction card (auto-detected)
+      const pendingCard = screen
+        .getByText("123 Pending Street")
+        .closest(".bg-white");
+
+      // Auto-detected transactions should NOT have Manual badge
+      expect(within(pendingCard!).queryByText("Manual")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("Filter Tabs", () => {
+    it("should show all filter tabs", async () => {
+      render(
+        <TransactionList
+          userId={mockUserId}
+          provider={mockProvider}
+          onClose={mockOnClose}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText("123 Pending Street")).toBeInTheDocument();
+      });
+
+      // All filter tabs should be present
+      expect(screen.getByRole("button", { name: /^all/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /pending review/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /^active/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /closed/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /rejected/i })).toBeInTheDocument();
+    });
+
+    it("should filter transactions when filter tab is clicked", async () => {
+      const user = userEvent.setup();
+
+      render(
+        <TransactionList
+          userId={mockUserId}
+          provider={mockProvider}
+          onClose={mockOnClose}
+        />,
+      );
+
+      // Wait for transactions to load
+      await waitFor(() => {
+        expect(screen.getByText("123 Pending Street")).toBeInTheDocument();
+      });
+
+      // Click Active filter
+      const activeFilter = screen.getByRole("button", { name: /^active/i });
+      await user.click(activeFilter);
+
+      // Should show active transactions (confirmed and manual are both "active" status)
+      await waitFor(() => {
+        expect(screen.getByText("456 Confirmed Avenue")).toBeInTheDocument();
+        expect(screen.getByText("789 Manual Road")).toBeInTheDocument();
+      });
+
+      // Pending transaction should NOT be visible (it's filtered out)
+      expect(screen.queryByText("123 Pending Street")).not.toBeInTheDocument();
     });
   });
 });
