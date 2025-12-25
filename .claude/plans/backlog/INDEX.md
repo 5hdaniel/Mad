@@ -175,7 +175,7 @@ This index tracks all backlog items with their current status and metadata.
 | SPRINT-005 | AI MVP Core | ✅ Completed | BACKLOG-075, 076 (10 tasks, TASK-315 to TASK-324) |
 | SPRINT-006 | AI MVP Polish | 📋 Planned | BACKLOG-077, 078, 079 (14 tasks, TASK-401 to TASK-414) |
 | SPRINT-007 | LLM Cost Optimization | 📋 Planned | TASK-501 to TASK-512 |
-| SPRINT-008 | TransactionList Refactoring | 📋 Planned | TASK-513 to TASK-520 (8 tasks, ~186K tokens, 5-7 hrs) |
+| SPRINT-008 | TransactionList Refactoring | ✅ Completed | TASK-513 to TASK-520 (8 tasks, 26 turns, ~146K tokens, ~2hrs) |
 
 ---
 
@@ -221,6 +221,8 @@ This index tracks all backlog items with their current status and metadata.
 - 2025-12-24: TASK-518 (Extract useTransactionScan hook) completed - PR #205 merged, 5 turns, ~24K tokens, 20m
 - 2025-12-24: TASK-519 (Extract useBulkActions hook) completed - PR #206 merged, 4 turns, ~24K tokens, 15m
 - 2025-12-24: Phase 4 (Hook Extraction) complete - TransactionList reduced to ~431 lines
+- 2025-12-24: TASK-520 (Directory structure) completed - PR #207 merged, 1 turn, ~8K tokens, 15m
+- 2025-12-24: **SPRINT-008 COMPLETE** - TransactionList: 1,357→431 lines (-68%), 9 files extracted
 
 ---
 
