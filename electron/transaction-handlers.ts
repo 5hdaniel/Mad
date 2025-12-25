@@ -1122,10 +1122,10 @@ export const registerTransactionHandlers = (
           );
         }
 
-        // Validate status
-        if (!status || !["active", "closed"].includes(status)) {
+        // Validate status - allow all 4 transaction statuses
+        if (!status || !["pending", "active", "closed", "rejected"].includes(status)) {
           throw new ValidationError(
-            "Status must be 'active' or 'closed'",
+            "Status must be 'pending', 'active', 'closed', or 'rejected'",
             "status",
           );
         }

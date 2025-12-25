@@ -15,7 +15,7 @@ export type DetectionStatus = "pending" | "confirmed" | "rejected";
 /**
  * Valid transaction status values
  */
-export type TransactionStatus = "active" | "closed";
+export type TransactionStatus = "pending" | "active" | "closed" | "rejected";
 
 /**
  * Transaction update payload with detection fields
@@ -80,7 +80,7 @@ export function isValidDetectionStatus(status: unknown): status is DetectionStat
  * Validates transaction status value
  */
 export function isValidTransactionStatus(status: unknown): status is TransactionStatus {
-  return status === "active" || status === "closed";
+  return status === "pending" || status === "active" || status === "closed" || status === "rejected";
 }
 
 /**
