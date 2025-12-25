@@ -45,6 +45,38 @@ Before issuing a task file:
 - No code examples: Engineers will invent patterns
 - "Add appropriate tests": Always specify what tests
 
+## Estimation Guidelines
+
+**MANDATORY**: Before estimating any task, consult `.claude/plans/backlog/INDEX.md` → "Estimation Accuracy Analysis" section.
+
+### Category Adjustment Factors
+
+Apply these multipliers to your initial estimates based on historical data:
+
+| Category | Multiplier | Rationale |
+|----------|------------|-----------|
+| schema | × 1.3 | High variance, add buffer |
+| refactor | × 0.5 | Consistently overestimated (-52% avg) |
+| test | × 1.0 | Usually accurate |
+| config | × 0.5 | Significantly overestimated |
+| service/ipc/ui | × 1.0 | TBD - need data |
+
+### Estimation Process
+
+1. **Categorize the task** - Determine primary category (schema, refactor, test, etc.)
+2. **Make initial estimate** - Based on scope and complexity
+3. **Apply adjustment factor** - Multiply by category factor
+4. **Consider context** - Well-structured code = faster refactoring
+5. **Document estimate** - Include Est. Turns, Tokens, Time in task file
+
+### Example
+
+```
+Initial estimate: 8-10 turns (refactor task)
+Adjustment: × 0.5
+Final estimate: 4-5 turns
+```
+
 ## Task file naming
 
 ```

@@ -130,7 +130,9 @@ Use this skill when the user asks for any of:
 
 1. **Clarity**: If an engineer could reasonably misinterpret something, **you failed to specify it**.
 
-2. **Metrics Tracking**: ALL task assignments MUST include metrics tracking requirements at the TOP of the assignment. Engineers must report:
+2. **Data-Driven Estimation**: Before creating ANY task estimates, consult `.claude/plans/backlog/INDEX.md` → "Estimation Accuracy Analysis" section. Apply category adjustment factors (e.g., refactor tasks use × 0.5 multiplier). Never estimate from scratch—use historical data.
+
+3. **Metrics Tracking**: ALL task assignments MUST include metrics tracking requirements at the TOP of the assignment. Engineers must report:
    - Turns (planning vs implementation vs debugging)
    - Tokens (planning vs implementation vs debugging)
    - Time spent (planning vs implementation vs debugging)
