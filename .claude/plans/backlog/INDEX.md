@@ -38,6 +38,8 @@ This index tracks all backlog items with their current status and metadata.
 - **SPRINT-004 (AI MVP Foundation):** ✅ Completed (BACKLOG-073, 074)
 - **SPRINT-005 (AI MVP Core):** ✅ Completed (BACKLOG-075, 076)
 - **SPRINT-006 (AI MVP Polish):** BACKLOG-077, 078, 079 (TASK-401 to TASK-414)
+- **SPRINT-007 (LLM Cost Optimization):** ✅ Completed (TASK-501 to TASK-512)
+- **SPRINT-008 (TransactionList Refactoring):** 🔄 In Progress (TASK-513 to TASK-520)
 - **Unassigned:** All others
 
 ### AI MVP Project
@@ -166,6 +168,8 @@ This index tracks all backlog items with their current status and metadata.
 | SPRINT-004 | AI MVP Foundation | ✅ Completed | BACKLOG-073, 074 (14 tasks, TASK-301 to TASK-314) |
 | SPRINT-005 | AI MVP Core | ✅ Completed | BACKLOG-075, 076 (10 tasks, TASK-315 to TASK-324) |
 | SPRINT-006 | AI MVP Polish | 📋 Planned | BACKLOG-077, 078, 079 (14 tasks, TASK-401 to TASK-414) |
+| SPRINT-007 | LLM Cost Optimization | ✅ Completed | TASK-501 to TASK-512 (performance benchmarks, cost optimization) |
+| SPRINT-008 | TransactionList Refactoring | 🔄 In Progress | TASK-513 to TASK-520 (UI refactoring, component extraction) |
 
 ---
 
@@ -199,6 +203,9 @@ This index tracks all backlog items with their current status and metadata.
 - 2025-12-18: Created SPRINT-006 plan for AI MVP Polish (BACKLOG-077, 078, 079)
 - 2025-12-18: Created 14 task files (TASK-401 to TASK-414) for SPRINT-006
 - 2025-12-18: Integration branch strategy: int/ai-polish for SPRINT-006
+- 2025-12-24: SPRINT-008 created for TransactionList refactoring (TASK-513 to TASK-520)
+- 2025-12-24: TASK-513 (Toast Fix) completed - PR #200 merged, 2 turns, ~16K tokens, 20m
+- 2025-12-24: TASK-514 (Extract TransactionStatusWrapper) completed - PR #201 merged, 4 turns, ~16K tokens, 12m
 
 ---
 
