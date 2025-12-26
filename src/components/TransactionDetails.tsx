@@ -1,40 +1,39 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
-import type { Transaction, Communication, Contact } from "@/types";
+/**
+ * TransactionDetails Component
+ * Shows full details of a single transaction
+ *
+ * This is the main orchestration component that composes:
+ * - TransactionHeader: Header with dynamic styling and action buttons
+ * - TransactionTabs: Tab navigation
+ * - TransactionDetailsTab: Details tab content
+ * - TransactionContactsTab: Contacts tab with AI suggestions
+ * - Various modal dialogs
+ */
+import React, { useState, useCallback } from "react";
+import type { Transaction } from "@/types";
 import ExportModal from "./ExportModal";
 import AuditTransactionModal from "./AuditTransactionModal";
 import { ToastContainer } from "./Toast";
 import { useToast } from "../hooks/useToast";
 import { useTransactionStatusUpdate } from "../hooks/useTransactionStatusUpdate";
 
-/**
- * Interface for AI-suggested contact assignment
- */
-interface SuggestedContact {
-  role: string;
-  contact_id: string;
-  is_primary?: boolean;
-  notes?: string;
-}
-
-/**
- * Interface for resolved suggested contact with contact details
- */
-interface ResolvedSuggestedContact extends SuggestedContact {
-  contact?: Contact;
-}
-
-interface ContactAssignment {
-  id: string;
-  contact_id: string;
-  contact_name?: string;
-  contact_email?: string;
-  contact_phone?: string;
-  contact_company?: string;
-  role?: string;
-  specific_role?: string;
-  is_primary?: number;
-  notes?: string;
-}
+// Import from transactionDetails module
+import {
+  useTransactionDetails,
+  useTransactionTabs,
+  useTransactionCommunications,
+  useSuggestedContacts,
+  TransactionHeader,
+  TransactionTabs,
+  TransactionDetailsTab,
+  TransactionContactsTab,
+  ExportSuccessMessage,
+  ArchivePromptModal,
+  DeleteConfirmModal,
+  UnlinkEmailModal,
+  EmailViewModal,
+  RejectReasonModal,
+} from "./transactionDetailsModule";
 
 interface TransactionDetailsComponentProps {
   transaction: Transaction;
@@ -63,121 +62,68 @@ function TransactionDetails({
   onShowSuccess,
   onShowError,
 }: TransactionDetailsComponentProps) {
-  const [communications, setCommunications] = useState<Communication[]>([]);
-  const [contactAssignments, setContactAssignments] = useState<
-    ContactAssignment[]
-  >([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [showExportModal, setShowExportModal] = useState<boolean>(false);
-  const [exportSuccess, setExportSuccess] = useState<string | null>(null);
-  const [showArchivePrompt, setShowArchivePrompt] = useState<boolean>(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<"details" | "contacts">("details");
-  const [unlinkingCommId, setUnlinkingCommId] = useState<string | null>(null);
-  const [showUnlinkConfirm, setShowUnlinkConfirm] =
-    useState<Communication | null>(null);
-  const [viewingEmail, setViewingEmail] = useState<Communication | null>(null);
-  const [resolvedSuggestions, setResolvedSuggestions] = useState<ResolvedSuggestedContact[]>([]);
-  const [processingContactId, setProcessingContactId] = useState<string | null>(null);
-  const [processingAll, setProcessingAll] = useState<boolean>(false);
-
-  // Pending review state - using custom hook
-  const [showRejectReasonModal, setShowRejectReasonModal] = useState<boolean>(false);
-  const [rejectReason, setRejectReason] = useState<string>("");
-  const [showEditModal, setShowEditModal] = useState<boolean>(false);
-
   // Toast notifications - use props if provided, otherwise use local fallback
   const localToast = useToast();
   const showSuccess = onShowSuccess || localToast.showSuccess;
   const showError = onShowError || localToast.showError;
 
-  // Transaction status update hook - handles approve/reject/restore with validation
+  // Transaction data hook
+  const {
+    communications,
+    contactAssignments,
+    resolvedSuggestions,
+    loading,
+    loadDetails,
+    setCommunications,
+    setResolvedSuggestions,
+    updateSuggestedContacts,
+  } = useTransactionDetails(transaction);
+
+  // Tab state hook
+  const { activeTab, setActiveTab } = useTransactionTabs();
+
+  // Communications hook
+  const {
+    unlinkingCommId,
+    showUnlinkConfirm,
+    viewingEmail,
+    setShowUnlinkConfirm,
+    setViewingEmail,
+    handleUnlinkCommunication,
+  } = useTransactionCommunications();
+
+  // Suggested contacts hook
+  const {
+    processingContactId,
+    processingAll,
+    handleAcceptSuggestion,
+    handleRejectSuggestion,
+    handleAcceptAll,
+  } = useSuggestedContacts(transaction);
+
+  // Transaction status update hook
   const { state: statusState, approve, reject, restore } = useTransactionStatusUpdate(userId);
   const { isApproving, isRejecting, isRestoring } = statusState;
+
+  // Modal states
+  const [showExportModal, setShowExportModal] = useState<boolean>(false);
+  const [exportSuccess, setExportSuccess] = useState<string | null>(null);
+  const [showArchivePrompt, setShowArchivePrompt] = useState<boolean>(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean>(false);
+  const [showRejectReasonModal, setShowRejectReasonModal] = useState<boolean>(false);
+  const [rejectReason, setRejectReason] = useState<string>("");
+  const [showEditModal, setShowEditModal] = useState<boolean>(false);
 
   // Check if transaction was rejected
   const isRejected = transaction.detection_status === "rejected";
 
-  /**
-   * Parse and memoize suggested contacts from transaction
-   */
-  const suggestedContacts = useMemo((): SuggestedContact[] => {
-    if (!transaction.suggested_contacts) return [];
-    try {
-      const parsed = JSON.parse(transaction.suggested_contacts);
-      if (Array.isArray(parsed)) {
-        return parsed.filter(
-          (sc: SuggestedContact) => sc.role && sc.contact_id
-        );
-      }
-      return [];
-    } catch {
-      return [];
-    }
-  }, [transaction.suggested_contacts]);
-
-  /**
-   * Resolve contact details for all suggested contacts
-   */
-  useEffect(() => {
-    const resolveContacts = async () => {
-      if (suggestedContacts.length === 0) {
-        setResolvedSuggestions([]);
-        return;
-      }
-
-      try {
-        const contactsResult = await window.api.contacts.getAll(transaction.user_id);
-        if (contactsResult.success && contactsResult.contacts) {
-          const contactMap = new Map(
-            contactsResult.contacts.map((c: Contact) => [c.id, c])
-          );
-          const resolved = suggestedContacts.map((sc) => ({
-            ...sc,
-            contact: contactMap.get(sc.contact_id),
-          }));
-          setResolvedSuggestions(resolved);
-        }
-      } catch (err) {
-        console.error("Failed to resolve suggested contacts:", err);
-        // Still show suggestions without contact details
-        setResolvedSuggestions(suggestedContacts.map((sc) => ({ ...sc })));
-      }
-    };
-
-    resolveContacts();
-  }, [suggestedContacts, transaction.user_id]);
-
-  useEffect(() => {
-    loadDetails();
-  }, [transaction.id]);
-
-  const loadDetails = async (): Promise<void> => {
-    try {
-      setLoading(true);
-      const result = await window.api.transactions.getDetails(transaction.id);
-
-      if (result.success) {
-        setCommunications((result.transaction as any).communications || []);
-        setContactAssignments(
-          (result.transaction as any).contact_assignments || [],
-        );
-      }
-    } catch (err) {
-      console.error("Failed to load details:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // Export handlers
   const handleExportComplete = (result: unknown): void => {
     const exportResult = result as { path?: string };
     setShowExportModal(false);
     setExportSuccess(exportResult.path || "Export completed successfully!");
-    // Auto-hide success message after 5 seconds
     setTimeout(() => setExportSuccess(null), 5000);
 
-    // Show archive prompt if transaction is still active
     if (transaction.status === "active") {
       setShowArchivePrompt(true);
     }
@@ -185,13 +131,9 @@ function TransactionDetails({
 
   const handleArchive = async (): Promise<void> => {
     try {
-      await window.api.transactions.update(transaction.id, {
-        status: "closed",
-      });
+      await window.api.transactions.update(transaction.id, { status: "closed" });
       setShowArchivePrompt(false);
-      if (onTransactionUpdated) {
-        onTransactionUpdated();
-      }
+      onTransactionUpdated?.();
     } catch (err) {
       console.error("Failed to archive transaction:", err);
     }
@@ -201,39 +143,28 @@ function TransactionDetails({
     try {
       await window.api.transactions.delete(transaction.id);
       setShowDeleteConfirm(false);
-      onClose(); // Close the details modal
-      if (onTransactionUpdated) {
-        onTransactionUpdated(); // Refresh the transaction list
-      }
+      onClose();
+      onTransactionUpdated?.();
     } catch (err) {
       console.error("Failed to delete transaction:", err);
       showError("Failed to delete transaction. Please try again.");
     }
   };
 
-  /**
-   * Approve pending transaction
-   * Uses the useTransactionStatusUpdate hook for validation and feedback recording
-   */
+  // Status update handlers
   const handleApprove = useCallback(async (): Promise<void> => {
-    const success = await approve(transaction.id, {
+    await approve(transaction.id, {
       onSuccess: () => {
         showSuccess("Transaction approved successfully!");
         onClose();
         onTransactionUpdated?.();
       },
-      onError: (error) => {
-        showError(error);
-      },
+      onError: (error) => showError(error),
     });
   }, [approve, transaction.id, onClose, onTransactionUpdated, showSuccess, showError]);
 
-  /**
-   * Reject transaction (works for both pending and active)
-   * Uses the useTransactionStatusUpdate hook for validation and feedback recording
-   */
   const handleReject = useCallback(async (): Promise<void> => {
-    const success = await reject(transaction.id, rejectReason, {
+    await reject(transaction.id, rejectReason, {
       onSuccess: () => {
         showSuccess("Transaction rejected");
         setShowRejectReasonModal(false);
@@ -241,939 +172,123 @@ function TransactionDetails({
         onClose();
         onTransactionUpdated?.();
       },
-      onError: (error) => {
-        showError(error);
-      },
+      onError: (error) => showError(error),
     });
   }, [reject, transaction.id, rejectReason, onClose, onTransactionUpdated, showSuccess, showError]);
 
-  /**
-   * Restore rejected transaction to active
-   * Uses the useTransactionStatusUpdate hook for validation and feedback recording
-   */
   const handleRestore = useCallback(async (): Promise<void> => {
-    const success = await restore(transaction.id, {
+    await restore(transaction.id, {
       onSuccess: () => {
         showSuccess("Transaction restored to active");
         onClose();
         onTransactionUpdated?.();
       },
-      onError: (error) => {
-        showError(error);
-      },
+      onError: (error) => showError(error),
     });
   }, [restore, transaction.id, onClose, onTransactionUpdated, showSuccess, showError]);
 
-  const handleUnlinkCommunication = async (
-    comm: Communication,
-  ): Promise<void> => {
-    try {
-      setUnlinkingCommId(comm.id);
-      const result = await window.api.transactions.unlinkCommunication(comm.id);
+  // Communication handlers
+  const handleUnlink = useCallback(
+    async (comm: typeof showUnlinkConfirm) => {
+      if (!comm) return;
+      await handleUnlinkCommunication(
+        comm,
+        () => {
+          setCommunications((prev) => prev.filter((c) => c.id !== comm.id));
+          showSuccess("Email unlinked from transaction");
+        },
+        showError
+      );
+    },
+    [handleUnlinkCommunication, setCommunications, showSuccess, showError]
+  );
 
-      if (result.success) {
-        // Remove the communication from the local state
-        setCommunications((prev) => prev.filter((c) => c.id !== comm.id));
-        setShowUnlinkConfirm(null);
-        showSuccess("Email unlinked from transaction");
-      } else {
-        console.error("Failed to unlink communication:", result.error);
-        showError("Failed to unlink email. Please try again.");
-      }
-    } catch (err) {
-      console.error("Failed to unlink communication:", err);
-      showError("Failed to unlink email. Please try again.");
-    } finally {
-      setUnlinkingCommId(null);
-    }
+  // Suggested contacts handlers with callbacks
+  const suggestionCallbacks = {
+    onUpdateResolvedSuggestions: setResolvedSuggestions,
+    resolvedSuggestions,
+    updateSuggestedContacts,
+    loadDetails,
+    onTransactionUpdated,
+    showSuccess,
+    showError,
   };
 
-  /**
-   * Helper to update suggested_contacts in database after processing
-   */
-  const updateSuggestedContacts = useCallback(async (
-    remainingSuggestions: SuggestedContact[]
-  ): Promise<void> => {
-    const newValue = remainingSuggestions.length > 0
-      ? JSON.stringify(remainingSuggestions)
-      : null;
-    await window.api.transactions.update(transaction.id, {
-      suggested_contacts: newValue,
+  const handleAcceptSuggestionWithCallbacks = useCallback(
+    (suggestion: typeof resolvedSuggestions[0]) => {
+      handleAcceptSuggestion(suggestion, suggestionCallbacks);
+    },
+    [handleAcceptSuggestion, suggestionCallbacks]
+  );
+
+  const handleRejectSuggestionWithCallbacks = useCallback(
+    (suggestion: typeof resolvedSuggestions[0]) => {
+      handleRejectSuggestion(suggestion, suggestionCallbacks);
+    },
+    [handleRejectSuggestion, suggestionCallbacks]
+  );
+
+  const handleAcceptAllWithCallbacks = useCallback(() => {
+    handleAcceptAll(resolvedSuggestions, {
+      ...suggestionCallbacks,
+      clearSuggestions: () => setResolvedSuggestions([]),
     });
-  }, [transaction.id]);
-
-  /**
-   * Handle accepting a single suggested contact
-   */
-  const handleAcceptSuggestion = useCallback(async (
-    suggestion: ResolvedSuggestedContact
-  ): Promise<void> => {
-    if (processingContactId || processingAll) return;
-
-    try {
-      setProcessingContactId(suggestion.contact_id);
-
-      // Assign the contact to the transaction
-      await window.api.transactions.assignContact(
-        transaction.id,
-        suggestion.contact_id,
-        suggestion.role,
-        undefined, // roleCategory
-        suggestion.is_primary || false,
-        suggestion.notes
-      );
-
-      // Record feedback (accepted as-is)
-      if (window.api.feedback?.recordRole) {
-        await window.api.feedback.recordRole(transaction.user_id, {
-          transactionId: transaction.id,
-          contactId: suggestion.contact_id,
-          originalRole: suggestion.role,
-          correctedRole: suggestion.role,
-        });
-      }
-
-      // Remove from local state
-      setResolvedSuggestions((prev) =>
-        prev.filter((s) => s.contact_id !== suggestion.contact_id)
-      );
-
-      // Update database
-      const remaining = resolvedSuggestions.filter(
-        (s) => s.contact_id !== suggestion.contact_id
-      );
-      await updateSuggestedContacts(remaining);
-
-      // Refresh transaction data
-      await loadDetails();
-      if (onTransactionUpdated) {
-        onTransactionUpdated();
-      }
-      showSuccess("Contact suggestion accepted");
-    } catch (err) {
-      console.error("Failed to accept suggestion:", err);
-      showError("Failed to accept contact suggestion. Please try again.");
-    } finally {
-      setProcessingContactId(null);
-    }
-  }, [
-    processingContactId,
-    processingAll,
-    transaction.id,
-    transaction.user_id,
-    resolvedSuggestions,
-    updateSuggestedContacts,
-    onTransactionUpdated,
-    showSuccess,
-    showError,
-  ]);
-
-  /**
-   * Handle rejecting a single suggested contact
-   */
-  const handleRejectSuggestion = useCallback(async (
-    suggestion: ResolvedSuggestedContact
-  ): Promise<void> => {
-    if (processingContactId || processingAll) return;
-
-    try {
-      setProcessingContactId(suggestion.contact_id);
-
-      // Record feedback (rejected - empty correctedRole indicates rejection)
-      if (window.api.feedback?.recordRole) {
-        await window.api.feedback.recordRole(transaction.user_id, {
-          transactionId: transaction.id,
-          contactId: suggestion.contact_id,
-          originalRole: suggestion.role,
-          correctedRole: "", // Empty indicates rejection
-        });
-      }
-
-      // Remove from local state
-      setResolvedSuggestions((prev) =>
-        prev.filter((s) => s.contact_id !== suggestion.contact_id)
-      );
-
-      // Update database
-      const remaining = resolvedSuggestions.filter(
-        (s) => s.contact_id !== suggestion.contact_id
-      );
-      await updateSuggestedContacts(remaining);
-
-      // Notify parent
-      if (onTransactionUpdated) {
-        onTransactionUpdated();
-      }
-      showSuccess("Contact suggestion rejected");
-    } catch (err) {
-      console.error("Failed to reject suggestion:", err);
-      showError("Failed to reject contact suggestion. Please try again.");
-    } finally {
-      setProcessingContactId(null);
-    }
-  }, [
-    processingContactId,
-    processingAll,
-    transaction.id,
-    transaction.user_id,
-    resolvedSuggestions,
-    updateSuggestedContacts,
-    onTransactionUpdated,
-    showSuccess,
-    showError,
-  ]);
-
-  /**
-   * Handle accepting all suggested contacts
-   */
-  const handleAcceptAll = useCallback(async (): Promise<void> => {
-    if (processingContactId || processingAll || resolvedSuggestions.length === 0) return;
-
-    try {
-      setProcessingAll(true);
-
-      for (const suggestion of resolvedSuggestions) {
-        // Assign the contact
-        await window.api.transactions.assignContact(
-          transaction.id,
-          suggestion.contact_id,
-          suggestion.role,
-          undefined,
-          suggestion.is_primary || false,
-          suggestion.notes
-        );
-
-        // Record feedback
-        if (window.api.feedback?.recordRole) {
-          await window.api.feedback.recordRole(transaction.user_id, {
-            transactionId: transaction.id,
-            contactId: suggestion.contact_id,
-            originalRole: suggestion.role,
-            correctedRole: suggestion.role,
-          });
-        }
-      }
-
-      // Clear all suggestions
-      await updateSuggestedContacts([]);
-      setResolvedSuggestions([]);
-
-      // Refresh transaction data
-      await loadDetails();
-      if (onTransactionUpdated) {
-        onTransactionUpdated();
-      }
-      showSuccess("All contact suggestions accepted");
-    } catch (err) {
-      console.error("Failed to accept all suggestions:", err);
-      showError("Failed to accept all suggestions. Please try again.");
-    } finally {
-      setProcessingAll(false);
-    }
-  }, [
-    processingContactId,
-    processingAll,
-    resolvedSuggestions,
-    transaction.id,
-    transaction.user_id,
-    updateSuggestedContacts,
-    onTransactionUpdated,
-    showSuccess,
-    showError,
-  ]);
-
-  // Determine header style based on state
-  const getHeaderStyle = () => {
-    if (isPendingReview) return "bg-gradient-to-r from-amber-500 to-orange-500";
-    if (isRejected) return "bg-gradient-to-r from-red-500 to-red-600";
-    return "bg-gradient-to-r from-green-500 to-teal-600";
-  };
-
-  const getHeaderTextStyle = () => {
-    if (isPendingReview) return "text-amber-100";
-    if (isRejected) return "text-red-100";
-    return "text-green-100";
-  };
-
-  const getHeaderTitle = () => {
-    if (isPendingReview) return "Review Transaction";
-    if (isRejected) return "Rejected Transaction";
-    return "Transaction Details";
-  };
+  }, [handleAcceptAll, resolvedSuggestions, suggestionCallbacks, setResolvedSuggestions]);
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[60] p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
-        {/* Header - amber for pending, red for rejected, green for regular */}
-        <div className={`flex-shrink-0 px-6 py-4 flex items-center justify-between rounded-t-xl ${getHeaderStyle()}`}>
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-xl font-bold text-white">
-                {getHeaderTitle()}
-              </h3>
-              {isPendingReview && (
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-white/20 text-white">
-                  Pending Review
-                </span>
-              )}
-              {isRejected && (
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-white/20 text-white">
-                  Rejected
-                </span>
-              )}
-            </div>
-            <p className={`text-sm ${getHeaderTextStyle()}`}>
-              {transaction.property_address}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            {isPendingReview ? (
-              <>
-                {/* Reject Button */}
-                <button
-                  onClick={() => setShowRejectReasonModal(true)}
-                  disabled={isRejecting}
-                  className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-white text-red-600 hover:bg-opacity-90 shadow-md hover:shadow-lg disabled:opacity-50"
-                >
-                  {isRejecting ? (
-                    <div className="w-5 h-5 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  )}
-                  Reject
-                </button>
-                {/* Edit Button */}
-                <button
-                  onClick={() => setShowEditModal(true)}
-                  className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-white text-amber-600 hover:bg-opacity-90 shadow-md hover:shadow-lg"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
-                  Edit
-                </button>
-                {/* Approve Button */}
-                <button
-                  onClick={handleApprove}
-                  disabled={isApproving}
-                  className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-emerald-500 text-white hover:bg-emerald-600 shadow-md hover:shadow-lg disabled:opacity-50"
-                >
-                  {isApproving ? (
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                  )}
-                  Approve
-                </button>
-              </>
-            ) : isRejected ? (
-              <>
-                {/* Restore to Active Button */}
-                <button
-                  onClick={handleRestore}
-                  disabled={isRestoring}
-                  className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-emerald-500 text-white hover:bg-emerald-600 shadow-md hover:shadow-lg disabled:opacity-50"
-                >
-                  {isRestoring ? (
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                  )}
-                  Restore to Active
-                </button>
-                {/* Delete Button */}
-                <button
-                  onClick={() => setShowDeleteConfirm(true)}
-                  className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-white text-red-600 hover:bg-opacity-90 shadow-md hover:shadow-lg"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                  Delete
-                </button>
-              </>
-            ) : (
-              <>
-                {/* Reject Button - allows marking active transaction as invalid */}
-                <button
-                  onClick={() => setShowRejectReasonModal(true)}
-                  disabled={isRejecting}
-                  className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-white text-orange-600 hover:bg-opacity-90 shadow-md hover:shadow-lg disabled:opacity-50"
-                >
-                  {isRejecting ? (
-                    <div className="w-5 h-5 border-2 border-orange-600 border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-                    </svg>
-                  )}
-                  Reject
-                </button>
-                {/* Export Button */}
-                <button
-                  onClick={() => setShowExportModal(true)}
-                  className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-white text-green-600 hover:bg-opacity-90 shadow-md hover:shadow-lg"
-                >
-                  <svg
-                    className="w-5 h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                    />
-                  </svg>
-                  Export
-                </button>
-                {/* Delete Button */}
-                <button
-                  onClick={() => setShowDeleteConfirm(true)}
-                  className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-white text-red-600 hover:bg-opacity-90 shadow-md hover:shadow-lg"
-                >
-                  <svg
-                    className="w-5 h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                    />
-                  </svg>
-                  Delete
-                </button>
-              </>
-            )}
-            {/* Close Button */}
-            <button
-              onClick={onClose}
-              className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-all"
-            >
-              <svg
-                className="w-6 h-6"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
-          </div>
-        </div>
+        {/* Header */}
+        <TransactionHeader
+          transaction={transaction}
+          isPendingReview={isPendingReview}
+          isRejected={isRejected}
+          isApproving={isApproving}
+          isRejecting={isRejecting}
+          isRestoring={isRestoring}
+          onClose={onClose}
+          onShowRejectReasonModal={() => setShowRejectReasonModal(true)}
+          onShowEditModal={() => setShowEditModal(true)}
+          onApprove={handleApprove}
+          onRestore={handleRestore}
+          onShowExportModal={() => setShowExportModal(true)}
+          onShowDeleteConfirm={() => setShowDeleteConfirm(true)}
+        />
 
-        {/* Success Message */}
-        {exportSuccess && (
-          <div className="flex-shrink-0 mx-6 mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-            <div className="flex items-start gap-2">
-              <svg
-                className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M5 13l4 4L19 7"
-                />
-              </svg>
-              <div className="flex-1">
-                <p className="text-sm font-medium text-green-900">
-                  PDF exported successfully!
-                </p>
-                <p className="text-xs text-green-700 mt-1 break-all">
-                  {exportSuccess}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Export Success Message */}
+        {exportSuccess && <ExportSuccessMessage message={exportSuccess} />}
 
         {/* Tabs */}
-        <div className="flex-shrink-0 border-b border-gray-200 px-6">
-          <div className="flex gap-4">
-            <button
-              onClick={() => setActiveTab("details")}
-              className={`px-4 py-3 font-medium text-sm transition-all ${
-                activeTab === "details"
-                  ? "border-b-2 border-green-500 text-green-600"
-                  : "text-gray-600 hover:text-gray-900"
-              }`}
-            >
-              Transaction Details
-            </button>
-            <button
-              onClick={() => setActiveTab("contacts")}
-              className={`px-4 py-3 font-medium text-sm transition-all ${
-                activeTab === "contacts"
-                  ? "border-b-2 border-green-500 text-green-600"
-                  : "text-gray-600 hover:text-gray-900"
-              }`}
-            >
-              Roles & Contacts ({contactAssignments.length})
-            </button>
-          </div>
-        </div>
+        <TransactionTabs
+          activeTab={activeTab}
+          contactCount={contactAssignments.length}
+          onTabChange={setActiveTab}
+        />
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
           {activeTab === "details" && (
-            <>
-              {/* Transaction Info */}
-              <div className="grid grid-cols-2 gap-4 mb-6">
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <p className="text-sm text-gray-600 mb-1">Sale Price</p>
-                  <p className="text-xl font-bold text-gray-900">
-                    {transaction.sale_price
-                      ? new Intl.NumberFormat("en-US", {
-                          style: "currency",
-                          currency: "USD",
-                        }).format(transaction.sale_price)
-                      : "N/A"}
-                  </p>
-                </div>
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <p className="text-sm text-gray-600 mb-1">Closing Date</p>
-                  <p className="text-xl font-bold text-gray-900">
-                    {transaction.closing_date
-                      ? new Date(transaction.closing_date).toLocaleDateString()
-                      : "N/A"}
-                  </p>
-                </div>
-              </div>
-
-              {/* Communications */}
-              {communications.length > 0 && (
-                <div>
-                  <h4 className="text-lg font-semibold text-gray-900 mb-3">
-                    Related Emails ({communications.length})
-                  </h4>
-                  {loading ? (
-                    <div className="text-center py-8">
-                      <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {communications.map((comm) => (
-                        <div
-                          key={comm.id}
-                          className="bg-gray-50 border border-gray-200 rounded-lg p-4 cursor-pointer hover:bg-gray-100 hover:border-gray-300 transition-colors"
-                          onClick={() => setViewingEmail(comm)}
-                        >
-                          <div className="flex items-start justify-between mb-2">
-                            <h5 className="font-semibold text-gray-900 flex-1 pr-4">
-                              {comm.subject || "(No Subject)"}
-                            </h5>
-                            <div className="flex items-center gap-2 flex-shrink-0">
-                              <span className="text-xs text-gray-500">
-                                {comm.sent_at
-                                  ? new Date(comm.sent_at).toLocaleDateString()
-                                  : "Unknown date"}
-                              </span>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setShowUnlinkConfirm(comm);
-                                }}
-                                disabled={unlinkingCommId === comm.id}
-                                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
-                                title="Remove this email from transaction"
-                              >
-                                {unlinkingCommId === comm.id ? (
-                                  <svg
-                                    className="w-4 h-4 animate-spin"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                  >
-                                    <circle
-                                      className="opacity-25"
-                                      cx="12"
-                                      cy="12"
-                                      r="10"
-                                      stroke="currentColor"
-                                      strokeWidth="4"
-                                    ></circle>
-                                    <path
-                                      className="opacity-75"
-                                      fill="currentColor"
-                                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                                    ></path>
-                                  </svg>
-                                ) : (
-                                  <svg
-                                    className="w-4 h-4"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth={2}
-                                      d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
-                                    />
-                                  </svg>
-                                )}
-                              </button>
-                            </div>
-                          </div>
-                          <p className="text-sm text-gray-600 mb-2">
-                            From: {comm.sender || "Unknown"}
-                          </p>
-                          {comm.body_plain && (
-                            <p className="text-sm text-gray-700 line-clamp-3">
-                              {comm.body_plain.substring(0, 200)}...
-                            </p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </>
+            <TransactionDetailsTab
+              transaction={transaction}
+              communications={communications}
+              loading={loading}
+              unlinkingCommId={unlinkingCommId}
+              onViewEmail={setViewingEmail}
+              onShowUnlinkConfirm={setShowUnlinkConfirm}
+            />
           )}
 
           {activeTab === "contacts" && (
-            <div>
-              {/* AI Suggested Contacts Section */}
-              {resolvedSuggestions.length > 0 && (
-                <div className="mb-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                      <svg
-                        className="w-5 h-5 text-purple-600"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
-                        />
-                      </svg>
-                      <h4 className="text-lg font-semibold text-gray-900">
-                        AI Suggested Contacts
-                      </h4>
-                      <span className="inline-block px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded-full">
-                        {resolvedSuggestions.length} suggestion{resolvedSuggestions.length !== 1 ? "s" : ""}
-                      </span>
-                    </div>
-                    <button
-                      onClick={handleAcceptAll}
-                      disabled={processingAll || !!processingContactId}
-                      className="px-3 py-1.5 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
-                    >
-                      {processingAll ? (
-                        <>
-                          <svg
-                            className="w-4 h-4 animate-spin"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                          >
-                            <circle
-                              className="opacity-25"
-                              cx="12"
-                              cy="12"
-                              r="10"
-                              stroke="currentColor"
-                              strokeWidth="4"
-                            ></circle>
-                            <path
-                              className="opacity-75"
-                              fill="currentColor"
-                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                            ></path>
-                          </svg>
-                          Processing...
-                        </>
-                      ) : (
-                        <>
-                          <svg
-                            className="w-4 h-4"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M5 13l4 4L19 7"
-                            />
-                          </svg>
-                          Accept All
-                        </>
-                      )}
-                    </button>
-                  </div>
-                  <div className="space-y-3">
-                    {resolvedSuggestions.map((suggestion) => {
-                      const isProcessing = processingContactId === suggestion.contact_id;
-                      const contact = suggestion.contact;
-                      const displayName = contact?.display_name || contact?.name || "Unknown Contact";
-                      const displayEmail = contact?.email || "";
-                      const displayCompany = contact?.company || "";
-
-                      return (
-                        <div
-                          key={suggestion.contact_id}
-                          className="bg-purple-50 border border-purple-200 rounded-lg p-4"
-                        >
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-2">
-                                <span className="inline-block px-3 py-1 bg-purple-100 text-purple-800 text-xs font-semibold rounded-full">
-                                  {suggestion.role}
-                                </span>
-                                {suggestion.is_primary && (
-                                  <span className="inline-block px-2 py-1 bg-blue-100 text-blue-800 text-xs font-semibold rounded-full">
-                                    Primary
-                                  </span>
-                                )}
-                                <span className="inline-block px-2 py-0.5 bg-yellow-100 text-yellow-800 text-xs font-medium rounded-full">
-                                  AI Suggested
-                                </span>
-                              </div>
-                              <h5 className="font-semibold text-gray-900 text-lg">
-                                {displayName}
-                              </h5>
-                              {displayEmail && (
-                                <p className="text-sm text-gray-600 mt-1">
-                                  <svg
-                                    className="w-4 h-4 inline mr-1"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth={2}
-                                      d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                                    />
-                                  </svg>
-                                  {displayEmail}
-                                </p>
-                              )}
-                              {displayCompany && (
-                                <p className="text-sm text-gray-600 mt-1">
-                                  <svg
-                                    className="w-4 h-4 inline mr-1"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth={2}
-                                      d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
-                                    />
-                                  </svg>
-                                  {displayCompany}
-                                </p>
-                              )}
-                              {suggestion.notes && (
-                                <p className="text-sm text-gray-700 mt-2 italic">
-                                  Note: {suggestion.notes}
-                                </p>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2 ml-4">
-                              <button
-                                onClick={() => handleAcceptSuggestion(suggestion)}
-                                disabled={isProcessing || processingAll}
-                                className="p-2 text-green-600 hover:bg-green-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                title="Accept suggestion"
-                              >
-                                {isProcessing ? (
-                                  <svg
-                                    className="w-5 h-5 animate-spin"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                  >
-                                    <circle
-                                      className="opacity-25"
-                                      cx="12"
-                                      cy="12"
-                                      r="10"
-                                      stroke="currentColor"
-                                      strokeWidth="4"
-                                    ></circle>
-                                    <path
-                                      className="opacity-75"
-                                      fill="currentColor"
-                                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                                    ></path>
-                                  </svg>
-                                ) : (
-                                  <svg
-                                    className="w-5 h-5"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth={2}
-                                      d="M5 13l4 4L19 7"
-                                    />
-                                  </svg>
-                                )}
-                              </button>
-                              <button
-                                onClick={() => handleRejectSuggestion(suggestion)}
-                                disabled={isProcessing || processingAll}
-                                className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                title="Reject suggestion"
-                              >
-                                <svg
-                                  className="w-5 h-5"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  viewBox="0 0 24 24"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M6 18L18 6M6 6l12 12"
-                                  />
-                                </svg>
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              <h4 className="text-lg font-semibold text-gray-900 mb-4">
-                Contact Assignments
-              </h4>
-              {loading ? (
-                <div className="text-center py-8">
-                  <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
-                </div>
-              ) : contactAssignments.length === 0 ? (
-                <p className="text-gray-600 text-center py-8">
-                  No contacts assigned to this transaction
-                </p>
-              ) : (
-                <div className="space-y-4">
-                  {contactAssignments.map((assignment) => (
-                    <div
-                      key={assignment.id}
-                      className="bg-gray-50 border border-gray-200 rounded-lg p-4"
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="inline-block px-3 py-1 bg-green-100 text-green-800 text-xs font-semibold rounded-full">
-                              {assignment.specific_role ||
-                                assignment.role ||
-                                "Unknown Role"}
-                            </span>
-                            {assignment.is_primary === 1 && (
-                              <span className="inline-block px-2 py-1 bg-blue-100 text-blue-800 text-xs font-semibold rounded-full">
-                                Primary
-                              </span>
-                            )}
-                          </div>
-                          <h5 className="font-semibold text-gray-900 text-lg">
-                            {assignment.contact_name || "Unknown Contact"}
-                          </h5>
-                          {assignment.contact_email && (
-                            <p className="text-sm text-gray-600 mt-1">
-                              <svg
-                                className="w-4 h-4 inline mr-1"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                                />
-                              </svg>
-                              {assignment.contact_email}
-                            </p>
-                          )}
-                          {assignment.contact_phone && (
-                            <p className="text-sm text-gray-600 mt-1">
-                              <svg
-                                className="w-4 h-4 inline mr-1"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
-                                />
-                              </svg>
-                              {assignment.contact_phone}
-                            </p>
-                          )}
-                          {assignment.contact_company && (
-                            <p className="text-sm text-gray-600 mt-1">
-                              <svg
-                                className="w-4 h-4 inline mr-1"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
-                                />
-                              </svg>
-                              {assignment.contact_company}
-                            </p>
-                          )}
-                          {assignment.notes && (
-                            <p className="text-sm text-gray-700 mt-2 italic">
-                              Note: {assignment.notes}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            <TransactionContactsTab
+              resolvedSuggestions={resolvedSuggestions}
+              contactAssignments={contactAssignments}
+              loading={loading}
+              processingContactId={processingContactId}
+              processingAll={processingAll}
+              onAcceptSuggestion={handleAcceptSuggestionWithCallbacks}
+              onRejectSuggestion={handleRejectSuggestionWithCallbacks}
+              onAcceptAll={handleAcceptAllWithCallbacks}
+            />
           )}
         </div>
       </div>
@@ -1190,344 +305,55 @@ function TransactionDetails({
 
       {/* Archive Prompt */}
       {showArchivePrompt && (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[70] p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
-            <h3 className="text-lg font-bold text-gray-900 mb-3">
-              Archive Transaction?
-            </h3>
-            <p className="text-sm text-gray-600 mb-6">
-              Export completed! Would you like to mark this transaction as
-              closed?
-            </p>
-            <div className="flex items-center gap-3 justify-end">
-              <button
-                onClick={() => setShowArchivePrompt(false)}
-                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg font-medium transition-all"
-              >
-                Keep Active
-              </button>
-              <button
-                onClick={handleArchive}
-                className="px-4 py-2 bg-gray-600 text-white hover:bg-gray-700 rounded-lg font-semibold transition-all"
-              >
-                Mark as Closed
-              </button>
-            </div>
-          </div>
-        </div>
+        <ArchivePromptModal
+          onKeepActive={() => setShowArchivePrompt(false)}
+          onArchive={handleArchive}
+        />
       )}
 
       {/* Delete Confirmation */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[70] p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
-                <svg
-                  className="w-6 h-6 text-red-600"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                  />
-                </svg>
-              </div>
-              <h3 className="text-lg font-bold text-gray-900">
-                Delete Transaction?
-              </h3>
-            </div>
-            <p className="text-sm text-gray-600 mb-2">
-              Are you sure you want to delete this transaction? This will
-              permanently remove:
-            </p>
-            <ul className="text-sm text-gray-600 mb-6 ml-6 list-disc">
-              <li>
-                Transaction details for{" "}
-                <strong>{transaction.property_address}</strong>
-              </li>
-              <li>All contact assignments</li>
-              <li>All related communications</li>
-            </ul>
-            <p className="text-sm text-red-600 font-semibold mb-6">
-              This action cannot be undone.
-            </p>
-            <div className="flex items-center gap-3 justify-end">
-              <button
-                onClick={() => setShowDeleteConfirm(false)}
-                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg font-medium transition-all"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDelete}
-                className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg font-semibold transition-all"
-              >
-                Delete Transaction
-              </button>
-            </div>
-          </div>
-        </div>
+        <DeleteConfirmModal
+          propertyAddress={transaction.property_address}
+          onCancel={() => setShowDeleteConfirm(false)}
+          onDelete={handleDelete}
+        />
       )}
 
       {/* Unlink Email Confirmation */}
       {showUnlinkConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[70] p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0">
-                <svg
-                  className="w-6 h-6 text-orange-600"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
-                  />
-                </svg>
-              </div>
-              <h3 className="text-lg font-bold text-gray-900">
-                Remove Email from Transaction?
-              </h3>
-            </div>
-            <p className="text-sm text-gray-600 mb-2">
-              Are you sure this email is not related to this transaction?
-            </p>
-            <div className="bg-gray-50 rounded-lg p-3 mb-4">
-              <p className="text-sm font-medium text-gray-900 truncate">
-                {showUnlinkConfirm.subject || "(No Subject)"}
-              </p>
-              <p className="text-xs text-gray-600 mt-1">
-                From: {showUnlinkConfirm.sender || "Unknown"}
-              </p>
-            </div>
-            <p className="text-sm text-gray-600 mb-6">
-              This email will be removed from this transaction and won&apos;t be
-              re-added during future email scans.
-            </p>
-            <div className="flex items-center gap-3 justify-end">
-              <button
-                onClick={() => setShowUnlinkConfirm(null)}
-                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg font-medium transition-all"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleUnlinkCommunication(showUnlinkConfirm)}
-                disabled={unlinkingCommId === showUnlinkConfirm.id}
-                className="px-4 py-2 bg-orange-600 text-white hover:bg-orange-700 rounded-lg font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              >
-                {unlinkingCommId === showUnlinkConfirm.id ? (
-                  <>
-                    <svg
-                      className="w-4 h-4 animate-spin"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      ></circle>
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      ></path>
-                    </svg>
-                    Removing...
-                  </>
-                ) : (
-                  "Remove Email"
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
+        <UnlinkEmailModal
+          communication={showUnlinkConfirm}
+          isUnlinking={unlinkingCommId === showUnlinkConfirm.id}
+          onCancel={() => setShowUnlinkConfirm(null)}
+          onUnlink={() => handleUnlink(showUnlinkConfirm)}
+        />
       )}
 
       {/* Full Email View Modal */}
       {viewingEmail && (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[70] p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[85vh] flex flex-col">
-            {/* Email Header */}
-            <div className="flex-shrink-0 bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-4 rounded-t-xl">
-              <div className="flex items-start justify-between">
-                <div className="flex-1 pr-4">
-                  <h3 className="text-lg font-bold text-white">
-                    {viewingEmail.subject || "(No Subject)"}
-                  </h3>
-                  <p className="text-blue-100 text-sm mt-1">
-                    {viewingEmail.sent_at
-                      ? new Date(viewingEmail.sent_at).toLocaleString()
-                      : "Unknown date"}
-                  </p>
-                </div>
-                <button
-                  onClick={() => setViewingEmail(null)}
-                  className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-all"
-                >
-                  <svg
-                    className="w-6 h-6"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M6 18L18 6M6 6l12 12"
-                    />
-                  </svg>
-                </button>
-              </div>
-            </div>
-
-            {/* Email Metadata */}
-            <div className="flex-shrink-0 px-6 py-4 border-b border-gray-200 bg-gray-50">
-              <div className="space-y-2">
-                <div className="flex items-start gap-2">
-                  <span className="text-sm font-medium text-gray-500 w-16">
-                    From:
-                  </span>
-                  <span className="text-sm text-gray-900">
-                    {viewingEmail.sender || "Unknown"}
-                  </span>
-                </div>
-                {viewingEmail.recipients && (
-                  <div className="flex items-start gap-2">
-                    <span className="text-sm font-medium text-gray-500 w-16">
-                      To:
-                    </span>
-                    <span className="text-sm text-gray-900">
-                      {viewingEmail.recipients}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Email Body */}
-            <div className="flex-1 overflow-y-auto p-6">
-              {viewingEmail.body_plain ? (
-                <div className="prose prose-sm max-w-none">
-                  <pre className="whitespace-pre-wrap font-sans text-sm text-gray-700 leading-relaxed">
-                    {viewingEmail.body_plain}
-                  </pre>
-                </div>
-              ) : (
-                <p className="text-gray-500 italic text-center py-8">
-                  No email content available
-                </p>
-              )}
-            </div>
-
-            {/* Footer Actions */}
-            <div className="flex-shrink-0 px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-xl">
-              <div className="flex items-center justify-between">
-                <button
-                  onClick={() => {
-                    setViewingEmail(null);
-                    setShowUnlinkConfirm(viewingEmail);
-                  }}
-                  className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg font-medium transition-all flex items-center gap-2"
-                >
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
-                    />
-                  </svg>
-                  Remove from Transaction
-                </button>
-                <button
-                  onClick={() => setViewingEmail(null)}
-                  className="px-4 py-2 bg-gray-600 text-white hover:bg-gray-700 rounded-lg font-semibold transition-all"
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <EmailViewModal
+          email={viewingEmail}
+          onClose={() => setViewingEmail(null)}
+          onRemoveFromTransaction={() => {
+            setViewingEmail(null);
+            setShowUnlinkConfirm(viewingEmail);
+          }}
+        />
       )}
 
       {/* Reject Reason Modal */}
       {showRejectReasonModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[70] p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
-                <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </div>
-              <h3 className="text-lg font-bold text-gray-900">
-                Reject Transaction
-              </h3>
-            </div>
-            <p className="text-sm text-gray-600 mb-4">
-              Are you sure this is not a valid real estate transaction?
-            </p>
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Reason for rejection (optional)
-              </label>
-              <textarea
-                value={rejectReason}
-                onChange={(e) => setRejectReason(e.target.value)}
-                placeholder="e.g., Not a real estate transaction, duplicate entry..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 resize-none"
-                rows={3}
-              />
-            </div>
-            <div className="flex items-center gap-3 justify-end">
-              <button
-                onClick={() => {
-                  setShowRejectReasonModal(false);
-                  setRejectReason("");
-                }}
-                disabled={isRejecting}
-                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg font-medium transition-all disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleReject}
-                disabled={isRejecting}
-                className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg font-semibold transition-all disabled:opacity-50 flex items-center gap-2"
-              >
-                {isRejecting ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Rejecting...
-                  </>
-                ) : (
-                  "Reject Transaction"
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
+        <RejectReasonModal
+          rejectReason={rejectReason}
+          onRejectReasonChange={setRejectReason}
+          isRejecting={isRejecting}
+          onCancel={() => {
+            setShowRejectReasonModal(false);
+            setRejectReason("");
+          }}
+          onReject={handleReject}
+        />
       )}
 
       {/* Edit Transaction Modal */}
@@ -1538,15 +364,13 @@ function TransactionDetails({
           onSuccess={() => {
             setShowEditModal(false);
             loadDetails();
-            if (onTransactionUpdated) {
-              onTransactionUpdated();
-            }
+            onTransactionUpdated?.();
           }}
           editTransaction={transaction}
         />
       )}
 
-      {/* Toast Notifications - only render if using local toast (no parent handlers provided) */}
+      {/* Toast Notifications - only render if using local toast */}
       {!onShowSuccess && !onShowError && (
         <ToastContainer toasts={localToast.toasts} onDismiss={localToast.removeToast} />
       )}
