@@ -30,13 +30,13 @@ describe("useConversations", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     // Reset the mock implementation before each test
-    (window.electron.getConversations as jest.Mock).mockReset();
+    (window.api.messages.getConversations as jest.Mock).mockReset();
   });
 
   describe("initial loading", () => {
     it("should start in loading state", async () => {
       // Mock a slow response
-      (window.electron.getConversations as jest.Mock).mockImplementation(
+      (window.api.messages.getConversations as jest.Mock).mockImplementation(
         () =>
           new Promise((resolve) =>
             setTimeout(
@@ -60,7 +60,7 @@ describe("useConversations", () => {
     });
 
     it("should load conversations on mount", async () => {
-      (window.electron.getConversations as jest.Mock).mockResolvedValue({
+      (window.api.messages.getConversations as jest.Mock).mockResolvedValue({
         success: true,
         conversations: mockConversations,
       });
@@ -73,13 +73,13 @@ describe("useConversations", () => {
 
       expect(result.current.conversations).toEqual(mockConversations);
       expect(result.current.error).toBeNull();
-      expect(window.electron.getConversations).toHaveBeenCalledTimes(1);
+      expect(window.api.messages.getConversations).toHaveBeenCalledTimes(1);
     });
   });
 
   describe("success handling", () => {
     it("should set conversations on successful response", async () => {
-      (window.electron.getConversations as jest.Mock).mockResolvedValue({
+      (window.api.messages.getConversations as jest.Mock).mockResolvedValue({
         success: true,
         conversations: mockConversations,
       });
@@ -95,7 +95,7 @@ describe("useConversations", () => {
     });
 
     it("should handle empty conversations array", async () => {
-      (window.electron.getConversations as jest.Mock).mockResolvedValue({
+      (window.api.messages.getConversations as jest.Mock).mockResolvedValue({
         success: true,
         conversations: [],
       });
@@ -111,7 +111,7 @@ describe("useConversations", () => {
     });
 
     it("should handle undefined conversations", async () => {
-      (window.electron.getConversations as jest.Mock).mockResolvedValue({
+      (window.api.messages.getConversations as jest.Mock).mockResolvedValue({
         success: true,
         conversations: undefined,
       });
@@ -128,7 +128,7 @@ describe("useConversations", () => {
 
   describe("error handling", () => {
     it("should set error on failed response", async () => {
-      (window.electron.getConversations as jest.Mock).mockResolvedValue({
+      (window.api.messages.getConversations as jest.Mock).mockResolvedValue({
         success: false,
         error: "Permission denied",
       });
@@ -144,7 +144,7 @@ describe("useConversations", () => {
     });
 
     it("should handle thrown errors", async () => {
-      (window.electron.getConversations as jest.Mock).mockRejectedValue(
+      (window.api.messages.getConversations as jest.Mock).mockRejectedValue(
         new Error("Network error"),
       );
 
@@ -158,7 +158,7 @@ describe("useConversations", () => {
     });
 
     it("should handle non-Error thrown values", async () => {
-      (window.electron.getConversations as jest.Mock).mockRejectedValue(
+      (window.api.messages.getConversations as jest.Mock).mockRejectedValue(
         "String error",
       );
 
@@ -172,7 +172,7 @@ describe("useConversations", () => {
     });
 
     it("should use default error message when none provided", async () => {
-      (window.electron.getConversations as jest.Mock).mockResolvedValue({
+      (window.api.messages.getConversations as jest.Mock).mockResolvedValue({
         success: false,
         error: undefined,
       });
@@ -189,7 +189,7 @@ describe("useConversations", () => {
 
   describe("reload", () => {
     it("should reload conversations when called", async () => {
-      (window.electron.getConversations as jest.Mock).mockResolvedValue({
+      (window.api.messages.getConversations as jest.Mock).mockResolvedValue({
         success: true,
         conversations: mockConversations,
       });
@@ -200,7 +200,7 @@ describe("useConversations", () => {
         expect(result.current.isLoading).toBe(false);
       });
 
-      expect(window.electron.getConversations).toHaveBeenCalledTimes(1);
+      expect(window.api.messages.getConversations).toHaveBeenCalledTimes(1);
 
       // Update mock for reload
       const newConversations = [
@@ -216,7 +216,7 @@ describe("useConversations", () => {
         },
       ];
 
-      (window.electron.getConversations as jest.Mock).mockResolvedValue({
+      (window.api.messages.getConversations as jest.Mock).mockResolvedValue({
         success: true,
         conversations: newConversations,
       });
@@ -225,13 +225,13 @@ describe("useConversations", () => {
         await result.current.reload();
       });
 
-      expect(window.electron.getConversations).toHaveBeenCalledTimes(2);
+      expect(window.api.messages.getConversations).toHaveBeenCalledTimes(2);
       expect(result.current.conversations).toHaveLength(3);
     });
 
     it("should clear previous error on reload", async () => {
       // First call fails
-      (window.electron.getConversations as jest.Mock).mockResolvedValueOnce({
+      (window.api.messages.getConversations as jest.Mock).mockResolvedValueOnce({
         success: false,
         error: "Initial error",
       });
@@ -243,7 +243,7 @@ describe("useConversations", () => {
       });
 
       // Second call succeeds
-      (window.electron.getConversations as jest.Mock).mockResolvedValueOnce({
+      (window.api.messages.getConversations as jest.Mock).mockResolvedValueOnce({
         success: true,
         conversations: mockConversations,
       });

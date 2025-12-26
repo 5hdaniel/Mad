@@ -39,7 +39,7 @@ function MicrosoftLogin({ onLoginComplete, onSkip }: MicrosoftLoginProps) {
 
     try {
       // Initialize Outlook service
-      const initResult = await window.electron.outlookInitialize();
+      const initResult = await window.api.outlook.initialize();
 
       if (!initResult.success) {
         // Not configured - allow user to skip
@@ -49,10 +49,10 @@ function MicrosoftLogin({ onLoginComplete, onSkip }: MicrosoftLoginProps) {
       }
 
       // Check if already authenticated
-      const isAuth = await window.electron.outlookIsAuthenticated();
+      const isAuth = await window.api.outlook.isAuthenticated();
 
       if (isAuth) {
-        const email = await window.electron.outlookGetUserEmail();
+        const email = await window.api.outlook.getUserEmail();
         if (email) {
           setUserEmail(email);
           setIsAuthenticated(true);
@@ -74,7 +74,8 @@ function MicrosoftLogin({ onLoginComplete, onSkip }: MicrosoftLoginProps) {
     setDeviceCode(null);
 
     // Listen for device code from main process
-    const handleDeviceCode = (code: string) => {
+    const handleDeviceCode = (info: unknown) => {
+      const code = info as string;
       // Parse the code string if it's JSON, otherwise create a simple object
       try {
         const parsed = JSON.parse(code) as DeviceCodeInfo;
@@ -87,12 +88,12 @@ function MicrosoftLogin({ onLoginComplete, onSkip }: MicrosoftLoginProps) {
 
     // Set up listener (will be cleaned up when authentication completes)
     let cleanup;
-    if (window.electron.onDeviceCode) {
-      cleanup = window.electron.onDeviceCode(handleDeviceCode);
+    if (window.api.outlook.onDeviceCode) {
+      cleanup = window.api.outlook.onDeviceCode(handleDeviceCode);
     }
 
     try {
-      const result = await window.electron.outlookAuthenticate();
+      const result = await window.api.outlook.authenticate();
 
       if (result.success) {
         setIsAuthenticated(true);

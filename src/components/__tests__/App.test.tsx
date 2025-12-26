@@ -225,10 +225,10 @@ describe("App", () => {
 
     // Default API mocks - still needed for some components that call APIs directly
     window.api.auth.getCurrentUser.mockResolvedValue({ success: false });
-    window.electron.checkPermissions.mockResolvedValue({
+    window.api.system.checkPermissions.mockResolvedValue({
       hasPermission: false,
     });
-    window.electron.checkAppLocation.mockResolvedValue({
+    window.api.system.checkAppLocation.mockResolvedValue({
       shouldPrompt: false,
       appPath: "/Applications/MagicAudit.app",
     });

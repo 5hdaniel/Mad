@@ -181,7 +181,7 @@ function PermissionsStepContent({ onAction }: OnboardingStepContentProps) {
   // Auto-check permissions on mount and periodically after user starts the flow
   const checkPermissions = useCallback(async () => {
     try {
-      const result = await window.electron.checkPermissions();
+      const result = await window.api.system.checkPermissions();
       if (result.hasPermission) {
         onAction({ type: "PERMISSION_GRANTED" });
       }
@@ -211,7 +211,7 @@ function PermissionsStepContent({ onAction }: OnboardingStepContentProps) {
 
   const handleOpenSystemSettings = async () => {
     try {
-      await window.electron.openSystemSettings();
+      await window.api.system.openSystemSettings();
       markStepComplete(1);
     } catch (error) {
       console.error("Error opening system settings:", error);
@@ -308,7 +308,7 @@ function PermissionsStepContent({ onAction }: OnboardingStepContentProps) {
           onClick={async () => {
             // Trigger Full Disk Access attempt to make app appear in System Settings
             try {
-              await window.electron.triggerFullDiskAccess();
+              await window.api.system.triggerFullDiskAccess();
             } catch (error) {
               console.error("Error triggering full disk access:", error);
             }

@@ -36,7 +36,9 @@ import {
   driverBridge,
   syncBridge,
   eventBridge,
-  legacyElectronBridge,
+  outlookBridge,
+  updateBridge,
+  messageBridge,
 } from "./preload/index";
 
 // Expose protected methods that allow the renderer process to use
@@ -86,13 +88,16 @@ contextBridge.exposeInMainWorld("api", {
 
   // Sync operations (Windows iPhone sync)
   sync: syncBridge,
+
+  // Outlook integration (Microsoft 365)
+  outlook: outlookBridge,
+
+  // Auto-update functionality
+  update: updateBridge,
+
+  // iMessage conversations (macOS)
+  messages: messageBridge,
 });
 
-/**
- * ============================================
- * LEGACY ELECTRON NAMESPACE
- * ============================================
- * @deprecated - Maintained for backward compatibility with older code
- * New code should use the 'api' namespace above instead
- */
-contextBridge.exposeInMainWorld("electron", legacyElectronBridge);
+// NOTE: Legacy window.electron namespace has been removed.
+// All APIs are now accessed through window.api namespace.

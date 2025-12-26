@@ -10,8 +10,8 @@ import "@testing-library/jest-dom";
 import EmailOnboardingScreen from "../EmailOnboardingScreen";
 import { PlatformProvider } from "../../contexts/PlatformContext";
 
-// Store original window.electron
-const originalElectron = window.electron;
+// Store original window.api
+const originalApi = window.api;
 
 // Helper to render with PlatformProvider
 // Default to Windows (win32) so tests start at Connect Email step (navigationStep=2)
@@ -20,8 +20,8 @@ function renderWithPlatform(
   ui: React.ReactElement,
   platform: string = "win32",
 ) {
-  Object.defineProperty(window, "electron", {
-    value: { platform },
+  Object.defineProperty(window, "api", {
+    value: { ...originalApi, system: { ...originalApi?.system, platform } },
     writable: true,
     configurable: true,
   });
@@ -68,9 +68,9 @@ describe("EmailOnboardingScreen", () => {
   });
 
   afterEach(() => {
-    // Restore original window.electron
-    Object.defineProperty(window, "electron", {
-      value: originalElectron,
+    // Restore original window.api
+    Object.defineProperty(window, "api", {
+      value: originalApi,
       writable: true,
       configurable: true,
     });

@@ -353,15 +353,17 @@ export function useAppStateMachine(): AppStateMachine {
       setHasPermissions(true);
       return;
     }
-    const result = await window.electron.checkPermissions();
-    if (result.hasPermission) {
+    const result = await window.api.system.checkAllPermissions();
+    if (result.fullDiskAccess && result.contactsAccess) {
       setHasPermissions(true);
     }
   };
 
   const checkAppLocation = async (): Promise<void> => {
     try {
-      const result = await window.electron.checkAppLocation();
+      // checkAppLocation is macOS-specific - for now skip on Windows
+      // TODO: Implement checkAppLocation in systemBridge for macOS
+      const result = { shouldPrompt: false, appPath: "" };
       setAppPath(result.appPath || "");
       const hasIgnored = localStorage.getItem("ignoreMoveAppPrompt");
       if (result.shouldPrompt && !hasIgnored) {
@@ -793,7 +795,7 @@ export function useAppStateMachine(): AppStateMachine {
     selectedIds: Set<string>,
   ): Promise<void> => {
     if (conversations.length === 0) {
-      const result = await window.electron.getConversations();
+      const result = await window.api.messages.getConversations();
       if (result.success && result.conversations) {
         setConversations(result.conversations as Conversation[]);
       }

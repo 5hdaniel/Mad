@@ -72,6 +72,18 @@ if (typeof window !== 'undefined') {
       remove: jest.fn(),
     },
     system: {
+      // Platform detection (migrated from window.electron.platform)
+      platform: 'darwin',
+      // App info (migrated from window.electron)
+      getAppInfo: jest.fn(),
+      getMacOSVersion: jest.fn(),
+      checkAppLocation: jest.fn(),
+      // Permission checks (migrated from window.electron)
+      checkPermissions: jest.fn(),
+      triggerFullDiskAccess: jest.fn(),
+      requestPermissions: jest.fn(),
+      openSystemSettings: jest.fn(),
+      // Existing system methods
       checkFullDiskAccess: jest.fn(),
       checkContactsPermission: jest.fn(),
       checkAllPermissions: jest.fn(),
@@ -84,6 +96,8 @@ if (typeof window !== 'undefined') {
       getDiagnostics: jest.fn(),
       hasEncryptionKeyStore: jest.fn(),
       initializeSecureStorage: jest.fn(),
+      getSecureStorageStatus: jest.fn(),
+      setupFullDiskAccess: jest.fn(),
     },
     address: {
       initialize: jest.fn(),
@@ -121,6 +135,38 @@ if (typeof window !== 'undefined') {
     },
     shell: {
       openExternal: jest.fn(),
+      openFolder: jest.fn(),
+    },
+    // iMessage conversations (macOS) - migrated from window.electron
+    messages: {
+      getConversations: jest.fn(),
+      getMessages: jest.fn(),
+      exportConversations: jest.fn(),
+    },
+    // Outlook integration - migrated from window.electron
+    outlook: {
+      initialize: jest.fn(),
+      isAuthenticated: jest.fn(),
+      authenticate: jest.fn(),
+      getUserEmail: jest.fn(),
+      exportEmails: jest.fn(),
+      onDeviceCode: jest.fn(() => jest.fn()),
+      onExportProgress: jest.fn(() => jest.fn()),
+    },
+    // Auto-update functionality - migrated from window.electron
+    update: {
+      onAvailable: jest.fn(() => jest.fn()),
+      onProgress: jest.fn(() => jest.fn()),
+      onDownloaded: jest.fn(() => jest.fn()),
+      install: jest.fn(),
+    },
+    // Apple drivers (Windows only)
+    drivers: {
+      checkApple: jest.fn(),
+      installApple: jest.fn(),
+      hasBundled: jest.fn(),
+      openITunesStore: jest.fn(),
+      checkUpdate: jest.fn(),
     },
     onTransactionScanProgress: jest.fn(() => jest.fn()),
     onGoogleMailboxConnected: jest.fn(() => jest.fn()),

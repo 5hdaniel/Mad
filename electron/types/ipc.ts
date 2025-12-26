@@ -540,6 +540,30 @@ export interface WindowApi {
 
   // System methods
   system: {
+    // Platform detection (migrated from window.electron.platform)
+    platform: NodeJS.Platform;
+
+    // App info methods (migrated from window.electron)
+    getAppInfo: () => Promise<{ version: string; name: string }>;
+    getMacOSVersion: () => Promise<{ version: string | number; name?: string }>;
+    checkAppLocation: () => Promise<{
+      inApplications?: boolean;
+      shouldPrompt?: boolean;
+      appPath?: string;
+      path?: string;
+    }>;
+
+    // Permission checks (migrated from window.electron)
+    checkPermissions: () => Promise<{
+      hasPermission?: boolean;
+      fullDiskAccess?: boolean;
+      contacts?: boolean;
+    }>;
+    triggerFullDiskAccess: () => Promise<{ granted: boolean }>;
+    requestPermissions: () => Promise<Record<string, unknown>>;
+    openSystemSettings: () => Promise<{ success: boolean }>;
+
+    // Existing system methods
     runPermissionSetup: () => Promise<{ success: boolean }>;
     requestContactsPermission: () => Promise<{ granted: boolean }>;
     setupFullDiskAccess: () => Promise<{ success: boolean }>;
@@ -902,6 +926,76 @@ export interface WindowApi {
   // Shell methods
   shell: {
     openExternal: (url: string) => Promise<void>;
+    openFolder: (folderPath: string) => Promise<{ success: boolean }>;
+  };
+
+  // Messages API (iMessage/SMS - migrated from window.electron)
+  messages: {
+    getConversations: () => Promise<{
+      success: boolean;
+      conversations?: Array<{
+        id: string;
+        name: string;
+        directChatCount: number;
+        groupChatCount: number;
+        directMessageCount: number;
+        groupMessageCount: number;
+        lastMessageDate: Date;
+      }>;
+      error?: string;
+    }>;
+    getMessages: (chatId: string) => Promise<unknown[]>;
+    exportConversations: (
+      conversationIds: string[],
+    ) => Promise<{
+      success: boolean;
+      exportPath?: string;
+      canceled?: boolean;
+      error?: string;
+    }>;
+  };
+
+  // Outlook integration (migrated from window.electron)
+  outlook: {
+    initialize: () => Promise<{ success: boolean; error?: string }>;
+    authenticate: () => Promise<{
+      success: boolean;
+      error?: string;
+      userInfo?: { username?: string };
+    }>;
+    isAuthenticated: () => Promise<boolean>;
+    getUserEmail: () => Promise<string | null>;
+    exportEmails: (
+      contacts: Array<{
+        name: string;
+        chatId?: string;
+        emails?: string[];
+        phones?: string[];
+      }>,
+    ) => Promise<{
+      success: boolean;
+      error?: string;
+      canceled?: boolean;
+      exportPath?: string;
+      results?: Array<{
+        contactName: string;
+        success: boolean;
+        textMessageCount: number;
+        emailCount?: number;
+        error: string | null;
+      }>;
+    }>;
+    signout: () => Promise<{ success: boolean }>;
+    onDeviceCode: (callback: (info: unknown) => void) => () => void;
+    onExportProgress: (callback: (progress: unknown) => void) => () => void;
+  };
+
+  // Auto-update (migrated from window.electron)
+  update: {
+    onAvailable: (callback: (info: unknown) => void) => () => void;
+    onProgress: (callback: (progress: unknown) => void) => () => void;
+    onDownloaded: (callback: (info: unknown) => void) => () => void;
+    install: () => void;
   };
 
   // Device detection methods (Windows)

@@ -40,7 +40,7 @@ interface DriversAPI {
  */
 function getDriversAPI(): DriversAPI | null {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (window.electron as any)?.drivers as DriversAPI | null;
+  return (window.api as any)?.drivers as DriversAPI | null;
 }
 
 // Windows + iPhone setup steps (includes driver installation)

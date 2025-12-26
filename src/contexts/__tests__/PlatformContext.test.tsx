@@ -7,8 +7,8 @@ import React from "react";
 import { render, screen } from "@testing-library/react";
 import { PlatformProvider, usePlatform } from "../PlatformContext";
 
-// Store original window.electron
-const originalElectron = window.electron;
+// Store original window.api
+const originalApi = window.api;
 
 // Test component that uses usePlatform
 function TestPlatformConsumer() {
@@ -38,9 +38,9 @@ describe("PlatformContext", () => {
   });
 
   afterEach(() => {
-    // Restore original window.electron
-    Object.defineProperty(window, "electron", {
-      value: originalElectron,
+    // Restore original window.api
+    Object.defineProperty(window, "api", {
+      value: originalApi,
       writable: true,
       configurable: true,
     });
@@ -48,8 +48,8 @@ describe("PlatformContext", () => {
 
   describe("PlatformProvider", () => {
     it("should provide macOS context when platform is darwin", () => {
-      Object.defineProperty(window, "electron", {
-        value: { platform: "darwin" },
+      Object.defineProperty(window, "api", {
+        value: { ...originalApi, system: { ...originalApi?.system, platform: "darwin" } },
         writable: true,
         configurable: true,
       });
@@ -70,8 +70,8 @@ describe("PlatformContext", () => {
     });
 
     it("should provide Windows context when platform is win32", () => {
-      Object.defineProperty(window, "electron", {
-        value: { platform: "win32" },
+      Object.defineProperty(window, "api", {
+        value: { ...originalApi, system: { ...originalApi?.system, platform: "win32" } },
         writable: true,
         configurable: true,
       });
@@ -92,8 +92,8 @@ describe("PlatformContext", () => {
     });
 
     it("should provide Linux context when platform is linux", () => {
-      Object.defineProperty(window, "electron", {
-        value: { platform: "linux" },
+      Object.defineProperty(window, "api", {
+        value: { ...originalApi, system: { ...originalApi?.system, platform: "linux" } },
         writable: true,
         configurable: true,
       });
@@ -114,8 +114,8 @@ describe("PlatformContext", () => {
     });
 
     it("should default to Windows when platform is unknown", () => {
-      Object.defineProperty(window, "electron", {
-        value: { platform: "unknown" },
+      Object.defineProperty(window, "api", {
+        value: { ...originalApi, system: { ...originalApi?.system, platform: "unknown" } },
         writable: true,
         configurable: true,
       });

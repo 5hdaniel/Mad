@@ -96,7 +96,7 @@ function ConversationList({
     setIsExporting(true);
 
     try {
-      const result = await window.electron.exportConversations(
+      const result = await window.api.messages.exportConversations(
         Array.from(selection.selectedIds),
       );
 
