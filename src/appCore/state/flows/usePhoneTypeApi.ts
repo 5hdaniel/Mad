@@ -58,7 +58,7 @@ export function usePhoneTypeApi({
 
             // On Windows + iPhone, check if drivers need to be installed/updated
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const drivers = (window.electron as any)?.drivers;
+            const drivers = (window.api as any)?.drivers;
             if (isWindows && result.phoneType === "iphone" && drivers) {
               try {
                 const driverStatus = await drivers.checkApple();

@@ -118,7 +118,7 @@ function PermissionsScreen({
 
   const detectAppInfo = async () => {
     try {
-      const info = await window.electron.getAppInfo();
+      const info = await window.api.system.getAppInfo();
       setAppInfo(info);
     } catch (error) {
       console.error("Error detecting app info:", error);
@@ -127,7 +127,7 @@ function PermissionsScreen({
 
   const detectMacOSVersion = async () => {
     try {
-      const versionInfo = await window.electron.getMacOSVersion();
+      const versionInfo = await window.api.system.getMacOSVersion();
       // Ensure the versionInfo has the required properties
       if (
         versionInfo &&
@@ -152,7 +152,7 @@ function PermissionsScreen({
   };
 
   const autoCheckPermissions = async () => {
-    const result = await window.electron.checkPermissions();
+    const result = await window.api.system.checkPermissions();
     if (result.hasPermission) {
       onPermissionsGranted();
     }
@@ -164,14 +164,14 @@ function PermissionsScreen({
   };
 
   const _handleOpenSystemSettings = async () => {
-    await window.electron.openSystemSettings();
+    await window.api.system.openSystemSettings();
     // Start checking periodically
     startPeriodicCheck();
   };
 
   const startPeriodicCheck = () => {
     const interval = setInterval(async () => {
-      const result = await window.electron.checkPermissions();
+      const result = await window.api.system.checkPermissions();
       if (result.hasPermission) {
         clearInterval(interval);
         onPermissionsGranted();
@@ -184,7 +184,7 @@ function PermissionsScreen({
 
   const handleCheckPermissions = async () => {
     setIsChecking(true);
-    const result = await window.electron.checkPermissions();
+    const result = await window.api.system.checkPermissions();
     setIsChecking(false);
 
     if (result.hasPermission) {
@@ -273,7 +273,7 @@ function PermissionsScreen({
           <button
             onClick={async () => {
               // Trigger Full Disk Access attempt - this makes the app appear in System Settings
-              await window.electron.triggerFullDiskAccess();
+              await window.api.system.triggerFullDiskAccess();
               setCurrentStep(2);
             }}
             className="w-full bg-primary text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors text-lg"
@@ -366,7 +366,7 @@ function PermissionsScreen({
             <>
               <button
                 onClick={async () => {
-                  await window.electron.openSystemSettings();
+                  await window.api.system.openSystemSettings();
                   setOpenSettingsComplete(true);
                 }}
                 className="w-full bg-primary text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-600 transition-colors mb-3"
@@ -805,7 +805,7 @@ function PermissionsScreen({
                     setQuitReopenComplete(true);
                     // Start auto-checking for permissions
                     const interval = setInterval(async () => {
-                      const result = await window.electron.checkPermissions();
+                      const result = await window.api.system.checkPermissions();
                       if (result.hasPermission) {
                         clearInterval(interval);
                         onPermissionsGranted();

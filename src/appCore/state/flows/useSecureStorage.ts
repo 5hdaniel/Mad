@@ -175,7 +175,7 @@ export function useSecureStorage({
                     // Check if Windows + iPhone needs driver setup
                     if (pendingOnboardingData.phoneType === "iphone") {
                       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                      const drivers = (window.electron as any)?.drivers;
+                      const drivers = (window.api as any)?.drivers;
                       if (drivers) {
                         try {
                           const driverStatus = await drivers.checkApple();

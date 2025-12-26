@@ -10,8 +10,8 @@ import "@testing-library/jest-dom";
 import AppleDriverSetup from "../AppleDriverSetup";
 import { PlatformProvider } from "../../contexts/PlatformContext";
 
-// Store original window.electron
-const originalElectron = window.electron;
+// Store original window.api
+const originalApi = window.api;
 
 // Shared mock functions that persist across tests
 const mockDrivers = {
@@ -27,10 +27,14 @@ function renderWithPlatform(
   ui: React.ReactElement,
   platform: string = "win32",
 ) {
-  // Mock the electron object with drivers API (reusing mock functions)
-  Object.defineProperty(window, "electron", {
+  // Mock the api object with system.platform and drivers API
+  Object.defineProperty(window, "api", {
     value: {
-      platform,
+      ...originalApi,
+      system: {
+        ...originalApi?.system,
+        platform,
+      },
       drivers: mockDrivers,
     },
     writable: true,
@@ -55,9 +59,9 @@ describe("AppleDriverSetup", () => {
   });
 
   afterEach(() => {
-    // Restore original window.electron
-    Object.defineProperty(window, "electron", {
-      value: originalElectron,
+    // Restore original window.api
+    Object.defineProperty(window, "api", {
+      value: originalApi,
       writable: true,
       configurable: true,
     });

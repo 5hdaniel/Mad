@@ -39,11 +39,11 @@ describe("OutlookExport", () => {
     jest.clearAllMocks();
 
     // Default mocks - not authenticated
-    window.electron.outlookInitialize.mockResolvedValue({ success: true });
-    window.electron.outlookIsAuthenticated.mockResolvedValue(false);
-    window.electron.outlookAuthenticate.mockResolvedValue({ success: true });
-    window.electron.outlookGetUserEmail.mockResolvedValue("test@outlook.com");
-    window.electron.outlookExportEmails.mockResolvedValue({
+    window.api.outlook.initialize.mockResolvedValue({ success: true });
+    window.api.outlook.isAuthenticated.mockResolvedValue(false);
+    window.api.outlook.authenticate.mockResolvedValue({ success: true });
+    window.api.outlook.getUserEmail.mockResolvedValue("test@outlook.com");
+    window.api.outlook.exportEmails.mockResolvedValue({
       success: true,
       exportPath: "/path/to/export",
       results: [
@@ -61,13 +61,13 @@ describe("OutlookExport", () => {
         },
       ],
     });
-    window.electron.openFolder.mockResolvedValue({ success: true });
-    window.electron.onExportProgress.mockReturnValue(jest.fn());
+    window.api.shell.openFolder.mockResolvedValue({ success: true });
+    window.api.outlook.onExportProgress.mockReturnValue(jest.fn());
   });
 
   describe("Initialization", () => {
     it("should show loading state during initialization", () => {
-      window.electron.outlookInitialize.mockImplementation(
+      window.api.outlook.initialize.mockImplementation(
         () => new Promise((resolve) => setTimeout(resolve, 1000)),
       );
 
@@ -94,7 +94,7 @@ describe("OutlookExport", () => {
       );
 
       await waitFor(() => {
-        expect(window.electron.outlookInitialize).toHaveBeenCalled();
+        expect(window.api.outlook.initialize).toHaveBeenCalled();
       });
     });
 
@@ -109,12 +109,12 @@ describe("OutlookExport", () => {
       );
 
       await waitFor(() => {
-        expect(window.electron.outlookIsAuthenticated).toHaveBeenCalled();
+        expect(window.api.outlook.isAuthenticated).toHaveBeenCalled();
       });
     });
 
     it("should show error when initialization fails", async () => {
-      window.electron.outlookInitialize.mockResolvedValue({
+      window.api.outlook.initialize.mockResolvedValue({
         success: false,
         error: "Microsoft Graph API unavailable",
       });
@@ -139,7 +139,7 @@ describe("OutlookExport", () => {
 
   describe("Authentication", () => {
     it("should show authentication screen when not authenticated", async () => {
-      window.electron.outlookIsAuthenticated.mockResolvedValue(false);
+      window.api.outlook.isAuthenticated.mockResolvedValue(false);
 
       render(
         <OutlookExport
@@ -160,7 +160,7 @@ describe("OutlookExport", () => {
     });
 
     it("should call authenticate when sign in button is clicked", async () => {
-      window.electron.outlookIsAuthenticated.mockResolvedValue(false);
+      window.api.outlook.isAuthenticated.mockResolvedValue(false);
 
       render(
         <OutlookExport
@@ -180,11 +180,11 @@ describe("OutlookExport", () => {
       });
       await userEvent.click(signInButton);
 
-      expect(window.electron.outlookAuthenticate).toHaveBeenCalled();
+      expect(window.api.outlook.authenticate).toHaveBeenCalled();
     });
 
     it("should show export screen after successful authentication", async () => {
-      window.electron.outlookIsAuthenticated.mockResolvedValue(true);
+      window.api.outlook.isAuthenticated.mockResolvedValue(true);
 
       render(
         <OutlookExport
@@ -206,8 +206,8 @@ describe("OutlookExport", () => {
     });
 
     it("should show error when authentication fails", async () => {
-      window.electron.outlookIsAuthenticated.mockResolvedValue(false);
-      window.electron.outlookAuthenticate.mockResolvedValue({
+      window.api.outlook.isAuthenticated.mockResolvedValue(false);
+      window.api.outlook.authenticate.mockResolvedValue({
         success: false,
         error: "User cancelled authentication",
       });
@@ -239,8 +239,8 @@ describe("OutlookExport", () => {
     });
 
     it("should disable sign in button while authenticating", async () => {
-      window.electron.outlookIsAuthenticated.mockResolvedValue(false);
-      window.electron.outlookAuthenticate.mockImplementation(
+      window.api.outlook.isAuthenticated.mockResolvedValue(false);
+      window.api.outlook.authenticate.mockImplementation(
         () => new Promise((resolve) => setTimeout(resolve, 1000)),
       );
 
@@ -269,7 +269,7 @@ describe("OutlookExport", () => {
 
   describe("Export Screen", () => {
     beforeEach(() => {
-      window.electron.outlookIsAuthenticated.mockResolvedValue(true);
+      window.api.outlook.isAuthenticated.mockResolvedValue(true);
     });
 
     it("should display selected contacts with emails", async () => {
@@ -368,7 +368,7 @@ describe("OutlookExport", () => {
 
   describe("Export Process", () => {
     beforeEach(() => {
-      window.electron.outlookIsAuthenticated.mockResolvedValue(true);
+      window.api.outlook.isAuthenticated.mockResolvedValue(true);
     });
 
     it("should call export API when export button is clicked", async () => {
@@ -391,7 +391,7 @@ describe("OutlookExport", () => {
         screen.getByRole("button", { name: /export 2 audits/i }),
       );
 
-      expect(window.electron.outlookExportEmails).toHaveBeenCalledWith([
+      expect(window.api.outlook.exportEmails).toHaveBeenCalledWith([
         expect.objectContaining({ name: "John Client" }),
         expect.objectContaining({ name: "Jane Agent" }),
       ]);
@@ -481,13 +481,13 @@ describe("OutlookExport", () => {
         screen.getByRole("button", { name: /open export folder/i }),
       );
 
-      expect(window.electron.openFolder).toHaveBeenCalledWith(
+      expect(window.api.shell.openFolder).toHaveBeenCalledWith(
         "/path/to/export",
       );
     });
 
     it("should show error when export fails", async () => {
-      window.electron.outlookExportEmails.mockResolvedValue({
+      window.api.outlook.exportEmails.mockResolvedValue({
         success: false,
         error: "Export failed: disk full",
       });
@@ -519,7 +519,7 @@ describe("OutlookExport", () => {
     });
 
     it("should disable export button while exporting", async () => {
-      window.electron.outlookExportEmails.mockImplementation(
+      window.api.outlook.exportEmails.mockImplementation(
         () => new Promise((resolve) => setTimeout(resolve, 1000)),
       );
 
@@ -552,7 +552,7 @@ describe("OutlookExport", () => {
 
   describe("Cancellation", () => {
     it("should call onCancel when cancel button is clicked", async () => {
-      window.electron.outlookIsAuthenticated.mockResolvedValue(false);
+      window.api.outlook.isAuthenticated.mockResolvedValue(false);
 
       render(
         <OutlookExport
@@ -575,7 +575,7 @@ describe("OutlookExport", () => {
     });
 
     it("should call onCancel when back button is clicked", async () => {
-      window.electron.outlookIsAuthenticated.mockResolvedValue(true);
+      window.api.outlook.isAuthenticated.mockResolvedValue(true);
 
       render(
         <OutlookExport
@@ -598,8 +598,8 @@ describe("OutlookExport", () => {
     });
 
     it("should call onCancel when export is cancelled", async () => {
-      window.electron.outlookIsAuthenticated.mockResolvedValue(true);
-      window.electron.outlookExportEmails.mockResolvedValue({
+      window.api.outlook.isAuthenticated.mockResolvedValue(true);
+      window.api.outlook.exportEmails.mockResolvedValue({
         success: false,
         canceled: true,
       });
@@ -631,7 +631,7 @@ describe("OutlookExport", () => {
 
   describe("Detailed Results", () => {
     beforeEach(() => {
-      window.electron.outlookIsAuthenticated.mockResolvedValue(true);
+      window.api.outlook.isAuthenticated.mockResolvedValue(true);
     });
 
     it("should show more details button after export", async () => {
@@ -709,23 +709,23 @@ describe("OutlookExport", () => {
       );
 
       await waitFor(() => {
-        expect(window.electron.onExportProgress).toHaveBeenCalled();
+        expect(window.api.outlook.onExportProgress).toHaveBeenCalled();
       });
     });
 
     it("should have all required Electron APIs available", () => {
-      expect(window.electron.outlookInitialize).toBeDefined();
-      expect(window.electron.outlookIsAuthenticated).toBeDefined();
-      expect(window.electron.outlookAuthenticate).toBeDefined();
-      expect(window.electron.outlookExportEmails).toBeDefined();
-      expect(window.electron.openFolder).toBeDefined();
-      expect(window.electron.onExportProgress).toBeDefined();
+      expect(window.api.outlook.initialize).toBeDefined();
+      expect(window.api.outlook.isAuthenticated).toBeDefined();
+      expect(window.api.outlook.authenticate).toBeDefined();
+      expect(window.api.outlook.exportEmails).toBeDefined();
+      expect(window.api.shell.openFolder).toBeDefined();
+      expect(window.api.outlook.onExportProgress).toBeDefined();
     });
   });
 
   describe("Empty Selection", () => {
     it("should disable export button when no contacts selected", async () => {
-      window.electron.outlookIsAuthenticated.mockResolvedValue(true);
+      window.api.outlook.isAuthenticated.mockResolvedValue(true);
 
       render(
         <OutlookExport

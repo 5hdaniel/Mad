@@ -7,6 +7,53 @@ import { ipcRenderer } from "electron";
 
 export const systemBridge = {
   /**
+   * Current platform identifier from Node.js process.platform
+   */
+  platform: process.platform,
+
+  /**
+   * Gets application info (version, name, etc.)
+   * @returns App info
+   */
+  getAppInfo: () => ipcRenderer.invoke("get-app-info"),
+
+  /**
+   * Gets macOS version information
+   * @returns macOS version
+   */
+  getMacOSVersion: () => ipcRenderer.invoke("get-macos-version"),
+
+  /**
+   * Checks if app is in /Applications folder
+   * @returns Location check result
+   */
+  checkAppLocation: () => ipcRenderer.invoke("check-app-location"),
+
+  /**
+   * Legacy permission check method
+   * @returns Permission statuses
+   */
+  checkPermissions: () => ipcRenderer.invoke("check-permissions"),
+
+  /**
+   * Triggers Full Disk Access check
+   * @returns Access status
+   */
+  triggerFullDiskAccess: () => ipcRenderer.invoke("trigger-full-disk-access"),
+
+  /**
+   * Legacy permission request method
+   * @returns Permission request result
+   */
+  requestPermissions: () => ipcRenderer.invoke("request-permissions"),
+
+  /**
+   * Opens macOS System Settings/Preferences
+   * @returns Open result
+   */
+  openSystemSettings: () => ipcRenderer.invoke("open-system-settings"),
+
+  /**
    * Gets secure storage status without triggering keychain prompt
    * Used to check if encryption is already available (user already authorized)
    * @returns Status result

@@ -12,29 +12,29 @@ export default function UpdateNotification() {
 
   useEffect(() => {
     // Listen for update events
-    if (window.electron?.onUpdateAvailable) {
-      window.electron.onUpdateAvailable((info) => {
+    if (window.api?.update?.onAvailable) {
+      window.api.update.onAvailable((info) => {
         setUpdateAvailable(true);
-        setUpdateInfo(info);
+        setUpdateInfo(info as UpdateInfo);
       });
     }
 
-    if (window.electron?.onUpdateProgress) {
-      window.electron.onUpdateProgress((progress) => {
-        setDownloadProgress(Math.round(progress.percent));
+    if (window.api?.update?.onProgress) {
+      window.api.update.onProgress((progress) => {
+        setDownloadProgress(Math.round((progress as { percent: number }).percent));
       });
     }
 
-    if (window.electron?.onUpdateDownloaded) {
-      window.electron.onUpdateDownloaded(() => {
+    if (window.api?.update?.onDownloaded) {
+      window.api.update.onDownloaded(() => {
         setUpdateDownloaded(true);
       });
     }
   }, []);
 
   const handleInstall = () => {
-    if (window.electron?.installUpdate) {
-      window.electron.installUpdate();
+    if (window.api?.update?.install) {
+      window.api.update.install();
     }
   };
 

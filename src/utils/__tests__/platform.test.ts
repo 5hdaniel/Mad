@@ -13,8 +13,8 @@ import {
   Platform,
 } from "../platform";
 
-// Store original window.electron
-const originalElectron = window.electron;
+// Store original window.api
+const originalApi = window.api;
 
 describe("Platform Detection Utility", () => {
   beforeEach(() => {
@@ -22,9 +22,9 @@ describe("Platform Detection Utility", () => {
   });
 
   afterEach(() => {
-    // Restore original window.electron
-    Object.defineProperty(window, "electron", {
-      value: originalElectron,
+    // Restore original window.api
+    Object.defineProperty(window, "api", {
+      value: originalApi,
       writable: true,
       configurable: true,
     });
@@ -32,8 +32,8 @@ describe("Platform Detection Utility", () => {
 
   describe("getPlatform", () => {
     it('should return "macos" when platform is darwin', () => {
-      Object.defineProperty(window, "electron", {
-        value: { platform: "darwin" },
+      Object.defineProperty(window, "api", {
+        value: { ...originalApi, system: { ...originalApi?.system, platform: "darwin" } },
         writable: true,
         configurable: true,
       });
@@ -42,8 +42,8 @@ describe("Platform Detection Utility", () => {
     });
 
     it('should return "windows" when platform is win32', () => {
-      Object.defineProperty(window, "electron", {
-        value: { platform: "win32" },
+      Object.defineProperty(window, "api", {
+        value: { ...originalApi, system: { ...originalApi?.system, platform: "win32" } },
         writable: true,
         configurable: true,
       });
@@ -52,8 +52,8 @@ describe("Platform Detection Utility", () => {
     });
 
     it('should return "linux" when platform is linux', () => {
-      Object.defineProperty(window, "electron", {
-        value: { platform: "linux" },
+      Object.defineProperty(window, "api", {
+        value: { ...originalApi, system: { ...originalApi?.system, platform: "linux" } },
         writable: true,
         configurable: true,
       });
@@ -63,8 +63,8 @@ describe("Platform Detection Utility", () => {
 
     it('should default to "windows" when platform is unknown', () => {
       const consoleWarnSpy = jest.spyOn(console, "warn").mockImplementation();
-      Object.defineProperty(window, "electron", {
-        value: { platform: "unknown" },
+      Object.defineProperty(window, "api", {
+        value: { ...originalApi, system: { ...originalApi?.system, platform: "unknown" } },
         writable: true,
         configurable: true,
       });
@@ -79,8 +79,8 @@ describe("Platform Detection Utility", () => {
       consoleWarnSpy.mockRestore();
     });
 
-    it('should default to "windows" when window.electron is undefined', () => {
-      Object.defineProperty(window, "electron", {
+    it('should default to "windows" when window.api is undefined', () => {
+      Object.defineProperty(window, "api", {
         value: undefined,
         writable: true,
         configurable: true,
@@ -90,8 +90,8 @@ describe("Platform Detection Utility", () => {
     });
 
     it('should default to "windows" when platform property is missing', () => {
-      Object.defineProperty(window, "electron", {
-        value: {},
+      Object.defineProperty(window, "api", {
+        value: { system: {} },
         writable: true,
         configurable: true,
       });
@@ -102,8 +102,8 @@ describe("Platform Detection Utility", () => {
 
   describe("isMacOS", () => {
     it("should return true on macOS", () => {
-      Object.defineProperty(window, "electron", {
-        value: { platform: "darwin" },
+      Object.defineProperty(window, "api", {
+        value: { ...originalApi, system: { ...originalApi?.system, platform: "darwin" } },
         writable: true,
         configurable: true,
       });
@@ -112,8 +112,8 @@ describe("Platform Detection Utility", () => {
     });
 
     it("should return false on Windows", () => {
-      Object.defineProperty(window, "electron", {
-        value: { platform: "win32" },
+      Object.defineProperty(window, "api", {
+        value: { ...originalApi, system: { ...originalApi?.system, platform: "win32" } },
         writable: true,
         configurable: true,
       });
@@ -122,8 +122,8 @@ describe("Platform Detection Utility", () => {
     });
 
     it("should return false on Linux", () => {
-      Object.defineProperty(window, "electron", {
-        value: { platform: "linux" },
+      Object.defineProperty(window, "api", {
+        value: { ...originalApi, system: { ...originalApi?.system, platform: "linux" } },
         writable: true,
         configurable: true,
       });
@@ -134,8 +134,8 @@ describe("Platform Detection Utility", () => {
 
   describe("isWindows", () => {
     it("should return true on Windows", () => {
-      Object.defineProperty(window, "electron", {
-        value: { platform: "win32" },
+      Object.defineProperty(window, "api", {
+        value: { ...originalApi, system: { ...originalApi?.system, platform: "win32" } },
         writable: true,
         configurable: true,
       });
@@ -144,8 +144,8 @@ describe("Platform Detection Utility", () => {
     });
 
     it("should return false on macOS", () => {
-      Object.defineProperty(window, "electron", {
-        value: { platform: "darwin" },
+      Object.defineProperty(window, "api", {
+        value: { ...originalApi, system: { ...originalApi?.system, platform: "darwin" } },
         writable: true,
         configurable: true,
       });
@@ -154,8 +154,8 @@ describe("Platform Detection Utility", () => {
     });
 
     it("should return false on Linux", () => {
-      Object.defineProperty(window, "electron", {
-        value: { platform: "linux" },
+      Object.defineProperty(window, "api", {
+        value: { ...originalApi, system: { ...originalApi?.system, platform: "linux" } },
         writable: true,
         configurable: true,
       });
@@ -166,8 +166,8 @@ describe("Platform Detection Utility", () => {
 
   describe("isLinux", () => {
     it("should return true on Linux", () => {
-      Object.defineProperty(window, "electron", {
-        value: { platform: "linux" },
+      Object.defineProperty(window, "api", {
+        value: { ...originalApi, system: { ...originalApi?.system, platform: "linux" } },
         writable: true,
         configurable: true,
       });
@@ -176,8 +176,8 @@ describe("Platform Detection Utility", () => {
     });
 
     it("should return false on macOS", () => {
-      Object.defineProperty(window, "electron", {
-        value: { platform: "darwin" },
+      Object.defineProperty(window, "api", {
+        value: { ...originalApi, system: { ...originalApi?.system, platform: "darwin" } },
         writable: true,
         configurable: true,
       });
@@ -186,8 +186,8 @@ describe("Platform Detection Utility", () => {
     });
 
     it("should return false on Windows", () => {
-      Object.defineProperty(window, "electron", {
-        value: { platform: "win32" },
+      Object.defineProperty(window, "api", {
+        value: { ...originalApi, system: { ...originalApi?.system, platform: "win32" } },
         writable: true,
         configurable: true,
       });
@@ -221,8 +221,8 @@ describe("Platform Detection Utility", () => {
   describe("isFeatureAvailable", () => {
     describe("on macOS", () => {
       beforeEach(() => {
-        Object.defineProperty(window, "electron", {
-          value: { platform: "darwin" },
+        Object.defineProperty(window, "api", {
+          value: { ...originalApi, system: { ...originalApi?.system, platform: "darwin" } },
           writable: true,
           configurable: true,
         });
@@ -247,8 +247,8 @@ describe("Platform Detection Utility", () => {
 
     describe("on Windows", () => {
       beforeEach(() => {
-        Object.defineProperty(window, "electron", {
-          value: { platform: "win32" },
+        Object.defineProperty(window, "api", {
+          value: { ...originalApi, system: { ...originalApi?.system, platform: "win32" } },
           writable: true,
           configurable: true,
         });
@@ -273,8 +273,8 @@ describe("Platform Detection Utility", () => {
 
     describe("on Linux", () => {
       beforeEach(() => {
-        Object.defineProperty(window, "electron", {
-          value: { platform: "linux" },
+        Object.defineProperty(window, "api", {
+          value: { ...originalApi, system: { ...originalApi?.system, platform: "linux" } },
           writable: true,
           configurable: true,
         });

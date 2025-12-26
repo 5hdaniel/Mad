@@ -213,6 +213,87 @@ interface ElectronAPI {
  * Exposed via contextBridge in preload.js
  */
 interface MainAPI {
+  // Messages API (iMessage/SMS - migrated from window.electron)
+  messages: {
+    getConversations: () => Promise<GetConversationsResult>;
+    getMessages: (chatId: string) => Promise<unknown[]>;
+    exportConversations: (
+      conversationIds: string[],
+    ) => Promise<{ success: boolean; exportPath?: string }>;
+  };
+
+  // Outlook integration (migrated from window.electron)
+  outlook: {
+    initialize: () => Promise<{ success: boolean; error?: string }>;
+    authenticate: () => Promise<{
+      success: boolean;
+      error?: string;
+      userInfo?: { username?: string };
+    }>;
+    isAuthenticated: () => Promise<boolean>;
+    getUserEmail: () => Promise<string | null>;
+    exportEmails: (
+      contacts: Array<{
+        name: string;
+        chatId?: string;
+        emails?: string[];
+        phones?: string[];
+      }>,
+    ) => Promise<{
+      success: boolean;
+      error?: string;
+      canceled?: boolean;
+      exportPath?: string;
+      results?: Array<{
+        contactName: string;
+        success: boolean;
+        textMessageCount: number;
+        emailCount?: number;
+        error: string | null;
+      }>;
+    }>;
+    signout: () => Promise<{ success: boolean }>;
+    onDeviceCode: (callback: (info: unknown) => void) => () => void;
+    onExportProgress: (callback: (progress: unknown) => void) => () => void;
+  };
+
+  // Auto-update (migrated from window.electron)
+  update: {
+    onAvailable: (callback: (info: unknown) => void) => () => void;
+    onProgress: (callback: (progress: unknown) => void) => () => void;
+    onDownloaded: (callback: (info: unknown) => void) => () => void;
+    install: () => void;
+  };
+
+  // Shell operations
+  shell: {
+    openExternal: (url: string) => Promise<{ success: boolean }>;
+    openFolder: (folderPath: string) => Promise<{ success: boolean }>;
+  };
+
+  // Apple Driver Management (Windows only)
+  drivers: {
+    checkApple: () => Promise<{
+      installed: boolean;
+      version?: string;
+      serviceRunning: boolean;
+      error?: string;
+    }>;
+    hasBundled: () => Promise<{ hasBundled: boolean }>;
+    installApple: () => Promise<{
+      success: boolean;
+      cancelled?: boolean;
+      error?: string;
+      rebootRequired?: boolean;
+    }>;
+    openITunesStore: () => Promise<{ success: boolean; error?: string }>;
+    checkUpdate: () => Promise<{
+      updateAvailable: boolean;
+      installedVersion: string | null;
+      bundledVersion: string | null;
+    }>;
+  };
+
   auth: {
     googleLogin: () => Promise<{
       success: boolean;
@@ -293,6 +374,30 @@ interface MainAPI {
     }) => Promise<{ success: boolean; error?: string }>;
   };
   system: {
+    // Platform detection (migrated from window.electron.platform)
+    platform: "darwin" | "win32" | "linux" | string;
+
+    // App info (migrated from window.electron)
+    getAppInfo: () => Promise<{ version: string; name: string }>;
+    getMacOSVersion: () => Promise<{ version: string | number; name?: string }>;
+    checkAppLocation: () => Promise<{
+      inApplications?: boolean;
+      shouldPrompt?: boolean;
+      appPath?: string;
+      path?: string;
+    }>;
+
+    // Permission checks (migrated from window.electron)
+    checkPermissions: () => Promise<{
+      hasPermission?: boolean;
+      fullDiskAccess?: boolean;
+      contacts?: boolean;
+    }>;
+    triggerFullDiskAccess: () => Promise<{ granted: boolean }>;
+    requestPermissions: () => Promise<Record<string, unknown>>;
+    openSystemSettings: () => Promise<{ success: boolean }>;
+
+    // Existing system methods
     getSecureStorageStatus: () => Promise<{
       success: boolean;
       available: boolean;
@@ -341,6 +446,10 @@ interface MainAPI {
       }>;
     }>;
     openPrivacyPane: (pane: string) => Promise<void>;
+    setupFullDiskAccess: () => Promise<void>;
+    checkFullDiskAccess: () => Promise<{ granted: boolean }>;
+    checkContactsPermission: () => Promise<{ granted: boolean }>;
+    checkAllPermissions: () => Promise<Record<string, boolean>>;
     contactSupport: (
       errorDetails?: string,
     ) => Promise<{ success: boolean; error?: string }>;

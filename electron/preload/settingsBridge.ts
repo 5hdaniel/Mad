@@ -67,4 +67,12 @@ export const shellBridge = {
    */
   openExternal: (url: string) =>
     ipcRenderer.invoke("shell:open-external", url),
+
+  /**
+   * Opens a folder in Finder/Explorer
+   * @param folderPath - Path to folder to open
+   * @returns Open result
+   */
+  openFolder: (folderPath: string) =>
+    ipcRenderer.invoke("open-folder", folderPath),
 };
