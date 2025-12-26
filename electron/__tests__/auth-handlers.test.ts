@@ -163,6 +163,28 @@ jest.mock("../services/logService", () => ({
   },
 }));
 
+// Mock sync-handlers for setSyncUserId
+jest.mock("../sync-handlers", () => ({
+  setSyncUserId: jest.fn(),
+}));
+
+// Mock handler modules since they are now extracted
+jest.mock("../handlers/googleAuthHandlers", () => ({
+  registerGoogleAuthHandlers: jest.fn(),
+}));
+
+jest.mock("../handlers/microsoftAuthHandlers", () => ({
+  registerMicrosoftAuthHandlers: jest.fn(),
+}));
+
+jest.mock("../handlers/sessionHandlers", () => ({
+  registerSessionHandlers: jest.fn(),
+}));
+
+jest.mock("../handlers/sharedAuthHandlers", () => ({
+  registerSharedAuthHandlers: jest.fn(),
+}));
+
 // Import after mocks are set up
 import { registerAuthHandlers, initializeDatabase } from "../auth-handlers";
 import databaseService from "../services/databaseService";
