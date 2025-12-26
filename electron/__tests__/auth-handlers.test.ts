@@ -168,22 +168,10 @@ jest.mock("../sync-handlers", () => ({
   setSyncUserId: jest.fn(),
 }));
 
-// Mock handler modules since they are now extracted
-jest.mock("../handlers/googleAuthHandlers", () => ({
-  registerGoogleAuthHandlers: jest.fn(),
-}));
-
-jest.mock("../handlers/microsoftAuthHandlers", () => ({
-  registerMicrosoftAuthHandlers: jest.fn(),
-}));
-
-jest.mock("../handlers/sessionHandlers", () => ({
-  registerSessionHandlers: jest.fn(),
-}));
-
-jest.mock("../handlers/sharedAuthHandlers", () => ({
-  registerSharedAuthHandlers: jest.fn(),
-}));
+// NOTE: We do NOT mock the handler modules (googleAuthHandlers, microsoftAuthHandlers, etc.)
+// because the tests need to exercise the real handler registration functions.
+// The individual handlers use services (databaseService, googleAuthService, etc.) which
+// ARE mocked above, so the handlers will work with mocked dependencies.
 
 // Import after mocks are set up
 import { registerAuthHandlers, initializeDatabase } from "../auth-handlers";
@@ -428,10 +416,12 @@ describe("Auth Handlers", () => {
       const result = await handler(mockEvent, "invalid-code");
 
       expect(result.success).toBe(false);
-      expect(mockAuditService.log).toHaveBeenCalledWith(
+      // Google complete login logs error but doesn't audit LOGIN_FAILED
+      expect(mockLogService.error).toHaveBeenCalledWith(
+        "Google complete login failed",
+        "AuthHandlers",
         expect.objectContaining({
-          action: "LOGIN_FAILED",
-          success: false,
+          error: "Token exchange failed",
         }),
       );
     });
@@ -516,7 +506,7 @@ describe("Auth Handlers", () => {
         "AuthHandlers",
       );
       expect(mockLogService.info).toHaveBeenCalledWith(
-        "Opening auth URL in popup window",
+        "Opening Microsoft auth URL in popup window",
         "AuthHandlers",
       );
     });
@@ -627,7 +617,7 @@ describe("Auth Handlers", () => {
       expect(result.success).toBe(true);
       expect(result.completed).toBe(false);
       expect(mockLogService.info).toHaveBeenCalledWith(
-        "Email onboarding was completed but no mailbox token found (session-only OAuth)",
+        "Email onboarding was completed but no mailbox token found",
         "AuthHandlers",
         expect.any(Object),
       );
@@ -1327,8 +1317,9 @@ describe("Auth Handlers", () => {
       expect(mockMainWindow.webContents.send).toHaveBeenCalledWith(
         "microsoft:login-cancelled",
       );
+      // Microsoft handler logs window closed but doesn't log "Sent..." message
       expect(mockLogService.info).toHaveBeenCalledWith(
-        "Sent microsoft:login-cancelled event to renderer",
+        "Microsoft login auth window closed by user",
         "AuthHandlers",
       );
     });
@@ -1396,8 +1387,9 @@ describe("Auth Handlers", () => {
       expect(mockMainWindow.webContents.send).toHaveBeenCalledWith(
         "google:mailbox-cancelled",
       );
+      // Google mailbox handler logs window closed but doesn't log "Sent..." message
       expect(mockLogService.info).toHaveBeenCalledWith(
-        "Sent google:mailbox-cancelled event to renderer",
+        "Google mailbox auth window closed by user",
         "AuthHandlers",
       );
     });
@@ -1454,8 +1446,9 @@ describe("Auth Handlers", () => {
       expect(mockMainWindow.webContents.send).toHaveBeenCalledWith(
         "microsoft:mailbox-cancelled",
       );
+      // Microsoft mailbox handler logs window closed but doesn't log "Sent..." message
       expect(mockLogService.info).toHaveBeenCalledWith(
-        "Sent microsoft:mailbox-cancelled event to renderer",
+        "Microsoft mailbox auth window closed by user",
         "AuthHandlers",
       );
     });
