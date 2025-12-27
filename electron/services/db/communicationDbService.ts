@@ -13,6 +13,7 @@ import type {
 } from "../../types";
 import { DatabaseError } from "../../types";
 import { dbGet, dbAll, dbRun } from "./core/dbConnection";
+import { validateFields } from "../../utils/sqlFieldWhitelist";
 
 /**
  * Create a new communication (email)
@@ -198,6 +199,9 @@ export async function updateCommunication(
   if (fields.length === 0) {
     throw new DatabaseError("No valid fields to update");
   }
+
+  // Validate fields against whitelist before SQL construction
+  validateFields("communications", fields);
 
   values.push(communicationId);
 

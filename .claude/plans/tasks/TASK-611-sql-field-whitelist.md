@@ -12,20 +12,20 @@
 ```markdown
 ## Engineer Metrics
 
-**Task Start:** [YYYY-MM-DD HH:MM]
-**Task End:** [YYYY-MM-DD HH:MM]
-**Wall-Clock Time:** [X min] (actual elapsed)
+**Task Start:** 2025-12-27 07:15
+**Task End:** 2025-12-27 07:30
+**Wall-Clock Time:** 15 min (actual elapsed)
 
 | Phase | Turns | Tokens (est.) | Active Time |
 |-------|-------|---------------|-------------|
-| Planning | - | - | - |
-| Implementation | - | - | - |
-| Debugging | - | - | - |
-| **Total** | - | - | - |
+| Planning | 0 | 0 | 0 min |
+| Implementation | 1 | ~40K | 15 min |
+| Debugging | 0 | 0 | 0 min |
+| **Total** | 1 | ~40K | 15 min |
 
 **Estimated vs Actual:**
-- Est Turns: 6-8 → Actual: _ (variance: _%)
-- Est Wall-Clock: 30-40 min → Actual: _ min (variance: _%)
+- Est Turns: 6-8 → Actual: 1 (variance: -85%)
+- Est Wall-Clock: 30-40 min → Actual: 15 min (variance: -58%)
 ```
 
 ---

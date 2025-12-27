@@ -7,6 +7,7 @@ import crypto from "crypto";
 import type { Contact } from "../../types";
 import { DatabaseError } from "../../types";
 import { dbGet, dbAll, dbRun, ensureDb } from "./core/dbConnection";
+import { validateFields } from "../../utils/sqlFieldWhitelist";
 
 // Transaction contact association data
 export interface TransactionContactData {
@@ -238,6 +239,9 @@ export async function updateContactRole(
   if (fields.length === 0) {
     throw new DatabaseError("No valid fields to update");
   }
+
+  // Validate fields against whitelist before SQL construction
+  validateFields("transaction_contacts", fields);
 
   values.push(transactionId, contactId);
 

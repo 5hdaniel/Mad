@@ -41,6 +41,7 @@ import { DatabaseError, NotFoundError } from "../types";
 import { databaseEncryptionService } from "./databaseEncryptionService";
 import logService from "./logService";
 import type { AuditLogEntry, AuditLogDbRow } from "./auditService";
+import { validateFields } from "../utils/sqlFieldWhitelist";
 
 // Contact with activity metadata
 interface ContactWithActivity extends Contact {
@@ -1612,6 +1613,9 @@ class DatabaseService implements IDatabaseService {
       throw new DatabaseError("No valid fields to update");
     }
 
+    // Validate fields against whitelist before SQL construction
+    validateFields("users_local", fields);
+
     values.push(userId);
 
     const sql = `UPDATE users_local SET ${fields.join(", ")} WHERE id = ?`;
@@ -2031,6 +2035,9 @@ class DatabaseService implements IDatabaseService {
       throw new DatabaseError("No valid fields to update");
     }
 
+    // Validate fields against whitelist before SQL construction
+    validateFields("contacts", fields);
+
     values.push(contactId);
     const sql = `UPDATE contacts SET ${fields.join(", ")} WHERE id = ?`;
     this._run(sql, values);
@@ -2406,6 +2413,9 @@ class DatabaseService implements IDatabaseService {
       throw new DatabaseError("No valid fields to update");
     }
 
+    // Validate fields against whitelist before SQL construction
+    validateFields("oauth_tokens", fields);
+
     values.push(tokenId);
 
     const sql = `UPDATE oauth_tokens SET ${fields.join(", ")} WHERE id = ?`;
@@ -2747,6 +2757,9 @@ class DatabaseService implements IDatabaseService {
       throw new DatabaseError("No valid fields to update");
     }
 
+    // Validate fields against whitelist before SQL construction
+    validateFields("transactions", fields);
+
     values.push(transactionId);
 
     const sql = `UPDATE transactions SET ${fields.join(", ")} WHERE id = ?`;
@@ -2949,6 +2962,9 @@ class DatabaseService implements IDatabaseService {
     if (fields.length === 0) {
       throw new DatabaseError("No valid fields to update");
     }
+
+    // Validate fields against whitelist before SQL construction
+    validateFields("communications", fields);
 
     values.push(communicationId);
 
@@ -3333,6 +3349,9 @@ class DatabaseService implements IDatabaseService {
     if (fields.length === 0) {
       throw new DatabaseError("No valid fields to update");
     }
+
+    // Validate fields against whitelist before SQL construction
+    validateFields("transaction_contacts", fields);
 
     values.push(transactionId, contactId);
 
