@@ -174,7 +174,7 @@ function ConversationList({
     <div className="flex flex-col min-h-full">
       {/* Joyride Tour */}
       <Joyride
-        steps={getExportTourSteps(outlookConnected) as any}
+        steps={getExportTourSteps(outlookConnected)}
         run={tour.runTour}
         continuous
         showProgress

@@ -73,7 +73,7 @@ export function useBulkActions(
 
     setIsBulkDeleting(true);
     try {
-      const result = await (window.api.transactions as any).bulkDelete(
+      const result = await window.api.transactions.bulkDelete(
         Array.from(selectedIds)
       );
 
@@ -167,7 +167,7 @@ export function useBulkActions(
 
       setIsBulkUpdating(true);
       try {
-        const result = await (window.api.transactions as any).bulkUpdateStatus(
+        const result = await window.api.transactions.bulkUpdateStatus(
           Array.from(selectedIds),
           status
         );

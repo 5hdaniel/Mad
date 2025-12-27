@@ -368,7 +368,7 @@ function TransactionList({
       {/* Audit Transaction Creation Modal */}
       {showAuditCreate && (
         <AuditTransactionModal
-          userId={parseInt(userId)}
+          userId={userId}
           provider={provider}
           onClose={() => setShowAuditCreate(false)}
           onSuccess={() => {

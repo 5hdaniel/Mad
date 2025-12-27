@@ -15,7 +15,7 @@ import { usePlatform } from "../contexts/PlatformContext";
 
 // Type definitions
 interface AuditTransactionModalProps {
-  userId: number;
+  userId: string;
   provider?: string; // Optional - not currently used
   onClose: () => void;
   onSuccess: (transaction: Transaction) => void;
@@ -495,7 +495,7 @@ function AuditTransactionModal({
         // Record feedback if changes were made
         const changes = getAddressChanges();
         if (changes && window.api.feedback?.recordTransaction) {
-          await window.api.feedback.recordTransaction(userId.toString(), {
+          await window.api.feedback.recordTransaction(userId, {
             detectedTransactionId: editTransaction.id,
             action: "confirm",
             corrections: changes,
@@ -512,7 +512,7 @@ function AuditTransactionModal({
       } else {
         // Call API to create audited transaction
         result = await window.api.transactions.createAudited(
-          userId.toString(),
+          userId,
           {
             ...addressData,
             contact_assignments: assignments,
@@ -824,7 +824,7 @@ interface ContactAssignmentStepProps {
     notes: string,
   ) => void;
   onRemoveContact: (role: string, contactId: string) => void;
-  userId: number;
+  userId: string;
   transactionType: string;
   propertyAddress: string;
 }
@@ -899,7 +899,7 @@ interface RoleAssignmentProps {
     notes: string,
   ) => void;
   onRemove: (role: string, contactId: string) => void;
-  userId: number;
+  userId: string;
   propertyAddress: string;
   transactionType: string;
 }
@@ -934,10 +934,10 @@ function RoleAssignment({
       // Use sorted API when property address is available, otherwise use regular API
       const result = propertyAddress
         ? await window.api.contacts.getSortedByActivity(
-            userId.toString(),
+            userId,
             propertyAddress,
           )
-        : await window.api.contacts.getAll(userId.toString());
+        : await window.api.contacts.getAll(userId);
 
       if (result.success) {
         setContacts(result.contacts || []);

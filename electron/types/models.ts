@@ -27,7 +27,7 @@ export type FalsePositiveReason = "signature" | "promotional" | "unrelated" | "o
 
 // Transactions
 export type TransactionType = "purchase" | "sale" | "other";
-export type TransactionStatus = "active" | "closed" | "archived";
+export type TransactionStatus = "pending" | "active" | "closed" | "archived" | "rejected";
 export type TransactionStage =
   | "intro"
   | "showing"

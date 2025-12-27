@@ -279,7 +279,7 @@ function Transactions({
 
     setIsBulkDeleting(true);
     try {
-      const result = await (window.api.transactions as any).bulkDelete(
+      const result = await window.api.transactions.bulkDelete(
         Array.from(selectedIds)
       );
 
@@ -357,7 +357,7 @@ function Transactions({
 
     setIsBulkUpdating(true);
     try {
-      const result = await (window.api.transactions as any).bulkUpdateStatus(
+      const result = await window.api.transactions.bulkUpdateStatus(
         Array.from(selectedIds),
         status
       );
@@ -524,7 +524,7 @@ function Transactions({
       {/* Audit Transaction Creation Modal */}
       {showAuditCreate && (
         <AuditTransactionModal
-          userId={parseInt(userId)}
+          userId={userId}
           provider={provider}
           onClose={() => setShowAuditCreate(false)}
           onSuccess={() => {

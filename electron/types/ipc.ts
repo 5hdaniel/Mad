@@ -810,7 +810,25 @@ export interface WindowApi {
     ) => Promise<{ success: boolean; cancelled?: boolean; error?: string }>;
     getDetails: (
       transactionId: string,
-    ) => Promise<{ success: boolean; transaction?: unknown; error?: string }>;
+    ) => Promise<{
+      success: boolean;
+      transaction?: Transaction & {
+        communications?: Communication[];
+        contact_assignments?: Array<{
+          id: string;
+          contact_id: string;
+          contact_name?: string;
+          contact_email?: string;
+          contact_phone?: string;
+          contact_company?: string;
+          role?: string;
+          specific_role?: string;
+          is_primary?: number;
+          notes?: string;
+        }>;
+      };
+      error?: string;
+    }>;
     create: (
       userId: string,
       transactionData: Record<string, unknown>,
@@ -876,7 +894,7 @@ export interface WindowApi {
     }>;
     bulkUpdateStatus: (
       transactionIds: string[],
-      status: "active" | "closed",
+      status: "pending" | "active" | "closed" | "rejected",
     ) => Promise<{
       success: boolean;
       updatedCount?: number;
