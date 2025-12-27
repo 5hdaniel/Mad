@@ -14,6 +14,7 @@ import type {
 import { DatabaseError } from "../../types";
 import { dbGet, dbAll, dbRun } from "./core/dbConnection";
 import { getTransactionContactsWithRoles } from "./transactionContactDbService";
+import { validateFields } from "../../utils/sqlFieldWhitelist";
 
 /**
  * Valid transaction status values.
@@ -344,6 +345,9 @@ export async function updateTransaction(
   if (fields.length === 0) {
     throw new DatabaseError("No valid fields to update");
   }
+
+  // Validate fields against whitelist before SQL construction
+  validateFields("transactions", fields);
 
   values.push(transactionId);
 

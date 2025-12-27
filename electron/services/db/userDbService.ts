@@ -7,6 +7,7 @@ import crypto from "crypto";
 import type { User, NewUser, OAuthProvider } from "../../types";
 import { DatabaseError, NotFoundError } from "../../types";
 import { dbGet, dbRun } from "./core/dbConnection";
+import { validateFields } from "../../utils/sqlFieldWhitelist";
 
 /**
  * Create a new user
@@ -121,6 +122,9 @@ export async function updateUser(
   if (fields.length === 0) {
     throw new DatabaseError("No valid fields to update");
   }
+
+  // Validate fields against whitelist before SQL construction
+  validateFields("users_local", fields);
 
   values.push(userId);
 

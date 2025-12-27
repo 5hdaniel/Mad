@@ -7,6 +7,7 @@ import crypto from "crypto";
 import type { OAuthToken, OAuthProvider, OAuthPurpose } from "../../types";
 import { DatabaseError } from "../../types";
 import { dbGet, dbRun } from "./core/dbConnection";
+import { validateFields } from "../../utils/sqlFieldWhitelist";
 
 /**
  * Save OAuth token (encrypted)
@@ -118,6 +119,9 @@ export async function updateOAuthToken(
   if (fields.length === 0) {
     throw new DatabaseError("No valid fields to update");
   }
+
+  // Validate fields against whitelist before SQL construction
+  validateFields("oauth_tokens", fields);
 
   values.push(tokenId);
 

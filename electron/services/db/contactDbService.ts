@@ -8,6 +8,7 @@ import type { Contact, NewContact, ContactFilters } from "../../types";
 import { DatabaseError } from "../../types";
 import { dbGet, dbAll, dbRun } from "./core/dbConnection";
 import logService from "../logService";
+import { validateFields } from "../../utils/sqlFieldWhitelist";
 
 // Contact with activity metadata
 interface ContactWithActivity extends Contact {
@@ -258,6 +259,9 @@ export async function updateContact(
   if (fields.length === 0) {
     throw new DatabaseError("No valid fields to update");
   }
+
+  // Validate fields against whitelist before SQL construction
+  validateFields("contacts", fields);
 
   values.push(contactId);
   const sql = `UPDATE contacts SET ${fields.join(", ")} WHERE id = ?`;
