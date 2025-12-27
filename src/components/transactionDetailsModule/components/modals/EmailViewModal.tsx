@@ -62,11 +62,11 @@ export function EmailViewModal({
                 {email.sender || "Unknown"}
               </span>
             </div>
-            {(email as any).recipients && (
+            {email.recipients && (
               <div className="flex items-start gap-2">
                 <span className="text-sm font-medium text-gray-500 w-16">To:</span>
                 <span className="text-sm text-gray-900">
-                  {(email as any).recipients}
+                  {email.recipients}
                 </span>
               </div>
             )}

@@ -135,7 +135,7 @@ export function AppModals({ app }: AppModalsProps) {
       {/* Audit Transaction Modal */}
       {modalState.showAuditTransaction && currentUser && authProvider && (
         <AuditTransactionModal
-          userId={currentUser.id as any}
+          userId={currentUser.id}
           provider={authProvider}
           onClose={closeAuditTransaction}
           onSuccess={handleAuditTransactionSuccess}

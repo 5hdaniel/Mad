@@ -99,7 +99,7 @@ interface ElectronAPI {
     update: (id: string, data: unknown) => Promise<{ success: boolean }>;
     delete: (id: string) => Promise<{ success: boolean }>;
     bulkDelete: (transactionIds: string[]) => Promise<{ success: boolean; deletedCount?: number; error?: string }>;
-    bulkUpdateStatus: (transactionIds: string[], status: string) => Promise<{ success: boolean; updatedCount?: number; error?: string }>;
+    bulkUpdateStatus: (transactionIds: string[], status: "pending" | "active" | "closed" | "rejected") => Promise<{ success: boolean; updatedCount?: number; error?: string }>;
   };
   onTransactionScanProgress: (
     callback: (progress: unknown) => void,
@@ -818,7 +818,10 @@ interface MainAPI {
     }>;
     getDetails: (transactionId: string) => Promise<{
       success: boolean;
-      transaction?: Record<string, unknown>;
+      transaction?: Transaction & {
+        communications?: unknown[];
+        contact_assignments?: unknown[];
+      };
       error?: string;
     }>;
     getWithContacts: (transactionId: string) => Promise<{
@@ -916,7 +919,7 @@ interface MainAPI {
     }>;
     bulkUpdateStatus: (
       transactionIds: string[],
-      status: string,
+      status: "pending" | "active" | "closed" | "rejected",
     ) => Promise<{
       success: boolean;
       updatedCount?: number;

@@ -359,7 +359,7 @@ function TransactionDetails({
       {/* Edit Transaction Modal */}
       {showEditModal && (
         <AuditTransactionModal
-          userId={parseInt(transaction.user_id, 10)}
+          userId={transaction.user_id}
           onClose={() => setShowEditModal(false)}
           onSuccess={() => {
             setShowEditModal(false);

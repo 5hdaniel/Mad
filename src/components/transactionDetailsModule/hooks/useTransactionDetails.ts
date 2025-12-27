@@ -62,10 +62,10 @@ export function useTransactionDetails(
       setLoading(true);
       const result = await window.api.transactions.getDetails(transaction.id);
 
-      if (result.success) {
-        setCommunications((result.transaction as any).communications || []);
+      if (result.success && result.transaction) {
+        setCommunications(result.transaction.communications || []);
         setContactAssignments(
-          (result.transaction as any).contact_assignments || []
+          result.transaction.contact_assignments || []
         );
       }
     } catch (err) {
