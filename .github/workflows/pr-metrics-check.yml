@@ -11,6 +11,7 @@ name: PR Metrics Validation
 # Exceptions:
 # - Dependabot PRs are exempt (automated dependency updates)
 # - PRs with [skip-metrics] in title are exempt (use sparingly)
+# - PRs with 'hotfix', 'quick-fix', or 'ci-fix' labels are exempt
 
 on:
   pull_request:
@@ -26,15 +27,34 @@ jobs:
     if: github.actor != 'dependabot[bot]'
 
     steps:
+      - name: Check for exempt labels
+        id: label-check
+        run: |
+          # Check if PR has any exempt labels
+          LABELS='${{ toJson(github.event.pull_request.labels.*.name) }}'
+          echo "Labels on PR: $LABELS"
+
+          if echo "$LABELS" | grep -qiE '"(hotfix|quick-fix|ci-fix)"'; then
+            echo "exempt=true" >> $GITHUB_OUTPUT
+            echo "::notice::Metrics validation skipped - exempt label detected"
+          else
+            echo "exempt=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Check for skip flag
         id: skip-check
         run: |
           PR_TITLE="${{ github.event.pull_request.title }}"
           if [[ "$PR_TITLE" == *"[skip-metrics]"* ]]; then
             echo "skip=true" >> $GITHUB_OUTPUT
+            echo "skip_reason=title flag" >> $GITHUB_OUTPUT
             echo "::warning::Metrics validation skipped via [skip-metrics] flag"
+          elif [[ "${{ steps.label-check.outputs.exempt }}" == "true" ]]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "skip_reason=exempt label" >> $GITHUB_OUTPUT
           else
             echo "skip=false" >> $GITHUB_OUTPUT
+            echo "skip_reason=" >> $GITHUB_OUTPUT
           fi
 
       - name: Validate Engineer Metrics Section
@@ -105,9 +125,17 @@ jobs:
           if [[ "${{ steps.skip-check.outputs.skip }}" == "true" ]]; then
             echo "## PR Metrics Validation: SKIPPED" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "Metrics validation was skipped due to [skip-metrics] flag in PR title." >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "> **Note**: Use [skip-metrics] sparingly. All sprint tasks should include metrics." >> $GITHUB_STEP_SUMMARY
+
+            SKIP_REASON="${{ steps.skip-check.outputs.skip_reason }}"
+            if [[ "$SKIP_REASON" == "exempt label" ]]; then
+              echo "Metrics validation was skipped due to exempt label (hotfix/quick-fix/ci-fix)." >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "> **Note**: Exempt labels are appropriate for urgent fixes that bypass the sprint workflow." >> $GITHUB_STEP_SUMMARY
+            else
+              echo "Metrics validation was skipped due to [skip-metrics] flag in PR title." >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "> **Note**: Use [skip-metrics] sparingly. All sprint tasks should include metrics." >> $GITHUB_STEP_SUMMARY
+            fi
           else
             echo "## PR Metrics Validation: PASSED" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
