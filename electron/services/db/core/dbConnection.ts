@@ -94,6 +94,10 @@ export function openDatabase(): DatabaseType {
   // Enable foreign keys
   database.pragma("foreign_keys = ON");
 
+  // Set busy timeout to prevent hangs on concurrent access
+  // 5 seconds is sufficient for most operations while still detecting true deadlocks
+  database.pragma("busy_timeout = 5000");
+
   // Verify database is accessible (will throw if key is wrong)
   try {
     database.pragma("cipher_integrity_check");
