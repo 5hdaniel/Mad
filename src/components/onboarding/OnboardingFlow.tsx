@@ -175,6 +175,17 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
     }
   }, [steps.length, app]);
 
+  // Action handler - flowHandleAction already calls onAction (which is handleAction)
+  // so we just need to call flowHandleAction, not both
+  // NOTE: This hook MUST be before any early return to follow React's rules of hooks
+  const handleStepAction = useCallback(
+    (action: StepAction) => {
+      // flowHandleAction calls onAction internally, then handles navigation
+      flowHandleAction(action);
+    },
+    [flowHandleAction]
+  );
+
   // Guard against no steps (shouldn't happen, but safety check)
   if (!currentStep) {
     return null;
@@ -184,16 +195,6 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
   const navigation = currentStep.meta.navigation ?? {};
   const showBack = navigation.showBack !== false && !isFirstStep;
   const showNext = navigation.hideContinue !== true;
-
-  // Action handler - flowHandleAction already calls onAction (which is handleAction)
-  // so we just need to call flowHandleAction, not both
-  const handleStepAction = useCallback(
-    (action: StepAction) => {
-      // flowHandleAction calls onAction internally, then handles navigation
-      flowHandleAction(action);
-    },
-    [flowHandleAction]
-  );
 
   return (
     <OnboardingShell
