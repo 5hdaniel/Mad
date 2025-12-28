@@ -4,6 +4,12 @@
  * Tests for Windows Apple driver detection and installation service.
  * These tests verify the service behavior on non-Windows platforms and mock
  * the Windows-specific functionality.
+ *
+ * NOTE: Extended timeout (15s) is required because:
+ * - checkAppleDrivers() performs multiple execAsync calls on Windows
+ * - Each execAsync has a 5s timeout (registry checks, service queries)
+ * - Under CI load or slow systems, these can approach their timeouts
+ * - 15s provides adequate headroom for worst-case sequential timing
  */
 
 import {
@@ -16,6 +22,10 @@ import {
   AppleDriverStatus,
   DriverInstallResult,
 } from "../appleDriverService";
+
+// Extend timeout for tests that perform async driver checks
+// The underlying execAsync calls can take up to 5s each on Windows
+jest.setTimeout(15000);
 
 describe("AppleDriverService", () => {
   describe("checkAppleDrivers", () => {
