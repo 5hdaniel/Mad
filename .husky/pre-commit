@@ -1,1 +1,16 @@
+# Skip type-check for docs/* branches (Option A)
+branch=$(git rev-parse --abbrev-ref HEAD)
+if [[ "$branch" == docs/* ]]; then
+  echo "Skipping type-check on docs branch"
+  exit 0
+fi
+
+# Skip type-check if only markdown files are staged (Option B)
+staged_files=$(git diff --cached --name-only --diff-filter=ACMR)
+non_md_files=$(echo "$staged_files" | grep -v '\.md$' || true)
+if [ -z "$non_md_files" ]; then
+  echo "Skipping type-check (markdown-only commit)"
+  exit 0
+fi
+
 npm run type-check
