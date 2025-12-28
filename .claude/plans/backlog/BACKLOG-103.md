@@ -1,73 +1,47 @@
-# BACKLOG-103: Fix Flaky Performance Benchmark Test
+# BACKLOG-103: Fix Contact Selection Issue
 
-## Priority: Low
+**Priority:** High
+**Category:** ui
+**Status:** Pending
+**Created:** 2025-12-28
 
-## Category: test
+---
 
-## Summary
+## Description
 
-The `performance-benchmark.test.ts` scalability test is flaky, failing intermittently due to variable test environment performance. Either make the test informational (not a CI blocker) or adjust thresholds.
+There is a bug when selecting contacts in the application. The specific issue needs investigation, but users are experiencing problems with the contact selection functionality.
 
-## Origin
+## Investigation Required
 
-SPRINT-009 Retrospective - Identified during sprint execution.
+Before implementation, the engineer must:
+1. Reproduce the bug by testing contact selection in various contexts
+2. Check `ContactSelectModal.tsx` for selection state issues
+3. Review contact selection in `AuditTransactionModal.tsx` and `EditTransactionModal.tsx`
+4. Identify if the issue is with single-select vs multi-select modes
+5. Document the exact reproduction steps
 
-## Current State
+## Potential Areas
 
-The scalability test in `performance-benchmark.test.ts` has strict timing thresholds that can fail on slower CI runners or when running alongside other tests. This creates false negatives that block legitimate PRs.
-
-## Problem
-
-1. **Variable CI Performance**: CI runners have inconsistent performance
-2. **Strict Thresholds**: Current thresholds don't account for environment variability
-3. **False Negatives**: Legitimate code changes blocked by timing failures
-
-## Proposed Solutions
-
-### Option A: Make Informational (Recommended)
-
-Convert the test to skip in CI but run locally:
-```typescript
-describe.skipIf(process.env.CI)('Scalability benchmarks (informational)', () => {
-  // Keep tests but don't block CI
-});
-```
-
-### Option B: Adjust Thresholds
-
-Increase thresholds by 50-100% to account for CI variability:
-```typescript
-// Current: expect(time).toBeLessThan(1000);
-// Updated: expect(time).toBeLessThan(2000);
-```
-
-### Option C: Statistical Approach
-
-Run benchmark multiple times and use median/p95 instead of single run.
+- `src/components/ContactSelectModal.tsx` - Main contact selection modal
+- `src/components/AuditTransactionModal.tsx` - Transaction creation with contact assignment
+- `src/components/transaction/components/EditTransactionModal.tsx` - Transaction editing
+- Contact role assignment in transaction details
 
 ## Acceptance Criteria
 
-- [ ] Performance benchmark test no longer causes CI flakiness
-- [ ] Test still provides value for detecting performance regressions (locally or with adjusted thresholds)
-- [ ] `npm test` passes reliably (10 consecutive runs without failure)
-- [ ] Decision documented in code comments
+- [ ] Bug is documented with reproduction steps
+- [ ] Root cause identified
+- [ ] Fix implemented and tested
+- [ ] No regression in other contact-related functionality
 
 ## Estimated Effort
 
-| Metric | Estimate | Notes |
-|--------|----------|-------|
-| Turns | 2-3 | Simple test modification |
-| Tokens | ~10K | |
-| Time | ~20 min | |
+- **Turns:** 4-8 (including investigation)
+- **Time:** ~45-90 min
+- **Adjustment:** N/A (ui category, 1.0x)
 
-## Dependencies
-
-None
-
-## Files to Modify
-
-- `src/__tests__/performance-benchmark.test.ts` or similar location
+---
 
 ## Notes
 
-SPRINT-009 showed 0 CI failures, but this issue was flagged during review. Proactive fix to prevent future flakiness.
+This is a bug fix item that requires investigation before implementation. The engineer should allocate time for bug reproduction and root cause analysis.

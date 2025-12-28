@@ -1,64 +1,69 @@
-# BACKLOG-104: Address Remaining 21 Any Types
+# BACKLOG-104: Dashboard UI to Emphasize Auto-Detection
 
-## Priority: Low
+**Priority:** Medium
+**Category:** ui
+**Status:** Pending
+**Created:** 2025-12-28
 
-## Category: refactor
+---
 
-## Summary
+## Description
 
-TASK-610 reduced `any` types from 114 to 5 (justified with eslint-disable comments). However, the original audit identified 114 occurrences across 37 files. A follow-up audit found 21 remaining `any` types in 10 files that need review.
+Update the Dashboard component to prominently showcase the AI auto-detection features built in SPRINT-006 and SPRINT-007. Currently the Dashboard focuses on manual actions (Start New Audit, Browse Transactions, Manage Contacts). It should highlight the AI-powered automatic transaction detection that runs in the background.
 
-## Origin
+## Background
 
-SPRINT-009 Retrospective - TASK-610 completed but residual work identified.
+SPRINT-006 and SPRINT-007 implemented:
+- AI-powered email analysis for transaction detection
+- Thread-based detection with 97% cost reduction
+- Automatic transaction suggestions with approve/reject workflow
+- LLM settings and feedback loop
 
-## Current State
+Users should understand that the app is actively working to detect transactions for them.
 
-After TASK-610:
-- 5 `any` types remain with eslint-disable (justified)
-- 21 additional `any` types in 10 files need review
-- Total: 26 `any` types remaining
+## Proposed Changes
 
-## Files to Review
+1. **Add "AI Detection Status" section** to Dashboard
+   - Show count of pending auto-detected transactions awaiting review
+   - Display recent detection activity (e.g., "5 new transactions detected today")
+   - Link to pending review queue
 
-Run this command to get current state:
-```bash
-grep -r ": any" --include="*.ts" --include="*.tsx" | grep -v node_modules | grep -v ".test." | wc -l
-```
+2. **Visual indicators**
+   - Badge on "Browse Transactions" showing pending review count
+   - Subtle animation or pulse indicating AI is active
+   - "Last scan" timestamp
+
+3. **Educational element**
+   - Brief explanation of how auto-detection works
+   - Value proposition messaging
+
+## Files to Modify
+
+- `src/components/Dashboard.tsx` - Main dashboard layout
+- Potentially new components for status display
 
 ## Acceptance Criteria
 
-- [ ] All remaining `any` types audited
-- [ ] Each `any` either:
-  - Replaced with proper type
-  - OR has eslint-disable with justification comment
-- [ ] `npm run type-check` passes
-- [ ] `npm run lint` passes
+- [ ] Dashboard shows pending auto-detected transaction count
+- [ ] Users can navigate directly to pending review from Dashboard
+- [ ] AI activity status is clearly visible
+- [ ] Design is consistent with existing dashboard style
+- [ ] No performance impact from additional data fetching
 
 ## Estimated Effort
 
-| Metric | Estimate | Notes |
-|--------|----------|-------|
-| Turns | 4-6 | Apply 0.5x refactor multiplier |
-| Tokens | ~20K | |
-| Time | ~30-45 min | |
+- **Turns:** 6-10
+- **Tokens:** ~35K-50K
+- **Time:** ~1-2h
+- **Adjustment:** 1.0x (ui category)
 
-**Note**: Original estimate would be 8-12 turns but refactor tasks consistently complete in 50% of estimated time.
+---
 
 ## Dependencies
 
-None - TASK-610 complete
-
-## Pre-Implementation Requirement
-
-**MUST scan scope before starting:**
-```bash
-# Scan actual any type count and locations
-grep -rn ": any" --include="*.ts" --include="*.tsx" | grep -v node_modules | grep -v ".test."
-```
-
-Document the actual count in the task file before estimating work.
+- Requires API to fetch pending auto-detected transaction count
+- May need IPC handler if not already available
 
 ## Notes
 
-This is cleanup work from SPRINT-009. Low priority as the most critical `any` types were addressed in TASK-610.
+This is a UX enhancement to improve visibility of the AI features. Should not change core functionality, just surface existing capabilities more prominently.

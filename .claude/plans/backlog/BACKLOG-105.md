@@ -1,93 +1,72 @@
-# BACKLOG-105: Monitor and Refactor AppRouter.tsx
+# BACKLOG-105: Text Messages Tab in Transaction Details
 
-## Priority: Low
+**Priority:** High
+**Category:** ui
+**Status:** Pending
+**Created:** 2025-12-28
 
-## Category: refactor
+---
 
-## Summary
+## Description
 
-AppRouter.tsx is currently at 359 lines, exceeding the 300-line target (though below the 400-line trigger). Monitor and plan extraction when appropriate.
+Add a new "Text Messages" tab to the transaction details view. This tab will show text messages (SMS/iMessage) associated with the transaction, with the ability to:
+1. View text message threads linked to the transaction
+2. Remove non-relevant texts from the transaction
+3. Search for and attach text threads that weren't automatically attached
 
-## Origin
+## Background
 
-SPRINT-009 Retrospective - Architecture monitoring identified during lessons learned.
+The current TransactionDetails component has two tabs:
+- Details: Shows transaction info and emails
+- Contacts: Shows assigned contacts and AI suggestions
 
-## Current State
+Text messages are stored in the `messages` table with `channel IN ('sms', 'imessage')` but are not currently displayed in transaction details.
 
-Per `.claude/docs/shared/architecture-guardrails.md`:
+Related backlog items:
+- BACKLOG-011: Manually Add Missing Emails to Audit
+- BACKLOG-012: Manually Add Missing Texts to Audit
 
-| File | Current | Target | Trigger |
-|------|---------|--------|---------|
-| `AppRouter.tsx` | 359 | 250 | >300 |
+## Technical Scope
 
-The file has exceeded the target (250) and the trigger (300) but is still below the upper bounds where extraction becomes urgent.
+This feature involves multiple tasks:
+1. **Tab UI** - Add "Messages" tab to TransactionDetails
+2. **Message List Component** - Display text messages in conversation style
+3. **Unlink Functionality** - Remove messages from transaction
+4. **Attach Functionality** - Search and link new message threads
 
-## Problem
+## Files to Create/Modify
 
-AppRouter.tsx has grown to include:
-- Route definitions
-- Route guards and authentication logic
-- Lazy loading configuration
-- Error boundaries for routes
-
-This should be split into focused modules.
-
-## Proposed Extraction
-
-### Option A: Route Groups
-```
-src/routes/
-  index.ts (re-exports)
-  AuthenticatedRoutes.tsx
-  PublicRoutes.tsx
-  AdminRoutes.tsx
-```
-
-### Option B: Feature-Based
-```
-src/features/
-  auth/routes.tsx
-  transactions/routes.tsx
-  contacts/routes.tsx
-  settings/routes.tsx
-```
+- `src/components/transactionDetailsModule/components/TransactionMessagesTab.tsx` (new)
+- `src/components/transactionDetailsModule/components/MessageThreadCard.tsx` (new)
+- `src/components/transactionDetailsModule/components/AttachMessagesModal.tsx` (new)
+- `src/components/TransactionDetails.tsx` (update tabs)
+- `src/components/transactionDetailsModule/types.ts` (extend types)
 
 ## Acceptance Criteria
 
-- [ ] AppRouter.tsx reduced to <250 lines
-- [ ] Route definitions moved to feature/domain modules
-- [ ] Route guards extracted to separate utilities
-- [ ] Lazy loading preserved
-- [ ] No functionality changes
-- [ ] All existing routes work correctly
+- [ ] Text Messages tab appears in transaction details
+- [ ] Text messages linked to transaction are displayed
+- [ ] Messages grouped by conversation thread
+- [ ] Can unlink irrelevant messages from transaction
+- [ ] Can search for and attach unlinked message threads
+- [ ] Empty state when no messages linked
+- [ ] Consistent styling with existing tabs
 
 ## Estimated Effort
 
-| Metric | Estimate | Notes |
-|--------|----------|-------|
-| Turns | 5-7 | Apply 0.5x refactor multiplier (base: 10-14) |
-| Tokens | ~25K | |
-| Time | ~45-60 min | |
+- **Turns:** 15-25 (multiple sub-tasks)
+- **Tokens:** ~80K-120K
+- **Time:** ~3-5h
+- **Adjustment:** 1.0x (ui category)
 
-## Dependencies
+---
 
-None
+## Sub-Tasks (Recommended Split)
 
-## Trigger Conditions
-
-Consider prioritizing this work when:
-- AppRouter.tsx exceeds 400 lines (urgent trigger)
-- New route groups are being added
-- Router-related bugs are difficult to debug
-
-## Monitoring
-
-Add to periodic codebase health checks:
-```bash
-wc -l src/AppRouter.tsx
-# Should be < 300 (target), definitely < 400 (trigger)
-```
+1. TASK-702: Add Messages tab infrastructure (Tab UI, empty state)
+2. TASK-703: Message thread display component
+3. TASK-704: Attach/unlink messages modal
 
 ## Notes
 
-This is preventive maintenance. Not urgent but should be addressed before the file becomes unmanageable. Current state is acceptable but trending toward technical debt.
+Consider splitting this into 2-3 smaller tasks for parallel or sequential execution. The tab infrastructure can be done first, then the display component, then the attach/unlink functionality.

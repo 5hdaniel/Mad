@@ -2,9 +2,9 @@
 
 This index tracks all backlog items with their current status and metadata.
 
-**Last Updated:** 2025-12-27
-**Total Items:** 113
-**Pending:** 76 | **In Progress:** 0 | **Completed:** 34 | **Obsolete:** 2 | **Deferred:** 2
+**Last Updated:** 2025-12-28
+**Total Items:** 116
+**Pending:** 79 | **In Progress:** 0 | **Completed:** 34 | **Obsolete:** 2 | **Deferred:** 2
 
 ---
 
@@ -41,6 +41,7 @@ This index tracks all backlog items with their current status and metadata.
 - **SPRINT-007 (LLM Cost Optimization):** Completed (BACKLOG-084, 085) - TASK-501 to TASK-512
 - **SPRINT-008 (TransactionList Refactoring):** Completed - TASK-513 to TASK-521
 - **SPRINT-009 (Codebase Standards Remediation):** Completed - TASK-600 to TASK-620 (20 tasks)
+- **SPRINT-010 (Core Polish & Text Messages):** Active - BACKLOG-103, 054, 105, 104 (6 tasks)
 - **Unassigned:** All others
 
 ### AI MVP Project - COMPLETE
@@ -114,7 +115,7 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-051 | Delete Comms/Attachments | service | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-052 | AI Transaction Timeline | ui | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-053 | Manually Add Communications | ui | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
-| BACKLOG-054 | Render Email HTML | ui | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| BACKLOG-054 | Render Email HTML | ui | Medium | Pending | SPRINT-010 | 6-10 | ~35K-55K | 1-2h | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-055 | AI House Viewing Extraction | service | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-056 | macOS Code Signing Fix | infra | High | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-057 | Login Auth Timeout Retry | service | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
@@ -160,6 +161,9 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-100 | Create auth/ Module | refactor | Medium | Pending | - | 3-4 | ~15K | 20-30m | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-100.md](BACKLOG-100.md) |
 | BACKLOG-101 | Split PermissionsScreen.tsx | refactor | Medium | Pending | - | 5-6 | ~22K | 45-60m | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-101.md](BACKLOG-101.md) |
 | BACKLOG-102 | Security Hardening Evaluation | security | Medium | Pending | - | 6-8 | ~30K | 1.5-2h | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-102.md](BACKLOG-102.md) |
+| BACKLOG-103 | Fix Contact Selection Issue | ui | High | Pending | SPRINT-010 | 4-8 | ~25K-40K | 45-90m | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-103.md](BACKLOG-103.md) |
+| BACKLOG-104 | Dashboard UI to Emphasize Auto-Detection | ui | Medium | Pending | SPRINT-010 | 6-10 | ~35K-50K | 1-2h | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-104.md](BACKLOG-104.md) |
+| BACKLOG-105 | Text Messages Tab in Transaction Details | ui | High | Pending | SPRINT-010 | 15-25 | ~80K-120K | 3-5h | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-105.md](BACKLOG-105.md) |
 
 ---
 
@@ -189,6 +193,7 @@ This index tracks all backlog items with their current status and metadata.
 | SPRINT-007 | LLM Cost Optimization | Completed | BACKLOG-084, 085 (12 tasks, TASK-501 to TASK-512) - 97% cost reduction |
 | SPRINT-008 | TransactionList Refactoring | Completed | TASK-513 to TASK-521 (9 tasks, 26 turns, ~146K tokens, ~2hrs) |
 | SPRINT-009 | Codebase Standards Remediation | Completed | TASK-600 to TASK-620 (20 tasks) - Security + Architecture + Types |
+| SPRINT-010 | Core Polish & Text Messages | **Active** | BACKLOG-103, 054, 105, 104 (6 tasks: TASK-700 to TASK-705) |
 
 ---
 
@@ -251,6 +256,9 @@ This index tracks all backlog items with their current status and metadata.
 - 2025-12-27: INDEX.md major update - corrected sprint statuses, archived completed task files
 - 2025-12-27: BACKLOG-061, 062, 063, 065 marked complete (addressed by SPRINT-009)
 - 2025-12-27: Task files archived: SPRINT-006 (14), SPRINT-007 (12), SPRINT-009 (21)
+- 2025-12-28: Created SPRINT-010 (Core Polish & Text Messages) - 6 tasks (TASK-700 to TASK-705)
+- 2025-12-28: Added BACKLOG-103 (Contact Selection Fix), BACKLOG-104 (Dashboard AI Display), BACKLOG-105 (Text Messages Tab)
+- 2025-12-28: SPRINT-010 covers: bug fix, HTML email rendering, text messages feature, dashboard enhancement
 
 ---
 
