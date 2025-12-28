@@ -3,8 +3,8 @@
 This index tracks all backlog items with their current status and metadata.
 
 **Last Updated:** 2025-12-28
-**Total Items:** 116
-**Pending:** 79 | **In Progress:** 0 | **Completed:** 34 | **Obsolete:** 2 | **Deferred:** 2
+**Total Items:** 125
+**Pending:** 88 | **In Progress:** 0 | **Completed:** 34 | **Obsolete:** 2 | **Deferred:** 2
 
 ---
 
@@ -26,9 +26,9 @@ This index tracks all backlog items with their current status and metadata.
 ## Quick Filters
 
 ### By Priority
-- **Critical:** BACKLOG-030 (done), 032, 035 (done), 038 (done), 039 (done), 044 (done), 045 (done), 058 (done), 059 (done), 072 (done), 073 (done), 074 (done)
-- **High:** BACKLOG-008, 009, 013, 016, 018, 020, 021, 023, 026, 031, 033, 037, 056, 060 (done), 061, 062, 063, 067, 075 (done), 076 (done), 084 (done), 085 (done), 088, 090, 091, 098, 099
-- **Medium:** Multiple (see full index), 077 (done), 078 (done), 079 (done), 081, 086, 087, 089, 092, 093, 094, 095, 096, 097, 100, 101, 102
+- **Critical:** BACKLOG-030 (done), 032, 035 (done), 038 (done), 039 (done), 044 (done), 045 (done), 058 (done), 059 (done), 072 (done), 073 (done), 074 (done), **107**, **108**
+- **High:** BACKLOG-008, 009, 013, 016, 018, 020, 021, 023, 026, 031, 033, 037, 056, 060 (done), 061, 062, 063, 067, 075 (done), 076 (done), 084 (done), 085 (done), 088, 090, 091, 098, 099, **109**, **110**, **111**
+- **Medium:** Multiple (see full index), 077 (done), 078 (done), 079 (done), 081, 086, 087, 089, 092, 093, 094, 095, 096, 097, 100, 101, 102, **112**, **113**, **114**, **115**
 - **Low/Deferred:** BACKLOG-001, 003, 004, 010, 017, 069, 070, 071
 
 ### By Sprint Assignment
@@ -164,6 +164,15 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-103 | Fix Contact Selection Issue | ui | High | Pending | SPRINT-010 | 4-8 | ~25K-40K | 45-90m | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-103.md](BACKLOG-103.md) |
 | BACKLOG-104 | Dashboard UI to Emphasize Auto-Detection | ui | Medium | Pending | SPRINT-010 | 6-10 | ~35K-50K | 1-2h | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-104.md](BACKLOG-104.md) |
 | BACKLOG-105 | Text Messages Tab in Transaction Details | ui | High | Pending | SPRINT-010 | 15-25 | ~80K-120K | 3-5h | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-105.md](BACKLOG-105.md) |
+| BACKLOG-107 | Split useAppStateMachine.ts into Flow Hooks | refactor | Critical | Pending | - | 30-40 | ~100K | 1-1.5d | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-107.md](BACKLOG-107.md) |
+| BACKLOG-108 | Fix Flaky appleDriverService Test | test | Critical | Pending | - | 2-4 | ~10K | 1-2h | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-108.md](BACKLOG-108.md) |
+| BACKLOG-109 | Reduce AppRouter.tsx to <300 Lines | refactor | High | Pending | - | 4-6 | ~20K | 30-45m | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-109.md](BACKLOG-109.md) |
+| BACKLOG-110 | Reduce AppShell.tsx to <150 Lines | refactor | High | Pending | - | 3-4 | ~15K | 20-30m | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-110.md](BACKLOG-110.md) |
+| BACKLOG-111 | Migrate Components to Service Abstractions | refactor | High | Pending | - | 40-50 | ~150K | 1-1.5d | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-111.md](BACKLOG-111.md) |
+| BACKLOG-112 | Boost Test Coverage for src/hooks/ | test | Medium | Pending | - | 40-60 | ~150K | 1-2d | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-112.md](BACKLOG-112.md) |
+| BACKLOG-113 | Boost Test Coverage for src/utils/ | test | Medium | Pending | - | 20-30 | ~80K | 1d | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-113.md](BACKLOG-113.md) |
+| BACKLOG-114 | Boost Test Coverage for electron/utils/ | test | Medium | Pending | - | 20-30 | ~80K | 1d | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-114.md](BACKLOG-114.md) |
+| BACKLOG-115 | Address Remaining any Types in Electron Handlers | refactor | Medium | Pending | - | 40-60 | ~150K | 1-2d | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-115.md](BACKLOG-115.md) |
 
 ---
 
@@ -259,6 +268,8 @@ This index tracks all backlog items with their current status and metadata.
 - 2025-12-28: Created SPRINT-010 (Core Polish & Text Messages) - 6 tasks (TASK-700 to TASK-705)
 - 2025-12-28: Added BACKLOG-103 (Contact Selection Fix), BACKLOG-104 (Dashboard AI Display), BACKLOG-105 (Text Messages Tab)
 - 2025-12-28: SPRINT-010 covers: bug fix, HTML email rendering, text messages feature, dashboard enhancement
+- 2025-12-28: Added BACKLOG-107 through BACKLOG-115 (9 items from SR Engineer findings for SPRINT-012+)
+- 2025-12-28: New items: 2 CRITICAL (useAppStateMachine split, flaky test), 3 HIGH (AppRouter, AppShell, service migration), 4 MEDIUM (test coverage, any types)
 
 ---
 
