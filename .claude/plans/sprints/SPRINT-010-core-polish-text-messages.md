@@ -43,6 +43,7 @@ This sprint combines bug fixes, UI enhancements, and a new feature:
 | TASK-702 | Add Messages Tab Infrastructure | ui | 4-6 | Pending |
 | TASK-703 | Message Thread Display Component | ui | 6-8 | Pending |
 | TASK-704 | Attach/Unlink Messages Modal | ui | 10-14 | Pending |
+| TASK-706 | Add Attachments Tab to Transaction Details | ui | 6-10 | Pending |
 
 ### Phase 4: Dashboard Enhancement (MEDIUM Priority)
 **Execution:** Independent
@@ -66,10 +67,11 @@ graph TD
         T701[TASK-701: HTML Email Rendering]
     end
 
-    subgraph Phase3[Phase 3: Text Messages]
+    subgraph Phase3[Phase 3: Transaction Tabs]
         T702[TASK-702: Messages Tab Infrastructure]
         T703[TASK-703: Message Thread Display]
         T704[TASK-704: Attach/Unlink Modal]
+        T706[TASK-706: Attachments Tab]
     end
 
     subgraph Phase4[Phase 4: Dashboard]
@@ -78,6 +80,7 @@ graph TD
 
     T702 --> T703
     T703 --> T704
+    T702 --> T706
 ```
 
 ---
@@ -144,10 +147,10 @@ Time →
 
 | Metric | Estimate |
 |--------|----------|
-| Total Tasks | 6 |
-| Total Turns | 39-59 |
-| Total Tokens | ~195K-310K |
-| Total Time | ~5-8 hours |
+| Total Tasks | 7 |
+| Total Turns | 45-69 |
+| Total Tokens | ~225K-360K |
+| Total Time | ~6-9 hours |
 
 **Updated Estimates (SR Engineer Review):**
 
@@ -202,8 +205,10 @@ Time →
 | TASK-703 | Message Thread Display Component | 3 | HIGH | No | 6-8 | Pending |
 | TASK-704 | Attach/Unlink Messages Modal | 3 | HIGH | No | 10-14 | Pending |
 | TASK-705 | Dashboard AI Detection Display | 4 | MEDIUM | Yes | 6-10 | Pending |
+| TASK-706 | Add Attachments Tab | 3 | MEDIUM | No** | 6-10 | Pending |
 
-*TASK-702 can run in parallel with Batch 1, but TASK-703/704 must wait for it.
+*TASK-702 can run in parallel with Batch 1, but TASK-703/704/706 must wait for it.
+**TASK-706 depends on TASK-702 for TransactionTab type update.
 
 ---
 
@@ -241,9 +246,9 @@ All 6 task files have been reviewed and updated with:
 
 ## Progress Tracking
 
-**Sprint Progress:** 0/6 tasks merged (0%)
+**Sprint Progress:** 0/7 tasks merged (0%)
 
 - Phase 1: 0/1 complete
 - Phase 2: 0/1 complete
-- Phase 3: 0/3 complete
+- Phase 3: 0/4 complete (Messages + Attachments)
 - Phase 4: 0/1 complete
