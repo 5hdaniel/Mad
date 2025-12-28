@@ -243,7 +243,19 @@ export async function handleGoogleLogin(
     // Process login in background after code is received
     setTimeout(async () => {
       try {
-        const code = await codePromise;
+        // Wrap the code promise with a timeout (matches Microsoft pattern)
+        const timeoutMs = 120000; // 2 minutes
+        const codeWithTimeout = Promise.race([
+          codePromise,
+          new Promise<never>((_, reject) =>
+            setTimeout(
+              () => reject(new Error("Authentication timed out")),
+              timeoutMs
+            )
+          ),
+        ]);
+
+        const code = await codeWithTimeout;
         await logService.info("Received Google authorization code, completing login", "AuthHandlers");
 
         // Exchange code for tokens
