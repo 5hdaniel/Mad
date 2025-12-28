@@ -90,9 +90,11 @@ Turns: |||| |||| || (12)
 
 ---
 
-## Step 5: Complete Task File Summary
+## Step 5: Complete Task File Summary (MANDATORY)
 
-**Before creating PR**, update the task file's Implementation Summary:
+**Before creating PR**, update the task file's Implementation Summary. This is required for phase retros and estimation calibration.
+
+**BLOCKING**: SR Engineer will reject PRs with incomplete task file summaries.
 
 ```markdown
 ## Implementation Summary (Engineer-Owned)
@@ -106,12 +108,32 @@ Turns: |||| |||| || (12)
 - **Before**: [state before]
 - **After**: [state after]
 - **Actual Turns**: X (Est: Y)
+- **Actual Tokens**: ~XK (Est: Y-ZK)
+- **Actual Active Time**: X min (Est: Y-Z min)
 - **PR**: [will add after PR created]
 
 ### Notes
-**Deviations from plan:** [explain any changes]
-**Issues encountered:** [document challenges]
+**Deviations from plan:** [explain any changes from approved plan]
+**Issues encountered:** [document challenges, blockers, unexpected complexity]
+**CI Failures:** [if any - describe and how resolved]
 ```
+
+**Why This Matters:**
+- PM uses these metrics for phase retro reports
+- Estimation multipliers are calibrated from actual vs estimated
+- Pattern analysis requires documented deviations and issues
+- Quality tracking needs CI failure documentation
+
+**Required Fields Summary:**
+
+| Field | Required | Used For |
+|-------|----------|----------|
+| Actual Turns | Yes | Estimation calibration |
+| Actual Tokens | Yes | Resource tracking |
+| Actual Active Time | Yes | Capacity planning |
+| Deviations from plan | Yes | Pattern analysis |
+| Issues encountered | Yes | Quality tracking |
+| CI Failures | If any | Quality metrics |
 
 ---
 
@@ -334,8 +356,16 @@ Copy this to your task file or notes:
 - [ ] Type check passes
 - [ ] Lint passes
 
+### Task File Metrics (MANDATORY for Phase Retros)
+- [ ] Actual Turns recorded (vs estimate)
+- [ ] Actual Tokens recorded (vs estimate)
+- [ ] Actual Active Time recorded (vs estimate)
+- [ ] Deviations from plan documented
+- [ ] Issues encountered documented
+- [ ] CI Failures documented (if any)
+
 ### PR Submission
-- [ ] Task file summary updated
+- [ ] Task file summary updated with all metrics
 - [ ] PR created with Engineer Metrics (including Plan metrics)
 - [ ] CI passes
 - [ ] SR Engineer review requested
