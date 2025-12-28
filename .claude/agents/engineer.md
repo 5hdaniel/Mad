@@ -83,6 +83,25 @@ Read the entire task file before any implementation:
 - Check acceptance criteria
 - Review guardrails
 
+### Step 2b: Scope Scanning (Cleanup Tasks Only)
+
+**For cleanup tasks (console.log removal, any types, commented code, etc.):**
+
+Before implementing, scan the actual scope:
+```bash
+# Example for console.log cleanup
+grep -r "console\." --include="*.ts" --include="*.tsx" | grep -v node_modules | wc -l
+```
+
+**Document in task file:**
+```markdown
+## Scope Scan (Pre-Implementation)
+**Scan Date:** YYYY-MM-DD
+**Result:** X occurrences across Y files
+```
+
+**Why:** SPRINT-009 showed cleanup estimates were often based on stale data. Scanning prevents surprises and allows re-estimation before starting.
+
 ### Step 3: Implement with Tracking
 
 As you work:
@@ -103,6 +122,12 @@ As you work:
 - [ ] Types pass: `npm run type-check`
 - [ ] Lint passes: `npm run lint`
 - [ ] Tests run 3x without flakiness (if applicable)
+
+### File Lifecycle (Refactor/Extraction Tasks)
+- [ ] Old/replaced files DELETED (not left behind)
+- [ ] Old test files DELETED
+- [ ] No dangling imports (type-check catches this)
+- [ ] See `.claude/docs/shared/file-lifecycle-protocol.md`
 
 ### Task File Updated
 - [ ] Implementation Summary section complete

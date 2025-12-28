@@ -162,6 +162,24 @@ Beyond the standard SOP, as senior engineer you also verify:
 - [ ] Performance implications assessed
 - [ ] Security implications documented
 - [ ] **Engineer Metrics present, SR Metrics to be added** (see Metrics Protocol below)
+- [ ] **File Lifecycle (Refactor PRs)** - No orphaned files left behind (see below)
+
+### File Lifecycle Check (Refactor/Extraction PRs)
+
+**Reference:** `.claude/docs/shared/file-lifecycle-protocol.md`
+
+For any PR involving refactoring, extraction, or file replacement:
+
+```markdown
+## File Lifecycle Review
+
+- [ ] **Orphan Check**: No replaced files left behind
+- [ ] **Import Check**: No dangling imports to deleted files
+- [ ] **Test Check**: Old tests removed, new tests added
+- [ ] **Export Check**: No barrel exports referencing deleted files
+```
+
+**SPRINT-009 Lesson:** TASK-618 cleaned up 11 orphaned files that should have been deleted in prior sprints. Enforce this check to prevent accumulation.
 
 ### Metrics Protocol (REQUIRED for Sprint Tasks)
 
@@ -199,6 +217,71 @@ Add your metrics to the PR before merging. See `.claude/docs/shared/metrics-temp
 #### After Merge: Notify PM
 
 Notify PM with metrics summary so they can update INDEX.md and assign next task.
+
+### Phase Retro Contribution (After Phase PRs Complete)
+
+**MANDATORY**: After reviewing all PRs in a phase, contribute quality observations to the phase retro.
+
+**When to Contribute:**
+- After the last PR in a phase is merged
+- PM will request your phase retro input
+- Provide observations before PM creates the phase retro report
+
+**What to Contribute:**
+
+| Category | What to Report |
+|----------|----------------|
+| **Quality Issues** | Code quality problems observed across PRs |
+| **Architecture Concerns** | Boundary violations, pattern breaks, coupling issues |
+| **Patterns to Reinforce** | Good practices that should continue |
+| **Patterns to Avoid** | Anti-patterns observed, things to prevent |
+
+**Format for Phase Retro Input:**
+
+```markdown
+## SR Engineer Phase Retro Input: SPRINT-XXX Phase Y
+
+### Quality Issues Observed
+
+| Task | Issue | Severity | Resolution |
+|------|-------|----------|------------|
+| TASK-XXX | [description] | Low/Med/High | [how fixed] |
+
+### Architecture Concerns
+
+- [concern 1]: [affected areas]
+- [concern 2]: [affected areas]
+
+### Patterns to Reinforce
+
+1. **[pattern name]**: [why it worked well]
+   - Example: TASK-XXX [specific example]
+
+### Patterns to Avoid
+
+1. **[anti-pattern name]**: [why it's problematic]
+   - Example: TASK-XXX [specific example]
+   - **Prevention**: [how to prevent in future]
+
+### Recommendations for Next Phase
+
+- [recommendation 1]
+- [recommendation 2]
+```
+
+**Workflow:**
+```
+Phase PRs All Merged
+        |
+        v
+SR Engineer Provides Phase Retro Input
+        |
+        v
+PM Creates Phase Retro Report (incorporating SR input)
+        |
+        v
+PM Archives to: .claude/plans/sprints/archive/SPRINT-XXX/phase-retros/
+```
 
 ## Review Output Format
 

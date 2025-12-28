@@ -161,6 +161,57 @@ git mv .claude/plans/tasks/TASK-XXX-slug.md .claude/plans/tasks/archive/
 git commit -m "chore: archive completed TASK-XXX"
 ```
 
+### Phase Retro Reports (After Phase Completion)
+
+**MANDATORY**: After each phase completes, PM must create a phase retro report.
+
+**Template:** `.claude/skills/agentic-pm/skills/phase-retro-guardrail-tuner/templates/phase-retro-report.template.md`
+
+**Storage:** `.claude/plans/sprints/archive/SPRINT-XXX/phase-retros/`
+
+**Process:**
+1. Wait for SR Engineer to contribute quality observations (see below)
+2. Create phase retro report using template
+3. Include the following sections:
+
+| Section | Required Content |
+|---------|-----------------|
+| **Completion Metrics** | Tasks completed, blocked, partial |
+| **Effort Metrics** | Total turns, tokens, time per task |
+| **Quality Issues** | CI failures, rework, conflicts (with SR input) |
+| **Variance Analysis** | Estimated vs actual by task and category |
+| **Patterns Observed** | Recurring issues or successes |
+| **Improvement Proposals** | Guardrail/template updates if issues found |
+
+**SR Engineer Contributions to Include:**
+- Quality issues observed during PR reviews
+- Architecture concerns identified
+- Patterns to reinforce (good practices)
+- Patterns to avoid (anti-patterns)
+
+**Workflow Integration:**
+```
+Phase Tasks Complete
+        |
+        v
+SR Engineer Contributes Quality Observations
+        |
+        v
+PM Creates Phase Retro Report
+        |
+        v
+Apply Now / Apply Next Phase Improvements
+        |
+        v
+Commit to archive folder
+```
+
+**Naming Convention:**
+```
+SPRINT-XXX-phase-Y-retro.md
+# Example: SPRINT-009-phase-1-retro.md
+```
+
 ## Project Infrastructure
 
 | Artifact | Location | Naming Pattern |

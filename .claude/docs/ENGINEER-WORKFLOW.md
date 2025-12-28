@@ -90,9 +90,11 @@ Turns: |||| |||| || (12)
 
 ---
 
-## Step 5: Complete Task File Summary
+## Step 5: Complete Task File Summary (MANDATORY)
 
-**Before creating PR**, update the task file's Implementation Summary:
+**Before creating PR**, update the task file's Implementation Summary. This is required for phase retros and estimation calibration.
+
+**BLOCKING**: SR Engineer will reject PRs with incomplete task file summaries.
 
 ```markdown
 ## Implementation Summary (Engineer-Owned)
@@ -106,12 +108,32 @@ Turns: |||| |||| || (12)
 - **Before**: [state before]
 - **After**: [state after]
 - **Actual Turns**: X (Est: Y)
+- **Actual Tokens**: ~XK (Est: Y-ZK)
+- **Actual Active Time**: X min (Est: Y-Z min)
 - **PR**: [will add after PR created]
 
 ### Notes
-**Deviations from plan:** [explain any changes]
-**Issues encountered:** [document challenges]
+**Deviations from plan:** [explain any changes from approved plan]
+**Issues encountered:** [document challenges, blockers, unexpected complexity]
+**CI Failures:** [if any - describe and how resolved]
 ```
+
+**Why This Matters:**
+- PM uses these metrics for phase retro reports
+- Estimation multipliers are calibrated from actual vs estimated
+- Pattern analysis requires documented deviations and issues
+- Quality tracking needs CI failure documentation
+
+**Required Fields Summary:**
+
+| Field | Required | Used For |
+|-------|----------|----------|
+| Actual Turns | Yes | Estimation calibration |
+| Actual Tokens | Yes | Resource tracking |
+| Actual Active Time | Yes | Capacity planning |
+| Deviations from plan | Yes | Pattern analysis |
+| Issues encountered | Yes | Quality tracking |
+| CI Failures | If any | Quality metrics |
 
 ---
 
@@ -215,6 +237,32 @@ The SR Engineer will:
 
 Sometimes PM will assign multiple tasks to run in parallel. This is only safe when SR Engineer has reviewed and approved parallel execution.
 
+### Recommended: Git Worktree Pattern
+
+**SPRINT-009 Lesson:** Git worktrees work well for parallel independent tasks. Each worktree is a separate working directory with its own branch, preventing conflicts.
+
+**Setup (one-time):**
+```bash
+# From main repository
+cd /path/to/Mad
+
+# Create worktrees for parallel tasks
+git worktree add ../Mad-TASK-601 feature/TASK-601-description
+git worktree add ../Mad-TASK-602 feature/TASK-602-description
+```
+
+**Benefits:**
+- Isolated working directories (no uncommitted file conflicts)
+- Each worktree has its own branch
+- Can run parallel Claude sessions, one per worktree
+- Git handles tracking automatically
+
+**Cleanup after merge:**
+```bash
+git worktree remove ../Mad-TASK-601
+git worktree remove ../Mad-TASK-602
+```
+
 ### When You're Assigned Parallel Tasks
 
 **You will be told explicitly:**
@@ -222,13 +270,15 @@ Sometimes PM will assign multiple tasks to run in parallel. This is only safe wh
 Parallel Assignment: TASK-XXX and TASK-YYY
 These tasks are approved for parallel execution.
 Create separate branches for each.
+Use worktrees for isolation (recommended).
 ```
 
 **Rules for parallel work:**
 1. Each task gets its own branch (from develop)
-2. Do NOT modify files that aren't listed in your task
-3. If you discover shared file needs, STOP and notify PM
-4. Submit PRs independently - don't wait for the other task
+2. Use worktrees for isolation (recommended)
+3. Do NOT modify files that aren't listed in your task
+4. If you discover shared file needs, STOP and notify PM
+5. Submit PRs independently - don't wait for the other task
 
 ### When Parallel Goes Wrong
 
@@ -306,8 +356,16 @@ Copy this to your task file or notes:
 - [ ] Type check passes
 - [ ] Lint passes
 
+### Task File Metrics (MANDATORY for Phase Retros)
+- [ ] Actual Turns recorded (vs estimate)
+- [ ] Actual Tokens recorded (vs estimate)
+- [ ] Actual Active Time recorded (vs estimate)
+- [ ] Deviations from plan documented
+- [ ] Issues encountered documented
+- [ ] CI Failures documented (if any)
+
 ### PR Submission
-- [ ] Task file summary updated
+- [ ] Task file summary updated with all metrics
 - [ ] PR created with Engineer Metrics (including Plan metrics)
 - [ ] CI passes
 - [ ] SR Engineer review requested
