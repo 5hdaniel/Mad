@@ -77,6 +77,15 @@ The `email` object has `body_html` available but it's not being rendered.
 
 ## Implementation Notes
 
+### Pre-Implementation Step (REQUIRED)
+
+**Install DOMPurify dependency:**
+```bash
+npm install dompurify @types/dompurify
+```
+
+This is required for the recommended sanitization approach.
+
 ### Security-First HTML Rendering
 
 **Option A: Sandboxed iframe (Recommended)**
@@ -167,6 +176,8 @@ const handleLinkClick = (e: React.MouseEvent) => {
 - If the iframe approach causes CSP issues
 - If email rendering looks broken for common email formats
 
+**CSP Verification Note:** Before using iframe with `srcDoc`, verify that the Electron app's Content Security Policy allows this approach. Check `electron/main.ts` or relevant security configuration for CSP settings. If CSP blocks `srcDoc`, use the DOMPurify approach instead.
+
 ## Testing Expectations (MANDATORY)
 
 ### Unit Tests
@@ -215,9 +226,9 @@ This task's PR MUST pass:
 **Category:** `ui`
 
 **Estimated Totals:**
-- **Turns:** 6-10
-- **Tokens:** ~35K-55K
-- **Time:** ~1-2h
+- **Turns:** 8-12
+- **Tokens:** ~40K-65K
+- **Time:** ~1.5-2.5h
 
 **Estimation Assumptions:**
 
@@ -325,6 +336,33 @@ Verification:
 
 **Suggestion for similar tasks:**
 <Recommendation>
+
+---
+
+## SR Engineer Review Notes (Pre-Implementation)
+
+**Reviewed:** 2025-12-28
+**Reviewer:** SR Engineer
+
+### Technical Corrections
+
+1. **Dependency Installation Required:**
+   - Must run `npm install dompurify @types/dompurify` before implementation
+   - This is a pre-implementation step, not optional
+
+2. **CSP Verification:**
+   - Check Electron CSP settings before choosing iframe vs DOMPurify approach
+   - DOMPurify is the safer fallback if CSP blocks iframe srcDoc
+
+3. **Estimate Updated:**
+   - Increased to 8-12 turns to account for dependency installation, CSP verification, and security testing
+
+4. **Execution Recommendation:**
+   - **Parallel Safe:** Yes - modifies EmailViewModal only
+   - Can run in parallel with TASK-700 and TASK-705
+
+5. **Dependencies:**
+   - None (independent task)
 
 ---
 

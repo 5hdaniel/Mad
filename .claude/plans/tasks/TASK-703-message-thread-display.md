@@ -163,6 +163,9 @@ interface MessageBubbleProps {
 export function MessageBubble({ message }: MessageBubbleProps) {
   const isOutbound = message.direction === 'outbound';
 
+  // Use body_text with fallback to body_plain
+  const messageText = message.body_text || message.body_plain || '';
+
   return (
     <div className={`flex ${isOutbound ? 'justify-end' : 'justify-start'}`}>
       <div
@@ -172,7 +175,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
             : 'bg-gray-200 text-gray-900 rounded-bl-sm'
         }`}
       >
-        <p className="text-sm whitespace-pre-wrap">{message.body_text}</p>
+        <p className="text-sm whitespace-pre-wrap">{messageText}</p>
         <p
           className={`text-xs mt-1 ${
             isOutbound ? 'text-blue-100' : 'text-gray-500'
@@ -184,6 +187,9 @@ export function MessageBubble({ message }: MessageBubbleProps) {
     </div>
   );
 }
+
+// Note: Use body_text as primary, body_plain as fallback
+// This ensures compatibility with different message formats
 
 function formatMessageTime(timestamp: string): string {
   const date = new Date(timestamp);
@@ -415,6 +421,28 @@ Verification:
 
 **Suggestion for similar tasks:**
 <Recommendation>
+
+---
+
+## SR Engineer Review Notes (Pre-Implementation)
+
+**Reviewed:** 2025-12-28
+**Reviewer:** SR Engineer
+
+### Technical Corrections
+
+1. **Message Body Field:**
+   - Use `body_text` as primary field
+   - Fallback to `body_plain` if `body_text` is null/undefined
+   - Pattern: `message.body_text || message.body_plain || ''`
+
+2. **Execution Recommendation:**
+   - **Parallel Safe:** No - must wait for TASK-702 to merge first
+   - Sequence: TASK-702 -> TASK-703 -> TASK-704
+   - BLOCKS: TASK-704
+
+3. **Dependencies:**
+   - REQUIRES: TASK-702 (Messages Tab Infrastructure) - must be merged
 
 ---
 

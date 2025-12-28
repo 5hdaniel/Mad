@@ -84,34 +84,49 @@ Add:
 { id: 'messages', label: 'Messages', icon: MessageIcon, count: messageCount }
 ```
 
-### Message Query (IPC)
+### Message Query (IPC) - CRITICAL
 
-Check if `window.api.messages.getByTransaction(transactionId)` exists. If not, the hook should use:
+**IMPORTANT:** `window.api.communications` does NOT exist. You must use the existing transaction details endpoint and filter communications.
 
+**Correct Approach:**
 ```typescript
-// May need to use communications endpoint and filter by channel
-const messages = await window.api.communications.getByTransaction(transactionId);
-const textMessages = messages.filter(m =>
-  m.channel === 'sms' || m.channel === 'imessage'
+// Use transactions.getDetails which returns communications
+const details = await window.api.transactions.getDetails(transactionId);
+const allCommunications = details.communications || [];
+
+// Filter for SMS/iMessage channels
+const textMessages = allCommunications.filter(
+  (m: Communication) => m.channel === 'sms' || m.channel === 'imessage'
 );
 ```
+
+**DO NOT attempt to use:**
+- `window.api.communications.getByTransaction()` - does not exist
+- `window.api.messages.getByTransaction()` - does not exist
+
+The data is already available through the transaction details response.
 
 ### Hook Pattern (Follow Existing)
 
 ```typescript
 // Follow pattern from useTransactionDetails.ts
+// IMPORTANT: Use transactions.getDetails, NOT communications endpoint
+
 export function useTransactionMessages(transaction: Transaction) {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Communication[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const loadMessages = useCallback(async () => {
     setLoading(true);
     try {
-      // Fetch messages linked to this transaction
-      const result = await window.api.communications.getByTransaction(transaction.id);
-      const textMessages = result.filter(m =>
-        m.channel === 'sms' || m.channel === 'imessage'
+      // Use existing transactions.getDetails endpoint
+      const details = await window.api.transactions.getDetails(transaction.id);
+      const allCommunications = details.communications || [];
+
+      // Filter for text messages only (SMS and iMessage)
+      const textMessages = allCommunications.filter(
+        (m: Communication) => m.channel === 'sms' || m.channel === 'imessage'
       );
       setMessages(textMessages);
     } catch (err) {
@@ -128,6 +143,8 @@ export function useTransactionMessages(transaction: Transaction) {
   return { messages, loading, error, refresh: loadMessages };
 }
 ```
+
+**Channel Values:** Filter by `channel === 'sms'` or `channel === 'imessage'` to get text messages only (excludes 'email').
 
 ### Empty State UI
 
@@ -334,6 +351,35 @@ Verification:
 
 **Suggestion for similar tasks:**
 <Recommendation>
+
+---
+
+## SR Engineer Review Notes (Pre-Implementation)
+
+**Reviewed:** 2025-12-28
+**Reviewer:** SR Engineer
+
+### CRITICAL Technical Corrections
+
+1. **IPC Endpoint Correction:**
+   - `window.api.communications` does NOT exist
+   - MUST use `window.api.transactions.getDetails(transactionId)` instead
+   - Filter the `communications` array by `channel === 'sms' || channel === 'imessage'`
+
+2. **Available Channel Values:**
+   - `'email'` - Email communications
+   - `'sms'` - SMS text messages
+   - `'imessage'` - iMessage text messages
+   - Filter to exclude emails, include only SMS and iMessage
+
+3. **Execution Recommendation:**
+   - **Parallel Safe:** No - Phase 3 must be sequential
+   - TASK-702 -> TASK-703 -> TASK-704 (strict order)
+   - Can run in parallel with Phase 1 (TASK-700) and Phase 4 (TASK-705)
+
+4. **Dependencies:**
+   - None (this is the first task in the Messages feature chain)
+   - BLOCKS: TASK-703, TASK-704
 
 ---
 

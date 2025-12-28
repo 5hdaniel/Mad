@@ -32,7 +32,7 @@ This sprint combines bug fixes, UI enhancements, and a new feature:
 
 | Task | Title | Category | Est. Turns | Status |
 |------|-------|----------|------------|--------|
-| TASK-701 | HTML Email Rendering | ui | 6-10 | Pending |
+| TASK-701 | HTML Email Rendering | ui | 8-12 | Pending |
 
 ### Phase 3: Text Messages Feature (HIGH Priority)
 **Execution:** Sequential (each builds on prior)
@@ -42,7 +42,7 @@ This sprint combines bug fixes, UI enhancements, and a new feature:
 |------|-------|----------|------------|--------|
 | TASK-702 | Add Messages Tab Infrastructure | ui | 4-6 | Pending |
 | TASK-703 | Message Thread Display Component | ui | 6-8 | Pending |
-| TASK-704 | Attach/Unlink Messages Modal | ui | 6-8 | Pending |
+| TASK-704 | Attach/Unlink Messages Modal | ui | 10-14 | Pending |
 
 ### Phase 4: Dashboard Enhancement (MEDIUM Priority)
 **Execution:** Independent
@@ -80,10 +80,52 @@ graph TD
     T703 --> T704
 ```
 
+---
+
+## Execution Order (SR Engineer Recommendation)
+
+### Batch 1: Parallel (Can start immediately)
+| Task | Title | Est. Turns | Parallel Safe |
+|------|-------|------------|---------------|
+| TASK-700 | Fix Contact Selection Issue | 4-8 | Yes - modifies contact selection only |
+| TASK-701 | HTML Email Rendering | 8-12 | Yes - modifies EmailViewModal only |
+| TASK-705 | Dashboard AI Detection Display | 6-10 | Yes - modifies Dashboard.tsx only |
+
+**Note:** These 3 tasks can run in parallel using separate Claude Web sessions.
+
+### Batch 2: Sequential (Phase 3 - Messages Feature)
+| Order | Task | Title | Est. Turns | Wait For |
+|-------|------|-------|------------|----------|
+| 1 | TASK-702 | Add Messages Tab Infrastructure | 4-6 | Can start with Batch 1 |
+| 2 | TASK-703 | Message Thread Display Component | 6-8 | TASK-702 merged |
+| 3 | TASK-704 | Attach/Unlink Messages Modal | 10-14 | TASK-703 merged |
+
+**CRITICAL:** Phase 3 MUST be sequential. Each task depends on the previous.
+
+### Execution Timeline (Optimal)
+
+```
+Time →
+├─── Batch 1 (Parallel) ───────────────────┤
+│  TASK-700: Contact Fix (4-8 turns)       │
+│  TASK-701: HTML Email (8-12 turns)       │
+│  TASK-705: Dashboard AI (6-10 turns)     │
+│  TASK-702: Messages Tab (4-6 turns)      │
+├──────────────────────────────────────────┤
+│           ↓ (TASK-702 merged)            │
+├─── Batch 2a ─────────────────────────────┤
+│  TASK-703: Message Thread (6-8 turns)    │
+├──────────────────────────────────────────┤
+│           ↓ (TASK-703 merged)            │
+├─── Batch 2b ─────────────────────────────┤
+│  TASK-704: Attach/Unlink (10-14 turns)   │
+└──────────────────────────────────────────┘
+```
+
 **Parallel Execution Notes:**
-- Phase 1 and Phase 2 can run in parallel (different files)
+- Batch 1 can run 4 tasks in parallel (different files, no conflicts)
 - Phase 3 is strictly sequential (TASK-702 -> TASK-703 -> TASK-704)
-- Phase 4 is independent and can run in parallel with any phase
+- TASK-702 can start immediately alongside Batch 1
 
 ---
 
@@ -103,11 +145,22 @@ graph TD
 | Metric | Estimate |
 |--------|----------|
 | Total Tasks | 6 |
-| Total Turns | 32-50 |
-| Total Tokens | ~160K-250K |
-| Total Time | ~4-6 hours |
+| Total Turns | 39-59 |
+| Total Tokens | ~195K-310K |
+| Total Time | ~5-8 hours |
 
-**Note:** Estimates based on ui category (1.0x multiplier). Actual may vary based on investigation findings for TASK-700.
+**Updated Estimates (SR Engineer Review):**
+
+| Task | Original Est. | Updated Est. | Change Reason |
+|------|---------------|--------------|---------------|
+| TASK-700 | 4-8 | 4-8 | No change |
+| TASK-701 | 6-10 | 8-12 | +2 for dependency install, CSP verification |
+| TASK-702 | 4-6 | 4-6 | No change |
+| TASK-703 | 6-8 | 6-8 | No change |
+| TASK-704 | 6-8 | 10-14 | +4 for required IPC handler creation |
+| TASK-705 | 6-10 | 6-10 | No change |
+
+**Note:** TASK-704 increased significantly because IPC handlers must be created (not optional).
 
 ---
 
@@ -141,26 +194,48 @@ graph TD
 
 ## Task List Summary
 
-| ID | Title | Phase | Priority | Status |
-|----|-------|-------|----------|--------|
-| TASK-700 | Fix Contact Selection Issue | 1 | HIGH | Pending |
-| TASK-701 | HTML Email Rendering | 2 | MEDIUM | Pending |
-| TASK-702 | Add Messages Tab Infrastructure | 3 | HIGH | Pending |
-| TASK-703 | Message Thread Display Component | 3 | HIGH | Pending |
-| TASK-704 | Attach/Unlink Messages Modal | 3 | HIGH | Pending |
-| TASK-705 | Dashboard AI Detection Display | 4 | MEDIUM | Pending |
+| ID | Title | Phase | Priority | Parallel | Est. Turns | Status |
+|----|-------|-------|----------|----------|------------|--------|
+| TASK-700 | Fix Contact Selection Issue | 1 | HIGH | Yes | 4-8 | Pending |
+| TASK-701 | HTML Email Rendering | 2 | MEDIUM | Yes | 8-12 | Pending |
+| TASK-702 | Add Messages Tab Infrastructure | 3 | HIGH | Yes* | 4-6 | Pending |
+| TASK-703 | Message Thread Display Component | 3 | HIGH | No | 6-8 | Pending |
+| TASK-704 | Attach/Unlink Messages Modal | 3 | HIGH | No | 10-14 | Pending |
+| TASK-705 | Dashboard AI Detection Display | 4 | MEDIUM | Yes | 6-10 | Pending |
+
+*TASK-702 can run in parallel with Batch 1, but TASK-703/704 must wait for it.
 
 ---
 
 ## SR Engineer Technical Review
 
-**Status:** Awaiting Review
+**Status:** COMPLETED
+**Review Date:** 2025-12-28
 
-Before task assignment, SR Engineer must review:
-1. Identify shared file dependencies across tasks
-2. Confirm parallel vs sequential execution recommendations
-3. Add technical considerations to each task file
-4. Flag any architectural concerns
+### Review Summary
+
+All 6 task files have been reviewed and updated with:
+- Technical corrections for IPC endpoints
+- File path clarifications
+- Execution recommendations (parallel vs sequential)
+- Pre-implementation notes added to each task
+
+### Key Corrections Applied
+
+| Task | Critical Correction |
+|------|---------------------|
+| TASK-700 | Verify edit modal is `AuditTransactionModal.tsx`, not separate file |
+| TASK-701 | Pre-install `dompurify @types/dompurify`, verify CSP settings |
+| TASK-702 | Use `transactions.getDetails`, NOT `window.api.communications` |
+| TASK-703 | Use `body_text` with fallback to `body_plain` |
+| TASK-704 | MUST create IPC handlers (they don't exist) - estimate increased |
+| TASK-705 | Use `transactions.getAll` + filter, NOT `getPendingReviewCount` |
+
+### Architectural Concerns
+
+1. **TASK-704 Scope:** Originally estimated as UI-only, but requires creating 3 new IPC handlers in `transactionBridge.ts` and exposing in `preload.ts`. This is backend + frontend work.
+
+2. **No `window.api.communications`:** This namespace does not exist. Engineers must use existing `transactions.getDetails` endpoint.
 
 ---
 

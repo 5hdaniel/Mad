@@ -65,20 +65,23 @@ SPRINT-006 and SPRINT-007 implemented:
 
 ## Implementation Notes
 
-### Data Fetching
+### Data Fetching - CORRECTED
 
-Need to get count of transactions with `detection_status = 'pending_review'`:
+**IMPORTANT:** There is no `getPendingReviewCount` endpoint. Use `transactions.getAll` and filter:
 
 ```typescript
-// Check if this IPC exists, or use transactions.getAll and filter
-const pendingCount = await window.api.transactions.getPendingReviewCount(userId);
-
-// Or if no specific endpoint:
+// CORRECT approach - use existing endpoint and filter
 const allTransactions = await window.api.transactions.getAll(userId);
-const pendingCount = allTransactions.filter(
+const pendingTransactions = allTransactions.filter(
   t => t.detection_status === 'pending_review'
-).length;
+);
+const pendingCount = pendingTransactions.length;
 ```
+
+**DO NOT attempt to use:**
+- `window.api.transactions.getPendingReviewCount()` - does not exist
+
+The filtering is done client-side, which is acceptable for dashboard display purposes.
 
 ### Dashboard Integration
 
@@ -366,6 +369,31 @@ Verification:
 
 **Suggestion for similar tasks:**
 <Recommendation>
+
+---
+
+## SR Engineer Review Notes (Pre-Implementation)
+
+**Reviewed:** 2025-12-28
+**Reviewer:** SR Engineer
+
+### Technical Corrections
+
+1. **Data Fetching Approach:**
+   - No `getPendingReviewCount` endpoint exists
+   - Use `transactions.getAll(userId)` and filter by `detection_status === 'pending_review'`
+   - Client-side filtering is acceptable for dashboard counts
+
+2. **Execution Recommendation:**
+   - **Parallel Safe:** Yes - modifies Dashboard.tsx only
+   - Can run in parallel with TASK-700, TASK-701, and Phase 3 tasks
+
+3. **Dependencies:**
+   - None (independent task)
+
+4. **Performance Note:**
+   - Consider caching or memoizing the filtered count to avoid unnecessary re-renders
+   - Use `useMemo` for the pending count calculation
 
 ---
 

@@ -52,9 +52,11 @@ Before implementing, reproduce and document:
 | File | Purpose |
 |------|---------|
 | `src/components/ContactSelectModal.tsx` | Main contact selection modal |
-| `src/components/AuditTransactionModal.tsx` | Transaction creation modal |
-| `src/components/transaction/components/EditTransactionModal.tsx` | Transaction edit modal |
+| `src/components/AuditTransactionModal.tsx` | Transaction creation/edit modal (verify - may contain edit functionality) |
+| `src/components/transaction/components/EditTransactionModal.tsx` | Transaction edit modal (verify if this exists or if edit is in AuditTransactionModal) |
 | `src/components/transactionDetailsModule/components/TransactionContactsTab.tsx` | Contact display in details |
+
+**SR Engineer Note:** Verify which modal handles editing - it may be `AuditTransactionModal.tsx` rather than a separate `EditTransactionModal.tsx`. The codebase may use `AuditTransactionModal` for both create and edit flows.
 
 ## Acceptance Criteria
 
@@ -275,6 +277,26 @@ Verification:
 
 **Suggestion for similar tasks:**
 <Recommendation>
+
+---
+
+## SR Engineer Review Notes (Pre-Implementation)
+
+**Reviewed:** 2025-12-28
+**Reviewer:** SR Engineer
+
+### Technical Corrections
+
+1. **File Path Clarification:**
+   - Verify that the edit modal is `AuditTransactionModal.tsx`, not a separate `EditTransactionModal.tsx`
+   - The codebase may use a single modal for both create and edit operations
+
+2. **Execution Recommendation:**
+   - **Parallel Safe:** Yes - this task modifies contact selection components only
+   - Can run in parallel with TASK-701 and TASK-705
+
+3. **Dependencies:**
+   - None identified
 
 ---
 

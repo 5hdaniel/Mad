@@ -72,27 +72,40 @@ Implement the ability to attach new message threads to a transaction and unlink 
 
 ## Implementation Notes
 
-### IPC for Message Linking
+### IPC for Message Linking - CRITICAL
 
-Check if these endpoints exist, create if needed:
+**IMPORTANT:** These IPC handlers DO NOT EXIST and MUST be created as part of this task.
 
+**Required New Endpoints:**
 ```typescript
 // Get unlinked messages for a user
-window.api.messages.getUnlinked(userId: string): Promise<Message[]>
+window.api.transactions.getUnlinkedMessages(userId: string): Promise<Communication[]>
 
 // Link message(s) to transaction
-window.api.messages.linkToTransaction(
+window.api.transactions.linkMessages(
   messageIds: string[],
   transactionId: string
 ): Promise<void>
 
 // Unlink message from transaction (sets transaction_id to null)
-window.api.messages.unlinkFromTransaction(messageId: string): Promise<void>
+window.api.transactions.unlinkMessages(messageIds: string[]): Promise<void>
 ```
 
-If IPC handlers don't exist, they need to be created in:
-- `electron/handlers/messageHandlers.ts` (or similar)
-- `electron/preload.ts` (expose in API)
+**Implementation Locations (REQUIRED):**
+
+1. **Extend `transactionBridge.ts`** (recommended approach):
+   - Add `linkMessages`, `unlinkMessages`, `getUnlinkedMessages` methods
+   - Follow existing patterns in this file
+
+2. **Update `preload.ts`**:
+   - Expose new methods in `window.api.transactions`
+
+3. **Add Database Queries**:
+   - `getUnlinkedMessages`: SELECT from communications WHERE transaction_id IS NULL AND channel IN ('sms', 'imessage')
+   - `linkMessages`: UPDATE communications SET transaction_id = ? WHERE id IN (?)
+   - `unlinkMessages`: UPDATE communications SET transaction_id = NULL WHERE id IN (?)
+
+**This is a CRITICAL change** - the engineer MUST create these IPC handlers. This is not optional.
 
 ### AttachMessagesModal Component
 
@@ -292,21 +305,22 @@ This task's PR MUST pass:
 **Category:** `ui`
 
 **Estimated Totals:**
-- **Turns:** 6-8
-- **Tokens:** ~35K-50K
-- **Time:** ~1-1.5h
+- **Turns:** 10-14
+- **Tokens:** ~55K-75K
+- **Time:** ~2-3h
 
 **Estimation Assumptions:**
 
 | Factor | Assumption | Est. Turns |
 |--------|------------|------------|
 | Files to create | 2 modals | +2-3 |
-| Files to modify | 3 files | +1-2 |
-| IPC handlers | May need 1-2 new handlers | +1-2 |
-| Code volume | ~250-300 lines | +1-2 |
-| Test complexity | Medium | +1-2 |
+| Files to modify | 3 UI files | +1-2 |
+| IPC handlers | MUST create 3 new handlers | +3-4 |
+| Bridge/preload updates | Required for new IPC | +2-3 |
+| Code volume | ~350-450 lines | +2-3 |
+| Test complexity | Medium-High (IPC + UI) | +2-3 |
 
-**Confidence:** Medium (may need IPC handler creation)
+**Confidence:** Medium (IPC handler creation is required, not optional)
 
 **Risk factors:**
 - IPC endpoint may not exist, requiring backend work
@@ -413,6 +427,39 @@ Verification:
 
 **Suggestion for similar tasks:**
 <Recommendation>
+
+---
+
+## SR Engineer Review Notes (Pre-Implementation)
+
+**Reviewed:** 2025-12-28
+**Reviewer:** SR Engineer
+
+### CRITICAL Technical Corrections
+
+1. **IPC Handlers DO NOT EXIST:**
+   - `window.api.messages.*` namespace does not exist
+   - MUST create new handlers in `transactionBridge.ts`:
+     - `linkMessages(messageIds: string[], transactionId: string)`
+     - `unlinkMessages(messageIds: string[])`
+     - `getUnlinkedMessages(userId: string)`
+   - MUST expose in `preload.ts` under `window.api.transactions`
+
+2. **Estimate Updated:**
+   - Increased to 10-14 turns due to required IPC handler creation
+   - This is backend + frontend work, not just UI
+
+3. **Execution Recommendation:**
+   - **Parallel Safe:** No - must wait for TASK-702 and TASK-703 to merge first
+   - Sequence: TASK-702 -> TASK-703 -> TASK-704
+
+4. **Dependencies:**
+   - REQUIRES: TASK-702 (Messages Tab Infrastructure)
+   - REQUIRES: TASK-703 (Message Thread Display)
+
+5. **Scope Expansion:**
+   - Original estimate underestimated IPC work
+   - Engineer should plan for bridge/preload modifications
 
 ---
 
