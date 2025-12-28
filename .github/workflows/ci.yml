@@ -24,7 +24,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0  # Fetch all history for proper branch comparison
+
+      - name: Fetch base branch for PR comparison
+        if: github.event_name == 'pull_request'
+        run: git fetch origin ${{ github.base_ref }}
 
       - name: Check for docs-only changes
         id: filter
