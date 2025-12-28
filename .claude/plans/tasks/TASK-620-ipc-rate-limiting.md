@@ -241,9 +241,9 @@ Completion:
 
 - **Before**: No IPC rate limiting
 - **After**: 3 expensive handlers protected with rate limiting
-- **Actual Turns**: 4 (Est: 6-8)
-- **Actual Tokens**: ~16K (Est: ~30K)
-- **Actual Time**: ~15 min
+- **Actual Turns**: 6 (Est: 6-8)
+- **Actual Tokens**: ~24K (Est: ~30K)
+- **Actual Time**: ~25 min (including debugging)
 - **PR**: https://github.com/5hdaniel/Mad/pull/233
 
 ### Implementation Details
@@ -278,7 +278,9 @@ Completion:
 
 **Issues encountered:**
 - Worktree needed npm install before type-check/lint could run (expected)
-- No other issues encountered
+- Existing transaction-handlers.test.ts and transaction-handlers.integration.test.ts
+  needed mocks for the rateLimiters to prevent rate limiting during test runs.
+  Added jest.mock for rateLimiters to both test files.
 
 ---
 
