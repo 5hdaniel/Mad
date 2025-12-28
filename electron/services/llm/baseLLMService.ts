@@ -14,6 +14,7 @@ import {
   TokenUsage,
 } from './tokenCounter';
 import type { LLMSettings } from '../../types/models';
+import logService from '../logService';
 
 /**
  * Interface for database operations needed by the service.
@@ -347,16 +348,16 @@ export abstract class BaseLLMService {
     message: string,
     data?: unknown
   ): void {
-    const logMessage = `[LLM:${this.provider}] ${message}`;
+    const context = `LLM:${this.provider}`;
     switch (level) {
       case 'info':
-        console.log(logMessage, data ?? '');
+        logService.info(message, context, data ? { data } : undefined);
         break;
       case 'warn':
-        console.warn(logMessage, data ?? '');
+        logService.warn(message, context, data ? { data } : undefined);
         break;
       case 'error':
-        console.error(logMessage, data ?? '');
+        logService.error(message, context, data ? { data } : undefined);
         break;
     }
   }

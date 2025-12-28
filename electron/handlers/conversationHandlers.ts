@@ -17,6 +17,7 @@ import {
   getContactNames,
   resolveContactName,
 } from "../services/contactsService";
+import logService from "../services/logService";
 import { macTimestampToDate, getYearsAgoTimestamp } from "../utils/dateUtils";
 import { createTimestampedFilename } from "../utils/fileUtils";
 import { getMessageText } from "../utils/messageParser";
@@ -31,8 +32,9 @@ let handlersRegistered = false;
 export function registerConversationHandlers(mainWindow: BrowserWindow): void {
   // Prevent double registration
   if (handlersRegistered) {
-    console.warn(
-      "[ConversationHandlers] Handlers already registered, skipping duplicate registration"
+    logService.warn(
+      "Handlers already registered, skipping duplicate registration",
+      "ConversationHandlers"
     );
     return;
   }
@@ -210,9 +212,10 @@ export function registerConversationHandlers(mainWindow: BrowserWindow): void {
                 }
               }
             } catch (err) {
-              console.error(
-                `Error processing group chat ${conv.chat_identifier}:`,
-                err
+              logService.error(
+                `Error processing group chat ${conv.chat_identifier}`,
+                "ConversationHandlers",
+                { error: err }
               );
             }
 
@@ -355,13 +358,13 @@ export function registerConversationHandlers(mainWindow: BrowserWindow): void {
           try {
             await dbClose2();
           } catch (closeError) {
-            console.error("Error closing db2:", closeError);
+            logService.error("Error closing db2", "ConversationHandlers", { error: closeError });
           }
         }
         throw error;
       }
     } catch (error) {
-      console.error("Error getting conversations:", error);
+      logService.error("Error getting conversations", "ConversationHandlers", { error });
       return {
         success: false,
         error: (error as Error).message,
@@ -421,7 +424,7 @@ export function registerConversationHandlers(mainWindow: BrowserWindow): void {
           throw error;
         }
       } catch (error) {
-        console.error("Error getting messages:", error);
+        logService.error("Error getting messages", "ConversationHandlers", { error });
         return {
           success: false,
           error: (error as Error).message,
@@ -438,7 +441,7 @@ export function registerConversationHandlers(mainWindow: BrowserWindow): void {
         await shell.openPath(folderPath);
         return { success: true };
       } catch (error) {
-        console.error("Error opening folder:", error);
+        logService.error("Error opening folder", "ConversationHandlers", { error, folderPath });
         return { success: false, error: (error as Error).message };
       }
     }
@@ -619,7 +622,7 @@ export function registerConversationHandlers(mainWindow: BrowserWindow): void {
               await fs.rename(filePath, newPath);
               finalPath = newPath;
             } catch (renameError) {
-              console.error("Error renaming folder:", renameError);
+              logService.error("Error renaming folder", "ConversationHandlers", { error: renameError });
               // Keep original path if rename fails
             }
           }
@@ -634,7 +637,7 @@ export function registerConversationHandlers(mainWindow: BrowserWindow): void {
           throw error;
         }
       } catch (error) {
-        console.error("Error exporting conversations:", error);
+        logService.error("Error exporting conversations", "ConversationHandlers", { error });
         return {
           success: false,
           error: (error as Error).message,

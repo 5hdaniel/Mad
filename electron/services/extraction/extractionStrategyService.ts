@@ -18,6 +18,7 @@
 
 import { LLMConfigService, LLMUserConfig } from '../llm/llmConfigService';
 import { LLMProvider } from '../llm/types';
+import logService from '../logService';
 
 // ============================================================================
 // Types
@@ -166,7 +167,7 @@ export class ExtractionStrategyService {
         estimatedTokenCost: this.estimateTokenCost(messageCount),
       };
     } catch (error) {
-      console.error('[StrategySelector] Error selecting strategy:', error);
+      logService.error('[StrategySelector] Error selecting strategy:', 'ExtractionStrategy', { error });
       return {
         method: 'pattern',
         reason: 'Error checking LLM availability, using pattern matching',

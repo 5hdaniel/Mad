@@ -8,6 +8,7 @@ import fs from "fs/promises";
 import sqlite3 from "sqlite3";
 import { promisify } from "util";
 import { exec } from "child_process";
+import logService from "./logService";
 
 const {
   normalizePhoneNumber,
@@ -107,7 +108,7 @@ async function getContactNames(): Promise<ContactNamesResult> {
         .filter((f) => f);
 
       if (dbFiles.length === 0) {
-        console.warn("[ContactsService] No .abcddb files found in", baseDir);
+        logService.warn("[ContactsService] No .abcddb files found in", "ContactsService", { baseDir });
         lastError = new Error("No contacts database files found");
       }
 
@@ -128,8 +129,9 @@ async function getContactNames(): Promise<ContactNamesResult> {
 
           // If this database has sufficient records, use it
           if (recordCount[0].count > MIN_CONTACT_RECORD_COUNT) {
-            console.log(
+            logService.info(
               `[ContactsService] Successfully loaded contacts from ${dbPath}`,
+              "ContactsService",
             );
             const result = await loadContactsFromDatabase(dbPath);
             const contactCount = Object.keys(result.contactMap).length;
@@ -142,22 +144,25 @@ async function getContactNames(): Promise<ContactNamesResult> {
               },
             };
           } else {
-            console.warn(
+            logService.warn(
               `[ContactsService] Database ${dbPath} has insufficient records (${recordCount[0].count})`,
+              "ContactsService",
             );
           }
         } catch (err) {
-          console.error(
+          logService.error(
             `[ContactsService] Failed to read database ${dbPath}:`,
-            (err as Error).message,
+            "ContactsService",
+            { error: (err as Error).message },
           );
           lastError = err as Error;
         }
       }
     } catch (err) {
-      console.error(
+      logService.error(
         "[ContactsService] Error finding database files:",
-        (err as Error).message,
+        "ContactsService",
+        { error: (err as Error).message },
       );
       lastError = err as Error;
     }
@@ -168,16 +173,18 @@ async function getContactNames(): Promise<ContactNamesResult> {
       DEFAULT_CONTACTS_DB,
     );
     attemptedPaths.push(defaultPath);
-    console.log(
+    logService.info(
       "[ContactsService] Attempting fallback to default path:",
-      defaultPath,
+      "ContactsService",
+      { defaultPath },
     );
     const result = await loadContactsFromDatabase(defaultPath);
     const contactCount = Object.keys(result.contactMap).length;
 
     if (contactCount > 0) {
-      console.log(
+      logService.info(
         `[ContactsService] Successfully loaded ${contactCount} contacts from fallback path`,
+        "ContactsService",
       );
       return {
         ...result,
@@ -191,9 +198,10 @@ async function getContactNames(): Promise<ContactNamesResult> {
       throw new Error("No contacts could be loaded from any database");
     }
   } catch (error) {
-    console.error(
+    logService.error(
       "[ContactsService] Error accessing contacts database:",
-      error,
+      "ContactsService",
+      { error },
     );
     return {
       contactMap,
@@ -224,9 +232,10 @@ async function loadContactsFromDatabase(
   try {
     await fs.access(contactsDbPath);
   } catch (error) {
-    console.error(
+    logService.error(
       `[ContactsService] Cannot access database at ${contactsDbPath}:`,
-      (error as Error).message,
+      "ContactsService",
+      { error: (error as Error).message },
     );
     return { contactMap, phoneToContactInfo };
   }
@@ -265,8 +274,9 @@ async function loadContactsFromDatabase(
 
     await dbClose();
 
-    console.log(
+    logService.info(
       `[ContactsService] Loaded ${contactsResult.length} contact records, ${phonesResult.length} phones, ${emailsResult.length} emails`,
+      "ContactsService",
     );
 
     // Build person map
@@ -279,9 +289,10 @@ async function loadContactsFromDatabase(
     // Build lookup maps
     buildContactMaps(personMap, contactMap, phoneToContactInfo);
   } catch (error) {
-    console.error(
+    logService.error(
       "[ContactsService] Error accessing contacts database:",
-      error,
+      "ContactsService",
+      { error },
     );
     throw error;
   }

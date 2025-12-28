@@ -211,7 +211,7 @@ export const registerTransactionHandlers = (
 
         // Debug: log detection fields being returned to frontend
         if (transactions.length > 0) {
-          console.log("[DEBUG transactions:get-all] First transaction detection fields:", {
+          logService.debug("First transaction detection fields", "TransactionHandlers", {
             id: transactions[0].id,
             detection_source: transactions[0].detection_source,
             detection_status: transactions[0].detection_status,

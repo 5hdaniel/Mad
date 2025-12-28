@@ -10,6 +10,7 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import type { MessageInput } from '../extraction/types';
+import logService from '../logService';
 
 // ============================================================================
 // Types
@@ -315,8 +316,9 @@ export function parseBatchResponse(
 
     // Warn on length mismatch (don't fail)
     if (parsedResults.length !== batch.emails.length) {
-      console.warn(
-        `[BatchParser] Response count mismatch: expected ${batch.emails.length}, got ${parsedResults.length}`
+      logService.warn(
+        `[BatchParser] Response count mismatch: expected ${batch.emails.length}, got ${parsedResults.length}`,
+        "BatchLLMService"
       );
     }
 
@@ -402,7 +404,7 @@ export async function processBatchErrors(
       fallbackResults.push(result);
     } catch {
       // Skip if individual analysis also fails
-      console.warn(`[BatchParser] Fallback failed for email ${errorItem.emailId}`);
+      logService.warn(`[BatchParser] Fallback failed for email ${errorItem.emailId}`, "BatchLLMService");
     }
   }
 

@@ -13,6 +13,7 @@ import path from "path";
 import fs from "fs";
 import crypto from "crypto";
 import { app } from "electron";
+import logService from "./logService";
 import type {
   User,
   NewUser,
@@ -39,7 +40,6 @@ import type {
 
 import { DatabaseError, NotFoundError } from "../types";
 import { databaseEncryptionService } from "./databaseEncryptionService";
-import logService from "./logService";
 import type { AuditLogEntry, AuditLogDbRow } from "./auditService";
 import { validateFields } from "../utils/sqlFieldWhitelist";
 
@@ -1783,8 +1783,9 @@ class DatabaseService implements IDatabaseService {
   async clearAllSessions(): Promise<void> {
     const sql = "DELETE FROM sessions";
     this._run(sql, []);
-    console.log(
+    logService.info(
       "[DatabaseService] Cleared all sessions for session-only OAuth",
+      "DatabaseService",
     );
   }
 
@@ -1795,8 +1796,9 @@ class DatabaseService implements IDatabaseService {
   async clearAllOAuthTokens(): Promise<void> {
     const sql = "DELETE FROM oauth_tokens";
     this._run(sql, []);
-    console.log(
+    logService.info(
       "[DatabaseService] Cleared all OAuth tokens for session-only OAuth",
+      "DatabaseService",
     );
   }
 
@@ -2448,7 +2450,7 @@ class DatabaseService implements IDatabaseService {
     const id = crypto.randomUUID();
 
     // Debug log to trace detection field values
-    console.log("[DEBUG createTransaction] detection fields:", {
+    logService.debug("[DEBUG createTransaction] detection fields:", "DatabaseService", {
       detection_source: transactionData.detection_source,
       detection_status: transactionData.detection_status,
       detection_confidence: transactionData.detection_confidence,
@@ -2501,7 +2503,7 @@ class DatabaseService implements IDatabaseService {
       throw new DatabaseError("Failed to create transaction");
     }
     // Debug: verify detection fields were saved
-    console.log("[DEBUG createTransaction] saved transaction detection fields:", {
+    logService.debug("[DEBUG createTransaction] saved transaction detection fields:", "DatabaseService", {
       detection_source: transaction.detection_source,
       detection_status: transaction.detection_status,
       detection_confidence: transaction.detection_confidence,

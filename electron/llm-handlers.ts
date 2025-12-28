@@ -10,6 +10,7 @@
 
 import { ipcMain } from 'electron';
 import type { IpcMainInvokeEvent } from 'electron';
+import logService from './services/logService';
 import {
   LLMConfigService,
   type LLMUserConfig,
@@ -93,7 +94,7 @@ export function registerLLMHandlers(configService: LLMConfigService): void {
         const config = await configService.getUserConfig(userId);
         return wrapResponse(config);
       } catch (error) {
-        console.error('[LLM Handler] Get config failed:', error);
+        logService.error('[LLM Handler] Get config failed:', 'LLMHandlers', { error });
         return wrapError(error);
       }
     }
@@ -115,10 +116,10 @@ export function registerLLMHandlers(configService: LLMConfigService): void {
       try {
         await configService.setApiKey(userId, provider, apiKey);
         // Log success without exposing the API key
-        console.log(`[LLM Handler] API key set for provider: ${provider}`);
+        logService.info(`[LLM Handler] API key set for provider: ${provider}`, 'LLMHandlers');
         return wrapResponse(undefined);
       } catch (error) {
-        console.error('[LLM Handler] Set API key failed:', error);
+        logService.error('[LLM Handler] Set API key failed:', 'LLMHandlers', { error });
         return wrapError(error);
       }
     }
@@ -140,7 +141,7 @@ export function registerLLMHandlers(configService: LLMConfigService): void {
         const isValid = await configService.validateApiKey(provider, apiKey);
         return wrapResponse(isValid);
       } catch (error) {
-        console.error('[LLM Handler] Validate key failed:', error);
+        logService.error('[LLM Handler] Validate key failed:', 'LLMHandlers', { error });
         return wrapError(error);
       }
     }
@@ -159,10 +160,10 @@ export function registerLLMHandlers(configService: LLMConfigService): void {
     ): Promise<LLMHandlerResponse<void>> => {
       try {
         await configService.removeApiKey(userId, provider);
-        console.log(`[LLM Handler] API key removed for provider: ${provider}`);
+        logService.info(`[LLM Handler] API key removed for provider: ${provider}`, 'LLMHandlers');
         return wrapResponse(undefined);
       } catch (error) {
-        console.error('[LLM Handler] Remove API key failed:', error);
+        logService.error('[LLM Handler] Remove API key failed:', 'LLMHandlers', { error });
         return wrapError(error);
       }
     }
@@ -183,7 +184,7 @@ export function registerLLMHandlers(configService: LLMConfigService): void {
         await configService.updatePreferences(userId, preferences);
         return wrapResponse(undefined);
       } catch (error) {
-        console.error('[LLM Handler] Update preferences failed:', error);
+        logService.error('[LLM Handler] Update preferences failed:', 'LLMHandlers', { error });
         return wrapError(error);
       }
     }
@@ -203,10 +204,10 @@ export function registerLLMHandlers(configService: LLMConfigService): void {
     ): Promise<LLMHandlerResponse<void>> => {
       try {
         await configService.recordConsent(userId, consent);
-        console.log(`[LLM Handler] Consent recorded: ${consent}`);
+        logService.info(`[LLM Handler] Consent recorded: ${consent}`, 'LLMHandlers');
         return wrapResponse(undefined);
       } catch (error) {
-        console.error('[LLM Handler] Record consent failed:', error);
+        logService.error('[LLM Handler] Record consent failed:', 'LLMHandlers', { error });
         return wrapError(error);
       }
     }
@@ -226,7 +227,7 @@ export function registerLLMHandlers(configService: LLMConfigService): void {
         const stats = await configService.getUsageStats(userId);
         return wrapResponse(stats);
       } catch (error) {
-        console.error('[LLM Handler] Get usage failed:', error);
+        logService.error('[LLM Handler] Get usage failed:', 'LLMHandlers', { error });
         return wrapError(error);
       }
     }
@@ -247,7 +248,7 @@ export function registerLLMHandlers(configService: LLMConfigService): void {
         const result = await configService.canUseLLM(userId);
         return wrapResponse(result);
       } catch (error) {
-        console.error('[LLM Handler] Can use check failed:', error);
+        logService.error('[LLM Handler] Can use check failed:', 'LLMHandlers', { error });
         return wrapError(error);
       }
     }

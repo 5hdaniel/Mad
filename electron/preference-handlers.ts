@@ -6,6 +6,7 @@
 import { ipcMain } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import supabaseService from "./services/supabaseService";
+import logService from "./services/logService";
 
 // Import validation utilities
 import {
@@ -33,7 +34,7 @@ export function registerPreferenceHandlers(): void {
       userId: string,
     ): Promise<PreferenceResponse> => {
       try {
-        console.log("[Preferences] Getting preferences for user:", userId);
+        logService.info("[Preferences] Getting preferences", "Preferences", { userId });
 
         // Validate input
         const validatedUserId = validateUserId(userId)!;
@@ -46,7 +47,7 @@ export function registerPreferenceHandlers(): void {
           preferences: preferences || {},
         };
       } catch (error) {
-        console.error("[Preferences] Failed to get preferences:", error);
+        logService.error("[Preferences] Failed to get preferences:", "Preferences", { error });
         if (error instanceof ValidationError) {
           return {
             success: false,
@@ -70,7 +71,7 @@ export function registerPreferenceHandlers(): void {
       preferences: unknown,
     ): Promise<PreferenceResponse> => {
       try {
-        console.log("[Preferences] Saving preferences for user:", userId);
+        logService.info("[Preferences] Saving preferences", "Preferences", { userId });
 
         // Validate inputs
         const validatedUserId = validateUserId(userId)!;
@@ -97,7 +98,7 @@ export function registerPreferenceHandlers(): void {
           success: true,
         };
       } catch (error) {
-        console.error("[Preferences] Failed to save preferences:", error);
+        logService.error("[Preferences] Failed to save preferences:", "Preferences", { error });
         if (error instanceof ValidationError) {
           return {
             success: false,
@@ -121,7 +122,7 @@ export function registerPreferenceHandlers(): void {
       partialPreferences: unknown,
     ): Promise<PreferenceResponse> => {
       try {
-        console.log("[Preferences] Updating preferences for user:", userId);
+        logService.info("[Preferences] Updating preferences", "Preferences", { userId });
 
         // Validate inputs
         const validatedUserId = validateUserId(userId)!;
@@ -157,7 +158,7 @@ export function registerPreferenceHandlers(): void {
           preferences: updatedPreferences,
         };
       } catch (error) {
-        console.error("[Preferences] Failed to update preferences:", error);
+        logService.error("[Preferences] Failed to update preferences:", "Preferences", { error });
         if (error instanceof ValidationError) {
           return {
             success: false,
@@ -172,7 +173,7 @@ export function registerPreferenceHandlers(): void {
     },
   );
 
-  console.log("[Preferences] Handlers registered");
+  logService.info("Handlers registered", "Preferences");
 }
 
 /**
