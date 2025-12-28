@@ -316,15 +316,20 @@ export async function handleMicrosoftLogin(
             mainWindow.webContents.send("microsoft:login-pending", {
               success: true,
               pendingLogin: true,
-              userInfo,
-              tokens: {
-                access_token: accessToken,
-                refresh_token: refreshToken,
-                expires_in: tokens.expires_in,
-                scope: tokens.scope,
+              oauthData: {
+                provider: "microsoft" as const,
+                userInfo,
+                tokens: {
+                  access_token: accessToken,
+                  refresh_token: refreshToken,
+                  expires_at: tokens.expires_in
+                    ? new Date(Date.now() + tokens.expires_in * 1000).toISOString()
+                    : new Date(Date.now() + 3600 * 1000).toISOString(),
+                  scopes: tokens.scope ? tokens.scope.split(" ") : [],
+                },
+                cloudUser,
+                subscription: subscription ?? undefined,
               },
-              cloudUser,
-              subscription: subscription ?? undefined,
             });
           }
           return;

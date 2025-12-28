@@ -253,13 +253,26 @@ export function useAppStateMachine(): AppStateMachine {
 
       // POST-DB FLOW: Database initialized, user authenticated
       if (isAuthenticated && !needsTermsAcceptance) {
+        // Special case: Returning user just completed login via keychain-explanation
+        // They need to transition to the appropriate next step (dashboard/permissions)
+        // This is NOT part of OnboardingFlow, so we handle it explicitly
+        if (currentStep === "keychain-explanation") {
+          // Returning users go straight to dashboard or permissions
+          const needsPermissions = isMacOS && !hasPermissions;
+          if (needsPermissions) {
+            setCurrentStep("permissions");
+          } else {
+            setCurrentStep("dashboard");
+          }
+          return;
+        }
+
         // Onboarding steps handled by the new OnboardingFlow - don't interfere
         const onboardingSteps = [
           "phone-type-selection",
           "email-onboarding",
           "apple-driver-setup",
           "android-coming-soon",
-          "keychain-explanation",
           "permissions",
         ];
 

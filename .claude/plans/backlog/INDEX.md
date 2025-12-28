@@ -3,8 +3,8 @@
 This index tracks all backlog items with their current status and metadata.
 
 **Last Updated:** 2025-12-28
-**Total Items:** 128
-**Pending:** 88 | **In Progress:** 0 | **Completed:** 37 | **Obsolete:** 2 | **Deferred:** 2
+**Total Items:** 129
+**Pending:** 89 | **In Progress:** 0 | **Completed:** 37 | **Obsolete:** 2 | **Deferred:** 2
 
 ---
 
@@ -29,7 +29,7 @@ This index tracks all backlog items with their current status and metadata.
 - **Critical:** BACKLOG-030 (done), 032, 035 (done), 038 (done), 039 (done), 044 (done), 045 (done), 058 (done), 059 (done), 072 (done), 073 (done), 074 (done), **107**, **108**, **117**
 - **High:** BACKLOG-008, 009, 013, 016, 018, 020, 021, 023, 026, 031, 033, 037, 056, 060 (done), 061, 062, 063, 067, 075 (done), 076 (done), 084 (done), 085 (done), 088, 090, 091, 098, 099, **109**, **110**, **111**, **118**
 - **Medium:** Multiple (see full index), 077 (done), 078 (done), 079 (done), 081, 086, 087, 089, 092, 093, 094, 095, 096, 097, 100, 101, 102, **112**, **113**, **114**, **115**, **116**
-- **Low/Deferred:** BACKLOG-001, 003, 004, 010, 017, 069, 070, 071
+- **Low/Deferred:** BACKLOG-001, 003, 004, 010, 017, 069, 070, 071, **119**
 
 ### By Sprint Assignment
 - **SPRINT-001 (Onboarding Refactor):** Completed
@@ -177,6 +177,7 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-116 | Bring Google Login to Feature Parity with Microsoft | service | Medium | Pending | - | 15-20 | ~60K | 2-3h | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-116.md](BACKLOG-116.md) |
 | BACKLOG-117 | Fix Sprint 009 Auth Regressions (Preload Sandbox + Google Login) | service | Critical | Completed | - | 4-6 | ~20K | 30-60m | 2 | ~8K | 9m | 1 | ~5K | 5m | 0 | 0 | 0 | 3 | ~13K | 14m | -70% | [BACKLOG-117.md](BACKLOG-117.md) |
 | BACKLOG-118 | Fix OnboardingFlow React Hooks Order Bug | ui | High | Completed | - | 1-2 | ~10K | 15m | 1 | ~8K | 10m | - | - | - | - | - | - | 1 | ~8K | 10m | -50% | [BACKLOG-118.md](BACKLOG-118.md) |
+| BACKLOG-119 | Audit OAuth Handler Parity (Google/Microsoft) | refactor | Low | Pending | - | 13-18 | ~50K | 2-3h | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-119.md](BACKLOG-119.md) |
 
 ---
 
@@ -282,6 +283,7 @@ This index tracks all backlog items with their current status and metadata.
 - 2025-12-28: Created TASK-900 for BACKLOG-117 implementation
 - 2025-12-28: BACKLOG-117 completed - PR #242 merged (preload sandbox + Google login + timeout protection)
 - 2025-12-28: CI workflow fix - fetch base branch for PR comparison
+- 2025-12-28: Added BACKLOG-119 (OAuth Handler Parity Audit) - Low priority, prevents future Google/Microsoft handler drift
 
 ---
 

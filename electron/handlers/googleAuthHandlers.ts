@@ -272,6 +272,35 @@ export async function handleGoogleLogin(
           oauth_id: userInfo.id,
         });
 
+        // Check if database is initialized
+        if (!databaseService.isInitialized()) {
+          await logService.info(
+            "Database not initialized - deferring user creation",
+            "AuthHandlers"
+          );
+          // Validate subscription for pending login
+          const pendingSubscription = await supabaseService.validateSubscription(cloudUser.id);
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send("google:login-pending", {
+              success: true,
+              pendingLogin: true,
+              oauthData: {
+                provider: "google" as const,
+                userInfo,
+                tokens: {
+                  access_token: tokens.access_token,
+                  refresh_token: tokens.refresh_token ?? null,
+                  expires_at: tokens.expires_at ?? new Date(Date.now() + 3600 * 1000).toISOString(),
+                  scopes: tokens.scopes ?? [],
+                },
+                cloudUser,
+                subscription: pendingSubscription ?? undefined,
+              },
+            });
+          }
+          return;
+        }
+
         // Create or find user in local database
         let localUser = await databaseService.getUserByOAuthId("google", userInfo.id);
         const isNewUser = !localUser;
