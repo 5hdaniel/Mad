@@ -99,14 +99,82 @@ const attachments = details.transaction.communications
 
 ## SR Engineer Review Notes (Pre-Implementation)
 
+**Review Date:** 2025-12-28 | **Status:** APPROVED WITH NOTES
+
+### Branch Information (SR Engineer decides)
+- **Branch From:** develop (after TASK-702 merges)
+- **Branch Into:** develop
+- **Suggested Branch Name:** feature/TASK-706-attachments-tab
+
 ### Execution Classification
-- **Parallel Safe:** Partially - shares files with TASK-702
-- **Recommended:** Run AFTER TASK-702 merges to avoid conflicts on TransactionTab type
+- **Parallel Safe:** NO - shares files with TASK-702
+- **Depends On:** TASK-702 (must merge first - TransactionTab type conflict)
+- **Blocks:** None
+
+### Shared File Analysis
+
+| File | Tasks | Risk |
+|------|-------|------|
+| `types.ts` | TASK-702, TASK-706 | HIGH - TransactionTab union type |
+| `TransactionTabs.tsx` | TASK-702, TASK-706 | HIGH - Tab button additions |
+| `TransactionDetails.tsx` | TASK-702, TASK-706 | MEDIUM - Tab content switch |
+
+### CRITICAL Technical Corrections
+
+1. **Attachment Data Location:**
+   - Attachments are in `Communication.attachment_metadata` (JSON string)
+   - `Communication.has_attachments` indicates presence
+   - `Communication.attachment_count` provides count
+   - **NOT** in a separate `attachments` array on the response
+
+2. **Data Fetching Approach - CORRECTED:**
+   ```typescript
+   interface EmailAttachment {
+     id: string;
+     filename: string;
+     mimeType: string;
+     size: number;
+   }
+
+   const details = await window.api.transactions.getDetails(transaction.id);
+   const attachments = (details.transaction.communications || [])
+     .filter(c => c.channel === 'email' && c.has_attachments)
+     .flatMap(email => {
+       const metadata = email.attachment_metadata
+         ? JSON.parse(email.attachment_metadata) as EmailAttachment[]
+         : [];
+       return metadata.map(att => ({
+         ...att,
+         emailId: email.id,
+         emailSubject: email.subject || 'No Subject',
+         emailDate: email.sent_at
+       }));
+     });
+   ```
+
+3. **MISSING: Attachment Download IPC Handler**
+   - `window.api.attachments.download()` does NOT exist
+   - Email attachments are stored as API references, not local files
+   - **Options for engineer:**
+     - A) Display metadata only (filename, size) - no download (simplest)
+     - B) Create new IPC handlers to fetch from Gmail/Outlook APIs (complex, scope creep)
+   - **RECOMMENDATION:** Start with Option A, defer download to future task
+
+4. **Scope Clarification:**
+   - This task should focus on **email attachments only**
+   - iOS message attachments are handled separately by iOSMessagesParser
+   - Filter by `channel === 'email'`
 
 ### Technical Considerations
-- Attachment data comes from `communications.attachments` array
-- Verify attachment download mechanism exists (may need IPC handler)
-- Consider lazy loading for transactions with many attachments
+- Parse `attachment_metadata` JSON carefully (may be null/undefined)
+- Handle emails with many attachments (pagination/lazy load if >50)
+- File icons should use mimeType, not filename extension
+- Consider grouping by email rather than flat list
+
+### Risk Assessment
+- **LOW:** UI work follows established patterns
+- **MEDIUM:** attachment_metadata JSON parsing edge cases
+- **HIGH if download attempted:** Would require new IPC handlers + OAuth token management
 
 ## Do / Don't
 
