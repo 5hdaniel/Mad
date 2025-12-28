@@ -4,6 +4,30 @@
  */
 
 import { ipcRenderer } from "electron";
+import type { NewTransaction, Transaction, TransactionStatus } from "../types/models";
+
+/**
+ * Options for scanning emails for transactions
+ */
+export interface ScanOptions {
+  provider?: "google" | "microsoft";
+  dateRange?: {
+    start?: string | Date;
+    end?: string | Date;
+  };
+  propertyAddress?: string;
+  forceRescan?: boolean;
+}
+
+/**
+ * Options for enhanced transaction export
+ */
+export interface ExportEnhancedOptions {
+  exportFormat?: "pdf" | "csv" | "json" | "txt_eml" | "excel";
+  includeContacts?: boolean;
+  includeEmails?: boolean;
+  includeSummary?: boolean;
+}
 
 export const transactionBridge = {
   /**
@@ -12,7 +36,7 @@ export const transactionBridge = {
    * @param options - Scan options (provider, dateRange, propertyAddress, etc.)
    * @returns Scan results
    */
-  scan: (userId: string, options: unknown) =>
+  scan: (userId: string, options?: ScanOptions) =>
     ipcRenderer.invoke("transactions:scan", userId, options),
 
   /**
@@ -37,7 +61,7 @@ export const transactionBridge = {
    * @param transactionData - Transaction details (address, type, status, dates, etc.)
    * @returns Created transaction
    */
-  create: (userId: string, transactionData: unknown) =>
+  create: (userId: string, transactionData: NewTransaction) =>
     ipcRenderer.invoke("transactions:create", userId, transactionData),
 
   /**
@@ -46,7 +70,7 @@ export const transactionBridge = {
    * @param transactionData - Audited transaction details
    * @returns Created audited transaction
    */
-  createAudited: (userId: string, transactionData: unknown) =>
+  createAudited: (userId: string, transactionData: NewTransaction) =>
     ipcRenderer.invoke(
       "transactions:create-audited",
       userId,
@@ -75,7 +99,7 @@ export const transactionBridge = {
    * @param updates - Fields to update (status, dates, address, etc.)
    * @returns Updated transaction
    */
-  update: (transactionId: string, updates: unknown) =>
+  update: (transactionId: string, updates: Partial<Transaction>) =>
     ipcRenderer.invoke("transactions:update", transactionId, updates),
 
   /**
@@ -176,9 +200,9 @@ export const transactionBridge = {
    */
   reanalyze: (
     userId: string,
-    provider: string,
+    provider: "google" | "microsoft",
     propertyAddress: string,
-    dateRange: unknown,
+    dateRange: { start?: string | Date; end?: string | Date },
   ) =>
     ipcRenderer.invoke(
       "transactions:reanalyze",
@@ -203,7 +227,7 @@ export const transactionBridge = {
    * @param options - Export options (format, includeContacts, includeEmails, etc.)
    * @returns Export result
    */
-  exportEnhanced: (transactionId: string, options: unknown) =>
+  exportEnhanced: (transactionId: string, options?: ExportEnhancedOptions) =>
     ipcRenderer.invoke(
       "transactions:export-enhanced",
       transactionId,
@@ -221,9 +245,9 @@ export const transactionBridge = {
   /**
    * Bulk updates status for multiple transactions
    * @param transactionIds - Array of transaction IDs to update
-   * @param status - New status ('active' or 'closed')
+   * @param status - New status ('pending', 'active', 'closed', or 'rejected')
    * @returns Bulk update result
    */
-  bulkUpdateStatus: (transactionIds: string[], status: string) =>
+  bulkUpdateStatus: (transactionIds: string[], status: TransactionStatus) =>
     ipcRenderer.invoke("transactions:bulk-update-status", transactionIds, status),
 };

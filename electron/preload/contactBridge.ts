@@ -4,6 +4,7 @@
  */
 
 import { ipcRenderer } from "electron";
+import type { NewContact, Contact } from "../types/models";
 
 export const contactBridge = {
   /**
@@ -27,7 +28,7 @@ export const contactBridge = {
    * @param contactsToImport - Array of contact objects to import
    * @returns Import results
    */
-  import: (userId: string, contactsToImport: unknown[]) =>
+  import: (userId: string, contactsToImport: NewContact[]) =>
     ipcRenderer.invoke("contacts:import", userId, contactsToImport),
 
   /**
@@ -36,7 +37,7 @@ export const contactBridge = {
    * @param propertyAddress - Property address to find relevant contacts for
    * @returns Sorted contacts
    */
-  getSortedByActivity: (userId: string, propertyAddress: string) =>
+  getSortedByActivity: (userId: string, propertyAddress?: string) =>
     ipcRenderer.invoke(
       "contacts:get-sorted-by-activity",
       userId,
@@ -49,7 +50,7 @@ export const contactBridge = {
    * @param contactData - Contact details (name, email, phone, company, etc.)
    * @returns Created contact
    */
-  create: (userId: string, contactData: unknown) =>
+  create: (userId: string, contactData: NewContact) =>
     ipcRenderer.invoke("contacts:create", userId, contactData),
 
   /**
@@ -58,7 +59,7 @@ export const contactBridge = {
    * @param updates - Fields to update (name, email, phone, etc.)
    * @returns Updated contact
    */
-  update: (contactId: string, updates: unknown) =>
+  update: (contactId: string, updates: Partial<Contact>) =>
     ipcRenderer.invoke("contacts:update", contactId, updates),
 
   /**
