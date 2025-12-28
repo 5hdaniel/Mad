@@ -19,10 +19,28 @@ This document outlines the standard procedure for creating, reviewing, and mergi
 
 ## Phase 0: Target Branch Verification
 
-Before creating a PR, verify you're targeting the correct branch:
+Before creating a PR, verify you're targeting the correct branch.
 
-| Your Branch Type | Target Branch |
-|------------------|---------------|
+### For Sprint Tasks (with Task File)
+
+Check the **Branch Configuration** section in your task file:
+
+```markdown
+## Branch Configuration (PM-Specified)
+
+| Setting | Value |
+|---------|-------|
+| **Base Branch** | `develop` / `int/xxx` / `project/xxx` |
+| **PR Target** | `develop` / `int/xxx` / `project/xxx` |
+| **Work Branch** | `<type>/TASK-XXX-slug` |
+```
+
+**Use the PR Target specified by PM** - it may NOT be `develop` for project or integration branches.
+
+### Default Target Branches (No Task File)
+
+| Your Branch Type | Default Target |
+|------------------|----------------|
 | `feature/*` | `develop` |
 | `fix/*` | `develop` |
 | `claude/*` | `develop` |
@@ -35,7 +53,7 @@ git branch --show-current
 
 # Verify target branch is up to date
 git fetch origin
-git log --oneline HEAD..origin/develop  # Should be empty or show expected commits
+git log --oneline HEAD..origin/<target>  # Should be empty or show expected commits
 ```
 
 ---
@@ -47,8 +65,10 @@ Ensure your branch is up-to-date with the target branch:
 
 ```bash
 git fetch origin
-git merge origin/develop  # or origin/main for hotfixes
+git merge origin/<PR Target>  # develop, int/xxx, project/xxx, or main for hotfixes
 ```
+
+**For sprint tasks:** Use the PR Target from your task file's Branch Configuration.
 
 Resolve any merge conflicts before proceeding.
 
@@ -390,7 +410,8 @@ This step MUST be performed before pushing for final CI verification:
 git fetch origin
 
 # 2. Merge target branch into your feature branch
-git merge origin/develop  # or origin/main for hotfixes
+#    Use PR Target from task file, or develop/main as default
+git merge origin/<PR Target>  # develop, int/xxx, project/xxx, or main
 
 # 3. If conflicts exist, resolve them NOW
 # 4. Run tests locally to verify nothing broke
@@ -400,6 +421,8 @@ npm test
 # 5. Push (this triggers CI on the merged state)
 git push
 ```
+
+**For sprint tasks:** Always use the PR Target from your task file's Branch Configuration.
 
 **Why this is mandatory:**
 - Other PRs may have been merged since you started
