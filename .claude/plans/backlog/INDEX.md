@@ -4,7 +4,7 @@ This index tracks all backlog items with their current status and metadata.
 
 **Last Updated:** 2025-12-28
 **Total Items:** 125
-**Pending:** 88 | **In Progress:** 0 | **Completed:** 34 | **Obsolete:** 2 | **Deferred:** 2
+**Pending:** 87 | **In Progress:** 0 | **Completed:** 35 | **Obsolete:** 2 | **Deferred:** 2
 
 ---
 
@@ -41,7 +41,8 @@ This index tracks all backlog items with their current status and metadata.
 - **SPRINT-007 (LLM Cost Optimization):** Completed (BACKLOG-084, 085) - TASK-501 to TASK-512
 - **SPRINT-008 (TransactionList Refactoring):** Completed - TASK-513 to TASK-521
 - **SPRINT-009 (Codebase Standards Remediation):** Completed - TASK-600 to TASK-620 (20 tasks)
-- **SPRINT-010 (Core Polish & Text Messages):** Active - BACKLOG-103, 054, 105, 104 (6 tasks)
+- **SPRINT-010 (Core Polish & Text Messages):** Active - BACKLOG-103, 054, 105, 104, 050 (7 tasks)
+- **SPRINT-011 (Testing Infrastructure & Demo):** Planned - BACKLOG-108, 014 (5 tasks)
 - **Unassigned:** All others
 
 ### AI MVP Project - COMPLETE
@@ -111,7 +112,7 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-047 | Contact Deletion Query Fix | service | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-048 | Transaction Edit Preserve Tab | ui | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-049 | Communications Tab | ui | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
-| BACKLOG-050 | Attachments Tab | ui | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| BACKLOG-050 | Attachments Tab | ui | Medium | Completed | SPRINT-010 | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | Addressed by TASK-706 |
 | BACKLOG-051 | Delete Comms/Attachments | service | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-052 | AI Transaction Timeline | ui | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-053 | Manually Add Communications | ui | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
@@ -165,7 +166,7 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-104 | Dashboard UI to Emphasize Auto-Detection | ui | Medium | Pending | SPRINT-010 | 6-10 | ~35K-50K | 1-2h | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-104.md](BACKLOG-104.md) |
 | BACKLOG-105 | Text Messages Tab in Transaction Details | ui | High | Pending | SPRINT-010 | 15-25 | ~80K-120K | 3-5h | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-105.md](BACKLOG-105.md) |
 | BACKLOG-107 | Split useAppStateMachine.ts into Flow Hooks | refactor | Critical | Pending | - | 30-40 | ~100K | 1-1.5d | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-107.md](BACKLOG-107.md) |
-| BACKLOG-108 | Fix Flaky appleDriverService Test | test | Critical | Pending | - | 2-4 | ~10K | 1-2h | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-108.md](BACKLOG-108.md) |
+| BACKLOG-108 | Fix Flaky appleDriverService Test | test | Critical | Pending | SPRINT-011 | 2-4 | ~10K | 1-2h | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-108.md](BACKLOG-108.md) |
 | BACKLOG-109 | Reduce AppRouter.tsx to <300 Lines | refactor | High | Pending | - | 4-6 | ~20K | 30-45m | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-109.md](BACKLOG-109.md) |
 | BACKLOG-110 | Reduce AppShell.tsx to <150 Lines | refactor | High | Pending | - | 3-4 | ~15K | 20-30m | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-110.md](BACKLOG-110.md) |
 | BACKLOG-111 | Migrate Components to Service Abstractions | refactor | High | Pending | - | 40-50 | ~150K | 1-1.5d | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-111.md](BACKLOG-111.md) |
@@ -202,7 +203,8 @@ This index tracks all backlog items with their current status and metadata.
 | SPRINT-007 | LLM Cost Optimization | Completed | BACKLOG-084, 085 (12 tasks, TASK-501 to TASK-512) - 97% cost reduction |
 | SPRINT-008 | TransactionList Refactoring | Completed | TASK-513 to TASK-521 (9 tasks, 26 turns, ~146K tokens, ~2hrs) |
 | SPRINT-009 | Codebase Standards Remediation | Completed | TASK-600 to TASK-620 (20 tasks) - Security + Architecture + Types |
-| SPRINT-010 | Core Polish & Text Messages | **Active** | BACKLOG-103, 054, 105, 104 (6 tasks: TASK-700 to TASK-705) |
+| SPRINT-010 | Core Polish & Text Messages | **Active** | BACKLOG-103, 054, 105, 104, 050 (7 tasks: TASK-700 to TASK-706) |
+| SPRINT-011 | Testing Infrastructure & Demo | Planned | BACKLOG-108, 014 (5 tasks: TASK-800 to TASK-804) |
 
 ---
 

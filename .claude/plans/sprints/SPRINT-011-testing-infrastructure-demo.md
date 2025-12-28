@@ -14,18 +14,20 @@ This sprint focuses on testing infrastructure to enable reproducible testing acr
 - **2 Test Fixture Tasks:** Create realistic fake data for emails and SMS/iMessage
 - **1 Integration Framework Task:** Build testing sandbox using fake data
 - **1 Demo Update Task:** Update Joyride tour for AI detection features (BACKLOG-014)
+- **1 Bug Fix Task:** Fix flaky appleDriverService test (BACKLOG-108)
 
 ---
 
 ## Phase Structure
 
-### Phase 1: Test Fixtures (HIGH Priority)
+### Phase 1: Test Fixtures & Bug Fixes (HIGH Priority)
 **Execution:** Can run in parallel (different data domains)
 
 | Task | Title | Category | Est. Turns | Status |
 |------|-------|----------|------------|--------|
 | TASK-800 | Create Fake Email Mailbox Fixtures | test | 8-12 | Pending |
 | TASK-801 | Create Fake SMS/iMessage and Contacts Fixtures | test | 10-14 | Pending |
+| TASK-804 | Fix Flaky appleDriverService Test | test | 2-4 | Pending |
 
 ### Phase 2: Integration Framework (HIGH Priority)
 **Execution:** Sequential (depends on Phase 1)
@@ -49,9 +51,10 @@ This sprint focuses on testing infrastructure to enable reproducible testing acr
 
 ```mermaid
 graph TD
-    subgraph Phase1[Phase 1: Test Fixtures]
+    subgraph Phase1[Phase 1: Test Fixtures & Bug Fixes]
         T800[TASK-800: Email Fixtures]
         T801[TASK-801: SMS/Contacts Fixtures]
+        T804[TASK-804: Fix Flaky Test]
     end
 
     subgraph Phase2[Phase 2: Integration Framework]
@@ -67,9 +70,10 @@ graph TD
 ```
 
 **Parallel Execution Notes:**
-- TASK-800 and TASK-801 can run in parallel (independent fixture domains)
+- TASK-800, TASK-801, and TASK-804 can run in parallel (independent fixture domains)
 - TASK-802 depends on both TASK-800 and TASK-801
 - TASK-803 is independent and can run in parallel with any phase
+- TASK-804 is independent (flaky test fix)
 
 ---
 
@@ -79,8 +83,8 @@ graph TD
 |------------|-------|-------|
 | BACKLOG-106 | Fake Email Mailbox Fixtures | TASK-800 |
 | BACKLOG-107 | Fake SMS/Contacts Fixtures | TASK-801 |
-| BACKLOG-108 | Integration Testing Framework | TASK-802 |
 | BACKLOG-014 | Update Joyride Demo for New Users | TASK-803 |
+| BACKLOG-108 | Fix Flaky appleDriverService Test | TASK-804 |
 
 ---
 
@@ -88,10 +92,10 @@ graph TD
 
 | Metric | Estimate |
 |--------|----------|
-| Total Tasks | 4 |
-| Total Turns | 36-54 |
-| Total Tokens | ~150K-220K |
-| Total Time | ~4-6 hours |
+| Total Tasks | 5 |
+| Total Turns | 38-58 |
+| Total Tokens | ~160K-240K |
+| Total Time | ~4.5-7 hours |
 
 ---
 
@@ -116,10 +120,11 @@ graph TD
 - [ ] Implementation Summary completed
 
 ### Sprint Completion
-- [ ] All 4 tasks merged
+- [ ] All 5 tasks merged
 - [ ] Test fixtures are realistic and comprehensive
 - [ ] Integration tests are reproducible
 - [ ] Joyride tour reflects current AI features
+- [ ] Flaky test fixed and stable
 - [ ] Full test suite passes
 
 ---
@@ -132,6 +137,7 @@ graph TD
 | TASK-801 | Create Fake SMS/iMessage and Contacts Fixtures | 1 | HIGH | Pending |
 | TASK-802 | Integration Testing Framework with Fake Data | 2 | HIGH | Pending |
 | TASK-803 | Update Joyride Demo for AI Detection | 3 | MEDIUM | Pending |
+| TASK-804 | Fix Flaky appleDriverService Test | 1 | HIGH | Pending |
 
 ---
 
@@ -180,6 +186,7 @@ All 4 tasks have been reviewed and approved. Technical notes added to each task 
 - TASK-800 - Email fixtures (independent, no shared files)
 - TASK-801 - SMS/contacts fixtures (independent, no shared files)
 - TASK-803 - Joyride update (independent, different domain)
+- TASK-804 - Flaky test fix (independent, isolated test file)
 
 **Batch 2 (Sequential, after Batch 1):**
 - TASK-802 - Integration testing (depends on TASK-800 + TASK-801 for fixtures)
@@ -210,8 +217,8 @@ All 4 tasks have been reviewed and approved. Technical notes added to each task 
 
 ## Progress Tracking
 
-**Sprint Progress:** 0/4 tasks merged (0%)
+**Sprint Progress:** 0/5 tasks merged (0%)
 
-- Phase 1: 0/2 complete
+- Phase 1: 0/3 complete
 - Phase 2: 0/1 complete
 - Phase 3: 0/1 complete
