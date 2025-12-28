@@ -240,6 +240,93 @@ export async function handleGoogleLogin(
       }
     );
 
+    // Process login in background after code is received
+    setTimeout(async () => {
+      try {
+        const code = await codePromise;
+        await logService.info("Received Google authorization code, completing login", "AuthHandlers");
+
+        // Exchange code for tokens
+        const { tokens, userInfo } = await googleAuthService.exchangeCodeForTokens(code);
+
+        // Sync user to Supabase
+        const cloudUser = await supabaseService.syncUser({
+          email: userInfo.email,
+          first_name: userInfo.given_name,
+          last_name: userInfo.family_name,
+          display_name: userInfo.name,
+          avatar_url: userInfo.picture,
+          oauth_provider: "google",
+          oauth_id: userInfo.id,
+        });
+
+        // Create or find user in local database
+        let localUser = await databaseService.getUserByOAuthId("google", userInfo.id);
+        const isNewUser = !localUser;
+
+        if (!localUser) {
+          localUser = await databaseService.createUser({
+            email: userInfo.email,
+            first_name: userInfo.given_name,
+            last_name: userInfo.family_name,
+            display_name: userInfo.name,
+            avatar_url: userInfo.picture,
+            oauth_provider: "google",
+            oauth_id: userInfo.id,
+            subscription_tier: cloudUser.subscription_tier,
+            subscription_status: cloudUser.subscription_status,
+            trial_ends_at: cloudUser.trial_ends_at,
+            is_active: true,
+          });
+        }
+
+        // Create session
+        const sessionToken = await databaseService.createSession(localUser.id);
+
+        // Determine subscription status
+        const subscription = {
+          tier: cloudUser.subscription_tier || localUser.subscription_tier || "free",
+          status: cloudUser.subscription_status || localUser.subscription_status || "trialing",
+          trial_ends_at: cloudUser.trial_ends_at || localUser.trial_ends_at,
+        };
+
+        // Check if new terms need acceptance
+        const needsTermsUpdate = isNewUser ? false : needsToAcceptTerms(localUser);
+
+        await logService.info("Google login completed successfully", "AuthHandlers", {
+          userId: localUser.id,
+          isNewUser,
+          needsTermsUpdate,
+        });
+
+        // Send success event to renderer
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("google:login-complete", {
+            success: true,
+            user: {
+              id: localUser.id,
+              email: localUser.email,
+              display_name: localUser.display_name,
+              avatar_url: localUser.avatar_url,
+            },
+            sessionToken,
+            subscription,
+            isNewUser: isNewUser || needsTermsUpdate,
+          });
+        }
+      } catch (error) {
+        await logService.error("Google login completion failed", "AuthHandlers", {
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("google:login-complete", {
+            success: false,
+            error: error instanceof Error ? error.message : "Login failed",
+          });
+        }
+      }
+    }, 0);
+
     return {
       success: true,
       authUrl,
