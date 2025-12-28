@@ -9,6 +9,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import os from "os";
 import { runAppleScript } from "../services/macOSPermissionHelper";
+import logService from "../services/logService";
 
 // Track registration to prevent duplicate handlers
 let handlersRegistered = false;
@@ -20,8 +21,9 @@ let handlersRegistered = false;
 export function registerPermissionHandlers(): void {
   // Prevent double registration
   if (handlersRegistered) {
-    console.warn(
-      "[PermissionHandlers] Handlers already registered, skipping duplicate registration"
+    logService.warn(
+      "Handlers already registered, skipping duplicate registration",
+      "PermissionHandlers"
     );
     return;
   }
@@ -39,7 +41,7 @@ export function registerPermissionHandlers(): void {
         pid: process.pid,
       };
     } catch (error) {
-      console.error("Error getting app info:", error);
+      logService.error("Error getting app info", "PermissionHandlers", { error });
       return {
         name: "Unknown",
         path: "Unknown",
@@ -98,7 +100,7 @@ export function registerPermissionHandlers(): void {
         appName: "System Settings",
       };
     } catch (error) {
-      console.error("Error detecting macOS version:", error);
+      logService.error("Error detecting macOS version", "PermissionHandlers", { error });
       return {
         version: 13,
         name: "Unknown (Error)",
@@ -144,7 +146,7 @@ export function registerPermissionHandlers(): void {
         appPath,
       };
     } catch (error) {
-      console.error("Error checking app location:", error);
+      logService.error("Error checking app location", "PermissionHandlers", { error });
       return {
         isInApplications: false,
         shouldPrompt: false,
@@ -232,7 +234,7 @@ export function registerPermissionHandlers(): void {
 
       return { success: false, message: "Not supported on this platform" };
     } catch (error) {
-      console.error("Error opening system settings:", error);
+      logService.error("Error opening system settings", "PermissionHandlers", { error });
       return { success: false, error: (error as Error).message };
     }
   });

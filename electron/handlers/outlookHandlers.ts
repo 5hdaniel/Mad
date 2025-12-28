@@ -17,6 +17,7 @@ import databaseService from "../services/databaseService";
 import microsoftAuthService from "../services/microsoftAuthService";
 import OutlookService from "../outlookService";
 import { getContactNames, resolveContactName } from "../services/contactsService";
+import logService from "../services/logService";
 import { macTimestampToDate } from "../utils/dateUtils";
 import { sanitizeFilename } from "../utils/fileUtils";
 import { getMessageText } from "../utils/messageParser";
@@ -33,8 +34,9 @@ let outlookService: OutlookService | null = null;
 export function registerOutlookHandlers(mainWindow: BrowserWindow): void {
   // Prevent double registration
   if (handlersRegistered) {
-    console.warn(
-      "[OutlookHandlers] Handlers already registered, skipping duplicate registration"
+    logService.warn(
+      "Handlers already registered, skipping duplicate registration",
+      "OutlookHandlers"
     );
     return;
   }
@@ -56,7 +58,7 @@ export function registerOutlookHandlers(mainWindow: BrowserWindow): void {
     "outlook-authenticate",
     async (event: IpcMainInvokeEvent, userId: string) => {
       try {
-        console.log("[Main] Starting Outlook authentication with redirect flow");
+        logService.info("Starting Outlook authentication with redirect flow", "OutlookHandlers");
 
         // Get user info to use as login hint
         let loginHint: string | undefined = undefined;
@@ -80,7 +82,7 @@ export function registerOutlookHandlers(mainWindow: BrowserWindow): void {
 
         // Wait for user to complete auth in browser (local server will catch redirect)
         const code = await codePromise;
-        console.log("[Main] Received authorization code from redirect");
+        logService.info("Received authorization code from redirect", "OutlookHandlers");
 
         // Exchange code for tokens
         const tokens = await microsoftAuthService.exchangeCodeForTokens(
@@ -110,7 +112,7 @@ export function registerOutlookHandlers(mainWindow: BrowserWindow): void {
           connected_email_address: userInfo.email,
         });
 
-        console.log("[Main] Outlook authentication completed successfully");
+        logService.info("Outlook authentication completed successfully", "OutlookHandlers");
 
         return {
           success: true,
@@ -120,7 +122,7 @@ export function registerOutlookHandlers(mainWindow: BrowserWindow): void {
           },
         };
       } catch (error) {
-        console.error("[Main] Outlook authentication failed:", error);
+        logService.error("Outlook authentication failed", "OutlookHandlers", { error });
         return {
           success: false,
           error: (error as Error).message,
@@ -150,7 +152,7 @@ export function registerOutlookHandlers(mainWindow: BrowserWindow): void {
 
         return tokenExpiry > now;
       } catch (error) {
-        console.error("Error checking Outlook authentication:", error);
+        logService.error("Error checking Outlook authentication", "OutlookHandlers", { error });
         return false;
       }
     }
@@ -185,7 +187,7 @@ export function registerOutlookHandlers(mainWindow: BrowserWindow): void {
           email: token.connected_email_address,
         };
       } catch (error) {
-        console.error("Error getting user email:", error);
+        logService.error("Error getting user email", "OutlookHandlers", { error });
         return {
           success: false,
           error: (error as Error).message,
@@ -524,9 +526,10 @@ export function registerOutlookHandlers(mainWindow: BrowserWindow): void {
                 }
               }
             } catch (err) {
-              console.error(
-                `Error exporting text messages for ${contact.name}:`,
-                err
+              logService.error(
+                `Error exporting text messages for ${contact.name}`,
+                "OutlookHandlers",
+                { error: err }
               );
               errors.push(`Text messages: ${(err as Error).message}`);
             }
@@ -558,7 +561,7 @@ export function registerOutlookHandlers(mainWindow: BrowserWindow): void {
                   errors.push(`${email}: ${result.error}`);
                 }
               } catch (err) {
-                console.error(`  - Error exporting emails from ${email}:`, err);
+                logService.error(`Error exporting emails from ${email}`, "OutlookHandlers", { error: err });
                 errors.push(`${email}: ${(err as Error).message}`);
               }
             }
@@ -591,8 +594,7 @@ export function registerOutlookHandlers(mainWindow: BrowserWindow): void {
           results: results,
         };
       } catch (error) {
-        console.error("Error exporting full audit:", error);
-        console.error("Stack trace:", (error as Error).stack);
+        logService.error("Error exporting full audit", "OutlookHandlers", { error, stack: (error as Error).stack });
         return {
           success: false,
           error: (error as Error).message,
@@ -609,7 +611,7 @@ export function registerOutlookHandlers(mainWindow: BrowserWindow): void {
       }
       return { success: true };
     } catch (error) {
-      console.error("Error signing out:", error);
+      logService.error("Error signing out", "OutlookHandlers", { error });
       return {
         success: false,
         error: (error as Error).message,

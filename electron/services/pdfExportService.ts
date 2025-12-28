@@ -2,6 +2,7 @@ import { BrowserWindow, app } from "electron";
 import path from "path";
 import fs from "fs/promises";
 import { Transaction, Communication } from "../types/models";
+import logService from "./logService";
 
 /**
  * PDF Export Service
@@ -28,9 +29,10 @@ class PDFExportService {
     outputPath: string,
   ): Promise<string> {
     try {
-      console.log(
+      logService.info(
         "[PDF Export] Generating PDF for transaction:",
-        transaction.id,
+        "PDFExport",
+        { transactionId: transaction.id },
       );
 
       // Create HTML content
@@ -69,10 +71,10 @@ class PDFExportService {
       this.exportWindow.close();
       this.exportWindow = null;
 
-      console.log("[PDF Export] PDF generated successfully:", outputPath);
+      logService.info("[PDF Export] PDF generated successfully:", "PDFExport", { outputPath });
       return outputPath;
     } catch (error) {
-      console.error("[PDF Export] Failed to generate PDF:", error);
+      logService.error("[PDF Export] Failed to generate PDF:", "PDFExport", { error });
       if (this.exportWindow) {
         this.exportWindow.close();
         this.exportWindow = null;

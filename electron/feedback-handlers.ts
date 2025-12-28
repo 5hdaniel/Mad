@@ -6,6 +6,7 @@
 import { ipcMain } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import databaseService from "./services/databaseService";
+import logService from "./services/logService";
 import type { UserFeedback } from "./types/models";
 import {
   getFeedbackService,
@@ -95,7 +96,7 @@ export const registerFeedbackHandlers = (): void => {
           feedbackId: feedback.id,
         };
       } catch (error) {
-        console.error("[Main] Submit feedback failed:", error);
+        logService.error("[Main] Submit feedback failed:", "Feedback", { error });
         if (error instanceof ValidationError) {
           return {
             success: false,
@@ -136,7 +137,7 @@ export const registerFeedbackHandlers = (): void => {
           feedback,
         };
       } catch (error) {
-        console.error("[Main] Get feedback failed:", error);
+        logService.error("[Main] Get feedback failed:", "Feedback", { error });
         if (error instanceof ValidationError) {
           return {
             success: false,
@@ -182,7 +183,7 @@ export const registerFeedbackHandlers = (): void => {
           metrics,
         };
       } catch (error) {
-        console.error("[Main] Get extraction metrics failed:", error);
+        logService.error("[Main] Get extraction metrics failed:", "Feedback", { error });
         if (error instanceof ValidationError) {
           return {
             success: false,
@@ -252,7 +253,7 @@ export const registerFeedbackHandlers = (): void => {
           suggestion,
         };
       } catch (error) {
-        console.error("[Main] Get suggestion failed:", error);
+        logService.error("[Main] Get suggestion failed:", "Feedback", { error });
         if (error instanceof ValidationError) {
           return {
             success: false,
@@ -296,7 +297,7 @@ export const registerFeedbackHandlers = (): void => {
           stats,
         };
       } catch (error) {
-        console.error("[Main] Get learning stats failed:", error);
+        logService.error("[Main] Get learning stats failed:", "Feedback", { error });
         if (error instanceof ValidationError) {
           return {
             success: false,
@@ -331,7 +332,7 @@ export const registerFeedbackHandlers = (): void => {
         await feedbackService.recordTransactionFeedback(userId, feedback);
         return { success: true };
       } catch (error) {
-        console.error("[Feedback] Error recording transaction feedback:", error);
+        logService.error("[Feedback] Error recording transaction feedback:", "Feedback", { error });
         return {
           success: false,
           error: error instanceof Error ? error.message : "Unknown error",
@@ -353,7 +354,7 @@ export const registerFeedbackHandlers = (): void => {
         await feedbackService.recordRoleFeedback(userId, feedback);
         return { success: true };
       } catch (error) {
-        console.error("[Feedback] Error recording role feedback:", error);
+        logService.error("[Feedback] Error recording role feedback:", "Feedback", { error });
         return {
           success: false,
           error: error instanceof Error ? error.message : "Unknown error",
@@ -375,7 +376,7 @@ export const registerFeedbackHandlers = (): void => {
         await feedbackService.recordCommunicationFeedback(userId, feedback);
         return { success: true };
       } catch (error) {
-        console.error("[Feedback] Error recording relevance feedback:", error);
+        logService.error("[Feedback] Error recording relevance feedback:", "Feedback", { error });
         return {
           success: false,
           error: error instanceof Error ? error.message : "Unknown error",
@@ -396,7 +397,7 @@ export const registerFeedbackHandlers = (): void => {
         const stats = await feedbackService.getFeedbackStats(userId);
         return { success: true, data: stats };
       } catch (error) {
-        console.error("[Feedback] Error getting stats:", error);
+        logService.error("[Feedback] Error getting stats:", "Feedback", { error });
         return {
           success: false,
           error: error instanceof Error ? error.message : "Unknown error",

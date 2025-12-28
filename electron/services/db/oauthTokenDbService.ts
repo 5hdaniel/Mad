@@ -8,6 +8,7 @@ import type { OAuthToken, OAuthProvider, OAuthPurpose } from "../../types";
 import { DatabaseError } from "../../types";
 import { dbGet, dbRun } from "./core/dbConnection";
 import { validateFields } from "../../utils/sqlFieldWhitelist";
+import logService from "../logService";
 
 /**
  * Save OAuth token (encrypted)
@@ -149,7 +150,5 @@ export async function deleteOAuthToken(
 export async function clearAllOAuthTokens(): Promise<void> {
   const sql = "DELETE FROM oauth_tokens";
   dbRun(sql, []);
-  console.log(
-    "[OAuthTokenDbService] Cleared all OAuth tokens for session-only OAuth",
-  );
+  logService.info("[OAuthTokenDbService] Cleared all OAuth tokens for session-only OAuth", "OAuthTokenDbService");
 }

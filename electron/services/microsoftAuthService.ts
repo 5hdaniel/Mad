@@ -3,6 +3,7 @@ import http from "http";
 import url from "url";
 import crypto from "crypto";
 import databaseService from "./databaseService";
+import logService from "./logService";
 // NOTE: tokenEncryptionService removed - using session-only OAuth
 // Tokens stored in encrypted database, no additional keychain encryption needed
 
@@ -81,8 +82,9 @@ class MicrosoftAuthService {
    */
   resolveCodeDirectly(code: string): void {
     if (this.codeResolver) {
-      console.log(
+      logService.info(
         "[MicrosoftAuth] Resolving code directly from navigation interception",
+        "MicrosoftAuth"
       );
       this.codeResolver(code);
       this.codeResolver = null;
@@ -97,8 +99,9 @@ class MicrosoftAuthService {
    */
   rejectCodeDirectly(error: string): void {
     if (this.codeRejecter) {
-      console.log(
+      logService.info(
         "[MicrosoftAuth] Rejecting code directly from navigation interception",
+        "MicrosoftAuth"
       );
       this.codeRejecter(new Error(error));
       this.codeResolver = null;
@@ -119,15 +122,17 @@ class MicrosoftAuthService {
 
       this.server = http.createServer((req, res) => {
         const parsedUrl = url.parse(req.url || "", true);
-        console.log(
+        logService.info(
           `[MicrosoftAuth] HTTP server received request: ${parsedUrl.pathname}`,
+          "MicrosoftAuth"
         );
 
         if (parsedUrl.pathname === "/callback") {
           const code = parsedUrl.query.code as string | undefined;
           const error = parsedUrl.query.error as string | undefined;
-          console.log(
+          logService.info(
             `[MicrosoftAuth] Callback received via HTTP server - code: ${code ? "present" : "missing"}, error: ${error || "none"}`,
+            "MicrosoftAuth"
           );
 
           if (error) {
@@ -230,8 +235,9 @@ class MicrosoftAuthService {
       });
 
       this.server.listen(3000, "localhost", () => {
-        console.log(
+        logService.info(
           "[MicrosoftAuth] Local callback server listening on http://localhost:3000",
+          "MicrosoftAuth"
         );
       });
 
@@ -248,7 +254,7 @@ class MicrosoftAuthService {
     if (this.server) {
       this.server.close();
       this.server = null;
-      console.log("[MicrosoftAuth] Local callback server stopped");
+      logService.info("[MicrosoftAuth] Local callback server stopped", "MicrosoftAuth");
     }
   }
 
@@ -372,9 +378,10 @@ class MicrosoftAuthService {
       return response.data;
     } catch (error) {
       const axiosError = error as AxiosError;
-      console.error(
-        "Error exchanging code for tokens:",
-        axiosError.response?.data || axiosError.message,
+      logService.error(
+        "Error exchanging code for tokens",
+        "MicrosoftAuth",
+        { error: axiosError.response?.data || axiosError.message }
       );
       throw new Error(
         (axiosError.response?.data as any)?.error_description ||
@@ -406,9 +413,10 @@ class MicrosoftAuthService {
       };
     } catch (error) {
       const axiosError = error as AxiosError;
-      console.error(
-        "Error getting user info:",
-        axiosError.response?.data || axiosError.message,
+      logService.error(
+        "Error getting user info",
+        "MicrosoftAuth",
+        { error: axiosError.response?.data || axiosError.message }
       );
       throw new Error("Failed to get user information");
     }
@@ -435,9 +443,10 @@ class MicrosoftAuthService {
       return response.data;
     } catch (error) {
       const axiosError = error as AxiosError;
-      console.error(
-        "Error refreshing token:",
-        axiosError.response?.data || axiosError.message,
+      logService.error(
+        "Error refreshing token",
+        "MicrosoftAuth",
+        { error: axiosError.response?.data || axiosError.message }
       );
       throw new Error("Failed to refresh access token");
     }
@@ -452,7 +461,7 @@ class MicrosoftAuthService {
     userId: string,
   ): Promise<{ success: boolean; error?: string }> {
     try {
-      console.log("[MicrosoftAuth] Refreshing access token for user:", userId);
+      logService.info("[MicrosoftAuth] Refreshing access token for user:", "MicrosoftAuth", { userId });
 
       // Get current token from database
       const tokenRecord = await databaseService.getOAuthToken(
@@ -462,7 +471,7 @@ class MicrosoftAuthService {
       );
 
       if (!tokenRecord || !tokenRecord.refresh_token) {
-        console.error("[MicrosoftAuth] No refresh token found for user");
+        logService.error("[MicrosoftAuth] No refresh token found for user", "MicrosoftAuth");
         return { success: false, error: "No refresh token available" };
       }
 
@@ -487,14 +496,15 @@ class MicrosoftAuthService {
         mailbox_connected: true,
       });
 
-      console.log(
+      logService.info(
         "[MicrosoftAuth] Token refreshed successfully. New expiry:",
-        expiresAt,
+        "MicrosoftAuth",
+        { expiresAt }
       );
 
       return { success: true };
     } catch (error) {
-      console.error("[MicrosoftAuth] Failed to refresh access token:", error);
+      logService.error("[MicrosoftAuth] Failed to refresh access token", "MicrosoftAuth", { error });
       return {
         success: false,
         error: error instanceof Error ? error.message : "Unknown error",
@@ -509,8 +519,9 @@ class MicrosoftAuthService {
   async revokeToken(_accessToken: string): Promise<RevokeTokenResult> {
     // Microsoft OAuth2 doesn't provide a revocation endpoint
     // For proper logout, direct user to: https://login.microsoftonline.com/common/oauth2/v2.0/logout
-    console.log(
+    logService.info(
       "Microsoft tokens cannot be revoked programmatically. User should sign out from Microsoft account.",
+      "MicrosoftAuth"
     );
     return { success: true, message: "Token will expire naturally" };
   }
@@ -537,9 +548,10 @@ class MicrosoftAuthService {
       };
     } catch (error) {
       const axiosError = error as AxiosError;
-      console.error(
-        "Error getting mailbox info:",
-        axiosError.response?.data || axiosError.message,
+      logService.error(
+        "Error getting mailbox info",
+        "MicrosoftAuth",
+        { error: axiosError.response?.data || axiosError.message }
       );
       throw new Error("Failed to get mailbox information");
     }

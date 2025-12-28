@@ -2,6 +2,7 @@ import { app, shell, Notification } from "electron";
 import { spawn } from "child_process";
 import { promises as fs } from "fs";
 import path from "path";
+import logService from "./logService";
 
 /**
  * Execute AppleScript safely by passing the script via stdin to osascript.
@@ -106,7 +107,7 @@ class MacOSPermissionHelper {
         message: "Contacts permission requested",
       };
     } catch (error) {
-      console.error("[MacOS] Failed to request Contacts permission:", error);
+      logService.error("[MacOS] Failed to request Contacts permission", "MacOSPermissionHelper", { error });
       return {
         success: false,
         error: (error as Error).message,
@@ -131,7 +132,7 @@ class MacOSPermissionHelper {
       const privacyURL =
         "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles";
 
-      console.log("[MacOS] Opening System Preferences to Full Disk Access...");
+      logService.info("[MacOS] Opening System Preferences to Full Disk Access...", "MacOSPermissionHelper");
       await shell.openExternal(privacyURL);
 
       // Give System Preferences time to open
@@ -141,11 +142,12 @@ class MacOSPermissionHelper {
       // This requires admin privileges and may prompt the user
       try {
         // This is informational - actual addition requires user interaction
-        console.log("[MacOS] App path:", appPath);
-        console.log("[MacOS] Bundle ID:", bundleId);
+        logService.info("[MacOS] App path:", "MacOSPermissionHelper", { appPath });
+        logService.info("[MacOS] Bundle ID:", "MacOSPermissionHelper", { bundleId });
       } catch {
-        console.log(
+        logService.info(
           "[MacOS] Could not programmatically add app (expected - requires user action)",
+          "MacOSPermissionHelper"
         );
       }
 
@@ -157,7 +159,7 @@ class MacOSPermissionHelper {
           "User needs to click the + button and add the app, or toggle it on if already present",
       };
     } catch (error) {
-      console.error("[MacOS] Failed to setup Full Disk Access:", error);
+      logService.error("[MacOS] Failed to setup Full Disk Access", "MacOSPermissionHelper", { error });
       return {
         success: false,
         message: "Failed to setup Full Disk Access",
@@ -189,7 +191,7 @@ class MacOSPermissionHelper {
       await shell.openExternal(url);
       return { success: true };
     } catch (error) {
-      console.error("[MacOS] Failed to open privacy pane:", error);
+      logService.error("[MacOS] Failed to open privacy pane", "MacOSPermissionHelper", { error });
       return { success: false, error: (error as Error).message };
     }
   }
@@ -238,7 +240,7 @@ class MacOSPermissionHelper {
    * Returns status of each step
    */
   async runPermissionSetupFlow(): Promise<PermissionSetupFlowResult> {
-    console.log("[MacOS] Starting permission setup flow...");
+    logService.info("[MacOS] Starting permission setup flow...", "MacOSPermissionHelper");
 
     const results: PermissionSetupFlowResult = {
       contacts: null,
@@ -248,14 +250,14 @@ class MacOSPermissionHelper {
 
     try {
       // Step 1: Request Contacts permission
-      console.log("[MacOS] Step 1: Requesting Contacts permission...");
+      logService.info("[MacOS] Step 1: Requesting Contacts permission...", "MacOSPermissionHelper");
       results.contacts = await this.requestContactsPermission();
 
       // Wait a moment for user to interact with Contacts dialog
       await new Promise((resolve) => setTimeout(resolve, 2000));
 
       // Step 2: Setup Full Disk Access
-      console.log("[MacOS] Step 2: Setting up Full Disk Access...");
+      logService.info("[MacOS] Step 2: Setting up Full Disk Access...", "MacOSPermissionHelper");
       results.fullDiskAccess = await this.setupFullDiskAccess();
 
       // Step 3: Show notification
@@ -269,7 +271,7 @@ class MacOSPermissionHelper {
 
       return results;
     } catch (error) {
-      console.error("[MacOS] Permission setup flow failed:", error);
+      logService.error("[MacOS] Permission setup flow failed", "MacOSPermissionHelper", { error });
       return {
         ...results,
         error: (error as Error).message,

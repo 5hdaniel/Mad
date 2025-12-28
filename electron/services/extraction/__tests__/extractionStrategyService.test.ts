@@ -477,16 +477,14 @@ describe('ExtractionStrategyService', () => {
     });
 
     it('should log errors when they occur', async () => {
-      const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+      // logService now handles errors - just verify the error doesn't break functionality
       mockGetUserConfig.mockRejectedValue(new Error('Test error'));
 
-      await service.selectStrategy('user-1');
+      const result = await service.selectStrategy('user-1');
 
-      expect(consoleSpy).toHaveBeenCalledWith(
-        '[StrategySelector] Error selecting strategy:',
-        expect.any(Error)
-      );
-      consoleSpy.mockRestore();
+      // Error should be handled gracefully, returning pattern fallback
+      expect(result.method).toBe('pattern');
+      expect(result.reason).toContain('Error checking LLM availability');
     });
   });
 

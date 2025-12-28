@@ -6,7 +6,8 @@
 import { ipcMain } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 
-// Service (still JS - to be migrated)
+// Services
+import logService from "./services/logService";
 const addressVerificationService =
   require("./services/addressVerificationService").default;
 
@@ -56,7 +57,7 @@ export const registerAddressHandlers = (): void => {
             : "No API key provided",
         };
       } catch (error) {
-        console.error("[Main] Address initialization failed:", error);
+        logService.error("[Main] Address initialization failed:", "AddressHandlers", { error });
         if (error instanceof ValidationError) {
           return {
             success: false,
@@ -103,7 +104,7 @@ export const registerAddressHandlers = (): void => {
           suggestions,
         };
       } catch (error) {
-        console.error("[Main] Get address suggestions failed:", error);
+        logService.error("[Main] Get address suggestions failed:", "AddressHandlers", { error });
         if (error instanceof ValidationError) {
           return {
             success: false,
@@ -143,7 +144,7 @@ export const registerAddressHandlers = (): void => {
           address: details,
         };
       } catch (error) {
-        console.error("[Main] Get address details failed:", error);
+        logService.error("[Main] Get address details failed:", "AddressHandlers", { error });
         if (error instanceof ValidationError) {
           return {
             success: false,
@@ -181,7 +182,7 @@ export const registerAddressHandlers = (): void => {
           address: result,
         };
       } catch (error) {
-        console.error("[Main] Geocode address failed:", error);
+        logService.error("[Main] Geocode address failed:", "AddressHandlers", { error });
         if (error instanceof ValidationError) {
           return {
             success: false,
@@ -219,7 +220,7 @@ export const registerAddressHandlers = (): void => {
           valid: isValid,
         };
       } catch (error) {
-        console.error("[Main] Validate address failed:", error);
+        logService.error("[Main] Validate address failed:", "AddressHandlers", { error });
         if (error instanceof ValidationError) {
           return {
             success: false,

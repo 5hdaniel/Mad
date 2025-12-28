@@ -6,6 +6,7 @@
 import crypto from "crypto";
 import type { Session, User } from "../../types";
 import { dbGet, dbRun } from "./core/dbConnection";
+import logService from "../logService";
 
 /**
  * Create a new session for a user
@@ -85,5 +86,5 @@ export async function deleteAllUserSessions(userId: string): Promise<void> {
 export async function clearAllSessions(): Promise<void> {
   const sql = "DELETE FROM sessions";
   dbRun(sql, []);
-  console.log("[SessionDbService] Cleared all sessions for session-only OAuth");
+  logService.info("[SessionDbService] Cleared all sessions for session-only OAuth", "SessionDbService");
 }

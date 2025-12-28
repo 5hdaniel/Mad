@@ -12,6 +12,7 @@ import {
   REGEX_PATTERNS,
   FALLBACK_MESSAGES,
 } from "../constants";
+import logService from "../services/logService";
 
 /**
  * Message object interface
@@ -62,7 +63,7 @@ export function extractTextFromAttributedBody(
       return FALLBACK_MESSAGES.UNABLE_TO_EXTRACT;
     }
   } catch (e) {
-    console.error("Error parsing attributedBody:", (e as Error).message);
+    logService.error("Error parsing attributedBody:", "MessageParser", { error: (e as Error).message });
     return FALLBACK_MESSAGES.PARSING_ERROR;
   }
 }

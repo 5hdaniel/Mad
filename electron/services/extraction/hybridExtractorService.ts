@@ -485,7 +485,7 @@ export class HybridExtractorService {
           }
         } catch (error) {
           // LLM errors should never break the pipeline
-          console.warn('[HybridExtractor] LLM analysis failed, using pattern only:', error);
+          logService.warn('[HybridExtractor] LLM analysis failed, using pattern only', 'HybridExtractor', { error });
         }
       }
 
@@ -560,7 +560,7 @@ export class HybridExtractorService {
           }
         }
       } catch (error) {
-        console.warn('[HybridExtractor] LLM clustering failed, using pattern grouping:', error);
+        logService.warn('[HybridExtractor] LLM clustering failed, using pattern grouping', 'HybridExtractor', { error });
       }
     }
 
@@ -618,7 +618,7 @@ export class HybridExtractorService {
         };
       }
     } catch (error) {
-      console.warn('[HybridExtractor] Contact role extraction failed:', error);
+      logService.warn('[HybridExtractor] Contact role extraction failed', 'HybridExtractor', { error });
     }
 
     return cluster;
@@ -800,7 +800,7 @@ export class HybridExtractorService {
         temperature: 0.1,
       };
     } catch (error) {
-      console.warn('[HybridExtractor] Failed to get LLM config:', error);
+      logService.warn('[HybridExtractor] Failed to get LLM config', 'HybridExtractor', { error });
       return null;
     }
   }
@@ -836,7 +836,7 @@ export class HybridExtractorService {
 
       return tokenEncryptionService.decrypt(encryptedKey);
     } catch (error) {
-      console.warn('[HybridExtractor] Failed to decrypt API key:', error);
+      logService.warn('[HybridExtractor] Failed to decrypt API key', 'HybridExtractor', { error });
       return null;
     }
   }

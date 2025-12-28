@@ -97,9 +97,10 @@ export function registerContactHandlers(): void {
       userId: string,
     ): Promise<ContactResponse> => {
       try {
-        console.log(
-          "[Main] Getting available contacts for import for user:",
-          userId,
+        logService.info(
+          "[Main] Getting available contacts for import",
+          "Contacts",
+          { userId },
         );
 
         // Validate input
@@ -129,8 +130,9 @@ export function registerContactHandlers(): void {
         const unimportedDbContacts =
           await databaseService.getUnimportedContactsByUserId(validatedUserId);
 
-        console.log(
+        logService.info(
           `[Main] Found ${unimportedDbContacts.length} unimported contacts from database (iPhone sync)`,
+          "Contacts",
         );
 
         for (const dbContact of unimportedDbContacts) {
@@ -189,8 +191,9 @@ export function registerContactHandlers(): void {
           }
         }
 
-        console.log(
+        logService.info(
           `[Main] Found ${availableContacts.length} total available contacts for import`,
+          "Contacts",
         );
 
         return {
@@ -199,7 +202,7 @@ export function registerContactHandlers(): void {
           contactsStatus: status, // Include loading status
         };
       } catch (error) {
-        console.error("[Main] Get available contacts failed:", error);
+        logService.error("[Main] Get available contacts failed:", "Contacts", { error });
         if (error instanceof ValidationError) {
           return {
             success: false,
@@ -223,11 +226,10 @@ export function registerContactHandlers(): void {
       contactsToImport: unknown[],
     ): Promise<ContactResponse> => {
       try {
-        console.log(
-          "[Main] Importing contacts for user:",
-          userId,
-          "count:",
-          contactsToImport.length,
+        logService.info(
+          "[Main] Importing contacts",
+          "Contacts",
+          { userId, count: contactsToImport.length },
         );
 
         // Validate inputs
@@ -274,7 +276,7 @@ export function registerContactHandlers(): void {
             if (updatedContact) {
               importedContacts.push(updatedContact);
             }
-            console.log(`[Main] Marked existing contact as imported: ${sanitizedContact.id}`);
+            logService.info(`[Main] Marked existing contact as imported: ${sanitizedContact.id}`, "Contacts");
           } else {
             // Create new contact from macOS Contacts app
             const importedContact = await databaseService.createContact({
@@ -291,8 +293,9 @@ export function registerContactHandlers(): void {
           }
         }
 
-        console.log(
+        logService.info(
           `[Main] Successfully imported ${importedContacts.length} contacts`,
+          "Contacts",
         );
 
         return {
@@ -300,7 +303,7 @@ export function registerContactHandlers(): void {
           contacts: importedContacts,
         };
       } catch (error) {
-        console.error("[Main] Import contacts failed:", error);
+        logService.error("[Main] Import contacts failed:", "Contacts", { error });
         if (error instanceof ValidationError) {
           return {
             success: false,
@@ -324,11 +327,10 @@ export function registerContactHandlers(): void {
       propertyAddress: string | null = null,
     ): Promise<ContactResponse> => {
       try {
-        console.log(
-          "[Main] Getting contacts sorted by activity for user:",
-          userId,
-          "address:",
-          propertyAddress,
+        logService.info(
+          "[Main] Getting contacts sorted by activity",
+          "Contacts",
+          { userId, propertyAddress },
         );
 
         // Validate inputs
@@ -352,8 +354,9 @@ export function registerContactHandlers(): void {
             validatedAddress ?? undefined,
           );
 
-        console.log(
+        logService.info(
           `[Main] Returning ${importedContacts.length} imported contacts sorted by activity`,
+          "Contacts",
         );
 
         return {
@@ -361,7 +364,7 @@ export function registerContactHandlers(): void {
           contacts: importedContacts,
         };
       } catch (error) {
-        console.error("[Main] Get sorted contacts failed:", error);
+        logService.error("[Main] Get sorted contacts failed:", "Contacts", { error });
         if (error instanceof ValidationError) {
           return {
             success: false,
@@ -527,7 +530,7 @@ export function registerContactHandlers(): void {
       contactId: string,
     ): Promise<ContactResponse> => {
       try {
-        console.log("[Main] Checking if contact can be deleted:", contactId);
+        logService.info("[Main] Checking if contact can be deleted", "Contacts", { contactId });
 
         // Validate input
         const validatedContactId = validateContactId(contactId); // Validated, will throw if invalid
@@ -548,7 +551,7 @@ export function registerContactHandlers(): void {
           count: transactions.length,
         };
       } catch (error) {
-        console.error("[Main] Check can delete contact failed:", error);
+        logService.error("[Main] Check can delete contact failed:", "Contacts", { contactId, error });
         if (error instanceof ValidationError) {
           return {
             success: false,
@@ -646,7 +649,7 @@ export function registerContactHandlers(): void {
       contactId: string,
     ): Promise<ContactResponse> => {
       try {
-        console.log("[Main] Removing contact from local database:", contactId);
+        logService.info("[Main] Removing contact from local database", "Contacts", { contactId });
 
         // Validate input
         const validatedContactId = validateContactId(contactId); // Validated, will throw if invalid
@@ -676,7 +679,7 @@ export function registerContactHandlers(): void {
           success: true,
         };
       } catch (error) {
-        console.error("[Main] Remove contact failed:", error);
+        logService.error("[Main] Remove contact failed:", "Contacts", { contactId, error });
         if (error instanceof ValidationError) {
           return {
             success: false,

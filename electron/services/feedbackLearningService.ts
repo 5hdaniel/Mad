@@ -4,6 +4,7 @@
  */
 
 import databaseService from "./databaseService";
+import logService from "./logService";
 import { UserFeedback } from "../types/models";
 
 interface Pattern {
@@ -148,7 +149,7 @@ class FeedbackLearningService {
 
       return patterns;
     } catch (error) {
-      console.error("[FeedbackLearning] Pattern detection failed:", error);
+      logService.error("[FeedbackLearning] Pattern detection failed:", "FeedbackLearning", { error });
       return [];
     }
   }
@@ -460,7 +461,7 @@ class FeedbackLearningService {
           return null;
       }
     } catch (error) {
-      console.error("[FeedbackLearning] Pattern application failed:", error);
+      logService.error("[FeedbackLearning] Pattern application failed:", "FeedbackLearning", { error });
       return null;
     }
   }
@@ -578,7 +579,7 @@ class FeedbackLearningService {
 
       return result;
     } catch (error) {
-      console.error("[FeedbackLearning] getAccuracyByProvider failed:", error);
+      logService.error("[FeedbackLearning] getAccuracyByProvider failed:", "FeedbackLearning", { error });
       return {};
     }
   }
@@ -627,7 +628,7 @@ class FeedbackLearningService {
 
       return result;
     } catch (error) {
-      console.error("[FeedbackLearning] getAccuracyByPromptVersion failed:", error);
+      logService.error("[FeedbackLearning] getAccuracyByPromptVersion failed:", "FeedbackLearning", { error });
       return {};
     }
   }
@@ -694,7 +695,7 @@ class FeedbackLearningService {
       // Limit to top 10
       return errors.slice(0, 10);
     } catch (error) {
-      console.error("[FeedbackLearning] identifySystematicErrors failed:", error);
+      logService.error("[FeedbackLearning] identifySystematicErrors failed:", "FeedbackLearning", { error });
       return [];
     }
   }
@@ -731,7 +732,7 @@ class FeedbackLearningService {
         overallAccuracy: totalLLMFeedback > 0 ? totalApprovals / totalLLMFeedback : 0,
       };
     } catch (error) {
-      console.error("[FeedbackLearning] getLLMFeedbackAnalysis failed:", error);
+      logService.error("[FeedbackLearning] getLLMFeedbackAnalysis failed:", "FeedbackLearning", { error });
       return {
         accuracyByProvider: {},
         accuracyByPromptVersion: {},

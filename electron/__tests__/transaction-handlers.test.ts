@@ -48,6 +48,7 @@ jest.mock("../services/auditService", () => ({
 jest.mock("../services/logService", () => ({
   __esModule: true,
   default: {
+    debug: jest.fn(),
     info: jest.fn(),
     error: jest.fn(),
     warn: jest.fn(),

@@ -7,6 +7,7 @@
 import { ipcMain, app, BrowserWindow } from "electron";
 import { autoUpdater } from "electron-updater";
 import log from "electron-log";
+import logService from "../services/logService";
 
 // Track registration to prevent duplicate handlers
 let handlersRegistered = false;
@@ -17,8 +18,9 @@ let handlersRegistered = false;
 export function registerUpdaterHandlers(mainWindow: BrowserWindow): void {
   // Prevent double registration
   if (handlersRegistered) {
-    console.warn(
-      "[UpdaterHandlers] Handlers already registered, skipping duplicate registration"
+    logService.warn(
+      "Handlers already registered, skipping duplicate registration",
+      "UpdaterHandlers"
     );
     return;
   }
