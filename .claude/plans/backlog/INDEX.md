@@ -3,8 +3,8 @@
 This index tracks all backlog items with their current status and metadata.
 
 **Last Updated:** 2025-12-28
-**Total Items:** 126
-**Pending:** 88 | **In Progress:** 0 | **Completed:** 35 | **Obsolete:** 2 | **Deferred:** 2
+**Total Items:** 128
+**Pending:** 89 | **In Progress:** 1 | **Completed:** 35 | **Obsolete:** 2 | **Deferred:** 2
 
 ---
 
@@ -26,8 +26,8 @@ This index tracks all backlog items with their current status and metadata.
 ## Quick Filters
 
 ### By Priority
-- **Critical:** BACKLOG-030 (done), 032, 035 (done), 038 (done), 039 (done), 044 (done), 045 (done), 058 (done), 059 (done), 072 (done), 073 (done), 074 (done), **107**, **108**
-- **High:** BACKLOG-008, 009, 013, 016, 018, 020, 021, 023, 026, 031, 033, 037, 056, 060 (done), 061, 062, 063, 067, 075 (done), 076 (done), 084 (done), 085 (done), 088, 090, 091, 098, 099, **109**, **110**, **111**
+- **Critical:** BACKLOG-030 (done), 032, 035 (done), 038 (done), 039 (done), 044 (done), 045 (done), 058 (done), 059 (done), 072 (done), 073 (done), 074 (done), **107**, **108**, **117**
+- **High:** BACKLOG-008, 009, 013, 016, 018, 020, 021, 023, 026, 031, 033, 037, 056, 060 (done), 061, 062, 063, 067, 075 (done), 076 (done), 084 (done), 085 (done), 088, 090, 091, 098, 099, **109**, **110**, **111**, **118**
 - **Medium:** Multiple (see full index), 077 (done), 078 (done), 079 (done), 081, 086, 087, 089, 092, 093, 094, 095, 096, 097, 100, 101, 102, **112**, **113**, **114**, **115**, **116**
 - **Low/Deferred:** BACKLOG-001, 003, 004, 010, 017, 069, 070, 071
 
@@ -175,6 +175,8 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-114 | Boost Test Coverage for electron/utils/ | test | Medium | Pending | - | 20-30 | ~80K | 1d | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-114.md](BACKLOG-114.md) |
 | BACKLOG-115 | Address Remaining any Types in Electron Handlers | refactor | Medium | Pending | - | 40-60 | ~150K | 1-2d | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-115.md](BACKLOG-115.md) |
 | BACKLOG-116 | Bring Google Login to Feature Parity with Microsoft | service | Medium | Pending | - | 15-20 | ~60K | 2-3h | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-116.md](BACKLOG-116.md) |
+| BACKLOG-117 | Fix Sprint 009 Auth Regressions (Preload Sandbox + Google Login) | service | Critical | In Progress | - | 4-6 | ~20K | 30-60m | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-117.md](BACKLOG-117.md) |
+| BACKLOG-118 | Fix OnboardingFlow React Hooks Order Bug | ui | High | Completed | - | 1-2 | ~10K | 15m | 1 | ~8K | 10m | - | - | - | - | - | - | 1 | ~8K | 10m | -50% | [BACKLOG-118.md](BACKLOG-118.md) |
 
 ---
 
@@ -274,6 +276,9 @@ This index tracks all backlog items with their current status and metadata.
 - 2025-12-28: Added BACKLOG-107 through BACKLOG-115 (9 items from SR Engineer findings for SPRINT-012+)
 - 2025-12-28: New items: 2 CRITICAL (useAppStateMachine split, flaky test), 3 HIGH (AppRouter, AppShell, service migration), 4 MEDIUM (test coverage, any types)
 - 2025-12-28: Added BACKLOG-116 (Google Login Feature Parity) - Medium priority, from SR Engineer review of PR #242
+- 2025-12-28: Added BACKLOG-117 (Sprint 009 Auth Regressions) - Critical priority, preload sandbox + Google login flow regression
+- 2025-12-28: Added BACKLOG-118 (OnboardingFlow Hooks Bug) - High priority, React hooks order violation fixed
+- 2025-12-28: BACKLOG-118 completed - useCallback moved before early return to fix hooks order
 
 ---
 
