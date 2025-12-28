@@ -68,12 +68,14 @@ You are auto-invoked when PM assigns a task. Your first actions:
 ### Creating Branch
 ```
 
-Then immediately:
+Then immediately (using Branch Configuration from task file):
 ```bash
-git checkout develop
-git pull origin develop
-git checkout -b [branch from task file]
+git checkout [Base Branch from task file]  # e.g., develop, int/xxx, project/xxx
+git pull origin [Base Branch]
+git checkout -b [Work Branch from task file]  # e.g., feature/TASK-XXX-slug
 ```
+
+**Note:** Check the task file's "Branch Configuration" section for the correct Base Branch. Do NOT assume `develop` - it may be a project or integration branch.
 
 ### Step 2: Read Task File Completely
 
@@ -123,9 +125,25 @@ As you work:
 **If ANY item is unchecked, DO NOT create PR.**
 ```
 
-### Step 5: Create PR with Metrics
+### Step 5: Sync with Target Branch (MANDATORY)
 
-Only after ALL quality gates pass:
+**Before creating PR**, sync with the target branch to catch conflicts early.
+
+**Full procedure:** See `.claude/docs/PR-SOP.md` Phase 7.5
+
+```bash
+git fetch origin
+git merge origin/[PR Target from task file]  # develop, int/xxx, project/xxx
+# Resolve conflicts if any
+npm run type-check && npm test
+git push
+```
+
+**If you cannot resolve conflicts:** Stop and ask PM or SR Engineer for guidance.
+
+### Step 6: Create PR with Metrics
+
+Only after ALL quality gates pass AND sync is complete:
 
 ```bash
 git add .
@@ -136,14 +154,16 @@ git commit -m "type(scope): description
 Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 
 git push -u origin [branch]
-gh pr create --base develop --title "..." --body "..."
+gh pr create --base [PR Target from task file] --title "..." --body "..."
 ```
+
+**Note:** Use the PR Target from the task file's Branch Configuration section.
 
 **PR body MUST include Engineer Metrics section.**
 
 **Metrics format:** See `.claude/docs/shared/metrics-templates.md` for the exact template.
 
-### Step 6: Wait for CI and Debug
+### Step 7: Wait for CI and Debug
 
 ```bash
 gh pr checks <PR-NUMBER> --watch
@@ -157,7 +177,9 @@ gh pr checks <PR-NUMBER> --watch
 5. Wait for CI again
 6. Track debugging turns/time separately
 
-### Step 7: Request SR Engineer Review
+**Full CI verification procedure:** See `.claude/docs/PR-SOP.md` Phase 8
+
+### Step 8: Request SR Engineer Review
 
 **Only when CI passes**, invoke the SR Engineer:
 

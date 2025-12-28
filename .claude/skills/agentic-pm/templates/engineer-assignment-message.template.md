@@ -35,18 +35,32 @@ Read the full task file before starting.
 1. **Non-goals**: Review the non-goals section carefully. Do not expand scope.
 2. **Integration**: Your work will be used by <TASK-AAA, TASK-BBB>.
 3. **Testing**: <specific testing requirements>
-4. **Branch**: Create `feat/<ID>-<slug>` from `<base branch>`.
+
+## Branch Configuration
+
+| Setting | Value |
+|---------|-------|
+| **Base Branch** | `<develop / int/xxx / project/xxx>` |
+| **PR Target** | `<develop / int/xxx / project/xxx>` |
+| **Work Branch** | `<feature/fix/hotfix/refactor>/TASK-XXX-slug` |
+
+**IMPORTANT:** Before creating your PR:
+1. Sync with target: `git fetch origin && git merge origin/<PR Target>`
+2. Resolve any conflicts
+3. Run tests: `npm run type-check && npm test`
+4. Push and verify CI passes
 
 ## Workflow
 
 1. Read the full task file
-2. Create your feature branch
+2. Create your work branch from **Base Branch** (see Branch Configuration above)
 3. Implement according to acceptance criteria
 4. Complete the Implementation Summary section
-5. Run all CI checks locally
-6. Open PR targeting `<branch>`
-7. Have senior-engineer-pr-lead agent review the PR
-8. After merge, report completion metrics (see below)
+5. Sync with **PR Target** and resolve any conflicts
+6. Run all CI checks locally
+7. Open PR targeting **PR Target**
+8. Have senior-engineer-pr-lead agent review the PR
+9. After merge, report completion metrics (see below)
 
 ## Completion Reporting (REQUIRED)
 

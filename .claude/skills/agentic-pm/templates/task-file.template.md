@@ -19,6 +19,27 @@ Use the Task tool to spawn the engineer agent instead.
 
 ---
 
+## Branch Configuration (PM-Specified)
+
+| Setting | Value |
+|---------|-------|
+| **Base Branch** | `develop` |
+| **PR Target** | `develop` |
+| **Work Branch** | `<type>/TASK-XXX-slug` |
+
+**Branch Type:** `feature` / `fix` / `hotfix` / `refactor`
+
+> **Note for PM:** Update the Base Branch and PR Target if this task is part of a project branch (`project/*`) or integration branch (`int/*`). For standard sprint tasks targeting develop, leave as `develop`.
+
+**Pre-PR Sync Requirement:**
+Before creating PR, engineer MUST:
+1. `git fetch origin && git merge origin/<PR Target>`
+2. Resolve any merge conflicts
+3. Run `npm run type-check && npm test` after resolution
+4. Push and verify CI passes
+
+---
+
 ## Goal
 
 <Clear, concise statement of what this task accomplishes. 1-2 sentences.>

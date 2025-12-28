@@ -202,7 +202,7 @@ Before creating a PR, always sync with target branch:
 
 ```bash
 git fetch origin
-git merge origin/develop  # or origin/main for hotfixes
+git merge origin/<PR Target>  # develop, int/xxx, project/xxx, or main
 
 # If conflicts exist, resolve them NOW
 # Run tests locally
@@ -212,6 +212,72 @@ npm test
 # Then push
 git push
 ```
+
+**For sprint tasks:** Use the PR Target from your task file's Branch Configuration section.
+
+**Full procedure:** See `.claude/docs/PR-SOP.md` Phase 7.5
+
+---
+
+## Git Worktrees (Parallel Development)
+
+Use worktrees when you need to work on a separate branch without interrupting your current work.
+
+### When to Use Worktrees
+
+| Scenario | Why Worktree |
+|----------|--------------|
+| Quick fix while mid-task | Keep current branch untouched |
+| Reviewing another PR | Test code without switching context |
+| CI/build fixes | Isolate from feature work |
+| Comparing branches | Side-by-side directories |
+
+### Worktree Commands
+
+```bash
+# Create worktree for a new branch (based on develop)
+git worktree add ../repo-fix develop -b fix/quick-fix
+
+# Create worktree for an existing branch
+git worktree add ../repo-feature feature/existing-branch
+
+# List all worktrees
+git worktree list
+
+# Remove worktree when done
+git worktree remove ../repo-fix
+
+# Force remove if there are uncommitted changes
+git worktree remove ../repo-fix --force
+```
+
+### Worktree Workflow Example
+
+```bash
+# You're mid-task on feature/TASK-500
+# CI fix needed urgently
+
+# 1. Create worktree for the fix
+git worktree add ../Mad-ci-fix develop -b fix/ci-flaky-test
+
+# 2. Work in the new directory
+cd ../Mad-ci-fix
+# ... make changes, test, commit ...
+git push -u origin fix/ci-flaky-test
+gh pr create --base develop
+
+# 3. After PR merged, clean up
+cd ../Mad  # back to original
+git worktree remove ../Mad-ci-fix
+
+# 4. Continue original work - branch untouched
+```
+
+### Best Practices
+
+- **Naming:** Use descriptive directory names like `repo-fix`, `repo-review`, `repo-hotfix`
+- **Cleanup:** Always remove worktrees after merging to avoid stale directories
+- **Sync:** Each worktree is independent - don't forget to sync both with origin
 
 ---
 
