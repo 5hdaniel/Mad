@@ -86,6 +86,87 @@ Include realistic real estate emails:
 
 ---
 
+## SR Engineer Review Notes (Pre-Implementation)
+
+**Review Date:** 2025-12-28 | **Status:** APPROVED
+
+### Branch Information (SR Engineer decides)
+- **Branch From:** develop
+- **Branch Into:** develop
+- **Suggested Branch Name:** feature/TASK-800-email-fixtures
+
+### Execution Classification
+- **Parallel Safe:** YES - no shared files with TASK-801
+- **Depends On:** None
+- **Blocks:** TASK-802 (Integration Testing Framework)
+
+### Shared File Analysis
+
+| File | Tasks | Risk |
+|------|-------|------|
+| `jest.config.js` | TASK-802 only | None for this task |
+| New fixture directory | TASK-800 only | None |
+
+### Technical Validation
+
+1. **Existing Fixture Pattern:**
+   - Reference: `electron/services/extraction/__tests__/fixtures/accuracy-test-emails.json`
+   - Good pattern with 60 emails, metadata, expected results
+   - New fixtures should match this structure for consistency
+
+2. **ParsedEmail Interface:**
+   - Located in `electron/services/gmailFetchService.ts`
+   - Key fields: id, thread_id, subject, body, sender, recipients, labels, sent_at
+   - Also: hasAttachments, attachmentCount, attachments[]
+
+3. **Email Fixture Requirements - APPROVED:**
+   - 100 emails across 30+ threads is appropriate
+   - Stage coverage (prospecting -> closing) aligns with TransactionStage enum
+   - Include both Gmail and Outlook format variations
+   - Deterministic IDs (e.g., `test-email-001`) for reproducibility
+
+4. **Recommended Fixture Structure:**
+   ```typescript
+   // Align with existing accuracy-test-emails.json pattern
+   {
+     "metadata": {
+       "description": "...",
+       "version": "1.0.0",
+       "totalEmails": 100,
+       ...
+     },
+     "emails": [
+       {
+         "id": "fake-email-001",
+         "thread_id": "thread-001",
+         "provider": "gmail",  // NEW: distinguish provider
+         "subject": "...",
+         "body": "...",
+         // ... standard email fields
+         "category": "transaction",
+         "stage": "closing",
+         "expected": {
+           "isTransaction": true,
+           "transactionType": "purchase",
+           "shouldBeSpam": false
+         }
+       }
+     ]
+   }
+   ```
+
+### Technical Considerations
+- Keep fixture JSON under 1MB for fast loading in tests
+- Include realistic email threading (replies, forwards)
+- Add edge cases: empty body, long subject, unicode characters
+- Include attachment metadata samples (not actual files)
+
+### Risk Assessment
+- **LOW:** This is test infrastructure, not production code
+- Ensure fixture loading helper handles JSON parse errors gracefully
+
+---
+
 ## PM Estimate
 
 **Turns:** 8-12 | **Tokens:** ~40K-60K | **Time:** ~1-2h
