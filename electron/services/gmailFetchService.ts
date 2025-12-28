@@ -1,6 +1,4 @@
 import { google, gmail_v1, Auth } from "googleapis";
-// NOTE: tokenEncryptionService removed - using session-only OAuth
-// Tokens stored in encrypted database, no additional keychain encryption needed
 import databaseService from "./databaseService";
 import logService from "./logService";
 import { OAuthToken } from "../types/models";

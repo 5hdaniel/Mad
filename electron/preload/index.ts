@@ -15,6 +15,3 @@ export { deviceBridge, backupBridge, driverBridge, syncBridge } from "./deviceBr
 export { outlookBridge, updateBridge } from "./outlookBridge";
 export { eventBridge } from "./eventBridge";
 export { messageBridge } from "./messageBridge";
-
-// NOTE: legacyElectronBridge has been deprecated and removed.
-// All functionality is now available through the modular bridges above.

@@ -9,8 +9,6 @@ import http from "http";
 import url from "url";
 import dotenv from "dotenv";
 import databaseService from "./databaseService";
-// NOTE: tokenEncryptionService removed - using session-only OAuth
-// Tokens stored in encrypted database, no additional keychain encryption needed
 
 dotenv.config({ path: ".env.development" });
 

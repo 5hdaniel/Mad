@@ -11,6 +11,7 @@ import log from "electron-log";
 import { backupService } from "./services/backupService";
 import { backupDecryptionService } from "./services/backupDecryptionService";
 import { BackupOptions, BackupProgress } from "./types/backup";
+import { rateLimiters } from "./utils/rateLimit";
 
 /**
  * Register all backup-related IPC handlers
@@ -145,6 +146,9 @@ export function registerBackupHandlers(mainWindow: BrowserWindow): void {
   /**
    * Start a backup operation
    * @param options BackupOptions with device UDID and optional settings
+   *
+   * Rate limited: 30 second cooldown per device to prevent backup spam.
+   * Backups are very expensive operations (full device backup, can take hours).
    */
   ipcMain.handle("backup:start", async (_, options: BackupOptions) => {
     log.info("[BackupHandlers] Starting backup for device:", options.udid);
@@ -153,6 +157,29 @@ export function registerBackupHandlers(mainWindow: BrowserWindow): void {
       // Validate options
       if (!options.udid) {
         throw new Error("Device UDID is required");
+      }
+
+      // Rate limit check - 30 second cooldown per device
+      const { allowed, remainingMs } = rateLimiters.backup.canExecute(
+        "backup:start",
+        options.udid
+      );
+      if (!allowed && remainingMs !== undefined) {
+        const seconds = Math.ceil(remainingMs / 1000);
+        log.warn(
+          `[BackupHandlers] Rate limited backup:start for device ${options.udid}. ` +
+            `Retry in ${seconds}s`
+        );
+        return {
+          success: false,
+          backupPath: null,
+          error: `Please wait ${seconds} seconds before starting another backup.`,
+          duration: 0,
+          deviceUdid: options.udid,
+          isIncremental: false,
+          backupSize: 0,
+          rateLimited: true,
+        };
       }
 
       const result = await backupService.startBackup(options);
