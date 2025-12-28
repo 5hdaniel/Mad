@@ -3,10 +3,8 @@
  * Modal for editing transaction details and contact assignments
  */
 import React, { useState, useEffect } from "react";
-import type {
-  Transaction,
-  Contact as BaseContact,
-} from "../../../../electron/types/models";
+import type { Transaction } from "../../../../electron/types/models";
+import type { ExtendedContact } from "../../../types/components";
 import {
   ROLE_TO_CATEGORY,
   AUDIT_WORKFLOW_STEPS,
@@ -20,11 +18,6 @@ import ContactSelectModal from "../../ContactSelectModal";
 // ============================================
 // TYPES
 // ============================================
-
-interface ExtendedContact extends BaseContact {
-  address_mention_count?: number;
-  last_communication_at?: string | Date;
-}
 
 interface ContactAssignment {
   id: string;
