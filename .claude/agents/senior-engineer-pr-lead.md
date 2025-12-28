@@ -162,6 +162,24 @@ Beyond the standard SOP, as senior engineer you also verify:
 - [ ] Performance implications assessed
 - [ ] Security implications documented
 - [ ] **Engineer Metrics present, SR Metrics to be added** (see Metrics Protocol below)
+- [ ] **File Lifecycle (Refactor PRs)** - No orphaned files left behind (see below)
+
+### File Lifecycle Check (Refactor/Extraction PRs)
+
+**Reference:** `.claude/docs/shared/file-lifecycle-protocol.md`
+
+For any PR involving refactoring, extraction, or file replacement:
+
+```markdown
+## File Lifecycle Review
+
+- [ ] **Orphan Check**: No replaced files left behind
+- [ ] **Import Check**: No dangling imports to deleted files
+- [ ] **Test Check**: Old tests removed, new tests added
+- [ ] **Export Check**: No barrel exports referencing deleted files
+```
+
+**SPRINT-009 Lesson:** TASK-618 cleaned up 11 orphaned files that should have been deleted in prior sprints. Enforce this check to prevent accumulation.
 
 ### Metrics Protocol (REQUIRED for Sprint Tasks)
 

@@ -53,21 +53,62 @@ Before issuing a task file:
 
 Apply these multipliers to your initial estimates based on historical data:
 
-| Category | Multiplier | Rationale |
-|----------|------------|-----------|
-| schema | × 1.3 | High variance, add buffer |
-| refactor | × 0.5 | Consistently overestimated (-52% avg) |
-| test | × 1.0 | Usually accurate |
-| config | × 0.5 | Significantly overestimated |
-| service/ipc/ui | × 1.0 | TBD - need data |
+| Category | Multiplier | Rationale | Data Points |
+|----------|------------|-----------|-------------|
+| security | × 0.4 | Simple focused fixes, avg -65% variance | SPRINT-009 |
+| refactor | × 0.5 | Consistently overestimated (-52% avg) | 10+ tasks |
+| test | × 1.0 | Usually accurate (0% variance) | SPRINT-009 |
+| cleanup | × 0.5 | Similar to refactor, but MUST scan scope first | SPRINT-009 |
+| schema | × 1.3 | High variance, add buffer | SPRINT-003 |
+| config | × 0.5 | Significantly overestimated | SPRINT-003 |
+| service/ipc/ui | × 1.0 | TBD - need data | - |
+
+**SPRINT-009 Insights:**
+- Security tasks completed in 40% of estimated time (avg -65% variance)
+- Cleanup tasks need scope scanning before estimating
+- Well-structured code accelerates refactoring
 
 ### Estimation Process
 
 1. **Categorize the task** - Determine primary category (schema, refactor, test, etc.)
-2. **Make initial estimate** - Based on scope and complexity
-3. **Apply adjustment factor** - Multiply by category factor
-4. **Consider context** - Well-structured code = faster refactoring
-5. **Document estimate** - Include Est. Turns, Tokens, Time in task file
+2. **Scan scope (REQUIRED for cleanup tasks)** - See below
+3. **Make initial estimate** - Based on scope and complexity
+4. **Apply adjustment factor** - Multiply by category factor
+5. **Consider context** - Well-structured code = faster refactoring
+6. **Document estimate** - Include Est. Turns, Tokens, Time in task file
+
+### Scope Scanning (REQUIRED for Cleanup Tasks)
+
+**Before estimating ANY cleanup task**, scan the actual scope:
+
+```bash
+# Console.log cleanup - count occurrences
+grep -r "console\." --include="*.ts" --include="*.tsx" | grep -v node_modules | wc -l
+
+# Commented code cleanup - approximate count
+grep -rn "^[[:space:]]*//.*{" --include="*.ts" --include="*.tsx" | grep -v node_modules | wc -l
+
+# Any types cleanup - count occurrences
+grep -r ": any" --include="*.ts" --include="*.tsx" | grep -v node_modules | wc -l
+
+# Orphaned files - list candidates
+find src -name "*.tsx" -exec basename {} \; | sort | uniq
+```
+
+**Document the scan results in the task file:**
+```markdown
+## Scope Scan (Pre-Implementation)
+
+**Scan Date:** YYYY-MM-DD
+**Command:** `grep -r "console\." --include="*.ts" | wc -l`
+**Result:** 47 occurrences across 23 files
+
+**Estimate based on scan:**
+- ~47 occurrences / ~10 per turn = 5 turns (base)
+- Apply cleanup multiplier: 5 × 0.5 = 2-3 turns
+```
+
+**Why this matters:** SPRINT-009 showed cleanup estimates were often based on stale audit data. Scanning actual scope prevents surprises.
 
 ### Example
 
