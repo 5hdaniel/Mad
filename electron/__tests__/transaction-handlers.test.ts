@@ -70,6 +70,16 @@ jest.mock("../services/enhancedExportService", () => ({
   },
 }));
 
+// Mock rate limiters to always allow in tests
+jest.mock("../utils/rateLimit", () => ({
+  rateLimiters: {
+    scan: {
+      canExecute: jest.fn().mockReturnValue({ allowed: true }),
+      clearAll: jest.fn(),
+    },
+  },
+}));
+
 jest.mock("../services/databaseService", () => ({
   __esModule: true,
   default: {

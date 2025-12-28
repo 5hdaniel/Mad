@@ -1,10 +1,5 @@
 import React from "react";
-import type { Contact } from "../../electron/types/models";
-
-interface ExtendedContact extends Contact {
-  address_mention_count?: number;
-  last_communication_at?: string | Date;
-}
+import type { ExtendedContact } from "../types/components";
 
 interface ContactSelectModalProps {
   contacts: ExtendedContact[];

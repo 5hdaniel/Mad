@@ -207,28 +207,28 @@ Test cases:
 **REQUIRED: Complete this section before creating PR.**
 **See: `.claude/docs/ENGINEER-WORKFLOW.md` for full workflow**
 
-*Completed: <DATE>*
+*Completed: 2025-12-27*
 
 ### Engineer Checklist
 
 ```
 Pre-Work:
-- [ ] Created branch from develop
-- [ ] Noted start time: ___
-- [ ] Read task file completely
+- [x] Created branch from develop
+- [x] Noted start time: Session start
+- [x] Read task file completely
 
 Implementation:
-- [ ] Rate limit utility created
-- [ ] Tests written and passing
-- [ ] At least 3 handlers rate-limited
-- [ ] Code complete
-- [ ] Tests pass locally (npm test)
-- [ ] Type check passes (npm run type-check)
-- [ ] Lint passes (npm run lint)
+- [x] Rate limit utility created
+- [x] Tests written and passing
+- [x] At least 3 handlers rate-limited
+- [x] Code complete
+- [x] Tests pass locally (npm test)
+- [x] Type check passes (npm run type-check)
+- [x] Lint passes (npm run lint)
 
 PR Submission:
-- [ ] This summary section completed
-- [ ] PR created with Engineer Metrics (see template)
+- [x] This summary section completed
+- [x] PR created with Engineer Metrics (see template)
 - [ ] CI passes (gh pr checks --watch)
 - [ ] SR Engineer review requested
 
@@ -240,19 +240,47 @@ Completion:
 ### Results
 
 - **Before**: No IPC rate limiting
-- **After**: 3+ expensive handlers protected
-- **Actual Turns**: X (Est: 6-8)
-- **Actual Tokens**: ~XK (Est: ~30K)
-- **Actual Time**: X min
-- **PR**: [URL after PR created]
+- **After**: 3 expensive handlers protected with rate limiting
+- **Actual Turns**: 6 (Est: 6-8)
+- **Actual Tokens**: ~24K (Est: ~30K)
+- **Actual Time**: ~25 min (including debugging)
+- **PR**: https://github.com/5hdaniel/Mad/pull/233
+
+### Implementation Details
+
+#### Files Created
+1. `electron/utils/rateLimit.ts` - Rate limiting utilities:
+   - `throttle()` - Limits function execution to once per delay period
+   - `debounce()` - Delays execution until no calls for delay period
+   - `createIPCRateLimiter()` - Factory for per-key rate limiters
+   - Pre-configured `rateLimiters` singleton for IPC handlers
+
+2. `electron/utils/__tests__/rateLimit.test.ts` - 26 comprehensive tests
+
+#### Files Modified
+1. `electron/backup-handlers.ts` - Added 30s rate limit to `backup:start`
+2. `electron/sync-handlers.ts` - Added 10s rate limit to `sync:start`
+3. `electron/transaction-handlers.ts` - Added 5s rate limit to `transactions:scan`
+
+#### Rate Limiting Thresholds
+| Handler | Cooldown | Rationale |
+|---------|----------|-----------|
+| `backup:start` | 30s | Backups are very expensive (full device, can take hours) |
+| `sync:start` | 10s | Syncs involve device communication + database writes |
+| `transactions:scan` | 5s | Scans hit external email APIs |
 
 ### Notes
 
 **Deviations from plan:**
-[If you deviated, explain what and why]
+- Enhanced the utility beyond just throttle/debounce to include `createIPCRateLimiter()`
+  which provides per-key rate limiting with remaining cooldown feedback. This is better
+  suited for IPC handlers where we want to rate limit per device/user rather than globally.
 
 **Issues encountered:**
-[Document any challenges]
+- Worktree needed npm install before type-check/lint could run (expected)
+- Existing transaction-handlers.test.ts and transaction-handlers.integration.test.ts
+  needed mocks for the rateLimiters to prevent rate limiting during test runs.
+  Added jest.mock for rateLimiters to both test files.
 
 ---
 

@@ -5,6 +5,7 @@
 
 export { authBridge } from "./authBridge";
 export { transactionBridge } from "./transactionBridge";
+export type { ScanOptions, ExportEnhancedOptions } from "./transactionBridge";
 export { contactBridge, addressBridge } from "./contactBridge";
 export { feedbackBridge } from "./communicationBridge";
 export { preferencesBridge, userBridge, shellBridge } from "./settingsBridge";
@@ -14,6 +15,3 @@ export { deviceBridge, backupBridge, driverBridge, syncBridge } from "./deviceBr
 export { outlookBridge, updateBridge } from "./outlookBridge";
 export { eventBridge } from "./eventBridge";
 export { messageBridge } from "./messageBridge";
-
-// NOTE: legacyElectronBridge has been deprecated and removed.
-// All functionality is now available through the modular bridges above.

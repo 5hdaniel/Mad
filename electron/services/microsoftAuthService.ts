@@ -4,8 +4,6 @@ import url from "url";
 import crypto from "crypto";
 import databaseService from "./databaseService";
 import logService from "./logService";
-// NOTE: tokenEncryptionService removed - using session-only OAuth
-// Tokens stored in encrypted database, no additional keychain encryption needed
 
 // ============================================
 // TYPES & INTERFACES

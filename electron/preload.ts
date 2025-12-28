@@ -98,6 +98,3 @@ contextBridge.exposeInMainWorld("api", {
   // iMessage conversations (macOS)
   messages: messageBridge,
 });
-
-// NOTE: Legacy window.electron namespace has been removed.
-// All APIs are now accessed through window.api namespace.

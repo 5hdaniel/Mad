@@ -8,20 +8,13 @@
  */
 import React, { useState, useEffect } from "react";
 import type { Transaction } from "../../../../electron/types/models";
+import type { TransactionCommunication } from "../../../types/components";
 import ExportModal from "../../ExportModal";
 import EditTransactionModal from "./EditTransactionModal";
 
 // ============================================
 // TYPES
 // ============================================
-
-interface Communication {
-  id: string;
-  subject?: string;
-  sender?: string;
-  sent_at?: string;
-  body_plain?: string;
-}
 
 interface ContactAssignment {
   id: string;
@@ -55,7 +48,7 @@ export function TransactionDetails({
   onClose,
   onTransactionUpdated,
 }: TransactionDetailsProps): React.ReactElement {
-  const [communications, setCommunications] = useState<Communication[]>([]);
+  const [communications, setCommunications] = useState<TransactionCommunication[]>([]);
   const [contactAssignments, setContactAssignments] = useState<
     ContactAssignment[]
   >([]);
@@ -68,8 +61,8 @@ export function TransactionDetails({
   const [activeTab, setActiveTab] = useState<"details" | "contacts">("details");
   const [unlinkingCommId, setUnlinkingCommId] = useState<string | null>(null);
   const [showUnlinkConfirm, setShowUnlinkConfirm] =
-    useState<Communication | null>(null);
-  const [viewingEmail, setViewingEmail] = useState<Communication | null>(null);
+    useState<TransactionCommunication | null>(null);
+  const [viewingEmail, setViewingEmail] = useState<TransactionCommunication | null>(null);
 
   useEffect(() => {
     loadDetails();
@@ -82,7 +75,7 @@ export function TransactionDetails({
 
       if (result.success) {
         const txn = result.transaction as {
-          communications?: Communication[];
+          communications?: TransactionCommunication[];
           contact_assignments?: ContactAssignment[];
         };
         setCommunications(txn.communications || []);
@@ -96,7 +89,7 @@ export function TransactionDetails({
   };
 
   const handleUnlinkCommunication = async (
-    comm: Communication
+    comm: TransactionCommunication
   ): Promise<void> => {
     try {
       setUnlinkingCommId(comm.id);
@@ -349,7 +342,7 @@ export function TransactionDetails({
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {communications.map((comm: Communication) => (
+                      {communications.map((comm: TransactionCommunication) => (
                         <div
                           key={comm.id}
                           className="bg-gray-50 border border-gray-200 rounded-lg p-4 cursor-pointer hover:bg-gray-100 hover:border-gray-300 transition-colors"

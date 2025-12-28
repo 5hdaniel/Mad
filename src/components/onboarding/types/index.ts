@@ -1,21 +1,24 @@
 /**
- * Onboarding Step Architecture Type Definitions
+ * Onboarding Types - Barrel Export
  *
- * This file re-exports all types from the types/ directory for backwards compatibility.
- * New code should import directly from './types' (the directory barrel export).
+ * This file re-exports all onboarding types from their domain-specific modules.
+ * Import from this file for backwards compatibility.
  *
  * @module onboarding/types
- * @deprecated Import from './types' directory instead
  */
 
+// Core step and platform types
 export type {
-  // Core types
   Platform,
   OnboardingStepId,
   SkippableStepId,
-  // Context
-  OnboardingContext,
-  // Actions
+} from "./steps";
+
+// Context types
+export type { OnboardingContext } from "./context";
+
+// Action types
+export type {
   SelectPhoneAction,
   ConnectEmailStartAction,
   EmailConnectedAction,
@@ -33,20 +36,33 @@ export type {
   ContinueEmailOnlyAction,
   StepAction,
   StepActionType,
-  // Configuration
+} from "./actions";
+
+// Configuration types
+export type {
   SkipConfig,
   StepNavigationConfig,
   OnboardingStepMeta,
-  // Components
+} from "./config";
+
+// Component types
+export type {
   OnboardingStepContentProps,
   OnboardingStep,
-  // Flows
+} from "./components";
+
+// Flow types
+export type {
   OnboardingStepRegistry,
   OnboardingFlowSequence,
   OnboardingFlowConfig,
-  // State
-  OnboardingPersistedState,
-  // Hooks
+} from "./flows";
+
+// State/persistence types
+export type { OnboardingPersistedState } from "./state";
+
+// Hook types
+export type {
   OnboardingOrchestratorProps,
   UseOnboardingFlowReturn,
-} from "./types/index";
+} from "./hooks";

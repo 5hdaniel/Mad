@@ -32,6 +32,9 @@ import {
   sanitizeObject,
 } from "./utils/validation";
 
+// Import rate limiting
+import { rateLimiters } from "./utils/rateLimit";
+
 // Type definitions
 interface TransactionResponse {
   success: boolean;
@@ -106,6 +109,8 @@ export const registerTransactionHandlers = (
   );
 
   // Scan and extract transactions from emails
+  // Rate limited: 5 second cooldown per user to prevent scan spam.
+  // Scans hit external email APIs (Gmail, Outlook).
   ipcMain.handle(
     "transactions:scan",
     async (
@@ -123,6 +128,25 @@ export const registerTransactionHandlers = (
         if (!validatedUserId) {
           throw new ValidationError("User ID validation failed", "userId");
         }
+
+        // Rate limit check - 5 second cooldown per user
+        const { allowed, remainingMs } = rateLimiters.scan.canExecute(
+          "transactions:scan",
+          validatedUserId
+        );
+        if (!allowed && remainingMs !== undefined) {
+          const seconds = Math.ceil(remainingMs / 1000);
+          logService.warn(
+            `Rate limited transactions:scan for user ${validatedUserId}. Retry in ${seconds}s`,
+            "Transactions"
+          );
+          return {
+            success: false,
+            error: `Please wait ${seconds} seconds before starting another scan.`,
+            rateLimited: true,
+          };
+        }
+
         const sanitizedOptions = sanitizeObject(options || {}) as ScanOptions;
 
         const result = await transactionService.scanAndExtractTransactions(

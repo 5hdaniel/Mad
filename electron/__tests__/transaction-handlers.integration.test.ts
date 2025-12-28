@@ -92,6 +92,16 @@ jest.mock("../services/databaseService", () => ({
   default: mockDatabaseService,
 }));
 
+// Mock rate limiters to always allow in tests
+jest.mock("../utils/rateLimit", () => ({
+  rateLimiters: {
+    scan: {
+      canExecute: jest.fn().mockReturnValue({ allowed: true }),
+      clearAll: jest.fn(),
+    },
+  },
+}));
+
 // Import after mocks
 import { registerTransactionHandlers } from "../transaction-handlers";
 
