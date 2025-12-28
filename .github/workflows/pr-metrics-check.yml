@@ -11,7 +11,7 @@ name: PR Metrics Validation
 # Exceptions:
 # - Dependabot PRs are exempt (automated dependency updates)
 # - PRs with [skip-metrics] in title are exempt (use sparingly)
-# - PRs with 'hotfix', 'quick-fix', or 'ci-fix' labels are exempt
+# - PRs with 'hotfix', 'quick-fix', 'ci-fix', or 'docs' labels are exempt
 
 on:
   pull_request:
@@ -34,7 +34,7 @@ jobs:
           LABELS='${{ toJson(github.event.pull_request.labels.*.name) }}'
           echo "Labels on PR: $LABELS"
 
-          if echo "$LABELS" | grep -qiE '"(hotfix|quick-fix|ci-fix)"'; then
+          if echo "$LABELS" | grep -qiE '"(hotfix|quick-fix|ci-fix|docs)"'; then
             echo "exempt=true" >> $GITHUB_OUTPUT
             echo "::notice::Metrics validation skipped - exempt label detected"
           else
