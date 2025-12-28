@@ -4,7 +4,7 @@ This index tracks all backlog items with their current status and metadata.
 
 **Last Updated:** 2025-12-28
 **Total Items:** 128
-**Pending:** 89 | **In Progress:** 1 | **Completed:** 35 | **Obsolete:** 2 | **Deferred:** 2
+**Pending:** 88 | **In Progress:** 0 | **Completed:** 37 | **Obsolete:** 2 | **Deferred:** 2
 
 ---
 
@@ -175,7 +175,7 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-114 | Boost Test Coverage for electron/utils/ | test | Medium | Pending | - | 20-30 | ~80K | 1d | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-114.md](BACKLOG-114.md) |
 | BACKLOG-115 | Address Remaining any Types in Electron Handlers | refactor | Medium | Pending | - | 40-60 | ~150K | 1-2d | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-115.md](BACKLOG-115.md) |
 | BACKLOG-116 | Bring Google Login to Feature Parity with Microsoft | service | Medium | Pending | - | 15-20 | ~60K | 2-3h | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-116.md](BACKLOG-116.md) |
-| BACKLOG-117 | Fix Sprint 009 Auth Regressions (Preload Sandbox + Google Login) | service | Critical | In Progress | - | 4-6 | ~20K | 30-60m | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-117.md](BACKLOG-117.md) |
+| BACKLOG-117 | Fix Sprint 009 Auth Regressions (Preload Sandbox + Google Login) | service | Critical | Completed | - | 4-6 | ~20K | 30-60m | 2 | ~8K | 9m | 1 | ~5K | 5m | 0 | 0 | 0 | 3 | ~13K | 14m | -70% | [BACKLOG-117.md](BACKLOG-117.md) |
 | BACKLOG-118 | Fix OnboardingFlow React Hooks Order Bug | ui | High | Completed | - | 1-2 | ~10K | 15m | 1 | ~8K | 10m | - | - | - | - | - | - | 1 | ~8K | 10m | -50% | [BACKLOG-118.md](BACKLOG-118.md) |
 
 ---
@@ -279,6 +279,9 @@ This index tracks all backlog items with their current status and metadata.
 - 2025-12-28: Added BACKLOG-117 (Sprint 009 Auth Regressions) - Critical priority, preload sandbox + Google login flow regression
 - 2025-12-28: Added BACKLOG-118 (OnboardingFlow Hooks Bug) - High priority, React hooks order violation fixed
 - 2025-12-28: BACKLOG-118 completed - useCallback moved before early return to fix hooks order
+- 2025-12-28: Created TASK-900 for BACKLOG-117 implementation
+- 2025-12-28: BACKLOG-117 completed - PR #242 merged (preload sandbox + Google login + timeout protection)
+- 2025-12-28: CI workflow fix - fetch base branch for PR comparison
 
 ---
 
