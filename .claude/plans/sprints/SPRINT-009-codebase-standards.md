@@ -64,9 +64,9 @@ This sprint remediates findings from a comprehensive SR Engineer audit:
 | TASK-608 | Electron Services Split | `electron/services/` | 10-14 |
 | TASK-609 | window.electron Migration | 13 files in `src/` | 16-20 |
 
-### Phase 6: Type Safety (MEDIUM)
+### Phase 6: Type Safety & Security (MEDIUM)
 **Execution:** Parallel possible
-**Dependency:** Phase 2 complete for M-3
+**Dependency:** Phase 2 complete for M-3; TASK-620 waits for TASK-616/617 if conflicts
 
 | Task | Title | Files | Est. Turns |
 |------|-------|-------|------------|
@@ -74,6 +74,8 @@ This sprint remediates findings from a comprehensive SR Engineer audit:
 | TASK-611 | SQL Field Whitelist | `databaseService.ts` | 6-8 |
 | TASK-612 | IPC Type Consolidation | `electron/types/`, preload | 8-10 |
 | TASK-613 | Onboarding Types Split | `src/types/` | 4-6 |
+| TASK-619 | Security Hardening (Query Timeout) | `dbConnection.ts`, docs | 6-8 | **MERGED** |
+| TASK-620 | IPC Rate Limiting | `electron/handlers/`, utils | 6-8 |
 
 ### Phase 7: Cleanup (LOW)
 **Execution:** Parallel (independent)
@@ -117,11 +119,13 @@ graph TD
         T609[TASK-609: window.electron]
     end
 
-    subgraph Phase6[Phase 6: Types]
+    subgraph Phase6[Phase 6: Types & Security]
         T610[TASK-610: Any Types]
         T611[TASK-611: SQL Whitelist]
         T612[TASK-612: IPC Types]
         T613[TASK-613: Onboarding Types]
+        T619[TASK-619: Query Timeout - MERGED]
+        T620[TASK-620: IPC Rate Limiting]
     end
 
     subgraph Phase7[Phase 7: Cleanup]
@@ -142,6 +146,9 @@ graph TD
     T608 --> T609
     T603 --> T612
     T609 --> T610
+    T611 --> T620
+    T616 -.-> T620
+    T617 -.-> T620
 ```
 
 ---
