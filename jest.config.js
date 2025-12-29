@@ -23,12 +23,6 @@ const baseConfig = {
     '^electron-log$': '<rootDir>/tests/__mocks__/electron-log.js',
     '^electron-updater$': '<rootDir>/tests/__mocks__/electron-updater.js',
   },
-
-  // Reduce output noise
-  verbose: false,
-
-  // Limit error output
-  errorOnDeprecated: false,
 };
 
 module.exports = {
@@ -55,16 +49,24 @@ module.exports = {
         '/tests/integration/', // Exclude integration tests from unit project
       ],
     },
-    // Integration tests - node environment with longer timeout
+    // Integration tests - node environment
     {
       ...baseConfig,
       displayName: 'integration',
       testEnvironment: 'node',
       setupFilesAfterEnv: ['<rootDir>/tests/integration/setup.ts'],
       testMatch: ['<rootDir>/tests/integration/**/*.test.ts'],
-      testTimeout: 30000, // 30 second timeout for integration tests
     },
   ],
+
+  // Global test timeout (30s for integration tests, default for unit tests)
+  testTimeout: 30000,
+
+  // Reduce output noise
+  verbose: false,
+
+  // Limit error output
+  errorOnDeprecated: false,
 
   // Coverage configuration
   collectCoverageFrom: [
