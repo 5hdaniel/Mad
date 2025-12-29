@@ -143,7 +143,7 @@ describe("TransactionMessagesTab", () => {
       );
 
       expect(
-        screen.getByText("Messages will appear here once linked to this transaction")
+        screen.getByText(/Click.*Attach Messages.*to link message threads to this transaction/i)
       ).toBeInTheDocument();
     });
 

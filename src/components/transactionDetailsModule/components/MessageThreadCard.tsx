@@ -16,6 +16,8 @@ export interface MessageThreadCardProps {
   contactName?: string;
   /** Phone number or identifier for the thread */
   phoneNumber: string;
+  /** Callback when unlink button is clicked */
+  onUnlink?: (threadId: string) => void;
 }
 
 /**
@@ -39,6 +41,7 @@ export function MessageThreadCard({
   messages,
   contactName,
   phoneNumber,
+  onUnlink,
 }: MessageThreadCardProps): React.ReactElement {
   const avatarInitial = getAvatarInitial(contactName, phoneNumber);
 
@@ -53,7 +56,7 @@ export function MessageThreadCard({
         <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-teal-600 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0">
           {avatarInitial}
         </div>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <h4 className="font-semibold text-gray-900 truncate" data-testid="thread-contact-name">
             {contactName || phoneNumber}
           </h4>
@@ -63,10 +66,32 @@ export function MessageThreadCard({
             </p>
           )}
         </div>
-        <div className="ml-auto flex-shrink-0">
+        <div className="flex items-center gap-2 flex-shrink-0">
           <span className="inline-block px-2 py-0.5 bg-green-100 text-green-700 text-xs font-medium rounded-full">
             {messages.length} {messages.length === 1 ? "message" : "messages"}
           </span>
+          {onUnlink && (
+            <button
+              onClick={() => onUnlink(threadId)}
+              className="text-gray-400 hover:text-red-600 hover:bg-red-50 rounded p-1 transition-all"
+              title="Remove from transaction"
+              data-testid="unlink-thread-button"
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
+                />
+              </svg>
+            </button>
+          )}
         </div>
       </div>
 
