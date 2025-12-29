@@ -154,7 +154,9 @@ describe("ContactSelectModal", () => {
       await userEvent.click(johnButton!);
 
       // Should show 1 selected in header
-      expect(screen.getByText("1 selected")).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText("1 selected")).toBeInTheDocument();
+      });
     });
 
     it("should replace selection when clicking another contact in single mode", async () => {
@@ -170,14 +172,18 @@ describe("ContactSelectModal", () => {
       // Select John first
       const johnButton = screen.getByText("John Smith").closest("button");
       await userEvent.click(johnButton!);
-      expect(screen.getByText("1 selected")).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText("1 selected")).toBeInTheDocument();
+      });
 
       // Then select Jane - should replace John
       const janeButton = screen.getByText("Jane Doe").closest("button");
       await userEvent.click(janeButton!);
 
       // Still only 1 selected
-      expect(screen.getByText("1 selected")).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText("1 selected")).toBeInTheDocument();
+      });
     });
 
     it("should call onSelect with selected contact when Add is clicked", async () => {
@@ -192,6 +198,11 @@ describe("ContactSelectModal", () => {
       // Select John
       const johnButton = screen.getByText("John Smith").closest("button");
       await userEvent.click(johnButton!);
+
+      // Wait for selection to update
+      await waitFor(() => {
+        expect(screen.getByText("1 selected")).toBeInTheDocument();
+      });
 
       // Click Add button
       const addButton = screen.getByRole("button", { name: /add/i });
@@ -215,12 +226,16 @@ describe("ContactSelectModal", () => {
       // Select John
       const johnButton = screen.getByText("John Smith").closest("button");
       await userEvent.click(johnButton!);
-      expect(screen.getByText("1 selected")).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText("1 selected")).toBeInTheDocument();
+      });
 
       // Select Jane too
       const janeButton = screen.getByText("Jane Doe").closest("button");
       await userEvent.click(janeButton!);
-      expect(screen.getByText("2 selected")).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText("2 selected")).toBeInTheDocument();
+      });
     });
 
     it("should deselect a contact when clicked again in multi-select mode", async () => {
@@ -237,11 +252,15 @@ describe("ContactSelectModal", () => {
 
       // Select John
       await userEvent.click(johnButton!);
-      expect(screen.getByText("1 selected")).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText("1 selected")).toBeInTheDocument();
+      });
 
       // Deselect John
       await userEvent.click(johnButton!);
-      expect(screen.getByText("Choose from your contacts")).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText("Choose from your contacts")).toBeInTheDocument();
+      });
     });
 
     it("should call onSelect with all selected contacts when Add is clicked", async () => {
@@ -257,9 +276,15 @@ describe("ContactSelectModal", () => {
       // Select John and Jane
       const johnButton = screen.getByText("John Smith").closest("button");
       await userEvent.click(johnButton!);
+      await waitFor(() => {
+        expect(screen.getByText("1 selected")).toBeInTheDocument();
+      });
 
       const janeButton = screen.getByText("Jane Doe").closest("button");
       await userEvent.click(janeButton!);
+      await waitFor(() => {
+        expect(screen.getByText("2 selected")).toBeInTheDocument();
+      });
 
       // Click Add button
       const addButton = screen.getByRole("button", { name: /add/i });
@@ -387,8 +412,10 @@ describe("ContactSelectModal", () => {
       const searchInput = screen.getByPlaceholderText(/search contacts/i);
       await userEvent.type(searchInput, "John");
 
-      expect(screen.getByText("John Smith")).toBeInTheDocument();
-      expect(screen.queryByText("Jane Doe")).not.toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText("John Smith")).toBeInTheDocument();
+        expect(screen.queryByText("Jane Doe")).not.toBeInTheDocument();
+      });
     });
 
     it("should filter contacts by email", async () => {
@@ -403,8 +430,10 @@ describe("ContactSelectModal", () => {
       const searchInput = screen.getByPlaceholderText(/search contacts/i);
       await userEvent.type(searchInput, "realty.com");
 
-      expect(screen.getByText("Bob Johnson")).toBeInTheDocument();
-      expect(screen.queryByText("John Smith")).not.toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText("Bob Johnson")).toBeInTheDocument();
+        expect(screen.queryByText("John Smith")).not.toBeInTheDocument();
+      });
     });
 
     it("should filter contacts by company", async () => {
@@ -419,8 +448,10 @@ describe("ContactSelectModal", () => {
       const searchInput = screen.getByPlaceholderText(/search contacts/i);
       await userEvent.type(searchInput, "Smith Corp");
 
-      expect(screen.getByText("John Smith")).toBeInTheDocument();
-      expect(screen.queryByText("Jane Doe")).not.toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText("John Smith")).toBeInTheDocument();
+        expect(screen.queryByText("Jane Doe")).not.toBeInTheDocument();
+      });
     });
 
     it("should show no results message when search has no matches", async () => {
@@ -435,7 +466,9 @@ describe("ContactSelectModal", () => {
       const searchInput = screen.getByPlaceholderText(/search contacts/i);
       await userEvent.type(searchInput, "nonexistent");
 
-      expect(screen.getByText("No matching contacts found")).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText("No matching contacts found")).toBeInTheDocument();
+      });
     });
 
     it("should be case insensitive", async () => {
@@ -450,7 +483,9 @@ describe("ContactSelectModal", () => {
       const searchInput = screen.getByPlaceholderText(/search contacts/i);
       await userEvent.type(searchInput, "JOHN");
 
-      expect(screen.getByText("John Smith")).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText("John Smith")).toBeInTheDocument();
+      });
     });
   });
 
@@ -547,8 +582,10 @@ describe("ContactSelectModal", () => {
       const johnButton = screen.getByText("John Smith").closest("button");
       await userEvent.click(johnButton!);
 
-      const addButton = screen.getByRole("button", { name: /add/i });
-      expect(addButton).not.toBeDisabled();
+      await waitFor(() => {
+        const addButton = screen.getByRole("button", { name: /add/i });
+        expect(addButton).not.toBeDisabled();
+      });
     });
 
     it("should show selection count in Add button", async () => {
@@ -564,10 +601,16 @@ describe("ContactSelectModal", () => {
       const johnButton = screen.getByText("John Smith").closest("button");
       await userEvent.click(johnButton!);
 
+      await waitFor(() => {
+        expect(screen.getByText("1 selected")).toBeInTheDocument();
+      });
+
       const janeButton = screen.getByText("Jane Doe").closest("button");
       await userEvent.click(janeButton!);
 
-      expect(screen.getByRole("button", { name: /add \(2\)/i })).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByRole("button", { name: /add \(2\)/i })).toBeInTheDocument();
+      });
     });
   });
 
