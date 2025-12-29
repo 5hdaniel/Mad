@@ -93,3 +93,38 @@ When planning phases for agentic engineers (LLM instances):
 - Phase with >5 parallel tasks touching shared code
 - Phase without explicit integration checkpoint
 - Tasks spanning multiple phases without clear handoff
+
+## Parallel Execution with Git Worktrees
+
+When running multiple tasks in parallel, use git worktrees to isolate each task's work.
+
+### Worktree Setup (Phase Start)
+
+```bash
+# For each parallel task in the phase
+git worktree add Mad-task-<NNN> feature/TASK-<NNN>-<slug>
+```
+
+### Worktree Management During Sprint
+
+| Situation | Action |
+|-----------|--------|
+| Task complete, PR merged | Worktree can be removed immediately or at sprint end |
+| Task blocked | Keep worktree until resolution |
+| Task cancelled | Remove worktree promptly |
+
+### Worktree Cleanup (MANDATORY at Sprint End)
+
+**Full reference:** `.claude/docs/shared/git-branching.md` → "Git Worktrees" section
+
+After all sprint PRs are merged:
+```bash
+# Bulk cleanup
+for wt in Mad-task-*; do [ -d "$wt" ] && git worktree remove "$wt" --force; done
+```
+
+### PM Responsibility
+
+When closing a sprint, verify:
+- [ ] All worktrees from the sprint are removed
+- [ ] `git worktree list` shows only the main repo
