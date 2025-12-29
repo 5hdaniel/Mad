@@ -50,7 +50,6 @@
   "license": "MIT",
   "devDependencies": {
     "@babel/preset-env": "^7.23.6",
-    "@types/dompurify": "^3.0.5",
     "@babel/preset-react": "^7.23.3",
     "@electron/notarize": "^2.4.1",
     "@jest/globals": "^30.2.0",
@@ -60,6 +59,7 @@
     "@testing-library/user-event": "^14.6.1",
     "@types/better-sqlite3": "^7.6.13",
     "@types/canvas-confetti": "^1.9.0",
+    "@types/dompurify": "^3.0.5",
     "@types/jest": "^29.5.14",
     "@types/node": "^22.19.1",
     "@types/react": "^19.2.6",
@@ -94,7 +94,6 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
-    "dompurify": "^3.0.6",
     "@azure/msal-node": "^2.15.0",
     "@microsoft/microsoft-graph-client": "^3.0.7",
     "@supabase/supabase-js": "^2.38.0",
@@ -102,6 +101,7 @@
     "better-sqlite3-multiple-ciphers": "^12.5.0",
     "canvas-confetti": "^1.9.3",
     "check-disk-space": "^3.4.0",
+    "dompurify": "^3.0.6",
     "dotenv": "^16.4.5",
     "electron-log": "^5.2.2",
     "electron-updater": "^6.3.9",
