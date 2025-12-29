@@ -1,6 +1,6 @@
 /**
  * Tests for TransactionMessagesTab component
- * Verifies rendering of loading, empty, error, and message list states
+ * Verifies rendering of loading, empty, error, and thread-based message list states
  */
 
 import React from "react";
@@ -19,6 +19,7 @@ describe("TransactionMessagesTab", () => {
       body_text: "Got your message about the property!",
       sent_at: "2024-01-16T11:00:00Z",
       direction: "inbound",
+      thread_id: "thread-1",
       participants: JSON.stringify({ from: "+14155550100", to: ["+14155550101"] }),
       has_attachments: false,
       is_false_positive: false,
@@ -30,6 +31,7 @@ describe("TransactionMessagesTab", () => {
       body_text: "Can we schedule a showing tomorrow?",
       sent_at: "2024-01-17T12:00:00Z",
       direction: "outbound",
+      thread_id: "thread-1",
       participants: JSON.stringify({ from: "+14155550101", to: ["+14155550100"] }),
       has_attachments: false,
       is_false_positive: false,
@@ -41,6 +43,8 @@ describe("TransactionMessagesTab", () => {
       body_text: "Thanks for the update!",
       sent_at: "2024-01-19T09:00:00Z",
       direction: "inbound",
+      thread_id: "thread-2",
+      participants: JSON.stringify({ from: "+14155550200", to: ["+14155550101"] }),
       has_attachments: false,
       is_false_positive: false,
     },
@@ -186,7 +190,7 @@ describe("TransactionMessagesTab", () => {
       expect(screen.getByText("Thanks for the update!")).toBeInTheDocument();
     });
 
-    it("should display channel badge for each message", () => {
+    it("should group messages into threads", () => {
       render(
         <TransactionMessagesTab
           messages={mockMessages as Communication[]}
@@ -195,14 +199,15 @@ describe("TransactionMessagesTab", () => {
         />
       );
 
-      // Should have SMS and iMessage badges
-      const smsBadges = screen.getAllByText("sms");
-      expect(smsBadges.length).toBeGreaterThanOrEqual(2);
+      // Should have thread list container
+      expect(screen.getByTestId("message-thread-list")).toBeInTheDocument();
 
-      expect(screen.getByText("imessage")).toBeInTheDocument();
+      // Should have 2 thread cards (thread-1 and thread-2)
+      const threadCards = screen.getAllByTestId("message-thread-card");
+      expect(threadCards.length).toBe(2);
     });
 
-    it("should display direction badges", () => {
+    it("should display conversation count when multiple threads", () => {
       render(
         <TransactionMessagesTab
           messages={mockMessages as Communication[]}
@@ -211,14 +216,11 @@ describe("TransactionMessagesTab", () => {
         />
       );
 
-      // Check for direction indicators
-      const receivedBadges = screen.getAllByText("Received");
-      expect(receivedBadges.length).toBe(2); // 2 inbound messages
-
-      expect(screen.getByText("Sent")).toBeInTheDocument(); // 1 outbound message
+      // Should show "in 2 conversations"
+      expect(screen.getByText("in 2 conversations")).toBeInTheDocument();
     });
 
-    it("should display sender information from participants", () => {
+    it("should display phone numbers as thread headers", () => {
       render(
         <TransactionMessagesTab
           messages={mockMessages as Communication[]}
@@ -227,130 +229,193 @@ describe("TransactionMessagesTab", () => {
         />
       );
 
-      // First message has a phone number in participants
-      expect(screen.getByText("+14155550100")).toBeInTheDocument();
+      // Thread headers should show phone numbers from participants
+      const contactNames = screen.getAllByTestId("thread-contact-name");
+      expect(contactNames.length).toBe(2);
     });
 
-    it("should truncate long message bodies", () => {
-      const longMessage: Partial<Communication> = {
-        id: "long-msg",
-        user_id: "user-456",
-        channel: "sms",
-        body_text: "A".repeat(200), // 200 characters
-        sent_at: "2024-01-20T10:00:00Z",
-        has_attachments: false,
-        is_false_positive: false,
-      };
+    it("should handle messages without thread_id", () => {
+      const messagesWithoutThreadId: Partial<Communication>[] = [
+        {
+          id: "solo-msg-1",
+          user_id: "user-456",
+          channel: "sms",
+          body_text: "Solo message 1",
+          sent_at: "2024-01-16T11:00:00Z",
+          has_attachments: false,
+          is_false_positive: false,
+        },
+        {
+          id: "solo-msg-2",
+          user_id: "user-456",
+          channel: "sms",
+          body_text: "Solo message 2",
+          sent_at: "2024-01-17T11:00:00Z",
+          has_attachments: false,
+          is_false_positive: false,
+        },
+      ];
 
       render(
         <TransactionMessagesTab
-          messages={[longMessage as Communication]}
+          messages={messagesWithoutThreadId as Communication[]}
           loading={false}
           error={null}
         />
       );
 
-      // Message should be truncated with ellipsis
-      const messageText = screen.getByText(/^A+\.\.\.$/);
-      expect(messageText).toBeInTheDocument();
+      // Each message without thread_id should be in its own "thread"
+      const threadCards = screen.getAllByTestId("message-thread-card");
+      expect(threadCards.length).toBe(2);
     });
 
-    it("should handle messages without participants gracefully", () => {
-      const messageWithoutParticipants: Partial<Communication> = {
-        id: "no-participants",
-        user_id: "user-456",
-        channel: "sms",
-        body_text: "Message without participants field",
-        sent_at: "2024-01-20T10:00:00Z",
-        has_attachments: false,
-        is_false_positive: false,
-      };
+    it("should display Unknown for messages without participants", () => {
+      const messageWithoutParticipants: Partial<Communication>[] = [
+        {
+          id: "no-participants",
+          user_id: "user-456",
+          channel: "sms",
+          body_text: "Message without participants",
+          sent_at: "2024-01-20T10:00:00Z",
+          has_attachments: false,
+          is_false_positive: false,
+        },
+      ];
 
       render(
         <TransactionMessagesTab
-          messages={[messageWithoutParticipants as Communication]}
+          messages={messageWithoutParticipants as Communication[]}
           loading={false}
           error={null}
         />
       );
 
-      // Should show "Unknown" as sender
-      expect(screen.getByText("Unknown")).toBeInTheDocument();
+      // Should show "Unknown" in the thread header
+      expect(screen.getByTestId("thread-contact-name")).toHaveTextContent("Unknown");
     });
 
     it("should use legacy sender field as fallback", () => {
-      const messageWithLegacySender: Partial<Communication> = {
-        id: "legacy-sender",
-        user_id: "user-456",
-        channel: "sms",
-        body_text: "Message with legacy sender",
-        sent_at: "2024-01-20T10:00:00Z",
-        sender: "John Doe",
-        has_attachments: false,
-        is_false_positive: false,
-      };
+      const messageWithLegacySender: Partial<Communication>[] = [
+        {
+          id: "legacy-sender",
+          user_id: "user-456",
+          channel: "sms",
+          body_text: "Message with legacy sender",
+          sent_at: "2024-01-20T10:00:00Z",
+          sender: "John Doe",
+          has_attachments: false,
+          is_false_positive: false,
+        },
+      ];
 
       render(
         <TransactionMessagesTab
-          messages={[messageWithLegacySender as Communication]}
+          messages={messageWithLegacySender as Communication[]}
           loading={false}
           error={null}
         />
       );
 
-      expect(screen.getByText("John Doe")).toBeInTheDocument();
+      expect(screen.getByTestId("thread-contact-name")).toHaveTextContent("John Doe");
+    });
+  });
+
+  describe("message bubble styling", () => {
+    it("should render inbound messages with left alignment", () => {
+      const inboundMessage: Partial<Communication>[] = [
+        {
+          id: "inbound-msg",
+          user_id: "user-456",
+          channel: "sms",
+          body_text: "Inbound message",
+          sent_at: "2024-01-20T10:00:00Z",
+          direction: "inbound",
+          has_attachments: false,
+          is_false_positive: false,
+        },
+      ];
+
+      render(
+        <TransactionMessagesTab
+          messages={inboundMessage as Communication[]}
+          loading={false}
+          error={null}
+        />
+      );
+
+      const messageBubble = screen.getByTestId("message-bubble");
+      expect(messageBubble).toHaveClass("justify-start");
+    });
+
+    it("should render outbound messages with right alignment", () => {
+      const outboundMessage: Partial<Communication>[] = [
+        {
+          id: "outbound-msg",
+          user_id: "user-456",
+          channel: "sms",
+          body_text: "Outbound message",
+          sent_at: "2024-01-20T10:00:00Z",
+          direction: "outbound",
+          has_attachments: false,
+          is_false_positive: false,
+        },
+      ];
+
+      render(
+        <TransactionMessagesTab
+          messages={outboundMessage as Communication[]}
+          loading={false}
+          error={null}
+        />
+      );
+
+      const messageBubble = screen.getByTestId("message-bubble");
+      expect(messageBubble).toHaveClass("justify-end");
     });
   });
 
   describe("date formatting", () => {
-    it("should format message dates correctly", () => {
-      const messageWithDate: Partial<Communication> = {
-        id: "dated-msg",
-        user_id: "user-456",
-        channel: "sms",
-        body_text: "Dated message",
-        sent_at: "2024-01-16T11:30:00Z",
-        has_attachments: false,
-        is_false_positive: false,
-      };
+    it("should display timestamp in message bubbles", () => {
+      const messageWithDate: Partial<Communication>[] = [
+        {
+          id: "dated-msg",
+          user_id: "user-456",
+          channel: "sms",
+          body_text: "Dated message",
+          sent_at: "2024-01-16T11:30:00Z",
+          has_attachments: false,
+          is_false_positive: false,
+        },
+      ];
 
       render(
         <TransactionMessagesTab
-          messages={[messageWithDate as Communication]}
+          messages={messageWithDate as Communication[]}
           loading={false}
           error={null}
         />
       );
 
-      // Date should be formatted (format depends on locale, but should include month and time)
-      // Just verify something date-related is rendered
-      const { container } = render(
-        <TransactionMessagesTab
-          messages={[messageWithDate as Communication]}
-          loading={false}
-          error={null}
-        />
-      );
-
-      // Date element should exist
-      const dateElement = container.querySelector(".text-gray-500");
-      expect(dateElement).toBeInTheDocument();
+      // Timestamp element should exist
+      expect(screen.getByTestId("message-timestamp")).toBeInTheDocument();
     });
 
     it("should use received_at as fallback for date", () => {
-      const messageWithReceivedAt: Partial<Communication> = {
-        id: "received-msg",
-        user_id: "user-456",
-        channel: "sms",
-        body_text: "Received message",
-        received_at: "2024-01-17T14:00:00Z",
-        has_attachments: false,
-        is_false_positive: false,
-      };
+      const messageWithReceivedAt: Partial<Communication>[] = [
+        {
+          id: "received-msg",
+          user_id: "user-456",
+          channel: "sms",
+          body_text: "Received message",
+          received_at: "2024-01-17T14:00:00Z",
+          has_attachments: false,
+          is_false_positive: false,
+        },
+      ];
 
       render(
         <TransactionMessagesTab
-          messages={[messageWithReceivedAt as Communication]}
+          messages={messageWithReceivedAt as Communication[]}
           loading={false}
           error={null}
         />
@@ -363,19 +428,21 @@ describe("TransactionMessagesTab", () => {
 
   describe("body text fallbacks", () => {
     it("should use body_plain as fallback", () => {
-      const messageWithBodyPlain: Partial<Communication> = {
-        id: "plain-msg",
-        user_id: "user-456",
-        channel: "sms",
-        body_plain: "Plain body content",
-        sent_at: "2024-01-20T10:00:00Z",
-        has_attachments: false,
-        is_false_positive: false,
-      };
+      const messageWithBodyPlain: Partial<Communication>[] = [
+        {
+          id: "plain-msg",
+          user_id: "user-456",
+          channel: "sms",
+          body_plain: "Plain body content",
+          sent_at: "2024-01-20T10:00:00Z",
+          has_attachments: false,
+          is_false_positive: false,
+        },
+      ];
 
       render(
         <TransactionMessagesTab
-          messages={[messageWithBodyPlain as Communication]}
+          messages={messageWithBodyPlain as Communication[]}
           loading={false}
           error={null}
         />
@@ -385,25 +452,68 @@ describe("TransactionMessagesTab", () => {
     });
 
     it("should use body as final fallback", () => {
-      const messageWithBody: Partial<Communication> = {
-        id: "body-msg",
-        user_id: "user-456",
-        channel: "sms",
-        body: "Legacy body content",
-        sent_at: "2024-01-20T10:00:00Z",
-        has_attachments: false,
-        is_false_positive: false,
-      };
+      const messageWithBody: Partial<Communication>[] = [
+        {
+          id: "body-msg",
+          user_id: "user-456",
+          channel: "sms",
+          body: "Legacy body content",
+          sent_at: "2024-01-20T10:00:00Z",
+          has_attachments: false,
+          is_false_positive: false,
+        },
+      ];
 
       render(
         <TransactionMessagesTab
-          messages={[messageWithBody as Communication]}
+          messages={messageWithBody as Communication[]}
           loading={false}
           error={null}
         />
       );
 
       expect(screen.getByText("Legacy body content")).toBeInTheDocument();
+    });
+  });
+
+  describe("thread sorting", () => {
+    it("should sort threads by most recent message", () => {
+      // Thread 1 has older messages, Thread 2 has newer
+      const messagesForSorting: Partial<Communication>[] = [
+        {
+          id: "old-msg",
+          user_id: "user-456",
+          channel: "sms",
+          body_text: "Old message",
+          sent_at: "2024-01-15T10:00:00Z",
+          thread_id: "thread-old",
+          has_attachments: false,
+          is_false_positive: false,
+        },
+        {
+          id: "new-msg",
+          user_id: "user-456",
+          channel: "sms",
+          body_text: "New message",
+          sent_at: "2024-01-17T10:00:00Z",
+          thread_id: "thread-new",
+          has_attachments: false,
+          is_false_positive: false,
+        },
+      ];
+
+      render(
+        <TransactionMessagesTab
+          messages={messagesForSorting as Communication[]}
+          loading={false}
+          error={null}
+        />
+      );
+
+      const threadCards = screen.getAllByTestId("message-thread-card");
+      // Newest thread should be first
+      expect(threadCards[0]).toHaveAttribute("data-thread-id", "thread-new");
+      expect(threadCards[1]).toHaveAttribute("data-thread-id", "thread-old");
     });
   });
 });
