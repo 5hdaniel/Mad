@@ -23,7 +23,8 @@ export const getDashboardTourSteps = (): Step[] => [
   },
   {
     target: '[data-tour="transactions-card"]',
-    content: "Browse and review all your past transaction audits in one place.",
+    content:
+      "Browse all your transaction audits here. Magic Audit can automatically detect real estate transactions in your emails - just click 'Auto Detect' to find them!",
     placement: "bottom",
     spotlightClicks: true,
     disableBeacon: true,
