@@ -28,7 +28,7 @@
       "hasAttachments": false,
       "attachmentCount": 0,
       "category": "transaction",
-      "stage": "initial_contact",
+      "stage": "intro",
       "difficulty": "easy",
       "expected": {
         "isTransaction": true,
@@ -50,7 +50,7 @@
       "hasAttachments": false,
       "attachmentCount": 0,
       "category": "transaction",
-      "stage": "initial_contact",
+      "stage": "intro",
       "difficulty": "easy",
       "expected": {
         "isTransaction": true,
@@ -80,7 +80,7 @@
         }
       ],
       "category": "transaction",
-      "stage": "contract",
+      "stage": "escrow",
       "difficulty": "easy",
       "expected": {
         "isTransaction": true,
@@ -109,7 +109,7 @@
         }
       ],
       "category": "transaction",
-      "stage": "inspection",
+      "stage": "inspections",
       "difficulty": "easy",
       "expected": {
         "isTransaction": true,
@@ -130,7 +130,7 @@
       "hasAttachments": false,
       "attachmentCount": 0,
       "category": "transaction",
-      "stage": "appraisal",
+      "stage": "escrow",
       "difficulty": "easy",
       "expected": {
         "isTransaction": true,
@@ -201,7 +201,7 @@
         }
       ],
       "category": "transaction",
-      "stage": "listing",
+      "stage": "intro",
       "difficulty": "easy",
       "expected": {
         "isTransaction": true,
@@ -344,7 +344,7 @@
         }
       ],
       "category": "transaction",
-      "stage": "title",
+      "stage": "escrow",
       "difficulty": "easy",
       "expected": {
         "isTransaction": true,
@@ -395,7 +395,7 @@
         }
       ],
       "category": "transaction",
-      "stage": "financing",
+      "stage": "escrow",
       "difficulty": "easy",
       "expected": {
         "isTransaction": true,
@@ -424,7 +424,7 @@
         }
       ],
       "category": "transaction",
-      "stage": "negotiation",
+      "stage": "offer",
       "difficulty": "easy",
       "expected": {
         "isTransaction": true,
@@ -521,7 +521,7 @@
         {"filename": "Natural_Hazard_Disclosure.pdf", "mimeType": "application/pdf", "sizeBytes": 150000, "expectedDocType": "disclosure"}
       ],
       "category": "transaction",
-      "stage": "disclosure",
+      "stage": "escrow",
       "difficulty": "easy",
       "expected": {
         "isTransaction": true,
@@ -588,7 +588,7 @@
         {"filename": "contract.pdf", "mimeType": "application/pdf", "sizeBytes": 200000, "expectedDocType": "contract"}
       ],
       "category": "transaction",
-      "stage": "contract",
+      "stage": "escrow",
       "difficulty": "hard",
       "expected": {
         "isTransaction": true,
@@ -719,7 +719,7 @@
       "hasAttachments": false,
       "attachmentCount": 0,
       "category": "transaction",
-      "stage": "final_walkthrough",
+      "stage": "closing",
       "difficulty": "easy",
       "expected": {
         "isTransaction": true,

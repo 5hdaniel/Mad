@@ -169,20 +169,13 @@ export function getStats(): EmailFixtureStats {
   };
 
   const byStage: Record<TransactionStage | 'none', number> = {
-    initial_contact: 0,
+    intro: 0,
     showing: 0,
     offer: 0,
-    negotiation: 0,
-    contract: 0,
-    inspection: 0,
-    appraisal: 0,
-    financing: 0,
-    title: 0,
-    disclosure: 0,
-    final_walkthrough: 0,
+    inspections: 0,
+    escrow: 0,
     closing: 0,
     post_closing: 0,
-    listing: 0,
     none: 0,
   };
 
