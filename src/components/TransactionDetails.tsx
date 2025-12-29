@@ -24,11 +24,13 @@ import {
   useTransactionCommunications,
   useSuggestedContacts,
   useTransactionMessages,
+  useTransactionAttachments,
   TransactionHeader,
   TransactionTabs,
   TransactionDetailsTab,
   TransactionContactsTab,
   TransactionMessagesTab,
+  TransactionAttachmentsTab,
   ExportSuccessMessage,
   ArchivePromptModal,
   DeleteConfirmModal,
@@ -109,6 +111,14 @@ function TransactionDetails({
     loading: messagesLoading,
     error: messagesError,
   } = useTransactionMessages(transaction);
+
+  // Attachments hook
+  const {
+    attachments,
+    loading: attachmentsLoading,
+    error: attachmentsError,
+    count: attachmentCount,
+  } = useTransactionAttachments(transaction);
 
   // Transaction status update hook
   const { state: statusState, approve, reject, restore } = useTransactionStatusUpdate(userId);
@@ -272,6 +282,7 @@ function TransactionDetails({
           activeTab={activeTab}
           contactCount={contactAssignments.length}
           messageCount={textMessages.length}
+          attachmentCount={attachmentCount}
           onTabChange={setActiveTab}
         />
 
@@ -306,6 +317,14 @@ function TransactionDetails({
               messages={textMessages}
               loading={messagesLoading}
               error={messagesError}
+            />
+          )}
+
+          {activeTab === "attachments" && (
+            <TransactionAttachmentsTab
+              attachments={attachments}
+              loading={attachmentsLoading}
+              error={attachmentsError}
             />
           )}
         </div>
