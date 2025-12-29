@@ -23,10 +23,12 @@ import {
   useTransactionTabs,
   useTransactionCommunications,
   useSuggestedContacts,
+  useTransactionMessages,
   TransactionHeader,
   TransactionTabs,
   TransactionDetailsTab,
   TransactionContactsTab,
+  TransactionMessagesTab,
   ExportSuccessMessage,
   ArchivePromptModal,
   DeleteConfirmModal,
@@ -100,6 +102,13 @@ function TransactionDetails({
     handleRejectSuggestion,
     handleAcceptAll,
   } = useSuggestedContacts(transaction);
+
+  // Messages hook
+  const {
+    messages: textMessages,
+    loading: messagesLoading,
+    error: messagesError,
+  } = useTransactionMessages(transaction);
 
   // Transaction status update hook
   const { state: statusState, approve, reject, restore } = useTransactionStatusUpdate(userId);
@@ -262,6 +271,7 @@ function TransactionDetails({
         <TransactionTabs
           activeTab={activeTab}
           contactCount={contactAssignments.length}
+          messageCount={textMessages.length}
           onTabChange={setActiveTab}
         />
 
@@ -288,6 +298,14 @@ function TransactionDetails({
               onAcceptSuggestion={handleAcceptSuggestionWithCallbacks}
               onRejectSuggestion={handleRejectSuggestionWithCallbacks}
               onAcceptAll={handleAcceptAllWithCallbacks}
+            />
+          )}
+
+          {activeTab === "messages" && (
+            <TransactionMessagesTab
+              messages={textMessages}
+              loading={messagesLoading}
+              error={messagesError}
             />
           )}
         </div>
