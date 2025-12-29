@@ -83,6 +83,7 @@ jobs:
     needs: check-changes
     if: needs.check-changes.outputs.docs-only != 'true'
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30  # Prevent CI from running indefinitely
 
     strategy:
       matrix:
