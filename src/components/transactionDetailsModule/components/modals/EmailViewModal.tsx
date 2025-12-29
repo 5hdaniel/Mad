@@ -66,9 +66,10 @@ function getEmailContent(email: Communication): {
   plain: string | null;
 } {
   // body_html is the primary HTML content
+  // body is the deprecated HTML field (still populated by older code paths)
   // body_text is the normalized plain text
   // body_plain is deprecated but may still be populated
-  const html = email.body_html || null;
+  const html = email.body_html || email.body || null;
   const plain = email.body_text || email.body_plain || null;
 
   return { html, plain };
