@@ -6,5 +6,7 @@ export { TransactionTabs } from "./TransactionTabs";
 export { TransactionDetailsTab } from "./TransactionDetailsTab";
 export { TransactionContactsTab } from "./TransactionContactsTab";
 export { TransactionMessagesTab } from "./TransactionMessagesTab";
+export { TransactionAttachmentsTab } from "./TransactionAttachmentsTab";
+export { AttachmentCard } from "./AttachmentCard";
 export { ExportSuccessMessage } from "./ExportSuccessMessage";
 export * from "./modals";

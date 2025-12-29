@@ -57,7 +57,7 @@ export interface TransactionDetailsProps {
 /**
  * Tab types for transaction details view
  */
-export type TransactionTab = "details" | "contacts" | "messages";
+export type TransactionTab = "details" | "contacts" | "messages" | "attachments";
 
 /**
  * Communication type for local use
