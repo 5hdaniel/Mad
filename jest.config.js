@@ -1,15 +1,5 @@
-module.exports = {
-  // Test environment - use node for backend, jsdom for frontend
-  testEnvironment: 'jest-environment-jsdom',
-
-  // Setup files
-  setupFilesAfterEnv: ['<rootDir>/tests/setup.js'],
-
-  // Use node environment for backend tests
-  testEnvironmentOptions: {
-    customExportConditions: ['node', 'node-addons'],
-  },
-
+// Base configuration shared across all projects
+const baseConfig = {
   // Module paths
   moduleDirectories: ['node_modules', 'src'],
 
@@ -34,6 +24,48 @@ module.exports = {
     '^electron-updater$': '<rootDir>/tests/__mocks__/electron-updater.js',
   },
 
+  // Reduce output noise
+  verbose: false,
+
+  // Limit error output
+  errorOnDeprecated: false,
+};
+
+module.exports = {
+  // Use projects for different test environments
+  projects: [
+    // Default project - unit tests with jsdom
+    {
+      ...baseConfig,
+      displayName: 'unit',
+      testEnvironment: 'jest-environment-jsdom',
+      setupFilesAfterEnv: ['<rootDir>/tests/setup.js'],
+      testEnvironmentOptions: {
+        customExportConditions: ['node', 'node-addons'],
+      },
+      testMatch: [
+        '**/__tests__/**/*.(test|spec).{js,jsx,ts,tsx}',
+        '**/tests/**/*.(test|spec).{js,jsx,ts,tsx}',
+        '**/?(*.)+(spec|test).{js,jsx,ts,tsx}',
+      ],
+      testPathIgnorePatterns: [
+        '/node_modules/',
+        '/dist/',
+        '/build/',
+        '/tests/integration/', // Exclude integration tests from unit project
+      ],
+    },
+    // Integration tests - node environment with longer timeout
+    {
+      ...baseConfig,
+      displayName: 'integration',
+      testEnvironment: 'node',
+      setupFilesAfterEnv: ['<rootDir>/tests/integration/setup.ts'],
+      testMatch: ['<rootDir>/tests/integration/**/*.test.ts'],
+      testTimeout: 30000, // 30 second timeout for integration tests
+    },
+  ],
+
   // Coverage configuration
   collectCoverageFrom: [
     'src/**/*.{js,jsx,ts,tsx}',
@@ -43,6 +75,7 @@ module.exports = {
     '!electron/**/*.test.{js,ts}',
     '!electron/main.js',
     '!**/node_modules/**',
+    '!tests/integration/**', // Exclude integration test framework from coverage
   ],
 
   coverageThreshold: {
@@ -72,22 +105,6 @@ module.exports = {
       statements: 55,
     },
   },
-
-  // Test match patterns
-  testMatch: [
-    '**/__tests__/**/*.(test|spec).{js,jsx,ts,tsx}',
-    '**/tests/**/*.(test|spec).{js,jsx,ts,tsx}',
-    '**/?(*.)+(spec|test).{js,jsx,ts,tsx}',
-  ],
-
-  // Ignore patterns
-  testPathIgnorePatterns: ['/node_modules/', '/dist/', '/build/'],
-
-  // Reduce output noise
-  verbose: false,
-
-  // Limit error output
-  errorOnDeprecated: false,
 
   // Concise error output for CI/CD
   bail: 1, // Stop after first test failure (optional - remove if you want all failures)
