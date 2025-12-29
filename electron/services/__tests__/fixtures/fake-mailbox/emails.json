@@ -1,0 +1,731 @@
+{
+  "metadata": {
+    "description": "Fake email mailbox fixtures for testing email sync, AI detection, and transaction extraction",
+    "version": "1.0.0",
+    "totalEmails": 60,
+    "transactionEmails": 30,
+    "spamEmails": 10,
+    "normalEmails": 15,
+    "edgeCaseEmails": 5,
+    "threads": 20,
+    "gmailEmails": 35,
+    "outlookEmails": 25,
+    "notes": "Emails organized by transaction stage and difficulty level"
+  },
+  "emails": [
+    {
+      "id": "fake-email-001",
+      "thread_id": "thread-001",
+      "provider": "gmail",
+      "subject": "New Listing: 123 Oak Street - $450,000",
+      "body": "Hi,\n\nI wanted to share this new listing with you. The property at 123 Oak Street is now available for $450,000. It features 3 bedrooms, 2 bathrooms, and a spacious backyard.\n\nLet me know if you'd like to schedule a showing.\n\nBest regards,\nSarah Johnson\nABC Realty",
+      "bodyHtml": "<p>Hi,</p><p>I wanted to share this new listing with you. The property at <strong>123 Oak Street</strong> is now available for <strong>$450,000</strong>.</p>",
+      "snippet": "I wanted to share this new listing with you...",
+      "sender": "sarah.johnson@abcrealty.com",
+      "recipients": ["buyer@example.com"],
+      "labels": ["INBOX", "IMPORTANT"],
+      "sent_at": "2024-01-15T10:30:00Z",
+      "hasAttachments": false,
+      "attachmentCount": 0,
+      "category": "transaction",
+      "stage": "initial_contact",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": true,
+        "transactionType": "purchase",
+        "shouldBeSpam": false
+      },
+      "notes": "Clear real estate listing email"
+    },
+    {
+      "id": "fake-email-002",
+      "thread_id": "thread-001",
+      "provider": "gmail",
+      "subject": "Re: New Listing: 123 Oak Street - $450,000",
+      "body": "Hi Sarah,\n\nThank you for sending this listing. I'm very interested! Can we schedule a showing for this Saturday?\n\nBest,\nJohn",
+      "sender": "buyer@example.com",
+      "recipients": ["sarah.johnson@abcrealty.com"],
+      "labels": ["SENT"],
+      "sent_at": "2024-01-15T14:22:00Z",
+      "hasAttachments": false,
+      "attachmentCount": 0,
+      "category": "transaction",
+      "stage": "initial_contact",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": true,
+        "transactionType": "purchase",
+        "shouldBeSpam": false
+      }
+    },
+    {
+      "id": "fake-email-003",
+      "thread_id": "thread-002",
+      "provider": "outlook",
+      "subject": "Purchase Agreement - 456 Maple Avenue",
+      "body": "Dear Mr. Thompson,\n\nPlease find attached the purchase agreement for 456 Maple Avenue. The agreed upon price is $525,000 with a closing date of March 15, 2024.\n\nPlease review and sign by Friday.\n\nRegards,\nMike Williams\nWilliams Law Group",
+      "sender": "mike.williams@williamslaw.com",
+      "recipients": ["thompson@email.com"],
+      "cc": ["agent@realty.com"],
+      "labels": ["INBOX"],
+      "sent_at": "2024-02-01T09:15:00Z",
+      "hasAttachments": true,
+      "attachmentCount": 1,
+      "attachments": [
+        {
+          "filename": "Purchase_Agreement_456_Maple.pdf",
+          "mimeType": "application/pdf",
+          "sizeBytes": 245000,
+          "expectedDocType": "purchase_agreement"
+        }
+      ],
+      "category": "transaction",
+      "stage": "contract",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": true,
+        "transactionType": "purchase",
+        "shouldBeSpam": false
+      }
+    },
+    {
+      "id": "fake-email-004",
+      "thread_id": "thread-003",
+      "provider": "gmail",
+      "subject": "Inspection Report Ready - 789 Pine Road",
+      "body": "Hello,\n\nThe home inspection for 789 Pine Road has been completed. Overall the property is in good condition with a few minor issues noted:\n\n- HVAC filter needs replacement\n- Minor caulking needed around bathroom fixtures\n- Recommend gutter cleaning\n\nNo major structural or safety concerns were found.\n\nFull report attached.\n\nTom Baker\nBaker Home Inspections",
+      "sender": "tom@bakerhomeinspections.com",
+      "recipients": ["buyer@email.com", "agent@realty.com"],
+      "labels": ["INBOX"],
+      "sent_at": "2024-02-10T16:45:00Z",
+      "hasAttachments": true,
+      "attachmentCount": 1,
+      "attachments": [
+        {
+          "filename": "Inspection_Report_789_Pine.pdf",
+          "mimeType": "application/pdf",
+          "sizeBytes": 1250000,
+          "expectedDocType": "inspection_report"
+        }
+      ],
+      "category": "transaction",
+      "stage": "inspection",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": true,
+        "transactionType": "purchase",
+        "shouldBeSpam": false
+      }
+    },
+    {
+      "id": "fake-email-005",
+      "thread_id": "thread-004",
+      "provider": "outlook",
+      "subject": "Appraisal Complete - Property Value Confirmed",
+      "body": "Dear Client,\n\nThe appraisal for the property at 321 Elm Street has been completed. The appraised value is $485,000, which meets the purchase price requirement for your loan.\n\nThe lender has been notified and we are on track for closing.\n\nBest regards,\nJennifer Adams\nFirst National Mortgage",
+      "sender": "jadams@firstnational.com",
+      "recipients": ["homebuyer@email.com"],
+      "labels": ["INBOX"],
+      "sent_at": "2024-02-15T11:30:00Z",
+      "hasAttachments": false,
+      "attachmentCount": 0,
+      "category": "transaction",
+      "stage": "appraisal",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": true,
+        "transactionType": "purchase",
+        "shouldBeSpam": false
+      }
+    },
+    {
+      "id": "fake-email-006",
+      "thread_id": "thread-005",
+      "provider": "gmail",
+      "subject": "Closing Scheduled - March 20th at 2:00 PM",
+      "body": "Hello Everyone,\n\nI'm pleased to confirm that closing for 555 Cedar Lane has been scheduled for:\n\nDate: March 20, 2024\nTime: 2:00 PM\nLocation: First Title Company, 100 Main Street, Suite 200\n\nPlease bring valid photo ID and any remaining funds in the form of a cashier's check.\n\nSee you there!\n\nLisa Chen\nFirst Title Company",
+      "sender": "lchen@firsttitle.com",
+      "recipients": ["buyer@email.com", "seller@email.com", "buyeragent@realty.com", "selleragent@realty.com"],
+      "labels": ["INBOX", "IMPORTANT"],
+      "sent_at": "2024-03-10T14:00:00Z",
+      "hasAttachments": false,
+      "attachmentCount": 0,
+      "category": "transaction",
+      "stage": "closing",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": true,
+        "transactionType": "purchase",
+        "shouldBeSpam": false
+      }
+    },
+    {
+      "id": "fake-email-007",
+      "thread_id": "thread-006",
+      "provider": "gmail",
+      "subject": "Congratulations on Your New Home!",
+      "body": "Dear John and Mary,\n\nCongratulations on the successful closing of 555 Cedar Lane! It was a pleasure working with you on this transaction.\n\nYour keys are enclosed, and all documents have been recorded with the county.\n\nWelcome to your new home!\n\nWarm regards,\nSarah Johnson\nABC Realty",
+      "sender": "sarah.johnson@abcrealty.com",
+      "recipients": ["johnnmary@email.com"],
+      "labels": ["INBOX"],
+      "sent_at": "2024-03-20T17:30:00Z",
+      "hasAttachments": false,
+      "attachmentCount": 0,
+      "category": "transaction",
+      "stage": "post_closing",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": true,
+        "transactionType": "purchase",
+        "shouldBeSpam": false
+      }
+    },
+    {
+      "id": "fake-email-008",
+      "thread_id": "thread-007",
+      "provider": "outlook",
+      "subject": "Listing Agreement - 888 Birch Boulevard",
+      "body": "Hi Sandra,\n\nThank you for choosing me to list your home at 888 Birch Boulevard. Attached is the listing agreement for your review and signature.\n\nKey terms:\n- List price: $395,000\n- Commission: 6%\n- Listing period: 6 months\n\nPlease let me know if you have any questions.\n\nBest,\nDavid Kim\nPremier Properties",
+      "sender": "dkim@premierproperties.com",
+      "recipients": ["sandra@email.com"],
+      "labels": ["INBOX"],
+      "sent_at": "2024-01-20T10:00:00Z",
+      "hasAttachments": true,
+      "attachmentCount": 1,
+      "attachments": [
+        {
+          "filename": "Listing_Agreement_888_Birch.pdf",
+          "mimeType": "application/pdf",
+          "sizeBytes": 180000,
+          "expectedDocType": "listing_agreement"
+        }
+      ],
+      "category": "transaction",
+      "stage": "listing",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": true,
+        "transactionType": "sale",
+        "shouldBeSpam": false
+      }
+    },
+    {
+      "id": "fake-email-009",
+      "thread_id": "thread-008",
+      "provider": "gmail",
+      "subject": "Offer Received! - 888 Birch Boulevard",
+      "body": "Great news Sandra!\n\nWe've received an offer on your property at 888 Birch Boulevard:\n\n- Offer price: $385,000\n- Earnest money: $10,000\n- Closing date: 45 days from acceptance\n- Contingencies: Financing, Inspection\n\nThe buyers are pre-approved and motivated. Let me know how you'd like to proceed.\n\nDavid Kim",
+      "sender": "dkim@premierproperties.com",
+      "recipients": ["sandra@email.com"],
+      "labels": ["INBOX", "STARRED"],
+      "sent_at": "2024-02-05T15:30:00Z",
+      "hasAttachments": true,
+      "attachmentCount": 1,
+      "attachments": [
+        {
+          "filename": "Offer_888_Birch.pdf",
+          "mimeType": "application/pdf",
+          "sizeBytes": 220000,
+          "expectedDocType": "offer"
+        }
+      ],
+      "category": "transaction",
+      "stage": "offer",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": true,
+        "transactionType": "sale",
+        "shouldBeSpam": false
+      }
+    },
+    {
+      "id": "fake-email-010",
+      "thread_id": "thread-009",
+      "provider": "gmail",
+      "subject": "Weekly Newsletter - Top Real Estate Tips",
+      "body": "Hello Subscriber,\n\nWelcome to this week's real estate newsletter!\n\n5 Tips for First-Time Home Buyers:\n1. Get pre-approved before shopping\n2. Don't skip the home inspection\n3. Factor in closing costs\n4. Research the neighborhood\n5. Work with a qualified agent\n\nClick here to read more!\n\nUnsubscribe | Update Preferences",
+      "sender": "newsletter@realtynews.com",
+      "recipients": ["user@email.com"],
+      "labels": ["INBOX", "CATEGORY_PROMOTIONS"],
+      "sent_at": "2024-01-22T08:00:00Z",
+      "hasAttachments": false,
+      "attachmentCount": 0,
+      "category": "normal",
+      "difficulty": "medium",
+      "expected": {
+        "isTransaction": false,
+        "transactionType": null,
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": true
+      },
+      "notes": "Newsletter with real estate content but not a transaction"
+    },
+    {
+      "id": "fake-email-011",
+      "thread_id": "thread-010",
+      "provider": "outlook",
+      "subject": "Meeting Tomorrow - Project Update",
+      "body": "Hi Team,\n\nReminder that we have our weekly project update meeting tomorrow at 10 AM in Conference Room B.\n\nAgenda:\n- Q1 progress review\n- Resource allocation\n- Upcoming deadlines\n\nPlease come prepared with your status updates.\n\nThanks,\nManager",
+      "sender": "manager@company.com",
+      "recipients": ["team@company.com"],
+      "labels": ["INBOX"],
+      "sent_at": "2024-01-25T16:00:00Z",
+      "hasAttachments": false,
+      "attachmentCount": 0,
+      "category": "normal",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": false,
+        "transactionType": null,
+        "shouldBeSpam": false
+      },
+      "notes": "Regular work email, not real estate related"
+    },
+    {
+      "id": "fake-email-012",
+      "thread_id": "thread-011",
+      "provider": "gmail",
+      "subject": "URGENT: Claim Your $1,000,000 Prize Now!!!",
+      "body": "CONGRATULATIONS!!!\n\nYou have been selected as the WINNER of our international lottery!\n\nClaim your $1,000,000 prize by clicking the link below and providing your bank details.\n\nACT NOW - This offer expires in 24 hours!\n\nClick here to claim: http://suspicious-link.com/claim",
+      "sender": "winner@lottery-scam.com",
+      "recipients": ["victim@email.com"],
+      "labels": ["SPAM"],
+      "sent_at": "2024-01-28T03:15:00Z",
+      "hasAttachments": false,
+      "attachmentCount": 0,
+      "category": "spam",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": false,
+        "transactionType": null,
+        "shouldBeSpam": true
+      },
+      "notes": "Obvious spam/scam email"
+    },
+    {
+      "id": "fake-email-013",
+      "thread_id": "thread-012",
+      "provider": "gmail",
+      "subject": "Your Amazon Order Has Shipped",
+      "body": "Hello,\n\nGreat news! Your order #123-456-789 has shipped and is on its way.\n\nEstimated delivery: January 30, 2024\n\nTrack your package: [Tracking Link]\n\nThank you for shopping with Amazon!",
+      "sender": "shipment-tracking@amazon.com",
+      "recipients": ["customer@email.com"],
+      "labels": ["INBOX", "CATEGORY_UPDATES"],
+      "sent_at": "2024-01-27T14:30:00Z",
+      "hasAttachments": false,
+      "attachmentCount": 0,
+      "category": "normal",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": false,
+        "transactionType": null,
+        "shouldBeSpam": false
+      }
+    },
+    {
+      "id": "fake-email-014",
+      "thread_id": "thread-013",
+      "provider": "outlook",
+      "subject": "Title Search Complete - No Issues Found",
+      "body": "Dear Valued Client,\n\nWe have completed the title search for the property at 999 Walnut Way.\n\nResults: The title is clear with no liens, encumbrances, or ownership disputes.\n\nWe are ready to proceed with title insurance issuance.\n\nPlease contact us if you have any questions.\n\nBest regards,\nTitle Services Team\nSecure Title Company",
+      "sender": "titlesearch@securetitle.com",
+      "recipients": ["buyer@email.com"],
+      "cc": ["agent@realty.com", "lender@mortgage.com"],
+      "labels": ["INBOX"],
+      "sent_at": "2024-02-20T11:00:00Z",
+      "hasAttachments": true,
+      "attachmentCount": 1,
+      "attachments": [
+        {
+          "filename": "Title_Search_Report_999_Walnut.pdf",
+          "mimeType": "application/pdf",
+          "sizeBytes": 350000,
+          "expectedDocType": "title_report"
+        }
+      ],
+      "category": "transaction",
+      "stage": "title",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": true,
+        "transactionType": "purchase",
+        "shouldBeSpam": false
+      }
+    },
+    {
+      "id": "fake-email-015",
+      "thread_id": "thread-014",
+      "provider": "gmail",
+      "subject": "Property showing tomorrow at 2pm",
+      "body": "hi just confirming the showing tomorrow at 2pm for the house on main st. thanks!",
+      "sender": "agent@email.com",
+      "recipients": ["client@email.com"],
+      "labels": ["INBOX"],
+      "sent_at": "2024-02-08T17:45:00Z",
+      "hasAttachments": false,
+      "attachmentCount": 0,
+      "category": "transaction",
+      "stage": "showing",
+      "difficulty": "medium",
+      "expected": {
+        "isTransaction": true,
+        "transactionType": "purchase",
+        "shouldBeSpam": false
+      },
+      "notes": "Informal email, no formal address - harder to classify"
+    },
+    {
+      "id": "fake-email-016",
+      "thread_id": "thread-015",
+      "provider": "outlook",
+      "subject": "Mortgage Pre-Approval Letter",
+      "body": "Dear John Smith,\n\nCongratulations! Based on our review of your financial information, you have been pre-approved for a mortgage loan.\n\nPre-Approval Details:\n- Maximum loan amount: $400,000\n- Estimated rate: 6.5%\n- Term: 30-year fixed\n- Valid for: 90 days\n\nThis pre-approval is subject to property appraisal and final underwriting.\n\nPlease contact your loan officer with any questions.\n\nSincerely,\nHome Lending Team\nBig Bank Mortgage",
+      "sender": "mortgages@bigbank.com",
+      "recipients": ["jsmith@email.com"],
+      "labels": ["INBOX", "IMPORTANT"],
+      "sent_at": "2024-01-10T09:00:00Z",
+      "hasAttachments": true,
+      "attachmentCount": 1,
+      "attachments": [
+        {
+          "filename": "PreApproval_Letter_JSmith.pdf",
+          "mimeType": "application/pdf",
+          "sizeBytes": 125000,
+          "expectedDocType": "preapproval_letter"
+        }
+      ],
+      "category": "transaction",
+      "stage": "financing",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": true,
+        "transactionType": "purchase",
+        "shouldBeSpam": false
+      }
+    },
+    {
+      "id": "fake-email-017",
+      "thread_id": "thread-016",
+      "provider": "gmail",
+      "subject": "Counter Offer - 777 Spruce Street",
+      "body": "Hello,\n\nThe sellers have reviewed your offer and would like to counter with the following terms:\n\n- Counter price: $340,000 (original offer was $325,000)\n- Closing date: 30 days from acceptance (vs 45 days requested)\n- All other terms remain the same\n\nPlease review and let me know your response by end of business tomorrow.\n\nRegards,\nListing Agent",
+      "sender": "listingagent@realty.com",
+      "recipients": ["buyeragent@realty.com"],
+      "labels": ["INBOX"],
+      "sent_at": "2024-02-12T13:15:00Z",
+      "hasAttachments": true,
+      "attachmentCount": 1,
+      "attachments": [
+        {
+          "filename": "Counter_Offer_777_Spruce.pdf",
+          "mimeType": "application/pdf",
+          "sizeBytes": 195000,
+          "expectedDocType": "counter_offer"
+        }
+      ],
+      "category": "transaction",
+      "stage": "negotiation",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": true,
+        "transactionType": "purchase",
+        "shouldBeSpam": false
+      }
+    },
+    {
+      "id": "fake-email-018",
+      "thread_id": "thread-017",
+      "provider": "outlook",
+      "subject": "Your credit score has changed",
+      "body": "Hello,\n\nYour credit score has been updated. Log in to your account to view your new score and see what's changed.\n\nMonitoring your credit is important, especially if you're planning to apply for a mortgage or other loan.\n\nView your score now: [Link]\n\nCredit Monitoring Service",
+      "sender": "alerts@creditmonitor.com",
+      "recipients": ["user@email.com"],
+      "labels": ["INBOX"],
+      "sent_at": "2024-02-01T07:00:00Z",
+      "hasAttachments": false,
+      "attachmentCount": 0,
+      "category": "normal",
+      "difficulty": "medium",
+      "expected": {
+        "isTransaction": false,
+        "transactionType": null,
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": true
+      },
+      "notes": "Credit monitoring email - mentions mortgage but not a transaction"
+    },
+    {
+      "id": "fake-email-019",
+      "thread_id": "thread-018",
+      "provider": "gmail",
+      "subject": "HOA Documents for Your Review",
+      "body": "Dear New Owner,\n\nWelcome to Sunset Ridge Community! As part of your purchase, please review the following HOA documents:\n\n1. CC&Rs (Covenants, Conditions & Restrictions)\n2. Bylaws\n3. Current Budget\n4. Meeting Minutes from last 3 meetings\n\nMonthly dues are $250, due on the 1st of each month.\n\nPlease sign the acknowledgment form and return within 10 days.\n\nSunset Ridge HOA Board",
+      "sender": "hoa@sunsetridge.org",
+      "recipients": ["newowner@email.com"],
+      "labels": ["INBOX"],
+      "sent_at": "2024-03-22T10:30:00Z",
+      "hasAttachments": true,
+      "attachmentCount": 4,
+      "attachments": [
+        {"filename": "CCRs.pdf", "mimeType": "application/pdf", "sizeBytes": 450000, "expectedDocType": "hoa_docs"},
+        {"filename": "Bylaws.pdf", "mimeType": "application/pdf", "sizeBytes": 120000, "expectedDocType": "hoa_docs"},
+        {"filename": "Budget_2024.pdf", "mimeType": "application/pdf", "sizeBytes": 85000, "expectedDocType": "hoa_docs"},
+        {"filename": "Meeting_Minutes.pdf", "mimeType": "application/pdf", "sizeBytes": 65000, "expectedDocType": "hoa_docs"}
+      ],
+      "category": "transaction",
+      "stage": "post_closing",
+      "difficulty": "medium",
+      "expected": {
+        "isTransaction": true,
+        "transactionType": "purchase",
+        "shouldBeSpam": false
+      }
+    },
+    {
+      "id": "fake-email-020",
+      "thread_id": "thread-019",
+      "provider": "outlook",
+      "subject": "Exclusive Investment Opportunity - Limited Time!",
+      "body": "Dear Investor,\n\nDon't miss this exclusive real estate investment opportunity!\n\nOur fund has consistently delivered 15%+ returns on commercial property investments.\n\nMinimum investment: $50,000\nProjected returns: 15-20% annually\n\nSchedule a call with our investment team today!\n\nThis is not a solicitation in jurisdictions where prohibited.",
+      "sender": "invest@dubiousinvestments.com",
+      "recipients": ["target@email.com"],
+      "labels": ["INBOX", "CATEGORY_PROMOTIONS"],
+      "sent_at": "2024-02-18T11:45:00Z",
+      "hasAttachments": false,
+      "attachmentCount": 0,
+      "category": "spam",
+      "difficulty": "medium",
+      "expected": {
+        "isTransaction": false,
+        "transactionType": null,
+        "shouldBeSpam": true,
+        "containsTransactionIndicators": true
+      },
+      "notes": "Promotional/spam email with real estate investment theme"
+    },
+    {
+      "id": "fake-email-021",
+      "thread_id": "thread-020",
+      "provider": "gmail",
+      "subject": "Disclosure Documents - Please Review Before Showing",
+      "body": "Hi,\n\nBefore we proceed with showings, please ensure your clients have reviewed the attached disclosure documents:\n\n- Seller's Property Disclosure\n- Lead-Based Paint Disclosure (required for homes built before 1978)\n- Natural Hazard Disclosure\n\nLet me know if you have any questions.\n\nThanks,\nListing Agent",
+      "sender": "listingagent@realty.com",
+      "recipients": ["buyeragent@realty.com"],
+      "labels": ["INBOX"],
+      "sent_at": "2024-02-06T09:30:00Z",
+      "hasAttachments": true,
+      "attachmentCount": 3,
+      "attachments": [
+        {"filename": "Seller_Disclosure.pdf", "mimeType": "application/pdf", "sizeBytes": 280000, "expectedDocType": "disclosure"},
+        {"filename": "Lead_Paint_Disclosure.pdf", "mimeType": "application/pdf", "sizeBytes": 95000, "expectedDocType": "disclosure"},
+        {"filename": "Natural_Hazard_Disclosure.pdf", "mimeType": "application/pdf", "sizeBytes": 150000, "expectedDocType": "disclosure"}
+      ],
+      "category": "transaction",
+      "stage": "disclosure",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": true,
+        "transactionType": "purchase",
+        "shouldBeSpam": false
+      }
+    },
+    {
+      "id": "fake-email-022",
+      "thread_id": "thread-001",
+      "provider": "gmail",
+      "subject": "Re: New Listing: 123 Oak Street - $450,000",
+      "body": "Hi John,\n\nSaturday works great! I have you scheduled for 11:00 AM.\n\nAddress: 123 Oak Street\nDate: Saturday, January 20th\nTime: 11:00 AM\n\nI'll meet you there. Looking forward to it!\n\nSarah",
+      "sender": "sarah.johnson@abcrealty.com",
+      "recipients": ["buyer@example.com"],
+      "labels": ["SENT"],
+      "sent_at": "2024-01-16T09:00:00Z",
+      "hasAttachments": false,
+      "attachmentCount": 0,
+      "category": "transaction",
+      "stage": "showing",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": true,
+        "transactionType": "purchase",
+        "shouldBeSpam": false
+      }
+    },
+    {
+      "id": "fake-email-023",
+      "thread_id": "thread-021",
+      "provider": "outlook",
+      "subject": "Rent Due Reminder - February",
+      "body": "Hello Tenant,\n\nThis is a friendly reminder that your rent of $1,800 is due on February 1st.\n\nPayment methods:\n- Online portal: tenant.propertymanagement.com\n- Check: Mail to 100 Management Way\n- Auto-pay: Already enrolled\n\nThank you for being a great tenant!\n\nProperty Management Team",
+      "sender": "payments@propertymanagement.com",
+      "recipients": ["tenant@email.com"],
+      "labels": ["INBOX"],
+      "sent_at": "2024-01-28T08:00:00Z",
+      "hasAttachments": false,
+      "attachmentCount": 0,
+      "category": "normal",
+      "difficulty": "medium",
+      "expected": {
+        "isTransaction": false,
+        "transactionType": null,
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": true
+      },
+      "notes": "Rental payment reminder - property related but not a purchase/sale transaction"
+    },
+    {
+      "id": "fake-email-024",
+      "thread_id": "thread-022",
+      "provider": "gmail",
+      "subject": "",
+      "body": "the docs r attached",
+      "sender": "agent@email.com",
+      "recipients": ["client@email.com"],
+      "labels": ["INBOX"],
+      "sent_at": "2024-02-14T16:20:00Z",
+      "hasAttachments": true,
+      "attachmentCount": 1,
+      "attachments": [
+        {"filename": "contract.pdf", "mimeType": "application/pdf", "sizeBytes": 200000, "expectedDocType": "contract"}
+      ],
+      "category": "transaction",
+      "stage": "contract",
+      "difficulty": "hard",
+      "expected": {
+        "isTransaction": true,
+        "transactionType": "purchase",
+        "shouldBeSpam": false
+      },
+      "notes": "Edge case: No subject, very brief body, relies on attachment context"
+    },
+    {
+      "id": "fake-email-025",
+      "thread_id": "thread-023",
+      "provider": "outlook",
+      "subject": "Your Home Value Has Increased!",
+      "body": "Great news, homeowner!\n\nBased on recent market data, your home at 456 Your Street has increased in value!\n\nEstimated value: $425,000\nChange from last month: +$5,000\n\nThinking of selling? Get a free home valuation from our top agents.\n\n[Get My Free Valuation]\n\nZillow",
+      "sender": "updates@zillow.com",
+      "recipients": ["homeowner@email.com"],
+      "labels": ["INBOX", "CATEGORY_UPDATES"],
+      "sent_at": "2024-02-10T12:00:00Z",
+      "hasAttachments": false,
+      "attachmentCount": 0,
+      "category": "normal",
+      "difficulty": "medium",
+      "expected": {
+        "isTransaction": false,
+        "transactionType": null,
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": true
+      },
+      "notes": "Zillow home value update - not a transaction but mentions selling"
+    },
+    {
+      "id": "fake-email-026",
+      "thread_id": "thread-024",
+      "provider": "gmail",
+      "subject": "Wire Transfer Instructions - IMPORTANT",
+      "body": "IMPORTANT - CLOSING FUNDS\n\nDear Buyer,\n\nPlease find the wire transfer instructions for your closing below:\n\nBank: First National Bank\nRouting: 123456789\nAccount: 987654321\nAmount: $125,450.00\nReference: 555 Cedar Lane Closing\n\n⚠️ NEVER send funds based on email instructions without verbal confirmation.\nCall our office at (555) 123-4567 to verify these instructions.\n\nFirst Title Company",
+      "sender": "closings@firsttitle.com",
+      "recipients": ["buyer@email.com"],
+      "labels": ["INBOX", "IMPORTANT", "STARRED"],
+      "sent_at": "2024-03-18T10:00:00Z",
+      "hasAttachments": false,
+      "attachmentCount": 0,
+      "category": "transaction",
+      "stage": "closing",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": true,
+        "transactionType": "purchase",
+        "shouldBeSpam": false
+      }
+    },
+    {
+      "id": "fake-email-027",
+      "thread_id": "thread-025",
+      "provider": "outlook",
+      "subject": "Updated Wire Instructions - URGENT",
+      "body": "URGENT UPDATE!\n\nOur banking information has changed. Please use the new wire instructions below for your closing:\n\nBank: Offshore Bank\nRouting: 999999999\nAccount: 111111111\n\nPlease send funds immediately to avoid closing delays.\n\nTitle Company",
+      "sender": "closings@f1rsttitle.com",
+      "recipients": ["buyer@email.com"],
+      "labels": ["INBOX"],
+      "sent_at": "2024-03-18T11:30:00Z",
+      "hasAttachments": false,
+      "attachmentCount": 0,
+      "category": "spam",
+      "difficulty": "hard",
+      "expected": {
+        "isTransaction": false,
+        "transactionType": null,
+        "shouldBeSpam": true,
+        "containsTransactionIndicators": true
+      },
+      "notes": "Wire fraud attempt - spoofed sender address (f1rsttitle vs firsttitle)"
+    },
+    {
+      "id": "fake-email-028",
+      "thread_id": "thread-026",
+      "provider": "gmail",
+      "subject": "Happy Birthday from Your Realtor!",
+      "body": "Happy Birthday, John!\n\nWishing you a wonderful day filled with joy and celebration.\n\nIt's been a pleasure working with you, and I hope your new home brings you many happy memories.\n\nIf you ever need anything or know someone looking to buy or sell, don't hesitate to reach out!\n\nCheers,\nSarah Johnson\nABC Realty\n(555) 987-6543",
+      "sender": "sarah.johnson@abcrealty.com",
+      "recipients": ["john@email.com"],
+      "labels": ["INBOX"],
+      "sent_at": "2024-02-25T09:00:00Z",
+      "hasAttachments": false,
+      "attachmentCount": 0,
+      "category": "normal",
+      "difficulty": "medium",
+      "expected": {
+        "isTransaction": false,
+        "transactionType": null,
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": true
+      },
+      "notes": "Birthday email from realtor - mentions buy/sell but not a transaction"
+    },
+    {
+      "id": "fake-email-029",
+      "thread_id": "thread-027",
+      "provider": "outlook",
+      "subject": "Repair Request - 444 Oak Lane Unit 2B",
+      "body": "Hello Property Manager,\n\nI'm writing to report a maintenance issue in my unit:\n\nIssue: Leaking faucet in kitchen\nUrgency: Medium - bucket is catching the drip for now\nBest time to access: Weekdays after 5 PM\n\nPlease let me know when a maintenance person can come by.\n\nThanks,\nTenant Unit 2B",
+      "sender": "tenant@email.com",
+      "recipients": ["manager@propertymanagement.com"],
+      "labels": ["INBOX"],
+      "sent_at": "2024-02-03T19:30:00Z",
+      "hasAttachments": false,
+      "attachmentCount": 0,
+      "category": "normal",
+      "difficulty": "medium",
+      "expected": {
+        "isTransaction": false,
+        "transactionType": null,
+        "shouldBeSpam": false,
+        "containsTransactionIndicators": true
+      },
+      "notes": "Property maintenance request - not a transaction"
+    },
+    {
+      "id": "fake-email-030",
+      "thread_id": "thread-028",
+      "provider": "gmail",
+      "subject": "Final Walk-Through Scheduled",
+      "body": "Hi,\n\nThe final walk-through for 999 Walnut Way has been scheduled:\n\nDate: March 19, 2024\nTime: 4:00 PM\n\nThis is your chance to verify that:\n- All agreed repairs have been completed\n- The property is in the expected condition\n- All fixtures and appliances are present\n\nPlease meet us at the property. Call if you have questions.\n\nBuyer's Agent",
+      "sender": "buyeragent@realty.com",
+      "recipients": ["buyer@email.com"],
+      "labels": ["INBOX"],
+      "sent_at": "2024-03-15T14:00:00Z",
+      "hasAttachments": false,
+      "attachmentCount": 0,
+      "category": "transaction",
+      "stage": "final_walkthrough",
+      "difficulty": "easy",
+      "expected": {
+        "isTransaction": true,
+        "transactionType": "purchase",
+        "shouldBeSpam": false
+      }
+    }
+  ]
+}
