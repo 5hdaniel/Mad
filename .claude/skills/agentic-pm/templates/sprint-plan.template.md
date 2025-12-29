@@ -156,3 +156,24 @@ The following MUST pass before merge:
 - [ ] No unresolved conflicts
 - [ ] Documentation updated (if applicable)
 - [ ] Ready for release (if applicable)
+- [ ] **Worktree cleanup complete** (see below)
+
+## Worktree Cleanup (Post-Sprint)
+
+If parallel execution used git worktrees, clean them up after all PRs merge:
+
+```bash
+# List current worktrees
+git worktree list
+
+# Remove sprint worktrees (adjust names as needed)
+git worktree remove Mad-task-XXX --force
+
+# Or bulk cleanup
+for wt in Mad-task-*; do [ -d "$wt" ] && git worktree remove "$wt" --force; done
+
+# Verify cleanup
+git worktree list
+```
+
+**Note:** Orphaned worktrees consume disk space and clutter IDE file browsers.

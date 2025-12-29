@@ -246,6 +246,10 @@ Engineer assumed transaction stage values without verifying against actual type 
 - [ ] Update backlog INDEX.md with completion dates — Owner: PM
 - [ ] Consider CI concurrency settings for future sprints — Owner: DevOps
 - [ ] Add type verification checklist to fixture task template — Owner: PM
+- [x] **Add worktree cleanup procedures to documentation** — Owner: PM ✅ COMPLETED
+  - Updated `.claude/docs/shared/git-branching.md` with worktree management section
+  - Updated `templates/sprint-plan.template.md` with cleanup checklist item
+  - Updated `modules/sprint-selection.md` with parallel execution guidance
 
 ---
 
