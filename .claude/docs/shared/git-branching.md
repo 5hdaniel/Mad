@@ -229,3 +229,70 @@ If an existing fix branch seems related:
 3. If it contains the fix, **merge it** instead of starting over
 
 **After creating a fix branch:** A fix is NOT complete until merged. Don't move on until the PR is merged.
+
+---
+
+## Git Worktrees (Parallel Sprint Execution)
+
+When executing sprint tasks in parallel, use git worktrees to maintain multiple branches simultaneously.
+
+### Creating Worktrees for Sprint Tasks
+
+```bash
+# From main repo, create worktree for each parallel task
+git worktree add Mad-task-701 feature/TASK-701-html-email
+git worktree add Mad-task-702 feature/TASK-702-messages-tab
+git worktree add Mad-task-800 feature/TASK-800-email-fixtures
+```
+
+### Worktree Naming Convention
+
+| Pattern | Example |
+|---------|---------|
+| `Mad-task-<NNN>` | `Mad-task-701`, `Mad-task-800` |
+| Based on task ID | Matches the TASK-XXX being implemented |
+
+### Worktree Cleanup (MANDATORY)
+
+**Important:** Git worktrees are NOT automatically cleaned up when PRs merge. They must be explicitly removed after sprint completion.
+
+**After sprint completion:**
+```bash
+# List all worktrees
+git worktree list
+
+# Remove each completed worktree
+git worktree remove Mad-task-701 --force
+git worktree remove Mad-task-702 --force
+git worktree remove Mad-task-800 --force
+
+# Verify cleanup
+git worktree list
+```
+
+**Bulk cleanup script:**
+```bash
+# Remove all Mad-task-* worktrees at once
+for wt in Mad-task-*; do
+  if [ -d "$wt" ]; then
+    git worktree remove "$wt" --force
+    echo "Removed worktree: $wt"
+  fi
+done
+```
+
+### When to Clean Up Worktrees
+
+| Trigger | Action |
+|---------|--------|
+| All sprint PRs merged | Remove all sprint worktrees |
+| Sprint cancelled/abandoned | Remove associated worktrees |
+| Task moved to different sprint | Remove old worktree if branch changed |
+
+### Worktree Cleanup Responsibility
+
+| Role | Responsibility |
+|------|----------------|
+| PM | Verify worktree cleanup in sprint completion checklist |
+| Engineer | Clean up worktrees after their tasks merge |
+| SR Engineer | Verify no orphaned worktrees during PR review |

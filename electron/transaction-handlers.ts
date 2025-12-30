@@ -1228,6 +1228,170 @@ export const registerTransactionHandlers = (
     },
   );
 
+  // Get unlinked messages (not attached to any transaction)
+  ipcMain.handle(
+    "transactions:get-unlinked-messages",
+    async (
+      event: IpcMainInvokeEvent,
+      userId: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        logService.info("Getting unlinked messages", "Transactions", { userId });
+
+        // Validate input
+        const validatedUserId = validateUserId(userId);
+        if (!validatedUserId) {
+          throw new ValidationError("User ID validation failed", "userId");
+        }
+
+        const messages = await transactionService.getUnlinkedMessages(validatedUserId);
+
+        return {
+          success: true,
+          messages,
+        };
+      } catch (error) {
+        logService.error("Get unlinked messages failed", "Transactions", {
+          userId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // Link messages to a transaction
+  ipcMain.handle(
+    "transactions:link-messages",
+    async (
+      event: IpcMainInvokeEvent,
+      messageIds: string[],
+      transactionId: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        logService.info("Linking messages to transaction", "Transactions", {
+          messageCount: messageIds?.length || 0,
+          transactionId,
+        });
+
+        // Validate transaction ID
+        const validatedTransactionId = validateTransactionId(transactionId);
+        if (!validatedTransactionId) {
+          throw new ValidationError(
+            "Transaction ID validation failed",
+            "transactionId",
+          );
+        }
+
+        // Validate message IDs
+        if (!Array.isArray(messageIds) || messageIds.length === 0) {
+          throw new ValidationError(
+            "Message IDs must be a non-empty array",
+            "messageIds",
+          );
+        }
+
+        // Validate each message ID
+        for (const id of messageIds) {
+          if (!id || typeof id !== "string" || id.trim().length === 0) {
+            throw new ValidationError(`Invalid message ID: ${id}`, "messageIds");
+          }
+        }
+
+        await transactionService.linkMessages(messageIds, validatedTransactionId);
+
+        logService.info("Messages linked successfully", "Transactions", {
+          messageCount: messageIds.length,
+          transactionId: validatedTransactionId,
+        });
+
+        return {
+          success: true,
+        };
+      } catch (error) {
+        logService.error("Link messages failed", "Transactions", {
+          messageCount: messageIds?.length || 0,
+          transactionId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // Unlink messages from a transaction (sets transaction_id to null)
+  ipcMain.handle(
+    "transactions:unlink-messages",
+    async (
+      event: IpcMainInvokeEvent,
+      messageIds: string[],
+    ): Promise<TransactionResponse> => {
+      try {
+        logService.info("Unlinking messages from transaction", "Transactions", {
+          messageCount: messageIds?.length || 0,
+        });
+
+        // Validate message IDs
+        if (!Array.isArray(messageIds) || messageIds.length === 0) {
+          throw new ValidationError(
+            "Message IDs must be a non-empty array",
+            "messageIds",
+          );
+        }
+
+        // Validate each message ID
+        for (const id of messageIds) {
+          if (!id || typeof id !== "string" || id.trim().length === 0) {
+            throw new ValidationError(`Invalid message ID: ${id}`, "messageIds");
+          }
+        }
+
+        await transactionService.unlinkMessages(messageIds);
+
+        logService.info("Messages unlinked successfully", "Transactions", {
+          messageCount: messageIds.length,
+        });
+
+        return {
+          success: true,
+        };
+      } catch (error) {
+        logService.error("Unlink messages failed", "Transactions", {
+          messageCount: messageIds?.length || 0,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
   // Enhanced export with options
   ipcMain.handle(
     "transactions:export-enhanced",

@@ -1,6 +1,8 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useCallback } from "react";
 import Joyride from "react-joyride";
 import { useTour } from "../hooks/useTour";
+import { usePendingTransactionCount } from "../hooks/usePendingTransactionCount";
+import { AIStatusCard } from "./dashboard/AIStatusCard";
 import {
   getDashboardTourSteps,
   JOYRIDE_STYLES,
@@ -38,6 +40,15 @@ function Dashboard({
     true,
     "hasSeenDashboardTour",
   );
+
+  // Fetch pending auto-detected transaction count
+  const { pendingCount, isLoading: isPendingLoading } =
+    usePendingTransactionCount();
+
+  // Handle viewing pending transactions - navigates to transactions view
+  const handleViewPending = useCallback(() => {
+    onViewTransactions();
+  }, [onViewTransactions]);
 
   // Track last reported tour state to prevent infinite loops
   const lastReportedTourStateRef = useRef<boolean | null>(null);
@@ -127,6 +138,15 @@ function Dashboard({
             </div>
           </div>
         )}
+
+        {/* AI Detection Status Card */}
+        <div className="mb-8">
+          <AIStatusCard
+            pendingCount={pendingCount}
+            onViewPending={handleViewPending}
+            isLoading={isPendingLoading}
+          />
+        </div>
 
         {/* Header */}
         <div className="text-center mb-12">

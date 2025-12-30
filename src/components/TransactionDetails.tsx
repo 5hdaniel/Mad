@@ -23,10 +23,14 @@ import {
   useTransactionTabs,
   useTransactionCommunications,
   useSuggestedContacts,
+  useTransactionMessages,
+  useTransactionAttachments,
   TransactionHeader,
   TransactionTabs,
   TransactionDetailsTab,
   TransactionContactsTab,
+  TransactionMessagesTab,
+  TransactionAttachmentsTab,
   ExportSuccessMessage,
   ArchivePromptModal,
   DeleteConfirmModal,
@@ -100,6 +104,21 @@ function TransactionDetails({
     handleRejectSuggestion,
     handleAcceptAll,
   } = useSuggestedContacts(transaction);
+
+  // Messages hook
+  const {
+    messages: textMessages,
+    loading: messagesLoading,
+    error: messagesError,
+  } = useTransactionMessages(transaction);
+
+  // Attachments hook
+  const {
+    attachments,
+    loading: attachmentsLoading,
+    error: attachmentsError,
+    count: attachmentCount,
+  } = useTransactionAttachments(transaction);
 
   // Transaction status update hook
   const { state: statusState, approve, reject, restore } = useTransactionStatusUpdate(userId);
@@ -262,6 +281,8 @@ function TransactionDetails({
         <TransactionTabs
           activeTab={activeTab}
           contactCount={contactAssignments.length}
+          messageCount={textMessages.length}
+          attachmentCount={attachmentCount}
           onTabChange={setActiveTab}
         />
 
@@ -288,6 +309,22 @@ function TransactionDetails({
               onAcceptSuggestion={handleAcceptSuggestionWithCallbacks}
               onRejectSuggestion={handleRejectSuggestionWithCallbacks}
               onAcceptAll={handleAcceptAllWithCallbacks}
+            />
+          )}
+
+          {activeTab === "messages" && (
+            <TransactionMessagesTab
+              messages={textMessages}
+              loading={messagesLoading}
+              error={messagesError}
+            />
+          )}
+
+          {activeTab === "attachments" && (
+            <TransactionAttachmentsTab
+              attachments={attachments}
+              loading={attachmentsLoading}
+              error={attachmentsError}
             />
           )}
         </div>

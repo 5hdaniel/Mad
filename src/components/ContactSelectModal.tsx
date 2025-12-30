@@ -8,6 +8,8 @@ interface ContactSelectModalProps {
   onSelect: (contacts: ExtendedContact[]) => void;
   onClose: () => void;
   propertyAddress?: string;
+  /** Initial contact IDs to pre-select when modal opens */
+  initialSelectedIds?: string[];
 }
 
 /**
@@ -28,9 +30,15 @@ function ContactSelectModal({
   onSelect,
   onClose,
   propertyAddress,
+  initialSelectedIds = [],
 }: ContactSelectModalProps) {
   const [searchQuery, setSearchQuery] = React.useState("");
-  const [selectedIds, setSelectedIds] = React.useState<string[]>([]);
+  const [selectedIds, setSelectedIds] = React.useState<string[]>(initialSelectedIds);
+
+  // Sync selectedIds when initialSelectedIds prop changes (e.g., modal reopened with different selections)
+  React.useEffect(() => {
+    setSelectedIds(initialSelectedIds);
+  }, [initialSelectedIds]);
 
   const availableContacts = contacts.filter((c) => !excludeIds.includes(c.id));
 

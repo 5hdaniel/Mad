@@ -8,12 +8,16 @@ import type { TransactionTab } from "../types";
 interface TransactionTabsProps {
   activeTab: TransactionTab;
   contactCount: number;
+  messageCount: number;
+  attachmentCount: number;
   onTabChange: (tab: TransactionTab) => void;
 }
 
 export function TransactionTabs({
   activeTab,
   contactCount,
+  messageCount,
+  attachmentCount,
   onTabChange,
 }: TransactionTabsProps): React.ReactElement {
   return (
@@ -38,6 +42,26 @@ export function TransactionTabs({
           }`}
         >
           Roles & Contacts ({contactCount})
+        </button>
+        <button
+          onClick={() => onTabChange("messages")}
+          className={`px-4 py-3 font-medium text-sm transition-all ${
+            activeTab === "messages"
+              ? "border-b-2 border-green-500 text-green-600"
+              : "text-gray-600 hover:text-gray-900"
+          }`}
+        >
+          Messages ({messageCount})
+        </button>
+        <button
+          onClick={() => onTabChange("attachments")}
+          className={`px-4 py-3 font-medium text-sm transition-all ${
+            activeTab === "attachments"
+              ? "border-b-2 border-green-500 text-green-600"
+              : "text-gray-600 hover:text-gray-900"
+          }`}
+        >
+          Attachments ({attachmentCount})
         </button>
       </div>
     </div>

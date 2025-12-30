@@ -250,4 +250,29 @@ export const transactionBridge = {
    */
   bulkUpdateStatus: (transactionIds: string[], status: TransactionStatus) =>
     ipcRenderer.invoke("transactions:bulk-update-status", transactionIds, status),
+
+  /**
+   * Gets unlinked messages (SMS/iMessage not attached to any transaction)
+   * @param userId - User ID to get messages for
+   * @returns List of unlinked messages
+   */
+  getUnlinkedMessages: (userId: string) =>
+    ipcRenderer.invoke("transactions:get-unlinked-messages", userId),
+
+  /**
+   * Links messages to a transaction
+   * @param messageIds - Array of message IDs to link
+   * @param transactionId - Transaction ID to link messages to
+   * @returns Link result
+   */
+  linkMessages: (messageIds: string[], transactionId: string) =>
+    ipcRenderer.invoke("transactions:link-messages", messageIds, transactionId),
+
+  /**
+   * Unlinks messages from a transaction (sets transaction_id to null)
+   * @param messageIds - Array of message IDs to unlink
+   * @returns Unlink result
+   */
+  unlinkMessages: (messageIds: string[]) =>
+    ipcRenderer.invoke("transactions:unlink-messages", messageIds),
 };
