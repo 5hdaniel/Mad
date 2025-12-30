@@ -67,7 +67,13 @@ const coverageConfig = {
 
 // CI uses simple flat config (no projects) for faster execution
 // Local development uses projects for integration tests
-const isCI = process.env.CI === 'true' || process.env.CI === true;
+// Note: GitHub Actions sets CI=true as a string
+const isCI = Boolean(process.env.CI);
+
+// Debug log for CI detection (will appear in test output)
+if (isCI) {
+  console.log('[jest.config] Running in CI mode - using flat config');
+}
 
 module.exports = isCI ? {
   // CI: Simple flat configuration (like the working config before multi-project)
