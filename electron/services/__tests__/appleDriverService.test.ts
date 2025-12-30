@@ -5,11 +5,10 @@
  * These tests verify the service behavior on non-Windows platforms and mock
  * the Windows-specific functionality.
  *
- * NOTE: Extended timeout (15s) is required because:
- * - checkAppleDrivers() performs multiple execAsync calls on Windows
- * - Each execAsync has a 5s timeout (registry checks, service queries)
- * - Under CI load or slow systems, these can approach their timeouts
- * - 15s provides adequate headroom for worst-case sequential timing
+ * FIX (TASK-804): Resolved flaky test issues by:
+ * - Adding proper beforeEach/afterEach for mock cleanup
+ * - Mocking child_process.exec to avoid real system calls
+ * - Removing extended timeout since we now use deterministic mocks
  */
 
 import {
@@ -23,11 +22,57 @@ import {
   DriverInstallResult,
 } from "../appleDriverService";
 
-// Extend timeout for tests that perform async driver checks
-// The underlying execAsync calls can take up to 5s each on Windows
-jest.setTimeout(15000);
+// Mock child_process to prevent real system calls and timing issues
+jest.mock("child_process", () => ({
+  exec: jest.fn((cmd, opts, callback) => {
+    // If callback is provided as second arg (no opts)
+    if (typeof opts === "function") {
+      callback = opts;
+    }
+    // Simulate registry/service not found on non-Windows
+    const error = new Error("Command not found");
+    (error as NodeJS.ErrnoException).code = "ENOENT";
+    if (callback) {
+      callback(error, "", "");
+    }
+    return { on: jest.fn(), stdout: { on: jest.fn() }, stderr: { on: jest.fn() } };
+  }),
+  spawn: jest.fn(() => ({
+    on: jest.fn((event, cb) => {
+      if (event === "close") {
+        // Simulate exit code 1 (not on Windows)
+        setTimeout(() => cb(1), 0);
+      }
+    }),
+    stdout: { on: jest.fn() },
+    stderr: { on: jest.fn() },
+  })),
+}));
+
+// Mock fs to prevent file system access issues
+jest.mock("fs", () => ({
+  existsSync: jest.fn(() => false),
+  mkdirSync: jest.fn(),
+  readdirSync: jest.fn(() => []),
+  readFileSync: jest.fn(() => ""),
+  createWriteStream: jest.fn(() => ({
+    on: jest.fn(),
+    close: jest.fn(),
+  })),
+  unlinkSync: jest.fn(),
+}));
 
 describe("AppleDriverService", () => {
+  // Reset mocks before each test to ensure isolation
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  // Clean up after all tests
+  afterAll(() => {
+    jest.restoreAllMocks();
+  });
+
   describe("checkAppleDrivers", () => {
     it("should return installed status on non-Windows platforms", async () => {
       // On non-Windows, drivers are not needed
@@ -202,8 +247,13 @@ describe("AppleDriverService", () => {
 });
 
 describe("AppleDriverService Windows-specific (mocked)", () => {
-  // These tests would run with mocked Windows APIs
-  // On actual Windows, they test real functionality
+  // These tests run with mocked Windows APIs
+  // Mocks are defined at the top of this file
+
+  // Reset mocks before each test to ensure isolation
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
 
   describe("registry check", () => {
     it("should handle registry not found gracefully", async () => {
