@@ -140,7 +140,7 @@ function Dashboard({
         )}
 
         {/* AI Detection Status Card */}
-        <div className="mb-8">
+        <div className="mb-8" data-tour="ai-detection-status">
           <AIStatusCard
             pendingCount={pendingCount}
             onViewPending={handleViewPending}
