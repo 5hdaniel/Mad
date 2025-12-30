@@ -2,6 +2,7 @@ import type {
   Transaction,
   NewTransaction,
   UpdateTransaction,
+  Communication,
   NewCommunication,
   OAuthProvider,
   Contact,
@@ -1314,6 +1315,119 @@ class TransactionService {
       realEstateEmailsFound: realEstateEmails.length,
       analyzed: realEstateEmails as any,
     };
+  }
+
+  /**
+   * Get unlinked messages for a user (messages not attached to any transaction)
+   * Filters to only SMS/iMessage channels
+   */
+  async getUnlinkedMessages(userId: string): Promise<Communication[]> {
+    // Get all messages for the user
+    const allMessages = await databaseService.getCommunications({
+      user_id: userId,
+    });
+
+    // Filter to unlinked SMS/iMessage only
+    const messages = allMessages.filter(
+      (msg) =>
+        !msg.transaction_id &&
+        (msg.channel === "sms" || msg.channel === "imessage"),
+    );
+
+    // Sort by most recent first
+    messages.sort((a, b) => {
+      const dateA = new Date(a.sent_at || a.received_at || 0).getTime();
+      const dateB = new Date(b.sent_at || b.received_at || 0).getTime();
+      return dateB - dateA;
+    });
+
+    await logService.info(
+      "Retrieved unlinked messages",
+      "TransactionService.getUnlinkedMessages",
+      {
+        userId,
+        count: messages.length,
+      },
+    );
+
+    return messages;
+  }
+
+  /**
+   * Link messages to a transaction
+   * Sets transaction_id on the specified messages
+   */
+  async linkMessages(messageIds: string[], transactionId: string): Promise<void> {
+    // Verify transaction exists
+    const transaction = await this.getTransactionDetails(transactionId);
+    if (!transaction) {
+      throw new Error("Transaction not found");
+    }
+
+    // Update each message
+    for (const messageId of messageIds) {
+      await databaseService.updateCommunication(messageId, {
+        transaction_id: transactionId,
+      });
+    }
+
+    // Update transaction message count
+    const newCount = (transaction.message_count || 0) + messageIds.length;
+    await databaseService.updateTransaction(transactionId, {
+      message_count: newCount,
+    });
+
+    await logService.info(
+      "Messages linked to transaction",
+      "TransactionService.linkMessages",
+      {
+        messageIds,
+        transactionId,
+        linkedCount: messageIds.length,
+      },
+    );
+  }
+
+  /**
+   * Unlink messages from a transaction (sets transaction_id to null)
+   * Does NOT add to ignored communications - simply removes the link
+   */
+  async unlinkMessages(messageIds: string[]): Promise<void> {
+    // Get transaction IDs for updating counts later
+    const transactionCounts = new Map<string, number>();
+
+    for (const messageId of messageIds) {
+      const message = await databaseService.getCommunicationById(messageId);
+      if (message?.transaction_id) {
+        const count = transactionCounts.get(message.transaction_id) || 0;
+        transactionCounts.set(message.transaction_id, count + 1);
+      }
+
+      // Remove the transaction link
+      await databaseService.updateCommunication(messageId, {
+        transaction_id: undefined,
+      });
+    }
+
+    // Update transaction message counts
+    for (const [transactionId, unlinkedCount] of transactionCounts) {
+      const transaction = await this.getTransactionDetails(transactionId);
+      if (transaction) {
+        const newCount = Math.max(0, (transaction.message_count || 0) - unlinkedCount);
+        await databaseService.updateTransaction(transactionId, {
+          message_count: newCount,
+        });
+      }
+    }
+
+    await logService.info(
+      "Messages unlinked from transaction",
+      "TransactionService.unlinkMessages",
+      {
+        messageIds,
+        unlinkedCount: messageIds.length,
+      },
+    );
   }
 }
 

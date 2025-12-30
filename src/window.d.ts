@@ -926,6 +926,31 @@ interface MainAPI {
       errors?: string[];
       error?: string;
     }>;
+    /**
+     * Gets unlinked messages (SMS/iMessage not attached to any transaction)
+     */
+    getUnlinkedMessages: (userId: string) => Promise<{
+      success: boolean;
+      messages?: unknown[];
+      error?: string;
+    }>;
+    /**
+     * Links messages to a transaction
+     */
+    linkMessages: (
+      messageIds: string[],
+      transactionId: string,
+    ) => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
+    /**
+     * Unlinks messages from a transaction (sets transaction_id to null)
+     */
+    unlinkMessages: (messageIds: string[]) => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
   };
 
   // Transaction scan progress event

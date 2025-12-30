@@ -2,9 +2,9 @@
 
 This index tracks all backlog items with their current status and metadata.
 
-**Last Updated:** 2025-12-28
-**Total Items:** 129
-**Pending:** 89 | **In Progress:** 0 | **Completed:** 37 | **Obsolete:** 2 | **Deferred:** 2
+**Last Updated:** 2025-12-30
+**Total Items:** 130
+**Pending:** 90 | **In Progress:** 0 | **Completed:** 37 | **Obsolete:** 2 | **Deferred:** 2
 
 ---
 
@@ -178,6 +178,7 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-117 | Fix Sprint 009 Auth Regressions (Preload Sandbox + Google Login) | service | Critical | Completed | - | 4-6 | ~20K | 30-60m | 2 | ~8K | 9m | 1 | ~5K | 5m | 0 | 0 | 0 | 3 | ~13K | 14m | -70% | [BACKLOG-117.md](BACKLOG-117.md) |
 | BACKLOG-118 | Fix OnboardingFlow React Hooks Order Bug | ui | High | Completed | - | 1-2 | ~10K | 15m | 1 | ~8K | 10m | - | - | - | - | - | - | 1 | ~8K | 10m | -50% | [BACKLOG-118.md](BACKLOG-118.md) |
 | BACKLOG-119 | Audit OAuth Handler Parity (Google/Microsoft) | refactor | Low | Pending | - | 13-18 | ~50K | 2-3h | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-119.md](BACKLOG-119.md) |
+| BACKLOG-120 | CI Testing Infrastructure Gaps | test/infra | Medium | Pending | - | 20-30 | ~80K | 1-2d | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-120.md](BACKLOG-120.md) |
 
 ---
 
@@ -284,6 +285,7 @@ This index tracks all backlog items with their current status and metadata.
 - 2025-12-28: BACKLOG-117 completed - PR #242 merged (preload sandbox + Google login + timeout protection)
 - 2025-12-28: CI workflow fix - fetch base branch for PR comparison
 - 2025-12-28: Added BACKLOG-119 (OAuth Handler Parity Audit) - Low priority, prevents future Google/Microsoft handler drift
+- 2025-12-30: Added BACKLOG-120 (CI Testing Infrastructure Gaps) - Medium priority, tracks testing gaps from TASK-704 CI debugging
 
 ---
 

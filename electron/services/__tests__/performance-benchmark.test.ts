@@ -207,10 +207,16 @@ describe('Pipeline Performance Benchmarks', () => {
         console.log(`${count} emails: ${elapsed.toFixed(2)}ms`);
       }
 
-      // Check that 800 emails doesn't take more than 15x the time of 100 emails
-      // (should be closer to 8x for linear, but allow overhead for system variation)
+      // Check that 800 emails doesn't take more than expected multiple of 100 emails
+      // (should be closer to 8x for linear, but CI runners have extreme variability)
+      // Per SR Engineer: CI runners can have 50-100x variability, skip strict check in CI
       const ratio = times[3] / times[0];
-      expect(ratio).toBeLessThan(15);
+      if (!process.env.CI) {
+        expect(ratio).toBeLessThan(15);
+      } else {
+        // In CI, just log the ratio for monitoring - don't fail on performance
+        console.log(`[CI] Skipping strict scalability assertion (ratio: ${ratio.toFixed(2)}x)`);
+      }
       console.log(`Scalability ratio (800/100): ${ratio.toFixed(2)}x (expected: <15x, ideal: 8x)`);
     });
 

@@ -238,3 +238,16 @@ global.console = {
   error: jest.fn(),
   warn: jest.fn(),
 };
+
+// Global cleanup to prevent Jest from hanging
+// Many tests use setTimeout which keeps the Node.js event loop alive
+afterAll(() => {
+  // Clear any pending timers
+  jest.clearAllTimers();
+  // Ensure real timers are restored
+  try {
+    jest.useRealTimers();
+  } catch (_e) {
+    // Already using real timers, ignore
+  }
+});

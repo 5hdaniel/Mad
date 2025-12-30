@@ -12,9 +12,14 @@
  *   - NODE_MODULE_VERSION 127 = Node.js 22.x
  *   - NODE_MODULE_VERSION 131 = Node.js 23.x
  *   - NODE_MODULE_VERSION 133 = Node.js 23.x (newer)
+ *
+ * NOTE: Skipped in CI - native modules are rebuilt for Electron, not Node.js/Jest.
+ * The 'Rebuild native modules for Electron' CI step validates the build works.
  */
 
-describe("Native Module Compatibility", () => {
+const skipInCI = process.env.CI ? describe.skip : describe;
+
+skipInCI("Native Module Compatibility", () => {
   it("should load better-sqlite3-multiple-ciphers without version mismatch", () => {
     // This test will throw if the module was compiled for a different Node version
     expect(() => {
