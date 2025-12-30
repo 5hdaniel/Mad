@@ -303,9 +303,6 @@ describe("SyncOrchestrator", () => {
   let orchestrator: SyncOrchestrator;
 
   beforeEach(() => {
-    // Use fake timers to prevent real setTimeout from keeping Jest alive
-    jest.useFakeTimers();
-
     // Reset mock states
     mockBackupService.setMockBehavior(true, false);
     mockBackupService.removeAllListeners();
@@ -316,10 +313,7 @@ describe("SyncOrchestrator", () => {
   });
 
   afterEach(() => {
-    // Clean up all pending timers to prevent Jest from hanging
-    jest.runOnlyPendingTimers();
-    jest.useRealTimers();
-
+    // Clean up orchestrator and listeners to prevent Jest from hanging
     orchestrator.stopDeviceDetection();
     orchestrator.removeAllListeners();
     mockBackupService.removeAllListeners();
