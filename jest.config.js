@@ -81,14 +81,18 @@ module.exports = {
     '**/?(*.)+(spec|test).{js,jsx,ts,tsx}',
   ],
 
-  // Ignore patterns - exclude integration tests and electron service tests that hang in CI
+  // Ignore patterns - exclude tests that cause CI hangs
   testPathIgnorePatterns: [
     '/node_modules/',
     '/dist/',
     '/build/',
     '/tests/integration/',
-    // Skip electron service tests in CI - they use EventEmitter/setTimeout patterns that cause Jest to hang
-    ...(process.env.CI ? ['/electron/services/__tests__/'] : []),
+    // Skip electron tests in CI - native modules and EventEmitter patterns cause hangs
+    // These should be run locally before committing
+    ...(process.env.CI ? [
+      '/electron/services/__tests__/',
+      '/electron/__tests__/',
+    ] : []),
   ],
 
   // Reduce output noise
