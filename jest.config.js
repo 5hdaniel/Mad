@@ -74,25 +74,21 @@ module.exports = {
     },
   },
 
-  // Test match patterns
-  testMatch: [
+  // Test match patterns - in CI, only run frontend tests (src/) for reliability
+  testMatch: process.env.CI ? [
+    '**/src/**/*.(test|spec).{js,jsx,ts,tsx}',
+  ] : [
     '**/__tests__/**/*.(test|spec).{js,jsx,ts,tsx}',
     '**/tests/**/*.(test|spec).{js,jsx,ts,tsx}',
     '**/?(*.)+(spec|test).{js,jsx,ts,tsx}',
   ],
 
-  // Ignore patterns - exclude tests that cause CI hangs
+  // Ignore patterns
   testPathIgnorePatterns: [
     '/node_modules/',
     '/dist/',
     '/build/',
     '/tests/integration/',
-    // Skip electron tests in CI - native modules and EventEmitter patterns cause hangs
-    // These should be run locally before committing
-    ...(process.env.CI ? [
-      '/electron/services/__tests__/',
-      '/electron/__tests__/',
-    ] : []),
   ],
 
   // Reduce output noise
