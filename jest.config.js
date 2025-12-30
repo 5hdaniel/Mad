@@ -1,4 +1,4 @@
-// Base configuration shared across all projects
+// Base configuration shared across all environments
 const baseConfig = {
   // Module paths
   moduleDirectories: ['node_modules', 'src'],
@@ -25,55 +25,8 @@ const baseConfig = {
   },
 };
 
-// CI environment skips integration tests - they use fake timers that prevent Jest from exiting
-const integrationProject = process.env.CI
-  ? null
-  : {
-      ...baseConfig,
-      displayName: 'integration',
-      testEnvironment: 'node',
-      setupFilesAfterEnv: ['<rootDir>/tests/integration/setup.ts'],
-      testMatch: ['<rootDir>/tests/integration/**/*.test.ts'],
-    };
-
-module.exports = {
-  // Use projects for different test environments
-  projects: [
-    // Default project - unit tests with jsdom
-    {
-      ...baseConfig,
-      displayName: 'unit',
-      testEnvironment: 'jest-environment-jsdom',
-      setupFilesAfterEnv: ['<rootDir>/tests/setup.js'],
-      testEnvironmentOptions: {
-        customExportConditions: ['node', 'node-addons'],
-      },
-      testMatch: [
-        '**/__tests__/**/*.(test|spec).{js,jsx,ts,tsx}',
-        '**/tests/**/*.(test|spec).{js,jsx,ts,tsx}',
-        '**/?(*.)+(spec|test).{js,jsx,ts,tsx}',
-      ],
-      testPathIgnorePatterns: [
-        '/node_modules/',
-        '/dist/',
-        '/build/',
-        '/tests/integration/', // Exclude integration tests from unit project
-      ],
-    },
-    // Integration tests - node environment (skipped in CI)
-    integrationProject,
-  ].filter(Boolean),
-
-  // Global test timeout (30s for integration tests, default for unit tests)
-  testTimeout: 30000,
-
-  // Reduce output noise
-  verbose: false,
-
-  // Limit error output
-  errorOnDeprecated: false,
-
-  // Coverage configuration
+// Coverage configuration (shared)
+const coverageConfig = {
   collectCoverageFrom: [
     'src/**/*.{js,jsx,ts,tsx}',
     'electron/services/**/*.{js,ts}',
@@ -82,9 +35,8 @@ module.exports = {
     '!electron/**/*.test.{js,ts}',
     '!electron/main.js',
     '!**/node_modules/**',
-    '!tests/integration/**', // Exclude integration test framework from coverage
+    '!tests/integration/**',
   ],
-
   coverageThreshold: {
     global: {
       branches: 30,
@@ -92,7 +44,6 @@ module.exports = {
       lines: 45,
       statements: 45,
     },
-    // Per-path thresholds - enforce higher coverage where it matters most
     './src/utils/': {
       branches: 80,
       functions: 80,
@@ -112,8 +63,72 @@ module.exports = {
       statements: 55,
     },
   },
+};
 
-  // Concise error output for CI/CD
-  bail: 1, // Stop after first test failure (optional - remove if you want all failures)
-  maxWorkers: process.env.CI ? 2 : '50%', // Limit parallel tests in CI for cleaner output
+// CI uses simple flat config (no projects) for faster execution
+// Local development uses projects for integration tests
+const isCI = process.env.CI === 'true' || process.env.CI === true;
+
+module.exports = isCI ? {
+  // CI: Simple flat configuration (like the working config before multi-project)
+  ...baseConfig,
+  ...coverageConfig,
+  testEnvironment: 'jest-environment-jsdom',
+  setupFilesAfterEnv: ['<rootDir>/tests/setup.js'],
+  testEnvironmentOptions: {
+    customExportConditions: ['node', 'node-addons'],
+  },
+  testMatch: [
+    '**/__tests__/**/*.(test|spec).{js,jsx,ts,tsx}',
+    '**/tests/**/*.(test|spec).{js,jsx,ts,tsx}',
+    '**/?(*.)+(spec|test).{js,jsx,ts,tsx}',
+  ],
+  testPathIgnorePatterns: [
+    '/node_modules/',
+    '/dist/',
+    '/build/',
+    '/tests/integration/', // Integration tests run locally only
+  ],
+  testTimeout: 30000,
+  verbose: false,
+  errorOnDeprecated: false,
+  bail: 1,
+  maxWorkers: 2,
+} : {
+  // Local: Multi-project configuration with integration tests
+  ...coverageConfig,
+  projects: [
+    {
+      ...baseConfig,
+      displayName: 'unit',
+      testEnvironment: 'jest-environment-jsdom',
+      setupFilesAfterEnv: ['<rootDir>/tests/setup.js'],
+      testEnvironmentOptions: {
+        customExportConditions: ['node', 'node-addons'],
+      },
+      testMatch: [
+        '**/__tests__/**/*.(test|spec).{js,jsx,ts,tsx}',
+        '**/tests/**/*.(test|spec).{js,jsx,ts,tsx}',
+        '**/?(*.)+(spec|test).{js,jsx,ts,tsx}',
+      ],
+      testPathIgnorePatterns: [
+        '/node_modules/',
+        '/dist/',
+        '/build/',
+        '/tests/integration/',
+      ],
+    },
+    {
+      ...baseConfig,
+      displayName: 'integration',
+      testEnvironment: 'node',
+      setupFilesAfterEnv: ['<rootDir>/tests/integration/setup.ts'],
+      testMatch: ['<rootDir>/tests/integration/**/*.test.ts'],
+    },
+  ],
+  testTimeout: 30000,
+  verbose: false,
+  errorOnDeprecated: false,
+  bail: 1,
+  maxWorkers: '50%',
 };
