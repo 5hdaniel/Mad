@@ -1,5 +1,15 @@
-// Base configuration shared across all environments
-const baseConfig = {
+module.exports = {
+  // Test environment - use node for backend, jsdom for frontend
+  testEnvironment: 'jest-environment-jsdom',
+
+  // Setup files
+  setupFilesAfterEnv: ['<rootDir>/tests/setup.js'],
+
+  // Use node environment for backend tests
+  testEnvironmentOptions: {
+    customExportConditions: ['node', 'node-addons'],
+  },
+
   // Module paths
   moduleDirectories: ['node_modules', 'src'],
 
@@ -23,10 +33,8 @@ const baseConfig = {
     '^electron-log$': '<rootDir>/tests/__mocks__/electron-log.js',
     '^electron-updater$': '<rootDir>/tests/__mocks__/electron-updater.js',
   },
-};
 
-// Coverage configuration (shared)
-const coverageConfig = {
+  // Coverage configuration
   collectCoverageFrom: [
     'src/**/*.{js,jsx,ts,tsx}',
     'electron/services/**/*.{js,ts}',
@@ -37,6 +45,7 @@ const coverageConfig = {
     '!**/node_modules/**',
     '!tests/integration/**',
   ],
+
   coverageThreshold: {
     global: {
       branches: 30,
@@ -44,6 +53,7 @@ const coverageConfig = {
       lines: 45,
       statements: 45,
     },
+    // Per-path thresholds - enforce higher coverage where it matters most
     './src/utils/': {
       branches: 80,
       functions: 80,
@@ -63,78 +73,24 @@ const coverageConfig = {
       statements: 55,
     },
   },
-};
 
-// CI uses simple flat config (no projects) for faster execution
-// Local development uses projects for integration tests
-// Note: GitHub Actions sets CI=true as a string
-const isCI = Boolean(process.env.CI);
-
-// Debug log for CI detection (will appear in test output)
-if (isCI) {
-  console.log('[jest.config] Running in CI mode - using flat config');
-}
-
-module.exports = isCI ? {
-  // CI: Simple flat configuration (like the working config before multi-project)
-  ...baseConfig,
-  ...coverageConfig,
-  testEnvironment: 'jest-environment-jsdom',
-  setupFilesAfterEnv: ['<rootDir>/tests/setup.js'],
-  testEnvironmentOptions: {
-    customExportConditions: ['node', 'node-addons'],
-  },
+  // Test match patterns
   testMatch: [
     '**/__tests__/**/*.(test|spec).{js,jsx,ts,tsx}',
     '**/tests/**/*.(test|spec).{js,jsx,ts,tsx}',
     '**/?(*.)+(spec|test).{js,jsx,ts,tsx}',
   ],
-  testPathIgnorePatterns: [
-    '/node_modules/',
-    '/dist/',
-    '/build/',
-    '/tests/integration/', // Integration tests run locally only
-  ],
-  testTimeout: 30000,
+
+  // Ignore patterns - exclude integration tests that use fake timers
+  testPathIgnorePatterns: ['/node_modules/', '/dist/', '/build/', '/tests/integration/'],
+
+  // Reduce output noise
   verbose: false,
+
+  // Limit error output
   errorOnDeprecated: false,
-  bail: 1,
-  maxWorkers: 2,
-} : {
-  // Local: Multi-project configuration with integration tests
-  ...coverageConfig,
-  projects: [
-    {
-      ...baseConfig,
-      displayName: 'unit',
-      testEnvironment: 'jest-environment-jsdom',
-      setupFilesAfterEnv: ['<rootDir>/tests/setup.js'],
-      testEnvironmentOptions: {
-        customExportConditions: ['node', 'node-addons'],
-      },
-      testMatch: [
-        '**/__tests__/**/*.(test|spec).{js,jsx,ts,tsx}',
-        '**/tests/**/*.(test|spec).{js,jsx,ts,tsx}',
-        '**/?(*.)+(spec|test).{js,jsx,ts,tsx}',
-      ],
-      testPathIgnorePatterns: [
-        '/node_modules/',
-        '/dist/',
-        '/build/',
-        '/tests/integration/',
-      ],
-    },
-    {
-      ...baseConfig,
-      displayName: 'integration',
-      testEnvironment: 'node',
-      setupFilesAfterEnv: ['<rootDir>/tests/integration/setup.ts'],
-      testMatch: ['<rootDir>/tests/integration/**/*.test.ts'],
-    },
-  ],
-  testTimeout: 30000,
-  verbose: false,
-  errorOnDeprecated: false,
-  bail: 1,
-  maxWorkers: '50%',
+
+  // Concise error output for CI/CD
+  bail: 1, // Stop after first test failure (optional - remove if you want all failures)
+  maxWorkers: process.env.CI ? 2 : '50%', // Limit parallel tests in CI for cleaner output
 };
