@@ -30,6 +30,13 @@ export const getDashboardTourSteps = (): Step[] => [
     disableBeacon: true,
   },
   {
+    target: '[data-tour="ai-detection-status"]',
+    content:
+      "This card shows transactions that our AI has automatically found in your emails. Click 'Review Now' to confirm or dismiss them.",
+    placement: "bottom",
+    disableBeacon: true,
+  },
+  {
     target: '[data-tour="contacts-card"]',
     content:
       "Manage your real estate contacts database here. Add, edit, or organize your client contacts.",
