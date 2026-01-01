@@ -56,6 +56,8 @@ The incident had clear signals that were missed:
 - Test failures requiring changes
 - Type errors after initial implementation
 - Lint fixes beyond auto-fix
+- Investigation/troubleshooting (even if no fix commit resulted)
+- Unexpected issues that required research
 
 **Even small debugging matters for estimation:**
 ```markdown
@@ -103,9 +105,10 @@ PR open time ≠ work time. Engineers wait for CI, wait for answers, get blocked
 
 **If PR open >4h AND Debugging: 0, ASK:**
 - "Was there waiting time (CI, blocked, waiting for answer)?"
-- "Did any debugging happen during that time?"
+- "Were there any unexpected issues that required debugging?"
+- "Did investigation/troubleshooting happen that didn't result in fix commits?"
 
-**Only block if:** Long PR + fix commits + Debugging: 0 (clear discrepancy)
+**Only block if:** fix commits present + Debugging: 0 (clear discrepancy)
 
 ---
 
@@ -193,9 +196,10 @@ PR open time ≠ work time. Engineers wait for CI, answers, dependencies.
 
 **If PR >4h AND Debugging: 0, ASK:**
 - "Was there waiting time (CI, blocked, waiting for answer)?"
-- "Did any debugging happen during that time?"
+- "Were there any unexpected issues that required debugging?"
+- "Did investigation/troubleshooting happen that didn't result in fix commits?"
 
-**Only block if:** Long PR + fix commits + Debugging: 0 (clear discrepancy)
+**Only block if:** fix commits present + Debugging: 0 (clear discrepancy)
 
 **Why this matters:** Without accurate debugging metrics, PM estimates appear more accurate than they are. Even 10 minutes of debugging affects estimation calibration.
 ```
