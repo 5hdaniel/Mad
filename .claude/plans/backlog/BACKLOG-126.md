@@ -38,55 +38,89 @@ The incident had clear signals that were missed:
 
 ---
 
-## Solution: SR Engineer Commit Verification Protocol
+## Solution: Tiered Debugging Verification Protocol
 
-### 1. Mandatory Git History Check Before Merge
+### Core Principle: Capture Everything, Block Intelligently
 
-**Add to PR-SOP Phase 9 (Pre-Merge Checklist):**
+**Two separate goals:**
+1. **Estimation Accuracy** - Capture ALL debugging effort, even 5 minutes
+2. **Quality Gate** - Block only on clear discrepancies (evidence vs reported)
 
-```bash
-# REQUIRED: Check commit history for unreported debugging
-git log --oneline origin/develop..HEAD | grep -E "^[a-f0-9]+ fix" | wc -l
-```
+---
 
-| Fix Commit Count | Action |
-|------------------|--------|
-| 0-2 | Normal - no action needed |
-| 3-5 | Flag: Request debugging metrics update if Debugging shows 0 |
-| 6+ | **BLOCKER**: Major debugging occurred, require incident documentation |
+### 1. Engineer Responsibility: Track ALL Debugging
 
-### 2. Timeline Verification
+**Any of these = debugging occurred, MUST be recorded:**
+- CI failure investigation (even if quick fix)
+- Any commit with "fix" in the message
+- Test failures requiring changes
+- Type errors after initial implementation
+- Lint fixes beyond auto-fix
 
-```bash
-# Check PR creation time vs now
-gh pr view <PR> --json createdAt,url
-```
-
-| Time Open | Action |
-|-----------|--------|
-| <4 hours | Normal |
-| 4-8 hours | Verify debugging tracked if any fix commits present |
-| >8 hours | **BLOCKER**: Require explanation, likely missing debugging metrics |
-
-### 3. Debugging Metrics Cross-Check
-
-**SR Engineer MUST verify:**
-
+**Even small debugging matters for estimation:**
 ```markdown
-## Debugging Verification (MANDATORY)
-
-1. Fix commit count: `git log --oneline develop..HEAD | grep -E "fix" | wc -l`
-   Result: X commits
-
-2. Reported debugging: [from Engineer Metrics section]
-   Result: X turns, X min
-
-3. Verification:
-   - [ ] If 0 fix commits AND 0 debugging reported → PASS
-   - [ ] If 3+ fix commits AND debugging > 0 → PASS
-   - [ ] If 3+ fix commits AND debugging = 0 → **BLOCK: Update metrics**
-   - [ ] If PR open >8h AND debugging = 0 → **BLOCK: Explain timeline**
+| Debugging (Debug) | 1 | ~4K | 10 min |  ← This is honest
+| Debugging (Debug) | 0 | 0 | 0 |         ← This should be rare
 ```
+
+**Rule:** If you made ANY commit after CI failed, Debugging > 0.
+
+---
+
+### 2. SR Engineer Verification: Tiered Response
+
+**Step 1: Collect evidence**
+```bash
+# Count fix commits
+FIX_COUNT=$(git log --oneline origin/develop..HEAD | grep -iE "fix" | wc -l)
+
+# Count total commits
+TOTAL_COMMITS=$(git log --oneline origin/develop..HEAD | wc -l)
+
+# Check PR age
+PR_AGE=$(gh pr view --json createdAt --jq '.createdAt')
+```
+
+**Step 2: Cross-check with tiered response**
+
+| Fix Commits | Debugging Reported | Response |
+|-------------|-------------------|----------|
+| 0 | 0 | ✅ **PASS** - Consistent, no debugging needed |
+| 0 | >0 | ✅ **PASS** - Honest about non-commit debugging (e.g., investigation) |
+| 1-2 | 0 | ⚠️ **ASK** - "These fix commits required no debugging time?" |
+| 1-2 | >0 | ✅ **PASS** - Consistent, small debugging captured |
+| 3-5 | 0 | ❌ **BLOCK** - Clear discrepancy, require update |
+| 3-5 | >0 | ✅ **PASS** - Verify proportional (3 commits ≈ 15+ min typical) |
+| 6+ | any | 📋 **INCIDENT REPORT** - Major debugging, document for learning |
+
+**Step 3: Timeline sanity check**
+
+| PR Open Time | Debugging: 0? | Response |
+|--------------|---------------|----------|
+| <2 hours | Yes | ✅ Plausible - fast implementation |
+| 2-4 hours | Yes | ⚠️ Ask - "What took the extra time?" |
+| 4-8 hours | Yes | ❌ Block - Debugging almost certainly occurred |
+| >8 hours | Yes | ❌ Block + Incident Report required |
+
+---
+
+### 3. Why Track Even Small Debugging?
+
+**For PM estimation calibration:**
+
+If TASK-700 estimates "4-6 turns" and actual is:
+- Implementation: 4 turns
+- Debugging: 0 turns
+- **Total: 4 turns** → PM thinks estimate was accurate
+
+But if actual was:
+- Implementation: 4 turns
+- Debugging: 2 turns (CI lint fix, type error)
+- **Total: 6 turns** → PM learns debugging overhead is real
+
+**Without capturing small debugging, estimates appear more accurate than they are.**
+
+---
 
 ### 4. Major Incident Threshold
 
@@ -118,37 +152,42 @@ Add to **Phase 9: Pre-Merge Checklist**:
 ```markdown
 ### 9.4 Debugging Metrics Verification (MANDATORY)
 
-Before merging, SR Engineer MUST verify debugging metrics are accurate:
+Before merging, SR Engineer MUST verify debugging metrics are accurately captured.
 
-**Step 1: Check fix commit count**
+**Goal:** Capture ALL debugging for estimation accuracy, block only on clear discrepancies.
+
+**Step 1: Collect evidence**
 ```bash
-git log --oneline origin/develop..HEAD | grep -iE "^[a-f0-9]+ fix" | wc -l
+# Count fix commits
+FIX_COUNT=$(git log --oneline origin/develop..HEAD | grep -iE "fix" | wc -l)
+echo "Fix commits: $FIX_COUNT"
+
+# Check PR age
+gh pr view --json createdAt --jq '.createdAt'
 ```
 
-**Step 2: Check PR timeline**
-```bash
-gh pr view <PR> --json createdAt --jq '.createdAt'
-# Compare to current time
-```
+**Step 2: Tiered response based on evidence vs reported**
 
-**Step 3: Cross-check with reported metrics**
+| Fix Commits | Debugging Reported | Response |
+|-------------|-------------------|----------|
+| 0 | 0 | ✅ PASS |
+| 0 | >0 | ✅ PASS (honest about investigation time) |
+| 1-2 | 0 | ⚠️ ASK engineer: "These fix commits took 0 debugging time?" |
+| 1-2 | >0 | ✅ PASS |
+| 3-5 | 0 | ❌ BLOCK - Require metrics update before merge |
+| 3-5 | >0 | ✅ PASS (verify roughly proportional) |
+| 6+ | any | 📋 INCIDENT REPORT required |
 
-| Scenario | Action |
-|----------|--------|
-| 0 fix commits, Debugging: 0 | ✅ PASS |
-| 1-2 fix commits, Debugging: 0 | ⚠️ Verify - ask engineer if truly 0 |
-| 3+ fix commits, Debugging: 0 | ❌ BLOCK - Require metrics update |
-| PR open >8h, Debugging: 0 | ❌ BLOCK - Require explanation |
+**Step 3: Timeline sanity check**
 
-**Step 4: Major Incident Check**
+| PR Open | Debugging: 0? | Response |
+|---------|---------------|----------|
+| <2h | Yes | ✅ Plausible |
+| 2-4h | Yes | ⚠️ Ask what took extra time |
+| 4-8h | Yes | ❌ Block - debugging certainly occurred |
+| >8h | Yes | ❌ Block + Incident Report |
 
-If ANY of these are true, require Incident Report:
-- [ ] Debugging >2 hours
-- [ ] >5 fix commits
-- [ ] PR open >8 hours
-- [ ] >5 CI failures
-
-**DO NOT MERGE if debugging appears undercounted. Send back to engineer.**
+**Why this matters:** Without accurate debugging metrics, PM estimates appear more accurate than they are. Even 10 minutes of debugging affects estimation calibration.
 ```
 
 ### Update 2: `.claude/agents/engineer.md`
@@ -156,54 +195,53 @@ If ANY of these are true, require Incident Report:
 Add to **Step 6: Wait for CI and Debug**:
 
 ```markdown
-### CI Debugging Is Tracked Work (Non-Negotiable)
+### ALL Debugging Must Be Tracked (Non-Negotiable)
 
-**CRITICAL:** If you create ANY commit with "fix" in the message, you MUST:
-1. Count those turns in the Debugging row
-2. Track the time spent debugging
-3. Update your metrics before SR Engineer review
+**Debugging = any work after initial implementation to fix issues.**
 
-**SR Engineer will run:**
-```bash
-git log --oneline origin/develop..HEAD | grep -E "fix" | wc -l
+Track debugging if ANY of these occurred:
+- CI failed and you made changes
+- Type-check failed after implementation
+- Tests failed and required fixes
+- Lint errors beyond auto-fix
+- ANY commit with "fix" in the message
+
+**Even small debugging counts:**
+```markdown
+| Debugging (Debug) | 1 | ~4K | 10 min |  ← Honest (CI lint fix)
+| Debugging (Debug) | 0 | 0 | 0 |         ← Should be rare
 ```
 
-If fix commits > 0 but Debugging = 0, **your PR will be blocked**.
+**Rule:** If you committed after CI failed, Debugging > 0.
+
+**SR Engineer will verify:**
+```bash
+git log --oneline origin/develop..HEAD | grep -iE "fix" | wc -l
+```
+
+**Consequences:**
+- 1-2 fix commits + Debugging: 0 → SR will ask for clarification
+- 3+ fix commits + Debugging: 0 → PR blocked until updated
+- 6+ fix commits → Incident Report required
+
+### Why This Matters for You
+
+Tracking debugging helps PM improve estimates. If debugging is hidden:
+- PM thinks "4 turn estimate" was accurate when it took 6
+- Future similar tasks get underestimated
+- You get blamed for being "slow" when debugging was real work
+
+**Accurate metrics protect your time estimates.**
 
 ### Major Incident Triggers
 
-If ANY of these occur, document as a Major Incident:
+Document as Major Incident when ANY occur:
 - Debugging takes >2 hours
 - You make >5 fix commits
-- CI fails >5 times on the same issue
-- You hit an external blocker (dependency, API, infrastructure)
+- CI fails >5 times on same issue
+- External blocker (dependency, API, infrastructure)
 
-**Major Incident Template:**
-
-```markdown
-## Major Incident Report
-
-**Type:** [CI Failure | External Blocker | Scope Creep | Other]
-**Duration:** X hours
-**Fix Commits:** X
-**CI Failures:** X
-
-### Timeline
-- [Time]: [Event]
-- [Time]: [Event]
-
-### Root Cause
-[Description]
-
-### Resolution
-[What fixed it]
-
-### Prevention
-[How to avoid in future]
-
-### Backlog Item
-[If systemic, create BACKLOG-XXX]
-```
+[Major Incident Template - same as before]
 ```
 
 ### Update 3: `.claude/docs/shared/metrics-templates.md`
@@ -211,24 +249,40 @@ If ANY of these occur, document as a Major Incident:
 Add to **Validation Rules** section:
 
 ```markdown
-## Automated Verification (SR Engineer)
+## Debugging Metrics: Capture Everything
 
-Before merge, SR Engineer runs:
+**Debugging is rarely 0.** Most tasks involve at least one CI fix, lint correction, or type error.
 
-```bash
-# Count fix commits
-FIX_COUNT=$(git log --oneline origin/develop..HEAD | grep -iE "^[a-f0-9]+ fix" | wc -l)
-echo "Fix commits: $FIX_COUNT"
+**What counts as debugging:**
+- Any commit with "fix" in message
+- CI investigation time (even if quick)
+- Type errors after implementation
+- Test fixes
+- Lint fixes beyond auto-fix
 
-# Check PR age
-PR_CREATED=$(gh pr view --json createdAt --jq '.createdAt')
-echo "PR created: $PR_CREATED"
+**Honest example:**
+```markdown
+| Phase | Turns | Tokens | Active Time |
+|-------|-------|--------|-------------|
+| Implementation (Impl) | 4 | ~16K | 25 min |
+| Debugging (Debug) | 1 | ~4K | 10 min |  ← CI lint fix
+| **Engineer Total** | 5 | ~20K | 35 min |
 ```
 
-**Blocking Conditions:**
-- `FIX_COUNT >= 3` AND Debugging row shows 0 → BLOCK
-- PR open >8 hours AND Debugging row shows 0 → BLOCK
-- `FIX_COUNT >= 6` AND no Incident Report → BLOCK
+## SR Engineer Verification
+
+Before merge, check for discrepancies:
+
+```bash
+FIX_COUNT=$(git log --oneline origin/develop..HEAD | grep -iE "fix" | wc -l)
+PR_AGE=$(gh pr view --json createdAt --jq '.createdAt')
+```
+
+**Tiered response:**
+- 1-2 fix commits + Debugging: 0 → Ask
+- 3+ fix commits + Debugging: 0 → Block
+- 6+ fix commits → Incident Report required
+- PR >4h + Debugging: 0 → Block
 ```
 
 ---
@@ -238,23 +292,31 @@ echo "PR created: $PR_CREATED"
 | Gap in TASK-704 | How This Fixes It |
 |-----------------|-------------------|
 | Debugging reported as 0 | SR Engineer cross-checks with git log |
-| 22 fix commits not flagged | Commit count triggers blocking threshold |
-| 22h timeline not questioned | PR age check flags >8h PRs |
+| 22 fix commits not flagged | 6+ commits triggers incident report |
+| 22h timeline not questioned | PR age >8h + Debugging: 0 = block |
+| Small debugging hidden too | 1-2 fix commits prompts clarification |
 | No incident documentation | Major Incident threshold requires report |
-| Metrics not enforced | SR Engineer BLOCKS merge on discrepancy |
+| Metrics not enforced | Tiered response: ask → block → incident |
 
-**Key Principle:** The verification is performed by SR Engineer using objective git data, not relying on engineer self-reporting alone.
+**Key Principles:**
+
+1. **Capture everything** - Even 1 fix commit should prompt "is debugging really 0?"
+2. **Block intelligently** - Only block on clear discrepancies (3+ commits, 0 reported)
+3. **Don't create friction** - Ask first for small discrepancies, block for clear ones
+4. **Use objective data** - Git history and PR age, not just self-reporting
 
 ---
 
 ## Acceptance Criteria
 
-- [ ] PR-SOP Phase 9 includes debugging verification steps with git commands
-- [ ] engineer.md explicitly states fix commits = debugging metrics required
-- [ ] metrics-templates.md includes automated verification commands
-- [ ] Major Incident threshold defined (>2h, >5 commits, >8h PR, >5 CI failures)
+- [ ] PR-SOP Phase 9 includes tiered debugging verification (ask/block/incident)
+- [ ] engineer.md states ALL debugging must be tracked (even small)
+- [ ] engineer.md explains WHY tracking helps engineer (better estimates)
+- [ ] metrics-templates.md clarifies "Debugging: 0 should be rare"
+- [ ] Tiered response defined: 1-2 commits = ask, 3+ = block, 6+ = incident
+- [ ] Timeline check: >4h PR + Debugging: 0 = block
 - [ ] Major Incident template provided
-- [ ] SR Engineer has clear BLOCK criteria (not just warnings)
+- [ ] SR Engineer verification uses git commands (objective data)
 
 ---
 
