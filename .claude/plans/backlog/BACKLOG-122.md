@@ -3,7 +3,9 @@
 **Priority:** Medium
 **Category:** docs
 **Created:** 2025-12-31
+**Completed:** 2026-01-01
 **Source:** SPRINT-011 Retrospective
+**Status:** Completed
 
 ---
 
@@ -30,10 +32,10 @@ Update the engineer agent prompts and documentation with clearer worktree instru
 
 ## Acceptance Criteria
 
-- [ ] Engineer agent prompt includes worktree creation template
-- [ ] Verification command documented (`git worktree list`)
-- [ ] Common failure modes documented with solutions
-- [ ] Example workflow from branch creation to PR
+- [x] Engineer agent prompt includes worktree creation template
+- [x] Verification command documented (`git worktree list`)
+- [x] Common failure modes documented with solutions
+- [x] Example workflow from branch creation to PR
 
 ## Implementation Notes
 

@@ -238,12 +238,83 @@ When executing sprint tasks in parallel, use git worktrees to maintain multiple 
 
 ### Creating Worktrees for Sprint Tasks
 
+The `git worktree add` command with `-b` creates BOTH the branch AND the worktree directory in one step.
+
+**Syntax:** `git worktree add <path> -b <new-branch> <base-branch>`
+
 ```bash
-# From main repo, create worktree for each parallel task
-git worktree add Mad-task-701 feature/TASK-701-html-email
-git worktree add Mad-task-702 feature/TASK-702-messages-tab
-git worktree add Mad-task-800 feature/TASK-800-email-fixtures
+# Feature work (base from develop)
+git worktree add ../Mad-task-701 -b feature/TASK-701-html-email develop
+
+# Bug fix (base from develop)
+git worktree add ../Mad-task-804 -b fix/TASK-804-flaky-test develop
+
+# Documentation/refactor (base from develop)
+git worktree add ../Mad-task-616 -b refactor/TASK-616-console-cleanup develop
+
+# Hotfix (base from main - production emergency)
+git worktree add ../Mad-hotfix-001 -b hotfix/critical-security-patch main
 ```
+
+### Verification Steps (MANDATORY)
+
+**Always verify worktree creation before proceeding:**
+
+```bash
+# Step 1: Verify worktree exists
+git worktree list
+# Expected output for each worktree:
+# /Users/you/Mad-task-701  abc1234 [feature/TASK-701-html-email]
+
+# Step 2: Verify directory is accessible
+ls /Users/you/Mad-task-701
+# Should show: package.json, src/, electron/, etc.
+
+# Step 3: Verify correct branch
+git -C /Users/you/Mad-task-701 branch --show-current
+# Should show: feature/TASK-701-html-email
+```
+
+### Common Failure Modes and Solutions
+
+| Error Message | Cause | Solution |
+|---------------|-------|----------|
+| `fatal: 'feature/TASK-XXX' already exists` | Branch name already in use | Delete: `git branch -D feature/TASK-XXX` then retry |
+| `fatal: '/path/to/Mad-task-XXX' already exists` | Directory exists | Remove: `rm -rf /path/to/Mad-task-XXX` then retry |
+| `fatal: not a git repository` | Running from wrong directory | Use `-C` flag: `git -C /path/to/Mad worktree add ...` |
+| `Preparing worktree (new branch)` then hangs | Network issue fetching | Add `--no-track` flag, push later |
+| Worktree not in `git worktree list` | Creation failed silently | Check command output, fix error, retry |
+
+### Example Workflow: Worktree from Creation to PR
+
+```bash
+# === SETUP (from main repo) ===
+cd /Users/daniel/Documents/Mad
+git fetch origin
+git pull origin develop
+
+# === CREATE WORKTREE ===
+git worktree add ../Mad-task-801 -b feature/TASK-801-sms-fixtures develop
+
+# === VERIFY ===
+git worktree list
+ls ../Mad-task-801/package.json  # Should exist
+
+# === WORK IN WORKTREE (always use absolute paths or -C) ===
+git -C /Users/daniel/Documents/Mad-task-801 status
+# ... make changes ...
+git -C /Users/daniel/Documents/Mad-task-801 add -A
+git -C /Users/daniel/Documents/Mad-task-801 commit -m "feat: add SMS fixtures"
+git -C /Users/daniel/Documents/Mad-task-801 push -u origin feature/TASK-801-sms-fixtures
+
+# === CREATE PR ===
+gh pr create --repo 5hdaniel/Mad --head feature/TASK-801-sms-fixtures --base develop
+
+# === CLEANUP (after PR merged) ===
+git worktree remove ../Mad-task-801 --force
+```
+
+**CRITICAL:** Always use `git -C /absolute/path` or `--prefix` for npm. Never rely on `cd` to maintain context in automated workflows.
 
 ### Worktree Naming Convention
 

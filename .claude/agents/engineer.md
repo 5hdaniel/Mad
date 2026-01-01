@@ -68,12 +68,62 @@ You are auto-invoked when PM assigns a task. Your first actions:
 ### Creating Branch
 ```
 
-Then immediately:
+Then immediately create your branch:
+
+**Standard Workflow (default):**
 ```bash
 git checkout develop
 git pull origin develop
 git checkout -b [branch from task file]
 ```
+
+**Worktree Workflow (when PM specifies parallel execution):**
+
+When PM assigns tasks for parallel execution, use git worktrees. The worktree command creates BOTH the branch AND the working directory in one step.
+
+```bash
+# 1. Ensure you're in the main repo and up to date
+git -C /path/to/Mad fetch origin
+git -C /path/to/Mad pull origin develop
+
+# 2. Create worktree + branch in ONE command
+#    -b creates a new branch, 'develop' is the base
+git -C /path/to/Mad worktree add ../Mad-task-XXX -b feature/TASK-XXX-description develop
+
+# 3. VERIFY worktree was created (MANDATORY before proceeding)
+git worktree list
+# Expected: /path/to/Mad-task-XXX  abc1234 [feature/TASK-XXX-description]
+
+# 4. Verify you can access the worktree
+ls /path/to/Mad-task-XXX
+# Should show project files (package.json, src/, etc.)
+
+# If either verification fails → STOP and report blocker to PM
+```
+
+**Working in Worktree (CRITICAL):**
+```bash
+# ALWAYS use -C flag with absolute path for git commands
+git -C /path/to/Mad-task-XXX status
+git -C /path/to/Mad-task-XXX add -A
+git -C /path/to/Mad-task-XXX commit -m "message"
+git -C /path/to/Mad-task-XXX push -u origin feature/TASK-XXX-description
+
+# For npm commands, use full path
+npm --prefix /path/to/Mad-task-XXX test
+npm --prefix /path/to/Mad-task-XXX run type-check
+```
+
+**Worktree Common Failures:**
+
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| "already exists" | Branch name in use | Delete branch: `git branch -D feature/TASK-XXX-...` then retry |
+| "not a git repository" | Wrong directory | Use `-C /path/to/Mad` to specify main repo |
+| Directory already exists | Path conflict | Use different path or `rm -rf` the directory first |
+| Worktree not in list | Creation failed | Check error output, fix issue, retry |
+
+**CRITICAL:** Never rely on `cd` to maintain context. Always use absolute paths or `git -C` for all operations.
 
 ### Step 2: Read Task File Completely
 
