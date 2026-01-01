@@ -108,3 +108,36 @@ For each significant TODO:
 | Sprint Start | Clear old archive if >3 sprints old |
 | Sprint End | Archive completed tasks |
 | Retrospective | Update estimation accuracy data |
+
+---
+
+## Sprint Status Verification (MANDATORY)
+
+**Problem:** Sprint files can become stale if not updated after PRs merge. This leads to incorrect status reports.
+
+**Rule:** Before reporting sprint status, ALWAYS verify against GitHub PRs.
+
+### Verification Procedure
+
+```bash
+# 1. Get task IDs from sprint file (e.g., TASK-700 to TASK-706)
+
+# 2. Check actual PR status for those tasks
+gh pr list --state all --limit 20 | grep -E "(700|701|702|703|704|705|706)"
+
+# 3. If PRs are merged but sprint file shows "Pending", update the sprint file
+```
+
+### When to Verify
+
+| Situation | Action |
+|-----------|--------|
+| User asks "where are we with sprint X?" | Verify against PRs first |
+| Sprint file shows "Planning" or "Active" | Check if PRs are merged |
+| Generating retrospective | Confirm all status matches PRs |
+
+### Why This Matters
+
+SPRINT-010 was fully merged on 2025-12-29 but sprint file still showed "Planning" on 2026-01-01. This led to incorrect status reports because the file was trusted without verification.
+
+**Trust, but verify.** The source of truth is GitHub, not the markdown files.
