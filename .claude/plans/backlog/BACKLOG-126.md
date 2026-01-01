@@ -93,14 +93,19 @@ PR_AGE=$(gh pr view --json createdAt --jq '.createdAt')
 | 3-5 | >0 | ✅ **PASS** - Verify proportional (3 commits ≈ 15+ min typical) |
 | 6+ | any | 📋 **INCIDENT REPORT** - Major debugging, document for learning |
 
-**Step 3: Timeline sanity check**
+**Step 3: Timeline as signal (not blocker)**
 
-| PR Open Time | Debugging: 0? | Response |
-|--------------|---------------|----------|
-| <2 hours | Yes | ✅ Plausible - fast implementation |
-| 2-4 hours | Yes | ⚠️ Ask - "What took the extra time?" |
-| 4-8 hours | Yes | ❌ Block - Debugging almost certainly occurred |
-| >8 hours | Yes | ❌ Block + Incident Report required |
+PR open time ≠ work time. Engineers wait for CI, wait for answers, get blocked on dependencies.
+
+| PR Open Time | Use As |
+|--------------|--------|
+| Any duration | **Signal to investigate**, not automatic block |
+
+**If PR open >4h AND Debugging: 0, ASK:**
+- "Was there waiting time (CI, blocked, waiting for answer)?"
+- "Did any debugging happen during that time?"
+
+**Only block if:** Long PR + fix commits + Debugging: 0 (clear discrepancy)
 
 ---
 
@@ -178,14 +183,19 @@ gh pr view --json createdAt --jq '.createdAt'
 | 3-5 | >0 | ✅ PASS (verify roughly proportional) |
 | 6+ | any | 📋 INCIDENT REPORT required |
 
-**Step 3: Timeline sanity check**
+**Step 3: Timeline as signal (not blocker)**
+
+PR open time ≠ work time. Engineers wait for CI, answers, dependencies.
 
 | PR Open | Debugging: 0? | Response |
 |---------|---------------|----------|
-| <2h | Yes | ✅ Plausible |
-| 2-4h | Yes | ⚠️ Ask what took extra time |
-| 4-8h | Yes | ❌ Block - debugging certainly occurred |
-| >8h | Yes | ❌ Block + Incident Report |
+| Any | Yes | **Investigate if fix commits present** |
+
+**If PR >4h AND Debugging: 0, ASK:**
+- "Was there waiting time (CI, blocked, waiting for answer)?"
+- "Did any debugging happen during that time?"
+
+**Only block if:** Long PR + fix commits + Debugging: 0 (clear discrepancy)
 
 **Why this matters:** Without accurate debugging metrics, PM estimates appear more accurate than they are. Even 10 minutes of debugging affects estimation calibration.
 ```
@@ -282,7 +292,7 @@ PR_AGE=$(gh pr view --json createdAt --jq '.createdAt')
 - 1-2 fix commits + Debugging: 0 → Ask
 - 3+ fix commits + Debugging: 0 → Block
 - 6+ fix commits → Incident Report required
-- PR >4h + Debugging: 0 → Block
+- Long PR + fix commits + Debugging: 0 → Investigate (PR time ≠ work time)
 ```
 
 ---
@@ -293,7 +303,7 @@ PR_AGE=$(gh pr view --json createdAt --jq '.createdAt')
 |-----------------|-------------------|
 | Debugging reported as 0 | SR Engineer cross-checks with git log |
 | 22 fix commits not flagged | 6+ commits triggers incident report |
-| 22h timeline not questioned | PR age >8h + Debugging: 0 = block |
+| 22h timeline not questioned | Long PR + fix commits = investigate |
 | Small debugging hidden too | 1-2 fix commits prompts clarification |
 | No incident documentation | Major Incident threshold requires report |
 | Metrics not enforced | Tiered response: ask → block → incident |
@@ -314,7 +324,7 @@ PR_AGE=$(gh pr view --json createdAt --jq '.createdAt')
 - [ ] engineer.md explains WHY tracking helps engineer (better estimates)
 - [ ] metrics-templates.md clarifies "Debugging: 0 should be rare"
 - [ ] Tiered response defined: 1-2 commits = ask, 3+ = block, 6+ = incident
-- [ ] Timeline check: >4h PR + Debugging: 0 = block
+- [ ] Timeline used as signal to investigate (not automatic blocker)
 - [ ] Major Incident template provided
 - [ ] SR Engineer verification uses git commands (objective data)
 
