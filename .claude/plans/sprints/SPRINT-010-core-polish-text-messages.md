@@ -244,6 +244,76 @@ All 6 task files have been reviewed and updated with:
 
 ---
 
+## Major Incident: TASK-704 CI Debugging (22 Hours)
+
+**This incident was NOT captured in original metrics and retrospective.**
+
+### Timeline
+
+| Event | Timestamp | Duration |
+|-------|-----------|----------|
+| PR #255 Created | 2025-12-29 08:16 | - |
+| Implementation Complete | 2025-12-29 08:16 | ~30 min |
+| CI Debugging Begins | 2025-12-29 09:00 | - |
+| CI Debugging Ends | 2025-12-30 06:11 | **~21 hours** |
+| PR Merged | 2025-12-30 06:20 | - |
+| **Total Wall Time** | - | **~22 hours** |
+
+### Root Cause
+
+Jest hanging for 20-45 minutes after tests passed:
+1. Mock classes using `EventEmitter` + `setTimeout` keeping Node.js event loop alive
+2. Native modules (SQLite) compiled for Electron, incompatible with Jest/Node.js
+3. `jest.useFakeTimers()` at module level conflicting with async operations
+
+### Debugging Commits (22 total)
+
+```
+fix(ci): skip nativeModules test in CI and add 30min timeout
+fix(ci): add --forceExit to prevent Jest from hanging after tests
+fix(ci): skip integration tests in CI - fake timers prevent Jest exit
+fix(ci): use flat Jest config in CI, remove multi-project overhead
+fix(ci): add proper timer/listener cleanup in syncOrchestrator.test.ts
+fix(ci): add global timer cleanup in test setup
+fix(ci): revert to working jest.config.js, exclude integration tests
+fix(ci): remove fake timers from syncOrchestrator tests
+fix(ci): skip syncOrchestrator tests in CI
+fix(ci): add 30 second global test timeout
+fix(ci): skip all electron service tests in CI
+fix(ci): exclude all electron tests from CI
+fix(ci): run only frontend tests in CI for reliability
+fix(ci): use --detectOpenHandles to find hanging cause
+fix(ci): restore --forceExit and let run complete
+fix(ci): exclude ContactSelectModal.test.tsx from CI
+docs(backlog): add ContactSelectModal test gap to BACKLOG-120
+```
+
+### Corrected TASK-704 Metrics
+
+| Phase | Reported | Actual | Difference |
+|-------|----------|--------|------------|
+| Implementation | 4 turns, 30m | 4 turns, 30m | - |
+| CI Debugging | 0 | **~20 turns, ~21h** | **+20 turns** |
+| **Total** | 4 turns, 30m | **~24 turns, ~22h** | **+500%** |
+
+### Impact on Sprint
+
+- **Estimated:** 10-14 turns, 2-3h
+- **Actual:** ~24 turns, ~22h
+- **Variance:** **+71% to +140% over estimate**
+
+### Outcome
+
+- Created BACKLOG-120 (CI Testing Infrastructure Gaps) to track issues
+- Multiple test files now skipped in CI (documented in BACKLOG-120)
+- Jest config modified with workarounds
+
+### Lesson Learned
+
+**CI debugging time MUST be captured separately.** The engineer metrics only showed implementation time, completely missing the 21+ hours of debugging. This invalidated the sprint's estimation accuracy data.
+
+---
+
 ## Progress Tracking
 
 **Sprint Progress:** 7/7 tasks merged (100%) ✅
