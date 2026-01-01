@@ -7,6 +7,7 @@
  */
 
 import type { FakeEmail } from '../../electron/services/__tests__/fixtures/fake-mailbox/types';
+import type { FakeMessage } from '../../electron/services/__tests__/fixtures/fake-ios-backup/types';
 import {
   getAllEmails,
   getTransactionEmails,
@@ -16,10 +17,20 @@ import {
   getStats as getEmailStats,
 } from '../../electron/services/__tests__/fixtures/fake-mailbox/emailFixtureService';
 import {
+  getAllMessages,
+  getAllHandles,
+  getAllChats,
+  getAllContacts,
+  getTransactionMessages,
+  getMessageStats,
+  filterMessages,
+} from '../../electron/services/__tests__/fixtures/fake-ios-backup/iosBackupFixtureService';
+import {
   MockGmailProvider,
   MockOutlookProvider,
   MockiOSBackupProvider,
   fakeEmailToProcessable,
+  fakeMessageToProcessable,
 } from './mockProviders';
 import type {
   TestSandboxOptions,
@@ -30,6 +41,7 @@ import type {
   ClassificationResult,
   ClassificationComparison,
   ProcessableEmail,
+  ProcessableMessage,
 } from './types';
 import { TEST_USER_ID, TEST_FIXED_DATE } from './setup';
 
@@ -48,8 +60,11 @@ export class TestSandbox {
   private outlookProvider: MockOutlookProvider;
   private iosProvider: MockiOSBackupProvider;
   private loadedEmails: FakeEmail[] = [];
+  private loadedMessages: FakeMessage[] = [];
   private syncedEmails: ProcessableEmail[] = [];
+  private syncedMessages: ProcessableMessage[] = [];
   private classificationResults: Map<string, ClassificationResult> = new Map();
+  private messageClassificationResults: Map<number, ClassificationResult> = new Map();
   private detectedTransactions: DetectedTransaction[] = [];
   private isSetup = false;
 
@@ -82,12 +97,19 @@ export class TestSandbox {
       this.outlookProvider.loadEmails(this.loadedEmails);
     }
 
-    // Load SMS fixtures when available (TASK-801)
+    // Load SMS fixtures (TASK-801)
     if (this.options.fixtures === 'sms' || this.options.fixtures === 'both') {
-      // TODO: Load SMS fixtures from TASK-801 when available
-      // const smsFixtures = loadSMSFixtures();
-      // this.iosProvider.loadMessages(smsFixtures.messages);
-      // this.iosProvider.loadContacts(smsFixtures.contacts);
+      this.loadedMessages = getAllMessages();
+      const handles = getAllHandles();
+      const chats = getAllChats();
+      const contacts = getAllContacts();
+
+      this.iosProvider.loadFixtures({
+        messages: this.loadedMessages,
+        handles,
+        chats,
+        contacts,
+      });
     }
 
     this.isSetup = true;
@@ -98,8 +120,11 @@ export class TestSandbox {
    */
   async teardown(): Promise<void> {
     this.loadedEmails = [];
+    this.loadedMessages = [];
     this.syncedEmails = [];
+    this.syncedMessages = [];
     this.classificationResults.clear();
+    this.messageClassificationResults.clear();
     this.detectedTransactions = [];
     this.isSetup = false;
   }
@@ -179,9 +204,13 @@ export class TestSandbox {
     const startTime = Date.now();
 
     try {
-      const result = await this.iosProvider.syncAll();
+      const { messages } = await this.iosProvider.fetchMessages();
+      this.syncedMessages.push(...messages);
+
       return {
-        ...result,
+        success: true,
+        itemCount: messages.length,
+        errorCount: 0,
         durationMs: Date.now() - startTime,
       };
     } catch (error) {
@@ -193,6 +222,46 @@ export class TestSandbox {
         durationMs: Date.now() - startTime,
       };
     }
+  }
+
+  /**
+   * Sync all messages and emails
+   */
+  async syncAll(): Promise<SyncResult> {
+    this.ensureSetup();
+
+    const startTime = Date.now();
+    let totalItems = 0;
+    let totalErrors = 0;
+    const errors: string[] = [];
+
+    // Sync emails if loaded
+    if (this.options.fixtures === 'email' || this.options.fixtures === 'both') {
+      const emailResult = await this.syncAllEmails();
+      totalItems += emailResult.itemCount;
+      if (!emailResult.success) {
+        totalErrors += emailResult.errorCount;
+        if (emailResult.error) errors.push(emailResult.error);
+      }
+    }
+
+    // Sync messages if loaded
+    if (this.options.fixtures === 'sms' || this.options.fixtures === 'both') {
+      const messageResult = await this.syncMessages();
+      totalItems += messageResult.itemCount;
+      if (!messageResult.success) {
+        totalErrors++;
+        if (messageResult.error) errors.push(`iOS: ${messageResult.error}`);
+      }
+    }
+
+    return {
+      success: totalErrors === 0,
+      itemCount: totalItems,
+      errorCount: totalErrors,
+      error: errors.length > 0 ? errors.join('; ') : undefined,
+      durationMs: Date.now() - startTime,
+    };
   }
 
   /**
@@ -372,10 +441,56 @@ export class TestSandbox {
   }
 
   /**
+   * Get synced SMS/iMessage messages
+   */
+  getSyncedMessages(): ProcessableMessage[] {
+    return [...this.syncedMessages];
+  }
+
+  /**
+   * Get messages filtered by criteria
+   */
+  getMessages(filter?: Parameters<typeof filterMessages>[0]): FakeMessage[] {
+    return filter ? filterMessages(filter) : this.loadedMessages;
+  }
+
+  /**
+   * Get transaction-related messages
+   */
+  getTransactionMessages(): FakeMessage[] {
+    return getTransactionMessages();
+  }
+
+  /**
    * Get classification results
    */
   getClassificationResults(): Map<string, ClassificationResult> {
     return new Map(this.classificationResults);
+  }
+
+  /**
+   * Get message classification results
+   */
+  getMessageClassificationResults(): Map<number, ClassificationResult> {
+    return new Map(this.messageClassificationResults);
+  }
+
+  /**
+   * Run classification on synced SMS/iMessage messages
+   * Uses pattern-based classification for testing (simulates AI detection)
+   */
+  async runMessageClassification(): Promise<ClassificationResult[]> {
+    this.ensureSetup();
+
+    const results: ClassificationResult[] = [];
+
+    for (const message of this.syncedMessages) {
+      const result = this.classifyMessage(message);
+      this.messageClassificationResults.set(message.messageId, result);
+      results.push(result);
+    }
+
+    return results;
   }
 
   /**
@@ -496,6 +611,96 @@ export class TestSandbox {
 
     return {
       messageId: email.externalId,
+      isTransactionRelated,
+      isSpam,
+      confidence,
+      transactionType,
+      stage,
+    };
+  }
+
+  /**
+   * Pattern-based SMS/iMessage classification
+   * Simulates AI detection for testing purposes
+   */
+  private classifyMessage(message: ProcessableMessage): ClassificationResult {
+    const text = message.text.toLowerCase();
+
+    // Spam detection patterns for SMS
+    const spamPatterns = [
+      /urgent.*claim.*prize/i,
+      /win.*\$\d+/i,
+      /lottery.*winner/i,
+      /congratulations.*winner/i,
+      /click here.*claim/i,
+      /free.*gift/i,
+    ];
+
+    const isSpam = spamPatterns.some((pattern) => pattern.test(text));
+
+    // Transaction detection patterns for SMS
+    const transactionPatterns = [
+      /showing.*property/i,
+      /meet.*listing/i,
+      /closing/i,
+      /escrow/i,
+      /inspection/i,
+      /appraisal/i,
+      /offer/i,
+      /contract/i,
+      /earnest money/i,
+      /\d+\s+(oak|maple|pine|elm)/i,
+      /walk-?through/i,
+      /keys/i,
+      /title.*company/i,
+      /lender/i,
+      /mortgage/i,
+    ];
+
+    const isTransactionRelated =
+      !isSpam && transactionPatterns.some((pattern) => pattern.test(text));
+
+    // Transaction type detection
+    let transactionType: 'purchase' | 'sale' | null = null;
+    if (isTransactionRelated) {
+      if (/listing|seller|your home/i.test(text)) {
+        transactionType = 'sale';
+      } else if (/buyer|purchase|mortgage|closing funds/i.test(text)) {
+        transactionType = 'purchase';
+      }
+    }
+
+    // Stage detection
+    let stage: ClassificationResult['stage'] = null;
+    if (isTransactionRelated) {
+      if (/new listing|interested in/i.test(text)) {
+        stage = 'intro';
+      } else if (/showing|schedule.*view/i.test(text)) {
+        stage = 'showing';
+      } else if (/offer|counter/i.test(text)) {
+        stage = 'offer';
+      } else if (/inspection/i.test(text)) {
+        stage = 'inspections';
+      } else if (/escrow|title|appraisal/i.test(text)) {
+        stage = 'escrow';
+      } else if (/closing|walk-?through|keys/i.test(text)) {
+        stage = 'closing';
+      } else if (/congratulations|moved in|hoa/i.test(text)) {
+        stage = 'post_closing';
+      }
+    }
+
+    // Confidence calculation
+    let confidence = 0.5;
+    if (isSpam || isTransactionRelated) {
+      const matchCount = (isSpam ? spamPatterns : transactionPatterns).filter((p) =>
+        p.test(text)
+      ).length;
+      confidence = Math.min(0.95, 0.5 + matchCount * 0.15);
+    }
+
+    return {
+      messageId: String(message.messageId),
       isTransactionRelated,
       isSpam,
       confidence,

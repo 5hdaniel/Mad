@@ -386,3 +386,223 @@ describe('Integration: Fixture Statistics', () => {
     }
   });
 });
+
+// ============================================================================
+// iOS Backup / SMS / iMessage Integration Tests (TASK-801 Fixtures)
+// ============================================================================
+
+describe('Integration: iOS Backup Sync Pipeline', () => {
+  let sandbox: TestSandbox;
+
+  beforeAll(async () => {
+    sandbox = await createTestSandbox({ fixtures: 'sms' });
+  });
+
+  afterAll(async () => {
+    await sandbox.teardown();
+  });
+
+  describe('Fixture Loading', () => {
+    it('should load iOS backup fixtures successfully', () => {
+      const stats = sandbox.getStats();
+      expect(stats.smsCount).toBeGreaterThan(0);
+    });
+
+    it('should load contacts from iOS backup', () => {
+      const stats = sandbox.getStats();
+      expect(stats.contactCount).toBeGreaterThan(0);
+    });
+
+    it('should have messages in multiple categories', () => {
+      const transactionMessages = sandbox.getTransactionMessages();
+      const allMessages = sandbox.getMessages();
+
+      expect(transactionMessages.length).toBeGreaterThan(0);
+      expect(allMessages.length).toBeGreaterThan(transactionMessages.length);
+    });
+  });
+
+  describe('Message Sync', () => {
+    it('should sync iOS messages', async () => {
+      const result = await sandbox.syncMessages();
+      expect(result.success).toBe(true);
+      expect(result.itemCount).toBeGreaterThan(0);
+      expect(result.errorCount).toBe(0);
+    });
+
+    it('should have synced messages available', async () => {
+      const syncedMessages = sandbox.getSyncedMessages();
+      expect(syncedMessages.length).toBeGreaterThan(0);
+    });
+
+    it('should include iMessage and SMS service types', () => {
+      const syncedMessages = sandbox.getSyncedMessages();
+      const services = new Set(syncedMessages.map((m) => m.service));
+
+      expect(services.has('iMessage')).toBe(true);
+      expect(services.has('SMS')).toBe(true);
+    });
+  });
+});
+
+describe('Integration: iOS Message Classification', () => {
+  let sandbox: TestSandbox;
+
+  beforeAll(async () => {
+    sandbox = await createTestSandbox({ fixtures: 'sms' });
+    await sandbox.syncMessages();
+  });
+
+  afterAll(async () => {
+    await sandbox.teardown();
+  });
+
+  describe('Classification Execution', () => {
+    it('should classify all synced messages', async () => {
+      const results = await sandbox.runMessageClassification();
+      const syncedCount = sandbox.getSyncedMessages().length;
+
+      expect(results.length).toBe(syncedCount);
+    });
+
+    it('should detect transaction-related messages', async () => {
+      const results = await sandbox.runMessageClassification();
+      const transactionMessages = results.filter((r) => r.isTransactionRelated);
+
+      expect(transactionMessages.length).toBeGreaterThan(0);
+    });
+
+    it('should assign confidence scores to all classifications', async () => {
+      const results = await sandbox.runMessageClassification();
+
+      for (const result of results) {
+        expect(result.confidence).toBeGreaterThanOrEqual(0);
+        expect(result.confidence).toBeLessThanOrEqual(1);
+      }
+    });
+  });
+});
+
+describe('Integration: Combined Email and SMS Pipeline', () => {
+  let sandbox: TestSandbox;
+
+  beforeAll(async () => {
+    sandbox = await createTestSandbox({ fixtures: 'both' });
+  });
+
+  afterAll(async () => {
+    await sandbox.teardown();
+  });
+
+  describe('Combined Fixture Loading', () => {
+    it('should load both email and SMS fixtures', () => {
+      const stats = sandbox.getStats();
+      expect(stats.emailCount).toBeGreaterThan(0);
+      expect(stats.smsCount).toBeGreaterThan(0);
+      expect(stats.contactCount).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Combined Sync', () => {
+    it('should sync all emails and messages', async () => {
+      const result = await sandbox.syncAll();
+
+      expect(result.success).toBe(true);
+      expect(result.itemCount).toBeGreaterThan(0);
+      expect(result.errorCount).toBe(0);
+    });
+
+    it('should have both emails and messages synced', async () => {
+      const emails = sandbox.getSyncedEmails();
+      const messages = sandbox.getSyncedMessages();
+
+      expect(emails.length).toBeGreaterThan(0);
+      expect(messages.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Combined Classification', () => {
+    it('should classify both emails and messages', async () => {
+      // Already synced in previous test
+      const emailResults = await sandbox.runClassification();
+      const messageResults = await sandbox.runMessageClassification();
+
+      expect(emailResults.length).toBeGreaterThan(0);
+      expect(messageResults.length).toBeGreaterThan(0);
+
+      // Both should detect some transaction-related content
+      const transactionEmails = emailResults.filter((r) => r.isTransactionRelated);
+      const transactionMessages = messageResults.filter((r) => r.isTransactionRelated);
+
+      expect(transactionEmails.length).toBeGreaterThan(0);
+      expect(transactionMessages.length).toBeGreaterThan(0);
+    });
+  });
+});
+
+describe('Integration: iOS Provider Error Handling', () => {
+  it('should handle simulated iOS backup errors gracefully', async () => {
+    const sandbox = new TestSandbox({ fixtures: 'sms' });
+    await sandbox.setup();
+
+    const iosProvider = sandbox.getProviders().ios;
+
+    // Create a new provider with error simulation
+    const { MockiOSBackupProvider } = await import('./mockProviders');
+    const errorProvider = new MockiOSBackupProvider({
+      simulateErrors: true,
+      errorRate: 1.0, // Always error
+    });
+
+    // Load fixtures into error provider
+    const messages = sandbox.getMessages();
+    errorProvider.loadMessages(messages);
+
+    await expect(errorProvider.fetchMessages()).rejects.toThrow();
+
+    await sandbox.teardown();
+  });
+
+  it('should report sync failure on iOS error', async () => {
+    const { MockiOSBackupProvider } = await import('./mockProviders');
+    const iosProvider = new MockiOSBackupProvider({
+      simulateErrors: true,
+      errorRate: 1.0,
+    });
+
+    const result = await iosProvider.syncAll();
+    expect(result.success).toBe(false);
+    expect(result.errorCount).toBe(1);
+    expect(result.error).toBeDefined();
+  });
+});
+
+describe('Integration: iOS Fixture Statistics', () => {
+  it('should have deterministic iOS fixture data', () => {
+    const { getAllMessages, getAllContacts } = require('../../electron/services/__tests__/fixtures/fake-ios-backup/iosBackupFixtureService');
+
+    const messages1 = getAllMessages();
+    const messages2 = getAllMessages();
+    const contacts1 = getAllContacts();
+    const contacts2 = getAllContacts();
+
+    expect(messages1.length).toBe(messages2.length);
+    expect(contacts1.length).toBe(contacts2.length);
+
+    for (let i = 0; i < messages1.length; i++) {
+      expect(messages1[i].id).toBe(messages2[i].id);
+      expect(messages1[i].text).toBe(messages2[i].text);
+    }
+  });
+
+  it('should have correct iOS fixture statistics', () => {
+    const { getMessageStats, getContactStats } = require('../../electron/services/__tests__/fixtures/fake-ios-backup/iosBackupFixtureService');
+
+    const messageStats = getMessageStats();
+    const contactStats = getContactStats();
+
+    expect(messageStats.total).toBeGreaterThan(0);
+    expect(messageStats.byCategory.transaction).toBeGreaterThan(0);
+    expect(contactStats.total).toBeGreaterThan(0);
+  });
+});

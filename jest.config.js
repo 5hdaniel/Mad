@@ -84,11 +84,14 @@ module.exports = {
   ],
 
   // Ignore patterns - exclude problematic tests in CI
+  // Integration tests (tests/integration/) are excluded from CI but run locally
+  // They test the full email/SMS sync -> classification -> detection pipeline
+  // using fake fixtures for deterministic, offline testing
   testPathIgnorePatterns: process.env.CI ? [
     '/node_modules/',
     '/dist/',
     '/build/',
-    '/tests/integration/',
+    '/tests/integration/', // Integration tests run locally, not in CI
     'ContactSelectModal.test.tsx', // Hangs in CI during loading
   ] : [
     '/node_modules/',
