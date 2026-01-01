@@ -1,0 +1,5423 @@
+{
+  "metadata": {
+    "description": "Fake iOS sms.db messages for testing real estate transaction detection",
+    "version": "1.0.0",
+    "totalMessages": 203,
+    "conversations": 30,
+    "handles": 43,
+    "attachments": 3,
+    "transactionMessages": 172,
+    "groupChats": 5,
+    "individualChats": 25,
+    "iMessages": 172,
+    "smsMessages": 31,
+    "notes": "Covers intro, showing, offer, inspection, escrow, closing, and post-closing stages"
+  },
+  "handles": [
+    {
+      "id": 1,
+      "identifier": "+14155550101",
+      "service": "iMessage"
+    },
+    {
+      "id": 2,
+      "identifier": "+14155550201",
+      "service": "iMessage"
+    },
+    {
+      "id": 11,
+      "identifier": "+14085551101",
+      "service": "iMessage"
+    },
+    {
+      "id": 12,
+      "identifier": "+14085551201",
+      "service": "SMS"
+    },
+    {
+      "id": 20,
+      "identifier": "+14155552001",
+      "service": "iMessage"
+    },
+    {
+      "id": 34,
+      "identifier": "+14155553401",
+      "service": "iMessage"
+    },
+    {
+      "id": 3,
+      "identifier": "+15105550301",
+      "service": "iMessage"
+    },
+    {
+      "id": 4,
+      "identifier": "+15105550401",
+      "service": "SMS"
+    },
+    {
+      "id": 13,
+      "identifier": "+19255551301",
+      "service": "iMessage"
+    },
+    {
+      "id": 21,
+      "identifier": "+16505552101",
+      "service": "iMessage"
+    },
+    {
+      "id": 22,
+      "identifier": "+16505552201",
+      "service": "iMessage"
+    },
+    {
+      "id": 29,
+      "identifier": "+16505552901",
+      "service": "iMessage"
+    },
+    {
+      "id": 41,
+      "identifier": "+19255554101",
+      "service": "SMS"
+    },
+    {
+      "id": 5,
+      "identifier": "+16505550501",
+      "service": "iMessage"
+    },
+    {
+      "id": 6,
+      "identifier": "+16505550601",
+      "service": "iMessage"
+    },
+    {
+      "id": 17,
+      "identifier": "+19255551701",
+      "service": "iMessage"
+    },
+    {
+      "id": 26,
+      "identifier": "+19255552601",
+      "service": "SMS"
+    },
+    {
+      "id": 36,
+      "identifier": "+19255553601",
+      "service": "iMessage"
+    },
+    {
+      "id": 44,
+      "identifier": "+14085554401",
+      "service": "SMS"
+    },
+    {
+      "id": 7,
+      "identifier": "+14155550701",
+      "service": "iMessage"
+    },
+    {
+      "id": 14,
+      "identifier": "+14155551401",
+      "service": "iMessage"
+    },
+    {
+      "id": 25,
+      "identifier": "+14085552501",
+      "service": "iMessage"
+    },
+    {
+      "id": 38,
+      "identifier": "+14155553801",
+      "service": "iMessage"
+    },
+    {
+      "id": 45,
+      "identifier": "+14155554501",
+      "service": "SMS"
+    },
+    {
+      "id": 8,
+      "identifier": "+14155550801",
+      "service": "iMessage"
+    },
+    {
+      "id": 16,
+      "identifier": "+16505551601",
+      "service": "iMessage"
+    },
+    {
+      "id": 23,
+      "identifier": "+14155552301",
+      "service": "iMessage"
+    },
+    {
+      "id": 30,
+      "identifier": "+14155553001",
+      "service": "iMessage"
+    },
+    {
+      "id": 9,
+      "identifier": "+15105550901",
+      "service": "iMessage"
+    },
+    {
+      "id": 15,
+      "identifier": "+15105551501",
+      "service": "SMS"
+    },
+    {
+      "id": 24,
+      "identifier": "+15105552401",
+      "service": "iMessage"
+    },
+    {
+      "id": 39,
+      "identifier": "+15105553901",
+      "service": "iMessage"
+    },
+    {
+      "id": 43,
+      "identifier": "+15105554301",
+      "service": "SMS"
+    },
+    {
+      "id": 10,
+      "identifier": "+14155551001",
+      "service": "iMessage"
+    },
+    {
+      "id": 18,
+      "identifier": "+14155551801",
+      "service": "iMessage"
+    },
+    {
+      "id": 37,
+      "identifier": "+14085553701",
+      "service": "iMessage"
+    },
+    {
+      "id": 31,
+      "identifier": "+12095553101",
+      "service": "SMS"
+    },
+    {
+      "id": 32,
+      "identifier": "+12095553201",
+      "service": "SMS"
+    },
+    {
+      "id": 33,
+      "identifier": "+14155553301",
+      "service": "iMessage"
+    },
+    {
+      "id": 35,
+      "identifier": "+15105553501",
+      "service": "iMessage"
+    },
+    {
+      "id": 19,
+      "identifier": "+15105551901",
+      "service": "SMS"
+    },
+    {
+      "id": 27,
+      "identifier": "+15105552701",
+      "service": "iMessage"
+    },
+    {
+      "id": 51,
+      "identifier": "+14155559999",
+      "service": "SMS"
+    }
+  ],
+  "chats": [
+    {
+      "id": 1,
+      "guid": "chat-sarah-individual",
+      "chatIdentifier": "+14155550101",
+      "displayName": null,
+      "style": 45,
+      "handleIds": [
+        1
+      ],
+      "chatType": "individual"
+    },
+    {
+      "id": 2,
+      "guid": "chat-michael-individual",
+      "chatIdentifier": "+14155550201",
+      "displayName": null,
+      "style": 45,
+      "handleIds": [
+        2
+      ],
+      "chatType": "individual"
+    },
+    {
+      "id": 3,
+      "guid": "chat-richard-individual",
+      "chatIdentifier": "+14085551101",
+      "displayName": null,
+      "style": 45,
+      "handleIds": [
+        11
+      ],
+      "chatType": "individual"
+    },
+    {
+      "id": 4,
+      "guid": "chat-jennifer-individual",
+      "chatIdentifier": "+15105550301",
+      "displayName": null,
+      "style": 45,
+      "handleIds": [
+        3
+      ],
+      "chatType": "individual"
+    },
+    {
+      "id": 5,
+      "guid": "chat-thomas-individual",
+      "chatIdentifier": "+19255551301",
+      "displayName": null,
+      "style": 45,
+      "handleIds": [
+        13
+      ],
+      "chatType": "individual"
+    },
+    {
+      "id": 6,
+      "guid": "chat-jason-individual",
+      "chatIdentifier": "+16505552101",
+      "displayName": null,
+      "style": 45,
+      "handleIds": [
+        21
+      ],
+      "chatType": "individual"
+    },
+    {
+      "id": 7,
+      "guid": "chat-andrew-individual",
+      "chatIdentifier": "+16505552901",
+      "displayName": null,
+      "style": 45,
+      "handleIds": [
+        29
+      ],
+      "chatType": "individual"
+    },
+    {
+      "id": 8,
+      "guid": "chat-david-individual",
+      "chatIdentifier": "+16505550501",
+      "displayName": null,
+      "style": 45,
+      "handleIds": [
+        5
+      ],
+      "chatType": "individual"
+    },
+    {
+      "id": 9,
+      "guid": "chat-daniel-individual",
+      "chatIdentifier": "+19255551701",
+      "displayName": null,
+      "style": 45,
+      "handleIds": [
+        17
+      ],
+      "chatType": "individual"
+    },
+    {
+      "id": 10,
+      "guid": "chat-rachel-individual",
+      "chatIdentifier": "+19255552601",
+      "displayName": null,
+      "style": 45,
+      "handleIds": [
+        26
+      ],
+      "chatType": "individual"
+    },
+    {
+      "id": 11,
+      "guid": "chat-james-lender",
+      "chatIdentifier": "+14155550701",
+      "displayName": null,
+      "style": 45,
+      "handleIds": [
+        7
+      ],
+      "chatType": "individual"
+    },
+    {
+      "id": 12,
+      "guid": "chat-kevin-lender",
+      "chatIdentifier": "+14085552501",
+      "displayName": null,
+      "style": 45,
+      "handleIds": [
+        25
+      ],
+      "chatType": "individual"
+    },
+    {
+      "id": 13,
+      "guid": "chat-linda-title",
+      "chatIdentifier": "+14155550801",
+      "displayName": null,
+      "style": 45,
+      "handleIds": [
+        8
+      ],
+      "chatType": "individual"
+    },
+    {
+      "id": 14,
+      "guid": "chat-mark-escrow",
+      "chatIdentifier": "+14155552301",
+      "displayName": null,
+      "style": 45,
+      "handleIds": [
+        23
+      ],
+      "chatType": "individual"
+    },
+    {
+      "id": 15,
+      "guid": "chat-william-inspector",
+      "chatIdentifier": "+15105550901",
+      "displayName": null,
+      "style": 45,
+      "handleIds": [
+        9
+      ],
+      "chatType": "individual"
+    },
+    {
+      "id": 16,
+      "guid": "chat-christopher-pest",
+      "chatIdentifier": "+15105551501",
+      "displayName": null,
+      "style": 45,
+      "handleIds": [
+        15
+      ],
+      "chatType": "individual"
+    },
+    {
+      "id": 17,
+      "guid": "chat-laura-roof",
+      "chatIdentifier": "+15105552401",
+      "displayName": null,
+      "style": 45,
+      "handleIds": [
+        24
+      ],
+      "chatType": "individual"
+    },
+    {
+      "id": 18,
+      "guid": "chat-elizabeth-attorney",
+      "chatIdentifier": "+14155551001",
+      "displayName": null,
+      "style": 45,
+      "handleIds": [
+        10
+      ],
+      "chatType": "individual"
+    },
+    {
+      "id": 19,
+      "guid": "chat-mom",
+      "chatIdentifier": "+12095553101",
+      "displayName": null,
+      "style": 45,
+      "handleIds": [
+        31
+      ],
+      "chatType": "individual"
+    },
+    {
+      "id": 20,
+      "guid": "chat-dad",
+      "chatIdentifier": "+12095553201",
+      "displayName": null,
+      "style": 45,
+      "handleIds": [
+        32
+      ],
+      "chatType": "individual"
+    },
+    {
+      "id": 21,
+      "guid": "chat-alex-friend",
+      "chatIdentifier": "+14155553301",
+      "displayName": null,
+      "style": 45,
+      "handleIds": [
+        33
+      ],
+      "chatType": "individual"
+    },
+    {
+      "id": 22,
+      "guid": "group-oak-street-transaction",
+      "chatIdentifier": "chat-group-oak",
+      "displayName": "123 Oak St Transaction",
+      "style": 43,
+      "handleIds": [
+        1,
+        3,
+        5,
+        7,
+        8
+      ],
+      "chatType": "group"
+    },
+    {
+      "id": 23,
+      "guid": "group-pine-ave-showing",
+      "chatIdentifier": "chat-group-pine",
+      "displayName": "Pine Ave Showing Team",
+      "style": 43,
+      "handleIds": [
+        2,
+        11,
+        13
+      ],
+      "chatType": "group"
+    },
+    {
+      "id": 24,
+      "guid": "group-maple-inspection",
+      "chatIdentifier": "chat-group-maple",
+      "displayName": "Maple Dr Inspection",
+      "style": 43,
+      "handleIds": [
+        9,
+        15,
+        17,
+        1
+      ],
+      "chatType": "group"
+    },
+    {
+      "id": 25,
+      "guid": "group-family",
+      "chatIdentifier": "chat-group-family",
+      "displayName": "Family",
+      "style": 43,
+      "handleIds": [
+        31,
+        32
+      ],
+      "chatType": "group"
+    },
+    {
+      "id": 26,
+      "guid": "group-closing-team",
+      "chatIdentifier": "chat-group-closing",
+      "displayName": "Closing Team - Elm St",
+      "style": 43,
+      "handleIds": [
+        1,
+        8,
+        10,
+        7,
+        21
+      ],
+      "chatType": "group"
+    },
+    {
+      "id": 27,
+      "guid": "chat-contractor",
+      "chatIdentifier": "+15105551901",
+      "displayName": null,
+      "style": 45,
+      "handleIds": [
+        19
+      ],
+      "chatType": "individual"
+    },
+    {
+      "id": 28,
+      "guid": "chat-appraiser",
+      "chatIdentifier": "+15105552701",
+      "displayName": null,
+      "style": 45,
+      "handleIds": [
+        27
+      ],
+      "chatType": "individual"
+    },
+    {
+      "id": 29,
+      "guid": "chat-insurance",
+      "chatIdentifier": "+15105553501",
+      "displayName": null,
+      "style": 45,
+      "handleIds": [
+        35
+      ],
+      "chatType": "individual"
+    },
+    {
+      "id": 30,
+      "guid": "chat-spam",
+      "chatIdentifier": "+14155559999",
+      "displayName": null,
+      "style": 45,
+      "handleIds": [
+        51
+      ],
+      "chatType": "individual"
+    }
+  ],
+  "messages": [
+    {
+      "id": 1,
+      "guid": "msg-1-2",
+      "text": "Hi! I saw your listing for 123 Oak Street. Is it still available?",
+      "handleId": 1,
+      "isFromMe": false,
+      "date": 727030800000000000,
+      "dateRead": 727030830000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        1
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "listing"
+        ],
+        "transactionStage": "intro"
+      }
+    },
+    {
+      "id": 2,
+      "guid": "msg-1-3",
+      "text": "Yes it is! Would you like to schedule a showing?",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727031100000000000,
+      "dateRead": null,
+      "dateDelivered": 727031102000000000,
+      "service": "iMessage",
+      "chatIds": [
+        1
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "showing"
+        ],
+        "transactionStage": "intro"
+      }
+    },
+    {
+      "id": 3,
+      "guid": "msg-1-4",
+      "text": "I'm looking for a 3-bedroom home in the Oakland area. Do you have any listings?",
+      "handleId": 1,
+      "isFromMe": false,
+      "date": 727031520000000000,
+      "dateRead": 727031550000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        1
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "medium",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "home",
+          "listings"
+        ],
+        "transactionStage": "intro"
+      }
+    },
+    {
+      "id": 4,
+      "guid": "msg-1-5",
+      "text": "I have several properties that might interest you. Let's set up a meeting.",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727032060000000000,
+      "dateRead": null,
+      "dateDelivered": 727032062000000000,
+      "service": "iMessage",
+      "chatIds": [
+        1
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "properties"
+        ],
+        "transactionStage": "intro"
+      }
+    },
+    {
+      "id": 5,
+      "guid": "msg-1-6",
+      "text": "My wife and I are looking to buy our first home. Can you help us?",
+      "handleId": 1,
+      "isFromMe": false,
+      "date": 727032720000000000,
+      "dateRead": 727032750000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        1
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "buy",
+          "home"
+        ],
+        "transactionStage": "intro"
+      }
+    },
+    {
+      "id": 6,
+      "guid": "msg-1-7",
+      "text": "Can we schedule a showing for 456 Pine Ave tomorrow at 2pm?",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727033500000000000,
+      "dateRead": null,
+      "dateDelivered": 727033502000000000,
+      "service": "iMessage",
+      "chatIds": [
+        1
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "showing"
+        ],
+        "transactionStage": "showing"
+      }
+    },
+    {
+      "id": 7,
+      "guid": "msg-1-8",
+      "text": "Tomorrow at 2pm works. I'll meet you there.",
+      "handleId": 1,
+      "isFromMe": false,
+      "date": 727034100000000000,
+      "dateRead": 727034130000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        1
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "meet"
+        ],
+        "transactionStage": "showing"
+      }
+    },
+    {
+      "id": 8,
+      "guid": "msg-1-9",
+      "text": "The clients loved the property! They want to make an offer.",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727034880000000000,
+      "dateRead": null,
+      "dateDelivered": 727034882000000000,
+      "service": "iMessage",
+      "chatIds": [
+        1
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "offer"
+        ],
+        "transactionStage": "showing"
+      }
+    },
+    {
+      "id": 9,
+      "guid": "msg-1-10",
+      "text": "Let's schedule a second showing for 789 Maple Drive",
+      "handleId": 1,
+      "isFromMe": false,
+      "date": 727035840000000000,
+      "dateRead": 727035870000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        1
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "showing"
+        ],
+        "transactionStage": "showing"
+      }
+    },
+    {
+      "id": 10,
+      "guid": "msg-1-11",
+      "text": "We'd like to submit an offer at $475,000 with 20% down",
+      "handleId": 1,
+      "isFromMe": false,
+      "date": 727036980000000000,
+      "dateRead": 727037010000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        1
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "offer",
+          "down"
+        ],
+        "transactionStage": "offer"
+      }
+    },
+    {
+      "id": 11,
+      "guid": "msg-1-12",
+      "text": "I'll present the offer to the sellers today",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727037880000000000,
+      "dateRead": null,
+      "dateDelivered": 727037882000000000,
+      "service": "iMessage",
+      "chatIds": [
+        1
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "offer",
+          "sellers"
+        ],
+        "transactionStage": "offer"
+      }
+    },
+    {
+      "id": 12,
+      "guid": "msg-1-13",
+      "text": "The seller countered at $485,000",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727039080000000000,
+      "dateRead": null,
+      "dateDelivered": 727039082000000000,
+      "service": "iMessage",
+      "chatIds": [
+        1
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "countered"
+        ],
+        "transactionStage": "offer"
+      }
+    },
+    {
+      "id": 13,
+      "guid": "msg-1-14",
+      "text": "My clients will accept the counter. Let's move forward.",
+      "handleId": 1,
+      "isFromMe": false,
+      "date": 727040580000000000,
+      "dateRead": 727040610000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        1
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "accept",
+          "counter"
+        ],
+        "transactionStage": "offer"
+      }
+    },
+    {
+      "id": 14,
+      "guid": "msg-1-15",
+      "text": "Please send the signed purchase agreement",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727042380000000000,
+      "dateRead": null,
+      "dateDelivered": 727042382000000000,
+      "service": "iMessage",
+      "chatIds": [
+        1
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "purchase agreement"
+        ],
+        "transactionStage": "offer"
+      }
+    },
+    {
+      "id": 15,
+      "guid": "msg-1-16",
+      "text": "The home inspection is scheduled for Thursday at 9am",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727044480000000000,
+      "dateRead": null,
+      "dateDelivered": 727044482000000000,
+      "service": "iMessage",
+      "chatIds": [
+        1
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "inspection"
+        ],
+        "transactionStage": "inspections"
+      }
+    },
+    {
+      "id": 16,
+      "guid": "msg-1-17",
+      "text": "I found some issues with the foundation. We should discuss.",
+      "handleId": 1,
+      "isFromMe": false,
+      "date": 727048080000000000,
+      "dateRead": 727048110000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        1
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "medium",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "foundation"
+        ],
+        "transactionStage": "inspections"
+      }
+    },
+    {
+      "id": 17,
+      "guid": "msg-1-18",
+      "text": "The pest inspection came back clean",
+      "handleId": 1,
+      "isFromMe": false,
+      "date": 727052280000000000,
+      "dateRead": 727052310000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        1
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "pest inspection"
+        ],
+        "transactionStage": "inspections"
+      }
+    },
+    {
+      "id": 18,
+      "guid": "msg-1-19",
+      "text": "Can you send the inspection report?",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727057080000000000,
+      "dateRead": null,
+      "dateDelivered": 727057082000000000,
+      "service": "iMessage",
+      "chatIds": [
+        1
+      ],
+      "attachmentIds": [
+        1
+      ],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "inspection report"
+        ],
+        "transactionStage": "inspections"
+      }
+    },
+    {
+      "id": 19,
+      "guid": "msg-1-20",
+      "text": "I've opened escrow with Fidelity Title",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727062480000000000,
+      "dateRead": null,
+      "dateDelivered": 727062482000000000,
+      "service": "iMessage",
+      "chatIds": [
+        1
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "escrow"
+        ],
+        "transactionStage": "escrow"
+      }
+    },
+    {
+      "id": 20,
+      "guid": "msg-1-21",
+      "text": "Please wire the deposit to the escrow account",
+      "handleId": 1,
+      "isFromMe": false,
+      "date": 727069680000000000,
+      "dateRead": 727069710000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        1
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "deposit",
+          "escrow"
+        ],
+        "transactionStage": "escrow"
+      }
+    },
+    {
+      "id": 21,
+      "guid": "msg-1-22",
+      "text": "The preliminary title report is ready for review",
+      "handleId": 1,
+      "isFromMe": false,
+      "date": 727078080000000000,
+      "dateRead": 727078110000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        1
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "title report"
+        ],
+        "transactionStage": "escrow"
+      }
+    },
+    {
+      "id": 22,
+      "guid": "msg-1-23",
+      "text": "There's a lien on the property we need to clear",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727087680000000000,
+      "dateRead": null,
+      "dateDelivered": 727087682000000000,
+      "service": "iMessage",
+      "chatIds": [
+        1
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "medium",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "lien"
+        ],
+        "transactionStage": "escrow"
+      }
+    },
+    {
+      "id": 23,
+      "guid": "msg-1-24",
+      "text": "Closing is set for Friday at 2pm",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727098480000000000,
+      "dateRead": null,
+      "dateDelivered": 727098482000000000,
+      "service": "iMessage",
+      "chatIds": [
+        1
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "closing"
+        ],
+        "transactionStage": "closing"
+      }
+    },
+    {
+      "id": 24,
+      "guid": "msg-1-25",
+      "text": "Bring your ID and a cashiers check for $12,500",
+      "handleId": 1,
+      "isFromMe": false,
+      "date": 727102080000000000,
+      "dateRead": 727102110000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        1
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "check"
+        ],
+        "transactionStage": "closing"
+      }
+    },
+    {
+      "id": 25,
+      "guid": "msg-1-26",
+      "text": "The deed has been recorded!",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727106280000000000,
+      "dateRead": null,
+      "dateDelivered": 727106282000000000,
+      "service": "iMessage",
+      "chatIds": [
+        1
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "deed",
+          "recorded"
+        ],
+        "transactionStage": "closing"
+      }
+    },
+    {
+      "id": 26,
+      "guid": "msg-1-27",
+      "text": "Keys will be available after 3pm",
+      "handleId": 1,
+      "isFromMe": false,
+      "date": 727111080000000000,
+      "dateRead": 727111110000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        1
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "keys"
+        ],
+        "transactionStage": "closing"
+      }
+    },
+    {
+      "id": 27,
+      "guid": "msg-1-28",
+      "text": "Here's the info for utility transfers",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727116480000000000,
+      "dateRead": null,
+      "dateDelivered": 727116482000000000,
+      "service": "iMessage",
+      "chatIds": [
+        1
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "utility"
+        ],
+        "transactionStage": "post_closing"
+      }
+    },
+    {
+      "id": 28,
+      "guid": "msg-1-29",
+      "text": "Do you have a plumber recommendation?",
+      "handleId": 1,
+      "isFromMe": false,
+      "date": 727118280000000000,
+      "dateRead": 727118310000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        1
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "medium",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [],
+        "transactionStage": "post_closing"
+      }
+    },
+    {
+      "id": 29,
+      "guid": "msg-1-30",
+      "text": "Your home warranty info is attached",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727120380000000000,
+      "dateRead": null,
+      "dateDelivered": 727120382000000000,
+      "service": "iMessage",
+      "chatIds": [
+        1
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "warranty"
+        ],
+        "transactionStage": "post_closing"
+      }
+    },
+    {
+      "id": 30,
+      "guid": "msg-1-31",
+      "text": "Thanks again for all your help with the purchase!",
+      "handleId": 1,
+      "isFromMe": false,
+      "date": 727122780000000000,
+      "dateRead": 727122810000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        1
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "purchase"
+        ],
+        "transactionStage": "post_closing"
+      }
+    },
+    {
+      "id": 31,
+      "guid": "msg-1-32",
+      "text": "I'd love a review on Zillow if you have time",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727125480000000000,
+      "dateRead": null,
+      "dateDelivered": 727125482000000000,
+      "service": "iMessage",
+      "chatIds": [
+        1
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "hard",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [],
+        "transactionStage": "post_closing"
+      }
+    },
+    {
+      "id": 32,
+      "guid": "msg-2-33",
+      "text": "Can we schedule a showing for 456 Pine Ave tomorrow at 2pm?",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727036800000000000,
+      "dateRead": null,
+      "dateDelivered": 727036802000000000,
+      "service": "iMessage",
+      "chatIds": [
+        2
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "showing"
+        ],
+        "transactionStage": "showing"
+      }
+    },
+    {
+      "id": 33,
+      "guid": "msg-2-34",
+      "text": "Tomorrow at 2pm works. I'll meet you there.",
+      "handleId": 2,
+      "isFromMe": false,
+      "date": 727037700000000000,
+      "dateRead": 727037730000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        2
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "meet"
+        ],
+        "transactionStage": "showing"
+      }
+    },
+    {
+      "id": 34,
+      "guid": "msg-2-35",
+      "text": "The clients loved the property! They want to make an offer.",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727038780000000000,
+      "dateRead": null,
+      "dateDelivered": 727038782000000000,
+      "service": "iMessage",
+      "chatIds": [
+        2
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "offer"
+        ],
+        "transactionStage": "showing"
+      }
+    },
+    {
+      "id": 35,
+      "guid": "msg-2-36",
+      "text": "Let's schedule a second showing for 789 Maple Drive",
+      "handleId": 2,
+      "isFromMe": false,
+      "date": 727040040000000000,
+      "dateRead": 727040070000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        2
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "showing"
+        ],
+        "transactionStage": "showing"
+      }
+    },
+    {
+      "id": 36,
+      "guid": "msg-2-37",
+      "text": "The open house is Saturday from 1-4pm",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727041480000000000,
+      "dateRead": null,
+      "dateDelivered": 727041482000000000,
+      "service": "iMessage",
+      "chatIds": [
+        2
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "open house"
+        ],
+        "transactionStage": "showing"
+      }
+    },
+    {
+      "id": 37,
+      "guid": "msg-2-38",
+      "text": "My buyers have 3 more properties to see today",
+      "handleId": 2,
+      "isFromMe": false,
+      "date": 727043100000000000,
+      "dateRead": 727043130000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        2
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "medium",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "buyers",
+          "properties"
+        ],
+        "transactionStage": "showing"
+      }
+    },
+    {
+      "id": 38,
+      "guid": "msg-2-39",
+      "text": "The house on Elm Street has been renovated recently",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727044900000000000,
+      "dateRead": null,
+      "dateDelivered": 727044902000000000,
+      "service": "iMessage",
+      "chatIds": [
+        2
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "medium",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "house",
+          "renovated"
+        ],
+        "transactionStage": "showing"
+      }
+    },
+    {
+      "id": 39,
+      "guid": "msg-2-40",
+      "text": "Can you send me the listing sheet for this property?",
+      "handleId": 2,
+      "isFromMe": false,
+      "date": 727046880000000000,
+      "dateRead": 727046910000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        2
+      ],
+      "attachmentIds": [
+        3
+      ],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "listing"
+        ],
+        "transactionStage": "showing"
+      }
+    },
+    {
+      "id": 40,
+      "guid": "msg-3-41",
+      "text": "Hi! I saw your listing for 123 Oak Street. Is it still available?",
+      "handleId": 11,
+      "isFromMe": false,
+      "date": 727042800000000000,
+      "dateRead": 727042830000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        3
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "listing"
+        ],
+        "transactionStage": "intro"
+      }
+    },
+    {
+      "id": 41,
+      "guid": "msg-3-42",
+      "text": "Yes it is! Would you like to schedule a showing?",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727043280000000000,
+      "dateRead": null,
+      "dateDelivered": 727043282000000000,
+      "service": "iMessage",
+      "chatIds": [
+        3
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "showing"
+        ],
+        "transactionStage": "intro"
+      }
+    },
+    {
+      "id": 42,
+      "guid": "msg-3-43",
+      "text": "I'm looking for a 3-bedroom home in the Oakland area. Do you have any listings?",
+      "handleId": 11,
+      "isFromMe": false,
+      "date": 727043760000000000,
+      "dateRead": 727043790000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        3
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "medium",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "home",
+          "listings"
+        ],
+        "transactionStage": "intro"
+      }
+    },
+    {
+      "id": 43,
+      "guid": "msg-3-44",
+      "text": "Can we schedule a showing for 456 Pine Ave tomorrow at 2pm?",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727044240000000000,
+      "dateRead": null,
+      "dateDelivered": 727044242000000000,
+      "service": "iMessage",
+      "chatIds": [
+        3
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "showing"
+        ],
+        "transactionStage": "showing"
+      }
+    },
+    {
+      "id": 44,
+      "guid": "msg-3-45",
+      "text": "Tomorrow at 2pm works. I'll meet you there.",
+      "handleId": 11,
+      "isFromMe": false,
+      "date": 727044960000000000,
+      "dateRead": 727044990000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        3
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "meet"
+        ],
+        "transactionStage": "showing"
+      }
+    },
+    {
+      "id": 45,
+      "guid": "msg-3-46",
+      "text": "The clients loved the property! They want to make an offer.",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727045680000000000,
+      "dateRead": null,
+      "dateDelivered": 727045682000000000,
+      "service": "iMessage",
+      "chatIds": [
+        3
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "offer"
+        ],
+        "transactionStage": "showing"
+      }
+    },
+    {
+      "id": 46,
+      "guid": "msg-4-47",
+      "text": "Hi! I saw your listing for 123 Oak Street. Is it still available?",
+      "handleId": 3,
+      "isFromMe": false,
+      "date": 727048800000000000,
+      "dateRead": 727048830000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        4
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "listing"
+        ],
+        "transactionStage": "intro"
+      }
+    },
+    {
+      "id": 47,
+      "guid": "msg-4-48",
+      "text": "Yes it is! Would you like to schedule a showing?",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727049400000000000,
+      "dateRead": null,
+      "dateDelivered": 727049402000000000,
+      "service": "iMessage",
+      "chatIds": [
+        4
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "showing"
+        ],
+        "transactionStage": "intro"
+      }
+    },
+    {
+      "id": 48,
+      "guid": "msg-4-49",
+      "text": "I'm looking for a 3-bedroom home in the Oakland area. Do you have any listings?",
+      "handleId": 3,
+      "isFromMe": false,
+      "date": 727050000000000000,
+      "dateRead": 727050030000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        4
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "medium",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "home",
+          "listings"
+        ],
+        "transactionStage": "intro"
+      }
+    },
+    {
+      "id": 49,
+      "guid": "msg-4-50",
+      "text": "Can we schedule a showing for 456 Pine Ave tomorrow at 2pm?",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727050600000000000,
+      "dateRead": null,
+      "dateDelivered": 727050602000000000,
+      "service": "iMessage",
+      "chatIds": [
+        4
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "showing"
+        ],
+        "transactionStage": "showing"
+      }
+    },
+    {
+      "id": 50,
+      "guid": "msg-4-51",
+      "text": "Tomorrow at 2pm works. I'll meet you there.",
+      "handleId": 3,
+      "isFromMe": false,
+      "date": 727051800000000000,
+      "dateRead": 727051830000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        4
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "meet"
+        ],
+        "transactionStage": "showing"
+      }
+    },
+    {
+      "id": 51,
+      "guid": "msg-4-52",
+      "text": "The clients loved the property! They want to make an offer.",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727053000000000000,
+      "dateRead": null,
+      "dateDelivered": 727053002000000000,
+      "service": "iMessage",
+      "chatIds": [
+        4
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "offer"
+        ],
+        "transactionStage": "showing"
+      }
+    },
+    {
+      "id": 52,
+      "guid": "msg-4-53",
+      "text": "Let's schedule a second showing for 789 Maple Drive",
+      "handleId": 3,
+      "isFromMe": false,
+      "date": 727054200000000000,
+      "dateRead": 727054230000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        4
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "showing"
+        ],
+        "transactionStage": "showing"
+      }
+    },
+    {
+      "id": 53,
+      "guid": "msg-4-54",
+      "text": "The open house is Saturday from 1-4pm",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727055400000000000,
+      "dateRead": null,
+      "dateDelivered": 727055402000000000,
+      "service": "iMessage",
+      "chatIds": [
+        4
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "open house"
+        ],
+        "transactionStage": "showing"
+      }
+    },
+    {
+      "id": 54,
+      "guid": "msg-4-55",
+      "text": "We'd like to submit an offer at $475,000 with 20% down",
+      "handleId": 3,
+      "isFromMe": false,
+      "date": 727056600000000000,
+      "dateRead": 727056630000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        4
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "offer",
+          "down"
+        ],
+        "transactionStage": "offer"
+      }
+    },
+    {
+      "id": 55,
+      "guid": "msg-4-56",
+      "text": "I'll present the offer to the sellers today",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727058400000000000,
+      "dateRead": null,
+      "dateDelivered": 727058402000000000,
+      "service": "iMessage",
+      "chatIds": [
+        4
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "offer",
+          "sellers"
+        ],
+        "transactionStage": "offer"
+      }
+    },
+    {
+      "id": 56,
+      "guid": "msg-4-57",
+      "text": "The seller countered at $485,000",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727060200000000000,
+      "dateRead": null,
+      "dateDelivered": 727060202000000000,
+      "service": "iMessage",
+      "chatIds": [
+        4
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "countered"
+        ],
+        "transactionStage": "offer"
+      }
+    },
+    {
+      "id": 57,
+      "guid": "msg-4-58",
+      "text": "My clients will accept the counter. Let's move forward.",
+      "handleId": 3,
+      "isFromMe": false,
+      "date": 727062000000000000,
+      "dateRead": 727062030000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        4
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "accept",
+          "counter"
+        ],
+        "transactionStage": "offer"
+      }
+    },
+    {
+      "id": 58,
+      "guid": "msg-5-59",
+      "text": "I'm looking for a 3-bedroom home in the Oakland area. Do you have any listings?",
+      "handleId": 13,
+      "isFromMe": false,
+      "date": 727060800000000000,
+      "dateRead": 727060830000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        5
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "medium",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "home",
+          "listings"
+        ],
+        "transactionStage": "intro"
+      }
+    },
+    {
+      "id": 59,
+      "guid": "msg-5-60",
+      "text": "I have several properties that might interest you. Let's set up a meeting.",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727061100000000000,
+      "dateRead": null,
+      "dateDelivered": 727061102000000000,
+      "service": "iMessage",
+      "chatIds": [
+        5
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "properties"
+        ],
+        "transactionStage": "intro"
+      }
+    },
+    {
+      "id": 60,
+      "guid": "msg-5-61",
+      "text": "My wife and I are looking to buy our first home. Can you help us?",
+      "handleId": 13,
+      "isFromMe": false,
+      "date": 727061400000000000,
+      "dateRead": 727061430000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        5
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "buy",
+          "home"
+        ],
+        "transactionStage": "intro"
+      }
+    },
+    {
+      "id": 61,
+      "guid": "msg-5-62",
+      "text": "We received 5 offers on the property",
+      "handleId": 13,
+      "isFromMe": false,
+      "date": 727061700000000000,
+      "dateRead": 727061730000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        5
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "medium",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "offers"
+        ],
+        "transactionStage": "offer"
+      }
+    },
+    {
+      "id": 62,
+      "guid": "msg-5-63",
+      "text": "The earnest money deposit is $10,000",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727063200000000000,
+      "dateRead": null,
+      "dateDelivered": 727063202000000000,
+      "service": "iMessage",
+      "chatIds": [
+        5
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "earnest money",
+          "deposit"
+        ],
+        "transactionStage": "offer"
+      }
+    },
+    {
+      "id": 63,
+      "guid": "msg-5-64",
+      "text": "We need proof of funds for the all-cash offer",
+      "handleId": 13,
+      "isFromMe": false,
+      "date": 727064700000000000,
+      "dateRead": 727064730000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        5
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "proof of funds",
+          "cash"
+        ],
+        "transactionStage": "offer"
+      }
+    },
+    {
+      "id": 64,
+      "guid": "msg-5-65",
+      "text": "The ratified contract is attached",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727066200000000000,
+      "dateRead": null,
+      "dateDelivered": 727066202000000000,
+      "service": "iMessage",
+      "chatIds": [
+        5
+      ],
+      "attachmentIds": [
+        2
+      ],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "contract"
+        ],
+        "transactionStage": "offer"
+      }
+    },
+    {
+      "id": 65,
+      "guid": "msg-6-66",
+      "text": "Hi! I saw your listing for 123 Oak Street. Is it still available?",
+      "handleId": 21,
+      "isFromMe": false,
+      "date": 727072800000000000,
+      "dateRead": 727072830000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        6
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "listing"
+        ],
+        "transactionStage": "intro"
+      }
+    },
+    {
+      "id": 66,
+      "guid": "msg-6-67",
+      "text": "Yes it is! Would you like to schedule a showing?",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727073280000000000,
+      "dateRead": null,
+      "dateDelivered": 727073282000000000,
+      "service": "iMessage",
+      "chatIds": [
+        6
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "showing"
+        ],
+        "transactionStage": "intro"
+      }
+    },
+    {
+      "id": 67,
+      "guid": "msg-6-68",
+      "text": "The clients loved the property! They want to make an offer.",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727073760000000000,
+      "dateRead": null,
+      "dateDelivered": 727073762000000000,
+      "service": "iMessage",
+      "chatIds": [
+        6
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "offer"
+        ],
+        "transactionStage": "showing"
+      }
+    },
+    {
+      "id": 68,
+      "guid": "msg-6-69",
+      "text": "Let's schedule a second showing for 789 Maple Drive",
+      "handleId": 21,
+      "isFromMe": false,
+      "date": 727074660000000000,
+      "dateRead": 727074690000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        6
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "showing"
+        ],
+        "transactionStage": "showing"
+      }
+    },
+    {
+      "id": 69,
+      "guid": "msg-6-70",
+      "text": "The open house is Saturday from 1-4pm",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727075560000000000,
+      "dateRead": null,
+      "dateDelivered": 727075562000000000,
+      "service": "iMessage",
+      "chatIds": [
+        6
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "open house"
+        ],
+        "transactionStage": "showing"
+      }
+    },
+    {
+      "id": 70,
+      "guid": "msg-6-71",
+      "text": "My buyers have 3 more properties to see today",
+      "handleId": 21,
+      "isFromMe": false,
+      "date": 727076460000000000,
+      "dateRead": 727076490000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        6
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "medium",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "buyers",
+          "properties"
+        ],
+        "transactionStage": "showing"
+      }
+    },
+    {
+      "id": 71,
+      "guid": "msg-7-72",
+      "text": "I have several properties that might interest you. Let's set up a meeting.",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727084800000000000,
+      "dateRead": null,
+      "dateDelivered": 727084802000000000,
+      "service": "iMessage",
+      "chatIds": [
+        7
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "properties"
+        ],
+        "transactionStage": "intro"
+      }
+    },
+    {
+      "id": 72,
+      "guid": "msg-7-73",
+      "text": "My wife and I are looking to buy our first home. Can you help us?",
+      "handleId": 29,
+      "isFromMe": false,
+      "date": 727085160000000000,
+      "dateRead": 727085190000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        7
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "buy",
+          "home"
+        ],
+        "transactionStage": "intro"
+      }
+    },
+    {
+      "id": 73,
+      "guid": "msg-7-74",
+      "text": "My clients will accept the counter. Let's move forward.",
+      "handleId": 29,
+      "isFromMe": false,
+      "date": 727085520000000000,
+      "dateRead": 727085550000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        7
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "accept",
+          "counter"
+        ],
+        "transactionStage": "offer"
+      }
+    },
+    {
+      "id": 74,
+      "guid": "msg-7-75",
+      "text": "Please send the signed purchase agreement",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727086720000000000,
+      "dateRead": null,
+      "dateDelivered": 727086722000000000,
+      "service": "iMessage",
+      "chatIds": [
+        7
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "purchase agreement"
+        ],
+        "transactionStage": "offer"
+      }
+    },
+    {
+      "id": 75,
+      "guid": "msg-7-76",
+      "text": "We received 5 offers on the property",
+      "handleId": 29,
+      "isFromMe": false,
+      "date": 727087920000000000,
+      "dateRead": 727087950000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        7
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "medium",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "offers"
+        ],
+        "transactionStage": "offer"
+      }
+    },
+    {
+      "id": 76,
+      "guid": "msg-7-77",
+      "text": "The earnest money deposit is $10,000",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727089120000000000,
+      "dateRead": null,
+      "dateDelivered": 727089122000000000,
+      "service": "iMessage",
+      "chatIds": [
+        7
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "earnest money",
+          "deposit"
+        ],
+        "transactionStage": "offer"
+      }
+    },
+    {
+      "id": 77,
+      "guid": "msg-7-78",
+      "text": "We need proof of funds for the all-cash offer",
+      "handleId": 29,
+      "isFromMe": false,
+      "date": 727090320000000000,
+      "dateRead": 727090350000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        7
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "proof of funds",
+          "cash"
+        ],
+        "transactionStage": "offer"
+      }
+    },
+    {
+      "id": 78,
+      "guid": "msg-8-79",
+      "text": "Hi! I saw your listing for 123 Oak Street. Is it still available?",
+      "handleId": 5,
+      "isFromMe": false,
+      "date": 727096800000000000,
+      "dateRead": 727096830000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        8
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "listing"
+        ],
+        "transactionStage": "intro"
+      }
+    },
+    {
+      "id": 79,
+      "guid": "msg-8-80",
+      "text": "Yes it is! Would you like to schedule a showing?",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727097400000000000,
+      "dateRead": null,
+      "dateDelivered": 727097402000000000,
+      "service": "iMessage",
+      "chatIds": [
+        8
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "showing"
+        ],
+        "transactionStage": "intro"
+      }
+    },
+    {
+      "id": 80,
+      "guid": "msg-8-81",
+      "text": "Can we schedule a showing for 456 Pine Ave tomorrow at 2pm?",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727098000000000000,
+      "dateRead": null,
+      "dateDelivered": 727098002000000000,
+      "service": "iMessage",
+      "chatIds": [
+        8
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "showing"
+        ],
+        "transactionStage": "showing"
+      }
+    },
+    {
+      "id": 81,
+      "guid": "msg-8-82",
+      "text": "Tomorrow at 2pm works. I'll meet you there.",
+      "handleId": 5,
+      "isFromMe": false,
+      "date": 727099500000000000,
+      "dateRead": 727099530000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        8
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "meet"
+        ],
+        "transactionStage": "showing"
+      }
+    },
+    {
+      "id": 82,
+      "guid": "msg-8-83",
+      "text": "The clients loved the property! They want to make an offer.",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727101000000000000,
+      "dateRead": null,
+      "dateDelivered": 727101002000000000,
+      "service": "iMessage",
+      "chatIds": [
+        8
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "offer"
+        ],
+        "transactionStage": "showing"
+      }
+    },
+    {
+      "id": 83,
+      "guid": "msg-8-84",
+      "text": "We'd like to submit an offer at $475,000 with 20% down",
+      "handleId": 5,
+      "isFromMe": false,
+      "date": 727102500000000000,
+      "dateRead": 727102530000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        8
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "offer",
+          "down"
+        ],
+        "transactionStage": "offer"
+      }
+    },
+    {
+      "id": 84,
+      "guid": "msg-8-85",
+      "text": "I'll present the offer to the sellers today",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727104900000000000,
+      "dateRead": null,
+      "dateDelivered": 727104902000000000,
+      "service": "iMessage",
+      "chatIds": [
+        8
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "offer",
+          "sellers"
+        ],
+        "transactionStage": "offer"
+      }
+    },
+    {
+      "id": 85,
+      "guid": "msg-8-86",
+      "text": "The seller countered at $485,000",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727107300000000000,
+      "dateRead": null,
+      "dateDelivered": 727107302000000000,
+      "service": "iMessage",
+      "chatIds": [
+        8
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "countered"
+        ],
+        "transactionStage": "offer"
+      }
+    },
+    {
+      "id": 86,
+      "guid": "msg-9-87",
+      "text": "The open house is Saturday from 1-4pm",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727114800000000000,
+      "dateRead": null,
+      "dateDelivered": 727114802000000000,
+      "service": "iMessage",
+      "chatIds": [
+        9
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "open house"
+        ],
+        "transactionStage": "showing"
+      }
+    },
+    {
+      "id": 87,
+      "guid": "msg-9-88",
+      "text": "My buyers have 3 more properties to see today",
+      "handleId": 17,
+      "isFromMe": false,
+      "date": 727116000000000000,
+      "dateRead": 727116030000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        9
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "medium",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "buyers",
+          "properties"
+        ],
+        "transactionStage": "showing"
+      }
+    },
+    {
+      "id": 88,
+      "guid": "msg-9-89",
+      "text": "The house on Elm Street has been renovated recently",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727117200000000000,
+      "dateRead": null,
+      "dateDelivered": 727117202000000000,
+      "service": "iMessage",
+      "chatIds": [
+        9
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "medium",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "house",
+          "renovated"
+        ],
+        "transactionStage": "showing"
+      }
+    },
+    {
+      "id": 89,
+      "guid": "msg-9-90",
+      "text": "Can you send me the listing sheet for this property?",
+      "handleId": 17,
+      "isFromMe": false,
+      "date": 727118400000000000,
+      "dateRead": 727118430000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        9
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "listing"
+        ],
+        "transactionStage": "showing"
+      }
+    },
+    {
+      "id": 90,
+      "guid": "msg-10-91",
+      "text": "Hi! I saw your listing for 123 Oak Street. Is it still available?",
+      "handleId": 26,
+      "isFromMe": false,
+      "date": 727126800000000000,
+      "dateRead": 727126830000000000,
+      "dateDelivered": null,
+      "service": "SMS",
+      "chatIds": [
+        10
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "listing"
+        ],
+        "transactionStage": "intro"
+      }
+    },
+    {
+      "id": 91,
+      "guid": "msg-10-92",
+      "text": "Yes it is! Would you like to schedule a showing?",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727127700000000000,
+      "dateRead": null,
+      "dateDelivered": 727127702000000000,
+      "service": "SMS",
+      "chatIds": [
+        10
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "showing"
+        ],
+        "transactionStage": "intro"
+      }
+    },
+    {
+      "id": 92,
+      "guid": "msg-10-93",
+      "text": "I'll present the offer to the sellers today",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727128600000000000,
+      "dateRead": null,
+      "dateDelivered": 727128602000000000,
+      "service": "SMS",
+      "chatIds": [
+        10
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "offer",
+          "sellers"
+        ],
+        "transactionStage": "offer"
+      }
+    },
+    {
+      "id": 93,
+      "guid": "msg-10-94",
+      "text": "The seller countered at $485,000",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727130700000000000,
+      "dateRead": null,
+      "dateDelivered": 727130702000000000,
+      "service": "SMS",
+      "chatIds": [
+        10
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "countered"
+        ],
+        "transactionStage": "offer"
+      }
+    },
+    {
+      "id": 94,
+      "guid": "msg-10-95",
+      "text": "My clients will accept the counter. Let's move forward.",
+      "handleId": 26,
+      "isFromMe": false,
+      "date": 727132800000000000,
+      "dateRead": 727132830000000000,
+      "dateDelivered": null,
+      "service": "SMS",
+      "chatIds": [
+        10
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "accept",
+          "counter"
+        ],
+        "transactionStage": "offer"
+      }
+    },
+    {
+      "id": 95,
+      "guid": "msg-11-96",
+      "text": "Pre-approval letter is ready for pickup",
+      "handleId": 7,
+      "isFromMe": false,
+      "date": 727138800000000000,
+      "dateRead": 727138830000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        11
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "pre-approval"
+        ],
+        "transactionStage": "intro"
+      }
+    },
+    {
+      "id": 96,
+      "guid": "msg-11-97",
+      "text": "We need your last 2 years of tax returns",
+      "handleId": 7,
+      "isFromMe": false,
+      "date": 727142400000000000,
+      "dateRead": 727142430000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        11
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "medium",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "tax returns"
+        ],
+        "transactionStage": "offer"
+      }
+    },
+    {
+      "id": 97,
+      "guid": "msg-11-98",
+      "text": "The rate lock expires Friday",
+      "handleId": 7,
+      "isFromMe": false,
+      "date": 727146000000000000,
+      "dateRead": 727146030000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        11
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "rate lock"
+        ],
+        "transactionStage": "escrow"
+      }
+    },
+    {
+      "id": 98,
+      "guid": "msg-11-99",
+      "text": "Loan is approved! Clear to close.",
+      "handleId": 7,
+      "isFromMe": false,
+      "date": 727149600000000000,
+      "dateRead": 727149630000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        11
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "approved",
+          "clear to close"
+        ],
+        "transactionStage": "closing"
+      }
+    },
+    {
+      "id": 99,
+      "guid": "msg-11-100",
+      "text": "Can you send updated pay stubs?",
+      "handleId": 7,
+      "isFromMe": false,
+      "date": 727153200000000000,
+      "dateRead": 727153230000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        11
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "medium",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "pay stubs"
+        ],
+        "transactionStage": "escrow"
+      }
+    },
+    {
+      "id": 100,
+      "guid": "msg-11-101",
+      "text": "The loan documents are ready to sign",
+      "handleId": 7,
+      "isFromMe": false,
+      "date": 727156800000000000,
+      "dateRead": 727156830000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        11
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "loan documents"
+        ],
+        "transactionStage": "escrow"
+      }
+    },
+    {
+      "id": 101,
+      "guid": "msg-11-102",
+      "text": "We need the HOA transfer docs",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727159500000000000,
+      "dateRead": null,
+      "dateDelivered": 727159502000000000,
+      "service": "iMessage",
+      "chatIds": [
+        11
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "medium",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "HOA"
+        ],
+        "transactionStage": "escrow"
+      }
+    },
+    {
+      "id": 102,
+      "guid": "msg-11-103",
+      "text": "All contingencies have been removed",
+      "handleId": 7,
+      "isFromMe": false,
+      "date": 727162200000000000,
+      "dateRead": 727162230000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        11
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "contingencies"
+        ],
+        "transactionStage": "escrow"
+      }
+    },
+    {
+      "id": 103,
+      "guid": "msg-12-104",
+      "text": "Pre-approval letter is ready for pickup",
+      "handleId": 25,
+      "isFromMe": false,
+      "date": 727156800000000000,
+      "dateRead": 727156830000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        12
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "pre-approval"
+        ],
+        "transactionStage": "intro"
+      }
+    },
+    {
+      "id": 104,
+      "guid": "msg-12-105",
+      "text": "We need your last 2 years of tax returns",
+      "handleId": 25,
+      "isFromMe": false,
+      "date": 727159800000000000,
+      "dateRead": 727159830000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        12
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "medium",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "tax returns"
+        ],
+        "transactionStage": "offer"
+      }
+    },
+    {
+      "id": 105,
+      "guid": "msg-12-106",
+      "text": "The rate lock expires Friday",
+      "handleId": 25,
+      "isFromMe": false,
+      "date": 727162800000000000,
+      "dateRead": 727162830000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        12
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "rate lock"
+        ],
+        "transactionStage": "escrow"
+      }
+    },
+    {
+      "id": 106,
+      "guid": "msg-13-107",
+      "text": "I've opened escrow with Fidelity Title",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727168800000000000,
+      "dateRead": null,
+      "dateDelivered": 727168802000000000,
+      "service": "iMessage",
+      "chatIds": [
+        13
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "escrow"
+        ],
+        "transactionStage": "escrow"
+      }
+    },
+    {
+      "id": 107,
+      "guid": "msg-13-108",
+      "text": "Please wire the deposit to the escrow account",
+      "handleId": 8,
+      "isFromMe": false,
+      "date": 727170900000000000,
+      "dateRead": 727170930000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        13
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "deposit",
+          "escrow"
+        ],
+        "transactionStage": "escrow"
+      }
+    },
+    {
+      "id": 108,
+      "guid": "msg-13-109",
+      "text": "The preliminary title report is ready for review",
+      "handleId": 8,
+      "isFromMe": false,
+      "date": 727173000000000000,
+      "dateRead": 727173030000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        13
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "title report"
+        ],
+        "transactionStage": "escrow"
+      }
+    },
+    {
+      "id": 109,
+      "guid": "msg-13-110",
+      "text": "There's a lien on the property we need to clear",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727175100000000000,
+      "dateRead": null,
+      "dateDelivered": 727175102000000000,
+      "service": "iMessage",
+      "chatIds": [
+        13
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "medium",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "lien"
+        ],
+        "transactionStage": "escrow"
+      }
+    },
+    {
+      "id": 110,
+      "guid": "msg-13-111",
+      "text": "The loan documents are ready to sign",
+      "handleId": 8,
+      "isFromMe": false,
+      "date": 727177200000000000,
+      "dateRead": 727177230000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        13
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "loan documents"
+        ],
+        "transactionStage": "escrow"
+      }
+    },
+    {
+      "id": 111,
+      "guid": "msg-13-112",
+      "text": "We need the HOA transfer docs",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727179300000000000,
+      "dateRead": null,
+      "dateDelivered": 727179302000000000,
+      "service": "iMessage",
+      "chatIds": [
+        13
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "medium",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "HOA"
+        ],
+        "transactionStage": "escrow"
+      }
+    },
+    {
+      "id": 112,
+      "guid": "msg-13-113",
+      "text": "All contingencies have been removed",
+      "handleId": 8,
+      "isFromMe": false,
+      "date": 727181400000000000,
+      "dateRead": 727181430000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        13
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "contingencies"
+        ],
+        "transactionStage": "escrow"
+      }
+    },
+    {
+      "id": 113,
+      "guid": "msg-13-114",
+      "text": "Final walkthrough is scheduled for 10am tomorrow",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727183500000000000,
+      "dateRead": null,
+      "dateDelivered": 727183502000000000,
+      "service": "iMessage",
+      "chatIds": [
+        13
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "walkthrough"
+        ],
+        "transactionStage": "escrow"
+      }
+    },
+    {
+      "id": 114,
+      "guid": "msg-14-115",
+      "text": "The preliminary title report is ready for review",
+      "handleId": 23,
+      "isFromMe": false,
+      "date": 727186800000000000,
+      "dateRead": 727186830000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        14
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "title report"
+        ],
+        "transactionStage": "escrow"
+      }
+    },
+    {
+      "id": 115,
+      "guid": "msg-14-116",
+      "text": "There's a lien on the property we need to clear",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727189500000000000,
+      "dateRead": null,
+      "dateDelivered": 727189502000000000,
+      "service": "iMessage",
+      "chatIds": [
+        14
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "medium",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "lien"
+        ],
+        "transactionStage": "escrow"
+      }
+    },
+    {
+      "id": 116,
+      "guid": "msg-14-117",
+      "text": "The loan documents are ready to sign",
+      "handleId": 23,
+      "isFromMe": false,
+      "date": 727192200000000000,
+      "dateRead": 727192230000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        14
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "loan documents"
+        ],
+        "transactionStage": "escrow"
+      }
+    },
+    {
+      "id": 117,
+      "guid": "msg-14-118",
+      "text": "We need the HOA transfer docs",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727194900000000000,
+      "dateRead": null,
+      "dateDelivered": 727194902000000000,
+      "service": "iMessage",
+      "chatIds": [
+        14
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "medium",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "HOA"
+        ],
+        "transactionStage": "escrow"
+      }
+    },
+    {
+      "id": 118,
+      "guid": "msg-14-119",
+      "text": "Closing is set for Friday at 2pm",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727197600000000000,
+      "dateRead": null,
+      "dateDelivered": 727197602000000000,
+      "service": "iMessage",
+      "chatIds": [
+        14
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "closing"
+        ],
+        "transactionStage": "closing"
+      }
+    },
+    {
+      "id": 119,
+      "guid": "msg-14-120",
+      "text": "Bring your ID and a cashiers check for $12,500",
+      "handleId": 23,
+      "isFromMe": false,
+      "date": 727199400000000000,
+      "dateRead": 727199430000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        14
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "check"
+        ],
+        "transactionStage": "closing"
+      }
+    },
+    {
+      "id": 120,
+      "guid": "msg-14-121",
+      "text": "The deed has been recorded!",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727201200000000000,
+      "dateRead": null,
+      "dateDelivered": 727201202000000000,
+      "service": "iMessage",
+      "chatIds": [
+        14
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "deed",
+          "recorded"
+        ],
+        "transactionStage": "closing"
+      }
+    },
+    {
+      "id": 121,
+      "guid": "msg-15-122",
+      "text": "The home inspection is scheduled for Thursday at 9am",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727204800000000000,
+      "dateRead": null,
+      "dateDelivered": 727204802000000000,
+      "service": "iMessage",
+      "chatIds": [
+        15
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "inspection"
+        ],
+        "transactionStage": "inspections"
+      }
+    },
+    {
+      "id": 122,
+      "guid": "msg-15-123",
+      "text": "I found some issues with the foundation. We should discuss.",
+      "handleId": 9,
+      "isFromMe": false,
+      "date": 727207200000000000,
+      "dateRead": 727207230000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        15
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "medium",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "foundation"
+        ],
+        "transactionStage": "inspections"
+      }
+    },
+    {
+      "id": 123,
+      "guid": "msg-15-124",
+      "text": "The pest inspection came back clean",
+      "handleId": 9,
+      "isFromMe": false,
+      "date": 727209600000000000,
+      "dateRead": 727209630000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        15
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "pest inspection"
+        ],
+        "transactionStage": "inspections"
+      }
+    },
+    {
+      "id": 124,
+      "guid": "msg-15-125",
+      "text": "Can you send the inspection report?",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727212000000000000,
+      "dateRead": null,
+      "dateDelivered": 727212002000000000,
+      "service": "iMessage",
+      "chatIds": [
+        15
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "inspection report"
+        ],
+        "transactionStage": "inspections"
+      }
+    },
+    {
+      "id": 125,
+      "guid": "msg-15-126",
+      "text": "The roof needs repairs - estimate is $8,000",
+      "handleId": 9,
+      "isFromMe": false,
+      "date": 727214400000000000,
+      "dateRead": 727214430000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        15
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "roof",
+          "repairs"
+        ],
+        "transactionStage": "inspections"
+      }
+    },
+    {
+      "id": 126,
+      "guid": "msg-16-127",
+      "text": "The pest inspection came back clean",
+      "handleId": 15,
+      "isFromMe": false,
+      "date": 727216800000000000,
+      "dateRead": 727216830000000000,
+      "dateDelivered": null,
+      "service": "SMS",
+      "chatIds": [
+        16
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "pest inspection"
+        ],
+        "transactionStage": "inspections"
+      }
+    },
+    {
+      "id": 127,
+      "guid": "msg-16-128",
+      "text": "Can you send the inspection report?",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727218300000000000,
+      "dateRead": null,
+      "dateDelivered": 727218302000000000,
+      "service": "SMS",
+      "chatIds": [
+        16
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "inspection report"
+        ],
+        "transactionStage": "inspections"
+      }
+    },
+    {
+      "id": 128,
+      "guid": "msg-17-129",
+      "text": "The roof needs repairs - estimate is $8,000",
+      "handleId": 24,
+      "isFromMe": false,
+      "date": 727222800000000000,
+      "dateRead": 727222830000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        17
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "roof",
+          "repairs"
+        ],
+        "transactionStage": "inspections"
+      }
+    },
+    {
+      "id": 129,
+      "guid": "msg-17-130",
+      "text": "We're requesting a credit for the HVAC issues",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727224900000000000,
+      "dateRead": null,
+      "dateDelivered": 727224902000000000,
+      "service": "iMessage",
+      "chatIds": [
+        17
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "medium",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "credit",
+          "HVAC"
+        ],
+        "transactionStage": "inspections"
+      }
+    },
+    {
+      "id": 130,
+      "guid": "msg-17-131",
+      "text": "The seller agreed to repair the electrical panel",
+      "handleId": 24,
+      "isFromMe": false,
+      "date": 727227000000000000,
+      "dateRead": 727227030000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        17
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "medium",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "repair",
+          "electrical"
+        ],
+        "transactionStage": "inspections"
+      }
+    },
+    {
+      "id": 131,
+      "guid": "msg-18-132",
+      "text": "There's a lien on the property we need to clear",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727234800000000000,
+      "dateRead": null,
+      "dateDelivered": 727234802000000000,
+      "service": "iMessage",
+      "chatIds": [
+        18
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "medium",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "lien"
+        ],
+        "transactionStage": "escrow"
+      }
+    },
+    {
+      "id": 132,
+      "guid": "msg-18-133",
+      "text": "The loan documents are ready to sign",
+      "handleId": 10,
+      "isFromMe": false,
+      "date": 727237800000000000,
+      "dateRead": 727237830000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        18
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "loan documents"
+        ],
+        "transactionStage": "escrow"
+      }
+    },
+    {
+      "id": 133,
+      "guid": "msg-18-134",
+      "text": "We need the HOA transfer docs",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727240800000000000,
+      "dateRead": null,
+      "dateDelivered": 727240802000000000,
+      "service": "iMessage",
+      "chatIds": [
+        18
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "medium",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "HOA"
+        ],
+        "transactionStage": "escrow"
+      }
+    },
+    {
+      "id": 134,
+      "guid": "msg-18-135",
+      "text": "The deed has been recorded!",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727243800000000000,
+      "dateRead": null,
+      "dateDelivered": 727243802000000000,
+      "service": "iMessage",
+      "chatIds": [
+        18
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "deed",
+          "recorded"
+        ],
+        "transactionStage": "closing"
+      }
+    },
+    {
+      "id": 135,
+      "guid": "msg-18-136",
+      "text": "Keys will be available after 3pm",
+      "handleId": 10,
+      "isFromMe": false,
+      "date": 727246200000000000,
+      "dateRead": 727246230000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        18
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "keys"
+        ],
+        "transactionStage": "closing"
+      }
+    },
+    {
+      "id": 136,
+      "guid": "msg-18-137",
+      "text": "Congratulations on your new home!",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727248600000000000,
+      "dateRead": null,
+      "dateDelivered": 727248602000000000,
+      "service": "iMessage",
+      "chatIds": [
+        18
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "new home"
+        ],
+        "transactionStage": "closing"
+      }
+    },
+    {
+      "id": 137,
+      "guid": "msg-19-138",
+      "text": "Hey! How's it going?",
+      "handleId": 31,
+      "isFromMe": false,
+      "date": 727033800000000000,
+      "dateRead": 727033830000000000,
+      "dateDelivered": null,
+      "service": "SMS",
+      "chatIds": [
+        19
+      ],
+      "attachmentIds": [],
+      "category": "normal",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": false
+      }
+    },
+    {
+      "id": 138,
+      "guid": "msg-19-139",
+      "text": "Want to grab lunch this week?",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727041000000000000,
+      "dateRead": null,
+      "dateDelivered": 727041002000000000,
+      "service": "SMS",
+      "chatIds": [
+        19
+      ],
+      "attachmentIds": [],
+      "category": "normal",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": false
+      }
+    },
+    {
+      "id": 139,
+      "guid": "msg-19-140",
+      "text": "Did you see the game last night?",
+      "handleId": 31,
+      "isFromMe": false,
+      "date": 727048200000000000,
+      "dateRead": 727048230000000000,
+      "dateDelivered": null,
+      "service": "SMS",
+      "chatIds": [
+        19
+      ],
+      "attachmentIds": [],
+      "category": "normal",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": false
+      }
+    },
+    {
+      "id": 140,
+      "guid": "msg-19-141",
+      "text": "Happy birthday!",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727055400000000000,
+      "dateRead": null,
+      "dateDelivered": 727055402000000000,
+      "service": "SMS",
+      "chatIds": [
+        19
+      ],
+      "attachmentIds": [],
+      "category": "normal",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": false
+      }
+    },
+    {
+      "id": 141,
+      "guid": "msg-19-142",
+      "text": "Thanks for dinner, it was great!",
+      "handleId": 31,
+      "isFromMe": false,
+      "date": 727062600000000000,
+      "dateRead": 727062630000000000,
+      "dateDelivered": null,
+      "service": "SMS",
+      "chatIds": [
+        19
+      ],
+      "attachmentIds": [],
+      "category": "normal",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": false
+      }
+    },
+    {
+      "id": 142,
+      "guid": "msg-20-143",
+      "text": "Running late, be there in 10",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727039800000000000,
+      "dateRead": null,
+      "dateDelivered": 727039802000000000,
+      "service": "SMS",
+      "chatIds": [
+        20
+      ],
+      "attachmentIds": [],
+      "category": "normal",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": false
+      }
+    },
+    {
+      "id": 143,
+      "guid": "msg-20-144",
+      "text": "Got your message, call you later",
+      "handleId": 32,
+      "isFromMe": false,
+      "date": 727050600000000000,
+      "dateRead": 727050630000000000,
+      "dateDelivered": null,
+      "service": "SMS",
+      "chatIds": [
+        20
+      ],
+      "attachmentIds": [],
+      "category": "normal",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": false
+      }
+    },
+    {
+      "id": 144,
+      "guid": "msg-20-145",
+      "text": "LOL that's hilarious",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727061400000000000,
+      "dateRead": null,
+      "dateDelivered": 727061402000000000,
+      "service": "SMS",
+      "chatIds": [
+        20
+      ],
+      "attachmentIds": [],
+      "category": "normal",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": false
+      }
+    },
+    {
+      "id": 145,
+      "guid": "msg-20-146",
+      "text": "Mom said to call her",
+      "handleId": 32,
+      "isFromMe": false,
+      "date": 727072200000000000,
+      "dateRead": 727072230000000000,
+      "dateDelivered": null,
+      "service": "SMS",
+      "chatIds": [
+        20
+      ],
+      "attachmentIds": [],
+      "category": "normal",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": false
+      }
+    },
+    {
+      "id": 146,
+      "guid": "msg-21-147",
+      "text": "Hey! How's it going?",
+      "handleId": 33,
+      "isFromMe": false,
+      "date": 727045800000000000,
+      "dateRead": 727045830000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        21
+      ],
+      "attachmentIds": [],
+      "category": "normal",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": false
+      }
+    },
+    {
+      "id": 147,
+      "guid": "msg-21-148",
+      "text": "Want to grab lunch this week?",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727049400000000000,
+      "dateRead": null,
+      "dateDelivered": 727049402000000000,
+      "service": "iMessage",
+      "chatIds": [
+        21
+      ],
+      "attachmentIds": [],
+      "category": "normal",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": false
+      }
+    },
+    {
+      "id": 148,
+      "guid": "msg-21-149",
+      "text": "Did you see the game last night?",
+      "handleId": 33,
+      "isFromMe": false,
+      "date": 727053000000000000,
+      "dateRead": 727053030000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        21
+      ],
+      "attachmentIds": [],
+      "category": "normal",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": false
+      }
+    },
+    {
+      "id": 149,
+      "guid": "msg-21-150",
+      "text": "The house on Main St might be available soon",
+      "handleId": 33,
+      "isFromMe": false,
+      "date": 727056600000000000,
+      "dateRead": 727056630000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        21
+      ],
+      "attachmentIds": [],
+      "category": "edge_case",
+      "difficulty": "hard",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "house"
+        ],
+        "transactionStage": "intro"
+      },
+      "notes": "Vague reference"
+    },
+    {
+      "id": 150,
+      "guid": "msg-21-151",
+      "text": "Thinking about selling next year",
+      "handleId": 33,
+      "isFromMe": false,
+      "date": 727059300000000000,
+      "dateRead": 727059330000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        21
+      ],
+      "attachmentIds": [],
+      "category": "edge_case",
+      "difficulty": "hard",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "selling"
+        ],
+        "transactionStage": "intro"
+      },
+      "notes": "Future intent"
+    },
+    {
+      "id": 151,
+      "guid": "msg-22-152",
+      "text": "We'd like to submit an offer at $475,000 with 20% down",
+      "handleId": 1,
+      "isFromMe": false,
+      "date": 727054800000000000,
+      "dateRead": 727054830000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        22
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "offer",
+          "down"
+        ],
+        "transactionStage": "offer"
+      }
+    },
+    {
+      "id": 152,
+      "guid": "msg-22-153",
+      "text": "I'll present the offer to the sellers today",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727056600000000000,
+      "dateRead": null,
+      "dateDelivered": 727056602000000000,
+      "service": "iMessage",
+      "chatIds": [
+        22
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "offer",
+          "sellers"
+        ],
+        "transactionStage": "offer"
+      }
+    },
+    {
+      "id": 153,
+      "guid": "msg-22-154",
+      "text": "The seller countered at $485,000",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727058400000000000,
+      "dateRead": null,
+      "dateDelivered": 727058402000000000,
+      "service": "iMessage",
+      "chatIds": [
+        22
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "countered"
+        ],
+        "transactionStage": "offer"
+      }
+    },
+    {
+      "id": 154,
+      "guid": "msg-22-155",
+      "text": "The home inspection is scheduled for Thursday at 9am",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727060200000000000,
+      "dateRead": null,
+      "dateDelivered": 727060202000000000,
+      "service": "iMessage",
+      "chatIds": [
+        22
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "inspection"
+        ],
+        "transactionStage": "inspections"
+      }
+    },
+    {
+      "id": 155,
+      "guid": "msg-22-156",
+      "text": "I found some issues with the foundation. We should discuss.",
+      "handleId": 9,
+      "isFromMe": false,
+      "date": 727062900000000000,
+      "dateRead": 727062930000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        22
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "medium",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "foundation"
+        ],
+        "transactionStage": "inspections"
+      }
+    },
+    {
+      "id": 156,
+      "guid": "msg-22-157",
+      "text": "I've opened escrow with Fidelity Title",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727065600000000000,
+      "dateRead": null,
+      "dateDelivered": 727065602000000000,
+      "service": "iMessage",
+      "chatIds": [
+        22
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "escrow"
+        ],
+        "transactionStage": "escrow"
+      }
+    },
+    {
+      "id": 157,
+      "guid": "msg-22-158",
+      "text": "Please wire the deposit to the escrow account",
+      "handleId": 8,
+      "isFromMe": false,
+      "date": 727069200000000000,
+      "dateRead": 727069230000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        22
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "deposit",
+          "escrow"
+        ],
+        "transactionStage": "escrow"
+      }
+    },
+    {
+      "id": 158,
+      "guid": "msg-22-159",
+      "text": "Closing is set for Friday at 2pm",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727072800000000000,
+      "dateRead": null,
+      "dateDelivered": 727072802000000000,
+      "service": "iMessage",
+      "chatIds": [
+        22
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "closing"
+        ],
+        "transactionStage": "closing"
+      }
+    },
+    {
+      "id": 159,
+      "guid": "msg-22-160",
+      "text": "Bring your ID and a cashiers check for $12,500",
+      "handleId": 7,
+      "isFromMe": false,
+      "date": 727074600000000000,
+      "dateRead": 727074630000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        22
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "check"
+        ],
+        "transactionStage": "closing"
+      }
+    },
+    {
+      "id": 160,
+      "guid": "msg-23-161",
+      "text": "Can we schedule a showing for 456 Pine Ave tomorrow at 2pm?",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727078800000000000,
+      "dateRead": null,
+      "dateDelivered": 727078802000000000,
+      "service": "iMessage",
+      "chatIds": [
+        23
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "showing"
+        ],
+        "transactionStage": "showing"
+      }
+    },
+    {
+      "id": 161,
+      "guid": "msg-23-162",
+      "text": "Tomorrow at 2pm works. I'll meet you there.",
+      "handleId": 2,
+      "isFromMe": false,
+      "date": 727080000000000000,
+      "dateRead": 727080030000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        23
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "meet"
+        ],
+        "transactionStage": "showing"
+      }
+    },
+    {
+      "id": 162,
+      "guid": "msg-23-163",
+      "text": "The clients loved the property! They want to make an offer.",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727081200000000000,
+      "dateRead": null,
+      "dateDelivered": 727081202000000000,
+      "service": "iMessage",
+      "chatIds": [
+        23
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "offer"
+        ],
+        "transactionStage": "showing"
+      }
+    },
+    {
+      "id": 163,
+      "guid": "msg-23-164",
+      "text": "Let's schedule a second showing for 789 Maple Drive",
+      "handleId": 2,
+      "isFromMe": false,
+      "date": 727082400000000000,
+      "dateRead": 727082430000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        23
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "showing"
+        ],
+        "transactionStage": "showing"
+      }
+    },
+    {
+      "id": 164,
+      "guid": "msg-23-165",
+      "text": "The open house is Saturday from 1-4pm",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727083600000000000,
+      "dateRead": null,
+      "dateDelivered": 727083602000000000,
+      "service": "iMessage",
+      "chatIds": [
+        23
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "open house"
+        ],
+        "transactionStage": "showing"
+      }
+    },
+    {
+      "id": 165,
+      "guid": "msg-23-166",
+      "text": "My buyers have 3 more properties to see today",
+      "handleId": 11,
+      "isFromMe": false,
+      "date": 727085100000000000,
+      "dateRead": 727085130000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        23
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "medium",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "buyers",
+          "properties"
+        ],
+        "transactionStage": "showing"
+      }
+    },
+    {
+      "id": 166,
+      "guid": "msg-23-167",
+      "text": "The house on Elm Street has been renovated recently",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727086600000000000,
+      "dateRead": null,
+      "dateDelivered": 727086602000000000,
+      "service": "iMessage",
+      "chatIds": [
+        23
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "medium",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "house",
+          "renovated"
+        ],
+        "transactionStage": "showing"
+      }
+    },
+    {
+      "id": 167,
+      "guid": "msg-24-168",
+      "text": "The home inspection is scheduled for Thursday at 9am",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727102800000000000,
+      "dateRead": null,
+      "dateDelivered": 727102802000000000,
+      "service": "iMessage",
+      "chatIds": [
+        24
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "inspection"
+        ],
+        "transactionStage": "inspections"
+      }
+    },
+    {
+      "id": 168,
+      "guid": "msg-24-169",
+      "text": "I found some issues with the foundation. We should discuss.",
+      "handleId": 9,
+      "isFromMe": false,
+      "date": 727104900000000000,
+      "dateRead": 727104930000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        24
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "medium",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "foundation"
+        ],
+        "transactionStage": "inspections"
+      }
+    },
+    {
+      "id": 169,
+      "guid": "msg-24-170",
+      "text": "The pest inspection came back clean",
+      "handleId": 9,
+      "isFromMe": false,
+      "date": 727107000000000000,
+      "dateRead": 727107030000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        24
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "pest inspection"
+        ],
+        "transactionStage": "inspections"
+      }
+    },
+    {
+      "id": 170,
+      "guid": "msg-24-171",
+      "text": "Can you send the inspection report?",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727109100000000000,
+      "dateRead": null,
+      "dateDelivered": 727109102000000000,
+      "service": "SMS",
+      "chatIds": [
+        24
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "inspection report"
+        ],
+        "transactionStage": "inspections"
+      }
+    },
+    {
+      "id": 171,
+      "guid": "msg-24-172",
+      "text": "The roof needs repairs - estimate is $8,000",
+      "handleId": 15,
+      "isFromMe": false,
+      "date": 727111500000000000,
+      "dateRead": 727111530000000000,
+      "dateDelivered": null,
+      "service": "SMS",
+      "chatIds": [
+        24
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "roof",
+          "repairs"
+        ],
+        "transactionStage": "inspections"
+      }
+    },
+    {
+      "id": 172,
+      "guid": "msg-25-173",
+      "text": "Hey! How's it going?",
+      "handleId": 31,
+      "isFromMe": false,
+      "date": 727036800000000000,
+      "dateRead": 727036830000000000,
+      "dateDelivered": null,
+      "service": "SMS",
+      "chatIds": [
+        25
+      ],
+      "attachmentIds": [],
+      "category": "normal",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": false
+      }
+    },
+    {
+      "id": 173,
+      "guid": "msg-25-174",
+      "text": "Want to grab lunch this week?",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727051200000000000,
+      "dateRead": null,
+      "dateDelivered": 727051202000000000,
+      "service": "SMS",
+      "chatIds": [
+        25
+      ],
+      "attachmentIds": [],
+      "category": "normal",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": false
+      }
+    },
+    {
+      "id": 174,
+      "guid": "msg-25-175",
+      "text": "Did you see the game last night?",
+      "handleId": 31,
+      "isFromMe": false,
+      "date": 727065600000000000,
+      "dateRead": 727065630000000000,
+      "dateDelivered": null,
+      "service": "SMS",
+      "chatIds": [
+        25
+      ],
+      "attachmentIds": [],
+      "category": "normal",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": false
+      }
+    },
+    {
+      "id": 175,
+      "guid": "msg-25-176",
+      "text": "Happy birthday!",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727080000000000000,
+      "dateRead": null,
+      "dateDelivered": 727080002000000000,
+      "service": "SMS",
+      "chatIds": [
+        25
+      ],
+      "attachmentIds": [],
+      "category": "normal",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": false
+      }
+    },
+    {
+      "id": 176,
+      "guid": "msg-25-177",
+      "text": "Thanks for dinner, it was great!",
+      "handleId": 32,
+      "isFromMe": false,
+      "date": 727094400000000000,
+      "dateRead": 727094430000000000,
+      "dateDelivered": null,
+      "service": "SMS",
+      "chatIds": [
+        25
+      ],
+      "attachmentIds": [],
+      "category": "normal",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": false
+      }
+    },
+    {
+      "id": 177,
+      "guid": "msg-25-178",
+      "text": "Running late, be there in 10",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727105200000000000,
+      "dateRead": null,
+      "dateDelivered": 727105202000000000,
+      "service": "SMS",
+      "chatIds": [
+        25
+      ],
+      "attachmentIds": [],
+      "category": "normal",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": false
+      }
+    },
+    {
+      "id": 178,
+      "guid": "msg-26-179",
+      "text": "I've opened escrow with Fidelity Title",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727150800000000000,
+      "dateRead": null,
+      "dateDelivered": 727150802000000000,
+      "service": "iMessage",
+      "chatIds": [
+        26
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "escrow"
+        ],
+        "transactionStage": "escrow"
+      }
+    },
+    {
+      "id": 179,
+      "guid": "msg-26-180",
+      "text": "Please wire the deposit to the escrow account",
+      "handleId": 8,
+      "isFromMe": false,
+      "date": 727154100000000000,
+      "dateRead": 727154130000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        26
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "deposit",
+          "escrow"
+        ],
+        "transactionStage": "escrow"
+      }
+    },
+    {
+      "id": 180,
+      "guid": "msg-26-181",
+      "text": "The preliminary title report is ready for review",
+      "handleId": 8,
+      "isFromMe": false,
+      "date": 727157400000000000,
+      "dateRead": 727157430000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        26
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "title report"
+        ],
+        "transactionStage": "escrow"
+      }
+    },
+    {
+      "id": 181,
+      "guid": "msg-26-182",
+      "text": "Closing is set for Friday at 2pm",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727160700000000000,
+      "dateRead": null,
+      "dateDelivered": 727160702000000000,
+      "service": "iMessage",
+      "chatIds": [
+        26
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "closing"
+        ],
+        "transactionStage": "closing"
+      }
+    },
+    {
+      "id": 182,
+      "guid": "msg-26-183",
+      "text": "Bring your ID and a cashiers check for $12,500",
+      "handleId": 10,
+      "isFromMe": false,
+      "date": 727163400000000000,
+      "dateRead": 727163430000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        26
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "check"
+        ],
+        "transactionStage": "closing"
+      }
+    },
+    {
+      "id": 183,
+      "guid": "msg-26-184",
+      "text": "The deed has been recorded!",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727166100000000000,
+      "dateRead": null,
+      "dateDelivered": 727166102000000000,
+      "service": "iMessage",
+      "chatIds": [
+        26
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "deed",
+          "recorded"
+        ],
+        "transactionStage": "closing"
+      }
+    },
+    {
+      "id": 184,
+      "guid": "msg-26-185",
+      "text": "Keys will be available after 3pm",
+      "handleId": 10,
+      "isFromMe": false,
+      "date": 727168800000000000,
+      "dateRead": 727168830000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        26
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "keys"
+        ],
+        "transactionStage": "closing"
+      }
+    },
+    {
+      "id": 185,
+      "guid": "msg-26-186",
+      "text": "Loan is approved! Clear to close.",
+      "handleId": 7,
+      "isFromMe": false,
+      "date": 727171500000000000,
+      "dateRead": 727171530000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        26
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "approved",
+          "clear to close"
+        ],
+        "transactionStage": "closing"
+      }
+    },
+    {
+      "id": 186,
+      "guid": "msg-26-187",
+      "text": "Can you send updated pay stubs?",
+      "handleId": 7,
+      "isFromMe": false,
+      "date": 727173900000000000,
+      "dateRead": 727173930000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        26
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "medium",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "pay stubs"
+        ],
+        "transactionStage": "escrow"
+      }
+    },
+    {
+      "id": 187,
+      "guid": "msg-27-188",
+      "text": "Do you have a plumber recommendation?",
+      "handleId": 19,
+      "isFromMe": false,
+      "date": 727240800000000000,
+      "dateRead": 727240830000000000,
+      "dateDelivered": null,
+      "service": "SMS",
+      "chatIds": [
+        27
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "medium",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [],
+        "transactionStage": "post_closing"
+      }
+    },
+    {
+      "id": 188,
+      "guid": "msg-27-189",
+      "text": "Your home warranty info is attached",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727244400000000000,
+      "dateRead": null,
+      "dateDelivered": 727244402000000000,
+      "service": "SMS",
+      "chatIds": [
+        27
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "warranty"
+        ],
+        "transactionStage": "post_closing"
+      }
+    },
+    {
+      "id": 189,
+      "guid": "msg-28-190",
+      "text": "Appraisal is scheduled for Monday",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727246800000000000,
+      "dateRead": null,
+      "dateDelivered": 727246802000000000,
+      "service": "iMessage",
+      "chatIds": [
+        28
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "appraisal"
+        ],
+        "transactionStage": "inspections"
+      }
+    },
+    {
+      "id": 190,
+      "guid": "msg-28-191",
+      "text": "The appraisal came in at value!",
+      "handleId": 27,
+      "isFromMe": false,
+      "date": 727249800000000000,
+      "dateRead": 727249830000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        28
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "appraisal"
+        ],
+        "transactionStage": "inspections"
+      }
+    },
+    {
+      "id": 191,
+      "guid": "msg-29-192",
+      "text": "Here's the info for utility transfers",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727252800000000000,
+      "dateRead": null,
+      "dateDelivered": 727252802000000000,
+      "service": "iMessage",
+      "chatIds": [
+        29
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "utility"
+        ],
+        "transactionStage": "post_closing"
+      }
+    },
+    {
+      "id": 192,
+      "guid": "msg-29-193",
+      "text": "Do you have a plumber recommendation?",
+      "handleId": 35,
+      "isFromMe": false,
+      "date": 727256100000000000,
+      "dateRead": 727256130000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        29
+      ],
+      "attachmentIds": [],
+      "category": "transaction",
+      "difficulty": "medium",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [],
+        "transactionStage": "post_closing"
+      }
+    },
+    {
+      "id": 193,
+      "guid": "msg-30-194",
+      "text": "URGENT: Your account has been suspended. Click here to verify.",
+      "handleId": 51,
+      "isFromMe": false,
+      "date": 727270800000000000,
+      "dateRead": 727270830000000000,
+      "dateDelivered": null,
+      "service": "SMS",
+      "chatIds": [
+        30
+      ],
+      "attachmentIds": [],
+      "category": "spam",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": false
+      },
+      "notes": "Obvious spam"
+    },
+    {
+      "id": 194,
+      "guid": "msg-30-195",
+      "text": "You've won a $1000 gift card! Claim now!",
+      "handleId": 51,
+      "isFromMe": false,
+      "date": 727288800000000000,
+      "dateRead": 727288830000000000,
+      "dateDelivered": null,
+      "service": "SMS",
+      "chatIds": [
+        30
+      ],
+      "attachmentIds": [],
+      "category": "spam",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": false
+      },
+      "notes": "Prize scam"
+    },
+    {
+      "id": 195,
+      "guid": "msg-30-196",
+      "text": "Work from home and earn $5000/week! Reply YES",
+      "handleId": 51,
+      "isFromMe": false,
+      "date": 727306800000000000,
+      "dateRead": 727306830000000000,
+      "dateDelivered": null,
+      "service": "SMS",
+      "chatIds": [
+        30
+      ],
+      "attachmentIds": [],
+      "category": "spam",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": false
+      },
+      "notes": "Work from home scam"
+    },
+    {
+      "id": 196,
+      "guid": "msg-30-197",
+      "text": "Your package could not be delivered. Update address here.",
+      "handleId": 51,
+      "isFromMe": false,
+      "date": 727324800000000000,
+      "dateRead": 727324830000000000,
+      "dateDelivered": null,
+      "service": "SMS",
+      "chatIds": [
+        30
+      ],
+      "attachmentIds": [],
+      "category": "spam",
+      "difficulty": "medium",
+      "expected": {
+        "isTransactionRelated": false
+      },
+      "notes": "Delivery scam"
+    },
+    {
+      "id": 197,
+      "guid": "msg-30-198",
+      "text": "FREE iPhone 15! Just pay shipping. Limited time!",
+      "handleId": 51,
+      "isFromMe": false,
+      "date": 727342800000000000,
+      "dateRead": 727342830000000000,
+      "dateDelivered": null,
+      "service": "SMS",
+      "chatIds": [
+        30
+      ],
+      "attachmentIds": [],
+      "category": "spam",
+      "difficulty": "easy",
+      "expected": {
+        "isTransactionRelated": false
+      },
+      "notes": "Free phone scam"
+    },
+    {
+      "id": 198,
+      "guid": "msg-21-199",
+      "text": "My friend just bought a house",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727300800000000000,
+      "dateRead": null,
+      "dateDelivered": 727300802000000000,
+      "service": "iMessage",
+      "chatIds": [
+        21
+      ],
+      "attachmentIds": [],
+      "category": "edge_case",
+      "difficulty": "hard",
+      "expected": {
+        "isTransactionRelated": false
+      },
+      "notes": "Third party reference"
+    },
+    {
+      "id": 199,
+      "guid": "msg-21-200",
+      "text": "I love HGTV shows about house flipping",
+      "handleId": 33,
+      "isFromMe": false,
+      "date": 727306800000000000,
+      "dateRead": 727306830000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        21
+      ],
+      "attachmentIds": [],
+      "category": "edge_case",
+      "difficulty": "hard",
+      "expected": {
+        "isTransactionRelated": false
+      },
+      "notes": "TV reference, not real transaction"
+    },
+    {
+      "id": 200,
+      "guid": "msg-21-201",
+      "text": "The market is crazy right now",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727312800000000000,
+      "dateRead": null,
+      "dateDelivered": 727312802000000000,
+      "service": "iMessage",
+      "chatIds": [
+        21
+      ],
+      "attachmentIds": [],
+      "category": "edge_case",
+      "difficulty": "hard",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "market"
+        ]
+      },
+      "notes": "Market commentary"
+    },
+    {
+      "id": 201,
+      "guid": "msg-21-202",
+      "text": "Rates went up again",
+      "handleId": 33,
+      "isFromMe": false,
+      "date": 727318800000000000,
+      "dateRead": 727318830000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        21
+      ],
+      "attachmentIds": [],
+      "category": "edge_case",
+      "difficulty": "medium",
+      "expected": {
+        "isTransactionRelated": true,
+        "expectedKeywords": [
+          "rates"
+        ]
+      },
+      "notes": "Interest rate reference"
+    },
+    {
+      "id": 202,
+      "guid": "msg-21-203",
+      "text": null,
+      "handleId": 33,
+      "isFromMe": false,
+      "date": 727324800000000000,
+      "dateRead": 727324830000000000,
+      "dateDelivered": null,
+      "service": "iMessage",
+      "chatIds": [
+        21
+      ],
+      "attachmentIds": [],
+      "category": "edge_case",
+      "difficulty": "hard",
+      "expected": {
+        "isTransactionRelated": false
+      },
+      "notes": "Empty message"
+    },
+    {
+      "id": 203,
+      "guid": "msg-21-204",
+      "text": "...",
+      "handleId": 0,
+      "isFromMe": true,
+      "date": 727330800000000000,
+      "dateRead": null,
+      "dateDelivered": 727330802000000000,
+      "service": "iMessage",
+      "chatIds": [
+        21
+      ],
+      "attachmentIds": [],
+      "category": "edge_case",
+      "difficulty": "hard",
+      "expected": {
+        "isTransactionRelated": false
+      },
+      "notes": "Ellipsis only"
+    }
+  ],
+  "attachments": [
+    {
+      "id": 1,
+      "guid": "attach-1",
+      "filename": "~/Library/SMS/Attachments/inspection_report.pdf",
+      "mimeType": "application/pdf",
+      "transferName": "inspection_report.pdf"
+    },
+    {
+      "id": 2,
+      "guid": "attach-2",
+      "filename": "~/Library/SMS/Attachments/purchase_contract.pdf",
+      "mimeType": "application/pdf",
+      "transferName": "purchase_contract.pdf"
+    },
+    {
+      "id": 3,
+      "guid": "attach-3",
+      "filename": "~/Library/SMS/Attachments/listing_sheet.pdf",
+      "mimeType": "application/pdf",
+      "transferName": "listing_sheet.pdf"
+    }
+  ]
+}
