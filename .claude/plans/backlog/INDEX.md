@@ -3,8 +3,8 @@
 This index tracks all backlog items with their current status and metadata.
 
 **Last Updated:** 2026-01-01
-**Total Items:** 133
-**Pending:** 84 | **In Progress:** 0 | **Completed:** 46 | **Obsolete:** 2 | **Deferred:** 2
+**Total Items:** 135
+**Pending:** 86 | **In Progress:** 0 | **Completed:** 46 | **Obsolete:** 2 | **Deferred:** 2
 
 ---
 
@@ -28,8 +28,8 @@ This index tracks all backlog items with their current status and metadata.
 ### By Priority
 - **Critical:** BACKLOG-030 (done), 032, 035 (done), 038 (done), 039 (done), 044 (done), 045 (done), 058 (done), 059 (done), 072 (done), 073 (done), 074 (done), **107**, 108 (done), 117 (done)
 - **High:** BACKLOG-008, 009, 013, 016, 018, 020, 021, 023, 026, 031, 033, 037, 056, 060 (done), 061, 062, 063, 067, 075 (done), 076 (done), 084 (done), 085 (done), 088, 090, 091, 098, 099, **109**, **110**, **111**, **118**, **121**
-- **Medium:** Multiple (see full index), 014 (done), 077 (done), 078 (done), 079 (done), 081, 086, 087, 089, 092, 093, 094, 095, 096, 097, 100, 101, 102, **112**, **113**, **114**, **115**, **116**, 122 (done)
-- **Low/Deferred:** BACKLOG-001, 003, 004, 010, 017, 069, 070, 071, **119**, **123**
+- **Medium:** Multiple (see full index), 014 (done), 077 (done), 078 (done), 079 (done), 081, 086, 087, 089, 092, 093, 094, 095, 096, 097, 100, 101, 102, **112**, **113**, **114**, **115**, **116**, 122 (done), **124**
+- **Low/Deferred:** BACKLOG-001, 003, 004, 010, 017, 069, 070, 071, **119**, **123**, **125**
 
 ### By Sprint Assignment
 - **SPRINT-001 (Onboarding Refactor):** Completed
@@ -182,6 +182,8 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-121 | Add Generator Approach Guidance for Large Fixtures | docs | High | Pending | - | 2-3 | ~10K | 20-30m | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-121.md](BACKLOG-121.md) |
 | BACKLOG-122 | Improve Engineer Agent Worktree Instructions | docs | Medium | Completed | - | 2-3 | ~10K | 20-30m | 2 | ~8K | 10m | - | - | - | - | - | - | 2 | ~8K | 10m | -50% | [BACKLOG-122.md](BACKLOG-122.md) |
 | BACKLOG-123 | Update Test Category Estimation Multiplier | docs | Low | Pending | - | 1-2 | ~5K | 10-15m | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-123.md](BACKLOG-123.md) |
+| BACKLOG-124 | Add Sprint Completion Checklist to PM Workflow | docs | Medium | Pending | - | 2-3 | ~10K | 15-20m | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-124.md](BACKLOG-124.md) |
+| BACKLOG-125 | Enforce Metrics Collection for All Sprints | docs | Low | Pending | - | 2-3 | ~8K | 15-20m | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-125.md](BACKLOG-125.md) |
 
 ---
 
@@ -300,6 +302,8 @@ This index tracks all backlog items with their current status and metadata.
 - 2026-01-01: Added BACKLOG-123 (Test Category Estimation Multiplier) - Low priority, from SPRINT-011 retrospective (-28% avg variance)
 - 2026-01-01: BACKLOG-122 completed - Engineer worktree instructions added to engineer.md and git-branching.md (2 turns, ~8K tokens)
 - 2026-01-01: **SPRINT-010 retroactive update** - All 7 tasks were merged 2025-12-29 but sprint file was never updated. Fixed sprint file, marked BACKLOG-054, 103, 104, 105 as Completed.
+- 2026-01-01: Added BACKLOG-124 (Sprint Completion Checklist) - Medium priority, from SPRINT-010 retrospective (stale sprint file)
+- 2026-01-01: Added BACKLOG-125 (Enforce Metrics Collection) - Low priority, from SPRINT-010 retrospective (missing metrics)
 
 ---
 
