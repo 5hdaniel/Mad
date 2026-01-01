@@ -156,6 +156,33 @@ export interface ProcessableEmail {
 }
 
 /**
+ * SMS/iMessage transformed for pipeline processing
+ * Compatible with the format expected by sync services
+ */
+export interface ProcessableMessage {
+  /** Message ID from iOS backup */
+  messageId: number;
+  /** Chat ID for grouping conversations */
+  chatId: number;
+  /** Message text content */
+  text: string;
+  /** Whether the message was sent by device owner */
+  isFromMe: boolean;
+  /** Sender identifier (phone or email) */
+  senderIdentifier: string;
+  /** Sender display name (if known from contacts) */
+  senderName?: string;
+  /** Message timestamp */
+  sentAt: Date;
+  /** Service type */
+  service: 'iMessage' | 'SMS';
+  /** Whether message has attachments */
+  hasAttachments: boolean;
+  /** Channel type */
+  channel: MessageChannel;
+}
+
+/**
  * Classification result for a message
  */
 export interface ClassificationResult {

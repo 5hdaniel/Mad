@@ -8,9 +8,16 @@
 
 import type { FakeEmail } from '../../electron/services/__tests__/fixtures/fake-mailbox/types';
 import type {
+  FakeMessage,
+  FakeContact,
+  FakeHandle,
+  FakeChat,
+} from '../../electron/services/__tests__/fixtures/fake-ios-backup/types';
+import type {
   MockEmailProviderConfig,
   MockMessageProviderConfig,
   ProcessableEmail,
+  ProcessableMessage,
   SyncResult,
 } from './types';
 
@@ -281,15 +288,58 @@ export class MockOutlookProvider {
 }
 
 /**
+ * Convert a FakeMessage to ProcessableMessage format
+ * This simulates what the iOS backup parser would return
+ */
+export function fakeMessageToProcessable(
+  message: FakeMessage,
+  handles: FakeHandle[],
+  contacts: FakeContact[]
+): ProcessableMessage {
+  // Find the handle for this message
+  const handle = handles.find((h) => h.id === message.handleId);
+  const senderIdentifier = handle?.identifier ?? 'unknown';
+
+  // Try to find a contact for this handle
+  let senderName: string | undefined;
+  if (handle) {
+    const contact = contacts.find((c) =>
+      c.phoneNumbers.some((p) => p.normalizedNumber === handle.identifier)
+    );
+    if (contact) {
+      senderName = contact.displayName;
+    }
+  }
+
+  // Convert Apple timestamp to Date
+  const APPLE_EPOCH = 978307200000;
+  const sentAt = new Date(message.date / 1_000_000 + APPLE_EPOCH);
+
+  return {
+    messageId: message.id,
+    chatId: message.chatIds[0] ?? 0,
+    text: message.text ?? '',
+    isFromMe: message.isFromMe,
+    senderIdentifier,
+    senderName,
+    sentAt,
+    service: message.service,
+    hasAttachments: message.attachmentIds.length > 0,
+    channel: 'sms',
+  };
+}
+
+/**
  * Mock iOS Backup Provider
  *
  * Simulates iOS backup/iMessage behavior for testing message sync pipelines.
- * Note: TASK-801 fixtures are not yet available, so this provides the interface
- * for future integration.
+ * Uses TASK-801 fixtures for realistic test data.
  */
 export class MockiOSBackupProvider {
-  private messages: unknown[] = []; // Will use SMS fixture types from TASK-801
-  private contacts: unknown[] = [];
+  private messages: FakeMessage[] = [];
+  private contacts: FakeContact[] = [];
+  private handles: FakeHandle[] = [];
+  private chats: FakeChat[] = [];
   private config: MockMessageProviderConfig;
 
   constructor(config: Partial<MockMessageProviderConfig> = {}) {
@@ -303,40 +353,92 @@ export class MockiOSBackupProvider {
 
   /**
    * Load messages into the mock provider
-   * Placeholder for TASK-801 integration
    */
-  loadMessages(messages: unknown[]): void {
+  loadMessages(messages: FakeMessage[]): void {
     this.messages = messages;
   }
 
   /**
-   * Load contacts into the mock provider
-   * Placeholder for TASK-801 integration
+   * Load handles into the mock provider
    */
-  loadContacts(contacts: unknown[]): void {
+  loadHandles(handles: FakeHandle[]): void {
+    this.handles = handles;
+  }
+
+  /**
+   * Load chats into the mock provider
+   */
+  loadChats(chats: FakeChat[]): void {
+    this.chats = chats;
+  }
+
+  /**
+   * Load contacts into the mock provider
+   */
+  loadContacts(contacts: FakeContact[]): void {
     this.contacts = contacts;
+  }
+
+  /**
+   * Load all fixture data at once
+   */
+  loadFixtures(data: {
+    messages: FakeMessage[];
+    handles: FakeHandle[];
+    chats: FakeChat[];
+    contacts: FakeContact[];
+  }): void {
+    this.messages = data.messages;
+    this.handles = data.handles;
+    this.chats = data.chats;
+    this.contacts = data.contacts;
   }
 
   /**
    * Simulate fetching messages from iOS backup
    */
-  async fetchMessages(): Promise<{ messages: unknown[]; count: number }> {
+  async fetchMessages(options?: {
+    limit?: number;
+    chatId?: number;
+    service?: 'iMessage' | 'SMS';
+  }): Promise<{ messages: ProcessableMessage[]; count: number }> {
     await simulateLatency(this.config.latencyMs);
 
     if (shouldSimulateError(this.config.simulateErrors, this.config.errorRate)) {
       throw new Error('Simulated iOS backup read error');
     }
 
+    let filteredMessages = [...this.messages];
+
+    // Apply filters
+    if (options?.chatId !== undefined) {
+      filteredMessages = filteredMessages.filter((m) =>
+        m.chatIds.includes(options.chatId!)
+      );
+    }
+
+    if (options?.service) {
+      filteredMessages = filteredMessages.filter((m) => m.service === options.service);
+    }
+
+    if (options?.limit && options.limit > 0) {
+      filteredMessages = filteredMessages.slice(0, options.limit);
+    }
+
+    const processableMessages = filteredMessages.map((m) =>
+      fakeMessageToProcessable(m, this.handles, this.contacts)
+    );
+
     return {
-      messages: [...this.messages],
-      count: this.messages.length,
+      messages: processableMessages,
+      count: processableMessages.length,
     };
   }
 
   /**
    * Simulate fetching contacts from iOS backup
    */
-  async fetchContacts(): Promise<{ contacts: unknown[]; count: number }> {
+  async fetchContacts(): Promise<{ contacts: FakeContact[]; count: number }> {
     await simulateLatency(this.config.latencyMs);
 
     if (shouldSimulateError(this.config.simulateErrors, this.config.errorRate)) {
@@ -391,6 +493,62 @@ export class MockiOSBackupProvider {
    */
   getContactCount(): number {
     return this.contacts.length;
+  }
+
+  /**
+   * Get loaded handle count
+   */
+  getHandleCount(): number {
+    return this.handles.length;
+  }
+
+  /**
+   * Get loaded chat count
+   */
+  getChatCount(): number {
+    return this.chats.length;
+  }
+
+  /**
+   * Get all loaded messages (raw fixture data)
+   */
+  getAllMessages(): FakeMessage[] {
+    return [...this.messages];
+  }
+
+  /**
+   * Get all loaded contacts
+   */
+  getAllContacts(): FakeContact[] {
+    return [...this.contacts];
+  }
+
+  /**
+   * Get all loaded handles
+   */
+  getAllHandles(): FakeHandle[] {
+    return [...this.handles];
+  }
+
+  /**
+   * Get all loaded chats
+   */
+  getAllChats(): FakeChat[] {
+    return [...this.chats];
+  }
+
+  /**
+   * Get transaction-related messages
+   */
+  getTransactionMessages(): FakeMessage[] {
+    return this.messages.filter((m) => m.expected.isTransactionRelated);
+  }
+
+  /**
+   * Get messages by category
+   */
+  getMessagesByCategory(category: FakeMessage['category']): FakeMessage[] {
+    return this.messages.filter((m) => m.category === category);
   }
 }
 

@@ -4,7 +4,12 @@ This directory contains the integration testing framework for Magic Audit. It en
 
 ## Overview
 
-The integration testing framework uses fake email fixtures (from `electron/services/__tests__/fixtures/fake-mailbox/`) to simulate real-world email data. Tests run completely offline with deterministic results.
+The integration testing framework uses fake email and SMS/iMessage fixtures to simulate real-world communication data:
+
+- **Email fixtures** from `electron/services/__tests__/fixtures/fake-mailbox/`
+- **iOS backup fixtures** (SMS/iMessage) from `electron/services/__tests__/fixtures/fake-ios-backup/`
+
+Tests run completely offline with deterministic results.
 
 ## Architecture
 
@@ -124,11 +129,34 @@ const { emails, hasMore } = await provider.fetchEmails({ top: 50, skip: 0 });
 Simulates iOS backup/iMessage reading:
 
 ```typescript
-const provider = new MockiOSBackupProvider();
+const provider = new MockiOSBackupProvider({
+  latencyMs: 100,
+  simulateErrors: false,
+});
 
-// Will be populated when TASK-801 fixtures are available
+// Load all fixture data at once
+provider.loadFixtures({
+  messages: getAllMessages(),
+  handles: getAllHandles(),
+  chats: getAllChats(),
+  contacts: getAllContacts(),
+});
+
+// Or load individually
 provider.loadMessages(messages);
+provider.loadHandles(handles);
+provider.loadChats(chats);
 provider.loadContacts(contacts);
+
+// Fetch messages with filtering
+const { messages, count } = await provider.fetchMessages({
+  limit: 50,
+  chatId: 1,
+  service: 'iMessage',
+});
+
+// Get transaction-related messages
+const transactionMsgs = provider.getTransactionMessages();
 ```
 
 ## Fixture Data
@@ -157,6 +185,54 @@ The email fixtures in `fake-mailbox/emails.json` contain:
 | easy | Clear transaction or spam indicators |
 | medium | Some ambiguity, requires context |
 | hard | Minimal indicators, edge cases |
+
+## iOS Backup Fixtures (TASK-801)
+
+The iOS backup fixtures in `fake-ios-backup/` contain realistic SMS and iMessage data:
+
+### Messages (`messages.json`)
+
+- 100+ fake messages across transaction, normal, spam, and edge cases
+- Both iMessage and SMS service types
+- Apple epoch timestamps for realistic parsing tests
+- Group and individual chats
+- Expected classification results for validation
+
+### Contacts (`contacts.json`)
+
+- 20+ fake contacts with realistic data
+- Real estate professional roles (agents, lenders, title, inspectors)
+- Phone numbers and email addresses
+- Linked to message handles for cross-referencing
+
+### Message Categories
+
+| Category | Description |
+|----------|-------------|
+| transaction | Real estate transaction messages |
+| normal | Regular personal messages |
+| spam | Spam/scam messages |
+| edge_case | Ambiguous or difficult cases |
+
+### Message Services
+
+| Service | Description |
+|---------|-------------|
+| iMessage | Apple iMessage (blue bubble) |
+| SMS | Traditional SMS (green bubble) |
+
+### Contact Roles
+
+| Role | Description |
+|------|-------------|
+| agent | Real estate agents |
+| buyer | Home buyers |
+| seller | Home sellers |
+| lender | Mortgage lenders |
+| title | Title company contacts |
+| inspector | Home inspectors |
+| attorney | Real estate attorneys |
+| other | Other contacts |
 
 ## Running Tests
 
@@ -203,9 +279,29 @@ The framework is designed for fast, reliable testing:
    const result = await sandbox.runDetection();
    ```
 
+## TestSandbox SMS/iMessage API
+
+Additional methods for SMS/iMessage testing:
+
+### Message Sync
+
+- `syncMessages()` - Sync from iOS backup provider
+- `syncAll()` - Sync from all providers (email + SMS)
+
+### Message Classification
+
+- `runMessageClassification()` - Classify all synced messages
+- `getMessageClassificationResults()` - Get message classification results map
+
+### Message Data Access
+
+- `getSyncedMessages()` - Get all synced messages
+- `getMessages(filter?)` - Get messages with optional filtering
+- `getTransactionMessages()` - Get transaction-related messages
+
 ## Future Enhancements
 
-- **TASK-801 Integration**: SMS/iMessage fixtures for message testing
 - **Database Integration**: In-memory SQLite for full service testing
 - **AI Mock**: Mock LLM responses for AI detection testing
 - **Regression Suite**: Track detection accuracy over time
+- **Combined Transaction Detection**: Detect transactions from both emails and messages
