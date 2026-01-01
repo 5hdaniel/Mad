@@ -1,0 +1,788 @@
+{
+  "metadata": {
+    "description": "Fake iOS AddressBook contacts for testing real estate transaction detection",
+    "version": "1.0.0",
+    "totalContacts": 52,
+    "contactsWithPhones": 50,
+    "contactsWithEmails": 45,
+    "realEstateProfessionals": 18,
+    "notes": "Includes agents, buyers, sellers, lenders, title officers, inspectors, and attorneys"
+  },
+  "contacts": [
+    {
+      "id": 1,
+      "firstName": "Sarah",
+      "lastName": "Mitchell",
+      "organization": "Keller Williams Realty",
+      "phoneNumbers": [
+        { "label": "mobile", "number": "+1 (415) 555-0101", "normalizedNumber": "+14155550101" },
+        { "label": "work", "number": "(415) 555-0102", "normalizedNumber": "+14155550102" }
+      ],
+      "emails": [
+        { "label": "work", "email": "sarah.mitchell@kwrealty.com" }
+      ],
+      "displayName": "Sarah Mitchell",
+      "role": "agent",
+      "notes": "Listing agent - very responsive"
+    },
+    {
+      "id": 2,
+      "firstName": "Michael",
+      "lastName": "Chen",
+      "organization": "Compass Real Estate",
+      "phoneNumbers": [
+        { "label": "mobile", "number": "+1 (415) 555-0201", "normalizedNumber": "+14155550201" }
+      ],
+      "emails": [
+        { "label": "work", "email": "mchen@compass.com" }
+      ],
+      "displayName": "Michael Chen",
+      "role": "agent",
+      "notes": "Buyer's agent"
+    },
+    {
+      "id": 3,
+      "firstName": "Jennifer",
+      "lastName": "Thompson",
+      "organization": null,
+      "phoneNumbers": [
+        { "label": "mobile", "number": "+1 (510) 555-0301", "normalizedNumber": "+15105550301" }
+      ],
+      "emails": [
+        { "label": "home", "email": "jen.thompson@gmail.com" }
+      ],
+      "displayName": "Jennifer Thompson",
+      "role": "buyer",
+      "notes": "First-time homebuyer"
+    },
+    {
+      "id": 4,
+      "firstName": "Robert",
+      "lastName": "Martinez",
+      "organization": null,
+      "phoneNumbers": [
+        { "label": "mobile", "number": "+1 (510) 555-0401", "normalizedNumber": "+15105550401" }
+      ],
+      "emails": [
+        { "label": "home", "email": "rmartinez@yahoo.com" }
+      ],
+      "displayName": "Robert Martinez",
+      "role": "buyer",
+      "notes": "Buyer - Jen's husband"
+    },
+    {
+      "id": 5,
+      "firstName": "David",
+      "lastName": "Wilson",
+      "organization": null,
+      "phoneNumbers": [
+        { "label": "mobile", "number": "+1 (650) 555-0501", "normalizedNumber": "+16505550501" },
+        { "label": "home", "number": "(650) 555-0502", "normalizedNumber": "+16505550502" }
+      ],
+      "emails": [
+        { "label": "home", "email": "dwilson@outlook.com" }
+      ],
+      "displayName": "David Wilson",
+      "role": "seller",
+      "notes": "Property seller - 123 Oak Street"
+    },
+    {
+      "id": 6,
+      "firstName": "Patricia",
+      "lastName": "Wilson",
+      "organization": null,
+      "phoneNumbers": [
+        { "label": "mobile", "number": "+1 (650) 555-0601", "normalizedNumber": "+16505550601" }
+      ],
+      "emails": [
+        { "label": "home", "email": "pwilson@outlook.com" }
+      ],
+      "displayName": "Patricia Wilson",
+      "role": "seller",
+      "notes": "Property seller - David's wife"
+    },
+    {
+      "id": 7,
+      "firstName": "James",
+      "lastName": "Anderson",
+      "organization": "First Republic Bank",
+      "phoneNumbers": [
+        { "label": "work", "number": "+1 (415) 555-0701", "normalizedNumber": "+14155550701" },
+        { "label": "mobile", "number": "(415) 555-0702", "normalizedNumber": "+14155550702" }
+      ],
+      "emails": [
+        { "label": "work", "email": "janderson@firstrepublic.com" }
+      ],
+      "displayName": "James Anderson",
+      "role": "lender",
+      "notes": "Mortgage loan officer"
+    },
+    {
+      "id": 8,
+      "firstName": "Linda",
+      "lastName": "Garcia",
+      "organization": "Fidelity National Title",
+      "phoneNumbers": [
+        { "label": "work", "number": "+1 (415) 555-0801", "normalizedNumber": "+14155550801" }
+      ],
+      "emails": [
+        { "label": "work", "email": "lgarcia@fntg.com" }
+      ],
+      "displayName": "Linda Garcia",
+      "role": "title",
+      "notes": "Title officer"
+    },
+    {
+      "id": 9,
+      "firstName": "William",
+      "lastName": "Brown",
+      "organization": "Bay Area Home Inspections",
+      "phoneNumbers": [
+        { "label": "mobile", "number": "+1 (510) 555-0901", "normalizedNumber": "+15105550901" }
+      ],
+      "emails": [
+        { "label": "work", "email": "wbrown@bayareainspect.com" }
+      ],
+      "displayName": "William Brown",
+      "role": "inspector",
+      "notes": "Home inspector - general"
+    },
+    {
+      "id": 10,
+      "firstName": "Elizabeth",
+      "lastName": "Taylor",
+      "organization": "Taylor & Associates Law",
+      "phoneNumbers": [
+        { "label": "work", "number": "+1 (415) 555-1001", "normalizedNumber": "+14155551001" }
+      ],
+      "emails": [
+        { "label": "work", "email": "etaylor@taylorlaw.com" }
+      ],
+      "displayName": "Elizabeth Taylor",
+      "role": "attorney",
+      "notes": "Real estate attorney"
+    },
+    {
+      "id": 11,
+      "firstName": "Richard",
+      "lastName": "Lee",
+      "organization": "Coldwell Banker",
+      "phoneNumbers": [
+        { "label": "mobile", "number": "+1 (408) 555-1101", "normalizedNumber": "+14085551101" }
+      ],
+      "emails": [
+        { "label": "work", "email": "rlee@coldwellbanker.com" }
+      ],
+      "displayName": "Richard Lee",
+      "role": "agent",
+      "notes": "Agent for 456 Pine Ave property"
+    },
+    {
+      "id": 12,
+      "firstName": "Susan",
+      "lastName": "Harris",
+      "organization": "RE/MAX",
+      "phoneNumbers": [
+        { "label": "mobile", "number": "+1 (408) 555-1201", "normalizedNumber": "+14085551201" }
+      ],
+      "emails": [
+        { "label": "work", "email": "sharris@remax.com" }
+      ],
+      "displayName": "Susan Harris",
+      "role": "agent",
+      "notes": "Agent - referral source"
+    },
+    {
+      "id": 13,
+      "firstName": "Thomas",
+      "lastName": "Clark",
+      "organization": null,
+      "phoneNumbers": [
+        { "label": "mobile", "number": "+1 (925) 555-1301", "normalizedNumber": "+19255551301" }
+      ],
+      "emails": [
+        { "label": "home", "email": "tclark@protonmail.com" }
+      ],
+      "displayName": "Thomas Clark",
+      "role": "buyer",
+      "notes": "Investment buyer"
+    },
+    {
+      "id": 14,
+      "firstName": "Nancy",
+      "lastName": "Lewis",
+      "organization": "Wells Fargo Home Mortgage",
+      "phoneNumbers": [
+        { "label": "work", "number": "+1 (415) 555-1401", "normalizedNumber": "+14155551401" }
+      ],
+      "emails": [
+        { "label": "work", "email": "nlewis@wellsfargo.com" }
+      ],
+      "displayName": "Nancy Lewis",
+      "role": "lender",
+      "notes": "Secondary lender contact"
+    },
+    {
+      "id": 15,
+      "firstName": "Christopher",
+      "lastName": "Walker",
+      "organization": "Pacific Pest Control",
+      "phoneNumbers": [
+        { "label": "mobile", "number": "+1 (510) 555-1501", "normalizedNumber": "+15105551501" }
+      ],
+      "emails": [
+        { "label": "work", "email": "cwalker@pacificpest.com" }
+      ],
+      "displayName": "Christopher Walker",
+      "role": "inspector",
+      "notes": "Termite/pest inspector"
+    },
+    {
+      "id": 16,
+      "firstName": "Karen",
+      "lastName": "Hall",
+      "organization": "Chicago Title",
+      "phoneNumbers": [
+        { "label": "work", "number": "+1 (650) 555-1601", "normalizedNumber": "+16505551601" }
+      ],
+      "emails": [
+        { "label": "work", "email": "khall@chicagotitle.com" }
+      ],
+      "displayName": "Karen Hall",
+      "role": "title",
+      "notes": "Escrow officer"
+    },
+    {
+      "id": 17,
+      "firstName": "Daniel",
+      "lastName": "Young",
+      "organization": null,
+      "phoneNumbers": [
+        { "label": "mobile", "number": "+1 (925) 555-1701", "normalizedNumber": "+19255551701" }
+      ],
+      "emails": [
+        { "label": "home", "email": "dyoung@gmail.com" }
+      ],
+      "displayName": "Daniel Young",
+      "role": "seller",
+      "notes": "Selling 789 Maple Drive"
+    },
+    {
+      "id": 18,
+      "firstName": "Michelle",
+      "lastName": "King",
+      "organization": "King Legal Services",
+      "phoneNumbers": [
+        { "label": "work", "number": "+1 (415) 555-1801", "normalizedNumber": "+14155551801" }
+      ],
+      "emails": [
+        { "label": "work", "email": "mking@kinglegal.com" }
+      ],
+      "displayName": "Michelle King",
+      "role": "attorney",
+      "notes": "Buyer's attorney"
+    },
+    {
+      "id": 19,
+      "firstName": "Steven",
+      "lastName": "Wright",
+      "organization": null,
+      "phoneNumbers": [
+        { "label": "mobile", "number": "+1 (510) 555-1901", "normalizedNumber": "+15105551901" }
+      ],
+      "emails": [
+        { "label": "home", "email": "swright@icloud.com" }
+      ],
+      "displayName": "Steven Wright",
+      "role": "other",
+      "notes": "Contractor - kitchen reno quote"
+    },
+    {
+      "id": 20,
+      "firstName": "Emily",
+      "lastName": "Scott",
+      "organization": "Sotheby's International Realty",
+      "phoneNumbers": [
+        { "label": "mobile", "number": "+1 (415) 555-2001", "normalizedNumber": "+14155552001" }
+      ],
+      "emails": [
+        { "label": "work", "email": "escott@sothebys.com" }
+      ],
+      "displayName": "Emily Scott",
+      "role": "agent",
+      "notes": "Luxury property specialist"
+    },
+    {
+      "id": 21,
+      "firstName": "Jason",
+      "lastName": "Green",
+      "organization": null,
+      "phoneNumbers": [
+        { "label": "mobile", "number": "+1 (650) 555-2101", "normalizedNumber": "+16505552101" }
+      ],
+      "emails": [
+        { "label": "home", "email": "jgreen@fastmail.com" }
+      ],
+      "displayName": "Jason Green",
+      "role": "buyer",
+      "notes": "Relocating from Seattle"
+    },
+    {
+      "id": 22,
+      "firstName": "Amanda",
+      "lastName": "Adams",
+      "organization": null,
+      "phoneNumbers": [
+        { "label": "mobile", "number": "+1 (650) 555-2201", "normalizedNumber": "+16505552201" }
+      ],
+      "emails": [
+        { "label": "home", "email": "aadams@fastmail.com" }
+      ],
+      "displayName": "Amanda Adams",
+      "role": "buyer",
+      "notes": "Jason's wife - relocating"
+    },
+    {
+      "id": 23,
+      "firstName": "Mark",
+      "lastName": "Nelson",
+      "organization": "HomeLight Escrow",
+      "phoneNumbers": [
+        { "label": "work", "number": "+1 (415) 555-2301", "normalizedNumber": "+14155552301" }
+      ],
+      "emails": [
+        { "label": "work", "email": "mnelson@homelight.com" }
+      ],
+      "displayName": "Mark Nelson",
+      "role": "title",
+      "notes": "Escrow coordinator"
+    },
+    {
+      "id": 24,
+      "firstName": "Laura",
+      "lastName": "Hill",
+      "organization": "Bay Area Roofing",
+      "phoneNumbers": [
+        { "label": "work", "number": "+1 (510) 555-2401", "normalizedNumber": "+15105552401" }
+      ],
+      "emails": [
+        { "label": "work", "email": "lhill@bayarearoofing.com" }
+      ],
+      "displayName": "Laura Hill",
+      "role": "inspector",
+      "notes": "Roof inspector"
+    },
+    {
+      "id": 25,
+      "firstName": "Kevin",
+      "lastName": "Baker",
+      "organization": "Guaranteed Rate",
+      "phoneNumbers": [
+        { "label": "mobile", "number": "+1 (408) 555-2501", "normalizedNumber": "+14085552501" }
+      ],
+      "emails": [
+        { "label": "work", "email": "kbaker@rate.com" }
+      ],
+      "displayName": "Kevin Baker",
+      "role": "lender",
+      "notes": "Mortgage broker"
+    },
+    {
+      "id": 26,
+      "firstName": "Rachel",
+      "lastName": "Gonzalez",
+      "organization": null,
+      "phoneNumbers": [
+        { "label": "mobile", "number": "+1 (925) 555-2601", "normalizedNumber": "+19255552601" }
+      ],
+      "emails": [
+        { "label": "home", "email": "rgonzalez@outlook.com" }
+      ],
+      "displayName": "Rachel Gonzalez",
+      "role": "seller",
+      "notes": "Estate sale - inherited property"
+    },
+    {
+      "id": 27,
+      "firstName": "Brian",
+      "lastName": "Carter",
+      "organization": "Carter Appraisals",
+      "phoneNumbers": [
+        { "label": "mobile", "number": "+1 (510) 555-2701", "normalizedNumber": "+15105552701" }
+      ],
+      "emails": [
+        { "label": "work", "email": "bcarter@carterappraisals.com" }
+      ],
+      "displayName": "Brian Carter",
+      "role": "other",
+      "notes": "Property appraiser"
+    },
+    {
+      "id": 28,
+      "firstName": "Stephanie",
+      "lastName": "Phillips",
+      "organization": "Century 21",
+      "phoneNumbers": [
+        { "label": "mobile", "number": "+1 (408) 555-2801", "normalizedNumber": "+14085552801" }
+      ],
+      "emails": [
+        { "label": "work", "email": "sphillips@century21.com" }
+      ],
+      "displayName": "Stephanie Phillips",
+      "role": "agent",
+      "notes": "Co-listing agent"
+    },
+    {
+      "id": 29,
+      "firstName": "Andrew",
+      "lastName": "Campbell",
+      "organization": null,
+      "phoneNumbers": [
+        { "label": "mobile", "number": "+1 (650) 555-2901", "normalizedNumber": "+16505552901" }
+      ],
+      "emails": [
+        { "label": "home", "email": "acampbell@pm.me" }
+      ],
+      "displayName": "Andrew Campbell",
+      "role": "buyer",
+      "notes": "Cash buyer - investor"
+    },
+    {
+      "id": 30,
+      "firstName": "Nicole",
+      "lastName": "Parker",
+      "organization": "Old Republic Title",
+      "phoneNumbers": [
+        { "label": "work", "number": "+1 (415) 555-3001", "normalizedNumber": "+14155553001" }
+      ],
+      "emails": [
+        { "label": "work", "email": "nparker@oldrepublictitle.com" }
+      ],
+      "displayName": "Nicole Parker",
+      "role": "title",
+      "notes": "Title search specialist"
+    },
+    {
+      "id": 31,
+      "firstName": "Mom",
+      "lastName": null,
+      "organization": null,
+      "phoneNumbers": [
+        { "label": "mobile", "number": "+1 (209) 555-3101", "normalizedNumber": "+12095553101" }
+      ],
+      "emails": [],
+      "displayName": "Mom",
+      "role": "other",
+      "notes": "Personal contact"
+    },
+    {
+      "id": 32,
+      "firstName": "Dad",
+      "lastName": null,
+      "organization": null,
+      "phoneNumbers": [
+        { "label": "mobile", "number": "+1 (209) 555-3201", "normalizedNumber": "+12095553201" }
+      ],
+      "emails": [],
+      "displayName": "Dad",
+      "role": "other",
+      "notes": "Personal contact"
+    },
+    {
+      "id": 33,
+      "firstName": "Alex",
+      "lastName": "Rodriguez",
+      "organization": null,
+      "phoneNumbers": [
+        { "label": "mobile", "number": "+1 (415) 555-3301", "normalizedNumber": "+14155553301" }
+      ],
+      "emails": [
+        { "label": "home", "email": "alex.r@gmail.com" }
+      ],
+      "displayName": "Alex Rodriguez",
+      "role": "other",
+      "notes": "Friend - gave real estate referral"
+    },
+    {
+      "id": 34,
+      "firstName": "Maria",
+      "lastName": "Santos",
+      "organization": "Redfin",
+      "phoneNumbers": [
+        { "label": "mobile", "number": "+1 (415) 555-3401", "normalizedNumber": "+14155553401" }
+      ],
+      "emails": [
+        { "label": "work", "email": "msantos@redfin.com" }
+      ],
+      "displayName": "Maria Santos",
+      "role": "agent",
+      "notes": "Showing coordinator"
+    },
+    {
+      "id": 35,
+      "firstName": "Gregory",
+      "lastName": "Moore",
+      "organization": "Moore & Associates Insurance",
+      "phoneNumbers": [
+        { "label": "work", "number": "+1 (510) 555-3501", "normalizedNumber": "+15105553501" }
+      ],
+      "emails": [
+        { "label": "work", "email": "gmoore@mooreinsurance.com" }
+      ],
+      "displayName": "Gregory Moore",
+      "role": "other",
+      "notes": "Homeowner's insurance agent"
+    },
+    {
+      "id": 36,
+      "firstName": "Ashley",
+      "lastName": "Turner",
+      "organization": null,
+      "phoneNumbers": [
+        { "label": "mobile", "number": "+1 (925) 555-3601", "normalizedNumber": "+19255553601" }
+      ],
+      "emails": [
+        { "label": "home", "email": "aturner@yahoo.com" }
+      ],
+      "displayName": "Ashley Turner",
+      "role": "seller",
+      "notes": "Seller - inherited property"
+    },
+    {
+      "id": 37,
+      "firstName": "Peter",
+      "lastName": "Nguyen",
+      "organization": "Nguyen & Tran Law Firm",
+      "phoneNumbers": [
+        { "label": "work", "number": "+1 (408) 555-3701", "normalizedNumber": "+14085553701" }
+      ],
+      "emails": [
+        { "label": "work", "email": "pnguyen@ntlaw.com" }
+      ],
+      "displayName": "Peter Nguyen",
+      "role": "attorney",
+      "notes": "Seller's attorney"
+    },
+    {
+      "id": 38,
+      "firstName": "Christina",
+      "lastName": "Flores",
+      "organization": "Bank of America",
+      "phoneNumbers": [
+        { "label": "work", "number": "+1 (415) 555-3801", "normalizedNumber": "+14155553801" }
+      ],
+      "emails": [
+        { "label": "work", "email": "cflores@bofa.com" }
+      ],
+      "displayName": "Christina Flores",
+      "role": "lender",
+      "notes": "Pre-approval contact"
+    },
+    {
+      "id": 39,
+      "firstName": "Timothy",
+      "lastName": "Reed",
+      "organization": "Reed Structural Engineering",
+      "phoneNumbers": [
+        { "label": "mobile", "number": "+1 (510) 555-3901", "normalizedNumber": "+15105553901" }
+      ],
+      "emails": [
+        { "label": "work", "email": "treed@reedengineering.com" }
+      ],
+      "displayName": "Timothy Reed",
+      "role": "inspector",
+      "notes": "Structural engineer"
+    },
+    {
+      "id": 40,
+      "firstName": "Samantha",
+      "lastName": "Bell",
+      "organization": "eXp Realty",
+      "phoneNumbers": [
+        { "label": "mobile", "number": "+1 (650) 555-4001", "normalizedNumber": "+16505554001" }
+      ],
+      "emails": [
+        { "label": "work", "email": "sbell@exprealty.com" }
+      ],
+      "displayName": "Samantha Bell",
+      "role": "agent",
+      "notes": "Team lead"
+    },
+    {
+      "id": 41,
+      "firstName": "Ryan",
+      "lastName": "Cooper",
+      "organization": null,
+      "phoneNumbers": [
+        { "label": "mobile", "number": "+1 (925) 555-4101", "normalizedNumber": "+19255554101" }
+      ],
+      "emails": [
+        { "label": "home", "email": "rcooper@outlook.com" }
+      ],
+      "displayName": "Ryan Cooper",
+      "role": "buyer",
+      "notes": "First-time buyer - pre-approved"
+    },
+    {
+      "id": 42,
+      "firstName": "Victoria",
+      "lastName": "Hayes",
+      "organization": "Stewart Title",
+      "phoneNumbers": [
+        { "label": "work", "number": "+1 (415) 555-4201", "normalizedNumber": "+14155554201" }
+      ],
+      "emails": [
+        { "label": "work", "email": "vhayes@stewarttitle.com" }
+      ],
+      "displayName": "Victoria Hayes",
+      "role": "title",
+      "notes": "Senior escrow officer"
+    },
+    {
+      "id": 43,
+      "firstName": "Eric",
+      "lastName": "Simmons",
+      "organization": "Simmons Plumbing",
+      "phoneNumbers": [
+        { "label": "mobile", "number": "+1 (510) 555-4301", "normalizedNumber": "+15105554301" }
+      ],
+      "emails": [
+        { "label": "work", "email": "esimmons@simmonsplumbing.com" }
+      ],
+      "displayName": "Eric Simmons",
+      "role": "inspector",
+      "notes": "Plumbing specialist"
+    },
+    {
+      "id": 44,
+      "firstName": "Megan",
+      "lastName": "Foster",
+      "organization": null,
+      "phoneNumbers": [
+        { "label": "mobile", "number": "+1 (408) 555-4401", "normalizedNumber": "+14085554401" }
+      ],
+      "emails": [
+        { "label": "home", "email": "mfoster@gmail.com" }
+      ],
+      "displayName": "Megan Foster",
+      "role": "seller",
+      "notes": "Downsizing seller"
+    },
+    {
+      "id": 45,
+      "firstName": "Carlos",
+      "lastName": "Rivera",
+      "organization": "CrossCountry Mortgage",
+      "phoneNumbers": [
+        { "label": "work", "number": "+1 (415) 555-4501", "normalizedNumber": "+14155554501" }
+      ],
+      "emails": [
+        { "label": "work", "email": "crivera@ccm.com" }
+      ],
+      "displayName": "Carlos Rivera",
+      "role": "lender",
+      "notes": "Secondary quote lender"
+    },
+    {
+      "id": 46,
+      "firstName": "Sandra",
+      "lastName": "Brooks",
+      "organization": "Berkshire Hathaway",
+      "phoneNumbers": [
+        { "label": "mobile", "number": "+1 (650) 555-4601", "normalizedNumber": "+16505554601" }
+      ],
+      "emails": [
+        { "label": "work", "email": "sbrooks@bhhscal.com" }
+      ],
+      "displayName": "Sandra Brooks",
+      "role": "agent",
+      "notes": "High-end market specialist"
+    },
+    {
+      "id": 47,
+      "firstName": "Jeffrey",
+      "lastName": "Wood",
+      "organization": null,
+      "phoneNumbers": [
+        { "label": "mobile", "number": "+1 (925) 555-4701", "normalizedNumber": "+19255554701" }
+      ],
+      "emails": [
+        { "label": "home", "email": "jwood@protonmail.com" }
+      ],
+      "displayName": "Jeffrey Wood",
+      "role": "buyer",
+      "notes": "Investor - multiple properties"
+    },
+    {
+      "id": 48,
+      "firstName": "Angela",
+      "lastName": "Price",
+      "organization": "Price Legal Group",
+      "phoneNumbers": [
+        { "label": "work", "number": "+1 (415) 555-4801", "normalizedNumber": "+14155554801" }
+      ],
+      "emails": [
+        { "label": "work", "email": "aprice@pricelegal.com" }
+      ],
+      "displayName": "Angela Price",
+      "role": "attorney",
+      "notes": "Commercial RE attorney"
+    },
+    {
+      "id": 49,
+      "firstName": null,
+      "lastName": null,
+      "organization": "Bay Area Moving Co",
+      "phoneNumbers": [
+        { "label": "work", "number": "+1 (510) 555-4901", "normalizedNumber": "+15105554901" }
+      ],
+      "emails": [
+        { "label": "work", "email": "info@bayareamoving.com" }
+      ],
+      "displayName": "Bay Area Moving Co",
+      "role": "other",
+      "notes": "Moving company"
+    },
+    {
+      "id": 50,
+      "firstName": null,
+      "lastName": null,
+      "organization": "PG&E Customer Service",
+      "phoneNumbers": [
+        { "label": "work", "number": "+1 (800) 743-5000", "normalizedNumber": "+18007435000" }
+      ],
+      "emails": [],
+      "displayName": "PG&E Customer Service",
+      "role": "other",
+      "notes": "Utility transfer"
+    },
+    {
+      "id": 51,
+      "firstName": "Unknown",
+      "lastName": null,
+      "organization": null,
+      "phoneNumbers": [
+        { "label": "mobile", "number": "+1 (415) 555-9999", "normalizedNumber": "+14155559999" }
+      ],
+      "emails": [],
+      "displayName": "Unknown",
+      "role": "other",
+      "notes": "Unidentified caller - possible spam"
+    },
+    {
+      "id": 52,
+      "firstName": "Broker",
+      "lastName": "Office",
+      "organization": "Keller Williams Main Office",
+      "phoneNumbers": [
+        { "label": "work", "number": "+1 (415) 555-0000", "normalizedNumber": "+14155550000" }
+      ],
+      "emails": [
+        { "label": "work", "email": "office@kwsf.com" }
+      ],
+      "displayName": "Broker Office",
+      "role": "agent",
+      "notes": "Main brokerage contact"
+    }
+  ]
+}
