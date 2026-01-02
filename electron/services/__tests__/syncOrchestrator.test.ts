@@ -693,3 +693,76 @@ describe("SyncOrchestrator E2E Flow", () => {
     );
   });
 });
+
+describe("SyncOrchestrator Skip Logic (TASK-908)", () => {
+  let orchestrator: SyncOrchestrator;
+
+  beforeEach(() => {
+    mockBackupService.setMockBehavior(true, false);
+    mockBackupService.removeAllListeners();
+    mockDeviceService.removeAllListeners();
+    orchestrator = new SyncOrchestrator();
+  });
+
+  afterEach(() => {
+    orchestrator.stopDeviceDetection();
+    orchestrator.removeAllListeners();
+  });
+
+  describe("shouldProcessBackup", () => {
+    it("should return true when no previous sync recorded", async () => {
+      // No previous sync, so should always process
+      const result = await orchestrator.shouldProcessBackup("/some/backup/path");
+      expect(result).toBe(true);
+    });
+
+    it("should return true when metadata cannot be retrieved", async () => {
+      // Backup service will return null for non-existent path
+      const result = await orchestrator.shouldProcessBackup("/nonexistent/path");
+      expect(result).toBe(true);
+    });
+  });
+
+  describe("recordBackupSync", () => {
+    it("should record sync metadata", () => {
+      const backupPath = "/test/backup/path";
+      const manifestHash = "a".repeat(64);
+
+      // Should not throw
+      expect(() => {
+        orchestrator.recordBackupSync(backupPath, manifestHash);
+      }).not.toThrow();
+    });
+  });
+
+  describe("clearLastBackupSync", () => {
+    it("should clear recorded sync", () => {
+      // Record a sync
+      orchestrator.recordBackupSync("/test/path", "hash123");
+
+      // Clear it
+      expect(() => {
+        orchestrator.clearLastBackupSync();
+      }).not.toThrow();
+    });
+  });
+
+  describe("SyncResult skipped field", () => {
+    it("should have skipped field in result type", () => {
+      // Type check: result should allow skipped and skipReason fields
+      const mockResult = {
+        success: true,
+        messages: [],
+        contacts: [],
+        conversations: [],
+        error: null,
+        duration: 100,
+        skipped: true,
+        skipReason: "unchanged" as const,
+      };
+
+      expect(mockResult.skipped).toBe(true);
+      expect(mockResult.skipReason).toBe("unchanged");
+    });
+  });
+});

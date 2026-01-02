@@ -31,6 +31,18 @@ import type { iOSContact } from "../types/iosContacts";
 import type { BackupProgress } from "../types/backup";
 
 /**
+ * Metadata about the last successfully synced backup (TASK-908)
+ */
+interface LastBackupSync {
+  /** Path to the backup directory */
+  backupPath: string;
+  /** SHA-256 hash of Manifest.db for change detection */
+  manifestHash: string;
+  /** When the sync was completed */
+  syncedAt: Date;
+}
+
+/**
  * Sync phases for progress tracking
  */
 export type SyncPhase =
@@ -54,6 +66,10 @@ export interface SyncResult {
   conversations: iOSConversation[];
   error: string | null;
   duration: number;
+  /** Whether the backup was skipped because it hasn't changed (TASK-908) */
+  skipped?: boolean;
+  /** Reason for skipping (TASK-908) */
+  skipReason?: "unchanged" | "force-resync";
 }
 
 /**
@@ -79,6 +95,18 @@ export interface SyncProgress {
   backupProgress?: BackupProgress;
   /** Estimated total backup size in bytes (for progress calculation) */
   estimatedTotalBytes?: number;
+}
+
+/**
+ * Options for processing an existing backup (TASK-908)
+ */
+export interface ProcessBackupOptions {
+  /** Device UDID */
+  udid: string;
+  /** Password for encrypted backups */
+  password?: string;
+  /** Force re-processing even if backup hasn't changed (TASK-908) */
+  forceResync?: boolean;
 }
 
 /**
@@ -112,6 +140,12 @@ export class SyncOrchestrator extends EventEmitter {
   private currentPhase: SyncPhase = "idle";
   private estimatedBackupSize: number = 0;
   private startTime: number = 0;
+
+  /**
+   * Tracks the last successfully synced backup for skip detection (TASK-908)
+   * Note: This is in-memory only; cross-session persistence is a future enhancement
+   */
+  private lastBackupSync: LastBackupSync | null = null;
 
   constructor() {
     super();
@@ -576,6 +610,97 @@ export class SyncOrchestrator extends EventEmitter {
   }
 
   /**
+   * Check if a backup should be processed or skipped (TASK-908)
+   *
+   * Compares the current backup's Manifest.db hash against the last
+   * successfully synced backup. If unchanged, the backup can be skipped.
+   *
+   * @param backupPath Full path to the backup directory
+   * @returns true if backup should be processed, false if it can be skipped
+   */
+  async shouldProcessBackup(backupPath: string): Promise<boolean> {
+    try {
+      const metadata = await this.backupService.getBackupMetadata(backupPath);
+
+      // Can't determine state - process anyway to be safe
+      if (!metadata) {
+        log.info(
+          "[SyncOrchestrator] No backup metadata available, will process backup"
+        );
+        return true;
+      }
+
+      // No previous sync recorded - first sync, must process
+      if (!this.lastBackupSync) {
+        log.info(
+          "[SyncOrchestrator] No previous sync recorded, will process backup"
+        );
+        return true;
+      }
+
+      // Different backup path - process (could be different device)
+      if (this.lastBackupSync.backupPath !== backupPath) {
+        log.info(
+          "[SyncOrchestrator] Different backup path, will process backup"
+        );
+        return true;
+      }
+
+      // Compare manifest hashes
+      if (this.lastBackupSync.manifestHash === metadata.manifestHash) {
+        const timeSinceLastSync = Math.round(
+          (Date.now() - this.lastBackupSync.syncedAt.getTime()) / 1000 / 60
+        );
+        log.info(
+          `[SyncOrchestrator] Backup unchanged since last sync (${timeSinceLastSync} min ago), skipping re-parse`
+        );
+        return false;
+      }
+
+      log.info(
+        "[SyncOrchestrator] Backup manifest changed, will process backup"
+      );
+      return true;
+    } catch (error) {
+      log.error(
+        "[SyncOrchestrator] Error checking if backup should be processed:",
+        error
+      );
+      // On error, process anyway to be safe
+      return true;
+    }
+  }
+
+  /**
+   * Record a successful backup sync for future skip detection (TASK-908)
+   *
+   * @param backupPath Full path to the backup directory
+   * @param manifestHash SHA-256 hash of the Manifest.db file
+   */
+  recordBackupSync(backupPath: string, manifestHash: string): void {
+    this.lastBackupSync = {
+      backupPath,
+      manifestHash,
+      syncedAt: new Date(),
+    };
+    log.info("[SyncOrchestrator] Recorded backup sync:", {
+      backupPath,
+      manifestHash: manifestHash.substring(0, 16) + "...",
+      syncedAt: this.lastBackupSync.syncedAt.toISOString(),
+    });
+  }
+
+  /**
+   * Clear the last backup sync record (TASK-908)
+   *
+   * Use this to force a full re-sync on the next sync operation.
+   */
+  clearLastBackupSync(): void {
+    this.lastBackupSync = null;
+    log.info("[SyncOrchestrator] Cleared last backup sync record");
+  }
+
+  /**
    * Get connected devices
    */
   getConnectedDevices(): iOSDevice[] {
@@ -727,8 +852,20 @@ export class SyncOrchestrator extends EventEmitter {
   /**
    * Process an existing backup without running a new backup
    * Useful for testing and debugging the extraction/storage pipeline
+   *
+   * @param udidOrOptions Either UDID string (legacy) or ProcessBackupOptions object
+   * @param password Optional password (only used with legacy UDID string param)
    */
-  async processExistingBackup(udid: string, password?: string): Promise<SyncResult> {
+  async processExistingBackup(
+    udidOrOptions: string | ProcessBackupOptions,
+    password?: string
+  ): Promise<SyncResult> {
+    // Handle both legacy (string, string) and new options-based signatures
+    const options =
+      typeof udidOrOptions === "string"
+        ? { udid: udidOrOptions, password, forceResync: false }
+        : udidOrOptions;
+
     if (this.isRunning) {
       return this.errorResult("Sync already in progress");
     }
@@ -740,12 +877,22 @@ export class SyncOrchestrator extends EventEmitter {
     try {
       // Get backup path - construct from app's userData folder
       const { app } = await import("electron");
-      const path = await import("path");
-      const backupPath = path.join(app.getPath("userData"), "Backups", udid);
-      log.info("[SyncOrchestrator] Processing existing backup", { udid, backupPath });
+      const pathModule = await import("path");
+      const backupPath = pathModule.join(
+        app.getPath("userData"),
+        "Backups",
+        options.udid
+      );
+      log.info("[SyncOrchestrator] Processing existing backup", {
+        udid: options.udid,
+        backupPath,
+        forceResync: options.forceResync ?? false,
+      });
 
       // Check if backup exists
-      const backupStatus = await this.backupService.checkBackupStatus(udid);
+      const backupStatus = await this.backupService.checkBackupStatus(
+        options.udid
+      );
       if (!backupStatus || !backupStatus.exists) {
         this.isRunning = false;
         return this.errorResult("No existing backup found for this device");
@@ -762,12 +909,43 @@ export class SyncOrchestrator extends EventEmitter {
         sizeBytes: backupStatus.sizeBytes,
       });
 
+      // TASK-908: Check if backup should be processed or skipped
+      if (!options.forceResync) {
+        const shouldProcess = await this.shouldProcessBackup(backupPath);
+        if (!shouldProcess) {
+          this.isRunning = false;
+          this.setPhase("complete");
+
+          const result: SyncResult = {
+            success: true,
+            messages: [],
+            contacts: [],
+            conversations: [],
+            error: null,
+            duration: Date.now() - this.startTime,
+            skipped: true,
+            skipReason: "unchanged",
+          };
+
+          log.info("[SyncOrchestrator] Skipped unchanged backup", {
+            duration: result.duration,
+          });
+          this.emit("complete", result);
+          return result;
+        }
+      } else {
+        log.info(
+          "[SyncOrchestrator] Force resync requested, skipping change detection"
+        );
+      }
+
       // Check if backup is encrypted and decrypt if needed
       let extractionPath = backupPath;
-      const isEncrypted = await this.decryptionService.isBackupEncrypted(backupPath);
+      const isEncrypted =
+        await this.decryptionService.isBackupEncrypted(backupPath);
 
       if (isEncrypted) {
-        if (!password) {
+        if (!options.password) {
           this.isRunning = false;
           this.emit("password-required", {});
           return this.errorResult("Password required for encrypted backup");
@@ -783,7 +961,7 @@ export class SyncOrchestrator extends EventEmitter {
 
         const decryptResult = await this.decryptionService.decryptBackup(
           backupPath,
-          password
+          options.password
         );
 
         if (!decryptResult.success || !decryptResult.decryptedPath) {
@@ -899,6 +1077,12 @@ export class SyncOrchestrator extends EventEmitter {
         contacts: contacts.length,
         duration,
       });
+
+      // TASK-908: Record successful sync for future skip detection
+      const metadata = await this.backupService.getBackupMetadata(backupPath);
+      if (metadata) {
+        this.recordBackupSync(backupPath, metadata.manifestHash);
+      }
 
       const result: SyncResult = {
         success: true,

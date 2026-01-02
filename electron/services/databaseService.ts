@@ -2441,6 +2441,53 @@ class DatabaseService implements IDatabaseService {
     this._run(sql, [userId, provider, purpose]);
   }
 
+  /**
+   * Get the last sync timestamp for an OAuth token
+   * Used for incremental email fetching
+   * @param userId - User ID
+   * @param provider - OAuth provider (google | microsoft)
+   * @returns Date of last sync, or null if never synced
+   */
+  async getOAuthTokenSyncTime(
+    userId: string,
+    provider: OAuthProvider,
+  ): Promise<Date | null> {
+    const sql = `
+      SELECT last_sync_at FROM oauth_tokens
+      WHERE user_id = ? AND provider = ? AND purpose = 'mailbox' AND is_active = 1
+    `;
+    const row = this._get<{ last_sync_at?: string }>(sql, [userId, provider]);
+
+    if (row?.last_sync_at) {
+      return new Date(row.last_sync_at);
+    }
+    return null;
+  }
+
+  /**
+   * Update the last sync timestamp for an OAuth token
+   * Should only be called AFTER successful email storage
+   * @param userId - User ID
+   * @param provider - OAuth provider (google | microsoft)
+   * @param syncTime - Timestamp of the sync
+   */
+  async updateOAuthTokenSyncTime(
+    userId: string,
+    provider: OAuthProvider,
+    syncTime: Date,
+  ): Promise<void> {
+    const sql = `
+      UPDATE oauth_tokens
+      SET last_sync_at = ?
+      WHERE user_id = ? AND provider = ? AND purpose = 'mailbox' AND is_active = 1
+    `;
+    this._run(sql, [syncTime.toISOString(), userId, provider]);
+    logService.info(
+      `Updated last_sync_at for ${provider} to ${syncTime.toISOString()}`,
+      "DatabaseService.updateOAuthTokenSyncTime",
+    );
+  }
+
   // ============================================
   // TRANSACTION OPERATIONS
   // ============================================
