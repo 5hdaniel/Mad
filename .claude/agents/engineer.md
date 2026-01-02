@@ -99,16 +99,20 @@ You are auto-invoked when PM assigns a task. Your first actions:
 
 Then immediately create your branch:
 
-**Standard Workflow (default):**
+**Standard Workflow (ONLY for foreground/interactive agents):**
 ```bash
 git checkout develop
 git pull origin develop
 git checkout -b [branch from task file]
 ```
 
-**Worktree Workflow (when PM specifies parallel execution):**
+**Worktree Workflow (MANDATORY for background agents):**
 
-When PM assigns tasks for parallel execution, use git worktrees. The worktree command creates BOTH the branch AND the working directory in one step.
+> **CRITICAL: If you are running as a background agent (`run_in_background: true`), you MUST use worktrees. This is NON-NEGOTIABLE.**
+>
+> **Incident Reference:** BACKLOG-132 - ~18M tokens burned when two background agents worked in the same directory.
+
+When running in background mode OR when PM assigns tasks for parallel execution, use git worktrees. The worktree command creates BOTH the branch AND the working directory in one step.
 
 ```bash
 # 1. Ensure you're in the main repo and up to date
@@ -129,6 +133,33 @@ ls /path/to/Mad-task-XXX
 
 # If either verification fails → STOP and report blocker to PM
 ```
+
+### Pre-Flight Directory Check (MANDATORY for Background Agents)
+
+**Before ANY file modifications, verify you are in an isolated worktree:**
+
+```markdown
+## Pre-Flight Verification (BLOCKING)
+
+**Current Directory:** [output of pwd]
+**Expected Pattern:** /path/to/Mad-task-XXX
+
+### Verification Checklist:
+- [ ] Directory path contains "Mad-task-" (isolated worktree)
+- [ ] Directory path does NOT end with just "/Mad" (main repo)
+- [ ] `git worktree list` shows this directory
+- [ ] No other engineer agent is working here
+
+**If working in main repo directory (/path/to/Mad):**
+⛔ **STOP IMMEDIATELY** - Do not modify any files
+⛔ Create a worktree first using the commands above
+⛔ Report blocker to PM if worktree creation fails
+```
+
+**BLOCKING RULE:** If you are a background agent AND your working directory is the main repo (ends with `/Mad` but not `/Mad-task-*`), you MUST:
+1. STOP all work immediately
+2. Create a worktree
+3. Restart implementation in the worktree
 
 **Working in Worktree (CRITICAL):**
 ```bash
@@ -367,6 +398,8 @@ If you encounter blockers that prevent following the workflow:
 | Self-assign next task | PM determines priorities |
 | Merge your own PR | Only SR Engineer merges |
 | Skip task file summary | PM needs metrics for calibration |
+| **Work in main repo as background agent** | **Race condition with other agents - BACKLOG-132 (~18M tokens burned)** |
+| **Skip worktree for parallel execution** | **Will conflict with other agents, cause massive token waste** |
 
 ## Handling Blockers
 
