@@ -173,6 +173,8 @@ Stop and ask PM if:
 
 ## SR Engineer Review Notes
 
+**Review Date:** 2026-01-02 | **Status:** APPROVED
+
 ### Branch Information
 - **Branch From:** develop
 - **Branch Into:** develop
@@ -181,3 +183,9 @@ Stop and ask PM if:
 - **Parallel Safe:** Yes (with TASK-904)
 - **Depends On:** None
 - **Blocks:** TASK-909, TASK-911
+
+### Technical Considerations
+- **VERIFY MIGRATION SYSTEM**: Existing migrations are `.sql` files in `electron/database/migrations/`, not numbered `.ts` files
+- Engineer should investigate actual migration pattern before implementing
+- If migration system differs significantly from task spec, use Stop-and-Ask trigger
+- SQLite `ALTER TABLE ADD COLUMN` is fast and non-blocking

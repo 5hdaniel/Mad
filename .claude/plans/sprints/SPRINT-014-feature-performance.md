@@ -32,9 +32,9 @@ This sprint addresses three backlog items focused on sync performance and reliab
 
 ---
 
-## Phase Structure
+## Phase Structure (SR Engineer Reviewed)
 
-### Phase 1: Foundation (Parallel)
+### Batch 1: Foundation (Parallel)
 
 | Task | Title | Backlog | Category | Est. Turns | Priority | Status |
 |------|-------|---------|----------|------------|----------|--------|
@@ -43,31 +43,42 @@ This sprint addresses three backlog items focused on sync performance and reliab
 
 **Parallel Safe:** Yes - different file domains (services vs database)
 
-### Phase 2: Incremental Sync (After Phase 1)
+### Batch 2: Gmail + iPhone (TASK-906 first, then parallel)
 
 | Task | Title | Backlog | Category | Est. Turns | Priority | Status |
 |------|-------|---------|----------|------------|----------|--------|
 | TASK-906 | Gmail Incremental Fetch | BACKLOG-090 | service | 4-6 | HIGH | Pending |
-| TASK-907 | Outlook Incremental Fetch | BACKLOG-090 | service | 4-6 | HIGH | Pending |
 | TASK-908 | iPhone Sync Skip Unchanged Backups | BACKLOG-090 | service | 3-4 | HIGH | Pending |
 
-**Parallel Safe:** TASK-906 and TASK-907 can run in parallel. TASK-908 is independent.
+**Note:** TASK-906 and TASK-908 can run in parallel (different files).
 
-### Phase 3: Dedup & UI (After Phase 2)
+### Batch 3: Outlook + Message-ID (After TASK-906 merges)
 
 | Task | Title | Backlog | Category | Est. Turns | Priority | Status |
 |------|-------|---------|----------|------------|----------|--------|
+| TASK-907 | Outlook Incremental Fetch | BACKLOG-090 | service | 4-6 | HIGH | Pending |
 | TASK-909 | Gmail Message-ID Header Extraction | BACKLOG-091 | service | 3-4 | HIGH | Pending |
-| TASK-910 | Sync Lock UI Component | BACKLOG-032 | ui | 3-4 | CRITICAL | Pending |
 
-**Note:** TASK-909 MUST rebase on TASK-906 (both modify gmailFetchService.ts)
+**CRITICAL:** Both TASK-907 and TASK-909 depend on TASK-906:
+- TASK-907 reuses database methods from TASK-906
+- TASK-909 modifies same file as TASK-906 (gmailFetchService.ts)
 
-### Phase 4: Integration
+### Batch 4: UI + LLM Filter (Parallel)
 
 | Task | Title | Backlog | Category | Est. Turns | Priority | Status |
 |------|-------|---------|----------|------------|----------|--------|
+| TASK-910 | Sync Lock UI Component | BACKLOG-032 | ui | 3-4 | CRITICAL | Pending |
 | TASK-911 | LLM Pipeline Filter Update | BACKLOG-090/091 | service | 2-3 | HIGH | Pending |
+
+**Dependencies:** TASK-910 depends on TASK-904. TASK-911 depends on TASK-905 + all incremental sync tasks.
+
+### Batch 5: Integration (Final)
+
+| Task | Title | Backlog | Category | Est. Turns | Priority | Status |
+|------|-------|---------|----------|------------|----------|--------|
 | TASK-912 | Integration Testing | ALL | test | 4-6 | HIGH | Pending |
+
+**Must wait for all other tasks to merge.**
 
 ---
 
