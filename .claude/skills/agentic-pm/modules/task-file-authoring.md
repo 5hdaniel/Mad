@@ -147,3 +147,82 @@ If requirements change during a sprint:
 ## Goal
 ...
 ```
+
+---
+
+## Fixture Task Template Additions
+
+**Purpose:** Prevent CI failures from invalid enum values in fixture data.
+
+**Source:** SPRINT-011 TASK-800 used invalid TransactionStage values (`initial_contact`, `negotiation`, `contract`) that don't exist in the actual type definition.
+
+### Type Verification Checklist (Required for Fixture Tasks)
+
+Before committing fixture data, verify:
+
+- [ ] All enum values match actual TypeScript definitions
+- [ ] Import types from source files (do NOT hardcode values)
+- [ ] Run `npm run type-check` before committing fixture data
+- [ ] File paths to type definitions included in task acceptance criteria
+
+### How to Verify Enum Values
+
+```bash
+# Find the type definition
+grep -rn "type TransactionStage" --include="*.ts" src/ electron/
+
+# Or check the exact file
+cat electron/services/types.ts | grep -A 10 "TransactionStage"
+
+# List all exported types from a file
+grep -E "^export (type|interface|enum)" electron/services/types.ts
+```
+
+### PM Responsibility
+
+When creating fixture tasks, PM MUST:
+1. Include exact enum values in task file (not "use appropriate values")
+2. Provide file path to type definition
+3. Add `npm run type-check` to acceptance criteria
+4. List valid values explicitly when enums have domain-specific meanings
+
+### Example
+
+**Bad task spec:**
+> "Use appropriate transaction stages for the test emails"
+
+This invites engineers to guess at values like `initial_contact` or `negotiation` which may not exist.
+
+**Good task spec:**
+> "Use TransactionStage values from `electron/services/types.ts`:
+> - Valid values: `intro`, `showing`, `offer`, `inspections`, `escrow`, `closing`, `post_closing`
+> - Do NOT use: `initial_contact`, `negotiation`, `contract` (these don't exist)"
+
+### When to Include This Checklist
+
+Include the Type Verification Checklist when the task involves:
+- Creating test fixtures with domain-specific enums
+- Adding mock data with typed fields
+- Generating fake data for integration tests
+- Any task where the engineer might need to use enum values
+
+### Template Addition for Fixture Tasks
+
+Add this section to task files for fixture creation:
+
+```markdown
+## Type Definitions Reference
+
+**Enums used in this task:**
+
+| Type | File | Valid Values |
+|------|------|-------------|
+| TransactionStage | `electron/services/types.ts` | `intro`, `showing`, `offer`, `inspections`, `escrow`, `closing`, `post_closing` |
+| TransactionStatus | `electron/services/types.ts` | `pending`, `active`, `archived` |
+
+**Pre-commit verification:**
+- [ ] `npm run type-check` passes with fixture data
+- [ ] All enum values verified against source definitions
+```
+
+**Reference:** BACKLOG-128

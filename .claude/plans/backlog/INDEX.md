@@ -3,7 +3,7 @@
 This index tracks all backlog items with their current status and metadata.
 
 **Last Updated:** 2026-01-01
-**Total Items:** 139
+**Total Items:** 140
 **Pending:** 90 | **In Progress:** 0 | **Completed:** 46 | **Obsolete:** 2 | **Deferred:** 2
 
 ---
@@ -27,7 +27,7 @@ This index tracks all backlog items with their current status and metadata.
 
 ### By Priority
 - **Critical:** BACKLOG-030 (done), 032, 035 (done), 038 (done), 039 (done), 044 (done), 045 (done), 058 (done), 059 (done), 072 (done), 073 (done), 074 (done), **107**, 108 (done), 117 (done)
-- **High:** BACKLOG-008, 009, 013, 016, 018, 020, 021, 023, 026, 031, 033, 037, 056, 060 (done), 061, 062, 063, 067, 075 (done), 076 (done), 084 (done), 085 (done), 088, 090, 091, 098, 099, **109**, **110**, **111**, **118**, **121**, **126**
+- **High:** BACKLOG-008, 009, 013, 016, 018, 020, 021, 023, 026, 031, 033, 037, 056, 060 (done), 061, 062, 063, 067, 075 (done), 076 (done), 084 (done), 085 (done), 088, 090, 091, 098, 099, **109**, **110**, **111**, **118**, **121**, **126**, **130**
 - **Medium:** Multiple (see full index), 014 (done), 077 (done), 078 (done), 079 (done), 081, 086, 087, 089, 092, 093, 094, 095, 096, 097, 100, 101, 102, **112**, **113**, **114**, **115**, **116**, 122 (done), **124**, **127**, **128**, **129**
 - **Low/Deferred:** BACKLOG-001, 003, 004, 010, 017, 069, 070, 071, **119**, **123**, **125**
 
@@ -43,6 +43,7 @@ This index tracks all backlog items with their current status and metadata.
 - **SPRINT-009 (Codebase Standards Remediation):** Completed - TASK-600 to TASK-620 (20 tasks)
 - **SPRINT-010 (Core Polish & Text Messages):** Completed - BACKLOG-103, 054, 105, 104, 050 (7 tasks: TASK-700 to TASK-706)
 - **SPRINT-011 (Testing Infrastructure & Demo):** Completed - BACKLOG-108, 014 (5 tasks: TASK-800 to TASK-804)
+- **SPRINT-012 (Process & Documentation Improvements):** Planning - BACKLOG-126, 124, 127, 128, 129, **130** (6 tasks: TASK-805 to TASK-810)
 - **Unassigned:** All others
 
 ### AI MVP Project - COMPLETE
@@ -182,12 +183,13 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-121 | Add Generator Approach Guidance for Large Fixtures | docs | High | Pending | - | 2-3 | ~10K | 20-30m | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-121.md](BACKLOG-121.md) |
 | BACKLOG-122 | Improve Engineer Agent Worktree Instructions | docs | Medium | Completed | - | 2-3 | ~10K | 20-30m | 2 | ~8K | 10m | - | - | - | - | - | - | 2 | ~8K | 10m | -50% | [BACKLOG-122.md](BACKLOG-122.md) |
 | BACKLOG-123 | Update Test Category Estimation Multiplier | docs | Low | Pending | - | 1-2 | ~5K | 10-15m | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-123.md](BACKLOG-123.md) |
-| BACKLOG-124 | Add Sprint Completion Checklist to PM Workflow | docs | Medium | Pending | - | 2-3 | ~10K | 15-20m | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-124.md](BACKLOG-124.md) |
+| BACKLOG-124 | Add Sprint Completion Checklist to PM Workflow | docs | Medium | Pending | SPRINT-012 | 2-3 | ~10K | 15-20m | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-124.md](BACKLOG-124.md) |
 | BACKLOG-125 | Enforce Metrics Collection for All Sprints | docs | Low | Pending | - | 2-3 | ~8K | 15-20m | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-125.md](BACKLOG-125.md) |
-| BACKLOG-126 | Enforce Debugging Metrics with Commit Verification | docs | High | Pending | - | 4-6 | ~20K | 30-45m | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-126.md](BACKLOG-126.md) |
-| BACKLOG-127 | Add Sprint Capacity Limits to PM Workflow | docs | Medium | Pending | - | 1-2 | ~6K | 10-15m | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-127.md](BACKLOG-127.md) |
-| BACKLOG-128 | Add Type Verification Checklist for Fixture Tasks | docs | Medium | Pending | - | 1-2 | ~6K | 10-15m | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-128.md](BACKLOG-128.md) |
-| BACKLOG-129 | Create CI Troubleshooting Documentation | docs | Medium | Pending | - | 2-3 | ~10K | 15-20m | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-129.md](BACKLOG-129.md) |
+| BACKLOG-126 | Enforce Debugging Metrics with Commit Verification | docs | High | Pending | SPRINT-012 | 4-6 | ~20K | 30-45m | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-126.md](BACKLOG-126.md) |
+| BACKLOG-127 | Add Sprint Capacity Limits to PM Workflow | docs | Medium | Pending | SPRINT-012 | 1-2 | ~6K | 10-15m | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-127.md](BACKLOG-127.md) |
+| BACKLOG-128 | Add Type Verification Checklist for Fixture Tasks | docs | Medium | Pending | SPRINT-012 | 1-2 | ~6K | 10-15m | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-128.md](BACKLOG-128.md) |
+| BACKLOG-129 | Create CI Troubleshooting Documentation | docs | Medium | Pending | SPRINT-012 | 2-3 | ~10K | 15-20m | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-129.md](BACKLOG-129.md) |
+| BACKLOG-130 | Sub-Agent Permission Auto-Denial Incident | infra/process | High | Pending | SPRINT-012 | 1-2 | ~8K | 10-15m | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-130.md](BACKLOG-130.md) |
 
 ---
 
@@ -219,6 +221,7 @@ This index tracks all backlog items with their current status and metadata.
 | SPRINT-009 | Codebase Standards Remediation | Completed | TASK-600 to TASK-620 (20 tasks) - Security + Architecture + Types |
 | SPRINT-010 | Core Polish & Text Messages | Completed | BACKLOG-103, 054, 105, 104, 050 (7 tasks: TASK-700 to TASK-706) - PRs #245-255 |
 | SPRINT-011 | Testing Infrastructure & Demo | Completed | BACKLOG-108, 014 (5 tasks: TASK-800 to TASK-804) - PRs #256-260 |
+| SPRINT-012 | Process & Documentation Improvements | Planning | BACKLOG-126, 124, 127, 128, 129 (5 tasks: TASK-805 to TASK-809) |
 
 ---
 
@@ -313,6 +316,10 @@ This index tracks all backlog items with their current status and metadata.
 - 2026-01-01: Added BACKLOG-126 (Incident/Blocker Tracking) - **High priority**, from TASK-704 CI incident (22h undocumented debugging)
 - 2026-01-01: Added TASK-704 to variance breakdown - actual ~24 turns vs estimated 10-14 (+100% variance due to CI incident)
 - 2026-01-01: Updated SPRINT-010 with "Major Incident" section documenting the 22-hour CI debugging
+- 2026-01-01: Created SPRINT-012 (Process & Documentation Improvements) - 5 tasks (TASK-805 to TASK-809)
+- 2026-01-01: Assigned BACKLOG-126, 124, 127, 128, 129 to SPRINT-012 (all docs category from retrospectives)
+- 2026-01-01: **INCIDENT** BACKLOG-130 created - Sub-agent permission auto-denial burned ~9.6M tokens across 5 parallel engineer agents
+- 2026-01-01: Lesson learned: Background agents cannot prompt for Write/Edit permissions - need pre-approval or foreground execution
 
 ---
 

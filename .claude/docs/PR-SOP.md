@@ -522,6 +522,49 @@ gh pr merge <PR-NUMBER> --merge
 - [ ] Delete local branch: `git branch -d your-branch-name`
 - [ ] Pull latest changes: `git checkout develop && git pull`
 
+### 9.4 Debugging Metrics Verification (MANDATORY)
+
+Before merging, SR Engineer MUST verify debugging metrics are accurately captured.
+
+**Goal:** Capture ALL debugging for estimation accuracy, block only on clear discrepancies.
+
+**Step 1: Collect evidence**
+```bash
+# Count fix commits
+FIX_COUNT=$(git log --oneline origin/develop..HEAD | grep -iE "fix" | wc -l)
+echo "Fix commits: $FIX_COUNT"
+
+# Check PR age
+gh pr view --json createdAt --jq '.createdAt'
+```
+
+**Step 2: Tiered response based on evidence vs reported**
+
+| Fix Commits | Debugging Reported | Response |
+|-------------|-------------------|----------|
+| 0 | 0 | PASS |
+| 0 | >0 | PASS (honest about investigation time) |
+| 1-2 | 0 | ASK engineer: "These fix commits took 0 debugging time?" |
+| 1-2 | >0 | PASS |
+| 3-5 | 0 | BLOCK - Require metrics update before merge |
+| 3-5 | >0 | PASS (verify roughly proportional) |
+| 6+ | any | INCIDENT REPORT required |
+
+**Step 3: Timeline as signal (not blocker)**
+
+PR open time does not equal work time. Engineers wait for CI, answers, dependencies.
+
+**If PR >4h AND Debugging: 0, ASK:**
+- "Was there waiting time (CI, blocked, waiting for answer)?"
+- "Were there any unexpected issues that required debugging?"
+- "Did investigation/troubleshooting happen that didn't result in fix commits?"
+
+**Only block if:** fix commits present + Debugging: 0 (clear discrepancy)
+
+**Why this matters:** Without accurate debugging metrics, PM estimates appear more accurate than they are. Even 10 minutes of debugging affects estimation calibration.
+
+**Reference:** BACKLOG-126 (TASK-704 incident - 22h debugging reported as 0)
+
 ---
 
 ## Hotfix Procedure

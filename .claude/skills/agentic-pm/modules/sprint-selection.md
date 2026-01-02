@@ -128,3 +128,83 @@ for wt in Mad-task-*; do [ -d "$wt" ] && git worktree remove "$wt" --force; done
 When closing a sprint, verify:
 - [ ] All worktrees from the sprint are removed
 - [ ] `git worktree list` shows only the main repo
+
+---
+
+## Sprint Capacity Guidelines
+
+**Purpose:** Prevent scope overflow by setting explicit limits based on historical data.
+
+**Source:** SPRINT-010 retrospective - 7 tasks planned, 4 completed. Sequential chains and parallel sprint execution exceeded capacity.
+
+### Capacity Limits
+
+| Sprint Type | Max Tasks | Max Sequential Chain |
+|-------------|-----------|----------------------|
+| Solo sprint | 5-7 tasks | 2-3 sequential |
+| Parallel sprints | 4-5 per sprint | 1-2 sequential |
+
+### Rules
+
+1. **Sequential chains beyond 2 tasks should be separate sprints**
+   - Each task in a chain blocks the next
+   - Risk of deferral compounds with chain length
+   - Exception: Very small tasks (< 2 turns each)
+
+2. **When running parallel sprints, reduce capacity**
+   - Context switching overhead
+   - Merge conflict risk increases
+   - CI queue congestion
+   - Reduce by ~30% from solo capacity
+
+3. **Stretch goals should be explicitly marked**
+   - Tasks 6-7 in a 7-task sprint = stretch
+   - Don't count stretch goals in commitment
+   - Label in sprint file as "(stretch)"
+
+### Sprint Structure Examples
+
+**Good sprint structure:**
+```
+Phase 1 (Parallel): 4 tasks
+Phase 2 (Sequential): 2 tasks (depends on 1 task from Phase 1)
+Stretch: 1 task (explicitly marked)
+```
+
+**Risky sprint structure:**
+```
+Phase 1 (Parallel): 3 tasks
+Phase 2 (Sequential): 4 tasks (chain of 4)  <- Too long
+```
+
+**Why risky:** A 4-task sequential chain means:
+- Task 2 waits for Task 1
+- Task 3 waits for Tasks 1+2
+- Task 4 waits for Tasks 1+2+3
+- Any blocker in the chain delays everything downstream
+
+**Fix:** Split into 2 sprints:
+- Sprint A: 3 parallel + 2 sequential
+- Sprint B: 2 sequential (former chain tasks 3-4)
+
+### Capacity Calculation
+
+```
+Base capacity: 5-7 tasks (solo sprint)
+
+Adjustments:
+- Parallel sprint execution: -30%
+- Sequential chain > 2: Split chain
+- High complexity tasks: Count as 1.5-2 tasks
+- Documentation-only tasks: Count as 0.5 tasks
+```
+
+### Planning Checklist
+
+Before finalizing sprint:
+- [ ] Total tasks <= capacity limit
+- [ ] Sequential chains <= 2-3 tasks
+- [ ] Stretch goals explicitly marked
+- [ ] Parallel sprint overlap considered
+
+**Reference:** BACKLOG-127

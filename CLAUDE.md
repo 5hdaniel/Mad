@@ -361,6 +361,7 @@ npx prebuild-install --runtime=electron --target=35.7.5 --arch=x64 --platform=wi
 | Git Branching | `.claude/docs/shared/git-branching.md` |
 | Effect Safety Patterns | `.claude/docs/shared/effect-safety-patterns.md` |
 | Native Module Fixes | `.claude/docs/shared/native-module-fixes.md` |
+| CI Troubleshooting | `.claude/docs/shared/ci-troubleshooting.md` |
 
 ## Getting Help
 

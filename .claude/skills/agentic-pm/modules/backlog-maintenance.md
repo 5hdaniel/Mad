@@ -141,3 +141,80 @@ gh pr list --state all --limit 20 | grep -E "(700|701|702|703|704|705|706)"
 SPRINT-010 was fully merged on 2025-12-29 but sprint file still showed "Planning" on 2026-01-01. This led to incorrect status reports because the file was trusted without verification.
 
 **Trust, but verify.** The source of truth is GitHub, not the markdown files.
+
+---
+
+## Sprint Completion Checklist (After Last PR Merges)
+
+**MANDATORY**: Execute this checklist immediately after the final sprint PR merges.
+
+**Why this exists:** SPRINT-010 was fully merged on 2025-12-29 but sprint file still showed "Planning" status when reviewed on 2026-01-01. This checklist prevents stale documentation.
+
+### 1. Verify All PRs Merged
+
+```bash
+# List all PRs for sprint tasks
+gh pr list --state all | grep -E "(TASK-XXX|TASK-YYY|...)"
+# All should show "MERGED"
+
+# Or check by branch pattern
+gh pr list --state merged --search "head:fix/task-" --limit 20
+```
+
+### 2. Update Sprint File
+
+Location: `.claude/plans/sprints/SPRINT-XXX-slug.md`
+
+Update these sections:
+- [ ] Change status from "PLANNING" or "IN PROGRESS" to "COMPLETED (YYYY-MM-DD)"
+- [ ] Update all task rows to show "**Merged** (PR #XXX)"
+- [ ] Update progress tracking: "X/X tasks merged (100%)"
+- [ ] Add entries to "Merged PRs" table with dates
+
+### 3. Update INDEX.md
+
+Location: `.claude/plans/backlog/INDEX.md`
+
+Update these sections:
+- [ ] Mark all addressed backlog items as "Completed"
+- [ ] Update Pending/Completed counts in header
+- [ ] Update sprint assignment line to show "Completed"
+- [ ] Add changelog entry with completion date and summary
+
+### 4. Mark Backlog Items Complete (Optional)
+
+If individual BACKLOG-XXX.md files exist, update their status headers.
+
+### 5. Archive Task Files
+
+Move completed task files to archive:
+```bash
+mkdir -p .claude/plans/tasks/archive/SPRINT-XXX
+git mv .claude/plans/tasks/TASK-XXX-*.md .claude/plans/tasks/archive/SPRINT-XXX/
+```
+
+### 6. Commit Updates
+
+```bash
+git add .claude/plans/
+git commit -m "docs: mark SPRINT-XXX as complete
+
+- Updated sprint file status to COMPLETED
+- Marked BACKLOG-XXX, BACKLOG-YYY as complete
+- Archived task files
+- Updated INDEX.md counts"
+git push
+```
+
+### Quick Reference
+
+| Step | File | Action |
+|------|------|--------|
+| 1 | - | Verify PRs merged |
+| 2 | Sprint file | Status -> COMPLETED |
+| 3 | INDEX.md | Backlog items -> Completed |
+| 4 | BACKLOG-XXX.md | Status -> Completed (if exists) |
+| 5 | Task files | Move to archive/ |
+| 6 | - | Commit and push |
+
+**Reference:** BACKLOG-124
