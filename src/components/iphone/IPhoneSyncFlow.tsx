@@ -3,6 +3,7 @@ import { useIPhoneSync } from "../../hooks/useIPhoneSync";
 import { ConnectionStatus } from "./ConnectionStatus";
 import { SyncProgress } from "./SyncProgress";
 import { BackupPasswordModal } from "./BackupPasswordModal";
+import { SyncLockBanner } from "../sync/SyncLockBanner";
 
 interface IPhoneSyncFlowProps {
   /** Callback when sync is complete and user clicks Continue */
@@ -32,9 +33,12 @@ export const IPhoneSyncFlow: React.FC<IPhoneSyncFlowProps> = ({ onClose }) => {
     needsPassword,
     lastSyncTime,
     isWaitingForPasscode,
+    syncLocked,
+    lockReason,
     startSync,
     submitPassword,
     cancelSync,
+    checkSyncStatus,
   } = useIPhoneSync();
 
   // Determine if we're actively syncing
@@ -44,6 +48,14 @@ export const IPhoneSyncFlow: React.FC<IPhoneSyncFlowProps> = ({ onClose }) => {
 
   return (
     <div className="iphone-sync-flow">
+      {/* TASK-910: Sync Lock Banner - Shown when another sync is in progress */}
+      {syncLocked && !isSyncing && (
+        <SyncLockBanner
+          operationName={lockReason || "Another sync operation"}
+          onRetry={checkSyncStatus}
+        />
+      )}
+
       {/* Connection Status - Shown when idle (not syncing, not complete, not error) */}
       {!isSyncing && !isComplete && !isError && (
         <ConnectionStatus
