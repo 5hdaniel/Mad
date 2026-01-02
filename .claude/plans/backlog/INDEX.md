@@ -45,6 +45,7 @@ This index tracks all backlog items with their current status and metadata.
 - **SPRINT-011 (Testing Infrastructure & Demo):** Completed - BACKLOG-108, 014 (5 tasks: TASK-800 to TASK-804)
 - **SPRINT-012 (Process & Documentation Improvements):** Completed - BACKLOG-124 (done), 126 (done), 127 (done), 128 (done), 129 (done), 130 (done) (6 tasks: TASK-805 to TASK-810, PR #262)
 - **SPRINT-013 (Architecture Cleanup):** Completed - BACKLOG-107 (done), 109 (done), 110 (done) (3 tasks: TASK-901 to TASK-903, PRs #263-265)
+- **SPRINT-014 (Feature/Performance):** Planning - BACKLOG-032, 090, 091 (Phase 1) (9 tasks: TASK-904 to TASK-912)
 - **Unassigned:** All others
 
 ### AI MVP Project - COMPLETE
@@ -328,6 +329,9 @@ This index tracks all backlog items with their current status and metadata.
 - 2026-01-02: **SPRINT-013 COMPLETE** - Architecture Cleanup: 3 tasks merged (PRs #263-265), BACKLOG-107, 109, 110 marked complete
 - 2026-01-02: useAppStateMachine split: 1130→422 lines + 8 flow hooks, AppRouter: 359→229 lines, AppShell: 190→110 lines
 - 2026-01-02: Sprint-013 efficiency: 12 turns (est 22-30), -57% variance - refactor tasks continue to be overestimated
+- 2026-01-02: Created SPRINT-014 (Feature/Performance) - 9 tasks (TASK-904 to TASK-912)
+- 2026-01-02: SPRINT-014 scope: BACKLOG-032 (full), BACKLOG-090 (full), BACKLOG-091 (Phase 1 only - schema + Gmail Message-ID)
+- 2026-01-02: BACKLOG-091 Phase 2 (Outlook + content hash + full dedup) deferred to SPRINT-015
 
 ---
 
