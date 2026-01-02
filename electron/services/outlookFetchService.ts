@@ -23,6 +23,14 @@ interface GraphEmailBody {
 }
 
 /**
+ * Microsoft Graph internet message header
+ */
+interface GraphInternetMessageHeader {
+  name: string;
+  value: string;
+}
+
+/**
  * Microsoft Graph API message
  */
 interface GraphMessage {
@@ -41,6 +49,9 @@ interface GraphMessage {
   // TASK-502: Added for junk detection
   inferenceClassification?: 'focused' | 'other';
   parentFolderId?: string;
+  // TASK-917: Added for Message-ID extraction (deduplication)
+  internetMessageId?: string;
+  internetMessageHeaders?: GraphInternetMessageHeader[];
 }
 
 /**
@@ -95,6 +106,8 @@ interface ParsedEmail {
   // TASK-502: Added for junk detection
   inferenceClassification?: string;
   parentFolderId?: string;
+  /** RFC 5322 Message-ID header for deduplication (TASK-917) */
+  messageIdHeader: string | null;
 }
 
 /**
@@ -106,6 +119,31 @@ interface EmailSearchOptions {
   before?: Date | null;
   maxResults?: number;
   onProgress?: (progress: FetchProgress) => void;
+}
+
+/**
+ * Extract RFC 5322 Message-ID header from Outlook message
+ * Uses internetMessageId property first (preferred), falls back to internetMessageHeaders
+ * @param message - Graph API message object
+ * @returns Message-ID header value or null if not found
+ */
+function extractMessageIdHeader(message: GraphMessage): string | null {
+  // Option 1: Use internetMessageId property (preferred, simpler)
+  if (message.internetMessageId) {
+    return message.internetMessageId;
+  }
+
+  // Option 2: Fall back to internetMessageHeaders array
+  if (message.internetMessageHeaders && message.internetMessageHeaders.length > 0) {
+    const messageIdHeader = message.internetMessageHeaders.find(
+      (h) => h.name?.toLowerCase() === "message-id",
+    );
+    if (messageIdHeader?.value) {
+      return messageIdHeader.value;
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -270,7 +308,7 @@ class OutlookFetchService {
       const filterString =
         filters.length > 0 ? `$filter=${filters.join(" and ")}` : "";
       const selectFields =
-        "$select=id,subject,from,toRecipients,ccRecipients,bccRecipients,receivedDateTime,sentDateTime,hasAttachments,body,bodyPreview,conversationId,inferenceClassification,parentFolderId";
+        "$select=id,subject,from,toRecipients,ccRecipients,bccRecipients,receivedDateTime,sentDateTime,hasAttachments,body,bodyPreview,conversationId,inferenceClassification,parentFolderId,internetMessageId,internetMessageHeaders";
 
       logService.info("Searching emails", "OutlookFetch");
 
@@ -439,6 +477,8 @@ class OutlookFetchService {
       // TASK-502: Added for junk detection
       inferenceClassification: message.inferenceClassification,
       parentFolderId: message.parentFolderId,
+      // TASK-917: Message-ID for deduplication
+      messageIdHeader: extractMessageIdHeader(message),
     };
   }
 

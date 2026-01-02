@@ -592,4 +592,169 @@ describe("OutlookFetchService", () => {
       );
     });
   });
+
+  describe("Message-ID header extraction (TASK-917)", () => {
+    beforeEach(async () => {
+      mockDatabaseService.getOAuthToken.mockResolvedValue(mockTokenRecord);
+      await outlookFetchService.initialize(mockUserId);
+    });
+
+    it("should extract Message-ID from internetMessageId property", async () => {
+      const mockMessage = {
+        id: "msg-1",
+        conversationId: "conv-1",
+        subject: "Test",
+        receivedDateTime: "2024-01-15T10:00:00Z",
+        sentDateTime: "2024-01-15T09:59:00Z",
+        hasAttachments: false,
+        internetMessageId: "<unique-id-123@outlook.com>",
+      };
+
+      mockAxios.mockResolvedValue({ data: { value: [mockMessage] } });
+
+      const results = await outlookFetchService.searchEmails({});
+
+      expect(results[0].messageIdHeader).toBe("<unique-id-123@outlook.com>");
+    });
+
+    it("should fall back to internetMessageHeaders when internetMessageId is missing", async () => {
+      const mockMessage = {
+        id: "msg-1",
+        conversationId: "conv-1",
+        subject: "Test",
+        receivedDateTime: "2024-01-15T10:00:00Z",
+        sentDateTime: "2024-01-15T09:59:00Z",
+        hasAttachments: false,
+        internetMessageHeaders: [
+          { name: "Message-ID", value: "<fallback-id@example.com>" },
+          { name: "From", value: "sender@example.com" },
+        ],
+      };
+
+      mockAxios.mockResolvedValue({ data: { value: [mockMessage] } });
+
+      const results = await outlookFetchService.searchEmails({});
+
+      expect(results[0].messageIdHeader).toBe("<fallback-id@example.com>");
+    });
+
+    it("should handle case-insensitive Message-ID header name in internetMessageHeaders", async () => {
+      const mockMessage = {
+        id: "msg-1",
+        conversationId: "conv-1",
+        subject: "Test",
+        receivedDateTime: "2024-01-15T10:00:00Z",
+        sentDateTime: "2024-01-15T09:59:00Z",
+        hasAttachments: false,
+        internetMessageHeaders: [
+          { name: "message-id", value: "<lowercase@example.com>" },
+        ],
+      };
+
+      mockAxios.mockResolvedValue({ data: { value: [mockMessage] } });
+
+      const results = await outlookFetchService.searchEmails({});
+
+      expect(results[0].messageIdHeader).toBe("<lowercase@example.com>");
+    });
+
+    it("should prefer internetMessageId over internetMessageHeaders", async () => {
+      const mockMessage = {
+        id: "msg-1",
+        conversationId: "conv-1",
+        subject: "Test",
+        receivedDateTime: "2024-01-15T10:00:00Z",
+        sentDateTime: "2024-01-15T09:59:00Z",
+        hasAttachments: false,
+        internetMessageId: "<preferred@outlook.com>",
+        internetMessageHeaders: [
+          { name: "Message-ID", value: "<fallback@example.com>" },
+        ],
+      };
+
+      mockAxios.mockResolvedValue({ data: { value: [mockMessage] } });
+
+      const results = await outlookFetchService.searchEmails({});
+
+      expect(results[0].messageIdHeader).toBe("<preferred@outlook.com>");
+    });
+
+    it("should return null when Message-ID is missing from both sources", async () => {
+      const mockMessage = {
+        id: "msg-1",
+        conversationId: "conv-1",
+        subject: "No Message-ID",
+        receivedDateTime: "2024-01-15T10:00:00Z",
+        sentDateTime: "2024-01-15T09:59:00Z",
+        hasAttachments: false,
+        // No internetMessageId
+        // No internetMessageHeaders
+      };
+
+      mockAxios.mockResolvedValue({ data: { value: [mockMessage] } });
+
+      const results = await outlookFetchService.searchEmails({});
+
+      expect(results[0].messageIdHeader).toBeNull();
+    });
+
+    it("should return null when internetMessageHeaders is empty array", async () => {
+      const mockMessage = {
+        id: "msg-1",
+        conversationId: "conv-1",
+        subject: "Empty Headers",
+        receivedDateTime: "2024-01-15T10:00:00Z",
+        sentDateTime: "2024-01-15T09:59:00Z",
+        hasAttachments: false,
+        internetMessageHeaders: [],
+      };
+
+      mockAxios.mockResolvedValue({ data: { value: [mockMessage] } });
+
+      const results = await outlookFetchService.searchEmails({});
+
+      expect(results[0].messageIdHeader).toBeNull();
+    });
+
+    it("should return null when internetMessageHeaders has no Message-ID header", async () => {
+      const mockMessage = {
+        id: "msg-1",
+        conversationId: "conv-1",
+        subject: "Test",
+        receivedDateTime: "2024-01-15T10:00:00Z",
+        sentDateTime: "2024-01-15T09:59:00Z",
+        hasAttachments: false,
+        internetMessageHeaders: [
+          { name: "From", value: "sender@example.com" },
+          { name: "To", value: "recipient@example.com" },
+        ],
+      };
+
+      mockAxios.mockResolvedValue({ data: { value: [mockMessage] } });
+
+      const results = await outlookFetchService.searchEmails({});
+
+      expect(results[0].messageIdHeader).toBeNull();
+    });
+
+    it("should preserve Message-ID with special characters", async () => {
+      const specialMessageId =
+        "<CAD+XH4s=BKDQRKRm+_dK3sEq@mail.outlook.com>";
+      const mockMessage = {
+        id: "msg-1",
+        conversationId: "conv-1",
+        subject: "Special chars",
+        receivedDateTime: "2024-01-15T10:00:00Z",
+        sentDateTime: "2024-01-15T09:59:00Z",
+        hasAttachments: false,
+        internetMessageId: specialMessageId,
+      };
+
+      mockAxios.mockResolvedValue({ data: { value: [mockMessage] } });
+
+      const results = await outlookFetchService.searchEmails({});
+
+      expect(results[0].messageIdHeader).toBe(specialMessageId);
+    });
+  });
 });
