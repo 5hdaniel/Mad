@@ -1,6 +1,6 @@
 {
   "permissions": {
-    "allow": ["Write", "Edit", "Bash"]
+    "allow": ["Read", "Glob", "Grep", "Write", "Edit", "Bash"]
   },
   "hooks": {
     "UserPromptSubmit": [
