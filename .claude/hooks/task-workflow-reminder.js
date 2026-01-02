@@ -27,20 +27,29 @@ process.stdin.on('end', () => {
     const prompt = (data.prompt || '').toLowerCase();
 
     // Patterns that indicate working on a TASK file
+    // Must be specific to avoid false positives from quoted text or questions
     const taskPatterns = [
       '.claude/plans/tasks',
-      'task-5',  // TASK-5XX pattern
-      'task-4',  // TASK-4XX pattern
-      'task-3',  // TASK-3XX pattern
-      'implement task',
-      'work on task',
-      'continue with task',
-      'complete task',
-      'finish task',
+      /task-[3-9]\d{2}/i,  // TASK-300 through TASK-999 pattern
+      /^implement task/i,  // Must start with "implement task"
+      /^work on task/i,    // Must start with "work on task"
+      /^complete task/i,   // Must start with "complete task"
+      /^finish task/i,     // Must start with "finish task"
     ];
 
-    // Check if any pattern matches
-    const matchedPattern = taskPatterns.find(pattern => prompt.includes(pattern));
+    // Remove quoted text before checking patterns (avoids false positives)
+    const promptWithoutQuotes = prompt
+      .replace(/"[^"]*"/g, '')   // Remove double-quoted text
+      .replace(/'[^']*'/g, '')   // Remove single-quoted text
+      .replace(/>[^\n]*/g, '');  // Remove lines starting with > (quoted replies)
+
+    // Check if any pattern matches (use cleaned prompt without quotes)
+    const matchedPattern = taskPatterns.find(pattern => {
+      if (pattern instanceof RegExp) {
+        return pattern.test(promptWithoutQuotes);
+      }
+      return promptWithoutQuotes.includes(pattern);
+    });
 
     if (matchedPattern) {
       // Check if they're already using the correct workflow
