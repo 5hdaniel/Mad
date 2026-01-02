@@ -104,6 +104,13 @@ Include in planning request:
 - Architecture boundaries (entry file guardrails)
 - Testing requirements
 
+**Fixture Size Check:**
+- [ ] Does task involve fixture creation?
+- [ ] If yes, how many items will the fixture contain?
+- [ ] If >50 items, plan to use generator approach
+
+Reference: `.claude/docs/shared/large-fixture-generation.md`
+
 ### SR Engineers
 
 Include in planning request:
