@@ -4,7 +4,7 @@ This index tracks all backlog items with their current status and metadata.
 
 **Last Updated:** 2026-01-02
 **Total Items:** 141
-**Pending:** 85 | **In Progress:** 0 | **Completed:** 52 | **Obsolete:** 2 | **Deferred:** 2
+**Pending:** 82 | **In Progress:** 0 | **Completed:** 55 | **Obsolete:** 2 | **Deferred:** 2
 
 ---
 
@@ -26,8 +26,8 @@ This index tracks all backlog items with their current status and metadata.
 ## Quick Filters
 
 ### By Priority
-- **Critical:** BACKLOG-030 (done), 032, 035 (done), 038 (done), 039 (done), 044 (done), 045 (done), 058 (done), 059 (done), 072 (done), 073 (done), 074 (done), **107**, 108 (done), 117 (done)
-- **High:** BACKLOG-008, 009, 013, 016, 018, 020, 021, 023, 026, 031, 033, 037, 056, 060 (done), 061, 062, 063, 067, 075 (done), 076 (done), 084 (done), 085 (done), 088, 090, 091, 098, 099, **109**, **110**, **111**, **118**, **121**, 126 (done), 130 (done)
+- **Critical:** BACKLOG-030 (done), 032, 035 (done), 038 (done), 039 (done), 044 (done), 045 (done), 058 (done), 059 (done), 072 (done), 073 (done), 074 (done), 107 (done), 108 (done), 117 (done)
+- **High:** BACKLOG-008, 009, 013, 016, 018, 020, 021, 023, 026, 031, 033, 037, 056, 060 (done), 061, 062, 063, 067, 075 (done), 076 (done), 084 (done), 085 (done), 088, 090, 091, 098, 099, 109 (done), 110 (done), **111**, **118**, **121**, 126 (done), 130 (done)
 - **Medium:** Multiple (see full index), 014 (done), 077 (done), 078 (done), 079 (done), 081, 086, 087, 089, 092, 093, 094, 095, 096, 097, 100, 101, 102, **112**, **113**, **114**, **115**, **116**, 122 (done), 124 (done), 127 (done), 128 (done), 129 (done), **131**
 - **Low/Deferred:** BACKLOG-001, 003, 004, 010, 017, 069, 070, 071, **119**, **123**, **125**
 
@@ -44,6 +44,7 @@ This index tracks all backlog items with their current status and metadata.
 - **SPRINT-010 (Core Polish & Text Messages):** Completed - BACKLOG-103, 054, 105, 104, 050 (7 tasks: TASK-700 to TASK-706)
 - **SPRINT-011 (Testing Infrastructure & Demo):** Completed - BACKLOG-108, 014 (5 tasks: TASK-800 to TASK-804)
 - **SPRINT-012 (Process & Documentation Improvements):** Completed - BACKLOG-124 (done), 126 (done), 127 (done), 128 (done), 129 (done), 130 (done) (6 tasks: TASK-805 to TASK-810, PR #262)
+- **SPRINT-013 (Architecture Cleanup):** Completed - BACKLOG-107 (done), 109 (done), 110 (done) (3 tasks: TASK-901 to TASK-903, PRs #263-265)
 - **Unassigned:** All others
 
 ### AI MVP Project - COMPLETE
@@ -166,10 +167,10 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-103 | Fix Contact Selection Issue | ui | High | Completed | SPRINT-010 | 4-8 | ~25K-40K | 45-90m | - | - | - | - | - | - | - | - | - | - | - | - | Addressed by TASK-700 |
 | BACKLOG-104 | Dashboard UI to Emphasize Auto-Detection | ui | Medium | Completed | SPRINT-010 | 6-10 | ~35K-50K | 1-2h | - | - | - | - | - | - | - | - | - | - | - | - | Addressed by TASK-705 |
 | BACKLOG-105 | Text Messages Tab in Transaction Details | ui | High | Completed | SPRINT-010 | 15-25 | ~80K-120K | 3-5h | - | - | - | - | - | - | - | - | - | - | - | - | Addressed by TASK-702/703/704 |
-| BACKLOG-107 | Split useAppStateMachine.ts into Flow Hooks | refactor | Critical | Pending | - | 30-40 | ~100K | 1-1.5d | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-107.md](BACKLOG-107.md) |
+| BACKLOG-107 | Split useAppStateMachine.ts into Flow Hooks | refactor | Critical | Completed | SPRINT-013 | 30-40 | ~100K | 1-1.5d | 9 | ~36K | 27m | - | - | - | 0 | 0 | 0 | 9 | ~36K | 27m | -55% | [BACKLOG-107.md](BACKLOG-107.md) |
 | BACKLOG-108 | Fix Flaky appleDriverService Test | test | Critical | Completed | SPRINT-011 | 2-4 | ~10K | 20m | 3 | ~10K | 10m | 3 | ~9K | 10m | 0 | 0 | 0 | 6 | ~19K | 20m | -67% | [BACKLOG-108.md](BACKLOG-108.md) |
-| BACKLOG-109 | Reduce AppRouter.tsx to <300 Lines | refactor | High | Pending | - | 4-6 | ~20K | 30-45m | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-109.md](BACKLOG-109.md) |
-| BACKLOG-110 | Reduce AppShell.tsx to <150 Lines | refactor | High | Pending | - | 3-4 | ~15K | 20-30m | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-110.md](BACKLOG-110.md) |
+| BACKLOG-109 | Reduce AppRouter.tsx to <300 Lines | refactor | High | Completed | SPRINT-013 | 4-6 | ~20K | 30-45m | 1 | ~12K | 8m | - | - | - | 0 | 0 | 0 | 1 | ~12K | 8m | -83% | [BACKLOG-109.md](BACKLOG-109.md) |
+| BACKLOG-110 | Reduce AppShell.tsx to <150 Lines | refactor | High | Completed | SPRINT-013 | 3-4 | ~15K | 20-30m | 2 | ~8K | 5m | - | - | - | 0 | 0 | 0 | 2 | ~8K | 5m | -43% | [BACKLOG-110.md](BACKLOG-110.md) |
 | BACKLOG-111 | Migrate Components to Service Abstractions | refactor | High | Pending | - | 40-50 | ~150K | 1-1.5d | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-111.md](BACKLOG-111.md) |
 | BACKLOG-112 | Boost Test Coverage for src/hooks/ | test | Medium | Pending | - | 40-60 | ~150K | 1-2d | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-112.md](BACKLOG-112.md) |
 | BACKLOG-113 | Boost Test Coverage for src/utils/ | test | Medium | Pending | - | 20-30 | ~80K | 1d | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-113.md](BACKLOG-113.md) |
@@ -221,7 +222,8 @@ This index tracks all backlog items with their current status and metadata.
 | SPRINT-009 | Codebase Standards Remediation | Completed | TASK-600 to TASK-620 (20 tasks) - Security + Architecture + Types |
 | SPRINT-010 | Core Polish & Text Messages | Completed | BACKLOG-103, 054, 105, 104, 050 (7 tasks: TASK-700 to TASK-706) - PRs #245-255 |
 | SPRINT-011 | Testing Infrastructure & Demo | Completed | BACKLOG-108, 014 (5 tasks: TASK-800 to TASK-804) - PRs #256-260 |
-| SPRINT-012 | Process & Documentation Improvements | Planning | BACKLOG-126, 124, 127, 128, 129 (5 tasks: TASK-805 to TASK-809) |
+| SPRINT-012 | Process & Documentation Improvements | Completed | BACKLOG-126, 124, 127, 128, 129, 130 (6 tasks: TASK-805 to TASK-810, PR #262) |
+| SPRINT-013 | Architecture Cleanup | Completed | BACKLOG-107, 109, 110 (3 tasks: TASK-901 to TASK-903, PRs #263-265, 12 turns, ~56K tokens) |
 
 ---
 
@@ -323,6 +325,9 @@ This index tracks all backlog items with their current status and metadata.
 - 2026-01-02: Added BACKLOG-131 (PR Metrics Validation Shell Escaping Bug) - Medium priority, CI workflow bug discovered during SPRINT-012 PR #262
 - 2026-01-02: **SPRINT-012 COMPLETE** - All 6 tasks merged (PR #262): BACKLOG-124, 126, 127, 128, 129, 130 marked complete
 - 2026-01-02: Lesson learned: Permission pre-approval via settings.json `permissions.allow` prevents background agent blocks
+- 2026-01-02: **SPRINT-013 COMPLETE** - Architecture Cleanup: 3 tasks merged (PRs #263-265), BACKLOG-107, 109, 110 marked complete
+- 2026-01-02: useAppStateMachine split: 1130→422 lines + 8 flow hooks, AppRouter: 359→229 lines, AppShell: 190→110 lines
+- 2026-01-02: Sprint-013 efficiency: 12 turns (est 22-30), -57% variance - refactor tasks continue to be overestimated
 
 ---
 
