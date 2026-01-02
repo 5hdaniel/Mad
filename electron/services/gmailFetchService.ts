@@ -33,6 +33,8 @@ interface ParsedEmail {
   attachments: EmailAttachment[];
   labels: string[];
   raw: gmail_v1.Schema$Message;
+  /** RFC 5322 Message-ID header for deduplication */
+  messageIdHeader: string | null;
 }
 
 /**
@@ -61,6 +63,21 @@ interface EmailSearchOptions {
  * Gmail Fetch Service
  * Fetches emails from Gmail for transaction extraction
  */
+/**
+ * Extract RFC 5322 Message-ID header from email headers
+ * Uses case-insensitive matching and returns full value including angle brackets
+ * @param headers - Array of header objects from Gmail API
+ * @returns Message-ID header value or null if not found
+ */
+function extractMessageIdHeader(
+  headers: Array<{ name?: string | null; value?: string | null }>,
+): string | null {
+  const messageIdHeader = headers.find(
+    (h) => h.name?.toLowerCase() === "message-id",
+  );
+  return messageIdHeader?.value ?? null;
+}
+
 class GmailFetchService {
   private gmail: gmail_v1.Gmail | null = null;
   private oauth2Client: Auth.OAuth2Client | null = null;
@@ -365,6 +382,7 @@ class GmailFetchService {
       attachments: attachments,
       labels: message.labelIds || [],
       raw: message,
+      messageIdHeader: extractMessageIdHeader(headers),
     };
   }
 
