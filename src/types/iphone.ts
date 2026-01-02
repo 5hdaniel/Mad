@@ -46,6 +46,17 @@ export interface BackupResult {
 
 export type SyncStatus = "idle" | "syncing" | "complete" | "error";
 
+/**
+ * Sync lock state for preventing concurrent sync operations
+ * TASK-910: Created for sync lock UI
+ */
+export interface SyncLockState {
+  /** Whether a sync operation is currently running */
+  syncLocked: boolean;
+  /** Human-readable description of the current operation */
+  lockReason: string | null;
+}
+
 // ============================================
 // COMPONENT PROP TYPES
 // ============================================
@@ -93,7 +104,13 @@ export interface UseIPhoneSyncReturn {
   lastSyncTime: Date | null;
   /** Whether the sync is waiting for the user to enter their iPhone passcode */
   isWaitingForPasscode: boolean;
+  /** Whether another sync operation is running (TASK-910) */
+  syncLocked: boolean;
+  /** Human-readable description of the blocking operation (TASK-910) */
+  lockReason: string | null;
   startSync: () => void;
   submitPassword: (password: string) => void;
   cancelSync: () => void;
+  /** Refresh the sync lock status (TASK-910) */
+  checkSyncStatus: () => Promise<void>;
 }
