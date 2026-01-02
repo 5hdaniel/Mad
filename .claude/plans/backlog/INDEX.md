@@ -4,7 +4,7 @@ This index tracks all backlog items with their current status and metadata.
 
 **Last Updated:** 2026-01-02
 **Total Items:** 141
-**Pending:** 91 | **In Progress:** 0 | **Completed:** 46 | **Obsolete:** 2 | **Deferred:** 2
+**Pending:** 85 | **In Progress:** 0 | **Completed:** 52 | **Obsolete:** 2 | **Deferred:** 2
 
 ---
 
@@ -27,8 +27,8 @@ This index tracks all backlog items with their current status and metadata.
 
 ### By Priority
 - **Critical:** BACKLOG-030 (done), 032, 035 (done), 038 (done), 039 (done), 044 (done), 045 (done), 058 (done), 059 (done), 072 (done), 073 (done), 074 (done), **107**, 108 (done), 117 (done)
-- **High:** BACKLOG-008, 009, 013, 016, 018, 020, 021, 023, 026, 031, 033, 037, 056, 060 (done), 061, 062, 063, 067, 075 (done), 076 (done), 084 (done), 085 (done), 088, 090, 091, 098, 099, **109**, **110**, **111**, **118**, **121**, **126**, **130**
-- **Medium:** Multiple (see full index), 014 (done), 077 (done), 078 (done), 079 (done), 081, 086, 087, 089, 092, 093, 094, 095, 096, 097, 100, 101, 102, **112**, **113**, **114**, **115**, **116**, 122 (done), **124**, **127**, **128**, **129**, **131**
+- **High:** BACKLOG-008, 009, 013, 016, 018, 020, 021, 023, 026, 031, 033, 037, 056, 060 (done), 061, 062, 063, 067, 075 (done), 076 (done), 084 (done), 085 (done), 088, 090, 091, 098, 099, **109**, **110**, **111**, **118**, **121**, 126 (done), 130 (done)
+- **Medium:** Multiple (see full index), 014 (done), 077 (done), 078 (done), 079 (done), 081, 086, 087, 089, 092, 093, 094, 095, 096, 097, 100, 101, 102, **112**, **113**, **114**, **115**, **116**, 122 (done), 124 (done), 127 (done), 128 (done), 129 (done), **131**
 - **Low/Deferred:** BACKLOG-001, 003, 004, 010, 017, 069, 070, 071, **119**, **123**, **125**
 
 ### By Sprint Assignment
@@ -43,7 +43,7 @@ This index tracks all backlog items with their current status and metadata.
 - **SPRINT-009 (Codebase Standards Remediation):** Completed - TASK-600 to TASK-620 (20 tasks)
 - **SPRINT-010 (Core Polish & Text Messages):** Completed - BACKLOG-103, 054, 105, 104, 050 (7 tasks: TASK-700 to TASK-706)
 - **SPRINT-011 (Testing Infrastructure & Demo):** Completed - BACKLOG-108, 014 (5 tasks: TASK-800 to TASK-804)
-- **SPRINT-012 (Process & Documentation Improvements):** Planning - BACKLOG-126, 124, 127, 128, 129, **130** (6 tasks: TASK-805 to TASK-810)
+- **SPRINT-012 (Process & Documentation Improvements):** Completed - BACKLOG-124 (done), 126 (done), 127 (done), 128 (done), 129 (done), 130 (done) (6 tasks: TASK-805 to TASK-810, PR #262)
 - **Unassigned:** All others
 
 ### AI MVP Project - COMPLETE
@@ -321,6 +321,8 @@ This index tracks all backlog items with their current status and metadata.
 - 2026-01-01: **INCIDENT** BACKLOG-130 created - Sub-agent permission auto-denial burned ~9.6M tokens across 5 parallel engineer agents
 - 2026-01-01: Lesson learned: Background agents cannot prompt for Write/Edit permissions - need pre-approval or foreground execution
 - 2026-01-02: Added BACKLOG-131 (PR Metrics Validation Shell Escaping Bug) - Medium priority, CI workflow bug discovered during SPRINT-012 PR #262
+- 2026-01-02: **SPRINT-012 COMPLETE** - All 6 tasks merged (PR #262): BACKLOG-124, 126, 127, 128, 129, 130 marked complete
+- 2026-01-02: Lesson learned: Permission pre-approval via settings.json `permissions.allow` prevents background agent blocks
 
 ---
 
