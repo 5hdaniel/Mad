@@ -534,6 +534,15 @@ interface MainAPI {
     /** Stop device detection polling */
     stopDetection: () => Promise<{ success: boolean }>;
 
+    /**
+     * Process existing backup without running new backup (for testing/recovery)
+     * @param options - Processing options including device UDID and optional password
+     */
+    processExisting: (options: {
+      udid: string;
+      password?: string;
+    }) => Promise<SyncResult>;
+
     /** Subscribe to sync progress updates */
     onProgress: (callback: (progress: SyncProgress) => void) => () => void;
 
@@ -548,6 +557,12 @@ interface MainAPI {
 
     /** Subscribe to password required events */
     onPasswordRequired: (callback: () => void) => () => void;
+
+    /** Subscribe to passcode waiting events (user needs to enter passcode on iPhone) */
+    onWaitingForPasscode: (callback: () => void) => () => void;
+
+    /** Subscribe to passcode entered events (user entered passcode, backup starting) */
+    onPasscodeEntered: (callback: () => void) => () => void;
 
     /** Subscribe to sync error events */
     onError: (callback: (error: { message: string }) => void) => () => void;
