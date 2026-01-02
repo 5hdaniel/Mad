@@ -126,11 +126,14 @@ export function useNavigationFlow({
   useEffect(() => {
     // Wait for ALL loading to complete before making routing decisions
     // This prevents race conditions where routing happens before user data loads
+    // CRITICAL: Include isDatabaseInitialized to prevent navigation to dashboard
+    // before database is ready (fixes "Database is not initialized" error)
     const isStillLoading =
       isAuthLoading ||
       isCheckingSecureStorage ||
       isLoadingPhoneType ||
-      isCheckingEmailOnboarding;
+      isCheckingEmailOnboarding ||
+      (isAuthenticated && !isDatabaseInitialized);
 
     if (!isAuthLoading && !isCheckingSecureStorage) {
       // PRE-DB FLOW: OAuth succeeded but database not initialized yet
@@ -272,6 +275,7 @@ export function useNavigationFlow({
   }, [
     isAuthenticated,
     isAuthLoading,
+    isDatabaseInitialized,
     needsTermsAcceptance,
     hasPermissions,
     hasCompletedEmailOnboarding,
