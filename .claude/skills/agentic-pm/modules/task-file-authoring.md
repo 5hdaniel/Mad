@@ -226,3 +226,45 @@ Add this section to task files for fixture creation:
 ```
 
 **Reference:** BACKLOG-128
+
+---
+
+## Large Fixture Warning
+
+**Purpose:** Prevent engineers from hitting the 32K output token limit when creating large data fixtures.
+
+**Source:** TASK-801 (SPRINT-011) attempted to output 203 messages directly, hit the token limit, and required a workaround.
+
+### When to Add This Warning
+
+When authoring tasks that involve creating fixtures with many items:
+
+| Fixture Size | PM Action |
+|--------------|-----------|
+| <20 items | No special handling needed |
+| 20-50 items | Consider adding generator note |
+| >50 items | **MUST add "USE GENERATOR APPROACH" note** |
+
+### Task File Addition for Large Fixtures
+
+Add this section to task files when fixture size exceeds 50 items:
+
+```markdown
+### Large Fixture Note
+
+This task creates >X items. **Use generator approach:**
+1. Create TypeScript generator script in `scripts/`
+2. Run with `npx ts-node scripts/generateFixtures.ts`
+3. Commit generated JSON, delete script
+
+See `.claude/docs/shared/large-fixture-generation.md`
+```
+
+### Why This Matters
+
+- Claude's Write tool has a 32,000 token output limit
+- 200+ items easily exceeds this limit
+- Generator scripts run outside Claude (no limit)
+- Provides reproducibility and type safety
+
+**Reference:** BACKLOG-121, `.claude/docs/shared/large-fixture-generation.md`
