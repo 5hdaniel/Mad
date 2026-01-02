@@ -459,7 +459,76 @@ npm run lint
 If you encounter unexpected complexity:
 - **At 2x estimated turns**: Note it in your progress update
 - **At 3x estimated turns**: Consider stopping and reporting to PM
-- **At 4x estimated turns**: STOP and report (per BACKLOG-133)
+- **At 4x estimated turns**: STOP and report (see Token Cap Enforcement below)
+
+---
+
+## Token Cap Enforcement (BACKLOG-133)
+
+**Full reference:** `.claude/docs/shared/token-cap-workflow.md`
+
+**Rule:** If estimated tokens = X, then soft cap = 4X
+
+This is a **soft cap**: you report and wait, you don't crash.
+
+### Tracking Token Usage
+
+1. Note estimated tokens from task file (e.g., "~10K tokens")
+2. Calculate your cap: 4 x estimate = cap (e.g., 40K)
+3. Track turns as proxy: 1 turn = ~4K tokens
+4. At 50% of cap: Note in progress update, assess trajectory
+5. At 100% of cap (4x estimate): STOP and report
+
+### When You Reach 4x Estimated Tokens
+
+1. **STOP** current work immediately
+2. **REPORT** status to PM using format below
+3. **WAIT** for PM decision before continuing
+
+**Do NOT:**
+- Try to "finish quickly" to avoid the report
+- Continue hoping you're almost done
+- Rationalize that "this is a special case"
+
+### Token Cap Report Format
+
+```markdown
+## TOKEN CAP REACHED
+
+**Task:** TASK-XXX
+**Estimated:** XK tokens
+**Current:** YK tokens (4x cap hit)
+**Cap:** ZK tokens
+
+### Progress
+- [x] Completed step 1
+- [x] Completed step 2
+- [ ] In progress: step 3
+
+### Reason for Overconsumption
+<One of:>
+- Unexpected complexity in [area]
+- Edit tool retry loops (X retries)
+- CI debugging cycle (X failures)
+- Large file reads (X files, ~YK tokens each)
+- Scope expansion discovered: [what]
+- Other: [description]
+
+### Options for PM
+1. Continue with additional XK token budget
+2. Abort and investigate root cause
+3. Hand off to different approach
+4. Split into multiple tasks
+
+**Awaiting PM decision.**
+```
+
+### Exceptions
+
+The 4x cap does NOT apply when:
+- PM explicitly specifies a different cap in the task file
+- Task file notes "high variance expected"
+- SR Engineer reviews (different workflow)
 
 ---
 
