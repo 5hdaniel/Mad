@@ -17,6 +17,7 @@ import { iPhoneSyncStorageService } from "./services/iPhoneSyncStorageService";
 import sessionService from "./services/sessionService";
 import type { iOSDevice } from "./types/device";
 import { rateLimiters } from "./utils/rateLimit";
+import { syncStatusService } from "./services/syncStatusService";
 
 let orchestrator: SyncOrchestrator | null = null;
 let mainWindowRef: BrowserWindow | null = null;
@@ -163,6 +164,12 @@ export function registerSyncHandlers(mainWindow: BrowserWindow, userId?: string)
   // Get current sync status
   ipcMain.handle("sync:status", () => {
     return orchestrator?.getStatus() || { isRunning: false, phase: "idle" };
+  });
+
+  // Get unified sync status (aggregates backup + orchestrator state)
+  // TASK-904: Exposes combined sync state to UI for preventing concurrent operations
+  ipcMain.handle("sync:getUnifiedStatus", () => {
+    return syncStatusService.getStatus();
   });
 
   // Process existing backup without running new backup (for testing)
@@ -400,6 +407,7 @@ export function cleanupSyncHandlers(): void {
   ipcMain.removeHandler("sync:cancel");
   ipcMain.removeHandler("sync:reset");
   ipcMain.removeHandler("sync:status");
+  ipcMain.removeHandler("sync:getUnifiedStatus");
   ipcMain.removeHandler("sync:process-existing");
   ipcMain.removeHandler("sync:devices");
   ipcMain.removeHandler("sync:start-detection");
