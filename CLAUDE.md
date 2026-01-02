@@ -143,6 +143,24 @@ git branch -a | grep "int/"
 
 This prevents fixes from being lost (as happened with the onboarding fix in `int/ai-polish` when `int/cost-optimization` branched from stale develop).
 
+### Parallel Agent Safety (MANDATORY)
+
+**CRITICAL:** When running multiple engineer agents in parallel (background mode), each agent MUST use an isolated git worktree. Working in the same directory causes race conditions that can burn massive tokens.
+
+**Incident Reference:** BACKLOG-132 (~18M tokens burned, ~500x overrun)
+
+**Quick Reference:**
+```bash
+# Create isolated worktree for parallel task
+git worktree add ../Mad-task-XXX -b feature/TASK-XXX-description develop
+
+# Verify isolation
+git worktree list
+pwd  # Should show Mad-task-XXX, NOT main repo
+```
+
+**Full documentation:** `.claude/docs/shared/git-branching.md` (Git Worktrees section)
+
 ### Bug Fix Workflow (MANDATORY)
 
 **Before investigating any reported bug:**

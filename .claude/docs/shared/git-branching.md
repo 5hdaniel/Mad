@@ -234,6 +234,10 @@ If an existing fix branch seems related:
 
 ## Git Worktrees (Parallel Sprint Execution)
 
+> **MANDATORY for Background Agents:** If you are running as a background agent (`run_in_background: true`) or executing parallel sprint tasks, you MUST use isolated git worktrees. This is NON-NEGOTIABLE.
+>
+> **Incident Reference:** BACKLOG-132 - ~18M tokens burned (~500x overrun) when two background agents worked in the same directory without worktree isolation.
+
 When executing sprint tasks in parallel, use git worktrees to maintain multiple branches simultaneously.
 
 ### Creating Worktrees for Sprint Tasks
