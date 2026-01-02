@@ -313,6 +313,14 @@ export interface Message {
   /** Full LLM analysis response stored as JSON string */
   llm_analysis?: string;
 
+  // ========== Deduplication (TASK-905) ==========
+  /** RFC 5322 Message-ID header for cross-provider deduplication */
+  message_id_header?: string;
+  /** SHA-256 hash of email content for fallback deduplication */
+  content_hash?: string;
+  /** ID of the original message if this is a duplicate */
+  duplicate_of?: string;
+
   // ========== Legacy Fields (backwards compatibility) ==========
   /** @deprecated Use channel instead */
   communication_type?: string;

@@ -568,6 +568,10 @@ class DatabaseService implements IDatabaseService {
       { name: 'external_id', sql: `ALTER TABLE messages ADD COLUMN external_id TEXT` },
       { name: 'thread_id', sql: `ALTER TABLE messages ADD COLUMN thread_id TEXT` },
       { name: 'participants_flat', sql: `ALTER TABLE messages ADD COLUMN participants_flat TEXT` },
+      // Deduplication columns (TASK-905)
+      { name: 'message_id_header', sql: `ALTER TABLE messages ADD COLUMN message_id_header TEXT` },
+      { name: 'content_hash', sql: `ALTER TABLE messages ADD COLUMN content_hash TEXT` },
+      { name: 'duplicate_of', sql: `ALTER TABLE messages ADD COLUMN duplicate_of TEXT` },
     ]);
 
     // Try to populate display_name from 'name' column if it exists in contacts

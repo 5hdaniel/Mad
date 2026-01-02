@@ -241,6 +241,11 @@ CREATE TABLE IF NOT EXISTS messages (
   transaction_link_confidence REAL,      -- How sure we are about this link
   transaction_link_source TEXT CHECK (transaction_link_source IN ('pattern', 'llm', 'user')),
 
+  -- Deduplication (TASK-905)
+  message_id_header TEXT,                -- RFC 5322 Message-ID header for cross-provider dedup
+  content_hash TEXT,                     -- SHA-256 hash of normalized content for fallback dedup
+  duplicate_of TEXT,                     -- ID of original message if this is a duplicate
+
   -- Metadata (provider-specific data)
   metadata TEXT,                         -- JSON: labels, flags, etc.
 
@@ -582,6 +587,10 @@ CREATE INDEX IF NOT EXISTS idx_messages_external_id ON messages(external_id);
 CREATE INDEX IF NOT EXISTS idx_messages_thread_id ON messages(thread_id);
 CREATE INDEX IF NOT EXISTS idx_messages_is_transaction_related ON messages(is_transaction_related);
 CREATE INDEX IF NOT EXISTS idx_messages_participants_flat ON messages(participants_flat);
+-- Deduplication indexes (TASK-905)
+CREATE INDEX IF NOT EXISTS idx_messages_message_id_header ON messages(message_id_header);
+CREATE INDEX IF NOT EXISTS idx_messages_content_hash ON messages(content_hash);
+CREATE INDEX IF NOT EXISTS idx_messages_duplicate_of ON messages(duplicate_of);
 
 -- Attachments
 CREATE INDEX IF NOT EXISTS idx_attachments_message_id ON attachments(message_id);
