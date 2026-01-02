@@ -3,8 +3,8 @@
 This index tracks all backlog items with their current status and metadata.
 
 **Last Updated:** 2026-01-02
-**Total Items:** 145
-**Pending:** 80 | **In Progress:** 0 | **Completed:** 59 | **Partial:** 1 | **Obsolete:** 2 | **Deferred:** 2
+**Total Items:** 146
+**Pending:** 80 | **In Progress:** 0 | **Completed:** 60 | **Partial:** 1 | **Obsolete:** 2 | **Deferred:** 2
 
 ---
 
@@ -26,7 +26,7 @@ This index tracks all backlog items with their current status and metadata.
 ## Quick Filters
 
 ### By Priority
-- **Critical:** BACKLOG-030 (done), 032 (done), 035 (done), 038 (done), 039 (done), 044 (done), 045 (done), 058 (done), 059 (done), 072 (done), 073 (done), 074 (done), 107 (done), 108 (done), 117 (done), **132** (NEW - parallel agent race condition)
+- **Critical:** BACKLOG-030 (done), 032 (done), 035 (done), 038 (done), 039 (done), 044 (done), 045 (done), 058 (done), 059 (done), 072 (done), 073 (done), 074 (done), 107 (done), 108 (done), 117 (done), 132 (done)
 - **High:** BACKLOG-008, 009, 013, 016, 018, 020, 021, 023, 026, 031, 033, 037, 056, 060 (done), 061, 062, 063, 067, 075 (done), 076 (done), 084 (done), 085 (done), 088, 090 (done), 091 Phase 1 (done), 098, 099, 109 (done), 110 (done), **111**, **118**, **121**, 126 (done), 130 (done), **133** (NEW - token cap with early reporting), **134** (done - engineer token optimization)
 - **Medium:** Multiple (see full index), 014 (done), 077 (done), 078 (done), 079 (done), 081, 086, 087, 089, 092, 093, 094, 095, 096, 097, 100, 101, 102, **112**, **113**, **114**, **115**, **116**, 122 (done), 124 (done), 127 (done), 128 (done), 129 (done), **131**
 - **Low/Deferred:** BACKLOG-001, 003, 004, 010, 017, 069, 070, 071, **119**, **123**, **125**
@@ -192,6 +192,7 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-128 | Add Type Verification Checklist for Fixture Tasks | docs | Medium | Pending | SPRINT-012 | 1-2 | ~6K | 10-15m | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-128.md](BACKLOG-128.md) |
 | BACKLOG-129 | Create CI Troubleshooting Documentation | docs | Medium | Pending | SPRINT-012 | 2-3 | ~10K | 15-20m | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-129.md](BACKLOG-129.md) |
 | BACKLOG-130 | Sub-Agent Permission Auto-Denial Incident | infra/process | High | Pending | SPRINT-012 | 1-2 | ~8K | 10-15m | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-130.md](BACKLOG-130.md) |
+| BACKLOG-132 | Mandatory Worktree for Parallel/Background Agents | docs/process | Critical | Completed | - | 1-2 | ~5K | 8-12m | 2 | ~8K | 5m | 1 | ~15K | 5m | 0 | 0 | 0 | 3 | ~23K | 10m | 0% | [BACKLOG-132.md](BACKLOG-132.md) |
 
 ---
 
@@ -336,6 +337,13 @@ This index tracks all backlog items with their current status and metadata.
 - 2026-01-02: **SPRINT-014 COMPLETE** - All 9 tasks merged (PRs #266-274): Sync status service, dedup schema, incremental sync (Gmail/Outlook/iPhone), Message-ID extraction, sync lock UI, LLM filter, integration tests
 - 2026-01-02: BACKLOG-032 (Handle Backup in Progress), 090 (Incremental Sync), 091 Phase 1 (Gmail Message-ID) marked complete
 - 2026-01-02: Added BACKLOG-135 (window.d.ts Type Definitions) - Medium priority, from TASK-910 token overrun (~6M tokens due to type debugging)
+- 2026-01-02: **SPRINT-014 RETROSPECTIVE** completed - identified 3 major incidents:
+  - Incident 1: Parallel agent race condition (TASK-906+908) consumed ~18M tokens (BACKLOG-132)
+  - Incident 2: window.d.ts type gaps (TASK-910) consumed ~6M tokens (BACKLOG-135)
+  - Incident 3: LLM filter debugging (TASK-911) consumed ~2.5M tokens
+- 2026-01-02: **Token efficiency for SPRINT-014:** ~0.4% of tokens produced mergeable work
+- 2026-01-02: Service category now has data: 5 tasks, -45% avg variance (suggested multiplier: 0.55x)
+- 2026-01-02: BACKLOG-132 (Mandatory Worktree Enforcement) completed - TASK-913, PR #274 merged (3 turns, ~23K tokens, 10m)
 
 ---
 
@@ -347,16 +355,17 @@ This index tracks all backlog items with their current status and metadata.
 
 | Category | Tasks | Avg Variance | Trend | Adjustment Factor |
 |----------|-------|--------------|-------|-------------------|
-| schema | 3 | +30% | under | 1.3x |
+| schema | 4 | +20% | under | 1.2x |
 | refactor | 10 | -52% | over | **0.5x** |
-| test | 1 | -7% | accurate | 1.0x |
+| test | 2 | -15% | accurate | 0.9x |
 | config | 1 | -62% | over | 0.5x |
 | security | 2 | -65% | over | 0.4x |
-| service | 0 | - | - | TBD |
+| service | 5 | -45% | over | **0.55x** |
 | ipc | 0 | - | - | TBD |
-| ui | 0 | - | - | TBD |
+| ui | 0 | - | - | TBD (SPRINT-014 incident skews data) |
 
-**Note:** Refactor category now has sufficient data (10 tasks) for reliable adjustment factor.
+**Note:** Refactor and service categories now have sufficient data for reliable adjustment factors.
+**Warning:** UI category variance unreliable due to TASK-910 type debugging incident.
 
 ### Variance Breakdown (All Completed Tasks)
 
@@ -378,6 +387,15 @@ This index tracks all backlog items with their current status and metadata.
 | TASK-519 | refactor | 6-8 | 4 | -43% | Clean hook boundaries |
 | TASK-520 | refactor | 3-4 | 1 | -71% | Directory restructure trivial |
 | **TASK-704** | **ui/ipc** | **10-14** | **~24** | **+100%** | **CI debugging incident (22h) - metrics not captured** |
+| TASK-904 | service | 4-6 | 2 | -60% | Clean IPC implementation |
+| TASK-905 | schema | 3-4 | 5 | +25% | Migration pattern discovery |
+| **TASK-906** | **service** | **4-6** | **incident** | **245x** | **Parallel agent race condition (BACKLOG-132)** |
+| TASK-907 | service | 4-6 | 1 | -80% | Trivial extension of TASK-906 pattern |
+| **TASK-908** | **service** | **3-4** | **incident** | **893x** | **Parallel agent race condition (BACKLOG-132)** |
+| TASK-909 | service | 3-4 | 1 | -70% | Clean header extraction |
+| **TASK-910** | **ui** | **3-4** | **incident** | **~400x** | **window.d.ts type gap (BACKLOG-135)** |
+| TASK-911 | service | 2-3 | 2 | 0% | On target |
+| TASK-912 | test | 4-6 | 4 | -20% | Clean test authoring |
 
 ### Learnings
 
@@ -387,20 +405,24 @@ This index tracks all backlog items with their current status and metadata.
 4. **Security tasks are overestimated** - avg -65% (use 0.4x multiplier)
 5. **Well-structured source code accelerates refactoring** - SPRINT-008 showed clean component boundaries enable faster extraction
 6. **Sequential refactor tasks compound efficiency** - each task builds on prior work, reducing discovery time
-7. **Need more data on: service, ipc, ui categories**
-8. **⚠️ CI/debugging incidents can dwarf implementation time** - TASK-704 took 30min to implement but 22h to debug CI issues. Incident tracking is MANDATORY (see BACKLOG-126)
+7. **Service tasks overestimated when clean** - SPRINT-014 showed -45% avg variance (excluding incidents)
+8. **CI/debugging incidents can dwarf implementation time** - TASK-704 took 30min to implement but 22h to debug CI issues. Incident tracking is MANDATORY (see BACKLOG-126)
+9. **Parallel agent isolation is MANDATORY** - SPRINT-014 race condition (TASK-906+908) consumed ~18M tokens. Use worktrees for all background agents (BACKLOG-132)
+10. **Type definition gaps cause debugging spirals** - SPRINT-014 TASK-910 consumed ~6M tokens due to window.d.ts missing getUnifiedStatus() (BACKLOG-135)
 
 ### PM Estimation Guidelines (Update as patterns emerge)
 
 | Category | Base Estimate | Adjustment | Notes |
 |----------|---------------|------------|-------|
-| schema | PM estimate | x 1.3 | High variance, add buffer |
+| schema | PM estimate | x 1.2 | High variance, add buffer |
 | refactor | PM estimate | **x 0.5** | Consistently overestimate (10 tasks, -52% avg) |
-| test | PM estimate | x 1.0 | Usually accurate |
+| test | PM estimate | x 0.9 | Usually accurate, slight overestimate |
 | config | PM estimate | x 0.5 | Significantly overestimate |
 | security | PM estimate | x 0.4 | SPRINT-009 showed simpler implementations |
-| service | PM estimate | x 1.0 | TBD - need data |
+| service | PM estimate | **x 0.55** | SPRINT-014 showed -45% avg variance |
 | ipc | PM estimate | x 1.5 | TBD - suspected underestimate |
-| ui | PM estimate | x 1.0 | TBD - need data |
+| ui | PM estimate | x 1.0 | TBD - SPRINT-014 incident skews data |
 
 **SPRINT-008 Insight**: For refactor sprints targeting well-structured code with clear boundaries, consider x 0.4 or even x 0.3 multiplier.
+
+**SPRINT-014 Insight**: Token overruns from infrastructure issues (race conditions, type gaps) can exceed implementation costs by 100-900x. Prevention is critical - see BACKLOG-132, 133, 135.
