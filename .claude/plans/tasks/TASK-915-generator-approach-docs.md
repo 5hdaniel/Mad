@@ -361,8 +361,8 @@ Verification:
 |-------|-------|--------|------|
 | Planning (Plan) | 0 | ~0K | 0 min |
 | Implementation (Impl) | 2 | ~8K | 5 min |
-| Debugging (Debug) | 0 | ~0K | 0 min |
-| **Engineer Total** | 2 | ~8K | 5 min |
+| Debugging (Debug) | 1 | ~4K | 3 min |
+| **Engineer Total** | 3 | ~12K | 8 min |
 ```
 
 ### Notes
@@ -379,7 +379,10 @@ None
 - Added fixture check as checklist items in plan-first-protocol under Engineers section
 
 **Issues encountered:**
-None
+CI "Validate PR Metrics" check failed twice due to:
+1. Shell special chars in PR body (">50" interpreted as redirect)
+2. "Estimate vs Actual" vs "Estimated vs Actual" text mismatch
+Fixed by updating PR body to avoid special chars and use exact text match.
 
 **Reviewer notes:**
 All acceptance criteria met. Documentation follows existing patterns.
@@ -392,10 +395,10 @@ All acceptance criteria met. Documentation follows existing patterns.
 | Files to modify | 2 | 2 | 0 | As expected |
 | Code volume | ~80 lines | ~115 lines | +35 | Added reference section, expanded tables |
 
-**Total Variance:** Est 1-2 turns -> Actual 2 turns (0% variance)
+**Total Variance:** Est 1-2 turns -> Actual 3 turns (50% over due to CI debugging)
 
 **Root cause of variance:**
-Estimate was accurate. Task file provided excellent guidance.
+Implementation was as expected (2 turns). Extra turn for debugging CI validation failures.
 
 **Suggestion for similar tasks:**
 Estimate is good for docs tasks with explicit implementation notes.
