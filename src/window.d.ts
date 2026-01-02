@@ -48,6 +48,23 @@ interface SyncResult {
 }
 
 /**
+ * Unified sync status (TASK-904)
+ * Aggregates status from backup and sync orchestrator
+ */
+interface UnifiedSyncStatus {
+  /** True if any backup/sync operation is currently running */
+  isAnyOperationRunning: boolean;
+  /** True if an iPhone backup is in progress */
+  backupInProgress: boolean;
+  /** True if email/message sync is in progress (not backup) */
+  emailSyncInProgress: boolean;
+  /** Human-readable label for the current operation, or null if idle */
+  currentOperation: string | null;
+  /** Current sync phase from orchestrator */
+  syncPhase: "idle" | "backup" | "decrypting" | "parsing-contacts" | "parsing-messages" | "resolving" | "cleanup" | "complete" | "error";
+}
+
+/**
  * iOS Device information from libimobiledevice
  */
 interface iOSDeviceInfo {
@@ -501,6 +518,12 @@ interface MainAPI {
       isRunning: boolean;
       phase: string;
     }>;
+
+    /**
+     * Get unified sync status (aggregates backup + orchestrator state)
+     * TASK-904: Use this to check if any sync operation is running
+     */
+    getUnifiedStatus: () => Promise<UnifiedSyncStatus>;
 
     /** Get connected devices */
     getDevices: () => Promise<iOSDeviceInfo[]>;

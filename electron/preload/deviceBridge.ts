@@ -246,6 +246,13 @@ export const syncBridge = {
   getStatus: () => ipcRenderer.invoke("sync:status"),
 
   /**
+   * Gets unified sync status (aggregates backup + orchestrator state)
+   * TASK-904: Use this to check if any sync operation is running
+   * @returns Unified sync status with operation details
+   */
+  getUnifiedStatus: () => ipcRenderer.invoke("sync:getUnifiedStatus"),
+
+  /**
    * Gets all connected iOS devices
    * @returns List of connected devices
    */
