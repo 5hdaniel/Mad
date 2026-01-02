@@ -313,28 +313,26 @@ class TransactionService {
             ? `[${i + 1}/${providers.length}] ${providerName}: `
             : "";
 
-        // Get last sync time for incremental fetch (Gmail only for now - TASK-906)
+        // Get last sync time for incremental fetch (TASK-906: Gmail, TASK-907: Outlook)
         let effectiveStartDate = startDate;
-        if (provider === "google") {
-          const lastSyncAt = await databaseService.getOAuthTokenSyncTime(userId, provider);
-          if (lastSyncAt) {
-            // Use last sync time for incremental fetch
-            effectiveStartDate = lastSyncAt;
-            await logService.info(
-              `Incremental sync: fetching emails since ${lastSyncAt.toISOString()}`,
-              "TransactionService.scanAndExtractTransactions",
-              { userId, provider, lastSyncAt: lastSyncAt.toISOString() },
-            );
-          } else {
-            // First sync: use 90-day lookback (or user preference if shorter)
-            const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
-            effectiveStartDate = startDate > ninetyDaysAgo ? startDate : ninetyDaysAgo;
-            await logService.info(
-              `First sync: fetching last 90 days of emails`,
-              "TransactionService.scanAndExtractTransactions",
-              { userId, provider, startDate: effectiveStartDate.toISOString() },
-            );
-          }
+        const lastSyncAt = await databaseService.getOAuthTokenSyncTime(userId, provider);
+        if (lastSyncAt) {
+          // Use last sync time for incremental fetch
+          effectiveStartDate = lastSyncAt;
+          await logService.info(
+            `Incremental sync: fetching emails since ${lastSyncAt.toISOString()}`,
+            "TransactionService.scanAndExtractTransactions",
+            { userId, provider, lastSyncAt: lastSyncAt.toISOString() },
+          );
+        } else {
+          // First sync: use 90-day lookback (or user preference if shorter)
+          const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+          effectiveStartDate = startDate > ninetyDaysAgo ? startDate : ninetyDaysAgo;
+          await logService.info(
+            `First sync: fetching last 90 days of emails`,
+            "TransactionService.scanAndExtractTransactions",
+            { userId, provider, startDate: effectiveStartDate.toISOString() },
+          );
         }
 
         if (onProgress)
@@ -480,18 +478,16 @@ class TransactionService {
         },
       );
 
-      // Step 5: Update last_sync_at for successful providers (Gmail only for now - TASK-906)
+      // Step 5: Update last_sync_at for successful providers (TASK-906: Gmail, TASK-907: Outlook)
       // This happens AFTER successful storage to ensure we don't skip emails on next sync
       const syncTime = new Date();
       for (const provider of successfulProviders) {
-        if (provider === "google") {
-          await databaseService.updateOAuthTokenSyncTime(userId, provider, syncTime);
-          await logService.info(
-            `Updated last_sync_at for ${provider}`,
-            "TransactionService.scanAndExtractTransactions",
-            { userId, provider, syncTime: syncTime.toISOString() },
-          );
-        }
+        await databaseService.updateOAuthTokenSyncTime(userId, provider, syncTime);
+        await logService.info(
+          `Updated last_sync_at for ${provider}`,
+          "TransactionService.scanAndExtractTransactions",
+          { userId, provider, syncTime: syncTime.toISOString() },
+        );
       }
 
       // Step 6: Complete
