@@ -192,7 +192,7 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-128 | Add Type Verification Checklist for Fixture Tasks | docs | Medium | Pending | SPRINT-012 | 1-2 | ~6K | 10-15m | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-128.md](BACKLOG-128.md) |
 | BACKLOG-129 | Create CI Troubleshooting Documentation | docs | Medium | Pending | SPRINT-012 | 2-3 | ~10K | 15-20m | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-129.md](BACKLOG-129.md) |
 | BACKLOG-130 | Sub-Agent Permission Auto-Denial Incident | infra/process | High | Pending | SPRINT-012 | 1-2 | ~8K | 10-15m | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-130.md](BACKLOG-130.md) |
-| BACKLOG-132 | Mandatory Worktree for Parallel/Background Agents | docs/process | Critical | Completed | - | 1-2 | ~5K | 8-12m | 2 | ~8K | 5m | 1 | ~15K | 5m | 0 | 0 | 0 | 3 | ~23K | 10m | 0% | [BACKLOG-132.md](BACKLOG-132.md) |
+| BACKLOG-132 | Mandatory Worktree for Parallel/Background Agents | docs/process | Critical | Completed | - | 1-2 | ~5K | 8-12m | 2 | ~8K | 5m | 1 | ~15K | 5m | 0 | 0 | 0 | 3 | ~23K | 10m | +360% | [BACKLOG-132.md](BACKLOG-132.md) |
 
 ---
 
@@ -344,6 +344,7 @@ This index tracks all backlog items with their current status and metadata.
 - 2026-01-02: **Token efficiency for SPRINT-014:** ~0.4% of tokens produced mergeable work
 - 2026-01-02: Service category now has data: 5 tasks, -45% avg variance (suggested multiplier: 0.55x)
 - 2026-01-02: BACKLOG-132 (Mandatory Worktree Enforcement) completed - TASK-913, PR #274 merged (3 turns, ~23K tokens, 10m)
+- 2026-01-02: Updated BACKLOG-132 variance to +360% (total tokens vs impl-only estimate); added SR Review Overhead table to PM Estimation Guidelines
 
 ---
 
@@ -396,6 +397,7 @@ This index tracks all backlog items with their current status and metadata.
 | **TASK-910** | **ui** | **3-4** | **incident** | **~400x** | **window.d.ts type gap (BACKLOG-135)** |
 | TASK-911 | service | 2-3 | 2 | 0% | On target |
 | TASK-912 | test | 4-6 | 4 | -20% | Clean test authoring |
+| BACKLOG-132 | docs | 1-2 | 3 | +360% tokens | PM estimate excluded SR review overhead (~15K) |
 
 ### Learnings
 
@@ -409,6 +411,7 @@ This index tracks all backlog items with their current status and metadata.
 8. **CI/debugging incidents can dwarf implementation time** - TASK-704 took 30min to implement but 22h to debug CI issues. Incident tracking is MANDATORY (see BACKLOG-126)
 9. **Parallel agent isolation is MANDATORY** - SPRINT-014 race condition (TASK-906+908) consumed ~18M tokens. Use worktrees for all background agents (BACKLOG-132)
 10. **Type definition gaps cause debugging spirals** - SPRINT-014 TASK-910 consumed ~6M tokens due to window.d.ts missing getUnifiedStatus() (BACKLOG-135)
+11. **PM estimates must include SR review overhead** - BACKLOG-132 showed +360% token variance because PM estimated impl only (~5K), but SR review added ~15K. Future estimates should add ~10-20K for mandatory PR review phase.
 
 ### PM Estimation Guidelines (Update as patterns emerge)
 
@@ -422,6 +425,21 @@ This index tracks all backlog items with their current status and metadata.
 | service | PM estimate | **x 0.55** | SPRINT-014 showed -45% avg variance |
 | ipc | PM estimate | x 1.5 | TBD - suspected underestimate |
 | ui | PM estimate | x 1.0 | TBD - SPRINT-014 incident skews data |
+
+#### SR Review Overhead (Add to ALL estimates)
+
+| Task Complexity | SR Review Overhead |
+|-----------------|-------------------|
+| Trivial (docs, config) | +10-15K tokens |
+| Standard (service, ui) | +15-25K tokens |
+| Complex (schema, refactor) | +25-40K tokens |
+
+**Formula:** `Total Estimate = (Impl Estimate × Category Adjustment) + SR Review Overhead`
+
+**Example:** A `docs` task estimated at 2-3 turns, ~10K tokens:
+- Adjusted impl: ~10K × 0.5 = ~5K
+- SR review overhead: +10-15K
+- **Total estimate: ~15-20K tokens**
 
 **SPRINT-008 Insight**: For refactor sprints targeting well-structured code with clear boundaries, consider x 0.4 or even x 0.3 multiplier.
 
