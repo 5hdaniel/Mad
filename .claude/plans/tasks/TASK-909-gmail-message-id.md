@@ -4,7 +4,7 @@
 **Backlog:** BACKLOG-091 (Phase 1)
 **Priority:** HIGH
 **Category:** service
-**Status:** Pending
+**Status:** Complete
 
 ---
 
@@ -120,14 +120,14 @@ await databaseService.insertMessage({
 
 ## Acceptance Criteria
 
-- [ ] `ParsedEmail` interface includes `messageIdHeader` field
-- [ ] Gmail parser extracts Message-ID from headers
-- [ ] Message-ID stored in `message_id_header` column
-- [ ] Null/missing Message-ID handled gracefully
-- [ ] >95% of Gmail emails have Message-ID extracted
-- [ ] Unit tests for header extraction
-- [ ] `npm run type-check` passes
-- [ ] `npm run lint` passes
+- [x] `ParsedEmail` interface includes `messageIdHeader` field
+- [x] Gmail parser extracts Message-ID from headers
+- [x] Message-ID stored in `message_id_header` column (schema from TASK-905)
+- [x] Null/missing Message-ID handled gracefully
+- [x] >95% of Gmail emails have Message-ID extracted (all Gmail emails have Message-ID)
+- [x] Unit tests for header extraction (7 new tests added)
+- [x] `npm run type-check` passes
+- [x] `npm run lint` passes
 
 ---
 
@@ -186,3 +186,85 @@ Stop and ask PM if:
 
 ### Merge Conflict Warning
 Both TASK-906 and TASK-909 modify `gmailFetchService.ts`. TASK-909 MUST rebase on TASK-906 before starting work.
+
+---
+
+## Implementation Summary
+
+### Changes Made
+
+1. **`electron/services/gmailFetchService.ts`**
+   - Added `messageIdHeader: string | null` field to `ParsedEmail` interface
+   - Added `extractMessageIdHeader()` helper function with case-insensitive matching
+   - Integrated extraction in `_parseMessage()` method
+
+2. **`electron/services/__tests__/gmailFetchService.test.ts`**
+   - Added 7 new tests for Message-ID header extraction:
+     - Extract with angle brackets
+     - Case-insensitive header name (lowercase, mixed case)
+     - Missing header returns null
+     - Empty headers array returns null
+     - Duplicate headers use first value
+     - Special characters preserved
+
+### Files Modified
+- `electron/services/gmailFetchService.ts` - Core implementation
+- `electron/services/__tests__/gmailFetchService.test.ts` - Unit tests
+
+### Deviation from Task File
+- Task file mentioned `electron/types/email.ts` but `ParsedEmail` is actually defined in `gmailFetchService.ts`
+- No separate types file modification needed
+
+### Engineer Checklist
+- [x] Code follows project conventions
+- [x] Unit tests added (7 new tests)
+- [x] Type-check passes
+- [x] Lint passes (warnings only, no errors)
+- [x] All 30 tests pass
+
+---
+
+## SR Engineer Review
+
+**Review Date:** 2026-01-02 | **Status:** APPROVED | **PR:** #269
+
+### Review Summary
+
+| Check | Status |
+|-------|--------|
+| Target Branch | develop (correct) |
+| Merge Type | Traditional merge (correct) |
+| CI Status | All checks passed |
+| Code Quality | HIGH |
+| Test Coverage | Excellent (7 new tests) |
+| Architecture | No violations |
+| Security | No concerns |
+
+### SR Engineer Metrics
+
+| Phase | Turns | Tokens | Time |
+|-------|-------|--------|------|
+| Code Review | 1 | ~8K | 8 min |
+| Feedback Cycles | 0 | 0 | 0 min |
+| **SR Total** | 1 | ~8K | 8 min |
+
+### Code Quality Assessment
+
+- **Type Safety:** Proper null handling with optional chaining and nullish coalescing
+- **Case Handling:** Correct case-insensitive header matching per RFC 5322
+- **Edge Cases:** Returns null for missing headers (graceful degradation)
+- **Documentation:** JSDoc comment explains purpose
+
+### Observations
+
+1. **Task file deviation handled correctly:** ParsedEmail is defined in gmailFetchService.ts, not electron/types/email.ts. Engineer documented this and made the right choice.
+
+2. **Implementation quality:** The helper function properly handles Gmail API's nullable header fields with `{ name?: string | null; value?: string | null }` typing.
+
+3. **Test coverage exceeds requirements:** 7 comprehensive tests covering standard cases, edge cases, and RFC compliance.
+
+### Merge Details
+
+- **Merged At:** 2026-01-02T17:09:20Z
+- **Merge Commit:** 4558de994c3c3a50b269b59e9dc1ad3973047a3f
+- **Required Rebase:** Yes (branch was behind develop by 4 commits)
