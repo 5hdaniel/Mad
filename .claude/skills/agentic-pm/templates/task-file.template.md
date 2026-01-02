@@ -139,6 +139,10 @@ This task's PR MUST pass:
 - **Tokens:** ~XK-YK
 - **Time:** ~Xm-Ym
 
+**Token Cap:** XK (4x upper estimate)
+
+> If you reach this cap, STOP and report to PM. See `.claude/docs/shared/token-cap-workflow.md`.
+
 **Estimation Assumptions:**
 
 | Factor | Assumption | Est. Turns |
