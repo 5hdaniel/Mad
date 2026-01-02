@@ -3,8 +3,8 @@
 This index tracks all backlog items with their current status and metadata.
 
 **Last Updated:** 2026-01-02
-**Total Items:** 144
-**Pending:** 83 | **In Progress:** 0 | **Completed:** 56 | **Obsolete:** 2 | **Deferred:** 2
+**Total Items:** 145
+**Pending:** 80 | **In Progress:** 0 | **Completed:** 59 | **Partial:** 1 | **Obsolete:** 2 | **Deferred:** 2
 
 ---
 
@@ -26,8 +26,8 @@ This index tracks all backlog items with their current status and metadata.
 ## Quick Filters
 
 ### By Priority
-- **Critical:** BACKLOG-030 (done), 032, 035 (done), 038 (done), 039 (done), 044 (done), 045 (done), 058 (done), 059 (done), 072 (done), 073 (done), 074 (done), 107 (done), 108 (done), 117 (done), **132** (NEW - parallel agent race condition)
-- **High:** BACKLOG-008, 009, 013, 016, 018, 020, 021, 023, 026, 031, 033, 037, 056, 060 (done), 061, 062, 063, 067, 075 (done), 076 (done), 084 (done), 085 (done), 088, 090, 091, 098, 099, 109 (done), 110 (done), **111**, **118**, **121**, 126 (done), 130 (done), **133** (NEW - token cap with early reporting), **134** (done - engineer token optimization)
+- **Critical:** BACKLOG-030 (done), 032 (done), 035 (done), 038 (done), 039 (done), 044 (done), 045 (done), 058 (done), 059 (done), 072 (done), 073 (done), 074 (done), 107 (done), 108 (done), 117 (done), **132** (NEW - parallel agent race condition)
+- **High:** BACKLOG-008, 009, 013, 016, 018, 020, 021, 023, 026, 031, 033, 037, 056, 060 (done), 061, 062, 063, 067, 075 (done), 076 (done), 084 (done), 085 (done), 088, 090 (done), 091 Phase 1 (done), 098, 099, 109 (done), 110 (done), **111**, **118**, **121**, 126 (done), 130 (done), **133** (NEW - token cap with early reporting), **134** (done - engineer token optimization)
 - **Medium:** Multiple (see full index), 014 (done), 077 (done), 078 (done), 079 (done), 081, 086, 087, 089, 092, 093, 094, 095, 096, 097, 100, 101, 102, **112**, **113**, **114**, **115**, **116**, 122 (done), 124 (done), 127 (done), 128 (done), 129 (done), **131**
 - **Low/Deferred:** BACKLOG-001, 003, 004, 010, 017, 069, 070, 071, **119**, **123**, **125**
 
@@ -45,7 +45,7 @@ This index tracks all backlog items with their current status and metadata.
 - **SPRINT-011 (Testing Infrastructure & Demo):** Completed - BACKLOG-108, 014 (5 tasks: TASK-800 to TASK-804)
 - **SPRINT-012 (Process & Documentation Improvements):** Completed - BACKLOG-124 (done), 126 (done), 127 (done), 128 (done), 129 (done), 130 (done) (6 tasks: TASK-805 to TASK-810, PR #262)
 - **SPRINT-013 (Architecture Cleanup):** Completed - BACKLOG-107 (done), 109 (done), 110 (done) (3 tasks: TASK-901 to TASK-903, PRs #263-265)
-- **SPRINT-014 (Feature/Performance):** Planning - BACKLOG-032, 090, 091 (Phase 1) (9 tasks: TASK-904 to TASK-912)
+- **SPRINT-014 (Feature/Performance):** Completed - BACKLOG-032 (done), 090 (done), 091 Phase 1 (done) (9 tasks: TASK-904 to TASK-912, PRs #266-274)
 - **Unassigned:** All others
 
 ### AI MVP Project - COMPLETE
@@ -97,7 +97,7 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-029 | App Startup Performance | infra | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-030 | Message Parser Async Yielding | service | Critical | Completed | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-031 | Incremental Backup Size Estimation | service | High | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
-| BACKLOG-032 | Handle Backup Already in Progress | service | Critical | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| BACKLOG-032 | Handle Backup Already in Progress | service | Critical | Completed | SPRINT-014 | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | TASK-904, 910 | - |
 | BACKLOG-033 | Check Supabase Terms Acceptance | service | High | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-034 | Phone Type Card Layout | ui | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-035 | Remove Orphaned Table | schema | Critical | Completed | SPRINT-003 | 5-8 | 20-30K | ~30m | 10 | ~40K | ~20m | - | - | - | - | - | - | 10 | ~40K | ~20m | +25% | [BACKLOG-035.md](BACKLOG-035.md) |
@@ -152,8 +152,8 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-087 | Onboarding Value Proposition Screen | ui | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-087.md](BACKLOG-087.md) |
 | BACKLOG-088 | Per-User Local ML Model | service | High | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-088.md](BACKLOG-088.md) |
 | BACKLOG-089 | Password Manager Support in Authentication | ui | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-089.md](BACKLOG-089.md) |
-| BACKLOG-090 | Incremental Sync - Only Process New Data | service | High | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-090.md](BACKLOG-090.md) |
-| BACKLOG-091 | Prevent Duplicate Emails Across Providers | service | High | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-091.md](BACKLOG-091.md) |
+| BACKLOG-090 | Incremental Sync - Only Process New Data | service | High | Completed | SPRINT-014 | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | TASK-906, 907, 908, 911 | [BACKLOG-090.md](BACKLOG-090.md) |
+| BACKLOG-091 | Prevent Duplicate Emails Across Providers | service | High | Partial | SPRINT-014 | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | Phase 1 done (TASK-905, 909), Phase 2 deferred | [BACKLOG-091.md](BACKLOG-091.md) |
 | BACKLOG-092 | Rename transactionDetailsModule | refactor | Low | Pending | - | 2-3 | ~10K | 15-20m | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-092.md](BACKLOG-092.md) |
 | BACKLOG-093 | Create common/ Module | refactor | Medium | Pending | - | 3-4 | ~15K | 20-30m | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-093.md](BACKLOG-093.md) |
 | BACKLOG-094 | Create llm/ Module | refactor | Medium | Pending | - | 2-3 | ~10K | 15-20m | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-094.md](BACKLOG-094.md) |
@@ -225,6 +225,7 @@ This index tracks all backlog items with their current status and metadata.
 | SPRINT-011 | Testing Infrastructure & Demo | Completed | BACKLOG-108, 014 (5 tasks: TASK-800 to TASK-804) - PRs #256-260 |
 | SPRINT-012 | Process & Documentation Improvements | Completed | BACKLOG-126, 124, 127, 128, 129, 130 (6 tasks: TASK-805 to TASK-810, PR #262) |
 | SPRINT-013 | Architecture Cleanup | Completed | BACKLOG-107, 109, 110 (3 tasks: TASK-901 to TASK-903, PRs #263-265, 12 turns, ~56K tokens) |
+| SPRINT-014 | Feature/Performance | Completed | BACKLOG-032, 090, 091 Phase 1 (9 tasks: TASK-904 to TASK-912, PRs #266-274) |
 
 ---
 
@@ -332,6 +333,9 @@ This index tracks all backlog items with their current status and metadata.
 - 2026-01-02: Created SPRINT-014 (Feature/Performance) - 9 tasks (TASK-904 to TASK-912)
 - 2026-01-02: SPRINT-014 scope: BACKLOG-032 (full), BACKLOG-090 (full), BACKLOG-091 (Phase 1 only - schema + Gmail Message-ID)
 - 2026-01-02: BACKLOG-091 Phase 2 (Outlook + content hash + full dedup) deferred to SPRINT-015
+- 2026-01-02: **SPRINT-014 COMPLETE** - All 9 tasks merged (PRs #266-274): Sync status service, dedup schema, incremental sync (Gmail/Outlook/iPhone), Message-ID extraction, sync lock UI, LLM filter, integration tests
+- 2026-01-02: BACKLOG-032 (Handle Backup in Progress), 090 (Incremental Sync), 091 Phase 1 (Gmail Message-ID) marked complete
+- 2026-01-02: Added BACKLOG-135 (window.d.ts Type Definitions) - Medium priority, from TASK-910 token overrun (~6M tokens due to type debugging)
 
 ---
 
