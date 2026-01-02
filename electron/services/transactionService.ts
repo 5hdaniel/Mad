@@ -299,6 +299,8 @@ class TransactionService {
     try {
       // Step 1: Fetch emails from all connected providers
       const allEmails: any[] = [];
+      // Track which providers we successfully fetched from (for updating last_sync_at later)
+      const successfulProviders: OAuthProvider[] = [];
 
       for (let i = 0; i < providers.length; i++) {
         // Check for cancellation before each provider
@@ -311,6 +313,30 @@ class TransactionService {
             ? `[${i + 1}/${providers.length}] ${providerName}: `
             : "";
 
+        // Get last sync time for incremental fetch (Gmail only for now - TASK-906)
+        let effectiveStartDate = startDate;
+        if (provider === "google") {
+          const lastSyncAt = await databaseService.getOAuthTokenSyncTime(userId, provider);
+          if (lastSyncAt) {
+            // Use last sync time for incremental fetch
+            effectiveStartDate = lastSyncAt;
+            await logService.info(
+              `Incremental sync: fetching emails since ${lastSyncAt.toISOString()}`,
+              "TransactionService.scanAndExtractTransactions",
+              { userId, provider, lastSyncAt: lastSyncAt.toISOString() },
+            );
+          } else {
+            // First sync: use 90-day lookback (or user preference if shorter)
+            const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+            effectiveStartDate = startDate > ninetyDaysAgo ? startDate : ninetyDaysAgo;
+            await logService.info(
+              `First sync: fetching last 90 days of emails`,
+              "TransactionService.scanAndExtractTransactions",
+              { userId, provider, startDate: effectiveStartDate.toISOString() },
+            );
+          }
+        }
+
         if (onProgress)
           onProgress({
             step: "fetching",
@@ -319,7 +345,7 @@ class TransactionService {
 
         const emails = await this._fetchEmails(userId, provider, {
           query: searchQuery,
-          after: startDate,
+          after: effectiveStartDate,
           before: endDate,
           maxResults: Math.floor(maxEmails / providers.length), // Split limit between providers
           onProgress: onProgress
@@ -345,6 +371,7 @@ class TransactionService {
         this.checkCancelled();
 
         allEmails.push(...emails);
+        successfulProviders.push(provider);
         await logService.info(
           `Fetched ${emails.length} emails from ${providerName}`,
           "TransactionService.scanAndExtractTransactions",
@@ -453,7 +480,21 @@ class TransactionService {
         },
       );
 
-      // Step 5: Complete
+      // Step 5: Update last_sync_at for successful providers (Gmail only for now - TASK-906)
+      // This happens AFTER successful storage to ensure we don't skip emails on next sync
+      const syncTime = new Date();
+      for (const provider of successfulProviders) {
+        if (provider === "google") {
+          await databaseService.updateOAuthTokenSyncTime(userId, provider, syncTime);
+          await logService.info(
+            `Updated last_sync_at for ${provider}`,
+            "TransactionService.scanAndExtractTransactions",
+            { userId, provider, syncTime: syncTime.toISOString() },
+          );
+        }
+      }
+
+      // Step 6: Complete
       if (onProgress)
         onProgress({ step: "complete", message: "Scan complete!" });
 

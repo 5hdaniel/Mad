@@ -328,6 +328,82 @@ describe("BackupService", () => {
     });
   });
 
+  describe("getBackupMetadata (TASK-908)", () => {
+    it("should return null when manifest does not exist", async () => {
+      // Reset fs.access to reject (file not found)
+      const fsModule = require("fs");
+      fsModule.promises.access = jest
+        .fn()
+        .mockRejectedValue(new Error("Not found"));
+
+      const result = await backupService.getBackupMetadata("/some/backup/path");
+      expect(result).toBeNull();
+    });
+
+    it("should return metadata when manifest exists", async () => {
+      const fsModule = require("fs");
+      const mockDate = new Date("2024-01-15T10:00:00Z");
+
+      // Mock pathExists to return true for manifest
+      fsModule.promises.access = jest.fn().mockResolvedValue(undefined);
+      fsModule.promises.stat = jest.fn().mockResolvedValue({
+        mtime: mockDate,
+        size: 1024,
+      });
+      fsModule.promises.readFile = jest
+        .fn()
+        .mockResolvedValue(Buffer.from("test manifest content"));
+
+      const result = await backupService.getBackupMetadata("/mock/backup/path");
+
+      expect(result).not.toBeNull();
+      expect(result?.modifiedAt).toEqual(mockDate);
+      expect(result?.manifestHash).toBeDefined();
+      expect(result?.manifestHash).toHaveLength(64); // SHA-256 hex is 64 chars
+    });
+
+    it("should return consistent hash for same content", async () => {
+      const fsModule = require("fs");
+      const mockContent = Buffer.from("consistent manifest content");
+
+      fsModule.promises.access = jest.fn().mockResolvedValue(undefined);
+      fsModule.promises.stat = jest.fn().mockResolvedValue({
+        mtime: new Date(),
+        size: 1024,
+      });
+      fsModule.promises.readFile = jest.fn().mockResolvedValue(mockContent);
+
+      const result1 = await backupService.getBackupMetadata("/mock/backup/path");
+      const result2 = await backupService.getBackupMetadata("/mock/backup/path");
+
+      expect(result1?.manifestHash).toBe(result2?.manifestHash);
+    });
+
+    it("should return different hash for different content", async () => {
+      const fsModule = require("fs");
+
+      fsModule.promises.access = jest.fn().mockResolvedValue(undefined);
+      fsModule.promises.stat = jest.fn().mockResolvedValue({
+        mtime: new Date(),
+        size: 1024,
+      });
+
+      // First call with content A
+      fsModule.promises.readFile = jest
+        .fn()
+        .mockResolvedValue(Buffer.from("content A"));
+      const result1 = await backupService.getBackupMetadata("/mock/backup/path");
+
+      // Second call with content B
+      fsModule.promises.readFile = jest
+        .fn()
+        .mockResolvedValue(Buffer.from("content B"));
+      const result2 = await backupService.getBackupMetadata("/mock/backup/path");
+
+      expect(result1?.manifestHash).not.toBe(result2?.manifestHash);
+    });
+  });
+
   describe("event emitter", () => {
     it("should support progress event listeners", () => {
       const listener = jest.fn();

@@ -951,6 +951,52 @@ export class BackupService extends EventEmitter {
   }
 
   /**
+   * Get backup metadata for change detection (TASK-908)
+   *
+   * Returns the modification time and SHA-256 hash of Manifest.db,
+   * which is the primary indicator of backup content changes.
+   *
+   * @param backupPath Full path to the backup directory
+   * @returns Metadata object or null if backup/manifest doesn't exist
+   */
+  async getBackupMetadata(backupPath: string): Promise<{
+    modifiedAt: Date;
+    manifestHash: string;
+  } | null> {
+    try {
+      const manifestPath = path.join(backupPath, "Manifest.db");
+
+      // Check if manifest exists
+      if (!(await this.pathExists(manifestPath))) {
+        log.debug("[BackupService] Manifest.db not found at:", manifestPath);
+        return null;
+      }
+
+      // Get file stats for modification time
+      const stats = await fs.stat(manifestPath);
+
+      // Compute SHA-256 hash of manifest for reliable change detection
+      const { createHash } = await import("crypto");
+      const manifestContent = await fs.readFile(manifestPath);
+      const hash = createHash("sha256").update(manifestContent).digest("hex");
+
+      log.debug("[BackupService] Backup metadata:", {
+        backupPath,
+        modifiedAt: stats.mtime.toISOString(),
+        manifestHash: hash.substring(0, 16) + "...", // Log truncated for brevity
+      });
+
+      return {
+        modifiedAt: stats.mtime,
+        manifestHash: hash,
+      };
+    } catch (error) {
+      log.error("[BackupService] Failed to get backup metadata:", error);
+      return null;
+    }
+  }
+
+  /**
    * List existing backups
    */
   async listBackups(): Promise<BackupInfo[]> {

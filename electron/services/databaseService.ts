@@ -42,6 +42,10 @@ import { DatabaseError, NotFoundError } from "../types";
 import { databaseEncryptionService } from "./databaseEncryptionService";
 import type { AuditLogEntry, AuditLogDbRow } from "./auditService";
 import { validateFields } from "../utils/sqlFieldWhitelist";
+import {
+  getOAuthTokenSyncTime as getOAuthTokenSyncTimeDb,
+  updateOAuthTokenSyncTime as updateOAuthTokenSyncTimeDb,
+} from "./db/oauthTokenDbService";
 
 // Contact with activity metadata
 interface ContactWithActivity extends Contact {
@@ -2439,6 +2443,35 @@ class DatabaseService implements IDatabaseService {
     const sql =
       "DELETE FROM oauth_tokens WHERE user_id = ? AND provider = ? AND purpose = ?";
     this._run(sql, [userId, provider, purpose]);
+  }
+
+  /**
+   * Get the last sync timestamp for an OAuth token
+   * Used for incremental email fetching
+   * @param userId - User ID
+   * @param provider - OAuth provider (google | microsoft)
+   * @returns Date of last sync, or null if never synced
+   */
+  async getOAuthTokenSyncTime(
+    userId: string,
+    provider: OAuthProvider,
+  ): Promise<Date | null> {
+    return getOAuthTokenSyncTimeDb(userId, provider);
+  }
+
+  /**
+   * Update the last sync timestamp for an OAuth token
+   * Should only be called AFTER successful email storage
+   * @param userId - User ID
+   * @param provider - OAuth provider (google | microsoft)
+   * @param syncTime - Timestamp of the sync
+   */
+  async updateOAuthTokenSyncTime(
+    userId: string,
+    provider: OAuthProvider,
+    syncTime: Date,
+  ): Promise<void> {
+    return updateOAuthTokenSyncTimeDb(userId, provider, syncTime);
   }
 
   // ============================================
