@@ -345,6 +345,7 @@ This index tracks all backlog items with their current status and metadata.
 - 2026-01-02: Service category now has data: 5 tasks, -45% avg variance (suggested multiplier: 0.55x)
 - 2026-01-02: BACKLOG-132 (Mandatory Worktree Enforcement) completed - TASK-913, PR #274 merged (3 turns, ~23K tokens, 10m)
 - 2026-01-02: Updated BACKLOG-132 variance to +360% (total tokens vs impl-only estimate); added SR Review Overhead table to PM Estimation Guidelines
+- 2026-01-02: Added data quality warning to Estimation Accuracy Analysis; marked all tasks with ✓/⚠️/❌ for complete/incomplete/incident metrics; only 8 of 30 tasks have complete lifecycle data
 
 ---
 
@@ -352,52 +353,68 @@ This index tracks all backlog items with their current status and metadata.
 
 **Purpose:** Track PM estimation accuracy by category to improve future predictions.
 
+> ⚠️ **DATA QUALITY WARNING (as of SPRINT-015)**
+>
+> ~60% of completed tasks have incomplete metrics - missing PR review and/or debug phases.
+> Variance calculations for these tasks compare impl-only actuals to full-lifecycle estimates,
+> making the data **unreliable**. Only tasks marked ✓ in the variance breakdown have complete
+> lifecycle metrics. Category adjustment factors should be recalculated once more complete data
+> is available.
+
 ### By Category (Updated after each sprint)
 
-| Category | Tasks | Avg Variance | Trend | Adjustment Factor |
-|----------|-------|--------------|-------|-------------------|
-| schema | 4 | +20% | under | 1.2x |
-| refactor | 10 | -52% | over | **0.5x** |
-| test | 2 | -15% | accurate | 0.9x |
-| config | 1 | -62% | over | 0.5x |
-| security | 2 | -65% | over | 0.4x |
-| service | 5 | -45% | over | **0.55x** |
-| ipc | 0 | - | - | TBD |
-| ui | 0 | - | - | TBD (SPRINT-014 incident skews data) |
+| Category | Tasks | Complete (✓) | Avg Variance | Trend | Adjustment Factor |
+|----------|-------|--------------|--------------|-------|-------------------|
+| schema | 4 | 0 | +20% | under | 1.2x ⚠️ |
+| refactor | 10 | 1 | -52% | over | **0.5x** ⚠️ |
+| test | 3 | 2 | +14% | mixed | 1.1x |
+| config | 1 | 1 | -62% | over | 0.5x |
+| security | 2 | 0 | -65% | over | 0.4x ⚠️ |
+| service | 6 | 1 | -47% | over | **0.55x** ⚠️ |
+| docs | 1 | 1 | +360% | under | **See SR Review Overhead** |
+| ui | 1 | 1 | -72% | over | 0.3x |
+| ipc | 0 | 0 | - | - | TBD |
 
-**Note:** Refactor and service categories now have sufficient data for reliable adjustment factors.
-**Warning:** UI category variance unreliable due to TASK-910 type debugging incident.
+**⚠️ Warning:** Categories with 0-1 complete (✓) tasks have unreliable adjustment factors.
+Categories with reliable data (2+ complete tasks): `test` only.
 
 ### Variance Breakdown (All Completed Tasks)
 
-| Task | Category | Est | Actual | Variance | Root Cause |
-|------|----------|-----|--------|----------|------------|
-| BACKLOG-035 | schema | 5-8 | 10 | +25% | Migration complexity underestimated |
-| BACKLOG-038 | schema | 10-15 | 8 | -36% | Simpler than expected |
-| BACKLOG-039 | schema | 10-15 | 25 | +100% | Unexpected edge cases in status enum |
-| BACKLOG-058 | refactor | 60-80 | 32 | -54% | Clean extraction, fewer dependencies |
-| BACKLOG-059 | test | 12-18 | 14 | -7% | Accurate estimate |
-| BACKLOG-060 | refactor | 10-15 | 14 | +12% | Accurate estimate |
-| BACKLOG-072 | config | 23-35 | 11 | -62% | Workflow docs simpler than expected |
-| TASK-513 | refactor | 4-6 | 2 | -60% | Toast fix simpler than expected |
-| TASK-514 | refactor | 6-8 | 4 | -43% | Clean component boundaries |
-| TASK-515 | refactor | 4-6 | 1 | -80% | Trivial extraction |
-| TASK-516 | refactor | 8-10 | 5 | -44% | Well-structured source code |
-| TASK-517 | refactor | 4-6 | 4 | -20% | Hook extraction on target |
-| TASK-518 | refactor | 4-6 | 5 | 0% | Accurate estimate |
-| TASK-519 | refactor | 6-8 | 4 | -43% | Clean hook boundaries |
-| TASK-520 | refactor | 3-4 | 1 | -71% | Directory restructure trivial |
-| **TASK-704** | **ui/ipc** | **10-14** | **~24** | **+100%** | **CI debugging incident (22h) - metrics not captured** |
-| TASK-904 | service | 4-6 | 2 | -60% | Clean IPC implementation |
-| TASK-905 | schema | 3-4 | 5 | +25% | Migration pattern discovery |
-| **TASK-906** | **service** | **4-6** | **incident** | **245x** | **Parallel agent race condition (BACKLOG-132)** |
-| TASK-907 | service | 4-6 | 1 | -80% | Trivial extension of TASK-906 pattern |
-| **TASK-908** | **service** | **3-4** | **incident** | **893x** | **Parallel agent race condition (BACKLOG-132)** |
-| TASK-909 | service | 3-4 | 1 | -70% | Clean header extraction |
-| **TASK-910** | **ui** | **3-4** | **incident** | **~400x** | **window.d.ts type gap (BACKLOG-135)** |
-| TASK-911 | service | 2-3 | 2 | 0% | On target |
-| TASK-912 | test | 4-6 | 4 | -20% | Clean test authoring |
-| BACKLOG-132 | docs | 1-2 | 3 | +360% tokens | PM estimate excluded SR review overhead (~15K) |
+**Legend:** ✓ = Complete metrics (Impl + PR + Debug) | ⚠️ = Impl-only (missing PR/Debug) | ❌ = Incident
+
+| Task | Category | Est | Actual | Variance | Data | Root Cause |
+|------|----------|-----|--------|----------|------|------------|
+| BACKLOG-014 | ui | 6-10 | 5 | -72% | ✓ | Simpler demo update |
+| BACKLOG-035 | schema | 5-8 | 10 | +25% | ⚠️ | Migration complexity underestimated |
+| BACKLOG-038 | schema | 10-15 | 8 | -36% | ⚠️ | Simpler than expected |
+| BACKLOG-039 | schema | 10-15 | 25 | +100% | ⚠️ | Unexpected edge cases in status enum |
+| BACKLOG-058 | refactor | 60-80 | 32 | -54% | ✓ | Clean extraction, fewer dependencies |
+| BACKLOG-059 | test | 12-18 | 14 | -7% | ✓ | Accurate estimate |
+| BACKLOG-060 | refactor | 10-15 | 14 | +12% | ⚠️ | Accurate estimate |
+| BACKLOG-072 | config | 23-35 | 11 | -62% | ✓ | Workflow docs simpler than expected |
+| BACKLOG-108 | test | 2-4 | 6 | +50% | ✓ | Flaky test fix more complex |
+| BACKLOG-117 | service | 4-6 | 3 | -50% | ✓ | Auth regression simpler than expected |
+| TASK-513 | refactor | 4-6 | 2 | -60% | ⚠️ | Toast fix simpler than expected |
+| TASK-514 | refactor | 6-8 | 4 | -43% | ⚠️ | Clean component boundaries |
+| TASK-515 | refactor | 4-6 | 1 | -80% | ⚠️ | Trivial extraction |
+| TASK-516 | refactor | 8-10 | 5 | -44% | ⚠️ | Well-structured source code |
+| TASK-517 | refactor | 4-6 | 4 | -20% | ⚠️ | Hook extraction on target |
+| TASK-518 | refactor | 4-6 | 5 | 0% | ⚠️ | Accurate estimate |
+| TASK-519 | refactor | 6-8 | 4 | -43% | ⚠️ | Clean hook boundaries |
+| TASK-520 | refactor | 3-4 | 1 | -71% | ⚠️ | Directory restructure trivial |
+| **TASK-704** | **ui/ipc** | **10-14** | **~24** | **+100%** | ⚠️ | **CI debugging incident (22h) - metrics not captured** |
+| TASK-904 | service | 4-6 | 2 | -60% | ⚠️ | Clean IPC implementation |
+| TASK-905 | schema | 3-4 | 5 | +25% | ⚠️ | Migration pattern discovery |
+| **TASK-906** | **service** | **4-6** | **incident** | **245x** | ❌ | **Parallel agent race condition (BACKLOG-132)** |
+| TASK-907 | service | 4-6 | 1 | -80% | ⚠️ | Trivial extension of TASK-906 pattern |
+| **TASK-908** | **service** | **3-4** | **incident** | **893x** | ❌ | **Parallel agent race condition (BACKLOG-132)** |
+| TASK-909 | service | 3-4 | 1 | -70% | ⚠️ | Clean header extraction |
+| **TASK-910** | **ui** | **3-4** | **incident** | **~400x** | ❌ | **window.d.ts type gap (BACKLOG-135)** |
+| TASK-911 | service | 2-3 | 2 | 0% | ⚠️ | On target |
+| TASK-912 | test | 4-6 | 4 | -20% | ⚠️ | Clean test authoring |
+| BACKLOG-132 | docs | 1-2 | 3 | +360% | ✓ | PM estimate excluded SR review overhead (~15K) |
+
+**Summary:** 8 tasks with ✓ complete data, 19 tasks with ⚠️ incomplete data, 3 ❌ incidents
 
 ### Learnings
 
