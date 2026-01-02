@@ -3,8 +3,8 @@
 This index tracks all backlog items with their current status and metadata.
 
 **Last Updated:** 2026-01-02
-**Total Items:** 145
-**Pending:** 80 | **In Progress:** 0 | **Completed:** 59 | **Partial:** 1 | **Obsolete:** 2 | **Deferred:** 2
+**Total Items:** 146
+**Pending:** 80 | **In Progress:** 0 | **Completed:** 60 | **Partial:** 1 | **Obsolete:** 2 | **Deferred:** 2
 
 ---
 
@@ -26,7 +26,7 @@ This index tracks all backlog items with their current status and metadata.
 ## Quick Filters
 
 ### By Priority
-- **Critical:** BACKLOG-030 (done), 032 (done), 035 (done), 038 (done), 039 (done), 044 (done), 045 (done), 058 (done), 059 (done), 072 (done), 073 (done), 074 (done), 107 (done), 108 (done), 117 (done), **132** (NEW - parallel agent race condition)
+- **Critical:** BACKLOG-030 (done), 032 (done), 035 (done), 038 (done), 039 (done), 044 (done), 045 (done), 058 (done), 059 (done), 072 (done), 073 (done), 074 (done), 107 (done), 108 (done), 117 (done), 132 (done)
 - **High:** BACKLOG-008, 009, 013, 016, 018, 020, 021, 023, 026, 031, 033, 037, 056, 060 (done), 061, 062, 063, 067, 075 (done), 076 (done), 084 (done), 085 (done), 088, 090 (done), 091 Phase 1 (done), 098, 099, 109 (done), 110 (done), **111**, **118**, **121**, 126 (done), 130 (done), **133** (NEW - token cap with early reporting), **134** (done - engineer token optimization)
 - **Medium:** Multiple (see full index), 014 (done), 077 (done), 078 (done), 079 (done), 081, 086, 087, 089, 092, 093, 094, 095, 096, 097, 100, 101, 102, **112**, **113**, **114**, **115**, **116**, 122 (done), 124 (done), 127 (done), 128 (done), 129 (done), **131**
 - **Low/Deferred:** BACKLOG-001, 003, 004, 010, 017, 069, 070, 071, **119**, **123**, **125**
@@ -192,6 +192,7 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-128 | Add Type Verification Checklist for Fixture Tasks | docs | Medium | Pending | SPRINT-012 | 1-2 | ~6K | 10-15m | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-128.md](BACKLOG-128.md) |
 | BACKLOG-129 | Create CI Troubleshooting Documentation | docs | Medium | Pending | SPRINT-012 | 2-3 | ~10K | 15-20m | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-129.md](BACKLOG-129.md) |
 | BACKLOG-130 | Sub-Agent Permission Auto-Denial Incident | infra/process | High | Pending | SPRINT-012 | 1-2 | ~8K | 10-15m | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-130.md](BACKLOG-130.md) |
+| BACKLOG-132 | Mandatory Worktree for Parallel/Background Agents | docs/process | Critical | Completed | - | 1-2 | ~5K | 8-12m | 2 | ~8K | 5m | 1 | ~15K | 5m | 0 | 0 | 0 | 3 | ~23K | 10m | 0% | [BACKLOG-132.md](BACKLOG-132.md) |
 
 ---
 
@@ -336,6 +337,7 @@ This index tracks all backlog items with their current status and metadata.
 - 2026-01-02: **SPRINT-014 COMPLETE** - All 9 tasks merged (PRs #266-274): Sync status service, dedup schema, incremental sync (Gmail/Outlook/iPhone), Message-ID extraction, sync lock UI, LLM filter, integration tests
 - 2026-01-02: BACKLOG-032 (Handle Backup in Progress), 090 (Incremental Sync), 091 Phase 1 (Gmail Message-ID) marked complete
 - 2026-01-02: Added BACKLOG-135 (window.d.ts Type Definitions) - Medium priority, from TASK-910 token overrun (~6M tokens due to type debugging)
+- 2026-01-02: BACKLOG-132 (Mandatory Worktree Enforcement) completed - TASK-913, PR #274 merged (3 turns, ~23K tokens, 10m)
 
 ---
 

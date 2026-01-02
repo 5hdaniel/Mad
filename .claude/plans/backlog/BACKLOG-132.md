@@ -2,7 +2,10 @@
 
 **Priority:** CRITICAL
 **Category:** Process / Agent Workflow
+**Status:** Completed
 **Created:** 2026-01-02
+**Completed:** 2026-01-02
+**Implementation:** TASK-913, PR #274
 **Source:** SPRINT-014 Incident - ~18M tokens burned due to race condition
 
 ---
@@ -89,10 +92,10 @@ Engineer agent must verify isolation BEFORE any work:
 
 ## Acceptance Criteria
 
-- [ ] Engineer agents running in background ALWAYS create worktrees
-- [ ] Engineer agents BLOCK if they detect they're in the main repo directory
-- [ ] PM spawn prompts include explicit worktree path
-- [ ] No future incidents of multiple agents in same directory
+- [x] Engineer agents running in background ALWAYS create worktrees
+- [x] Engineer agents BLOCK if they detect they're in the main repo directory
+- [x] PM spawn prompts include explicit worktree path
+- [ ] No future incidents of multiple agents in same directory (ongoing)
 
 ---
 

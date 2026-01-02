@@ -324,5 +324,5 @@ Documentation changes address BACKLOG-132 root cause (worktree was opt-in, not m
 ### Merge Information
 
 **PR Number:** #274
-**Merge Commit:** pending
+**Merge Commit:** b92ff1b136e979d8ea92491ff379475acd162a41
 **Merged To:** develop
