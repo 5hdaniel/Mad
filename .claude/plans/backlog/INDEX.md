@@ -3,8 +3,8 @@
 This index tracks all backlog items with their current status and metadata.
 
 **Last Updated:** 2026-01-02
-**Total Items:** 143
-**Pending:** 84 | **In Progress:** 0 | **Completed:** 55 | **Obsolete:** 2 | **Deferred:** 2
+**Total Items:** 144
+**Pending:** 83 | **In Progress:** 0 | **Completed:** 56 | **Obsolete:** 2 | **Deferred:** 2
 
 ---
 
@@ -27,7 +27,7 @@ This index tracks all backlog items with their current status and metadata.
 
 ### By Priority
 - **Critical:** BACKLOG-030 (done), 032, 035 (done), 038 (done), 039 (done), 044 (done), 045 (done), 058 (done), 059 (done), 072 (done), 073 (done), 074 (done), 107 (done), 108 (done), 117 (done), **132** (NEW - parallel agent race condition)
-- **High:** BACKLOG-008, 009, 013, 016, 018, 020, 021, 023, 026, 031, 033, 037, 056, 060 (done), 061, 062, 063, 067, 075 (done), 076 (done), 084 (done), 085 (done), 088, 090, 091, 098, 099, 109 (done), 110 (done), **111**, **118**, **121**, 126 (done), 130 (done), **133** (NEW - token cap with early reporting)
+- **High:** BACKLOG-008, 009, 013, 016, 018, 020, 021, 023, 026, 031, 033, 037, 056, 060 (done), 061, 062, 063, 067, 075 (done), 076 (done), 084 (done), 085 (done), 088, 090, 091, 098, 099, 109 (done), 110 (done), **111**, **118**, **121**, 126 (done), 130 (done), **133** (NEW - token cap with early reporting), **134** (done - engineer token optimization)
 - **Medium:** Multiple (see full index), 014 (done), 077 (done), 078 (done), 079 (done), 081, 086, 087, 089, 092, 093, 094, 095, 096, 097, 100, 101, 102, **112**, **113**, **114**, **115**, **116**, 122 (done), 124 (done), 127 (done), 128 (done), 129 (done), **131**
 - **Low/Deferred:** BACKLOG-001, 003, 004, 010, 017, 069, 070, 071, **119**, **123**, **125**
 

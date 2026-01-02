@@ -71,8 +71,8 @@ The project settings are missing tool pre-approval. Add to `.claude/settings.jso
 3. IMPLEMENT → Do the work
 4. SUMMARIZE → Complete task file Implementation Summary
 5. PR      → Create with Engineer Metrics (REQUIRED)
-6. CI      → Wait for pass, debug failures
-7. SR REVIEW → Request only when ALL requirements met
+6. HANDOFF → Immediately request SR Engineer review (DO NOT poll CI)
+7. DONE    → Your work ends after handoff
 ```
 
 ## When You Are Invoked
@@ -278,19 +278,21 @@ gh pr create --base develop --title "..." --body "..."
 
 **Metrics format:** See `.claude/docs/shared/metrics-templates.md` for the exact template.
 
-### Step 6: Wait for CI and Debug
+### Step 6: Handoff to SR Engineer (DO NOT POLL CI)
 
-```bash
-gh pr checks <PR-NUMBER> --watch
-```
+> **TOKEN OPTIMIZATION (BACKLOG-134):** Engineers DO NOT wait for CI. Create PR and immediately hand off to SR Engineer.
 
-**If CI fails:**
-1. Note debugging start time
-2. Diagnose failure: `gh run view <RUN-ID> --log-failed`
-3. Fix issue
-4. Push fix
-5. Wait for CI again
-6. Track debugging turns/time separately
+After PR is created:
+1. Note the PR number and URL
+2. **Immediately proceed to Step 7** (SR Engineer handoff)
+3. DO NOT run `gh pr checks --watch` or poll CI status
+4. SR Engineer will handle CI verification and merge
+
+**Why:** CI polling loops burned ~500K-2.7M tokens in SPRINT-014. The SR Engineer review gate catches any CI failures.
+
+**If you already know CI will fail** (e.g., you saw lint errors locally):
+1. Fix the issue before creating PR
+2. Still DO NOT poll CI after PR creation
 
 #### ALL Debugging Must Be Tracked (Non-Negotiable)
 
@@ -343,7 +345,9 @@ Document as Major Incident when ANY occur:
 
 ### Step 7: Request SR Engineer Review
 
-**Only when CI passes**, invoke the SR Engineer:
+**Immediately after PR creation**, invoke the SR Engineer:
+
+> **Note:** You do NOT wait for CI. SR Engineer handles CI verification.
 
 ```markdown
 Please review PR #XXX for merge readiness.
@@ -360,8 +364,10 @@ Please review PR #XXX for merge readiness.
 
 **Estimated vs Actual:** Est X-Y turns → Actual X turns
 
-Please verify, add SR metrics, approve and merge.
+Please verify CI, add SR metrics, approve and merge.
 ```
+
+**Your work is DONE after this handoff.** Do not continue monitoring the PR.
 
 ## Workflow Violations
 
@@ -400,6 +406,62 @@ If you encounter blockers that prevent following the workflow:
 | Skip task file summary | PM needs metrics for calibration |
 | **Work in main repo as background agent** | **Race condition with other agents - BACKLOG-132 (~18M tokens burned)** |
 | **Skip worktree for parallel execution** | **Will conflict with other agents, cause massive token waste** |
+
+---
+
+## Token Optimization Rules (BACKLOG-134)
+
+These rules prevent token overconsumption that burned ~500K-2.7M tokens in SPRINT-014.
+
+### 1. Use --silent Flags for Commands
+
+```bash
+# GOOD - minimal output
+npm test -- --testPathPattern="foo" --silent
+npm run lint -- --quiet
+npm run type-check 2>&1 | tail -20
+
+# BAD - verbose output wastes tokens
+npm test -- --testPathPattern="foo"
+npm run lint
+```
+
+### 2. Tool Retry Limits
+
+**Edit tool failures:**
+- If Edit fails with "string not found" → Try ONE more time with adjusted context
+- If it fails TWICE → STOP and report the issue
+- DO NOT keep retrying with variations
+
+```markdown
+## BLOCKED: Edit tool failure
+
+**File:** [path]
+**Attempted string:** [first 50 chars...]
+**Error:** String not found
+
+**Tried:**
+1. Original string
+2. Adjusted whitespace
+
+**Recommendation:** Need to read file again or use different approach.
+```
+
+### 3. Responsibility Split
+
+| Agent | Does | Doesn't |
+|-------|------|---------|
+| **Engineer** | Implement, test locally, commit, push, create PR, handoff | Poll CI, wait for CI, merge |
+| **SR Engineer** | Review code, verify CI, handle failures, merge | Re-implement features |
+
+### 4. Early Exit on Issues
+
+If you encounter unexpected complexity:
+- **At 2x estimated turns**: Note it in your progress update
+- **At 3x estimated turns**: Consider stopping and reporting to PM
+- **At 4x estimated turns**: STOP and report (per BACKLOG-133)
+
+---
 
 ## Handling Blockers
 
