@@ -36,6 +36,7 @@ import type {
   QueryResult,
   IgnoredCommunication,
   NewIgnoredCommunication,
+  Message,
 } from "../types";
 
 import { DatabaseError, NotFoundError } from "../types";
@@ -3752,6 +3753,51 @@ class DatabaseService implements IDatabaseService {
       errorMessage: row.error_message || undefined,
       syncedAt: row.synced_at ? new Date(row.synced_at) : undefined,
     };
+  }
+
+  // ============================================
+  // LLM ANALYSIS OPERATIONS (TASK-911)
+  // ============================================
+
+  /**
+   * Get messages that are eligible for LLM analysis.
+   * Excludes already-analyzed messages and duplicates.
+   *
+   * @param userId - The user ID to filter messages for
+   * @param limit - Maximum number of messages to return (default: 100)
+   * @returns Messages pending LLM analysis
+   */
+  async getMessagesForLLMAnalysis(
+    userId: string,
+    limit = 100,
+  ): Promise<Message[]> {
+    const sql = `
+      SELECT * FROM messages
+      WHERE user_id = ?
+        AND is_transaction_related IS NULL
+        AND duplicate_of IS NULL
+      ORDER BY received_at DESC
+      LIMIT ?
+    `;
+    return this._all<Message>(sql, [userId, limit]);
+  }
+
+  /**
+   * Get count of messages pending LLM analysis.
+   * Excludes already-analyzed messages and duplicates.
+   *
+   * @param userId - The user ID to filter messages for
+   * @returns Count of messages pending analysis
+   */
+  async getPendingLLMAnalysisCount(userId: string): Promise<number> {
+    const sql = `
+      SELECT COUNT(*) as count FROM messages
+      WHERE user_id = ?
+        AND is_transaction_related IS NULL
+        AND duplicate_of IS NULL
+    `;
+    const result = this._get<{ count: number }>(sql, [userId]);
+    return result?.count ?? 0;
   }
 
   // ============================================
