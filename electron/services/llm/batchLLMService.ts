@@ -1,16 +1,20 @@
 /**
  * Batch LLM Service
  * TASK-507: Batch multiple emails into single LLM requests
+ * TASK-911: Added LLM-eligible message query utilities
  *
  * This service optimizes LLM usage by:
  * 1. Grouping emails into batches within token limits
  * 2. Estimating token counts to maximize batch efficiency
  * 3. Formatting batched prompts for LLM analysis
+ * 4. Filtering out duplicates and already-analyzed messages (TASK-911)
  */
 
 import { v4 as uuidv4 } from 'uuid';
 import type { MessageInput } from '../extraction/types';
+import type { Message } from '../../types';
 import logService from '../logService';
+import databaseService from '../databaseService';
 
 // ============================================================================
 // Types
@@ -409,4 +413,89 @@ export async function processBatchErrors(
   }
 
   return fallbackResults;
+}
+
+// ============================================================================
+// LLM-Eligible Message Queries (TASK-911)
+// ============================================================================
+
+/**
+ * Get messages eligible for LLM analysis.
+ * Filters out already-analyzed messages and duplicates.
+ *
+ * @param userId - The user ID to query messages for
+ * @param limit - Maximum number of messages to return (default: 100)
+ * @returns Messages ready for LLM processing
+ */
+export async function getMessagesForLLMAnalysis(
+  userId: string,
+  limit = 100
+): Promise<Message[]> {
+  const messages = await databaseService.getMessagesForLLMAnalysis(userId, limit);
+
+  logService.info(
+    `[LLM] Found ${messages.length} messages pending analysis`,
+    'BatchLLMService'
+  );
+
+  return messages;
+}
+
+/**
+ * Get count of messages pending LLM analysis.
+ *
+ * @param userId - The user ID to query messages for
+ * @returns Count of messages pending analysis
+ */
+export async function getPendingLLMAnalysisCount(
+  userId: string
+): Promise<number> {
+  const count = await databaseService.getPendingLLMAnalysisCount(userId);
+
+  logService.debug(
+    `[LLM] Total pending analysis: ${count}`,
+    'BatchLLMService'
+  );
+
+  return count;
+}
+
+/**
+ * Convert Message records to MessageInput format for LLM processing.
+ * This bridges the database Message type to the extraction pipeline input type.
+ *
+ * @param messages - Database Message records
+ * @returns MessageInput array for the extraction pipeline
+ */
+export function convertMessagesToInput(messages: Message[]): MessageInput[] {
+  return messages.map((msg) => {
+    // Parse participants JSON if present
+    let sender = '';
+    let recipients: string[] = [];
+
+    if (msg.participants) {
+      try {
+        const participants = JSON.parse(msg.participants);
+        sender = participants.from || '';
+        recipients = participants.to || [];
+      } catch {
+        // Use legacy fields if JSON parsing fails
+        sender = msg.sender || '';
+        recipients = msg.recipients ? msg.recipients.split(',').map((r) => r.trim()) : [];
+      }
+    } else {
+      // Fallback to legacy fields
+      sender = msg.sender || '';
+      recipients = msg.recipients ? msg.recipients.split(',').map((r) => r.trim()) : [];
+    }
+
+    return {
+      id: msg.id,
+      subject: msg.subject || '',
+      body: msg.body_text || msg.body_html || msg.body || '',
+      sender,
+      recipients,
+      date: (msg.sent_at || msg.received_at || msg.created_at)?.toString() || '',
+    };
+  });
 }

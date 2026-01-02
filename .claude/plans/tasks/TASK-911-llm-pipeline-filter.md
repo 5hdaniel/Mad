@@ -4,7 +4,7 @@
 **Backlog:** BACKLOG-090, BACKLOG-091
 **Priority:** HIGH
 **Category:** service
-**Status:** Pending
+**Status:** Complete
 
 ---
 
@@ -14,12 +14,13 @@ Track and report at PR submission:
 
 | Phase | Turns | Tokens | Time |
 |-------|-------|--------|------|
-| Planning (Plan) | - | - | - |
-| Implementation (Impl) | - | - | - |
-| Debugging (Debug) | - | - | - |
-| **Engineer Total** | - | - | - |
+| Planning (Plan) | 0 | 0 | 0 min |
+| Implementation (Impl) | 2 | ~8K | 12 min |
+| Debugging (Debug) | 0 | 0 | 0 min |
+| **Engineer Total** | 2 | ~8K | 12 min |
 
 **Estimated:** 2-3 turns, ~10K tokens, 10-15 min
+**Actual:** 2 turns, ~8K tokens, 12 min
 
 ---
 
@@ -125,13 +126,13 @@ console.log(`[LLM] Processed ${processed} messages, ${skipped} skipped (duplicat
 
 ## Acceptance Criteria
 
-- [ ] `getMessagesForLLMAnalysis()` returns only unanalyzed, non-duplicate messages
-- [ ] `getPendingLLMAnalysisCount()` returns accurate count
-- [ ] LLM service uses new query methods
-- [ ] Logs show message counts for debugging
-- [ ] No behavior change for users without duplicates
-- [ ] `npm run type-check` passes
-- [ ] `npm run lint` passes
+- [x] `getMessagesForLLMAnalysis()` returns only unanalyzed, non-duplicate messages
+- [x] `getPendingLLMAnalysisCount()` returns accurate count
+- [x] LLM service uses new query methods
+- [x] Logs show message counts for debugging
+- [x] No behavior change for users without duplicates
+- [x] `npm run type-check` passes
+- [x] `npm run lint` passes
 
 ---
 
@@ -186,3 +187,37 @@ Stop and ask PM if:
 - **Parallel Safe:** Yes (with TASK-910)
 - **Depends On:** TASK-905 (schema), TASK-906, TASK-907, TASK-908
 - **Blocks:** TASK-912
+
+---
+
+## Implementation Summary
+
+### Changes Made
+
+1. **electron/services/databaseService.ts**
+   - Added `Message` type import
+   - Added `getMessagesForLLMAnalysis(userId, limit)` method - queries messages table for unanalyzed, non-duplicate messages
+   - Added `getPendingLLMAnalysisCount(userId)` method - returns count of pending messages
+
+2. **electron/services/llm/batchLLMService.ts**
+   - Added imports for `Message` type and `databaseService`
+   - Added `getMessagesForLLMAnalysis()` wrapper function with logging
+   - Added `getPendingLLMAnalysisCount()` wrapper function with logging
+   - Added `convertMessagesToInput()` utility to bridge Message to MessageInput types
+
+### Query Logic
+
+Both methods filter messages with:
+```sql
+WHERE user_id = ?
+  AND is_transaction_related IS NULL  -- Not yet analyzed
+  AND duplicate_of IS NULL            -- Not a duplicate
+ORDER BY received_at DESC
+```
+
+### Testing
+
+- `npm run type-check` - PASSED
+- `npm run lint` - PASSED (only pre-existing warnings)
+- `npm test -- --testPathPattern=batchLLMService` - 31/31 tests PASSED
+- `npm test -- --testPathPattern=databaseService.test` - 88/88 tests PASSED
