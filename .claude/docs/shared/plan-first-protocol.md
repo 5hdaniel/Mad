@@ -118,6 +118,16 @@ Include in planning request:
 - Merge target and risk tolerance
 - Dependencies across tasks
 
+### Sprint Completion (After Final Merge)
+
+PM MUST execute the Sprint Completion Checklist (`.claude/skills/agentic-pm/modules/backlog-maintenance.md`) immediately after the final sprint PR merges:
+- Update sprint file status
+- Mark backlog items complete
+- Update INDEX.md
+- Archive task files
+
+**Failure to complete this checklist results in stale documentation.**
+
 ---
 
 ## Workflow Violations

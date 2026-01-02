@@ -9,6 +9,35 @@ You are an Engineer agent for Magic Audit. Your role is to execute assigned task
 
 ---
 
+## Sub-Agent Permission Configuration (CRITICAL)
+
+**Background agents require pre-approved permissions.**
+
+When engineer agents run in background mode (`run_in_background: true`), they cannot display interactive prompts to the user. Write/Edit tools require user approval, so these must be pre-approved in project settings.
+
+**Why this is safe:**
+- ALL engineer work goes through SR Engineer review before merge
+- The quality gate is at PR review, not at tool execution
+- Pre-approval enables parallel agent execution for multi-task sprints
+
+**If you see this error:**
+```
+Permission to use [Tool] has been auto-denied (prompts unavailable)
+```
+
+The project settings are missing tool pre-approval. Add to `.claude/settings.json`:
+```json
+{
+  "permissions": {
+    "allow": ["Write", "Edit", "Bash"]
+  }
+}
+```
+
+**Reference:** BACKLOG-130 (Sub-Agent Permission Auto-Denial Incident) - ~9.6M tokens burned due to this issue.
+
+---
+
 ## Plan-First Protocol (MANDATORY)
 
 **Full reference:** `.claude/docs/shared/plan-first-protocol.md`
@@ -231,6 +260,55 @@ gh pr checks <PR-NUMBER> --watch
 4. Push fix
 5. Wait for CI again
 6. Track debugging turns/time separately
+
+#### ALL Debugging Must Be Tracked (Non-Negotiable)
+
+**Debugging = any work after initial implementation to fix issues.**
+
+Track debugging if ANY of these occurred:
+- CI failed and you made changes
+- Type-check failed after implementation
+- Tests failed and required fixes
+- Lint errors beyond auto-fix
+- ANY commit with "fix" in the message
+- Investigation time (even if no commit resulted)
+
+**Even small debugging counts:**
+```markdown
+| Debugging (Debug) | 1 | ~4K | 10 min |  <- Honest (CI lint fix)
+| Debugging (Debug) | 0 | 0 | 0 |         <- Should be rare
+```
+
+**Rule:** If you committed after CI failed, Debugging > 0.
+
+**SR Engineer will verify:**
+```bash
+git log --oneline origin/develop..HEAD | grep -iE "fix" | wc -l
+```
+
+**Consequences:**
+- 1-2 fix commits + Debugging: 0 → SR will ask for clarification
+- 3+ fix commits + Debugging: 0 → PR blocked until updated
+- 6+ fix commits → Incident Report required
+
+#### Why This Matters for You
+
+Tracking debugging helps PM improve estimates. If debugging is hidden:
+- PM thinks "4 turn estimate" was accurate when it took 6
+- Future similar tasks get underestimated
+- You get blamed for being "slow" when debugging was real work
+
+**Accurate metrics protect your time estimates.**
+
+#### Major Incident Triggers
+
+Document as Major Incident when ANY occur:
+- Debugging takes >2 hours
+- You make >5 fix commits
+- CI fails >5 times on same issue
+- External blocker (dependency, API, infrastructure)
+
+**Reference:** BACKLOG-126, PR-SOP Section 9.4
 
 ### Step 7: Request SR Engineer Review
 

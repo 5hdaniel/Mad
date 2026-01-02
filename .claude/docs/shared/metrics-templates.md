@@ -202,3 +202,43 @@ Update each task file with its individual SR metrics.
 - [ ] Placeholder values ("X" instead of numbers)
 - [ ] Missing Planning Notes
 - [ ] Incomplete Implementation Summary in task file
+
+---
+
+## Debugging Metrics: Capture Everything
+
+**Debugging is rarely 0.** Most tasks involve at least one CI fix, lint correction, or type error.
+
+**What counts as debugging:**
+- Any commit with "fix" in message
+- CI investigation time (even if quick)
+- Type errors after implementation
+- Test fixes
+- Lint fixes beyond auto-fix
+- Investigation time (even if no commit resulted)
+
+**Honest example:**
+```markdown
+| Phase | Turns | Tokens | Active Time |
+|-------|-------|--------|-------------|
+| Implementation (Impl) | 4 | ~16K | 25 min |
+| Debugging (Debug) | 1 | ~4K | 10 min |  <- CI lint fix
+| **Engineer Total** | 5 | ~20K | 35 min |
+```
+
+## SR Engineer Verification
+
+Before merge, check for discrepancies:
+
+```bash
+FIX_COUNT=$(git log --oneline origin/develop..HEAD | grep -iE "fix" | wc -l)
+PR_AGE=$(gh pr view --json createdAt --jq '.createdAt')
+```
+
+**Tiered response:**
+- 1-2 fix commits + Debugging: 0 → Ask
+- 3+ fix commits + Debugging: 0 → Block
+- 6+ fix commits → Incident Report required
+- Long PR + fix commits + Debugging: 0 → Investigate (PR time != work time)
+
+**Reference:** BACKLOG-126, PR-SOP Section 9.4
