@@ -3,6 +3,7 @@
 **Sprint:** SPRINT-017 (Metrics Workflow Test)
 **Category:** fix/ui
 **Priority:** Medium
+**SR Review:** Approved 2026-01-03
 
 ---
 
@@ -18,7 +19,7 @@
 
 ## Goal
 
-Remove duplicate Back/Continue buttons from the Secure Storage onboarding step. Currently, buttons render twice - once from the step content and once from the OnboardingShell.
+Fix duplicate Back/Continue buttons on the Secure Storage onboarding step. Currently, buttons render twice - once from the shell and once from the step content.
 
 ## Non-Goals
 
@@ -31,98 +32,86 @@ Remove duplicate Back/Continue buttons from the Secure Storage onboarding step. 
 
 | File | Action |
 |------|--------|
-| `src/components/onboarding/steps/SecureStorageStep.tsx` | Remove duplicate navigation buttons |
+| `src/components/onboarding/steps/SecureStorageStep.tsx` | Add `hideContinue: true` to meta, remove Back button div only |
 
 ## Root Cause
 
 ```
 OnboardingFlow.tsx (line 204-215):
-  └─ NavigationButtons component ← renders Back/Continue based on step.meta.navigation
+  └─ NavigationButtons ← renders Back/Continue based on step.meta.navigation
 
 SecureStorageStep.tsx (line 209-222):
   └─ Also renders Back/Continue buttons inside Content ← DUPLICATE
 ```
 
-The step's metadata already configures navigation:
+**Critical Detail:** The step's Continue button passes `dontShowAgain` checkbox value via the `SECURE_STORAGE_SETUP` action. The shell's Continue button does NOT have access to this value - it just calls `goToNext()`.
+
+## Implementation (SR Engineer Approved)
+
+### Step 1: Update Step Metadata
+
+Add `hideContinue: true` to prevent shell from rendering its Continue button:
+
 ```typescript
-navigation: {
-  showBack: true,
-  continueLabel: "Continue",
-}
+// In SecureStorageStep.tsx, update meta.navigation
+export const meta: OnboardingStepMeta = {
+  id: "secure-storage",
+  progressLabel: "Secure Storage",
+  platforms: ["macos"],
+  navigation: {
+    showBack: true,
+    hideContinue: true,  // ADD THIS - shell won't render Continue
+    continueLabel: "Continue",
+  },
+  skip: undefined,
+  shouldShow: (context) => !context.isDatabaseInitialized,
+};
 ```
 
-The shell reads this and renders appropriate buttons. The step content should NOT also render buttons.
+### Step 2: Remove ONLY the Back Button
 
-## Implementation Notes
-
-### Code to Remove
-
-In `SecureStorageStep.tsx`, remove lines 209-222 (the navigation buttons div):
+Remove the Back button from step content (lines 210-215), but **KEEP the Continue button**:
 
 ```tsx
-{/* Navigation buttons - REMOVE THIS BLOCK */}
-<div className="flex gap-3">
-  <button
-    onClick={handleBack}
-    className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-colors"
-  >
-    Back
-  </button>
-  <button
-    onClick={handleContinue}
-    className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-600 hover:to-purple-700 transition-colors"
-  >
-    Continue
-  </button>
-</div>
+{/* REMOVE THIS - Back button (shell handles this) */}
+<button
+  onClick={handleBack}
+  className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-colors"
+>
+  Back
+</button>
 ```
 
-### Keep These
+### Step 3: Adjust Layout
 
-- `handleContinue` function - still needed, called by shell's NavigationButtons via `onAction`
-- `handleBack` function - still needed
-- The checkbox and info box - these are step-specific content
+The remaining Continue button needs full width since Back is removed. Update the container:
 
-### Navigation Flow After Fix
-
-1. User clicks Continue in shell's NavigationButtons
-2. Shell calls `goToNext()` which triggers `onAction({ type: 'NAVIGATE_NEXT' })`
-3. Hook's `handleAction` calls the step's `onAction` prop
-4. For SecureStorage, we need to ensure `SECURE_STORAGE_SETUP` fires with `dontShowAgain`
-
-**WAIT** - There's a problem. The shell's NavigationButtons doesn't know about `dontShowAgain`. Let me check...
-
-Actually, looking at the flow more carefully:
-- Shell's `goToNext` → triggers navigation
-- But `SecureStorageStep` needs to call `onAction({ type: 'SECURE_STORAGE_SETUP', dontShowAgain })`
-
-**Revised approach:** The step needs to handle Continue differently. Check if other steps use `meta.navigation.onContinue` or if there's a pattern for custom continue behavior.
-
-### Alternative Fix
-
-Keep the Continue button in the step content (to handle custom `dontShowAgain` logic), but tell the shell to hide its Continue button:
-
-```typescript
-// In SecureStorageStep meta
-navigation: {
-  showBack: true,
-  hideContinue: true, // Shell won't render Continue
-  continueLabel: "Continue",
-}
+```tsx
+{/* Change from flex gap-3 to just the Continue button */}
+<button
+  onClick={handleContinue}
+  className="w-full px-4 py-2.5 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-600 hover:to-purple-700 transition-colors"
+>
+  Continue
+</button>
 ```
 
-Then the step renders its own Continue with the checkbox value. **Only remove the Back button** from step content since shell handles that.
+### What to Keep
+
+- `handleContinue` function - dispatches `SECURE_STORAGE_SETUP` with `dontShowAgain`
+- `handleBack` function - may still be called by shell's Back button
+- The Continue button in step content - handles checkbox value
+- The checkbox and info box - step-specific content
 
 ## Acceptance Criteria
 
-- [ ] Exactly one Back button visible
-- [ ] Exactly one Continue button visible
-- [ ] "Don't show this explanation again" checkbox still works
-- [ ] Clicking Continue passes correct `dontShowAgain` value
-- [ ] Navigation to next/previous steps works correctly
+- [ ] Exactly one Back button visible (from shell)
+- [ ] Exactly one Continue button visible (from step content)
+- [ ] Toggle checkbox ON → click Continue → `dontShowAgain: true` passed to handler
+- [ ] Toggle checkbox OFF → click Continue → `dontShowAgain: false` passed to handler
+- [ ] Back button navigates to Phone Type selection
 - [ ] `npm run type-check` passes
 - [ ] `npm run lint` passes
-- [ ] `npm test` passes (if onboarding tests exist)
 
 ## Testing
 
@@ -130,17 +119,19 @@ Then the step renders its own Continue with the checkbox value. **Only remove th
 # Start dev server
 npm run dev
 
-# Navigate to onboarding
+# Navigate to onboarding (or reset onboarding state)
 # Select iPhone → reach Secure Storage step
-# Verify: exactly 2 buttons (Back + Continue)
-# Test checkbox toggle
-# Test Back navigation
-# Test Continue navigation
+
+# Verify:
+# 1. Exactly 2 buttons visible (Back + Continue)
+# 2. Toggle "Don't show again" checkbox
+# 3. Click Continue - verify preference is saved
+# 4. Click Back - verify navigation works
 ```
 
 ## Stop-and-Ask Triggers
 
-- If removing buttons breaks the `dontShowAgain` functionality
+- If `hideContinue` option doesn't exist in navigation types
 - If other steps have similar duplicate button issues
 - If the fix requires changing OnboardingFlow.tsx
 
@@ -162,10 +153,9 @@ Engineer Agent ID: <agent_id from Task tool output>
 - [ ] Read task file
 - [ ] Created branch from develop
 - [ ] Implemented fix
-- [ ] Tested manually
+- [ ] Tested manually (checkbox + navigation)
 - [ ] Type check passes
 - [ ] Lint passes
-- [ ] Tests pass
 - [ ] PR created with metrics
 
 ### Metrics (Auto-Captured)
