@@ -264,12 +264,17 @@ git commit -m "type(scope): description
 Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 
 git push -u origin [branch]
-gh pr create --base develop --title "..." --body "..."
+gh pr create --base develop --title "..." --body "$(cat .github/PULL_REQUEST_TEMPLATE.md)"
 ```
 
-**PR body MUST include Agent ID for metrics tracking.**
+**CRITICAL: Use the PR template.** The template at `.github/PULL_REQUEST_TEMPLATE.md` contains the required format:
+- Agent ID section
+- Auto-captured metrics table (`| Metric | Value |` format)
+- SR Engineer review section
 
-**Metrics format:** See `.claude/docs/shared/metrics-templates.md` for the auto-captured format.
+**DO NOT manually write a PR body.** Fill in the template sections instead.
+
+**Metrics lookup:** `grep "<agent_id>" .claude/metrics/tokens.jsonl | jq '.'`
 
 ### Step 6: Handoff to SR Engineer (DO NOT POLL CI)
 
