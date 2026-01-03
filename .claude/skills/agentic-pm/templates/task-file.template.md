@@ -130,14 +130,11 @@ This task's PR MUST pass:
 
 ---
 
-## PM Estimate Breakdown (PM-Owned)
+## PM Estimate (PM-Owned)
 
 **Category:** `<schema | service | ipc | ui | refactor | test | config | docs>`
 
-**Estimated Totals:**
-- **Turns:** X-Y
-- **Tokens:** ~XK-YK
-- **Time:** ~Xm-Ym
+**Estimated Tokens:** ~XK-YK
 
 **Token Cap:** XK (4x upper estimate)
 
@@ -145,16 +142,12 @@ This task's PR MUST pass:
 
 **Estimation Assumptions:**
 
-| Factor | Assumption | Est. Turns |
-|--------|------------|------------|
-| Files to create | X new files | +X |
-| Files to modify | X files (scope: small/medium/large) | +X |
-| Code volume | ~X lines | +X |
-| Functions/handlers | X functions | +X |
-| Core files touched | Yes/No (main.ts, preload.ts, App.tsx) | +X |
-| New patterns | Yes/No (following existing vs new pattern) | +X |
-| Test complexity | Low/Medium/High | +X |
-| Dependencies | X services to integrate | +X |
+| Factor | Assumption | Impact |
+|--------|------------|--------|
+| Files to create | X new files | +XK |
+| Files to modify | X files (scope: small/medium/large) | +XK |
+| Code volume | ~X lines | +XK |
+| Test complexity | Low/Medium/High | +XK |
 
 **Confidence:** Low / Medium / High
 
@@ -162,31 +155,21 @@ This task's PR MUST pass:
 - <uncertainty 1>
 - <uncertainty 2>
 
-**Similar past tasks:** <TASK-XXX (actual: Y turns) if applicable>
+**Similar past tasks:** <TASK-XXX (actual: XK tokens) if applicable>
 
 ---
 
 ## Implementation Summary (Engineer-Owned)
 
-**REQUIRED: You MUST complete this section before opening your PR.**
-**PRs will be REJECTED if this section is incomplete.**
+**REQUIRED: Record your agent_id immediately when the Task tool returns.**
 
 *Completed: <DATE>*
 
-### Plan-First Protocol
+### Agent ID
 
+**Record this immediately when Task tool returns:**
 ```
-Plan Agent Invocations:
-- [ ] Initial plan created
-- [ ] Plan reviewed from Engineer perspective
-- [ ] Plan approved (revisions: X)
-
-Plan Agent Metrics:
-| Activity | Turns | Tokens (est.) | Time |
-|----------|-------|---------------|------|
-| Initial Plan | X | ~XK | X min |
-| Revision(s) | X | ~XK | X min |
-| **Plan Total** | X | ~XK | X min |
+Engineer Agent ID: <agent_id from Task tool output>
 ```
 
 ### Checklist
@@ -206,36 +189,21 @@ Verification:
 - [ ] npm test passes (if applicable)
 ```
 
-### Engineer Metrics (Self-Reported)
+### Metrics (Auto-Captured)
 
-```
-| Phase | Turns | Tokens | Time |
-|-------|-------|--------|------|
-| Planning (Plan) | X | ~XK | X min |
-| Implementation (Impl) | X | ~XK | X min |
-| Debugging (Debug) | X | ~XK | X min |
-| **Engineer Total** | X | ~XK | X min |
-```
+**From SubagentStop hook** - Run: `grep "<agent_id>" .claude/metrics/tokens.jsonl | jq '.'`
 
-### Actual Tokens (Auto-Captured)
-
-**From SubagentStop hook** (see `.claude/metrics/tokens.jsonl`):
-
-```
-Agent ID: <agent_id from Task tool output>
 | Metric | Value |
 |--------|-------|
-| Input tokens | X |
-| Output tokens | X |
-| Cache read | X |
-| Cache create | X |
-| **Total tokens** | X |
-| API calls | X |
-```
+| **Total Tokens** | X |
+| Duration | X seconds |
+| API Calls | X |
+| Input Tokens | X |
+| Output Tokens | X |
+| Cache Read | X |
+| Cache Create | X |
 
-**Variance:** Self-reported ~XK vs Actual ~XK (X% difference)
-
-> To find your agent's data: `grep "<agent_id>" .claude/metrics/tokens.jsonl | jq '.'`
+**Variance:** PM Est ~XK vs Actual ~XK (X% over/under)
 
 ### Notes
 
@@ -259,43 +227,42 @@ Agent ID: <agent_id from Task tool output>
 
 ### Estimate vs Actual Analysis
 
-**REQUIRED: Compare PM estimates to actuals to improve future predictions.**
+**REQUIRED: Compare PM token estimate to actual to improve future predictions.**
 
-| Factor | PM Assumed | Actual | Delta | Why Different? |
-|--------|------------|--------|-------|----------------|
-| Files to create | X | X | 0 | - |
-| Files to modify | X | X | +/- X | <reason> |
-| Code volume | ~X lines | ~X lines | +/- X | <reason> |
-| Functions/handlers | X | X | +/- X | <reason> |
-| Core files touched | Yes/No | Yes/No | - | <reason if changed> |
-| New patterns | Yes/No | Yes/No | - | <reason if changed> |
-| Test complexity | Low/Med/High | Low/Med/High | - | <reason if changed> |
-
-**Total Variance:** Est X-Y turns → Actual Z turns (X% over/under)
+| Metric | PM Estimate | Actual | Variance |
+|--------|-------------|--------|----------|
+| **Tokens** | ~XK | ~XK | +/-X% |
+| Duration | - | X sec | - |
 
 **Root cause of variance:**
-<1-2 sentence explanation of why estimate was off, e.g., "PM counted 3 handlers but task needed 8", "Unexpected type complexity in preload bridge">
+<1-2 sentence explanation of why estimate was off, e.g., "Complex type debugging", "Clean implementation with existing patterns">
 
 **Suggestion for similar tasks:**
-<What should PM estimate differently next time? e.g., "Count each IPC handler as +1 turn", "Core file modifications need +2 turns buffer">
+<What should PM estimate differently next time? e.g., "This category should use 0.5x multiplier">
 
 ---
 
 ## SR Engineer Review (SR-Owned)
 
-**REQUIRED: SR Engineer MUST complete this section when reviewing/merging the PR.**
+**REQUIRED: Record your agent_id immediately when the Task tool returns.**
 
 *Review Date: <DATE>*
 
-### SR Engineer Metrics
+### Agent ID
 
 ```
-| Phase | Turns | Tokens | Time |
-|-------|-------|--------|------|
-| PR Review | X | ~XK | X min |
-| Feedback/Revisions | X | ~XK | X min |
-| **SR Total** | X | ~XK | X min |
+SR Engineer Agent ID: <agent_id from Task tool output>
 ```
+
+### Metrics (Auto-Captured)
+
+**From SubagentStop hook** - Run: `grep "<agent_id>" .claude/metrics/tokens.jsonl | jq '.'`
+
+| Metric | Value |
+|--------|-------|
+| **Total Tokens** | X |
+| Duration | X seconds |
+| API Calls | X |
 
 ### Review Summary
 

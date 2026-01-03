@@ -65,6 +65,16 @@ This index tracks all backlog items with their current status and metadata.
 
 **Categories:** `schema` | `service` | `ipc` | `ui` | `refactor` | `test` | `config` | `docs` | `infra` | `security` | `enhancement`
 
+> **METRICS FORMAT CHANGE (2026-01-03)**
+>
+> Self-reported metrics (Turns/Time) have been deprecated. New tasks use auto-captured metrics:
+> - **Est. Tokens**: PM estimate
+> - **Actual Tokens**: From SubagentStop hook (`.claude/metrics/tokens.jsonl`)
+> - **Duration**: Seconds (auto-captured)
+> - **Variance**: (Actual - Est) / Est × 100
+>
+> Legacy columns retained for historical data. New tasks populate: Est Tokens, Actual Tokens, Duration, Variance.
+
 | ID | Title | Category | Priority | Status | Sprint | Est. Turns | Est. Tokens | Est. Time | Impl Turns | Impl Tokens | Impl Time | PR Turns | PR Tokens | PR Time | Debug Turns | Debug Tokens | Debug Time | Total Turns | Total Tokens | Total Time | Variance | File |
 |----|-------|----------|----------|--------|--------|------------|-------------|-----------|------------|-------------|-----------|----------|-----------|---------|-------------|--------------|------------|-------------|--------------|------------|----------|------|
 | BACKLOG-001 | Add ES Module Type to package.json | infra | Low | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-001.md](BACKLOG-001.md) |
@@ -367,6 +377,12 @@ This index tracks all backlog items with their current status and metadata.
   - Task file template updated with "Actual Tokens (Auto-Captured)" section
   - PM Estimation Guidelines updated to reference automatic tracking
   - Self-reported vs actual variance can now be measured objectively
+- 2026-01-03: **METRICS FORMAT ALIGNMENT** - Templates aligned with auto-captured data:
+  - Hook updated to capture duration (start/end timestamps)
+  - Task template simplified: removed self-reported Turns/Time, uses auto-captured Tokens/Duration/API Calls
+  - INDEX.md table columns preserved for historical data, new tasks use simplified format
+  - PM estimates now in tokens only (no turns/time)
+  - Engineers MUST record agent_id immediately when Task tool returns
 
 ---
 
@@ -376,11 +392,9 @@ This index tracks all backlog items with their current status and metadata.
 
 > ⚠️ **DATA QUALITY WARNING (as of SPRINT-015)**
 >
-> ~60% of completed tasks have incomplete metrics - missing PR review and/or debug phases.
-> Variance calculations for these tasks compare impl-only actuals to full-lifecycle estimates,
-> making the data **unreliable**. Only tasks marked ✓ in the variance breakdown have complete
-> lifecycle metrics. Category adjustment factors should be recalculated once more complete data
-> is available.
+> Historical data uses self-reported metrics which are unreliable (~100x variance observed).
+> Starting 2026-01-03, all new tasks use auto-captured metrics via SubagentStop hook.
+> Category adjustment factors will be recalculated once sufficient auto-captured data is available.
 
 ### By Category (Updated after each sprint)
 
@@ -464,6 +478,8 @@ Categories with reliable data (2+ complete tasks): `test`, `service` (9 tasks).
 
 ### PM Estimation Guidelines (Update as patterns emerge)
 
+> **Note:** As of 2026-01-03, estimates are in tokens only. Duration is captured but not estimated.
+
 | Category | Base Estimate | Adjustment | Notes |
 |----------|---------------|------------|-------|
 | schema | PM estimate | x 1.2 | High variance, add buffer |
@@ -487,24 +503,29 @@ Categories with reliable data (2+ complete tasks): `test`, `service` (9 tasks).
 
 **Formula:** `Total Estimate = (Impl Estimate × Category Adjustment) + SR Review Overhead`
 
-**Example:** A `docs` task estimated at 2-3 turns, ~10K tokens:
+**Example:** A `docs` task estimated at ~10K tokens:
 - Adjusted impl: ~10K × 0.5 = ~5K
 - SR review overhead: +10-15K
 - **Total estimate: ~15-20K tokens**
 
 #### Automatic Token Tracking (BACKLOG-137)
 
-**Actual tokens are now captured automatically** via SubagentStop hook:
+**Actual tokens and duration are now captured automatically** via SubagentStop hook.
+
+Hook output fields:
+- `total_tokens` - Sum of input + output + cache tokens
+- `duration_secs` - Time from first to last message in transcript
+- `api_calls` - Number of API roundtrips
 
 ```bash
-# View metrics log
+# View all metrics
 cat .claude/metrics/tokens.jsonl | jq '.'
 
 # Find specific agent's data (use agent_id from Task tool output)
 grep "<agent_id>" .claude/metrics/tokens.jsonl | jq '.'
 ```
 
-Engineers should record the `agent_id` from their Task tool output and use it to fill in the "Actual Tokens (Auto-Captured)" section of the task file. This provides ground-truth data to validate self-reported estimates.
+Engineers MUST record their `agent_id` immediately when the Task tool returns, then populate the "Metrics (Auto-Captured)" section of the task file.
 
 **SPRINT-008 Insight**: For refactor sprints targeting well-structured code with clear boundaries, consider x 0.4 or even x 0.3 multiplier.
 
