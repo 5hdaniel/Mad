@@ -3,6 +3,7 @@ import databaseService from "./databaseService";
 import logService from "./logService";
 import microsoftAuthService from "./microsoftAuthService";
 import { OAuthToken } from "../types/models";
+import { computeEmailHash } from "../utils/emailHash";
 
 /**
  * Microsoft Graph API email recipient
@@ -108,6 +109,8 @@ interface ParsedEmail {
   parentFolderId?: string;
   /** RFC 5322 Message-ID header for deduplication (TASK-917) */
   messageIdHeader: string | null;
+  /** SHA-256 content hash for fallback deduplication (TASK-918) */
+  contentHash: string;
 }
 
 /**
@@ -458,6 +461,17 @@ class OutlookFetchService {
         ? message.body.content
         : message.bodyPreview || "";
 
+    // Use sentDateTime for hash (consistent with Gmail using internalDate)
+    const sentDate = new Date(message.sentDateTime);
+
+    // Compute content hash for deduplication fallback (TASK-918)
+    const contentHash = computeEmailHash({
+      subject: message.subject,
+      from,
+      sentDate,
+      bodyPlain,
+    });
+
     return {
       id: message.id,
       threadId: message.conversationId,
@@ -467,7 +481,7 @@ class OutlookFetchService {
       cc: cc,
       bcc: bcc,
       date: new Date(message.receivedDateTime),
-      sentDate: new Date(message.sentDateTime),
+      sentDate: sentDate,
       body: body,
       bodyPlain: bodyPlain,
       snippet: message.bodyPreview || "",
@@ -479,6 +493,8 @@ class OutlookFetchService {
       parentFolderId: message.parentFolderId,
       // TASK-917: Message-ID for deduplication
       messageIdHeader: extractMessageIdHeader(message),
+      // TASK-918: Content hash for fallback deduplication
+      contentHash,
     };
   }
 
