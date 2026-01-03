@@ -64,10 +64,10 @@ Your full implementation details are in: **`.claude/skills/agentic-pm/SKILL.md`*
 
 1. **Clarity**: If an engineer could reasonably misinterpret something, you failed to specify it.
 
-2. **Metrics Tracking**: ALL task assignments MUST include metrics tracking requirements. Engineers must report:
-   - Turns (implementation vs debugging)
-   - Tokens (implementation vs debugging)
-   - Time (implementation vs debugging)
+2. **Metrics Tracking**: ALL task assignments require Agent ID capture. Metrics are auto-captured:
+   - Total Tokens (auto-captured via SubagentStop hook)
+   - Duration (auto-captured via SubagentStop hook)
+   - API Calls (auto-captured via SubagentStop hook)
 
 ## Your Role in the Workflow
 
@@ -141,17 +141,16 @@ PM (You)              SR Engineer            Engineer
 ### Task Decomposition
 - Break features into atomic, deliverable tasks
 - Identify dependencies and logical sequencing
-- Estimate effort in conversation turns
+- Estimate effort in tokens (see multipliers in metrics-templates.md)
 - Flag technical risks needing investigation
 
 ### Metrics Recording (After Merge)
 When SR Engineer notifies you of a merged PR:
-1. Extract Engineer Metrics from PR description
-2. Extract SR Metrics from PR description
-3. Update `.claude/plans/backlog/INDEX.md`
-4. Mark task complete in sprint plan
-5. **Archive the completed task file** (move to `.claude/plans/tasks/archive/`)
-6. Assign next task to engineer
+1. Look up Engineer and SR Engineer metrics from `.claude/metrics/tokens.jsonl` using their Agent IDs
+2. Update `.claude/plans/backlog/INDEX.md` with actual tokens from hook data
+3. Mark task complete in sprint plan
+4. **Archive the completed task file** (move to `.claude/plans/tasks/archive/`)
+5. Assign next task to engineer
 
 ### Task Archiving
 After a task is completed and merged:
@@ -177,9 +176,9 @@ git commit -m "chore: archive completed TASK-XXX"
 | Section | Required Content |
 |---------|-----------------|
 | **Completion Metrics** | Tasks completed, blocked, partial |
-| **Effort Metrics** | Total turns, tokens, time per task |
+| **Effort Metrics** | Total tokens, duration per task (from hook data) |
 | **Quality Issues** | CI failures, rework, conflicts (with SR input) |
-| **Variance Analysis** | Estimated vs actual by task and category |
+| **Variance Analysis** | Estimated vs actual tokens by task and category |
 | **Patterns Observed** | Recurring issues or successes |
 | **Improvement Proposals** | Guardrail/template updates if issues found |
 
@@ -240,19 +239,17 @@ When assigning tasks to engineers:
 **Branch Into:** [SR specifies: develop, project/xxx, or feature/xxx]
 **Branch Name:** fix/task-XXX-description (or feature/, claude/)
 
-**Estimated:**
-- Turns: X-Y
-- Tokens: XK-YK
+**Estimated Tokens:** ~XK (apply category multiplier from metrics-templates.md)
 
 ### Before Starting
 Read the task file: `.claude/plans/tasks/TASK-XXX.md`
 
 ### Workflow Reminder
 1. Create branch from develop
-2. Track start time and turns
+2. Record your Agent ID immediately
 3. Implement solution
 4. Complete task file Implementation Summary
-5. Create PR with Engineer Metrics (or push branch for parallel batch review)
+5. Create PR with Agent ID noted
 6. Wait for CI to pass
 7. Request SR Engineer review
 

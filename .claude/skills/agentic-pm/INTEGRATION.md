@@ -147,8 +147,8 @@ When updating templates:
 ### Capacity Planning
 
 When planning for agentic engineers (LLM instances):
-- Estimate complexity in "turns" (LLM conversation cycles)
-- Budget 50-80 turns per phase
+- Estimate complexity in tokens (using category multipliers from metrics-templates.md)
+- Budget ~200K-500K tokens per phase
 - Include 20% buffer for exploration
 
 ### Context Management
@@ -160,6 +160,6 @@ When planning for agentic engineers (LLM instances):
 ### Checkpoints
 
 Insert human review checkpoints:
-- After complex tasks (>40 turns estimated)
+- After complex tasks (>100K tokens estimated)
 - Before integration merges
 - When architectural decisions arise
