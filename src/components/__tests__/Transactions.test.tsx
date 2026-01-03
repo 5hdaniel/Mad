@@ -10,6 +10,15 @@ import "@testing-library/jest-dom";
 import Transactions from "../Transactions";
 import { PlatformProvider } from "../../contexts/PlatformContext";
 
+// Mock useAppStateMachine to return isDatabaseInitialized: true
+// This allows tests to render the actual component content
+jest.mock("../../appCore", () => ({
+  ...jest.requireActual("../../appCore"),
+  useAppStateMachine: () => ({
+    isDatabaseInitialized: true,
+  }),
+}));
+
 describe("Transactions", () => {
   // Helper to render component with PlatformProvider
   const renderWithProvider = (ui: React.ReactElement) => {

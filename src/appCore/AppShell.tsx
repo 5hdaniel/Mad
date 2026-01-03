@@ -21,6 +21,7 @@ export function AppShell({ app, children }: AppShellProps) {
   const {
     currentStep,
     isAuthenticated,
+    isDatabaseInitialized,
     currentUser,
     isOnline,
     isChecking,
@@ -31,6 +32,20 @@ export function AppShell({ app, children }: AppShellProps) {
     handleRetryConnection,
     getPageTitle,
   } = app;
+
+  // PRIMARY DATABASE INITIALIZATION GATE
+  // Block all content for authenticated users until database is ready
+  // This prevents "Database is not initialized" errors from modal bypass
+  if (isAuthenticated && !isDatabaseInitialized) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Initializing secure storage...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen flex flex-col bg-gray-50 overflow-hidden">

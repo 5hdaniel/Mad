@@ -10,6 +10,15 @@ import "@testing-library/jest-dom";
 import AuditTransactionModal from "../AuditTransactionModal";
 import { PlatformProvider } from "../../contexts/PlatformContext";
 
+// Mock useAppStateMachine to return isDatabaseInitialized: true
+// This allows tests to render the actual component content
+jest.mock("../../appCore", () => ({
+  ...jest.requireActual("../../appCore"),
+  useAppStateMachine: () => ({
+    isDatabaseInitialized: true,
+  }),
+}));
+
 describe("AuditTransactionModal", () => {
   const mockUserId = 123;
   const mockProvider = "google";

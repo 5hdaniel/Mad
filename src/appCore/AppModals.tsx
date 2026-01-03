@@ -30,6 +30,9 @@ export function AppModals({ app }: AppModalsProps) {
     authProvider,
     subscription,
 
+    // Database state (for modal guards)
+    isDatabaseInitialized,
+
     // Pending data for terms modal
     pendingOAuthData,
     needsTermsAcceptance,
@@ -96,7 +99,7 @@ export function AppModals({ app }: AppModalsProps) {
       )}
 
       {/* Transactions View */}
-      {modalState.showTransactions && currentUser && authProvider && (
+      {modalState.showTransactions && currentUser && authProvider && isDatabaseInitialized && (
         <div className="fixed inset-0 z-[60]">
           <TransactionList
             userId={currentUser.id}
@@ -107,7 +110,7 @@ export function AppModals({ app }: AppModalsProps) {
       )}
 
       {/* Contacts View */}
-      {modalState.showContacts && currentUser && (
+      {modalState.showContacts && currentUser && isDatabaseInitialized && (
         <div className="fixed inset-0 z-[60]">
           <Contacts userId={currentUser.id} onClose={closeContacts} />
         </div>
@@ -133,7 +136,7 @@ export function AppModals({ app }: AppModalsProps) {
       )}
 
       {/* Audit Transaction Modal */}
-      {modalState.showAuditTransaction && currentUser && authProvider && (
+      {modalState.showAuditTransaction && currentUser && authProvider && isDatabaseInitialized && (
         <AuditTransactionModal
           userId={currentUser.id}
           provider={authProvider}
