@@ -219,23 +219,28 @@ TASK-922 (hook) ──┐
 
 ### What Didn't Work
 
-1. **Estimates still undershot** - ~35K estimated vs ~254K actual billable tokens
-2. **SR Engineer overhead** - SR reviews added ~137K billable (54% of sprint)
+1. **Estimates still undershot** - ~35K estimated vs ~116K Engineer actual (+231%)
+2. **SR Engineer overhead** - SR reviews added ~137K billable (54% of sprint total)
 
 ### Estimation Analysis
 
-| Task | PM Est | Eng Actual | SR Actual | Total Actual | Variance |
-|------|--------|------------|-----------|--------------|----------|
-| TASK-922 | ~20K | 56K | 74K | 130K | +550% |
-| TASK-923 | ~15K | 60K | 63K | 123K | +720% |
-| **Total** | ~35K | 116K | 137K | **254K** | +626% |
+PM estimates target **Engineer billable only** (SR Engineer tracked separately).
 
-**Root Cause Analysis:**
-- PM estimates targeted engineer work only, not SR Engineer review
-- Should estimates include SR Engineer overhead?
-- Or should we track them separately?
+| Task | PM Est | Engineer Actual | Variance |
+|------|--------|-----------------|----------|
+| TASK-922 | ~20K | 56K | +180% |
+| TASK-923 | ~15K | 60K | +300% |
+| **Total** | ~35K | **116K** | **+231%** |
 
-**Recommendation:** Track Engineer vs SR Engineer separately. PM estimates should target Engineer billable only. SR overhead is a multiplier on top.
+**SR Engineer Overhead (tracked separately):**
+
+| Task | SR Actual | SR:Eng Ratio |
+|------|-----------|--------------|
+| TASK-922 | 74K | 1.3x |
+| TASK-923 | 63K | 1.1x |
+| **Total** | **137K** | **1.2x** |
+
+**Key Insight:** SR Engineer adds ~1.2x overhead on top of Engineer work. This is expected (code review, verification, merge). PM estimates correctly target Engineer work only.
 
 ### Process Validation
 
