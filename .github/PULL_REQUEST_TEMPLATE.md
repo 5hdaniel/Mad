@@ -54,13 +54,10 @@ Engineer Agent ID: <paste your agent_id here>
 
 | Metric | Value |
 |--------|-------|
-| **Total Tokens** |  |
+| **Billable Tokens** |  |
+| Total Tokens |  |
 | Duration |  seconds |
 | API Calls |  |
-| Input Tokens |  |
-| Output Tokens |  |
-| Cache Read |  |
-| Cache Create |  |
 
 **Variance:** PM Est ~XK vs Actual ~XK (X% over/under)
 
