@@ -52,6 +52,12 @@ Before issuing a task file:
 > **Note:** As of 2026-01-03, estimates are in **tokens only**. Self-reported turns/time are deprecated.
 > Actual metrics are auto-captured via SubagentStop hook.
 
+> **Token Estimates Target Billable Tokens**
+>
+> PM estimates (e.g., "~20K tokens") refer to **billable tokens** (output + cache_create),
+> NOT total tokens. Total includes cache reads which inflate the number but don't
+> represent new work.
+
 ### Category Adjustment Factors
 
 Apply these multipliers to your **token estimates** based on historical data:

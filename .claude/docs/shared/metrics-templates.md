@@ -38,6 +38,26 @@ grep "<agent_id>" .claude/metrics/tokens.jsonl | jq '.'
 
 ---
 
+## Token Accounting
+
+Understanding the difference between token metrics:
+
+| Metric | Formula | Use For |
+|--------|---------|---------|
+| **Billable Tokens** | output + cache_create | PM estimates, variance analysis |
+| **Total Tokens** | input + output + cache_read + cache_create | Context usage, debugging |
+
+### Why Billable vs Total?
+
+- **Cache reads are "free"** - Reusing previously cached context doesn't represent new work
+- **Output + cache_create = actual new work** - This is what PM estimates should target
+- **Example from SPRINT-017:**
+  - Total: ~1M tokens (inflated by 892K cache reads)
+  - Billable: ~112K tokens (actual new work)
+  - PM estimate was ~15K - variance should compare to billable, not total
+
+---
+
 ## Estimation Multipliers (Token-Based)
 
 Based on actual data from sprints. Apply to PM token estimates:

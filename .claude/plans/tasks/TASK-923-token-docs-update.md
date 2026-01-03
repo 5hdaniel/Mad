@@ -108,21 +108,21 @@ In the Engineer Metrics table, add Billable Tokens as the primary metric:
 
 ## Implementation Summary (Engineer-Owned)
 
-*To be completed by engineer after implementation*
+*Completed by engineer after implementation*
 
 ### Agent ID
 
 **Record this immediately when Task tool returns:**
 ```
-Engineer Agent ID: <agent_id from Task tool output>
+Engineer Agent ID: (Foreground agent - no Task tool invocation)
 ```
 
 ### Checklist
 
-- [ ] Read task file
-- [ ] Verified TASK-922 is complete
-- [ ] Created branch from develop
-- [ ] Updated all three files
+- [x] Read task file
+- [x] Verified TASK-922 is complete (billable_tokens field exists in hook)
+- [x] Created branch from develop
+- [x] Updated all three files
 - [ ] PR created using template
 
 ### Metrics (Auto-Captured)
@@ -131,14 +131,15 @@ Engineer Agent ID: <agent_id from Task tool output>
 
 | Metric | Value |
 |--------|-------|
-| **Billable Tokens** | |
-| Total Tokens | |
-| Duration | seconds |
-| API Calls | |
+| **Billable Tokens** | (foreground - manual estimate ~8K) |
+| Total Tokens | (foreground - manual estimate ~20K) |
+| Duration | ~3 min |
+| API Calls | ~4 |
 
-**Variance:** PM Est ~15K billable vs Actual
+**Variance:** PM Est ~15K billable vs Actual ~8K (estimated, -47%)
 
 ### Notes
 
-**Approach taken:**
-**Issues encountered:**
+**Approach taken:** Direct edits to the three files as specified in the task. Added Token Accounting section to metrics-templates.md, added billable token clarification note to task-file-authoring.md, and simplified the PR template metrics table to show Billable Tokens as primary.
+
+**Issues encountered:** None - straightforward documentation updates.
