@@ -19,27 +19,21 @@
 - [ ] Created branch from `develop` (not from feature branch)
 - [ ] Branch follows naming: `fix/task-XXX-*` or `feature/task-XXX-*`
 
-### 2. Plan-First Protocol (MANDATORY)
-- [ ] Plan agent invoked before implementation
-- [ ] Plan reviewed and approved
-- [ ] Plan agent metrics recorded in metrics table below
-
-### 3. Implementation
+### 2. Implementation
 - [ ] All acceptance criteria met
 - [ ] Tests pass locally: `npm test`
 - [ ] Type check passes: `npm run type-check`
 - [ ] Lint passes: `npm run lint`
 
-### 4. Task File Updated
+### 3. Task File Updated
 - [ ] Implementation Summary section completed in task file
 - [ ] Deviations documented (if any)
 - [ ] Issues encountered documented (if any)
 
-### 5. Metrics Tracked
-- [ ] Start time noted
-- [ ] Turns counted (Planning, Implementation, Debugging)
-- [ ] Time calculated
-- [ ] Engineer Metrics section below is complete
+### 4. Metrics Captured
+- [ ] Agent ID recorded below
+- [ ] Metrics retrieved from SubagentStop hook data
+- [ ] Variance calculated
 
 ---
 
@@ -47,25 +41,31 @@
 
 **MANDATORY: PRs without complete metrics will be rejected by CI.**
 
-**Engineer Start Time:**
-**Engineer End Time:**
+### Agent ID
 
-| Phase | Turns | Tokens | Time |
-|-------|-------|--------|------|
-| Planning (Plan) |  | ~K |  min |
-| Implementation (Impl) |  | ~K |  min |
-| Debugging (Debug) |  | ~K |  min |
-| **Engineer Total** |  | ~K |  min |
+**Record this when Task tool returns:**
+```
+Engineer Agent ID: <paste your agent_id here>
+```
 
-**Planning Notes:**
-<!-- Key decisions from planning phase, revisions if any -->
+### Metrics (Auto-Captured)
+
+**From SubagentStop hook** - Run: `grep "<agent_id>" .claude/metrics/tokens.jsonl | jq '.'`
+
+| Metric | Value |
+|--------|-------|
+| **Total Tokens** |  |
+| Duration |  seconds |
+| API Calls |  |
+| Input Tokens |  |
+| Output Tokens |  |
+| Cache Read |  |
+| Cache Create |  |
+
+**Variance:** PM Est ~XK vs Actual ~XK (X% over/under)
 
 **Implementation Notes:**
-<!-- Summary of approach -->
-
-**Estimated vs Actual:**
-- Est: X turns, XK tokens
-- Actual: X turns, ~XK tokens (Plan: X, Impl: X, Debug: X)
+<!-- Summary of approach, key decisions -->
 
 ---
 
@@ -82,9 +82,9 @@
 ### SR Engineer Checklist
 
 **BLOCKING - Verify before reviewing code:**
-- [ ] Engineer Metrics section is complete (not placeholders)
-- [ ] Plan-First Protocol checkboxes are checked
-- [ ] Planning (Plan) row has actual values (not "X" or empty)
+- [ ] Engineer Agent ID is present (not placeholder)
+- [ ] Metrics table has actual values (not "X" or empty)
+- [ ] Variance is calculated
 - [ ] Implementation Summary in task file is complete
 
 **Code Review:**
@@ -95,17 +95,18 @@
 
 ### SR Engineer Metrics: TASK-XXX
 
-**SR Review Start:**
-**SR Review End:**
+**Agent ID:**
+```
+SR Engineer Agent ID: <paste your agent_id here>
+```
 
-| Phase | Turns | Tokens | Time |
-|-------|-------|--------|------|
-| Planning (Plan) |  | ~K |  min |
-| PR Review (PR) |  | ~K |  min |
-| **SR Total** |  | ~K |  min |
+**Metrics (Auto-Captured):**
 
-**Planning Notes:**
-<!-- Review strategy decisions, plan revisions if any -->
+| Metric | Value |
+|--------|-------|
+| **Total Tokens** |  |
+| Duration |  seconds |
+| API Calls |  |
 
 **Review Notes:**
 <!-- Architecture concerns, security review, approval rationale -->
@@ -120,8 +121,8 @@
 
 This PR will be automatically validated by CI for:
 - Presence of Engineer Metrics section
-- Presence of Plan-First Protocol section
-- Metrics table with Planning row
-- Estimated vs Actual comparison
+- Presence of Agent ID section
+- Auto-captured metrics (Total Tokens)
+- Variance comparison
 
 PRs missing these elements will fail the PR Metrics Validation check.

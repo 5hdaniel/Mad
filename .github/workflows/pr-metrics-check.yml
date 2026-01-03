@@ -3,10 +3,13 @@ name: PR Metrics Validation
 # This workflow enforces the Engineer Workflow Compliance requirements
 # by validating that all PRs include required metrics sections.
 #
-# Requirements:
+# Requirements (Updated 2026-01-03):
 # 1. Engineer Metrics section must be present
-# 2. Plan-First Protocol section must be present
+# 2. Agent ID section must be present (for auto-captured metrics)
 # 3. Metrics table must have actual values (not placeholders)
+#
+# Note: Turn-based metrics are deprecated. New format uses auto-captured
+# metrics via SubagentStop hook (Total Tokens, Duration, API Calls).
 #
 # Exceptions:
 # - Dependabot PRs are exempt (automated dependency updates)
@@ -75,46 +78,49 @@ jobs:
           fi
           echo "  [PASS] Engineer Metrics section found"
 
-          # Check 2: Plan-First Protocol section exists
+          # Check 2: Agent ID section exists (for auto-captured metrics)
           echo ""
-          echo "Check 2: Plan-First Protocol section..."
-          if [[ ! "$PR_BODY" =~ "Plan-First Protocol" ]]; then
-            echo "::error::PR missing 'Plan-First Protocol' section"
-            echo "  Add the Plan-First Protocol checklist to your PR description."
-            echo "  This confirms you invoked the Plan agent before implementation."
+          echo "Check 2: Agent ID section..."
+          if [[ ! "$PR_BODY" =~ "Agent ID" ]] && [[ ! "$PR_BODY" =~ "Engineer Agent ID" ]]; then
+            echo "::error::PR missing 'Agent ID' section"
+            echo "  Add the Agent ID section with your agent_id for metrics lookup."
+            echo "  See .github/PULL_REQUEST_TEMPLATE.md for the required format."
             exit 1
           fi
-          echo "  [PASS] Plan-First Protocol section found"
+          echo "  [PASS] Agent ID section found"
 
-          # Check 3: Metrics table has structure
+          # Check 3: Metrics table has structure (new auto-captured format)
           echo ""
           echo "Check 3: Metrics table structure..."
-          if [[ ! "$PR_BODY" =~ "| Phase | Turns | Tokens | Time |" ]]; then
+          # Accept either new format (| Metric | Value |) or legacy format for transition period
+          if [[ ! "$PR_BODY" =~ "| Metric | Value |" ]] && [[ ! "$PR_BODY" =~ "Total Tokens" ]]; then
             echo "::error::PR missing metrics table"
             echo "  Ensure the Engineer Metrics section contains the required table."
+            echo "  New format: | Metric | Value | with Total Tokens, Duration, API Calls"
             exit 1
           fi
           echo "  [PASS] Metrics table found"
 
-          # Check 4: Planning row exists (indicates Plan-First was followed)
+          # Check 4: Auto-captured metrics present (Total Tokens indicates hook data used)
           echo ""
-          echo "Check 4: Planning metrics row..."
-          if [[ ! "$PR_BODY" =~ "Planning (Plan)" ]] && [[ ! "$PR_BODY" =~ "| Planning" ]]; then
-            echo "::error::PR missing Planning (Plan) row in metrics table"
-            echo "  Add the Planning metrics from your Plan agent invocation."
+          echo "Check 4: Auto-captured metrics..."
+          if [[ ! "$PR_BODY" =~ "Total Tokens" ]]; then
+            echo "::error::PR missing auto-captured metrics (Total Tokens)"
+            echo "  Use: grep '<agent_id>' .claude/metrics/tokens.jsonl | jq '.'"
+            echo "  Add Total Tokens from SubagentStop hook data."
             exit 1
           fi
-          echo "  [PASS] Planning row found"
+          echo "  [PASS] Auto-captured metrics found"
 
-          # Check 5: Estimated vs Actual section exists
+          # Check 5: Variance section exists (estimation calibration)
           echo ""
-          echo "Check 5: Estimated vs Actual section..."
-          if [[ ! "$PR_BODY" =~ "Estimated vs Actual" ]]; then
-            echo "::error::PR missing 'Estimated vs Actual' comparison"
-            echo "  Add the estimation comparison to help calibrate future estimates."
+          echo "Check 5: Variance section..."
+          if [[ ! "$PR_BODY" =~ "Variance" ]] && [[ ! "$PR_BODY" =~ "Estimated vs Actual" ]]; then
+            echo "::error::PR missing variance/estimation comparison"
+            echo "  Add the variance calculation to help calibrate future estimates."
             exit 1
           fi
-          echo "  [PASS] Estimated vs Actual section found"
+          echo "  [PASS] Variance section found"
 
           echo ""
           echo "=== All metrics validations passed ==="
@@ -141,7 +147,7 @@ jobs:
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "All required metrics sections are present:" >> $GITHUB_STEP_SUMMARY
             echo "- [x] Engineer Metrics section" >> $GITHUB_STEP_SUMMARY
-            echo "- [x] Plan-First Protocol section" >> $GITHUB_STEP_SUMMARY
-            echo "- [x] Metrics table with Planning row" >> $GITHUB_STEP_SUMMARY
-            echo "- [x] Estimated vs Actual comparison" >> $GITHUB_STEP_SUMMARY
+            echo "- [x] Agent ID section" >> $GITHUB_STEP_SUMMARY
+            echo "- [x] Auto-captured metrics (Total Tokens)" >> $GITHUB_STEP_SUMMARY
+            echo "- [x] Variance comparison" >> $GITHUB_STEP_SUMMARY
           fi
