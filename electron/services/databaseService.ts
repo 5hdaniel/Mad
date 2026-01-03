@@ -14,6 +14,7 @@ import fs from "fs";
 import crypto from "crypto";
 import { app } from "electron";
 import logService from "./logService";
+import { setDb, setDbPath, setEncryptionKey } from "./db/core/dbConnection";
 import type {
   User,
   NewUser,
@@ -172,6 +173,12 @@ class DatabaseService implements IDatabaseService {
 
       // Open database connection with encryption
       this.db = this._openDatabase();
+
+      // Share connection with dbConnection module for sub-services
+      // (transactionDbService, contactDbService, etc. use dbConnection.ensureDb())
+      setDb(this.db);
+      setDbPath(this.dbPath);
+      setEncryptionKey(this.encryptionKey);
 
       // Run schema migrations
       await this.runMigrations();
