@@ -2,6 +2,7 @@ import { google, gmail_v1, Auth } from "googleapis";
 import databaseService from "./databaseService";
 import logService from "./logService";
 import { OAuthToken } from "../types/models";
+import { computeEmailHash } from "../utils/emailHash";
 
 /**
  * Email attachment metadata
@@ -35,6 +36,8 @@ interface ParsedEmail {
   raw: gmail_v1.Schema$Message;
   /** RFC 5322 Message-ID header for deduplication */
   messageIdHeader: string | null;
+  /** SHA-256 content hash for fallback deduplication (TASK-918) */
+  contentHash: string;
 }
 
 /**
@@ -365,17 +368,31 @@ class GmailFetchService {
       message.payload.parts.forEach(extractAttachments);
     }
 
+    // Extract fields for hash computation
+    const subject = getHeader("Subject");
+    const from = getHeader("From");
+    const sentDate = new Date(parseInt(message.internalDate || "0"));
+    const bodyPlainForHash = bodyPlain || body;
+
+    // Compute content hash for deduplication fallback (TASK-918)
+    const contentHash = computeEmailHash({
+      subject,
+      from,
+      sentDate,
+      bodyPlain: bodyPlainForHash,
+    });
+
     return {
       id: message.id || "",
       threadId: message.threadId || "",
-      subject: getHeader("Subject"),
-      from: getHeader("From"),
+      subject: subject,
+      from: from,
       to: getHeader("To"),
       cc: getHeader("Cc"),
       bcc: getHeader("Bcc"),
-      date: new Date(parseInt(message.internalDate || "0")),
+      date: sentDate,
       body: body,
-      bodyPlain: bodyPlain || body,
+      bodyPlain: bodyPlainForHash,
       snippet: message.snippet || "",
       hasAttachments: attachments.length > 0,
       attachmentCount: attachments.length,
@@ -383,6 +400,7 @@ class GmailFetchService {
       labels: message.labelIds || [],
       raw: message,
       messageIdHeader: extractMessageIdHeader(headers),
+      contentHash,
     };
   }
 
