@@ -80,6 +80,15 @@ export function useSecureStorage({
       return localStorage.getItem("skipKeychainExplanation") === "true";
     });
 
+  // Sync isDatabaseInitialized with isAuthenticated
+  // If user is authenticated, database MUST be initialized (login requires DB)
+  // This handles cases where backend initializes DB without frontend knowing
+  useEffect(() => {
+    if (isAuthenticated && !isDatabaseInitialized) {
+      setIsDatabaseInitialized(true);
+    }
+  }, [isAuthenticated, isDatabaseInitialized]);
+
   // Check if encryption key store exists on app load
   // This is a file existence check that does NOT trigger keychain prompts
   useEffect(() => {
