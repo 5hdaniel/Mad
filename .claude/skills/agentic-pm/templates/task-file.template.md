@@ -206,7 +206,7 @@ Verification:
 - [ ] npm test passes (if applicable)
 ```
 
-### Engineer Metrics
+### Engineer Metrics (Self-Reported)
 
 ```
 | Phase | Turns | Tokens | Time |
@@ -216,6 +216,26 @@ Verification:
 | Debugging (Debug) | X | ~XK | X min |
 | **Engineer Total** | X | ~XK | X min |
 ```
+
+### Actual Tokens (Auto-Captured)
+
+**From SubagentStop hook** (see `.claude/metrics/tokens.jsonl`):
+
+```
+Agent ID: <agent_id from Task tool output>
+| Metric | Value |
+|--------|-------|
+| Input tokens | X |
+| Output tokens | X |
+| Cache read | X |
+| Cache create | X |
+| **Total tokens** | X |
+| API calls | X |
+```
+
+**Variance:** Self-reported ~XK vs Actual ~XK (X% difference)
+
+> To find your agent's data: `grep "<agent_id>" .claude/metrics/tokens.jsonl | jq '.'`
 
 ### Notes
 

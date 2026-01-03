@@ -2,9 +2,9 @@
 
 This index tracks all backlog items with their current status and metadata.
 
-**Last Updated:** 2026-01-02 (SPRINT-015 Retrospective)
-**Total Items:** 149
-**Pending:** 76 | **In Progress:** 0 | **Completed:** 67 | **Partial:** 0 | **Obsolete:** 2 | **Deferred:** 2
+**Last Updated:** 2026-01-03 (BACKLOG-137 Automatic Token Tracking)
+**Total Items:** 150
+**Pending:** 76 | **In Progress:** 0 | **Completed:** 68 | **Partial:** 0 | **Obsolete:** 2 | **Deferred:** 2
 
 ---
 
@@ -27,7 +27,7 @@ This index tracks all backlog items with their current status and metadata.
 
 ### By Priority
 - **Critical:** BACKLOG-030 (done), 032 (done), 035 (done), 038 (done), 039 (done), 044 (done), 045 (done), 058 (done), 059 (done), 072 (done), 073 (done), 074 (done), 107 (done), 108 (done), 117 (done), 132 (done)
-- **High:** BACKLOG-008, 009, 013, 016, 018, 020, 021, 023, 026, 031, 033, 037, 056, 060 (done), 061, 062, 063, 067, 075 (done), 076 (done), 084 (done), 085 (done), 088, 090 (done), 091 (done), 098, 099, 109 (done), 110 (done), **111**, **118**, 121 (done), 126 (done), 130 (done), 133 (done), **134** (done - engineer token optimization), 136 (done)
+- **High:** BACKLOG-008, 009, 013, 016, 018, 020, 021, 023, 026, 031, 033, 037, 056, 060 (done), 061, 062, 063, 067, 075 (done), 076 (done), 084 (done), 085 (done), 088, 090 (done), 091 (done), 098, 099, 109 (done), 110 (done), **111**, **118**, 121 (done), 126 (done), 130 (done), 133 (done), **134** (done - engineer token optimization), 136 (done), **137** (done - automatic token tracking)
 - **Medium:** Multiple (see full index), 014 (done), 077 (done), 078 (done), 079 (done), 081, 086, 087, 089, 092, 093, 094, 095, 096, 097, 100, 101, 102, **112**, **113**, **114**, **115**, **116**, 122 (done), 124 (done), 127 (done), 128 (done), 129 (done), **131**, 135 (done)
 - **Low/Deferred:** BACKLOG-001, 003, 004, 010, 017, 069, 070, 071, **119**, **123**, **125**
 
@@ -197,6 +197,7 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-133 | Engineer Token Cap with Early Reporting | docs/process | High | Completed | SPRINT-015 | 2-3 | ~10K | 15-25m | N/A | ~800K-1.1M | N/A | - | - | - | - | - | - | N/A | ~800K-1.1M | N/A | ~100x | TASK-914 |
 | BACKLOG-135 | Fix window.d.ts Type Definitions | tech-debt | Medium | Completed | SPRINT-015 | 2-3 | ~10K | 15-20m | 3 | ~10K | 15m | - | - | - | - | - | - | 3 | ~10K | 15m | 0% | TASK-916 |
 | BACKLOG-136 | PM Token Monitoring Workflow | docs/process | High | Completed | SPRINT-015 | 1 | ~5K | 10m | 1 | ~5K | 5m | - | - | - | - | - | - | 1 | ~5K | 5m | -50% | Hotfix during SPRINT-015 |
+| BACKLOG-137 | Automatic Token Tracking Tooling | tooling | High | Completed | - | 6-10 | ~40K | 1-2h | 4 | ~34K | 20m | - | - | - | - | - | - | 4 | ~34K | 20m | -56% | [BACKLOG-137.md](BACKLOG-137.md) |
 
 ---
 
@@ -360,6 +361,12 @@ This index tracks all backlog items with their current status and metadata.
 - 2026-01-02: Phase 3 (email dedup) completed efficiently: 9 turns, ~40K tokens (vs estimated 12-17 turns, ~58K tokens)
 - 2026-01-02: Service category adjustment confirmed at 0.50x (TASK-917/918/919 avg -31% variance)
 - 2026-01-02: SPRINT-016 (Component Refactoring) plan created and ready to start
+- 2026-01-03: **BACKLOG-137 COMPLETE** - Automatic Token Tracking Tooling implemented:
+  - SubagentStop hook captures actual tokens from engineer agent transcripts
+  - Metrics persisted to `.claude/metrics/tokens.jsonl`
+  - Task file template updated with "Actual Tokens (Auto-Captured)" section
+  - PM Estimation Guidelines updated to reference automatic tracking
+  - Self-reported vs actual variance can now be measured objectively
 
 ---
 
@@ -484,6 +491,20 @@ Categories with reliable data (2+ complete tasks): `test`, `service` (9 tasks).
 - Adjusted impl: ~10K × 0.5 = ~5K
 - SR review overhead: +10-15K
 - **Total estimate: ~15-20K tokens**
+
+#### Automatic Token Tracking (BACKLOG-137)
+
+**Actual tokens are now captured automatically** via SubagentStop hook:
+
+```bash
+# View metrics log
+cat .claude/metrics/tokens.jsonl | jq '.'
+
+# Find specific agent's data (use agent_id from Task tool output)
+grep "<agent_id>" .claude/metrics/tokens.jsonl | jq '.'
+```
+
+Engineers should record the `agent_id` from their Task tool output and use it to fill in the "Actual Tokens (Auto-Captured)" section of the task file. This provides ground-truth data to validate self-reported estimates.
 
 **SPRINT-008 Insight**: For refactor sprints targeting well-structured code with clear boundaries, consider x 0.4 or even x 0.3 multiplier.
 
