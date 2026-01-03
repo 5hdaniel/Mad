@@ -53,6 +53,9 @@ API_CALLS=$(echo "$STATS" | jq -r '.tokens.api_calls // 0')
 # Total = new input + output + cache (cache counts towards context usage)
 TOTAL_TOKENS=$((TOTAL_INPUT + TOTAL_OUTPUT + TOTAL_CACHE_READ + TOTAL_CACHE_CREATE))
 
+# Billable = actual new work (output + cache creation, NOT cache reads)
+BILLABLE_TOKENS=$((TOTAL_OUTPUT + TOTAL_CACHE_CREATE))
+
 # Extract timing and calculate duration in seconds
 START_TS=$(echo "$STATS" | jq -r '.timing.start // empty')
 END_TS=$(echo "$STATS" | jq -r '.timing.end // empty')
@@ -77,12 +80,13 @@ LOG_ENTRY=$(jq -n \
   --argjson output "$TOTAL_OUTPUT" \
   --argjson cache_read "$TOTAL_CACHE_READ" \
   --argjson cache_create "$TOTAL_CACHE_CREATE" \
+  --argjson billable "$BILLABLE_TOKENS" \
   --argjson total "$TOTAL_TOKENS" \
   --argjson calls "$API_CALLS" \
   --argjson duration "$DURATION_SECS" \
   --arg start "$START_TS" \
   --arg end "$END_TS" \
-  '{timestamp: $ts, session_id: $sid, agent_id: $aid, input_tokens: $input, output_tokens: $output, cache_read: $cache_read, cache_create: $cache_create, total_tokens: $total, api_calls: $calls, duration_secs: $duration, started_at: $start, ended_at: $end}')
+  '{timestamp: $ts, session_id: $sid, agent_id: $aid, input_tokens: $input, output_tokens: $output, cache_read: $cache_read, cache_create: $cache_create, billable_tokens: $billable, total_tokens: $total, api_calls: $calls, duration_secs: $duration, started_at: $start, ended_at: $end}')
 
 echo "$LOG_ENTRY" >> "$METRICS_FILE"
 echo "[HOOK] Logged: $TOTAL_TOKENS tokens" >> /tmp/claude-hook-debug.log
