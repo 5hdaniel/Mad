@@ -1,5 +1,19 @@
 {
   "permissions": {
     "allow": ["Read", "Glob", "Grep", "Write", "Edit", "Bash"]
+  },
+  "hooks": {
+    "SubagentStop": [
+      {
+        "matcher": "Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/track-agent-tokens.sh",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
   }
 }
