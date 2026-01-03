@@ -11,6 +11,7 @@ import {
 import { ToastContainer } from "./Toast";
 import { useSelection } from "../hooks/useSelection";
 import { useToast } from "../hooks/useToast";
+import { useAppStateMachine } from "../appCore";
 import {
   // Components
   TransactionStatusWrapper,
@@ -40,6 +41,9 @@ function TransactionList({
   provider,
   onClose,
 }: TransactionListComponentProps) {
+  // Database initialization guard (belt-and-suspenders defense)
+  const { isDatabaseInitialized } = useAppStateMachine();
+
   // UI state for search and filter
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [filter, setFilter] = useState<TransactionFilter>(() => {
@@ -144,6 +148,19 @@ function TransactionList({
       : window.location.pathname;
     window.history.replaceState({}, "", newUrl);
   }, [filter]);
+
+  // DEFENSIVE CHECK: Return loading state if database not initialized
+  // Should never trigger if AppShell gate works, but prevents errors if bypassed
+  if (!isDatabaseInitialized) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+          <p className="text-gray-500 text-sm">Waiting for database...</p>
+        </div>
+      </div>
+    );
+  }
 
   const formatCurrency = (amount: number | null | undefined): string => {
     if (!amount) return "N/A";

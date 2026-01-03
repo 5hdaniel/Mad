@@ -12,6 +12,7 @@ import {
 import ContactSelectModal from "./ContactSelectModal";
 import type { Contact, Transaction } from "../../electron/types/models";
 import { usePlatform } from "../contexts/PlatformContext";
+import { useAppStateMachine } from "../appCore";
 
 // Type definitions
 interface AuditTransactionModalProps {
@@ -108,6 +109,8 @@ function AuditTransactionModal({
   editTransaction,
 }: AuditTransactionModalProps): React.ReactElement {
   const { isMacOS, isWindows } = usePlatform();
+  // Database initialization guard (belt-and-suspenders defense)
+  const { isDatabaseInitialized } = useAppStateMachine();
   const isEditing = !!editTransaction;
   const [step, setStep] = useState<number>(1); // 1: Address, 2: Client & Agents, 3: Professional Services
   const [loading, setLoading] = useState<boolean>(false);
@@ -218,6 +221,21 @@ function AuditTransactionModal({
       }
     }
   }, [editTransaction]);
+
+  // DEFENSIVE CHECK: Return loading state if database not initialized
+  // Should never trigger if AppShell gate works, but prevents errors if bypassed
+  if (!isDatabaseInitialized) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-xl shadow-2xl p-8">
+          <div className="text-center">
+            <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+            <p className="text-gray-500 text-sm">Waiting for database...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   /**
    * Handle address input change with autocomplete

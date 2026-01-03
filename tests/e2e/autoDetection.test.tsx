@@ -24,6 +24,15 @@ import TransactionList from '../../src/components/TransactionList';
 import AuditTransactionModal from '../../src/components/AuditTransactionModal';
 import { PlatformProvider } from '../../src/contexts/PlatformContext';
 
+// Mock useAppStateMachine to return isDatabaseInitialized: true
+// This allows tests to render the actual component content
+jest.mock('../../src/appCore', () => ({
+  ...jest.requireActual('../../src/appCore'),
+  useAppStateMachine: () => ({
+    isDatabaseInitialized: true,
+  }),
+}));
+
 // ===========================================================================
 // TEST FIXTURES
 // ===========================================================================
@@ -156,7 +165,8 @@ const mockContacts = [
 // ===========================================================================
 
 /**
- * Helper to render TransactionList with all required providers
+ * Helper to render TransactionList with required providers
+ * Note: useAppStateMachine is mocked at the top of this file
  */
 function renderTransactionList(props = {}) {
   return render(
@@ -171,6 +181,7 @@ function renderTransactionList(props = {}) {
 
 /**
  * Helper to render AuditTransactionModal with PlatformProvider
+ * Note: useAppStateMachine is mocked at the top of this file
  */
 function renderAuditModal(props = {}) {
   return render(

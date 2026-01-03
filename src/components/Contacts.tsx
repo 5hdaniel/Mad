@@ -10,6 +10,7 @@ import {
   useContactSearch,
   ExtendedContact,
 } from "./contact";
+import { useAppStateMachine } from "../appCore";
 
 interface ContactsProps {
   userId: string;
@@ -24,6 +25,9 @@ interface ContactsProps {
  * - View contact details
  */
 function Contacts({ userId, onClose }: ContactsProps) {
+  // Database initialization guard (belt-and-suspenders defense)
+  const { isDatabaseInitialized } = useAppStateMachine();
+
   // Contact list and removal state
   const {
     contacts,
@@ -52,6 +56,19 @@ function Contacts({ userId, onClose }: ContactsProps) {
   const [selectedContact, setSelectedContact] = useState<
     ExtendedContact | undefined
   >(undefined);
+
+  // DEFENSIVE CHECK: Return loading state if database not initialized
+  // Should never trigger if AppShell gate works, but prevents errors if bypassed
+  if (!isDatabaseInitialized) {
+    return (
+      <div className="h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+          <p className="text-gray-500 text-sm">Waiting for database...</p>
+        </div>
+      </div>
+    );
+  }
 
   const handleAddContact = () => {
     setShowImport(true);
