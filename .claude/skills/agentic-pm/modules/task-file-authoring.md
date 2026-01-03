@@ -49,33 +49,35 @@ Before issuing a task file:
 
 **MANDATORY**: Before estimating any task, consult `.claude/plans/backlog/INDEX.md` → "Estimation Accuracy Analysis" section.
 
+> **Note:** As of 2026-01-03, estimates are in **tokens only**. Self-reported turns/time are deprecated.
+> Actual metrics are auto-captured via SubagentStop hook.
+
 ### Category Adjustment Factors
 
-Apply these multipliers to your initial estimates based on historical data:
+Apply these multipliers to your **token estimates** based on historical data:
 
 | Category | Multiplier | Rationale | Data Points |
 |----------|------------|-----------|-------------|
 | security | × 0.4 | Simple focused fixes, avg -65% variance | SPRINT-009 |
 | refactor | × 0.5 | Consistently overestimated (-52% avg) | 10+ tasks |
-| test | × 1.0 | Usually accurate (0% variance) | SPRINT-009 |
+| test | × 0.9 | Usually accurate | SPRINT-009 |
 | cleanup | × 0.5 | Similar to refactor, but MUST scan scope first | SPRINT-009 |
 | schema | × 1.3 | High variance, add buffer | SPRINT-003 |
 | config | × 0.5 | Significantly overestimated | SPRINT-003 |
-| service/ipc/ui | × 1.0 | TBD - need data | - |
-
-**SPRINT-009 Insights:**
-- Security tasks completed in 40% of estimated time (avg -65% variance)
-- Cleanup tasks need scope scanning before estimating
-- Well-structured code accelerates refactoring
+| service | × 0.5 | SPRINT-014/015 confirmed -31% to -45% avg | SPRINT-014/015 |
+| docs | × 5.0 | Iteration can spiral (~100x observed) | SPRINT-015 |
+| types | × 1.0 | Usually accurate | SPRINT-015 |
+| ipc | × 1.5 | Suspected underestimate | - |
+| ui | × 1.0 | TBD - need data | - |
 
 ### Estimation Process
 
 1. **Categorize the task** - Determine primary category (schema, refactor, test, etc.)
 2. **Scan scope (REQUIRED for cleanup tasks)** - See below
-3. **Make initial estimate** - Based on scope and complexity
+3. **Make initial token estimate** - Based on scope and complexity
 4. **Apply adjustment factor** - Multiply by category factor
-5. **Consider context** - Well-structured code = faster refactoring
-6. **Document estimate** - Include Est. Turns, Tokens, Time in task file
+5. **Add SR Review overhead** - +10-40K depending on complexity
+6. **Document estimate** - Include Est. Tokens and Token Cap in task file
 
 ### Scope Scanning (REQUIRED for Cleanup Tasks)
 
@@ -113,9 +115,11 @@ find src -name "*.tsx" -exec basename {} \; | sort | uniq
 ### Example
 
 ```
-Initial estimate: 8-10 turns (refactor task)
-Adjustment: × 0.5
-Final estimate: 4-5 turns
+Initial token estimate: ~40K (refactor task)
+Category adjustment: × 0.5 = ~20K
+SR Review overhead: +15K
+Final estimate: ~35K tokens
+Token Cap: 140K (4x upper estimate)
 ```
 
 ## Task file naming

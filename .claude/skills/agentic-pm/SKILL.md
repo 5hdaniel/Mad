@@ -45,14 +45,14 @@ Use this skill when the user asks for any of:
 
 2. **Data-Driven Estimation**: Before creating ANY task estimates, consult `.claude/plans/backlog/INDEX.md` → "Estimation Accuracy Analysis" section. Apply category adjustment factors (e.g., refactor tasks use × 0.5 multiplier). Never estimate from scratch—use historical data.
 
-3. **Metrics Tracking**: ALL task assignments MUST include metrics tracking requirements at the TOP of the assignment. Engineers must report:
-   - Turns (planning vs implementation vs debugging)
-   - Tokens (planning vs implementation vs debugging)
-   - Time spent (planning vs implementation vs debugging)
+3. **Metrics Tracking**: ALL task assignments MUST include metrics tracking requirements. Metrics are now **auto-captured** via SubagentStop hook:
+   - **Total Tokens**: Captured automatically from agent transcript
+   - **Duration**: Captured automatically (start to end time)
+   - **API Calls**: Captured automatically
 
-   **Plan Agent Metrics are now REQUIRED** - Engineers must track Plan agent usage separately.
+   Engineers must record their `agent_id` immediately when the Task tool returns, then retrieve metrics from `.claude/metrics/tokens.jsonl`.
 
-   This data is critical for improving estimates. No exceptions.
+   PM estimates in tokens only. Self-reported metrics are deprecated.
 
 ## Progressive disclosure (how to use the bundled modules)
 

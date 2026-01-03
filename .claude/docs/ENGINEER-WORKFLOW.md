@@ -57,23 +57,23 @@ git checkout -b fix/task-XXX-description
 
 ---
 
-## Step 3: Track Metrics (Start Timer)
+## Step 3: Prepare for Metrics Capture
 
-**Before reading the task file:**
+**IMPORTANT:** Metrics are now auto-captured via SubagentStop hook.
 
-Note your start time. You will track:
+Your only responsibility:
+1. **Record your agent_id immediately** when the Task tool returns
+2. After completion, retrieve metrics using the grep command
 
-| Metric | What to Count |
-|--------|---------------|
-| **Turns** | Number of user messages/prompts |
-| **Tokens** | Estimate: Turns × 4K |
-| **Time** | Wall-clock active work time |
-
-**Tip:** Keep a simple tally as you work:
+```bash
+# After agent completes, find your metrics:
+grep "<your_agent_id>" .claude/metrics/tokens.jsonl | jq '.'
 ```
-Start: 2:00 PM
-Turns: |||| |||| || (12)
-```
+
+The hook automatically captures:
+- Total tokens (input + output + cache)
+- Duration (seconds)
+- API calls
 
 ---
 
@@ -92,7 +92,7 @@ Turns: |||| |||| || (12)
 
 ## Step 5: Complete Task File Summary (MANDATORY)
 
-**Before creating PR**, update the task file's Implementation Summary. This is required for phase retros and estimation calibration.
+**Before creating PR**, update the task file's Implementation Summary with your agent_id and auto-captured metrics.
 
 **BLOCKING**: SR Engineer will reject PRs with incomplete task file summaries.
 
@@ -101,39 +101,47 @@ Turns: |||| |||| || (12)
 
 *Completed: YYYY-MM-DD*
 
+### Agent ID
+
+**Record this immediately when Task tool returns:**
+```
+Engineer Agent ID: <agent_id from Task tool output>
+```
+
 ### Checklist
 [Mark all items complete]
 
-### Results
-- **Before**: [state before]
-- **After**: [state after]
-- **Actual Turns**: X (Est: Y)
-- **Actual Tokens**: ~XK (Est: Y-ZK)
-- **Actual Active Time**: X min (Est: Y-Z min)
-- **PR**: [will add after PR created]
+### Metrics (Auto-Captured)
+
+**From SubagentStop hook** - Run: `grep "<agent_id>" .claude/metrics/tokens.jsonl | jq '.'`
+
+| Metric | Value |
+|--------|-------|
+| **Total Tokens** | X |
+| Duration | X seconds |
+| API Calls | X |
+
+**Variance:** PM Est ~XK vs Actual ~XK (X% over/under)
 
 ### Notes
 **Deviations from plan:** [explain any changes from approved plan]
 **Issues encountered:** [document challenges, blockers, unexpected complexity]
-**CI Failures:** [if any - describe and how resolved]
 ```
 
 **Why This Matters:**
-- PM uses these metrics for phase retro reports
-- Estimation multipliers are calibrated from actual vs estimated
-- Pattern analysis requires documented deviations and issues
-- Quality tracking needs CI failure documentation
+- PM uses these metrics for estimation calibration
+- Auto-captured data is objective (no self-reporting errors)
+- Pattern analysis requires documented deviations
 
 **Required Fields Summary:**
 
 | Field | Required | Used For |
 |-------|----------|----------|
-| Actual Turns | Yes | Estimation calibration |
-| Actual Tokens | Yes | Resource tracking |
-| Actual Active Time | Yes | Capacity planning |
+| Agent ID | Yes | Metrics lookup |
+| Total Tokens | Yes | Resource tracking |
+| Variance | Yes | Estimation calibration |
 | Deviations from plan | Yes | Pattern analysis |
 | Issues encountered | Yes | Quality tracking |
-| CI Failures | If any | Quality metrics |
 
 ---
 
@@ -341,14 +349,12 @@ Copy this to your task file or notes:
 
 ### Pre-Work
 - [ ] Created branch from develop
-- [ ] Noted start time: ___
 - [ ] Read task file
 
 ### Plan-First (MANDATORY)
 - [ ] Invoked Plan agent with task context
 - [ ] Reviewed plan from Engineer perspective
 - [ ] Plan approved (or revised and re-approved)
-- [ ] Plan agent metrics recorded (turns, tokens, time)
 
 ### Implementation
 - [ ] Code complete (following approved plan)
@@ -356,17 +362,16 @@ Copy this to your task file or notes:
 - [ ] Type check passes
 - [ ] Lint passes
 
-### Task File Metrics (MANDATORY for Phase Retros)
-- [ ] Actual Turns recorded (vs estimate)
-- [ ] Actual Tokens recorded (vs estimate)
-- [ ] Actual Active Time recorded (vs estimate)
+### Metrics (Auto-Captured)
+- [ ] Agent ID recorded immediately when Task tool returned
+- [ ] Metrics retrieved: grep "<agent_id>" .claude/metrics/tokens.jsonl
+- [ ] Variance calculated (PM Est vs Actual)
 - [ ] Deviations from plan documented
 - [ ] Issues encountered documented
-- [ ] CI Failures documented (if any)
 
 ### PR Submission
-- [ ] Task file summary updated with all metrics
-- [ ] PR created with Engineer Metrics (including Plan metrics)
+- [ ] Task file summary updated with agent_id and metrics
+- [ ] PR created
 - [ ] CI passes
 - [ ] SR Engineer review requested
 

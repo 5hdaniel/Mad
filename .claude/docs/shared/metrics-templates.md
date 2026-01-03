@@ -1,7 +1,7 @@
 # Metrics Templates
 
 **Status:** Canonical reference for all metrics tracking
-**Last Updated:** 2025-12-25
+**Last Updated:** 2026-01-03
 
 ---
 
@@ -12,103 +12,106 @@ All sprint tasks require metrics tracking for:
 - Workflow efficiency analysis
 - Resource planning
 
-**Metric Types:**
-- **Turns**: Number of user messages/prompts (1 turn = 1 message)
-- **Tokens**: Estimated as Turns × 4K (adjust for long file reads: +2-5K each)
-- **Active Time**: LLM computation/response time (what engineer reports)
-- **Wall-Clock Time**: Real elapsed time from task start to PR creation (includes API latency, exploration, tests)
+### Metrics Format Change (2026-01-03)
 
----
+**Self-reported metrics (Turns/Time) have been deprecated.** New tasks use auto-captured metrics via SubagentStop hook.
 
-## Estimation Multipliers (SPRINT-009 Calibrated)
+| Old (Deprecated) | New (Auto-Captured) |
+|------------------|---------------------|
+| Turns (manual count) | API Calls (from hook) |
+| Tokens (estimate: Turns × 4K) | Total Tokens (from hook) |
+| Time (self-reported) | Duration (from hook, seconds) |
 
-Based on actual data from SPRINT-008 and SPRINT-009:
+**Metric Types (Current):**
+- **Total Tokens**: Sum of input + output + cache tokens (auto-captured)
+- **Duration**: Time from first to last message in transcript (auto-captured)
+- **API Calls**: Number of API roundtrips (auto-captured)
 
-| Category | Turn Multiplier | Wall-Clock Multiplier | Notes |
-|----------|-----------------|----------------------|-------|
-| **refactor** | **0.3x** | 3x | Well-structured code extractions |
-| **security** | 1.0x | 3x | Audits require careful review |
-| **test** | 1.0x | 3x | Test writing is predictable |
-| **schema** | 1.3x | 3x | High variance, add buffer |
-| **config** | 0.5x | 3x | Usually overestimated |
-| **service** | 1.0x | 3x | TBD - need data |
-| **ipc** | 1.5x | 3x | Suspected underestimate |
-| **ui** | 1.0x | 3x | TBD - need data |
+**How to access:**
+```bash
+# View all metrics
+cat .claude/metrics/tokens.jsonl | jq '.'
 
-**Example:**
-- PM estimates 10-14 turns for a refactor task
-- Apply 0.3x → Expect 3-4 actual turns
-- Apply 3x wall-clock → Expect 15-20 min real time
-
-### Wall-Clock Overhead Breakdown
-
-| Category | Impact | Notes |
-|----------|--------|-------|
-| API response latency | 30-90s per turn | Claude Opus responses |
-| File exploration | 5-15 min | Reading code before implementing |
-| Test execution | 5-10 min | npm test, CI |
-| Git operations | 3-5 min | Branch, commit, push |
-
----
-
-## Engineer Metrics (PR Description)
-
-Include this section in every PR for sprint tasks:
-
-```markdown
----
-
-## Engineer Metrics: TASK-XXX
-
-**Task Start:** [YYYY-MM-DD HH:MM]
-**Task End:** [YYYY-MM-DD HH:MM]
-**Wall-Clock Time:** [X min] (actual elapsed time)
-
-| Phase | Turns | Tokens | Active Time |
-|-------|-------|--------|-------------|
-| Planning (Plan) | X | ~XK | X min |
-| Implementation (Impl) | X | ~XK | X min |
-| Debugging (Debug) | X | ~XK | X min |
-| **Engineer Total** | X | ~XK | X min |
-
-**Planning Notes:** [Plan revisions, key decisions from planning phase]
-**Implementation Notes:** [Approach summary, any deviations from plan]
-
-**Estimated vs Actual:**
-- Est Turns: X-Y → Actual: X (variance: X%)
-- Est Wall-Clock: X-Y min → Actual: X min (variance: X%)
+# Find specific agent's data
+grep "<agent_id>" .claude/metrics/tokens.jsonl | jq '.'
 ```
 
-### Phase Definitions
+---
 
-| Phase | What to Count |
-|-------|---------------|
-| **Planning (Plan)** | All Plan agent invocations and revisions |
-| **Implementation (Impl)** | Actual coding, testing, file modifications |
-| **Debugging (Debug)** | CI failures, bug fixes, test fixes |
+## Estimation Multipliers (Token-Based)
+
+Based on actual data from sprints. Apply to PM token estimates:
+
+| Category | Multiplier | Notes |
+|----------|------------|-------|
+| **refactor** | **0.5x** | Consistently overestimate (-52% avg) |
+| **security** | 0.4x | Simple focused fixes |
+| **config** | 0.5x | Significantly overestimate |
+| **service** | **0.5x** | SPRINT-014/015 confirmed |
+| **test** | 0.9x | Usually accurate |
+| **schema** | 1.3x | High variance, add buffer |
+| **docs** | **5.0x** | Iteration can spiral (SPRINT-015) |
+| **types** | 1.0x | Usually accurate |
+| **ipc** | 1.5x | Suspected underestimate |
+| **ui** | 1.0x | TBD - need data |
+
+**Example:**
+- PM estimates ~20K tokens for a refactor task
+- Apply 0.5x → Expect ~10K actual tokens
 
 ---
 
-## SR Engineer Metrics (PR Description)
+## Engineer Metrics (Task File)
 
-Add after Engineer Metrics when approving/merging:
+Engineers capture their agent_id and populate from hook data:
 
 ```markdown
+### Agent ID
+
+**Record this immediately when Task tool returns:**
+```
+Engineer Agent ID: <agent_id from Task tool output>
+```
+
+### Metrics (Auto-Captured)
+
+**From SubagentStop hook** - Run: `grep "<agent_id>" .claude/metrics/tokens.jsonl | jq '.'`
+
+| Metric | Value |
+|--------|-------|
+| **Total Tokens** | X |
+| Duration | X seconds |
+| API Calls | X |
+| Input Tokens | X |
+| Output Tokens | X |
+| Cache Read | X |
+| Cache Create | X |
+
+**Variance:** PM Est ~XK vs Actual ~XK (X% over/under)
+```
+
 ---
 
-## Senior Engineer Metrics: TASK-XXX
+## SR Engineer Metrics (Task File)
 
-**SR Review Start:** [HH:MM]
-**SR Review End:** [HH:MM]
+SR Engineer captures their agent_id when reviewing:
 
-| Phase | Turns | Tokens | Time |
-|-------|-------|--------|------|
-| Planning (Plan) | X | ~XK | X min |
-| PR Review (PR) | X | ~XK | X min |
-| **SR Total** | X | ~XK | X min |
+```markdown
+### Agent ID
 
-**Planning Notes:** [Review strategy decisions, plan revisions if any]
-**Review Notes:** [Architecture concerns, security review, approval rationale]
+```
+SR Engineer Agent ID: <agent_id from Task tool output>
+```
+
+### Metrics (Auto-Captured)
+
+**From SubagentStop hook** - Run: `grep "<agent_id>" .claude/metrics/tokens.jsonl | jq '.'`
+
+| Metric | Value |
+|--------|-------|
+| **Total Tokens** | X |
+| Duration | X seconds |
+| API Calls | X |
 ```
 
 ---
@@ -124,17 +127,13 @@ SR Engineer sends to PM after merging:
 **PR**: #XXX (merged)
 **Branch**: [branch name]
 
-### Metrics Summary
-| Role | Phase | Turns | Tokens | Time |
-|------|-------|-------|--------|------|
-| Engineer | Planning | X | ~XK | X min |
-| Engineer | Implementation | X | ~XK | X min |
-| Engineer | Debugging | X | ~XK | X min |
-| **Engineer Total** | - | X | ~XK | X min |
-| SR | Planning | X | ~XK | X min |
-| SR | PR Review | X | ~XK | X min |
-| **SR Total** | - | X | ~XK | X min |
-| **Grand Total** | - | X | ~XK | X min |
+### Metrics Summary (Auto-Captured)
+
+| Role | Agent ID | Total Tokens | Duration |
+|------|----------|--------------|----------|
+| Engineer | aXXXXXX | ~XK | X sec |
+| SR Engineer | aXXXXXX | ~XK | X sec |
+| **Total** | - | ~XK | X sec |
 
 ### PM Actions Needed
 1. Update INDEX.md with metrics
@@ -150,95 +149,79 @@ When PM records metrics in `.claude/plans/backlog/INDEX.md`:
 
 | Column | Source | Format |
 |--------|--------|--------|
-| Est Turns | Task file | `X-Y` |
-| Eng Turns | PR metrics | `X` |
-| PR Turns | SR metrics | `X` |
-| Est Tokens | Task file | `XK-YK` |
-| Eng Tokens | PR metrics | `~XK` |
-| PR Tokens | SR metrics | `~XK` |
-| Est Time | Task file | `Xm` |
-| Eng Time | PR metrics | `Xm` |
-| PR Time | SR metrics | `Xm` |
+| Est Tokens | Task file | `~XK` |
+| Actual Tokens | Hook data | `~XK` |
+| Duration | Hook data | `X sec` |
+| Variance | Calculated | `+/-X%` |
 
----
-
-## Batch Review Metrics
-
-When SR Engineer reviews multiple PRs in one session:
-
-```markdown
-## Batch Review Metrics
-
-| Task | PR Review | Feedback | Total |
-|------|-----------|----------|-------|
-| TASK-XXX | 2 turns, ~8K, 5m | 0 | 2 turns, ~8K, 5m |
-| TASK-YYY | 2 turns, ~8K, 5m | 0 | 2 turns, ~8K, 5m |
-| **Batch Total** | 4 turns | ~16K | 10m |
-```
-
-Update each task file with its individual SR metrics.
+**Legacy columns** (Turns, Time per phase) are preserved for historical data but no longer populated for new tasks.
 
 ---
 
 ## Token Estimation Guidelines
 
-| Activity | Token Estimate |
-|----------|----------------|
-| Standard turn | ~4K |
-| Long file read (>300 lines) | +2-5K |
-| Complex plan generation | ~6-8K |
-| Code review with context | ~5-8K |
+| Task Complexity | Token Estimate |
+|-----------------|----------------|
+| Trivial (config, small fix) | ~5-10K |
+| Simple (single file, clear pattern) | ~15-25K |
+| Standard (multi-file, integration) | ~30-50K |
+| Complex (architecture, debugging) | ~80-150K |
+| Large (multi-component refactor) | ~200K+ |
+
+**SR Review Overhead (add to ALL estimates):**
+
+| Task Complexity | SR Review Overhead |
+|-----------------|-------------------|
+| Trivial (docs, config) | +10-15K tokens |
+| Standard (service, ui) | +15-25K tokens |
+| Complex (schema, refactor) | +25-40K tokens |
 
 ---
 
 ## Validation Rules
 
-**CI will block PRs missing:**
-- [ ] Engineer Metrics section
-- [ ] Planning (Plan) row with actual numbers
-- [ ] Estimated vs Actual comparison
+**Task file must include:**
+- [ ] Agent ID section (Engineer)
+- [ ] Metrics (Auto-Captured) table with actual values
+- [ ] Variance calculation
 
 **SR Engineer will reject:**
+- [ ] Missing Agent ID
 - [ ] Placeholder values ("X" instead of numbers)
-- [ ] Missing Planning Notes
-- [ ] Incomplete Implementation Summary in task file
+- [ ] Unfilled metrics tables
 
 ---
 
-## Debugging Metrics: Capture Everything
+## Debugging Metrics Note
 
-**Debugging is rarely 0.** Most tasks involve at least one CI fix, lint correction, or type error.
+Debugging effort is captured automatically in the total tokens. The hook captures everything from agent start to completion, including:
+- Initial implementation
+- CI failure investigation
+- Fix iterations
+- Final verification
 
-**What counts as debugging:**
-- Any commit with "fix" in message
-- CI investigation time (even if quick)
-- Type errors after implementation
-- Test fixes
-- Lint fixes beyond auto-fix
-- Investigation time (even if no commit resulted)
+No separate tracking needed - the total reflects all work.
 
-**Honest example:**
-```markdown
-| Phase | Turns | Tokens | Active Time |
-|-------|-------|--------|-------------|
-| Implementation (Impl) | 4 | ~16K | 25 min |
-| Debugging (Debug) | 1 | ~4K | 10 min |  <- CI lint fix
-| **Engineer Total** | 5 | ~20K | 35 min |
-```
+---
 
-## SR Engineer Verification
+## Deprecated Sections
 
-Before merge, check for discrepancies:
+The following are kept for historical reference but no longer used:
 
-```bash
-FIX_COUNT=$(git log --oneline origin/develop..HEAD | grep -iE "fix" | wc -l)
-PR_AGE=$(gh pr view --json createdAt --jq '.createdAt')
-```
+<details>
+<summary>Legacy: Turn-Based Estimation (Deprecated)</summary>
 
-**Tiered response:**
-- 1-2 fix commits + Debugging: 0 → Ask
-- 3+ fix commits + Debugging: 0 → Block
-- 6+ fix commits → Incident Report required
-- Long PR + fix commits + Debugging: 0 → Investigate (PR time != work time)
+Previously used:
+- Turns: Number of user messages/prompts
+- Tokens: Estimated as Turns × 4K
+- Time: Wall-clock active work time
 
-**Reference:** BACKLOG-126, PR-SOP Section 9.4
+This was inaccurate (observed ~100x variance) and replaced by auto-captured metrics.
+</details>
+
+<details>
+<summary>Legacy: Phase Breakdown (Deprecated)</summary>
+
+Previously tracked Planning/Implementation/Debugging phases separately.
+Auto-captured metrics provide total only; phase breakdown is no longer required.
+</details>
