@@ -2,24 +2,27 @@
 
 This index tracks all backlog items with their current status and metadata.
 
-**Last Updated:** 2026-01-03 (BACKLOG-137 Automatic Token Tracking)
-**Total Items:** 150
-**Pending:** 76 | **In Progress:** 0 | **Completed:** 68 | **Partial:** 0 | **Obsolete:** 2 | **Deferred:** 2
+**Last Updated:** 2026-01-03 (BACKLOG-138 Turns/Metrics Cleanup)
+**Total Items:** 151
+**Pending:** 77 | **In Progress:** 0 | **Completed:** 68 | **Partial:** 0 | **Obsolete:** 2 | **Deferred:** 2
 
 ---
 
-> **NON-NEGOTIABLE: METRICS SUBMISSION REQUIRED**
+> **NON-NEGOTIABLE: METRICS CAPTURE REQUIRED**
 >
-> When completing ANY backlog item, you MUST submit granular metrics:
+> When completing ANY backlog item, you MUST:
 >
-> | Phase | Turns | Tokens | Time |
-> |-------|-------|--------|------|
-> | Implementation | required | required | required |
-> | PR Review | required | required | required |
-> | Debugging/Fixes | required | required | required |
-> | **Total** | required | required | required |
+> 1. **Record your agent_id immediately** when the Task tool returns
+> 2. **Retrieve auto-captured metrics** via: `grep "<agent_id>" .claude/metrics/tokens.jsonl | jq '.'`
 >
-> **No exceptions.** PM will reject completion reports without this breakdown.
+> | Metric | Source | Required |
+> |--------|--------|----------|
+> | Total Tokens | Auto-captured | Yes |
+> | Duration | Auto-captured | Yes |
+> | API Calls | Auto-captured | Yes |
+> | Variance | Calculated | Yes |
+>
+> **No exceptions.** PR rejected without Implementation Summary in task file.
 
 ---
 
@@ -28,7 +31,7 @@ This index tracks all backlog items with their current status and metadata.
 ### By Priority
 - **Critical:** BACKLOG-030 (done), 032 (done), 035 (done), 038 (done), 039 (done), 044 (done), 045 (done), 058 (done), 059 (done), 072 (done), 073 (done), 074 (done), 107 (done), 108 (done), 117 (done), 132 (done)
 - **High:** BACKLOG-008, 009, 013, 016, 018, 020, 021, 023, 026, 031, 033, 037, 056, 060 (done), 061, 062, 063, 067, 075 (done), 076 (done), 084 (done), 085 (done), 088, 090 (done), 091 (done), 098, 099, 109 (done), 110 (done), **111**, **118**, 121 (done), 126 (done), 130 (done), 133 (done), **134** (done - engineer token optimization), 136 (done), **137** (done - automatic token tracking)
-- **Medium:** Multiple (see full index), 014 (done), 077 (done), 078 (done), 079 (done), 081, 086, 087, 089, 092, 093, 094, 095, 096, 097, 100, 101, 102, **112**, **113**, **114**, **115**, **116**, 122 (done), 124 (done), 127 (done), 128 (done), 129 (done), **131**, 135 (done)
+- **Medium:** Multiple (see full index), 014 (done), 077 (done), 078 (done), 079 (done), 081, 086, 087, 089, 092, 093, 094, 095, 096, 097, 100, 101, 102, **112**, **113**, **114**, **115**, **116**, 122 (done), 124 (done), 127 (done), 128 (done), 129 (done), **131**, 135 (done), **138**
 - **Low/Deferred:** BACKLOG-001, 003, 004, 010, 017, 069, 070, 071, **119**, **123**, **125**
 
 ### By Sprint Assignment
@@ -208,6 +211,7 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-135 | Fix window.d.ts Type Definitions | tech-debt | Medium | Completed | SPRINT-015 | 2-3 | ~10K | 15-20m | 3 | ~10K | 15m | - | - | - | - | - | - | 3 | ~10K | 15m | 0% | TASK-916 |
 | BACKLOG-136 | PM Token Monitoring Workflow | docs/process | High | Completed | SPRINT-015 | 1 | ~5K | 10m | 1 | ~5K | 5m | - | - | - | - | - | - | 1 | ~5K | 5m | -50% | Hotfix during SPRINT-015 |
 | BACKLOG-137 | Automatic Token Tracking Tooling | tooling | High | Completed | - | 6-10 | ~40K | 1-2h | 4 | ~34K | 20m | - | - | - | - | - | - | 4 | ~34K | 20m | -56% | [BACKLOG-137.md](BACKLOG-137.md) |
+| BACKLOG-138 | Turns/Self-Reported Metrics Cleanup | docs/cleanup | Medium | Pending | - | - | ~75K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-138.md](BACKLOG-138.md) |
 
 ---
 
@@ -383,6 +387,7 @@ This index tracks all backlog items with their current status and metadata.
   - INDEX.md table columns preserved for historical data, new tasks use simplified format
   - PM estimates now in tokens only (no turns/time)
   - Engineers MUST record agent_id immediately when Task tool returns
+- 2026-01-03: Added BACKLOG-138 (Turns/Metrics Cleanup) - Remove remaining ~600+ "turns" references from active docs
 
 ---
 
