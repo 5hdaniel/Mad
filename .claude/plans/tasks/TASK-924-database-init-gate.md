@@ -226,6 +226,27 @@ Engineer Agent ID: <agent_id from Task tool output>
 
 ---
 
+## Post-Merge Hotfix
+
+**Issue Found:** Manual testing revealed the gate blocked forever with "Waiting for database..."
+
+**Root Cause:** Backend initializes database during OAuth flow, but frontend `isDatabaseInitialized` state wasn't updated. The `setIsDatabaseInitialized(true)` was only called inside the `initializeSecureStorage()` callback, not when backend auto-initializes.
+
+**Fix Applied:** Added sync effect in `useSecureStorage.ts`:
+```tsx
+useEffect(() => {
+  if (isAuthenticated && !isDatabaseInitialized) {
+    setIsDatabaseInitialized(true);
+  }
+}, [isAuthenticated, isDatabaseInitialized]);
+```
+
+**Logic:** If `isAuthenticated` is true, the database MUST be initialized (login cannot succeed without DB).
+
+**Commit:** `3a47484` - fix(auth): sync isDatabaseInitialized with isAuthenticated
+
+---
+
 ## SR Engineer PR Review
 
 **Review Date:** 2026-01-03 | **Reviewer:** SR Engineer Agent
