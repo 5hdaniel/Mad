@@ -50,6 +50,7 @@ This index tracks all backlog items with their current status and metadata.
 - **SPRINT-013 (Architecture Cleanup):** Completed - BACKLOG-107 (done), 109 (done), 110 (done) (3 tasks: TASK-901 to TASK-903, PRs #263-265)
 - **SPRINT-014 (Feature/Performance):** Completed - BACKLOG-032 (done), 090 (done), 091 Phase 1 (done) (9 tasks: TASK-904 to TASK-912, PRs #266-274)
 - **SPRINT-015 (Infrastructure Stabilization):** Completed - BACKLOG-132 (done), 133 (done), 135 (done), 121 (done), 091 Phase 2 (done) (7 tasks: TASK-913 to TASK-919, PRs #275-281 + hotfix #278)
+- **SPRINT-017 (Metrics Workflow Test):** Completed - TASK-921 (1 task, PR #283) - Validated auto-captured metrics workflow
 - **Unassigned:** All others
 
 ### AI MVP Project - COMPLETE
@@ -247,6 +248,7 @@ This index tracks all backlog items with their current status and metadata.
 | SPRINT-013 | Architecture Cleanup | Completed | BACKLOG-107, 109, 110 (3 tasks: TASK-901 to TASK-903, PRs #263-265, 12 turns, ~56K tokens) |
 | SPRINT-014 | Feature/Performance | Completed | BACKLOG-032, 090, 091 Phase 1 (9 tasks: TASK-904 to TASK-912, PRs #266-274) |
 | SPRINT-015 | Infrastructure Stabilization | Completed | BACKLOG-132, 133, 135, 121, 091 Phase 2 (7 tasks: TASK-913 to TASK-919, PRs #275-281 + hotfix #278) |
+| SPRINT-017 | Metrics Workflow Test | Completed | TASK-921 (1 task, PR #283) - Validated auto-captured metrics, found PR template gap |
 
 ---
 
@@ -393,6 +395,12 @@ This index tracks all backlog items with their current status and metadata.
   - Updated `.github/workflows/pr-metrics-check.yml` for new validation
   - Updated `.github/PULL_REQUEST_TEMPLATE.md` with Agent ID format
   - CI now validates for Agent ID + `| Metric | Value |` table
+- 2026-01-03: **SPRINT-017 COMPLETE** - Metrics Workflow Test:
+  - TASK-921: Fixed duplicate buttons on SecureStorageStep (PR #283)
+  - Validated SubagentStop hook captures metrics to tokens.jsonl
+  - Found gap: Engineer used legacy PR format instead of template
+  - Fixed: Updated engineer.md to require PR template usage
+  - Auto-captured metrics: Engineer ~1M tokens (892K cache), 174 sec, 31 API calls
 
 ---
 
