@@ -1,13 +1,30 @@
 # Metrics Tracking Guide
 
-**Status:** Canonical reference for all metrics collection and analysis
-**Last Updated:** 2025-12-28
+**Status:** DEPRECATED - See `.claude/docs/shared/metrics-templates.md` for current format
+**Last Updated:** 2026-01-03
 
 ---
 
-## Overview
+> **DEPRECATION NOTICE (2026-01-03)**
+>
+> This document uses the legacy turn-based metrics format which has been replaced by auto-captured metrics via SubagentStop hook.
+>
+> **For current metrics format, see:** `.claude/docs/shared/metrics-templates.md`
+>
+> **Key changes:**
+> - Turns (manual count) → API Calls (auto-captured)
+> - Tokens (estimate: Turns × 4K) → Total Tokens (auto-captured)
+> - Time (self-reported) → Duration (auto-captured, seconds)
+>
+> This document is preserved for historical reference only.
 
-This guide defines all metrics tracked across the Magic Audit development workflow. Metrics enable:
+---
+
+## Overview (LEGACY)
+
+This guide defines the LEGACY metrics tracked across the Magic Audit development workflow. For current metrics, see `metrics-templates.md`.
+
+Metrics enable:
 
 - Estimation calibration (improving future estimates)
 - Workflow efficiency analysis (identifying bottlenecks)
@@ -16,9 +33,11 @@ This guide defines all metrics tracked across the Magic Audit development workfl
 
 ---
 
-## 1. Engineer Metrics (Per Task)
+## 1. Engineer Metrics (Per Task) - LEGACY
 
 Engineers record these metrics for each task in their PR description.
+
+> **DEPRECATED:** Engineers now only need to record their Agent ID. Metrics are auto-captured.
 
 ### Required Fields
 

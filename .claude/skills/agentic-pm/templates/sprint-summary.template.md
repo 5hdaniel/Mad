@@ -27,20 +27,20 @@
 
 ### Estimation Accuracy
 
-| Task | Category | Est. Turns | Actual Turns | Variance | Notes |
-|------|----------|------------|--------------|----------|-------|
-| TASK-XXX | <category> | X-Y | Z | +/-X% | <note> |
-| TASK-XXX | <category> | X-Y | Z | +/-X% | <note> |
-| TASK-XXX | <category> | X-Y | Z | +/-X% | <note> |
+| Task | Category | Est. Tokens | Actual Tokens | Variance | Notes |
+|------|----------|-------------|---------------|----------|-------|
+| TASK-XXX | <category> | ~XK | ~YK | +/-X% | <note> |
+| TASK-XXX | <category> | ~XK | ~YK | +/-X% | <note> |
+| TASK-XXX | <category> | ~XK | ~YK | +/-X% | <note> |
 
 ### Variance Analysis by Category
 
-| Category | Tasks | Avg Est. | Avg Actual | Avg Variance | Pattern |
-|----------|-------|----------|------------|--------------|---------|
-| security | X | X | X | X% | <pattern observed> |
-| refactor | X | X | X | X% | <pattern observed> |
-| test | X | X | X | X% | <pattern observed> |
-| cleanup | X | X | X | X% | <pattern observed> |
+| Category | Tasks | Avg Est. Tokens | Avg Actual Tokens | Avg Variance | Pattern |
+|----------|-------|-----------------|-------------------|--------------|---------|
+| security | X | ~XK | ~YK | X% | <pattern observed> |
+| refactor | X | ~XK | ~YK | X% | <pattern observed> |
+| test | X | ~XK | ~YK | X% | <pattern observed> |
+| cleanup | X | ~XK | ~YK | X% | <pattern observed> |
 
 ### Updated Estimation Multipliers
 
@@ -53,13 +53,13 @@ Based on this sprint's data, update the estimation multipliers:
 | test | X.Xx | X.Xx | <based on variance> |
 | cleanup | X.Xx | X.Xx | <based on variance> |
 
-### Time Metrics by Phase
+### Duration Metrics by Phase
 
-| Phase | Tasks | Est. Time | Actual Time | Notes |
-|-------|-------|-----------|-------------|-------|
-| Phase 1: <name> | X | X-Y min | ~X min | <note> |
-| Phase 2: <name> | X | X-Y min | ~X min | <note> |
-| **Total** | **X** | **X-Y hours** | **~X hours** | - |
+| Phase | Tasks | Est. Tokens | Actual Tokens | Duration | Notes |
+|-------|-------|-------------|---------------|----------|-------|
+| Phase 1: <name> | X | ~XK | ~YK | X sec | <note> |
+| Phase 2: <name> | X | ~XK | ~YK | X sec | <note> |
+| **Total** | **X** | **~XK** | **~YK** | **X sec** | - |
 
 ---
 
@@ -221,17 +221,17 @@ Follow-up work identified during this sprint:
 | #XXX | <title> | TASK-XXX | <reviewer> | YYYY-MM-DD |
 | #XXX | <title> | TASK-XXX | <reviewer> | YYYY-MM-DD |
 
-### Engineer Metrics Summary
+### Engineer Metrics Summary (Auto-Captured)
 
-| Engineer | Tasks | Total Turns | Total Tokens | Total Time |
-|----------|-------|-------------|--------------|------------|
-| <engineer> | X | X | ~XK | X min |
+| Engineer Agent ID | Tasks | Total Tokens | Duration |
+|-------------------|-------|--------------|----------|
+| <agent_id> | X | ~XK | X sec |
 
-### SR Engineer Metrics Summary
+### SR Engineer Metrics Summary (Auto-Captured)
 
-| SR Engineer | PRs Reviewed | Total Turns | Total Tokens | Total Time |
-|-------------|--------------|-------------|--------------|------------|
-| <sr engineer> | X | X | ~XK | X min |
+| SR Engineer Agent ID | PRs Reviewed | Total Tokens | Duration |
+|----------------------|--------------|--------------|----------|
+| <agent_id> | X | ~XK | X sec |
 
 ### Combined Sprint Metrics
 
@@ -239,12 +239,11 @@ Follow-up work identified during this sprint:
 |--------|-------|
 | Total Tasks | X |
 | Total PRs | X |
-| Total Engineer Turns | X |
-| Total SR Engineer Turns | X |
-| Total Tokens (est.) | ~XK |
-| Total Active Time | X hours |
-| Avg Turns per Task | X.X |
-| Avg Time per Task | X min |
+| Total Engineer Tokens | ~XK |
+| Total SR Engineer Tokens | ~XK |
+| Total Tokens | ~XK |
+| Total Duration | X sec |
+| Avg Tokens per Task | ~XK |
 
 ---
 

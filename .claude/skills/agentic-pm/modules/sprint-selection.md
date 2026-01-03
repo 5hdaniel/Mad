@@ -68,24 +68,24 @@ When planning phases for agentic engineers (LLM instances):
 
 ### Parallelism limits
 - **Per-phase**: 3-5 parallel tasks max per LLM instance
-- **Complexity budget**: ~50-80 turns total per phase (sum of all tasks)
+- **Complexity budget**: ~200K-500K tokens total per phase (sum of all tasks)
 - **Context management**: Tasks sharing contracts should be sequential to avoid drift
 
 ### Capacity planning
-| Phase Complexity | Max Parallel Tasks | Typical Turn Budget |
-|------------------|-------------------|---------------------|
-| Light | 5 | 30-50 turns |
-| Moderate | 3-4 | 50-80 turns |
-| Heavy | 2-3 | 80-120 turns |
+| Phase Complexity | Max Parallel Tasks | Typical Token Budget |
+|------------------|-------------------|----------------------|
+| Light | 5 | ~100-200K tokens |
+| Moderate | 3-4 | ~200-400K tokens |
+| Heavy | 2-3 | ~400-600K tokens |
 
 ### Buffer allocation
 - Include 20% buffer for unforeseen complexity
-- Add explicit "integration verification" turn budget per phase
+- Add explicit "integration verification" token budget per phase
 - Complex tasks may need human review checkpoints
 
 ### Red flags (capacity)
-- Phase with total estimated turns > 100 without checkpoint
-- Single task estimated at > 40 turns without breakdown
+- Phase with total estimated tokens > 500K without checkpoint
+- Single task estimated at > 150K tokens without breakdown
 - All "complex" or "very_complex" tasks in same phase
 
 ## Red flags (general)
@@ -149,7 +149,7 @@ When closing a sprint, verify:
 1. **Sequential chains beyond 2 tasks should be separate sprints**
    - Each task in a chain blocks the next
    - Risk of deferral compounds with chain length
-   - Exception: Very small tasks (< 2 turns each)
+   - Exception: Very small tasks (~5-10K tokens each)
 
 2. **When running parallel sprints, reduce capacity**
    - Context switching overhead

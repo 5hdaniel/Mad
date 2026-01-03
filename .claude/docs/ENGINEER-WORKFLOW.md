@@ -7,14 +7,14 @@
 ## Quick Reference
 
 ```
-1. BRANCH  → Create from develop
-2. PLAN    → Invoke Plan agent (MANDATORY)
-3. TRACK   → Note start time, count turns
+1. BRANCH   → Create from develop
+2. PLAN     → Invoke Plan agent (MANDATORY)
+3. AGENT_ID → Record immediately (for auto-captured metrics)
 4. IMPLEMENT → Do the work
-5. METRICS → Add to PR description (including Plan metrics)
-6. PR      → Create when ready for review
+5. SUMMARIZE → Complete task file Implementation Summary
+6. PR       → Create when ready for review
 7. SR REVIEW → Wait for SR Engineer
-8. PM      → SR passes to PM for next task
+8. PM       → SR passes to PM for next task
 ```
 
 ---
@@ -50,8 +50,7 @@ git checkout -b fix/task-XXX-description
 **Quick Steps:**
 1. Invoke Plan agent with task context
 2. Review plan for feasibility
-3. Track Plan agent metrics (turns, tokens, time)
-4. Only proceed after plan is approved
+3. Only proceed after plan is approved
 
 **BLOCKING**: Do NOT start implementation until you have an approved plan.
 
@@ -197,10 +196,7 @@ gh pr create --base develop --title "..." --body "..."
    - Lint errors → Run `npm run lint --fix`, commit, push
    - Build failures → Check logs, often dependency issues
 
-   **Track debugging time:**
-   - Note when you start debugging
-   - Count turns spent fixing CI issues
-   - Add to "Debugging (Debug)" row in metrics
+   **Note:** All debugging effort is automatically captured in your total metrics via SubagentStop hook.
 
    **After fixing, wait for CI again:**
    ```bash
@@ -219,9 +215,11 @@ Please review PR #XXX for merge readiness.
 **PR URL:** https://github.com/org/repo/pull/XXX
 **Task:** TASK-XXX
 **Summary:** [what was done]
-**Engineer Metrics:** X turns, ~XK tokens, X min
+**Engineer Agent ID:** [your agent_id]
+**Estimated Tokens:** ~XK
 
-Please verify, add SR metrics, approve and merge.
+Please verify, review code, approve and merge.
+Metrics are auto-captured via SubagentStop hook.
 ```
 
 ---

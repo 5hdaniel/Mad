@@ -66,32 +66,27 @@ After receiving the plan, review it from your role's perspective:
 Please revise the plan addressing these concerns.
 ```
 
-### Step 3: Track Plan Agent Metrics
+### Step 3: Record Agent ID
 
-**REQUIRED**: Track all Plan agent activity:
+**REQUIRED**: Record the Plan agent's activity:
 
 ```markdown
-## Plan Agent Metrics
+## Plan Agent
 
-**Planning Start Time:** [timestamp]
-**Planning End Time:** [timestamp]
+**Plan Agent ID:** [agent_id from Task tool output]
+**Planning Complete:** [timestamp]
 
-| Activity | Turns | Tokens (est.) | Time |
-|----------|-------|---------------|------|
-| Initial Plan | X | ~XK | X min |
-| Revision(s) | X | ~XK | X min |
-| **Plan Total** | X | ~XK | X min |
+Metrics will be auto-captured via SubagentStop hook.
 ```
 
 ### Step 4: Approve and Execute
 
 Once satisfied with the plan:
 1. Document the approved plan in your output
-2. Record Plan agent metrics (turns, tokens, time)
-3. Use the plan as your execution guide
-4. Reference plan steps as you complete them
+2. Use the plan as your execution guide
+3. Reference plan steps as you complete them
 
-**BLOCKING**: Do NOT start execution until you have an approved plan AND recorded Plan metrics.
+**BLOCKING**: Do NOT start execution until you have an approved plan.
 
 ---
 
@@ -141,15 +136,13 @@ PM MUST execute the Sprint Completion Checklist (`.claude/skills/agentic-pm/modu
 
 | Violation | Detection | Consequence |
 |-----------|-----------|-------------|
-| Skipping Plan-First Protocol | CI check + SR Review | PR blocked until plan metrics added |
-| Missing Plan metrics | SR Engineer review | PR rejected |
-| Placeholder metrics ("X" values) | SR Engineer review | PR rejected |
+| Skipping Plan-First Protocol | CI check + SR Review | PR blocked until plan complete |
+| Missing Agent ID | SR Engineer review | PR rejected |
 
 **If you realize you skipped planning:**
 1. STOP immediately
 2. Invoke Plan agent (even retroactively)
 3. Document as deviation: "DEVIATION: Plan created post-implementation"
-4. Include retroactive plan metrics
 
 ---
 

@@ -106,8 +106,9 @@ find src -name "*.tsx" -exec basename {} \; | sort | uniq
 **Result:** 47 occurrences across 23 files
 
 **Estimate based on scan:**
-- ~47 occurrences / ~10 per turn = 5 turns (base)
-- Apply cleanup multiplier: 5 × 0.5 = 2-3 turns
+- ~47 occurrences across 23 files
+- Base estimate: ~20K tokens
+- Apply cleanup multiplier: × 0.5 = ~10K tokens
 ```
 
 **Why this matters:** SPRINT-009 showed cleanup estimates were often based on stale audit data. Scanning actual scope prevents surprises.

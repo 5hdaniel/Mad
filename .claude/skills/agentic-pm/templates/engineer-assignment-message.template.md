@@ -1,13 +1,12 @@
 # Engineer Assignment: TASK-XXX
 
-> **NON-NEGOTIABLE: METRICS TRACKING REQUIRED**
+> **NON-NEGOTIABLE: AGENT ID CAPTURE REQUIRED**
 >
-> You MUST track and report metrics at task completion. This is mandatory.
-> - Track **turns**, **tokens**, and **time** for each phase (implementation, PR review, debugging)
-> - Report using the template in "Completion Reporting" section below
-> - Start tracking NOW - note your start time before reading further
+> You MUST record your Agent ID immediately when this task starts. This is mandatory.
+> - Record your **Agent ID** from the Task tool output
+> - Metrics are auto-captured via SubagentStop hook
 >
-> **Start Time:** _______________
+> **Agent ID:** _______________
 
 ---
 
@@ -40,44 +39,41 @@ Read the full task file before starting.
 ## Workflow
 
 1. Read the full task file
-2. Create your feature branch
-3. Implement according to acceptance criteria
-4. Complete the Implementation Summary section
-5. Run all CI checks locally
-6. Open PR targeting `<branch>`
-7. Have senior-engineer-pr-lead agent review the PR
-8. After merge, report completion metrics (see below)
+2. Record your Agent ID immediately
+3. Create your feature branch
+4. Implement according to acceptance criteria
+5. Complete the Implementation Summary section
+6. Run all CI checks locally
+7. Open PR targeting `<branch>` with Agent ID noted
+8. Have senior-engineer-pr-lead agent review the PR
 
 ## Completion Reporting (REQUIRED)
 
-After your task is complete and PR is merged, you MUST report:
+After your task is complete and PR is merged, report:
 
 ```
 ## Task Completion Report: TASK-XXX
 
-**Status:** ✅ Complete
+**Status:** Complete
 **PR:** #<number>
+**Engineer Agent ID:** <your_agent_id>
 
-### Metrics Breakdown
+### Metrics (Auto-Captured)
 
-| Phase | Turns | Tokens | Time |
-|-------|-------|--------|------|
-| Implementation | <N> | ~<X>K | <X> min |
-| PR Review (sr-eng agent) | <N> | ~<X>K | <X> min |
-| Debugging/Fixes | <N> | ~<X>K | <X> min |
-| **Total** | <N> | ~<X>K | <X> min |
+Run: `grep "<your_agent_id>" .claude/metrics/tokens.jsonl | jq '.'`
+
+| Metric | Value |
+|--------|-------|
+| Total Tokens | <from hook> |
+| Duration | <from hook> seconds |
+| API Calls | <from hook> |
 
 ### Variance Notes
-(if significantly different from estimate of <X> turns, <X>K tokens)
+(if significantly different from estimate of ~<X>K tokens)
 <explanation>
 ```
 
-**How to track:**
-- **Turns**: Count user message prompts (yours = implementation, agent spawns = PR review)
-- **Tokens**: Estimate based on conversation length (~4 tokens/word, or use Claude Code token counter if available)
-- **Time**: Note start/end timestamps for each phase
-
-This data is used to improve future estimates. The PM will update the backlog index with these metrics.
+Metrics are auto-captured via SubagentStop hook. The PM will lookup metrics using your Agent ID.
 
 ## Stop and Ask If
 

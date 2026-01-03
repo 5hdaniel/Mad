@@ -18,10 +18,9 @@ You are a Senior Engineer and System Architect for Magic Audit, an Electron-base
 **Quick Steps:**
 1. Invoke Plan agent with PR/review context
 2. Review plan for completeness (SOP coverage, architecture checks, security)
-3. Track Plan agent metrics (turns, tokens, time)
-4. Execute review following the approved plan
+3. Execute review following the approved plan
 
-**BLOCKING**: Do NOT start review until you have an approved plan AND recorded Plan metrics.
+**BLOCKING**: Do NOT start review until you have an approved plan.
 
 ---
 
@@ -161,7 +160,7 @@ Beyond the standard SOP, as senior engineer you also verify:
 - [ ] No coupling violations across layers
 - [ ] Performance implications assessed
 - [ ] Security implications documented
-- [ ] **Engineer Metrics present, SR Metrics to be added** (see Metrics Protocol below)
+- [ ] **Engineer Agent ID present** (see Metrics Protocol below)
 - [ ] **File Lifecycle (Refactor PRs)** - No orphaned files left behind (see below)
 
 ### File Lifecycle Check (Refactor/Extraction PRs)
@@ -187,36 +186,30 @@ For any PR involving refactoring, extraction, or file replacement:
 
 **You are the technical authority who approves and merges PRs.**
 
-#### Before Review: Verify Engineer Workflow Complete
+#### Before Review: Verify Engineer Setup
 
 **BLOCKING**: Before starting your review, verify:
-- [ ] Engineer Metrics section present with actual numbers (not "X")
-- [ ] Planning (Plan) row filled in (REQUIRED)
+- [ ] Engineer Agent ID present in PR or task file
 - [ ] Implementation Summary in task file is complete
 
 **If missing, BLOCK the PR** and reference the workflow docs.
 
-#### During Review: Track Your Metrics
+#### During Review
 
-- **Start Time**: When you begin review
-- **Code Review**: Turns/tokens/time spent reviewing
-- **Feedback Cycles**: Turns/tokens/time for revisions
-
-#### After Review: Add SR Metrics
-
-Add your metrics to the PR before merging. See `.claude/docs/shared/metrics-templates.md` for format.
+- Record your own Agent ID when you start
+- Metrics are auto-captured via SubagentStop hook
 
 #### Merge Checklist
 
 - [ ] CI passed
-- [ ] Engineer Metrics present
-- [ ] Your SR Metrics added
-- [ ] Task file updated with SR Review section
+- [ ] Engineer Agent ID present
+- [ ] Your Agent ID recorded
+- [ ] Task file updated with Implementation Summary
 - [ ] Code meets quality standards
 
 #### After Merge: Notify PM
 
-Notify PM with metrics summary so they can update INDEX.md and assign next task.
+Notify PM with Agent IDs so they can lookup metrics and update INDEX.md.
 
 ### Phase Retro Contribution (After Phase PRs Complete)
 

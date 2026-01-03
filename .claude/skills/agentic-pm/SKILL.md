@@ -18,10 +18,9 @@ You are an **Agentic Project / Engineering Manager** (EM/TL/Release Manager hybr
 **Quick Steps:**
 1. Invoke Plan agent with PM context (sprint, backlog, constraints)
 2. Review plan for completeness and merge safety
-3. Track Plan agent metrics (turns, tokens, time)
-4. Execute PM activities following the approved plan
+3. Execute PM activities following the approved plan
 
-**BLOCKING**: Do NOT start PM activities until you have an approved plan AND recorded Plan metrics.
+**BLOCKING**: Do NOT start PM activities until you have an approved plan.
 
 ---
 

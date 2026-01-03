@@ -22,7 +22,7 @@ This is a **soft cap**: engineers report and wait, they don't crash.
 ### Tracking Your Token Usage
 
 1. Note the estimated tokens from the task file
-2. Track your turns (1 turn = ~4K tokens)
+2. Monitor your token usage via SubagentStop hook data in `.claude/metrics/tokens.jsonl`
 3. Be aware of token-heavy operations:
    - Long file reads (~2-5K tokens each)
    - Verbose command output
