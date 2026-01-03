@@ -31,6 +31,7 @@ export const meta: OnboardingStepMeta = {
   platforms: ["macos"],
   navigation: {
     showBack: true,
+    hideContinue: true, // Shell won't render Continue - step handles it with dontShowAgain
     continueLabel: "Continue",
   },
   // This step is required for macOS users
@@ -205,21 +206,13 @@ export function SecureStorageContent({
             </span>
           </label>
 
-          {/* Navigation buttons */}
-          <div className="flex gap-3">
-            <button
-              onClick={handleBack}
-              className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-colors"
-            >
-              Back
-            </button>
-            <button
-              onClick={handleContinue}
-              className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-600 hover:to-purple-700 transition-colors"
-            >
-              Continue
-            </button>
-          </div>
+          {/* Continue button - Back is handled by shell */}
+          <button
+            onClick={handleContinue}
+            className="w-full px-4 py-2.5 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-600 hover:to-purple-700 transition-colors"
+          >
+            Continue
+          </button>
         </>
       )}
     </div>
