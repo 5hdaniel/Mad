@@ -4,6 +4,10 @@ import logService from "./logService";
 import microsoftAuthService from "./microsoftAuthService";
 import { OAuthToken } from "../types/models";
 import { computeEmailHash } from "../utils/emailHash";
+import {
+  EmailDeduplicationService,
+  DuplicateCheckResult,
+} from "./emailDeduplicationService";
 
 /**
  * Microsoft Graph API email recipient
@@ -111,6 +115,8 @@ interface ParsedEmail {
   messageIdHeader: string | null;
   /** SHA-256 content hash for fallback deduplication (TASK-918) */
   contentHash: string;
+  /** ID of the original message if this is a duplicate (TASK-919) */
+  duplicateOf?: string;
 }
 
 /**
@@ -570,6 +576,65 @@ class OutlookFetchService {
     } catch (error) {
       logService.error("Failed to get folders", "OutlookFetch", { error });
       throw error;
+    }
+  }
+
+  /**
+   * Check emails for duplicates and populate duplicateOf field (TASK-919)
+   *
+   * Uses EmailDeduplicationService to detect duplicates by:
+   * 1. Message-ID header (most reliable)
+   * 2. Content hash (fallback)
+   *
+   * @param userId - User ID to scope the duplicate check
+   * @param emails - Array of parsed emails to check
+   * @returns Same emails with duplicateOf field populated where applicable
+   */
+  async checkDuplicates(
+    userId: string,
+    emails: ParsedEmail[]
+  ): Promise<ParsedEmail[]> {
+    if (emails.length === 0) {
+      return emails;
+    }
+
+    try {
+      const db = databaseService.getRawDatabase();
+      const dedupService = new EmailDeduplicationService(db);
+
+      // Use batch check for efficiency
+      const dedupInputs = emails.map((e) => ({
+        messageIdHeader: e.messageIdHeader,
+        contentHash: e.contentHash,
+      }));
+
+      const results = dedupService.checkForDuplicatesBatch(userId, dedupInputs);
+
+      // Populate duplicateOf field for each email
+      const enrichedEmails = emails.map((email, index) => {
+        const result = results.get(index);
+        if (result?.isDuplicate && result.originalId) {
+          return {
+            ...email,
+            duplicateOf: result.originalId,
+          };
+        }
+        return email;
+      });
+
+      const duplicateCount = enrichedEmails.filter((e) => e.duplicateOf).length;
+      if (duplicateCount > 0) {
+        logService.info(
+          `Duplicate check: ${duplicateCount}/${emails.length} duplicates found`,
+          "OutlookFetch"
+        );
+      }
+
+      return enrichedEmails;
+    } catch (error) {
+      logService.error("Failed to check duplicates", "OutlookFetch", { error });
+      // Return original emails without duplicate info on error
+      return emails;
     }
   }
 }
