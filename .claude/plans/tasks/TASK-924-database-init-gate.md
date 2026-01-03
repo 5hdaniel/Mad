@@ -50,6 +50,7 @@ Previous fixes (piecemeal, incomplete):
 | `src/components/TransactionList.tsx` | Add defensive check |
 | `src/components/Transactions.tsx` | Add defensive check |
 | `src/components/Contacts.tsx` | Add defensive check |
+| `src/components/AuditTransactionModal.tsx` | Add defensive check (SR Engineer addition) |
 
 ---
 
@@ -152,6 +153,33 @@ if (!isDatabaseInitialized) {
 - If adding the gate causes infinite loading on any platform
 - If the state flow is unclear or different than expected
 - If you need to modify the database initialization logic itself
+- If BackgroundServices requires database access during init (verify compatibility)
+- If `useAppStateMachine()` cannot be imported in TransactionList/Transactions/Contacts
+
+---
+
+## SR Engineer Review Notes
+
+**Review Date:** 2026-01-03 | **Status:** APPROVED
+
+### Branch Information
+- **Branch From:** develop
+- **Branch Into:** develop
+- **Suggested Branch Name:** fix/TASK-924-database-init-gate
+
+### Execution Classification
+- **Parallel Safe:** Yes (single task sprint)
+- **Depends On:** None
+- **Blocks:** None
+
+### Technical Considerations
+- `isDatabaseInitialized` is already exposed via `useAppStateMachine()` (line 269)
+- Components can import the hook directly for defensive checks
+- Gate in AppShell blocks children including AppModals - this is correct
+- Verify BackgroundServices doesn't require DB during init
+
+### Scope Addition
+- ADDED `AuditTransactionModal.tsx` to scope (same race condition applies)
 
 ---
 
