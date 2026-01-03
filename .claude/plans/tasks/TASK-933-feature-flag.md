@@ -255,6 +255,59 @@ If any occur, rollback immediately and report to PM.
 
 ---
 
+## SR Engineer Review Notes
+
+**Review Date:** 2026-01-03 | **Status:** APPROVED with Recommendation
+
+### Branch Information (SR Engineer decides)
+- **Branch From:** project/state-coordination
+- **Branch Name:** feature/TASK-933-feature-flag
+- **Branch Into:** project/state-coordination
+
+### Execution Classification
+- **Parallel Safe:** Yes (can run parallel with TASK-930)
+- **Depends On:** TASK-929
+- **Blocks:** None
+
+### Shared File Analysis
+- Files created: `FeatureFlag.tsx`, `utils/featureFlags.ts`, `docs/rollback-procedure.md`
+- Files modified: `index.ts` (add exports)
+- Conflicts with: None
+
+### Technical Considerations
+
+**Default Value Recommendation:**
+The implementation notes set default to `true` (enabled).
+
+**RECOMMENDATION:** Change default to `false` for Phase 1:
+```typescript
+// Default: disabled in Phase 1 (safety)
+// Change to true in Phase 2 when ready for testing
+return false;
+```
+
+This ensures the new state machine doesn't activate until explicitly enabled, providing safer rollout.
+
+**URL Parameter Priority:**
+The URL param overriding localStorage is correct for testing. Ensure:
+- `?newStateMachine=true` enables
+- `?newStateMachine=false` disables
+- Any other value or missing = use localStorage or default
+
+**Debug Panel:**
+The dev-only debug panel is useful. Ensure:
+- Only renders in development (`process.env.NODE_ENV === 'development'`)
+- Position doesn't conflict with other dev tools
+- Consider adding a toggle button for quick testing
+
+**Documentation:**
+The rollback procedure doc is good. Also document:
+- How to verify flag state (console command)
+- How to check which system is active
+- Monitoring for state machine issues
+
+---
+
 ## PM Estimate (PM-Owned)
 
 **Category:** `service`

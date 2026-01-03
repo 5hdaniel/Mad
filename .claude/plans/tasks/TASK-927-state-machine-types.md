@@ -363,6 +363,44 @@ This task's PR MUST pass:
 
 ---
 
+## SR Engineer Review Notes
+
+**Review Date:** 2026-01-03 | **Status:** APPROVED with Recommendations
+
+### Branch Information (SR Engineer decides)
+- **Branch From:** project/state-coordination
+- **Branch Name:** feature/TASK-927-state-machine-types
+- **Branch Into:** project/state-coordination
+
+### Execution Classification
+- **Parallel Safe:** No (blocking foundation task)
+- **Depends On:** None (first task)
+- **Blocks:** TASK-928, TASK-929, TASK-930, TASK-931, TASK-932, TASK-933
+
+### Shared File Analysis
+- Files created: `types.ts`, `index.ts`
+- Conflicts with: None (creates new directory)
+
+### Technical Considerations
+
+**CRITICAL: OnboardingStep Naming Alignment**
+
+Before implementing, verify step names against `OnboardingFlow.tsx`:
+- Existing uses: `phone-type`, `email-connect`, `apple-driver`, `android-coming-soon`, `permissions`, `secure-storage`
+- Proposed uses: `phone-type`, `email`, `apple-driver-setup`, `android-coming-soon`, `permissions`
+
+**Recommended changes:**
+1. Use `email-connect` instead of `email` (matches existing)
+2. Use `apple-driver` instead of `apple-driver-setup` (matches existing)
+3. Add `secure-storage` step (maps to `keychain-explanation` route)
+4. Clarify if `terms` is a step or modal (existing treats as modal in AppRouter)
+
+**LoadingPhase Notes:**
+- Current flow in `useSecureStorage.ts`: check keystore -> init DB -> complete login
+- Ensure `loading-auth` phase aligns with `getCurrentUser()` not `getStoredSession()` (latter doesn't exist)
+
+---
+
 ## PM Estimate (PM-Owned)
 
 **Category:** `schema`

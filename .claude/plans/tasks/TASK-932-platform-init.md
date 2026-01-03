@@ -181,6 +181,55 @@ const PHASE_MESSAGES: Record<LoadingPhase, (platform: { isMacOS: boolean }) => s
 
 ---
 
+## SR Engineer Review Notes
+
+**Review Date:** 2026-01-03 | **Status:** APPROVED
+
+### Branch Information (SR Engineer decides)
+- **Branch From:** project/state-coordination
+- **Branch Name:** feature/TASK-932-platform-init
+- **Branch Into:** project/state-coordination
+
+### Execution Classification
+- **Parallel Safe:** Yes (can run parallel with TASK-931)
+- **Depends On:** TASK-930
+- **Blocks:** None (end of chain)
+
+### Shared File Analysis
+- Files created: `utils/platformInit.ts`
+- Files modified: `LoadingOrchestrator.tsx` (adds platform-specific logic)
+- Conflicts with: **COORDINATE WITH TASK-931** - both touch orchestrator area
+
+### Technical Considerations
+
+**Platform Detection Robustness:**
+The proposed `detectPlatform()` is good. Enhance with:
+```typescript
+// Check both platform and userAgent for robustness
+const isMacOS = platform.includes('Mac') || userAgent.includes('Macintosh');
+const isWindows = platform.includes('Win') || userAgent.includes('Windows');
+```
+
+**Existing Platform Detection:**
+The codebase already has `usePlatform()` hook from contexts. Consider:
+1. Platform detection in LoadingOrchestrator should NOT use hooks (runs before context)
+2. Use raw `window.navigator` detection early
+3. Can sync with context later if needed
+
+**macOS Keychain Flow:**
+The existing `useSecureStorage.ts` handles macOS keychain prompts. Ensure:
+- LoadingOrchestrator doesn't duplicate this logic
+- Just detect platform and let existing flow handle prompts
+- Or migrate keychain handling to new state machine (may be Phase 2 scope)
+
+**Windows DPAPI:**
+Existing code auto-initializes on Windows. Ensure new orchestrator:
+- Dispatches `DB_INIT_STARTED` before calling API
+- Handles success/failure correctly
+- Doesn't race with existing `useSecureStorage` (they run parallel)
+
+---
+
 ## PM Estimate (PM-Owned)
 
 **Category:** `service`

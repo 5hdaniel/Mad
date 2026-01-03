@@ -424,6 +424,47 @@ This task's PR MUST pass:
 
 ---
 
+## SR Engineer Review Notes
+
+**Review Date:** 2026-01-03 | **Status:** APPROVED
+
+### Branch Information (SR Engineer decides)
+- **Branch From:** project/state-coordination
+- **Branch Name:** feature/TASK-928-state-reducer
+- **Branch Into:** project/state-coordination
+
+### Execution Classification
+- **Parallel Safe:** No (sequential after TASK-927)
+- **Depends On:** TASK-927
+- **Blocks:** TASK-929, TASK-930, TASK-931, TASK-932, TASK-933
+
+### Shared File Analysis
+- Files created: `reducer.ts`, `reducer.test.ts`
+- Files modified: `index.ts` (add export)
+- Conflicts with: None (TASK-927 must complete first)
+
+### Technical Considerations
+
+**USER_DATA_LOADED Transition:**
+The implementation notes show a TODO for this transition. Resolve by:
+1. After `AUTH_LOADED` with user, state transitions to `loading-user-data` phase
+2. `USER_DATA_LOADED` should transition to either:
+   - `onboarding` state (if new user needs onboarding)
+   - `ready` state (if returning user with all data)
+
+**Onboarding Step Progression:**
+The `getNextOnboardingStep` helper needs access to `userData` from the action payload. Consider:
+- Passing full context in `USER_DATA_LOADED` action
+- Or storing platform/userData in a way the reducer can access
+
+**Test Coverage Target:**
+The 90% target is appropriate. Ensure edge cases:
+- Double-dispatch same action
+- Actions in wrong state
+- All error recovery paths
+
+---
+
 ## PM Estimate (PM-Owned)
 
 **Category:** `service`

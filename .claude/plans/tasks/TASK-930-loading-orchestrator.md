@@ -373,6 +373,63 @@ export function ErrorScreen({ error, onRetry }: ErrorScreenProps) {
 
 ---
 
+## SR Engineer Review Notes
+
+**Review Date:** 2026-01-03 | **Status:** APPROVED with Recommendations
+
+### Branch Information (SR Engineer decides)
+- **Branch From:** project/state-coordination
+- **Branch Name:** feature/TASK-930-loading-orchestrator
+- **Branch Into:** project/state-coordination
+
+### Execution Classification
+- **Parallel Safe:** Yes (can run parallel with TASK-933)
+- **Depends On:** TASK-929
+- **Blocks:** TASK-931, TASK-932
+
+### Shared File Analysis
+- Files created: `LoadingOrchestrator.tsx`, `components/LoadingScreen.tsx`, `components/ErrorScreen.tsx`
+- Files modified: `index.ts` (add exports)
+- Conflicts with: TASK-932 will modify LoadingOrchestrator.tsx (coordinate)
+
+### Technical Considerations
+
+**CRITICAL: API Method Correction**
+
+The implementation notes reference `window.api.auth.getStoredSession()` which **DOES NOT EXIST**.
+
+Replace with `window.api.auth.getCurrentUser()` which returns:
+```typescript
+{
+  success: boolean;
+  user?: unknown;
+  sessionToken?: string;
+  provider?: string;
+  subscription?: unknown;
+  isNewUser?: boolean;
+  error?: string;
+}
+```
+
+**Effect Safety Pattern:**
+The proposed effects correctly check BOTH `status` AND `phase`. This follows the Effect Safety Patterns doc.
+
+Ensure each effect:
+1. Checks state conditions before calling API
+2. Handles both success and error paths
+3. Doesn't double-fire (phase check prevents this)
+
+**Platform Detection:**
+Using `window.navigator.platform` is correct but consider:
+- `platform.includes('Mac')` may not catch all macOS variants
+- Consider also checking `userAgent` for robustness
+- TASK-932 will refine this - coordinate
+
+**Components Directory:**
+Creating `components/` subdirectory is fine. Ensure barrel export includes these.
+
+---
+
 ## PM Estimate (PM-Owned)
 
 **Category:** `service`

@@ -368,6 +368,52 @@ describe('AppState Integration Tests', () => {
 
 ---
 
+## SR Engineer Review Notes
+
+**Review Date:** 2026-01-03 | **Status:** APPROVED
+
+### Branch Information (SR Engineer decides)
+- **Branch From:** project/state-coordination
+- **Branch Name:** feature/TASK-931-integration-tests
+- **Branch Into:** project/state-coordination
+
+### Execution Classification
+- **Parallel Safe:** Yes (can run parallel with TASK-932)
+- **Depends On:** TASK-930
+- **Blocks:** None (end of chain)
+
+### Shared File Analysis
+- Files created: `__tests__/integration.test.ts`, `__tests__/testUtils.ts`
+- Files modified: None
+- Conflicts with: None
+
+### Technical Considerations
+
+**Mock API Setup:**
+The proposed mock structure is correct. Ensure mocks match actual API signatures from `window.d.ts`:
+- `hasEncryptionKeyStore` returns `{ success: boolean, hasKeyStore: boolean }`
+- `initializeSecureStorage` returns `{ success: boolean, available: boolean, ... }`
+- Use `getCurrentUser` not `getStoredSession`
+
+**Test Isolation:**
+Each test should:
+1. Clear all mocks in beforeEach
+2. Reset any localStorage state
+3. Not depend on execution order
+
+**Platform Tests:**
+Basic platform tests can be written here, but TASK-932 will add more comprehensive platform-specific paths. Consider:
+- Add placeholder tests for platform paths
+- Mark them as `it.todo()` if TASK-932 is not yet merged
+- Or run TASK-932 first if tight coupling is needed
+
+**Flaky Test Prevention:**
+- Use `waitFor` with reasonable timeouts
+- Don't rely on timing-based assertions
+- Mock all async operations
+
+---
+
 ## PM Estimate (PM-Owned)
 
 **Category:** `test`

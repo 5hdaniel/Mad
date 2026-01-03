@@ -48,33 +48,40 @@ Create the foundation for a unified state machine architecture to replace fragme
 ## Dependency Graph
 
 ```
-TASK-927 (types)
-    |
-    v
-TASK-928 (reducer)
-    |
-    v
-TASK-929 (context)
-    |
-    +------+------+
-    |      |      |
-    v      v      v
-TASK-930 TASK-933  (parallel)
-(loader) (flag)
-    |
-    +------+
-    |      |
-    v      v
-TASK-931 TASK-932
-(tests)  (platform)
+TASK-927 (types) ─────────────────────────────────────────┐
+    |                                                     |
+    v                                                     |
+TASK-928 (reducer) ───────────────────────────────────────┤
+    |                                                     |
+    v                                                     |
+TASK-929 (context) ───────────────────────────────────────┤
+    |                                                     |
+    +─────────────+─────────────+                         |
+    |             |             |                         |
+    v             v             |                         |
+TASK-930      TASK-933          |                         |
+(loader)      (flag)            |                         |
+    |             |             |                         |
+    +─────────────+             |                         |
+    |             |             |                         |
+    v             v             |                         |
+TASK-931      TASK-932          |                         |
+(tests)       (platform)        |                         |
+                                |                         |
+                         All import from types.ts ────────┘
 ```
 
-**Execution Order:**
-1. TASK-927 (types) - blocking
-2. TASK-928 (reducer) - blocking
-3. TASK-929 (context) - blocking
-4. TASK-930, TASK-933 (parallel batch)
-5. TASK-931, TASK-932 (parallel batch after 930)
+**Execution Order (SR Engineer Confirmed):**
+
+| Batch | Tasks | Type | Rationale |
+|-------|-------|------|-----------|
+| **1** | TASK-927 | Sequential | Foundation types, all tasks depend on it |
+| **2** | TASK-928 | Sequential | Reducer depends on types, context depends on reducer |
+| **3** | TASK-929 | Sequential | Context depends on reducer, multiple tasks depend on context |
+| **4** | TASK-930, TASK-933 | **Parallel** | Both only depend on context, no shared files between them |
+| **5** | TASK-931, TASK-932 | **Parallel** | Both depend on TASK-930, minimal overlap |
+
+**Note on Batch 5:** TASK-932 modifies `LoadingOrchestrator.tsx` created by TASK-930. TASK-931 tests it. If running in parallel, TASK-931 should use placeholder tests for platform-specific paths that TASK-932 adds.
 
 ---
 
@@ -511,6 +518,58 @@ Before merging to project branch:
 
 ---
 
+## SR Engineer Technical Review
+
+**Review Date:** 2026-01-03
+**Reviewer:** SR Engineer
+**Status:** **APPROVED**
+**Risk Level:** MEDIUM
+
+### Review Summary
+
+Sprint plan is well-structured with appropriate constraints and clear deliverables. The dependency graph is correctly ordered with opportunities for parallelism in later batches.
+
+### Key Findings
+
+| Area | Finding | Severity |
+|------|---------|----------|
+| OnboardingStep Types | Names don't match existing OnboardingFlow.tsx | Medium |
+| API Method | `getStoredSession()` doesn't exist, use `getCurrentUser()` | High |
+| Feature Flag Default | Default `true` is risky for Phase 1 | Low |
+| Token Estimates | TASK-928, TASK-930 may be underestimated | Low |
+
+### Recommendations Applied
+
+1. **TASK-927**: Added notes about OnboardingStep naming alignment
+2. **TASK-930**: Documented API method correction requirement
+3. **TASK-933**: Recommended default `false` for Phase 1 safety
+4. **All tasks**: Added branch information and execution classification
+
+### Shared File Matrix
+
+| File | Tasks | Conflict Risk |
+|------|-------|---------------|
+| `machine/index.ts` | 927, 928, 929, 930, 933 | High - sequential updates |
+| `machine/types.ts` | 927 creates, all import | None - read after create |
+| `LoadingOrchestrator.tsx` | 930 creates, 932 modifies | Medium - coordinate |
+
+### Pre-Implementation Checklist
+
+Before starting TASK-927:
+- [ ] Create `project/state-coordination` branch from develop
+- [ ] Verify OnboardingFlow.tsx step names for alignment
+- [ ] Confirm `window.api.auth.getCurrentUser()` signature
+
+### Approval
+
+This sprint is **APPROVED** for implementation. Engineers should:
+1. Follow the confirmed execution order (Batches 1-5)
+2. Pay attention to SR Engineer notes in each task file
+3. Coordinate on shared files in Batch 5
+
+---
+
 ## Changelog
 
+- 2026-01-03: SR Engineer technical review completed - APPROVED
 - 2026-01-03: Sprint created (Phase 1 of BACKLOG-142)
