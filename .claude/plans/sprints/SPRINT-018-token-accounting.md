@@ -1,7 +1,8 @@
 # SPRINT-018: Token Accounting Clarity
 
-**Status:** READY TO START
+**Status:** COMPLETE
 **Created:** 2026-01-03
+**Completed:** 2026-01-03
 **Target:** develop
 
 ---
@@ -147,7 +148,123 @@ TASK-922 (hook) ──┐
 
 ## End-of-Sprint Validation
 
-- [ ] billable_tokens appears in tokens.jsonl
-- [ ] Documentation updated
-- [ ] Engineer used PR template correctly (validates SPRINT-017 fix)
-- [ ] PRs merged to develop
+- [x] billable_tokens appears in tokens.jsonl
+- [x] Documentation updated
+- [x] Engineer used PR template correctly (validates SPRINT-017 fix)
+- [x] PRs merged to develop
+
+---
+
+## Task Summary
+
+| ID | Title | Status | PR | Est Billable | Actual Billable |
+|----|-------|--------|----|--------------:|----------------:|
+| TASK-922 | Add billable_tokens to hook | **COMPLETE** | #284 | ~20K | ~56K |
+| TASK-923 | Update metrics documentation | **COMPLETE** | #285 | ~15K | ~60K |
+
+---
+
+## Auto-Captured Metrics (from tokens.jsonl)
+
+### TASK-922: billable_tokens Hook
+
+**Engineer Agent (`aa24846`):**
+
+| Metric | Value |
+|--------|-------|
+| **Billable Tokens** | 56,469 |
+| Total Tokens | 884,993 |
+| Duration | 185 seconds |
+| API Calls | 32 |
+
+**SR Engineer Agent (`a25ab05`):**
+
+| Metric | Value |
+|--------|-------|
+| **Billable Tokens** | 74,169 |
+| Total Tokens | 868,870 |
+| Duration | 176 seconds |
+| API Calls | 30 |
+
+### TASK-923: Documentation Update
+
+**Engineer Agent (`ace0aa6`):**
+
+| Metric | Value |
+|--------|-------|
+| **Billable Tokens** | 60,449 |
+| Total Tokens | 987,947 |
+| Duration | 196 seconds |
+| API Calls | 31 |
+
+**SR Engineer Agent (`a771f8f`):**
+
+| Metric | Value |
+|--------|-------|
+| **Billable Tokens** | 63,035 |
+| Total Tokens | 795,294 |
+| Duration | 130 seconds |
+| API Calls | 25 |
+
+---
+
+## Retrospective
+
+### What Worked
+
+1. **billable_tokens field** - Now captured automatically, provides clear distinction from total
+2. **PR Template Usage** - Engineers used the template correctly (SPRINT-017 fix validated)
+3. **Sequential execution** - TASK-922 first, then TASK-923 worked smoothly
+4. **Hook captures metrics automatically** - No manual tracking needed
+
+### What Didn't Work
+
+1. **Estimates still undershot** - ~35K estimated vs ~254K actual billable tokens
+2. **SR Engineer overhead** - SR reviews added ~137K billable (54% of sprint)
+
+### Estimation Analysis
+
+| Task | PM Est | Eng Actual | SR Actual | Total Actual | Variance |
+|------|--------|------------|-----------|--------------|----------|
+| TASK-922 | ~20K | 56K | 74K | 130K | +550% |
+| TASK-923 | ~15K | 60K | 63K | 123K | +720% |
+| **Total** | ~35K | 116K | 137K | **254K** | +626% |
+
+**Root Cause Analysis:**
+- PM estimates targeted engineer work only, not SR Engineer review
+- Should estimates include SR Engineer overhead?
+- Or should we track them separately?
+
+**Recommendation:** Track Engineer vs SR Engineer separately. PM estimates should target Engineer billable only. SR overhead is a multiplier on top.
+
+### Process Validation
+
+| Item | Result |
+|------|--------|
+| PR template usage | **PASS** - Engineers used template correctly |
+| billable_tokens capture | **PASS** - Field appears in tokens.jsonl |
+| Distinction clarity | **PASS** - Total vs Billable now clearly separated |
+
+---
+
+## Sprint Metrics Summary
+
+| Role | Agent ID | Billable Tokens | Total Tokens | Duration |
+|------|----------|-----------------|--------------|----------|
+| Engineer (922) | aa24846 | 56,469 | 884,993 | 185s |
+| SR Engineer (922) | a25ab05 | 74,169 | 868,870 | 176s |
+| Engineer (923) | ace0aa6 | 60,449 | 987,947 | 196s |
+| SR Engineer (923) | a771f8f | 63,035 | 795,294 | 130s |
+| **Total** | - | **254,122** | **3,537,104** | **~11 min** |
+
+**Key Insight:** Total tokens (3.5M) includes ~3.3M cache reads. Billable tokens (254K) represent actual new work - only 7% of total.
+
+---
+
+## Changelog
+
+- 2026-01-03: Sprint created with TASK-922 and TASK-923
+- 2026-01-03: SR Engineer approved sprint plan
+- 2026-01-03: TASK-922 completed, PR #284 merged
+- 2026-01-03: TASK-923 completed, PR #285 merged
+- 2026-01-03: Retrospective completed, sprint closed
