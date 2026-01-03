@@ -247,6 +247,32 @@ useEffect(() => {
 
 ---
 
+## Post-Merge Hotfix #2 (The Real Fix)
+
+**Issue Found:** Still getting "Database is not initialized" error from TransactionService
+
+**Root Cause:** Two separate database systems:
+1. `databaseService.ts` - Class-based, creates `this.db`
+2. `db/core/dbConnection.ts` - Module-level, has separate `db` variable
+
+`databaseService` opens the database but **never shares it** with `dbConnection` module. Sub-services (transactionDbService, contactDbService, etc.) use `dbConnection.ensureDb()` which was null.
+
+**Fix Applied:** After opening database in `databaseService.ts`, share connection:
+```typescript
+import { setDb, setDbPath, setEncryptionKey } from "./db/core/dbConnection";
+
+// After this.db = this._openDatabase();
+setDb(this.db);
+setDbPath(this.dbPath);
+setEncryptionKey(this.encryptionKey);
+```
+
+**Commit:** `6dafd7b` - fix(database): share connection with dbConnection module
+
+**Note:** The frontend gate (PR #286) was masking this backend bug. The real fix was in the backend database initialization.
+
+---
+
 ## SR Engineer PR Review
 
 **Review Date:** 2026-01-03 | **Reviewer:** SR Engineer Agent
