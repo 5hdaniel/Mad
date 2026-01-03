@@ -4,7 +4,9 @@
 - **Priority:** Medium
 - **Category:** docs/cleanup
 - **Created:** 2026-01-03
+- **Completed:** 2026-01-03
 - **Sprint:** Unassigned
+- **PR:** #282 (merged)
 
 ## Summary
 
