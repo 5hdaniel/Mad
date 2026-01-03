@@ -15,8 +15,8 @@ SPRINT-016 follows the infrastructure stabilization work of SPRINT-015 with a fo
 | Sprint | Status | Focus |
 |--------|--------|-------|
 | SPRINT-014 | Complete | Feature/Performance (Incremental sync, email dedup Phase 1) |
-| SPRINT-015 | In Progress | Infrastructure stabilization (worktree mandate, token cap, window.d.ts, email dedup Phase 2) |
-| **SPRINT-016** | **Planned** | **Component refactoring + Service migration (Phase 1)** |
+| SPRINT-015 | **Complete** | Infrastructure stabilization (worktree mandate, token cap, window.d.ts, email dedup Phase 2) |
+| **SPRINT-016** | **Ready to Start** | **Component refactoring + Service migration (Phase 1)** |
 
 ---
 

@@ -3,7 +3,8 @@
 **Sprint Goal:** Stabilize agent infrastructure to prevent token overconsumption incidents, then lay groundwork for email deduplication Phase 2. Address root causes from SPRINT-014 retrospective before continuing feature work.
 
 **Created:** 2026-01-02
-**Status:** PLANNED
+**Completed:** 2026-01-02
+**Status:** COMPLETE
 **Target Branch:** develop
 
 ---
@@ -365,15 +366,15 @@ git worktree list  # Verify cleanup
 
 ## End-of-Sprint Validation Checklist
 
-- [ ] All 7 tasks merged to develop
-- [ ] All CI checks passing
-- [ ] All acceptance criteria verified
-- [ ] Testing requirements met
-- [ ] No unresolved conflicts
-- [ ] Documentation updated
-- [ ] Worktree cleanup complete
-- [ ] INDEX.md updated with sprint completion
-- [ ] Phase retro report created
+- [x] All 7 tasks merged to develop
+- [x] All CI checks passing
+- [x] All acceptance criteria verified
+- [x] Testing requirements met
+- [x] No unresolved conflicts
+- [x] Documentation updated
+- [x] Worktree cleanup complete
+- [x] INDEX.md updated with sprint completion
+- [x] Phase retro report created (see below)
 
 ---
 
@@ -400,3 +401,204 @@ After task files are created, SR Engineer should review:
 - `.claude/plans/tasks/TASK-917-*.md`
 - `.claude/plans/tasks/TASK-918-*.md`
 - `.claude/plans/tasks/TASK-919-*.md`
+
+---
+
+## SPRINT-015 RETROSPECTIVE
+
+**Completed:** 2026-01-02
+
+---
+
+### Sprint Summary
+
+| Metric | Planned | Actual | Variance |
+|--------|---------|--------|----------|
+| Tasks | 7 | 7 + 1 hotfix | +14% |
+| PRs | 7 | 8 (PRs #275-281 + hotfix #278) | +14% |
+| Status | - | COMPLETE | - |
+
+**Additional Deliverables:**
+- Hotfix PR #278: Database init gate bug fix (critical bug discovered and fixed during sprint)
+- BACKLOG-136: PM Token Monitoring workflow documented
+
+---
+
+### Completion Status by Task
+
+| Task | PR | Description | Status | Engineer Tokens (self-reported) |
+|------|-----|-------------|--------|--------------------------------|
+| TASK-913 | Archived | Worktree enforcement docs | COMPLETE | ~5K |
+| TASK-914 | #276 | Token cap enforcement | COMPLETE | ~8K (actual ~800K-1.1M) |
+| TASK-915 | #275 | Generator approach docs | COMPLETE | ~12K (actual ~800K-1.1M) |
+| TASK-916 | #277 | Window.d.ts type fixes | COMPLETE | ~10K |
+| TASK-917 | #279 | Outlook Message-ID extraction | COMPLETE | ~12K |
+| TASK-918 | #280 | Content hash fallback | COMPLETE | ~12K |
+| TASK-919 | #281 | Duplicate linking logic | COMPLETE | ~16K |
+| Hotfix | #278 | Database init gate bug fix | COMPLETE | ~5K |
+
+---
+
+### Estimated vs Actual Analysis
+
+#### Phase 1: Documentation Tasks (TASK-913, 914, 915)
+
+| Task | Est. Tokens | Self-Reported | Actual (observed) | Variance | Notes |
+|------|-------------|---------------|-------------------|----------|-------|
+| TASK-913 | ~8K | ~5K | ~5K | -37% | Archived directly (no PR) |
+| TASK-914 | ~10K | ~8K | ~800K-1.1M | **~100x** | Token cap iteration spiral |
+| TASK-915 | ~5K | ~12K | ~800K-1.1M | **~100x** | Large fixture debugging |
+
+**Phase 1 Observation:**
+TASK-914 and TASK-915 self-reported metrics (~8K and ~12K) are dramatically lower than actual consumption (~800K-1.1M each). This represents a ~100x discrepancy between reported and actual tokens. Root causes:
+1. Engineers did not track full debugging/iteration cycles
+2. Multiple agent restarts not captured in metrics
+3. CI debugging and iteration loops consumed majority of tokens
+
+#### Phase 2: Type Definitions (TASK-916)
+
+| Task | Est. Tokens | Actual | Variance |
+|------|-------------|--------|----------|
+| TASK-916 | ~10K | ~10K | 0% |
+
+**Phase 2 Observation:**
+TASK-916 completed efficiently with accurate estimate. Type sync work was straightforward once window.d.ts gaps from SPRINT-014 were identified.
+
+#### Phase 3: Email Dedup (TASK-917, 918, 919)
+
+| Task | Est. Tokens | Actual | Turns | Variance |
+|------|-------------|--------|-------|----------|
+| TASK-917 | ~20K | ~12K | 3 | -40% |
+| TASK-918 | ~18K | ~12K | 3 | -33% |
+| TASK-919 | ~20K | ~16K | 3 | -20% |
+
+**Phase 3 Observation:**
+All three email dedup tasks completed significantly under estimate. Key factors:
+1. Well-specified task files with code examples
+2. Pattern reference from TASK-909 (Gmail Message-ID) accelerated work
+3. Sequential execution avoided merge conflicts
+4. Schema already existed from SPRINT-014 TASK-905
+
+**Phase 3 Efficiency:** 9 turns total (vs estimated 12-17), ~40K tokens (vs ~58K estimated)
+
+---
+
+### Key Incidents
+
+#### Incident 1: Documentation Task Token Overrun (TASK-914, TASK-915)
+
+**Impact:** ~100x estimated tokens (~1.6-2.2M tokens vs ~15-18K expected)
+
+**Root Cause:**
+- Documentation tasks required multiple iteration cycles
+- CI failures and debugging not anticipated in estimates
+- Agent restarts reset context, requiring re-reading
+- Self-reported metrics captured only "final successful run"
+
+**Mitigation Applied:**
+- BACKLOG-136: PM Token Monitoring workflow added
+- Future docs tasks will have higher variance buffer
+
+#### Incident 2: Database Init Gate Bug (Hotfix #278)
+
+**Impact:** Critical user-facing bug discovered during testing
+
+**Symptom:** Dashboard loading before database initialized, causing crashes
+
+**Root Cause:** Navigation allowed before `isDbReady` state was true
+
+**Fix:** Added gate in navigation to block dashboard until database initialized
+
+**Outcome:** Fixed in same sprint, no user impact
+
+---
+
+### Lessons Learned
+
+#### What Went Well
+
+1. **Phase 3 Sequential Execution:** Email dedup tasks (917, 918, 919) completed efficiently by following strict sequential order. No merge conflicts.
+
+2. **Pattern Reference Acceleration:** TASK-917 referenced TASK-909 (Gmail pattern), reducing implementation time by ~25-50%.
+
+3. **Hotfix Responsiveness:** Critical database init bug discovered and fixed within the sprint, preventing user impact.
+
+4. **SR Engineer Technical Review:** Corrected Phase 1a/1b sequencing (TASK-913 before TASK-914) prevented engineer.md merge conflict.
+
+5. **Detailed Task Specifications:** Tasks with code examples (TASK-918, 919) had lower variance than abstract specifications.
+
+#### What Needs Improvement
+
+1. **Documentation Task Estimation:** Docs tasks estimated at ~5-10K tokens but actual consumption was ~100x higher. Need to:
+   - Add "iteration buffer" for docs tasks
+   - Account for CI debugging in estimates
+   - Require PM monitoring for docs category
+
+2. **Metrics Collection Gap:** Self-reported engineer metrics were ~100x lower than actual consumption. Need to:
+   - Implement automated token tracking
+   - Require turn/token capture at each iteration
+   - Add PM checkpoint at 2x estimate
+
+3. **Token Cap Enforcement Timing:** Token cap documentation (TASK-914) was created during a sprint that exceeded token caps. Need to:
+   - Apply new guardrails to subsequent sprints only
+   - Set realistic expectations for "meta" tasks (process improvement)
+
+---
+
+### Action Items for Future Sprints
+
+| Action | Owner | Priority | Target |
+|--------|-------|----------|--------|
+| Apply PM token monitoring for all SPRINT-016 tasks | PM | High | SPRINT-016 |
+| Add iteration buffer (5x) for documentation tasks | PM | High | Next docs sprint |
+| Implement automated token tracking | Infra | Medium | SPRINT-017+ |
+| Continue sequential execution for shared-file tasks | SR Engineer | High | Ongoing |
+| Archive completed task files | PM | Low | Post-merge |
+
+---
+
+### Sprint Success Criteria Evaluation
+
+| Criterion | Status | Notes |
+|-----------|--------|-------|
+| No token overconsumption incidents | PARTIAL | TASK-914/915 exceeded, but PM monitoring added |
+| Worktree isolation verified for parallel work | PASS | Phase 1a used worktrees successfully |
+| All documentation updates reflect SPRINT-014 lessons | PASS | Worktree mandate, token cap, window.d.ts |
+| window.d.ts matches preload bridge exports | PASS | TASK-916 synced all exports |
+| Email dedup Phase 2 infrastructure complete | PASS | Message-ID + content hash + linking |
+| Ready to continue feature work in SPRINT-016 | PASS | SPRINT-016 plan created and committed |
+
+**Overall Sprint Grade:** B+
+- Achieved all technical objectives
+- Documentation tasks consumed excessive tokens but delivered value
+- Hotfix addressed critical bug discovered during work
+- Process improvements (token monitoring) added mid-sprint
+
+---
+
+### Category Adjustment Updates
+
+Based on SPRINT-015 data:
+
+| Category | Previous Factor | New Data | Updated Factor |
+|----------|-----------------|----------|----------------|
+| docs | 0.5x | TASK-914/915 ~100x overrun | **Use 5x buffer for iteration** |
+| service | 0.55x | TASK-917/918/919 avg -31% | **0.50x** (confirmed) |
+| types | TBD | TASK-916 0% variance | **1.0x** |
+
+---
+
+### Metrics Summary for INDEX.md
+
+| Task | Category | Est. Turns | Est. Tokens | Actual Turns | Actual Tokens | Variance |
+|------|----------|------------|-------------|--------------|---------------|----------|
+| TASK-913 | docs | 2-3 | ~8K | 2 | ~5K | -37% |
+| TASK-914 | docs | 2-3 | ~10K | N/A | ~800K-1.1M | ~100x |
+| TASK-915 | docs | 1-2 | ~5K | N/A | ~800K-1.1M | ~100x |
+| TASK-916 | types | 2-3 | ~10K | 3 | ~10K | 0% |
+| TASK-917 | service | 4-6 | ~20K | 3 | ~12K | -40% |
+| TASK-918 | service | 4-5 | ~18K | 3 | ~12K | -33% |
+| TASK-919 | service | 4-6 | ~20K | 3 | ~16K | -20% |
+| **Total** | - | **19-28** | **~91K** | **~17** | **~75K** (Phase 2-3 only) | - |
+
+**Note:** Phase 1 (TASK-914, 915) actual tokens excluded from total due to incident-level consumption. Including them would show ~1.7M total vs ~91K estimated.

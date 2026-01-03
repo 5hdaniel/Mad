@@ -2,9 +2,9 @@
 
 This index tracks all backlog items with their current status and metadata.
 
-**Last Updated:** 2026-01-02
-**Total Items:** 146
-**Pending:** 80 | **In Progress:** 0 | **Completed:** 60 | **Partial:** 1 | **Obsolete:** 2 | **Deferred:** 2
+**Last Updated:** 2026-01-02 (SPRINT-015 Retrospective)
+**Total Items:** 149
+**Pending:** 76 | **In Progress:** 0 | **Completed:** 67 | **Partial:** 0 | **Obsolete:** 2 | **Deferred:** 2
 
 ---
 
@@ -27,8 +27,8 @@ This index tracks all backlog items with their current status and metadata.
 
 ### By Priority
 - **Critical:** BACKLOG-030 (done), 032 (done), 035 (done), 038 (done), 039 (done), 044 (done), 045 (done), 058 (done), 059 (done), 072 (done), 073 (done), 074 (done), 107 (done), 108 (done), 117 (done), 132 (done)
-- **High:** BACKLOG-008, 009, 013, 016, 018, 020, 021, 023, 026, 031, 033, 037, 056, 060 (done), 061, 062, 063, 067, 075 (done), 076 (done), 084 (done), 085 (done), 088, 090 (done), 091 Phase 1 (done), 098, 099, 109 (done), 110 (done), **111**, **118**, **121**, 126 (done), 130 (done), **133** (NEW - token cap with early reporting), **134** (done - engineer token optimization)
-- **Medium:** Multiple (see full index), 014 (done), 077 (done), 078 (done), 079 (done), 081, 086, 087, 089, 092, 093, 094, 095, 096, 097, 100, 101, 102, **112**, **113**, **114**, **115**, **116**, 122 (done), 124 (done), 127 (done), 128 (done), 129 (done), **131**
+- **High:** BACKLOG-008, 009, 013, 016, 018, 020, 021, 023, 026, 031, 033, 037, 056, 060 (done), 061, 062, 063, 067, 075 (done), 076 (done), 084 (done), 085 (done), 088, 090 (done), 091 (done), 098, 099, 109 (done), 110 (done), **111**, **118**, 121 (done), 126 (done), 130 (done), 133 (done), **134** (done - engineer token optimization), 136 (done)
+- **Medium:** Multiple (see full index), 014 (done), 077 (done), 078 (done), 079 (done), 081, 086, 087, 089, 092, 093, 094, 095, 096, 097, 100, 101, 102, **112**, **113**, **114**, **115**, **116**, 122 (done), 124 (done), 127 (done), 128 (done), 129 (done), **131**, 135 (done)
 - **Low/Deferred:** BACKLOG-001, 003, 004, 010, 017, 069, 070, 071, **119**, **123**, **125**
 
 ### By Sprint Assignment
@@ -46,6 +46,7 @@ This index tracks all backlog items with their current status and metadata.
 - **SPRINT-012 (Process & Documentation Improvements):** Completed - BACKLOG-124 (done), 126 (done), 127 (done), 128 (done), 129 (done), 130 (done) (6 tasks: TASK-805 to TASK-810, PR #262)
 - **SPRINT-013 (Architecture Cleanup):** Completed - BACKLOG-107 (done), 109 (done), 110 (done) (3 tasks: TASK-901 to TASK-903, PRs #263-265)
 - **SPRINT-014 (Feature/Performance):** Completed - BACKLOG-032 (done), 090 (done), 091 Phase 1 (done) (9 tasks: TASK-904 to TASK-912, PRs #266-274)
+- **SPRINT-015 (Infrastructure Stabilization):** Completed - BACKLOG-132 (done), 133 (done), 135 (done), 121 (done), 091 Phase 2 (done) (7 tasks: TASK-913 to TASK-919, PRs #275-281 + hotfix #278)
 - **Unassigned:** All others
 
 ### AI MVP Project - COMPLETE
@@ -153,7 +154,7 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-088 | Per-User Local ML Model | service | High | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-088.md](BACKLOG-088.md) |
 | BACKLOG-089 | Password Manager Support in Authentication | ui | Medium | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-089.md](BACKLOG-089.md) |
 | BACKLOG-090 | Incremental Sync - Only Process New Data | service | High | Completed | SPRINT-014 | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | TASK-906, 907, 908, 911 | [BACKLOG-090.md](BACKLOG-090.md) |
-| BACKLOG-091 | Prevent Duplicate Emails Across Providers | service | High | Partial | SPRINT-014 | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | Phase 1 done (TASK-905, 909), Phase 2 deferred | [BACKLOG-091.md](BACKLOG-091.md) |
+| BACKLOG-091 | Prevent Duplicate Emails Across Providers | service | High | Completed | SPRINT-014/015 | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | Phase 1 (TASK-905, 909), Phase 2 (TASK-917, 918, 919) | [BACKLOG-091.md](BACKLOG-091.md) |
 | BACKLOG-092 | Rename transactionDetailsModule | refactor | Low | Pending | - | 2-3 | ~10K | 15-20m | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-092.md](BACKLOG-092.md) |
 | BACKLOG-093 | Create common/ Module | refactor | Medium | Pending | - | 3-4 | ~15K | 20-30m | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-093.md](BACKLOG-093.md) |
 | BACKLOG-094 | Create llm/ Module | refactor | Medium | Pending | - | 2-3 | ~10K | 15-20m | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-094.md](BACKLOG-094.md) |
@@ -182,7 +183,7 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-118 | Fix OnboardingFlow React Hooks Order Bug | ui | High | Completed | - | 1-2 | ~10K | 15m | 1 | ~8K | 10m | - | - | - | - | - | - | 1 | ~8K | 10m | -50% | [BACKLOG-118.md](BACKLOG-118.md) |
 | BACKLOG-119 | Audit OAuth Handler Parity (Google/Microsoft) | refactor | Low | Pending | - | 13-18 | ~50K | 2-3h | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-119.md](BACKLOG-119.md) |
 | BACKLOG-120 | CI Testing Infrastructure Gaps | test/infra | Medium | Pending | - | 20-30 | ~80K | 1-2d | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-120.md](BACKLOG-120.md) |
-| BACKLOG-121 | Add Generator Approach Guidance for Large Fixtures | docs | High | Pending | - | 2-3 | ~10K | 20-30m | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-121.md](BACKLOG-121.md) |
+| BACKLOG-121 | Add Generator Approach Guidance for Large Fixtures | docs | High | Completed | SPRINT-015 | 2-3 | ~10K | 20-30m | N/A | ~800K-1.1M | N/A | - | - | - | - | - | - | N/A | ~800K-1.1M | N/A | ~100x | [BACKLOG-121.md](BACKLOG-121.md) |
 | BACKLOG-122 | Improve Engineer Agent Worktree Instructions | docs | Medium | Completed | - | 2-3 | ~10K | 20-30m | 2 | ~8K | 10m | - | - | - | - | - | - | 2 | ~8K | 10m | -50% | [BACKLOG-122.md](BACKLOG-122.md) |
 | BACKLOG-123 | Update Test Category Estimation Multiplier | docs | Low | Pending | - | 1-2 | ~5K | 10-15m | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-123.md](BACKLOG-123.md) |
 | BACKLOG-124 | Add Sprint Completion Checklist to PM Workflow | docs | Medium | Pending | SPRINT-012 | 2-3 | ~10K | 15-20m | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-124.md](BACKLOG-124.md) |
@@ -192,7 +193,10 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-128 | Add Type Verification Checklist for Fixture Tasks | docs | Medium | Pending | SPRINT-012 | 1-2 | ~6K | 10-15m | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-128.md](BACKLOG-128.md) |
 | BACKLOG-129 | Create CI Troubleshooting Documentation | docs | Medium | Pending | SPRINT-012 | 2-3 | ~10K | 15-20m | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-129.md](BACKLOG-129.md) |
 | BACKLOG-130 | Sub-Agent Permission Auto-Denial Incident | infra/process | High | Pending | SPRINT-012 | 1-2 | ~8K | 10-15m | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-130.md](BACKLOG-130.md) |
-| BACKLOG-132 | Mandatory Worktree for Parallel/Background Agents | docs/process | Critical | Completed | - | 1-2 | ~5K | 8-12m | 2 | ~8K | 5m | 1 | ~15K | 5m | 0 | 0 | 0 | 3 | ~23K | 10m | +360% | [BACKLOG-132.md](BACKLOG-132.md) |
+| BACKLOG-132 | Mandatory Worktree for Parallel/Background Agents | docs/process | Critical | Completed | SPRINT-015 | 1-2 | ~5K | 8-12m | 2 | ~8K | 5m | 1 | ~15K | 5m | 0 | 0 | 0 | 3 | ~23K | 10m | +360% | [BACKLOG-132.md](BACKLOG-132.md) |
+| BACKLOG-133 | Engineer Token Cap with Early Reporting | docs/process | High | Completed | SPRINT-015 | 2-3 | ~10K | 15-25m | N/A | ~800K-1.1M | N/A | - | - | - | - | - | - | N/A | ~800K-1.1M | N/A | ~100x | TASK-914 |
+| BACKLOG-135 | Fix window.d.ts Type Definitions | tech-debt | Medium | Completed | SPRINT-015 | 2-3 | ~10K | 15-20m | 3 | ~10K | 15m | - | - | - | - | - | - | 3 | ~10K | 15m | 0% | TASK-916 |
+| BACKLOG-136 | PM Token Monitoring Workflow | docs/process | High | Completed | SPRINT-015 | 1 | ~5K | 10m | 1 | ~5K | 5m | - | - | - | - | - | - | 1 | ~5K | 5m | -50% | Hotfix during SPRINT-015 |
 
 ---
 
@@ -227,6 +231,7 @@ This index tracks all backlog items with their current status and metadata.
 | SPRINT-012 | Process & Documentation Improvements | Completed | BACKLOG-126, 124, 127, 128, 129, 130 (6 tasks: TASK-805 to TASK-810, PR #262) |
 | SPRINT-013 | Architecture Cleanup | Completed | BACKLOG-107, 109, 110 (3 tasks: TASK-901 to TASK-903, PRs #263-265, 12 turns, ~56K tokens) |
 | SPRINT-014 | Feature/Performance | Completed | BACKLOG-032, 090, 091 Phase 1 (9 tasks: TASK-904 to TASK-912, PRs #266-274) |
+| SPRINT-015 | Infrastructure Stabilization | Completed | BACKLOG-132, 133, 135, 121, 091 Phase 2 (7 tasks: TASK-913 to TASK-919, PRs #275-281 + hotfix #278) |
 
 ---
 
@@ -346,6 +351,15 @@ This index tracks all backlog items with their current status and metadata.
 - 2026-01-02: BACKLOG-132 (Mandatory Worktree Enforcement) completed - TASK-913, PR #274 merged (3 turns, ~23K tokens, 10m)
 - 2026-01-02: Updated BACKLOG-132 variance to +360% (total tokens vs impl-only estimate); added SR Review Overhead table to PM Estimation Guidelines
 - 2026-01-02: Added data quality warning to Estimation Accuracy Analysis; marked all tasks with ✓/⚠️/❌ for complete/incomplete/incident metrics; only 8 of 30 tasks have complete lifecycle data
+- 2026-01-02: **SPRINT-015 COMPLETE** - Infrastructure Stabilization (7 tasks: TASK-913 to TASK-919, PRs #275-281 + hotfix #278)
+  - BACKLOG-132 (Worktree Enforcement), 133 (Token Cap), 135 (window.d.ts), 121 (Generator Docs) marked complete
+  - BACKLOG-091 Phase 2 complete (TASK-917 Outlook Message-ID, TASK-918 Content Hash, TASK-919 Duplicate Linking)
+  - Hotfix #278: Database init gate bug discovered and fixed during sprint
+  - BACKLOG-136: PM Token Monitoring workflow added mid-sprint
+- 2026-01-02: Key incident: TASK-914/915 consumed ~100x estimated tokens (~1.6-2.2M vs ~15-18K)
+- 2026-01-02: Phase 3 (email dedup) completed efficiently: 9 turns, ~40K tokens (vs estimated 12-17 turns, ~58K tokens)
+- 2026-01-02: Service category adjustment confirmed at 0.50x (TASK-917/918/919 avg -31% variance)
+- 2026-01-02: SPRINT-016 (Component Refactoring) plan created and ready to start
 
 ---
 
@@ -370,13 +384,15 @@ This index tracks all backlog items with their current status and metadata.
 | test | 3 | 2 | +14% | mixed | 1.1x |
 | config | 1 | 1 | -62% | over | 0.5x |
 | security | 2 | 0 | -65% | over | 0.4x ⚠️ |
-| service | 6 | 1 | -47% | over | **0.55x** ⚠️ |
-| docs | 1 | 1 | +360% | under | **See SR Review Overhead** |
+| service | 9 | 1 | -31% | over | **0.50x** (SPRINT-015 confirmed) |
+| docs | 3 | 1 | ~100x (incident) | incident | **5.0x** (iteration buffer) |
+| types | 1 | 0 | 0% | accurate | **1.0x** (new) |
 | ui | 1 | 1 | -72% | over | 0.3x |
 | ipc | 0 | 0 | - | - | TBD |
 
-**⚠️ Warning:** Categories with 0-1 complete (✓) tasks have unreliable adjustment factors.
-Categories with reliable data (2+ complete tasks): `test` only.
+**⚠️ Warning:** Categories with 0-1 complete tasks have unreliable adjustment factors.
+Categories with reliable data (2+ complete tasks): `test`, `service` (9 tasks).
+**CRITICAL:** `docs` category has incident-level variance - use 5x buffer and PM monitoring.
 
 ### Variance Breakdown (All Completed Tasks)
 
@@ -413,8 +429,14 @@ Categories with reliable data (2+ complete tasks): `test` only.
 | TASK-911 | service | 2-3 | 2 | 0% | ⚠️ | On target |
 | TASK-912 | test | 4-6 | 4 | -20% | ⚠️ | Clean test authoring |
 | BACKLOG-132 | docs | 1-2 | 3 | +360% | ✓ | PM estimate excluded SR review overhead (~15K) |
+| **TASK-914** | **docs** | **2-3** | **N/A** | **~100x** | ❌ | **Token cap iteration spiral (self-reported ~8K, actual ~800K-1.1M)** |
+| **TASK-915** | **docs** | **1-2** | **N/A** | **~100x** | ❌ | **Generator docs iteration spiral (self-reported ~12K, actual ~800K-1.1M)** |
+| TASK-916 | types | 2-3 | 3 | 0% | ⚠️ | Type sync straightforward |
+| TASK-917 | service | 4-6 | 3 | -40% | ⚠️ | Pattern reference accelerated work |
+| TASK-918 | service | 4-5 | 3 | -33% | ⚠️ | Well-specified task file |
+| TASK-919 | service | 4-6 | 3 | -20% | ⚠️ | Sequential execution, no conflicts |
 
-**Summary:** 8 tasks with ✓ complete data, 19 tasks with ⚠️ incomplete data, 3 ❌ incidents
+**Summary:** 8 tasks with complete data, 25 tasks with incomplete data, 5 incidents
 
 ### Learnings
 
@@ -429,6 +451,9 @@ Categories with reliable data (2+ complete tasks): `test` only.
 9. **Parallel agent isolation is MANDATORY** - SPRINT-014 race condition (TASK-906+908) consumed ~18M tokens. Use worktrees for all background agents (BACKLOG-132)
 10. **Type definition gaps cause debugging spirals** - SPRINT-014 TASK-910 consumed ~6M tokens due to window.d.ts missing getUnifiedStatus() (BACKLOG-135)
 11. **PM estimates must include SR review overhead** - BACKLOG-132 showed +360% token variance because PM estimated impl only (~5K), but SR review added ~15K. Future estimates should add ~10-20K for mandatory PR review phase.
+12. **Documentation tasks with iteration can spiral** - SPRINT-015 TASK-914/915 consumed ~100x estimated tokens due to iteration cycles and CI debugging. Self-reported metrics captured only final successful run. Docs category needs 5x buffer for iteration.
+13. **Pattern reference dramatically accelerates service tasks** - SPRINT-015 TASK-917 referenced TASK-909 pattern, completing at -40% variance. Well-specified task files with code examples reduce variance.
+14. **Sequential execution for shared files is mandatory** - SPRINT-015 Phase 3 (TASK-917/918/919) completed efficiently by strict sequential order. No merge conflicts despite all three touching fetch services.
 
 ### PM Estimation Guidelines (Update as patterns emerge)
 
@@ -439,7 +464,9 @@ Categories with reliable data (2+ complete tasks): `test` only.
 | test | PM estimate | x 0.9 | Usually accurate, slight overestimate |
 | config | PM estimate | x 0.5 | Significantly overestimate |
 | security | PM estimate | x 0.4 | SPRINT-009 showed simpler implementations |
-| service | PM estimate | **x 0.55** | SPRINT-014 showed -45% avg variance |
+| service | PM estimate | **x 0.50** | SPRINT-014/015 confirmed -31% to -45% avg variance |
+| types | PM estimate | **x 1.0** | SPRINT-015 TASK-916 showed 0% variance |
+| docs | PM estimate | **x 5.0** | SPRINT-015 TASK-914/915 ~100x overrun - add iteration buffer |
 | ipc | PM estimate | x 1.5 | TBD - suspected underestimate |
 | ui | PM estimate | x 1.0 | TBD - SPRINT-014 incident skews data |
 
