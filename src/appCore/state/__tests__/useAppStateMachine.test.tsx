@@ -444,11 +444,10 @@ describe("useAppStateMachine", () => {
 
       await waitFor(() => {
         expect(capturedState).not.toBeNull();
+        expect(capturedState?.hasPermissions).toBeDefined();
+        expect(capturedState?.outlookConnected).toBeDefined();
+        expect(capturedState?.isNewUserFlow).toBeDefined();
       });
-
-      expect(capturedState?.hasPermissions).toBeDefined();
-      expect(capturedState?.outlookConnected).toBeDefined();
-      expect(capturedState?.isNewUserFlow).toBeDefined();
     });
 
     it("should have conversation state", async () => {
@@ -552,14 +551,16 @@ describe("useAppStateMachine", () => {
       });
     });
 
-    it("should have false for hasPermissions initially", async () => {
+    it("should have true for hasPermissions initially (prevents flicker)", async () => {
+      // Default to true to prevent UI flicker for returning users
+      // Actual permission status is verified by async effect
       setupMocks({ isAuthenticated: false });
 
       renderWithProviders();
 
       await waitFor(() => {
         expect(capturedState).not.toBeNull();
-        expect(capturedState?.hasPermissions).toBe(false);
+        expect(capturedState?.hasPermissions).toBe(true);
       });
     });
   });

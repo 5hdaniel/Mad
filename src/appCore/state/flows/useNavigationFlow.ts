@@ -221,6 +221,13 @@ export function useNavigationFlow({
       isCheckingEmailOnboarding ||
       (isAuthenticated && !isDatabaseInitialized);
 
+    // CRITICAL: Don't make ANY routing decisions while still loading
+    // This single guard prevents all flicker by ensuring we wait for complete data
+    // Don't reset step for users in the middle of onboarding
+    if (isStillLoading) {
+      return;
+    }
+
     if (!isAuthLoading && !isCheckingSecureStorage) {
       // PRE-DB FLOW: OAuth succeeded but database not initialized yet
       if (pendingOAuthData && !isAuthenticated) {

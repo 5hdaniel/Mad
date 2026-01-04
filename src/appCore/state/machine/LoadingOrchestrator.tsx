@@ -321,15 +321,18 @@ export function LoadingOrchestrator({
           ? phoneTypeResult.phoneType
           : null;
 
-      // Determine if email onboarding is completed
-      const hasCompletedEmailOnboarding =
-        emailOnboardingResult.success && emailOnboardingResult.completed;
-
       // Determine if any email provider is connected
       const hasEmailConnected =
         connectionsResult.success &&
         (connectionsResult.google?.connected === true ||
           connectionsResult.microsoft?.connected === true);
+
+      // Determine if email onboarding is completed
+      // If email is connected, consider onboarding complete (for returning users
+      // who connected email before the hasCompletedEmailOnboarding flag existed)
+      const hasCompletedEmailOnboarding =
+        (emailOnboardingResult.success && emailOnboardingResult.completed) ||
+        hasEmailConnected;
 
       // Determine permissions status (macOS only)
       const hasPermissions = platform.isMacOS

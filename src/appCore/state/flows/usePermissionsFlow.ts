@@ -32,7 +32,9 @@ export function usePermissionsFlow({
   onSetShowMoveAppPrompt,
   onSetCurrentStep,
 }: UsePermissionsFlowOptions): UsePermissionsFlowReturn {
-  const [hasPermissions, setHasPermissions] = useState<boolean>(false);
+  // Default to true to avoid flicker for returning users
+  // The actual status will be verified by the effect below
+  const [hasPermissions, setHasPermissions] = useState<boolean>(true);
   const [appPath, setAppPath] = useState<string>("");
 
   const checkPermissions = useCallback(async (): Promise<void> => {
@@ -41,9 +43,8 @@ export function usePermissionsFlow({
       return;
     }
     const result = await window.api.system.checkAllPermissions();
-    if (result.fullDiskAccess && result.contactsAccess) {
-      setHasPermissions(true);
-    }
+    // Set based on actual permission status
+    setHasPermissions(result.fullDiskAccess && result.contactsAccess);
   }, [isWindows]);
 
   const checkAppLocation = useCallback(async (): Promise<void> => {
