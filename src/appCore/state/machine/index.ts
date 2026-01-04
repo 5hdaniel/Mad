@@ -38,3 +38,7 @@ export {
   clearStateMachineFlag,
   getFeatureFlagStatus,
 } from "./utils/featureFlags";
+
+// Migration utilities
+export { useOptionalMachineState } from "./hooks/useOptionalMachineState";
+export * from "./selectors";
