@@ -37,4 +37,6 @@ export {
   isAuthenticated,
   isUnauthenticated,
   needsNavigation,
+  deriveAppStep,
+  derivePageTitle,
 } from "./navigationDerivation";

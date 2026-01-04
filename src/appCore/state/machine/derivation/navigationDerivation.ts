@@ -14,6 +14,7 @@ import type {
   LoadingPhase,
   OnboardingStep,
 } from "../types";
+import type { AppStep } from "../../types";
 
 // =============================================================================
 // NAVIGATION TARGET TYPES
@@ -212,4 +213,98 @@ export function needsNavigation(
  */
 export function deriveScreen(state: AppState): NavigationScreen {
   return deriveNavigationTarget(state).screen;
+}
+
+// =============================================================================
+// APP STEP DERIVATION (for legacy component compatibility)
+// =============================================================================
+
+/**
+ * Maps OnboardingStep (state machine) to AppStep (legacy UI route).
+ *
+ * The state machine uses OnboardingStep values that are semantic ("phone-type"),
+ * while the legacy UI uses AppStep values that are route-based ("phone-type-selection").
+ *
+ * @param step - OnboardingStep from state machine
+ * @returns Corresponding AppStep for UI routing
+ */
+function mapOnboardingStepToAppStep(step: OnboardingStep): AppStep {
+  switch (step) {
+    case "phone-type":
+      return "phone-type-selection";
+    case "secure-storage":
+      return "keychain-explanation";
+    case "email-connect":
+      return "email-onboarding";
+    case "permissions":
+      return "permissions";
+    case "apple-driver":
+      return "apple-driver-setup";
+    case "android-coming-soon":
+      return "android-coming-soon";
+  }
+}
+
+/**
+ * Derives the AppStep (legacy UI route) from current application state.
+ * This bridges the gap between the state machine's semantic steps and
+ * the legacy component's route-based navigation.
+ *
+ * @param state - Current application state
+ * @returns AppStep for legacy component compatibility
+ *
+ * @example
+ * ```ts
+ * const appStep = deriveAppStep(state);
+ * // Can be used directly with legacy components expecting AppStep
+ * ```
+ */
+export function deriveAppStep(state: AppState): AppStep {
+  switch (state.status) {
+    case "loading":
+      return "loading";
+
+    case "unauthenticated":
+      return "login";
+
+    case "onboarding":
+      return mapOnboardingStepToAppStep(state.step);
+
+    case "ready":
+      return "dashboard";
+
+    case "error":
+      // Error state shows loading screen with error handling elsewhere
+      return "loading";
+  }
+}
+
+/**
+ * Derives the page title based on the current AppStep.
+ * Pure function for getting the window/page title.
+ *
+ * @param appStep - Current AppStep
+ * @returns Page title string
+ */
+export function derivePageTitle(appStep: AppStep): string {
+  switch (appStep) {
+    case "login":
+      return "Welcome";
+    case "email-onboarding":
+      return "Connect Email";
+    case "microsoft-login":
+      return "Login";
+    case "permissions":
+      return "Setup Permissions";
+    case "dashboard":
+      return "Magic Audit";
+    case "contacts":
+      return "Select Contacts for Export";
+    case "outlook":
+      return "Export to Outlook";
+    case "complete":
+      return "Export Complete";
+    default:
+      return "Magic Audit";
+  }
 }
