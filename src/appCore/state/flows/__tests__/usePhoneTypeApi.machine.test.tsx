@@ -1,0 +1,561 @@
+/**
+ * usePhoneTypeApi State Machine Path Tests
+ *
+ * Tests for the state machine path of the usePhoneTypeApi hook.
+ * Verifies that when the feature flag is enabled, the hook correctly
+ * derives its state from the state machine instead of local state.
+ *
+ * @module appCore/state/flows/__tests__/usePhoneTypeApi.machine.test
+ */
+
+import React from "react";
+import { renderHook, act } from "@testing-library/react";
+import { usePhoneTypeApi } from "../usePhoneTypeApi";
+import { AppStateProvider } from "../../machine/AppStateContext";
+import type {
+  AppState,
+  LoadingState,
+  ReadyState,
+  OnboardingState,
+} from "../../machine/types";
+import * as featureFlags from "../../machine/utils/featureFlags";
+
+// Mock the feature flags module
+jest.mock("../../machine/utils/featureFlags", () => ({
+  isNewStateMachineEnabled: jest.fn(),
+}));
+
+const mockIsNewStateMachineEnabled =
+  featureFlags.isNewStateMachineEnabled as jest.Mock;
+
+// Mock window.api.user
+const mockSetPhoneType = jest.fn();
+Object.defineProperty(window, "api", {
+  value: {
+    user: {
+      setPhoneType: mockSetPhoneType,
+    },
+  },
+  writable: true,
+});
+
+// Default mock options for usePhoneTypeApi
+const defaultOptions = {
+  userId: "test-user-id",
+  isWindows: false,
+};
+
+// Test states
+const loadingCheckingStorage: LoadingState = {
+  status: "loading",
+  phase: "checking-storage",
+};
+
+const loadingInitializingDb: LoadingState = {
+  status: "loading",
+  phase: "initializing-db",
+};
+
+const loadingAuth: LoadingState = {
+  status: "loading",
+  phase: "loading-auth",
+};
+
+const loadingUserData: LoadingState = {
+  status: "loading",
+  phase: "loading-user-data",
+};
+
+const readyStateIPhone: ReadyState = {
+  status: "ready",
+  user: { id: "test-user", email: "test@example.com" },
+  platform: { isMacOS: true, isWindows: false, hasIPhone: true },
+  userData: {
+    phoneType: "iphone",
+    hasCompletedEmailOnboarding: true,
+    hasEmailConnected: true,
+    needsDriverSetup: false,
+    hasPermissions: true,
+  },
+};
+
+const readyStateAndroid: ReadyState = {
+  status: "ready",
+  user: { id: "test-user", email: "test@example.com" },
+  platform: { isMacOS: true, isWindows: false, hasIPhone: false },
+  userData: {
+    phoneType: "android",
+    hasCompletedEmailOnboarding: true,
+    hasEmailConnected: true,
+    needsDriverSetup: false,
+    hasPermissions: true,
+  },
+};
+
+const readyStateNoPhoneType: ReadyState = {
+  status: "ready",
+  user: { id: "test-user", email: "test@example.com" },
+  platform: { isMacOS: true, isWindows: false, hasIPhone: false },
+  userData: {
+    phoneType: null,
+    hasCompletedEmailOnboarding: false,
+    hasEmailConnected: false,
+    needsDriverSetup: false,
+    hasPermissions: true,
+  },
+};
+
+const readyStateWindowsIPhoneNeedsDriver: ReadyState = {
+  status: "ready",
+  user: { id: "test-user", email: "test@example.com" },
+  platform: { isMacOS: false, isWindows: true, hasIPhone: true },
+  userData: {
+    phoneType: "iphone",
+    hasCompletedEmailOnboarding: true,
+    hasEmailConnected: true,
+    needsDriverSetup: true,
+    hasPermissions: true,
+  },
+};
+
+const onboardingStatePhoneType: OnboardingState = {
+  status: "onboarding",
+  step: "phone-type",
+  user: { id: "test-user", email: "test@example.com" },
+  platform: { isMacOS: true, isWindows: false, hasIPhone: false },
+  completedSteps: [],
+};
+
+const onboardingStateEmailConnect: OnboardingState = {
+  status: "onboarding",
+  step: "email-connect",
+  user: { id: "test-user", email: "test@example.com" },
+  platform: { isMacOS: true, isWindows: false, hasIPhone: true },
+  completedSteps: ["phone-type"],
+};
+
+const onboardingStateWindowsIPhone: OnboardingState = {
+  status: "onboarding",
+  step: "apple-driver",
+  user: { id: "test-user", email: "test@example.com" },
+  platform: { isMacOS: false, isWindows: true, hasIPhone: true },
+  completedSteps: ["phone-type", "email-connect"],
+};
+
+describe("usePhoneTypeApi - State Machine Path", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockIsNewStateMachineEnabled.mockReturnValue(true);
+  });
+
+  const createWrapper = (initialState?: AppState) => {
+    return ({ children }: { children: React.ReactNode }) => (
+      <AppStateProvider initialState={initialState}>{children}</AppStateProvider>
+    );
+  };
+
+  describe("return interface", () => {
+    it("returns the same interface shape as legacy path", () => {
+      const { result } = renderHook(() => usePhoneTypeApi(defaultOptions), {
+        wrapper: createWrapper(readyStateIPhone),
+      });
+
+      // Verify all expected properties exist
+      expect(result.current).toHaveProperty("hasSelectedPhoneType");
+      expect(result.current).toHaveProperty("selectedPhoneType");
+      expect(result.current).toHaveProperty("isLoadingPhoneType");
+      expect(result.current).toHaveProperty("needsDriverSetup");
+      expect(result.current).toHaveProperty("setHasSelectedPhoneType");
+      expect(result.current).toHaveProperty("setSelectedPhoneType");
+      expect(result.current).toHaveProperty("setNeedsDriverSetup");
+      expect(result.current).toHaveProperty("savePhoneType");
+
+      // Verify types
+      expect(typeof result.current.hasSelectedPhoneType).toBe("boolean");
+      expect(typeof result.current.isLoadingPhoneType).toBe("boolean");
+      expect(typeof result.current.needsDriverSetup).toBe("boolean");
+      expect(typeof result.current.setHasSelectedPhoneType).toBe("function");
+      expect(typeof result.current.setSelectedPhoneType).toBe("function");
+      expect(typeof result.current.setNeedsDriverSetup).toBe("function");
+      expect(typeof result.current.savePhoneType).toBe("function");
+    });
+  });
+
+  describe("hasSelectedPhoneType", () => {
+    it("returns false when on phone-type onboarding step", () => {
+      const { result } = renderHook(() => usePhoneTypeApi(defaultOptions), {
+        wrapper: createWrapper(onboardingStatePhoneType),
+      });
+      expect(result.current.hasSelectedPhoneType).toBe(false);
+    });
+
+    it("returns true when past phone-type step", () => {
+      const { result } = renderHook(() => usePhoneTypeApi(defaultOptions), {
+        wrapper: createWrapper(onboardingStateEmailConnect),
+      });
+      expect(result.current.hasSelectedPhoneType).toBe(true);
+    });
+
+    it("returns true when ready", () => {
+      const { result } = renderHook(() => usePhoneTypeApi(defaultOptions), {
+        wrapper: createWrapper(readyStateIPhone),
+      });
+      expect(result.current.hasSelectedPhoneType).toBe(true);
+    });
+
+    it("returns false during loading", () => {
+      const { result } = renderHook(() => usePhoneTypeApi(defaultOptions), {
+        wrapper: createWrapper(loadingUserData),
+      });
+      expect(result.current.hasSelectedPhoneType).toBe(false);
+    });
+  });
+
+  describe("selectedPhoneType", () => {
+    it("returns iphone when user has selected iphone", () => {
+      const { result } = renderHook(() => usePhoneTypeApi(defaultOptions), {
+        wrapper: createWrapper(readyStateIPhone),
+      });
+      expect(result.current.selectedPhoneType).toBe("iphone");
+    });
+
+    it("returns android when user has selected android", () => {
+      const { result } = renderHook(() => usePhoneTypeApi(defaultOptions), {
+        wrapper: createWrapper(readyStateAndroid),
+      });
+      expect(result.current.selectedPhoneType).toBe("android");
+    });
+
+    it("returns null when no phone type selected", () => {
+      const { result } = renderHook(() => usePhoneTypeApi(defaultOptions), {
+        wrapper: createWrapper(onboardingStatePhoneType),
+      });
+      expect(result.current.selectedPhoneType).toBeNull();
+    });
+
+    it("returns iphone from platform during onboarding when hasIPhone is true", () => {
+      const { result } = renderHook(() => usePhoneTypeApi(defaultOptions), {
+        wrapper: createWrapper(onboardingStateEmailConnect),
+      });
+      expect(result.current.selectedPhoneType).toBe("iphone");
+    });
+
+    it("returns null during loading", () => {
+      const { result } = renderHook(() => usePhoneTypeApi(defaultOptions), {
+        wrapper: createWrapper(loadingUserData),
+      });
+      expect(result.current.selectedPhoneType).toBeNull();
+    });
+  });
+
+  describe("isLoadingPhoneType", () => {
+    it("returns true when checking storage", () => {
+      const { result } = renderHook(() => usePhoneTypeApi(defaultOptions), {
+        wrapper: createWrapper(loadingCheckingStorage),
+      });
+      expect(result.current.isLoadingPhoneType).toBe(true);
+    });
+
+    it("returns true when initializing database", () => {
+      const { result } = renderHook(() => usePhoneTypeApi(defaultOptions), {
+        wrapper: createWrapper(loadingInitializingDb),
+      });
+      expect(result.current.isLoadingPhoneType).toBe(true);
+    });
+
+    it("returns true when loading auth", () => {
+      const { result } = renderHook(() => usePhoneTypeApi(defaultOptions), {
+        wrapper: createWrapper(loadingAuth),
+      });
+      expect(result.current.isLoadingPhoneType).toBe(true);
+    });
+
+    it("returns true when loading user data", () => {
+      const { result } = renderHook(() => usePhoneTypeApi(defaultOptions), {
+        wrapper: createWrapper(loadingUserData),
+      });
+      expect(result.current.isLoadingPhoneType).toBe(true);
+    });
+
+    it("returns false when ready", () => {
+      const { result } = renderHook(() => usePhoneTypeApi(defaultOptions), {
+        wrapper: createWrapper(readyStateIPhone),
+      });
+      expect(result.current.isLoadingPhoneType).toBe(false);
+    });
+
+    it("returns false when onboarding", () => {
+      const { result } = renderHook(() => usePhoneTypeApi(defaultOptions), {
+        wrapper: createWrapper(onboardingStatePhoneType),
+      });
+      expect(result.current.isLoadingPhoneType).toBe(false);
+    });
+  });
+
+  describe("needsDriverSetup", () => {
+    it("returns true for Windows + iPhone user needing drivers (ready state)", () => {
+      const { result } = renderHook(() => usePhoneTypeApi(defaultOptions), {
+        wrapper: createWrapper(readyStateWindowsIPhoneNeedsDriver),
+      });
+      expect(result.current.needsDriverSetup).toBe(true);
+    });
+
+    it("returns false for macOS user (ready state)", () => {
+      const { result } = renderHook(() => usePhoneTypeApi(defaultOptions), {
+        wrapper: createWrapper(readyStateIPhone),
+      });
+      expect(result.current.needsDriverSetup).toBe(false);
+    });
+
+    it("returns true for Windows + iPhone during onboarding", () => {
+      const { result } = renderHook(() => usePhoneTypeApi(defaultOptions), {
+        wrapper: createWrapper(onboardingStateWindowsIPhone),
+      });
+      expect(result.current.needsDriverSetup).toBe(true);
+    });
+
+    it("returns false for macOS user during onboarding", () => {
+      const { result } = renderHook(() => usePhoneTypeApi(defaultOptions), {
+        wrapper: createWrapper(onboardingStatePhoneType),
+      });
+      expect(result.current.needsDriverSetup).toBe(false);
+    });
+
+    it("returns false during loading", () => {
+      const { result } = renderHook(() => usePhoneTypeApi(defaultOptions), {
+        wrapper: createWrapper(loadingUserData),
+      });
+      // Returns false because status is loading (not ready or onboarding)
+      expect(result.current.needsDriverSetup).toBe(false);
+    });
+  });
+
+  describe("setters (no-ops)", () => {
+    it("setHasSelectedPhoneType is a no-op", () => {
+      const { result } = renderHook(() => usePhoneTypeApi(defaultOptions), {
+        wrapper: createWrapper(readyStateIPhone),
+      });
+
+      const valueBefore = result.current.hasSelectedPhoneType;
+      act(() => {
+        result.current.setHasSelectedPhoneType(false);
+      });
+      // Value should remain unchanged
+      expect(result.current.hasSelectedPhoneType).toBe(valueBefore);
+    });
+
+    it("setSelectedPhoneType is a no-op", () => {
+      const { result } = renderHook(() => usePhoneTypeApi(defaultOptions), {
+        wrapper: createWrapper(readyStateIPhone),
+      });
+
+      const valueBefore = result.current.selectedPhoneType;
+      act(() => {
+        result.current.setSelectedPhoneType("android");
+      });
+      // Value should remain unchanged (iphone from state)
+      expect(result.current.selectedPhoneType).toBe(valueBefore);
+    });
+
+    it("setNeedsDriverSetup is a no-op", () => {
+      const { result } = renderHook(() => usePhoneTypeApi(defaultOptions), {
+        wrapper: createWrapper(readyStateIPhone),
+      });
+
+      const valueBefore = result.current.needsDriverSetup;
+      act(() => {
+        result.current.setNeedsDriverSetup(true);
+      });
+      // Value should remain unchanged
+      expect(result.current.needsDriverSetup).toBe(valueBefore);
+    });
+  });
+
+  describe("savePhoneType", () => {
+    it("calls API and returns true on success", async () => {
+      mockSetPhoneType.mockResolvedValueOnce({ success: true });
+
+      const { result } = renderHook(() => usePhoneTypeApi(defaultOptions), {
+        wrapper: createWrapper(onboardingStatePhoneType),
+      });
+
+      let saveResult: boolean | undefined;
+      await act(async () => {
+        saveResult = await result.current.savePhoneType("iphone");
+      });
+
+      expect(mockSetPhoneType).toHaveBeenCalledWith("test-user", "iphone");
+      expect(saveResult).toBe(true);
+    });
+
+    it("returns false when API fails", async () => {
+      mockSetPhoneType.mockResolvedValueOnce({
+        success: false,
+        error: "DB error",
+      });
+
+      const { result } = renderHook(() => usePhoneTypeApi(defaultOptions), {
+        wrapper: createWrapper(onboardingStatePhoneType),
+      });
+
+      let saveResult: boolean | undefined;
+      await act(async () => {
+        saveResult = await result.current.savePhoneType("android");
+      });
+
+      expect(saveResult).toBe(false);
+    });
+
+    it("returns false when API throws error", async () => {
+      mockSetPhoneType.mockRejectedValueOnce(new Error("Network error"));
+
+      const { result } = renderHook(() => usePhoneTypeApi(defaultOptions), {
+        wrapper: createWrapper(onboardingStatePhoneType),
+      });
+
+      let saveResult: boolean | undefined;
+      await act(async () => {
+        saveResult = await result.current.savePhoneType("iphone");
+      });
+
+      expect(saveResult).toBe(false);
+    });
+
+    it("returns false when no user is available (loading state)", async () => {
+      const { result } = renderHook(() => usePhoneTypeApi(defaultOptions), {
+        wrapper: createWrapper(loadingUserData),
+      });
+
+      let saveResult: boolean | undefined;
+      await act(async () => {
+        saveResult = await result.current.savePhoneType("iphone");
+      });
+
+      expect(mockSetPhoneType).not.toHaveBeenCalled();
+      expect(saveResult).toBe(false);
+    });
+
+    it("uses user id from state machine, not from options", async () => {
+      mockSetPhoneType.mockResolvedValueOnce({ success: true });
+
+      // Options have different userId than state machine
+      const optionsWithDifferentUser = {
+        ...defaultOptions,
+        userId: "different-user-id",
+      };
+
+      const { result } = renderHook(
+        () => usePhoneTypeApi(optionsWithDifferentUser),
+        {
+          wrapper: createWrapper(onboardingStatePhoneType),
+        }
+      );
+
+      await act(async () => {
+        await result.current.savePhoneType("iphone");
+      });
+
+      // Should use user id from state machine (test-user), not from options
+      expect(mockSetPhoneType).toHaveBeenCalledWith("test-user", "iphone");
+    });
+  });
+
+  describe("state transitions", () => {
+    it("returns correct values for each loading phase", () => {
+      // Test checking-storage phase
+      const { result: resultChecking } = renderHook(
+        () => usePhoneTypeApi(defaultOptions),
+        { wrapper: createWrapper(loadingCheckingStorage) }
+      );
+      expect(resultChecking.current.isLoadingPhoneType).toBe(true);
+      expect(resultChecking.current.hasSelectedPhoneType).toBe(false);
+      expect(resultChecking.current.selectedPhoneType).toBeNull();
+
+      // Test initializing-db phase
+      const { result: resultInit } = renderHook(
+        () => usePhoneTypeApi(defaultOptions),
+        { wrapper: createWrapper(loadingInitializingDb) }
+      );
+      expect(resultInit.current.isLoadingPhoneType).toBe(true);
+      expect(resultInit.current.hasSelectedPhoneType).toBe(false);
+
+      // Test loading-auth phase
+      const { result: resultAuth } = renderHook(
+        () => usePhoneTypeApi(defaultOptions),
+        { wrapper: createWrapper(loadingAuth) }
+      );
+      expect(resultAuth.current.isLoadingPhoneType).toBe(true);
+      expect(resultAuth.current.hasSelectedPhoneType).toBe(false);
+
+      // Test loading-user-data phase
+      const { result: resultUserData } = renderHook(
+        () => usePhoneTypeApi(defaultOptions),
+        { wrapper: createWrapper(loadingUserData) }
+      );
+      expect(resultUserData.current.isLoadingPhoneType).toBe(true);
+      expect(resultUserData.current.hasSelectedPhoneType).toBe(false);
+    });
+
+    it("returns correct values for ready and onboarding states", () => {
+      // Test ready state
+      const { result: resultReady } = renderHook(
+        () => usePhoneTypeApi(defaultOptions),
+        { wrapper: createWrapper(readyStateIPhone) }
+      );
+      expect(resultReady.current.isLoadingPhoneType).toBe(false);
+      expect(resultReady.current.hasSelectedPhoneType).toBe(true);
+      expect(resultReady.current.selectedPhoneType).toBe("iphone");
+
+      // Test onboarding state (phone-type step)
+      const { result: resultOnboarding } = renderHook(
+        () => usePhoneTypeApi(defaultOptions),
+        { wrapper: createWrapper(onboardingStatePhoneType) }
+      );
+      expect(resultOnboarding.current.isLoadingPhoneType).toBe(false);
+      expect(resultOnboarding.current.hasSelectedPhoneType).toBe(false);
+      expect(resultOnboarding.current.selectedPhoneType).toBeNull();
+
+      // Test onboarding state (past phone-type step)
+      const { result: resultOnboardingPast } = renderHook(
+        () => usePhoneTypeApi(defaultOptions),
+        { wrapper: createWrapper(onboardingStateEmailConnect) }
+      );
+      expect(resultOnboardingPast.current.isLoadingPhoneType).toBe(false);
+      expect(resultOnboardingPast.current.hasSelectedPhoneType).toBe(true);
+      expect(resultOnboardingPast.current.selectedPhoneType).toBe("iphone");
+    });
+  });
+
+  describe("feature flag toggle", () => {
+    it("uses state machine path when flag is enabled", () => {
+      mockIsNewStateMachineEnabled.mockReturnValue(true);
+
+      const { result } = renderHook(() => usePhoneTypeApi(defaultOptions), {
+        wrapper: createWrapper(readyStateIPhone),
+      });
+
+      // Should use derived state (ready state = has phone type)
+      expect(result.current.hasSelectedPhoneType).toBe(true);
+      expect(result.current.selectedPhoneType).toBe("iphone");
+      expect(result.current.isLoadingPhoneType).toBe(false);
+    });
+  });
+});
+
+describe("usePhoneTypeApi - Legacy Path Preserved", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    // Disable state machine to test legacy path
+    mockIsNewStateMachineEnabled.mockReturnValue(false);
+  });
+
+  it("does not crash when feature flag is disabled (legacy path)", () => {
+    // This test just verifies the hook can be called without the provider
+    // when the feature flag is disabled (it should use legacy path)
+    // We can't fully test legacy path as it requires window.api mocks
+    // But we can verify it doesn't throw
+    expect(() => {
+      renderHook(() => usePhoneTypeApi(defaultOptions));
+    }).not.toThrow();
+  });
+});
