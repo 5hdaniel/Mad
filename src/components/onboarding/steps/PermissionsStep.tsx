@@ -502,6 +502,8 @@ const permissionsStep: OnboardingStep = {
       showBack: true,
     },
     canProceed: (context) => context.permissionsGranted,
+    // Only show if permissions not yet granted (returning users with FDA skip this)
+    shouldShow: (context) => !context.permissionsGranted,
   },
   Content: PermissionsStepContent,
 };
