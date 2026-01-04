@@ -26,6 +26,7 @@ import {
   usePhoneHandlers,
   useKeychainHandlers,
 } from "./flows";
+import { useOptionalMachineState } from "./machine/hooks/useOptionalMachineState";
 import type { AppStateMachine, PendingEmailTokens } from "./types";
 
 export function useAppStateMachine(): AppStateMachine {
@@ -55,6 +56,11 @@ export function useAppStateMachine(): AppStateMachine {
   } = useNetwork();
 
   const { isMacOS, isWindows } = usePlatform();
+
+  // ============================================
+  // STATE MACHINE (Optional - feature flagged)
+  // ============================================
+  const machineState = useOptionalMachineState();
 
   // ============================================
   // PENDING EMAIL TOKENS STATE
@@ -90,6 +96,9 @@ export function useAppStateMachine(): AppStateMachine {
     onSetHasSelectedPhoneType: phoneTypeApi.setHasSelectedPhoneType,
     onSetSelectedPhoneType: phoneTypeApi.setSelectedPhoneType,
     onSetCurrentStep: (step) => nav.setCurrentStep(step),
+    // Pass state machine dispatch for LOGIN_SUCCESS integration
+    stateMachineDispatch: machineState?.dispatch,
+    platform: { isMacOS, isWindows },
   });
 
   // ============================================

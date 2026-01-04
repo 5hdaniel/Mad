@@ -474,6 +474,139 @@ describe("appStateReducer - Loading Phase Transitions", () => {
 });
 
 // ============================================
+// LOGIN_SUCCESS TRANSITIONS
+// ============================================
+
+describe("appStateReducer - LOGIN_SUCCESS Transitions", () => {
+  describe("LOGIN_SUCCESS from unauthenticated", () => {
+    it("transitions new user directly to onboarding", () => {
+      const state: AppState = { status: "unauthenticated" };
+      const action = {
+        type: "LOGIN_SUCCESS" as const,
+        user: mockUser,
+        platform: mockMacOSPlatform,
+        isNewUser: true,
+      };
+
+      const result = appStateReducer(state, action);
+
+      expect(result.status).toBe("onboarding");
+      if (result.status === "onboarding") {
+        expect(result.user).toEqual(mockUser);
+        expect(result.platform).toEqual(mockMacOSPlatform);
+        expect(result.step).toBe("phone-type");
+        expect(result.completedSteps).toEqual([]);
+      }
+    });
+
+    it("transitions returning user to loading-user-data with user/platform stored in state", () => {
+      const state: AppState = { status: "unauthenticated" };
+      const action = {
+        type: "LOGIN_SUCCESS" as const,
+        user: mockUser,
+        platform: mockMacOSPlatform,
+        isNewUser: false,
+      };
+
+      const result = appStateReducer(state, action);
+
+      expect(result.status).toBe("loading");
+      if (result.status === "loading") {
+        expect(result.phase).toBe("loading-user-data");
+        expect(result.progress).toBe(75); // Skip phases 1-3
+        expect(result.user).toEqual(mockUser);
+        expect(result.platform).toEqual(mockMacOSPlatform);
+      }
+    });
+
+    it("returns current state if not in unauthenticated status", () => {
+      const state: ReadyState = {
+        status: "ready",
+        user: mockUser,
+        platform: mockMacOSPlatform,
+        userData: mockCompleteUserData,
+      };
+      const action = {
+        type: "LOGIN_SUCCESS" as const,
+        user: mockUser,
+        platform: mockMacOSPlatform,
+        isNewUser: false,
+      };
+
+      const result = appStateReducer(state, action);
+
+      expect(result).toBe(state);
+    });
+
+    it("returns current state if already in loading status", () => {
+      const state: LoadingState = { status: "loading", phase: "loading-auth" };
+      const action = {
+        type: "LOGIN_SUCCESS" as const,
+        user: mockUser,
+        platform: mockMacOSPlatform,
+        isNewUser: false,
+      };
+
+      const result = appStateReducer(state, action);
+
+      expect(result).toBe(state);
+    });
+  });
+
+  describe("USER_DATA_LOADED after LOGIN_SUCCESS", () => {
+    it("uses user and platform from state (LOGIN_SUCCESS flow) when action has undefined values", () => {
+      // After LOGIN_SUCCESS, state has user/platform but action might not
+      const state: LoadingState = {
+        status: "loading",
+        phase: "loading-user-data",
+        user: mockUser,
+        platform: mockMacOSPlatform,
+      };
+      const action = {
+        type: "USER_DATA_LOADED" as const,
+        data: mockCompleteUserData,
+        // user and platform undefined - simulating fresh login flow
+        // where LoadingOrchestrator may not have set authDataRef
+        user: undefined as unknown as User,
+        platform: undefined as unknown as PlatformInfo,
+      };
+
+      const result = appStateReducer(state, action);
+
+      expect(result.status).toBe("ready");
+      if (result.status === "ready") {
+        expect(result.user).toEqual(mockUser);
+        expect(result.platform).toEqual(mockMacOSPlatform);
+        expect(result.userData).toEqual(mockCompleteUserData);
+      }
+    });
+
+    it("transitions to onboarding when user data is incomplete (LOGIN_SUCCESS flow)", () => {
+      const state: LoadingState = {
+        status: "loading",
+        phase: "loading-user-data",
+        user: mockUser,
+        platform: mockMacOSPlatform,
+      };
+      const action = {
+        type: "USER_DATA_LOADED" as const,
+        data: mockIncompleteUserData,
+        user: undefined as unknown as User,
+        platform: undefined as unknown as PlatformInfo,
+      };
+
+      const result = appStateReducer(state, action);
+
+      expect(result.status).toBe("onboarding");
+      if (result.status === "onboarding") {
+        expect(result.user).toEqual(mockUser);
+        expect(result.step).toBe("phone-type");
+      }
+    });
+  });
+});
+
+// ============================================
 // ONBOARDING TRANSITIONS
 // ============================================
 
