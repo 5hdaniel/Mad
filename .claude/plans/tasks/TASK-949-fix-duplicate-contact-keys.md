@@ -55,8 +55,8 @@ id: `contacts-app-${Date.now()}-${index}`,
 ## PR Preparation
 
 - **Title**: `fix(contacts): use unique IDs for imported contacts`
-- **Branch From**: `project/state-coordination`
-- **Branch Into**: `project/state-coordination`
+- **Branch From**: `develop`
+- **Branch Into**: `develop`
 - **Branch Name**: `fix/TASK-949-duplicate-contact-keys`
 
 ---
@@ -77,8 +77,8 @@ id: `contacts-app-${Date.now()}-${index}`,
 
 ### Branch Information
 
-- **Branch From:** `project/state-coordination`
-- **Branch Into:** `project/state-coordination`
+- **Branch From:** `develop`
+- **Branch Into:** `develop`
 - **Branch Name:** `fix/TASK-949-duplicate-contact-keys`
 
 ### Priority

@@ -73,8 +73,25 @@ const appState: OnboardingAppState = useMemo(() => {
 ## PR Preparation
 
 - **Title**: `fix(onboarding): derive appState from state machine`
-- **Branch From**: `project/state-coordination` or `develop`
+- **Branch From**: `develop`
+- **Branch Into**: `develop`
 - **Branch Name**: `fix/TASK-950-onboarding-state-derivation`
+
+---
+
+## SR Engineer Pre-Implementation Review
+
+**Status:** APPROVED
+
+### Branch Information
+
+- **Branch From:** `develop`
+- **Branch Into:** `develop`
+- **Branch Name:** `fix/TASK-950-onboarding-state-derivation`
+
+### Priority
+
+**CRITICAL** - Completes the state machine migration (BACKLOG-142 Phase 3)
 
 ---
 

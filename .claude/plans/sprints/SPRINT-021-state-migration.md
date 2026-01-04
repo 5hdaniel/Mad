@@ -1,8 +1,9 @@
 # SPRINT-021: State Coordination Migration (Phase 2)
 
-**Status:** NOT STARTED
+**Status:** ✅ COMPLETE
 **Created:** 2026-01-03
-**Target:** project/state-coordination (integration branch)
+**Completed:** 2026-01-04
+**Target:** project/state-coordination (integration branch) → develop (PR #305)
 **Prerequisites:** SPRINT-020 (Phase 1 - Foundation) COMPLETE
 
 ---
@@ -250,23 +251,35 @@ Before enabling feature flag default true:
 
 | Metric | Estimated | Actual |
 |--------|-----------|--------|
-| Total Tokens | ~340K | TBD |
-| Tasks Completed | 8 | TBD |
-| Blocked Tasks | 0 | TBD |
-| PRs Created | 8 | TBD |
+| Total Tokens | ~395K | ~400K |
+| Tasks Completed | 8 | 9 (8 planned + TASK-948 hotfix) |
+| Blocked Tasks | 0 | 0 |
+| PRs Created | 8 | 10 (PRs #295-303, #305) |
+| Deferred Tasks | 0 | 2 (TASK-949, TASK-950) |
 
 ### Task Completion Summary
 
-| Task | PR | Tokens | Status |
-|------|-----|--------|--------|
-| TASK-940 | - | - | NOT STARTED |
-| TASK-941 | - | - | NOT STARTED |
-| TASK-942 | - | - | NOT STARTED |
-| TASK-943 | - | - | NOT STARTED |
-| TASK-944 | - | - | NOT STARTED |
-| TASK-945 | - | - | NOT STARTED |
-| TASK-946 | - | - | NOT STARTED |
-| TASK-947 | - | - | NOT STARTED |
+| Task | PR | Status | Notes |
+|------|-----|--------|-------|
+| TASK-940 | #295 | ✅ MERGED | Migration utilities and selectors |
+| TASK-941 | #297 | ✅ MERGED | Migrate useSecureStorage |
+| TASK-942 | #298 | ✅ MERGED | Migrate usePhoneTypeApi |
+| TASK-943 | #299 | ✅ MERGED | Migrate useEmailOnboardingApi |
+| TASK-944 | #296 | ✅ MERGED | Step and navigation derivation |
+| TASK-945 | #300 | ✅ MERGED | Migrate useNavigationFlow |
+| TASK-946 | #301 | ✅ MERGED | Integration tests (40 tests) |
+| TASK-947 | #302 | ✅ MERGED | Feature flag default true |
+| TASK-948 | #303 | ✅ MERGED | **Hotfix** - Returning user data loading |
+| TASK-949 | - | ⏸️ DEFERRED | Duplicate contact keys → SPRINT-022 |
+| TASK-950 | - | ⏸️ DEFERRED | OnboardingFlow state derivation → SPRINT-022 |
+
+### Merge to Develop
+
+| PR | Title | Status |
+|----|-------|--------|
+| #305 | feat(state): complete Phase 2 state machine migration (SPRINT-021) | ✅ MERGED |
+
+**Branch `project/state-coordination` successfully merged to `develop` on 2026-01-04.**
 
 ---
 
@@ -366,5 +379,32 @@ Batch 5-7: TASK-945, 946, 947 (sequential as planned)
 
 ## Changelog
 
+- 2026-01-04: **Sprint COMPLETE** - PR #305 merged to develop
+- 2026-01-04: TASK-949 and TASK-950 deferred to SPRINT-022
+- 2026-01-04: TASK-948 hotfix merged (LoadingOrchestrator user data loading)
+- 2026-01-04: All 8 planned tasks merged (TASK-940 through TASK-947)
 - 2026-01-03: SR Engineer technical review complete - APPROVED with observations
 - 2026-01-03: Sprint created (Phase 2 of BACKLOG-142)
+
+## Known Issues (Deferred to SPRINT-022)
+
+1. **TASK-950**: OnboardingFlow still reads from legacy app state, causing brief step cycling for returning users with pending OAuth. Fresh login works correctly.
+2. **TASK-949**: Duplicate contact keys warning when importing contacts with same name.
+
+## Retrospective Notes
+
+### What Went Well
+- All 8 core migration tasks completed efficiently
+- State machine feature flag now enabled by default
+- Integration tests provide good coverage (40+ tests)
+
+### What Needed Improvement
+- TASK-948 hotfix was needed due to LoadingOrchestrator dispatching placeholder data
+- TASK-950 root cause discovered late (OnboardingFlow legacy state dependency)
+- CI Jest worker processes got stuck, required manual cleanup
+
+### Action Items for SPRINT-022
+- [ ] Implement TASK-950 (OnboardingFlow state derivation)
+- [ ] Implement TASK-949 (duplicate contact keys fix)
+- [ ] Add SubagentStop hook for Jest worker cleanup (BACKLOG-146)
+- [ ] Consider legacy code removal once TASK-950 is verified
