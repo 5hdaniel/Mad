@@ -429,39 +429,18 @@ describe("useNavigationFlow - State Machine Path", () => {
   });
 });
 
-describe("useNavigationFlow - Legacy Path Preserved", () => {
+describe("useNavigationFlow - State Machine Required", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    // Disable state machine to test legacy path
+    // Disable state machine
     mockIsNewStateMachineEnabled.mockReturnValue(false);
   });
 
-  it("does not crash when feature flag is disabled (legacy path)", () => {
-    // This test verifies the hook can be called without the provider
-    // when the feature flag is disabled (it should use legacy path)
+  it("throws error when feature flag is disabled (legacy path removed)", () => {
+    // Legacy code paths have been removed - hook now requires state machine
     expect(() => {
       renderHook(() => useNavigationFlow(defaultOptions));
-    }).not.toThrow();
-  });
-
-  it("legacy path returns proper interface", () => {
-    const { result } = renderHook(() => useNavigationFlow(defaultOptions));
-
-    // Verify all expected properties exist
-    expect(result.current).toHaveProperty("currentStep");
-    expect(result.current).toHaveProperty("showSetupPromptDismissed");
-    expect(result.current).toHaveProperty("isTourActive");
-    expect(result.current).toHaveProperty("setCurrentStep");
-    expect(result.current).toHaveProperty("setIsTourActive");
-    expect(result.current).toHaveProperty("goToStep");
-    expect(result.current).toHaveProperty("goToEmailOnboarding");
-    expect(result.current).toHaveProperty("handleDismissSetupPrompt");
-    expect(result.current).toHaveProperty("getPageTitle");
-
-    // Legacy path transitions based on effects
-    // With default options (isAuthenticated=false, no pendingOAuthData),
-    // it transitions to 'login' via effect
-    expect(result.current.currentStep).toBe("login");
+    }).toThrow("useNavigationFlow requires state machine to be enabled");
   });
 });
 

@@ -410,21 +410,18 @@ describe("useSecureStorage - State Machine Path", () => {
   });
 });
 
-describe("useSecureStorage - Legacy Path Preserved", () => {
+describe("useSecureStorage - State Machine Required", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     localStorageMock.clear();
-    // Disable state machine to test legacy path
+    // Disable state machine
     mockIsNewStateMachineEnabled.mockReturnValue(false);
   });
 
-  it("does not crash when feature flag is disabled (legacy path)", () => {
-    // This test just verifies the hook can be called without the provider
-    // when the feature flag is disabled (it should use legacy path)
-    // We can't fully test legacy path as it requires window.api mocks
-    // But we can verify it doesn't throw
+  it("throws error when feature flag is disabled (legacy path removed)", () => {
+    // Legacy code paths have been removed - hook now requires state machine
     expect(() => {
       renderHook(() => useSecureStorage(defaultOptions));
-    }).not.toThrow();
+    }).toThrow("useSecureStorage requires state machine to be enabled");
   });
 });

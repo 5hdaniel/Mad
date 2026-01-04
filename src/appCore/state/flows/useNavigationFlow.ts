@@ -2,25 +2,20 @@
  * useNavigationFlow Hook
  *
  * Manages navigation state and step transitions.
- * Contains the complex navigation effects that determine which step to show.
+ * Derives the current step from the state machine - no effects needed.
  *
  * @module appCore/state/flows/useNavigationFlow
  *
- * ## Migration Status
+ * ## State Machine Integration
  *
- * This hook supports two execution paths:
- * 1. **State Machine Path** (new): When feature flag enabled, derives navigation
- *    state from the state machine. Navigation is pure derivation - no effects.
- * 2. **Legacy Path** (existing): Original implementation with effect-based navigation.
+ * This hook derives navigation state purely from the state machine.
+ * Navigation is derived, not pushed - components render based on derived step.
  *
- * The state machine path uses `useOptionalMachineState()` to check if
- * the feature flag is enabled and returns early with derived values.
- *
- * Key insight: The effect-based approach tried to PUSH navigation. The new approach
- * DERIVES what should be shown. Components render based on derived step.
+ * Requires the state machine feature flag to be enabled.
+ * If disabled, throws an error - legacy code paths have been removed.
  */
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useCallback } from "react";
 import type { AppStep, PendingOnboardingData } from "../types";
 import type { PendingOAuthData } from "../../../components/Login";
 import {
@@ -86,367 +81,63 @@ export interface UseNavigationFlowReturn {
   getPageTitle: () => string;
 }
 
-export function useNavigationFlow({
-  isAuthenticated,
-  isAuthLoading,
-  needsTermsAcceptance,
-  isMacOS,
-  isWindows,
-  pendingOAuthData,
-  pendingOnboardingData,
-  isCheckingSecureStorage,
-  isDatabaseInitialized,
-  isInitializingDatabase,
-  initializeSecureStorage,
-  hasSelectedPhoneType,
-  isLoadingPhoneType,
-  needsDriverSetup,
-  hasCompletedEmailOnboarding,
-  hasEmailConnected,
-  isCheckingEmailOnboarding,
-  hasPermissions,
-  showTermsModal,
-  onSetShowTermsModal,
-}: UseNavigationFlowOptions): UseNavigationFlowReturn {
-  // ============================================
-  // STATE MACHINE PATH
-  // ============================================
-  // Check if state machine is enabled and available.
-  // If so, derive all values from state machine and return early.
+export function useNavigationFlow(
+  // Options kept for API compatibility but not used - state machine is source of truth
+  _options: UseNavigationFlowOptions
+): UseNavigationFlowReturn {
   const machineState = useOptionalMachineState();
 
-  // UI-only local state (needed for both paths)
-  // These are not part of the state machine - they're purely UI concerns
-  const [showSetupPromptDismissedLocal, setShowSetupPromptDismissedLocal] =
-    useState<boolean>(false);
-  const [isTourActiveLocal, setIsTourActiveLocal] = useState<boolean>(false);
-
-  if (machineState) {
-    const { state } = machineState;
-
-    // Derive currentStep from state machine
-    // This is the key migration: no effects, just pure derivation
-    const currentStep = deriveAppStep(state);
-
-    // Setters are no-ops in state machine mode - navigation is derived from state
-    const setCurrentStep = useCallback((_step: AppStep) => {
-      // No-op in state machine mode
-      // Navigation is derived from state machine, not imperatively set
-    }, []);
-
-    // Navigation methods are also no-ops
-    // In state machine mode, navigation happens by dispatching actions
-    // that change state, which then derives the new step
-    const goToStep = useCallback((_step: AppStep) => {
-      // No-op in state machine mode
-    }, []);
-
-    const goToEmailOnboarding = useCallback(() => {
-      // No-op in state machine mode
-    }, []);
-
-    // handleDismissSetupPrompt works - it's a UI-only concern
-    const handleDismissSetupPrompt = useCallback((): void => {
-      setShowSetupPromptDismissedLocal(true);
-    }, []);
-
-    // getPageTitle uses the derived step
-    const getPageTitle = useCallback((): string => {
-      return derivePageTitle(currentStep);
-    }, [currentStep]);
-
-    return {
-      currentStep,
-      showSetupPromptDismissed: showSetupPromptDismissedLocal,
-      isTourActive: isTourActiveLocal,
-      setCurrentStep,
-      setIsTourActive: setIsTourActiveLocal,
-      goToStep,
-      goToEmailOnboarding,
-      handleDismissSetupPrompt,
-      getPageTitle,
-    };
-  }
-
-  // ============================================
-  // LEGACY PATH
-  // ============================================
-  // Original implementation with effect-based navigation.
-  // Used when state machine feature flag is disabled.
-
-  const [currentStep, setCurrentStep] = useState<AppStep>("loading");
+  // UI-only local state - not part of the state machine
   const [showSetupPromptDismissed, setShowSetupPromptDismissed] =
     useState<boolean>(false);
   const [isTourActive, setIsTourActive] = useState<boolean>(false);
 
-  // Auto-initialize database for returning Windows users (no keychain UI needed)
-  // On macOS, users see keychain-explanation screen which triggers init on Continue.
-  // On Windows, returning users skip all pre-DB onboarding, so we auto-init here.
-  useEffect(() => {
-    const isReturningUser =
-      pendingOAuthData && !!pendingOAuthData.cloudUser.terms_accepted_at;
+  if (!machineState) {
+    throw new Error(
+      "useNavigationFlow requires state machine to be enabled. " +
+        "Legacy code paths have been removed."
+    );
+  }
 
-    if (
-      isWindows &&
-      pendingOAuthData &&
-      !isAuthenticated &&
-      isReturningUser &&
-      !isDatabaseInitialized &&
-      !isInitializingDatabase &&
-      currentStep === "loading"
-    ) {
-      initializeSecureStorage(true);
-    }
-  }, [
-    isWindows,
-    pendingOAuthData,
-    isAuthenticated,
-    isDatabaseInitialized,
-    isInitializingDatabase,
-    currentStep,
-    initializeSecureStorage,
-  ]);
+  const { state } = machineState;
 
-  // Handle auth state changes to update navigation
-  // IMPORTANT: Guards prevent infinite loops by only updating state when values differ
-  useEffect(() => {
-    // Wait for ALL loading to complete before making routing decisions
-    // This prevents race conditions where routing happens before user data loads
-    // CRITICAL: Include isDatabaseInitialized to prevent navigation to dashboard
-    // before database is ready (fixes "Database is not initialized" error)
-    const isStillLoading =
-      isAuthLoading ||
-      isCheckingSecureStorage ||
-      isLoadingPhoneType ||
-      isCheckingEmailOnboarding ||
-      (isAuthenticated && !isDatabaseInitialized);
+  // Derive currentStep from state machine - pure derivation, no effects
+  const currentStep = deriveAppStep(state);
 
-    // CRITICAL: Don't make ANY routing decisions while still loading
-    // This single guard prevents all flicker by ensuring we wait for complete data
-    // Don't reset step for users in the middle of onboarding
-    if (isStillLoading) {
-      return;
-    }
+  // Setters are no-ops - navigation is derived from state machine
+  const setCurrentStep = useCallback((_step: AppStep) => {
+    // No-op: navigation is derived from state machine, not imperatively set
+  }, []);
 
-    if (!isAuthLoading && !isCheckingSecureStorage) {
-      // PRE-DB FLOW: OAuth succeeded but database not initialized yet
-      if (pendingOAuthData && !isAuthenticated) {
-        const isNewUser = !pendingOAuthData.cloudUser.terms_accepted_at;
+  // Navigation methods are also no-ops
+  // Navigation happens by dispatching actions that change state
+  const goToStep = useCallback((_step: AppStep) => {
+    // No-op: state machine drives navigation
+  }, []);
 
-        // RETURNING USERS: Skip pre-DB onboarding, go straight to DB initialization
-        // Their phone type and email settings are in the local database
-        if (!isNewUser) {
-          if (isMacOS) {
-            if (currentStep !== "keychain-explanation") {
-              setCurrentStep("keychain-explanation");
-            }
-          } else {
-            // Windows: Initialize database directly (no keychain setup needed)
-            // The useSecureStorage hook will handle this
-            if (currentStep !== "loading") {
-              setCurrentStep("loading");
-            }
-          }
-          return;
-        }
+  const goToEmailOnboarding = useCallback(() => {
+    // No-op: state machine drives navigation
+  }, []);
 
-        // NEW USERS ONLY: Go through full pre-DB onboarding flow
-
-        // Step 1: New users must accept terms first (shows as modal)
-        if (!pendingOnboardingData.termsAccepted) {
-          if (!showTermsModal) onSetShowTermsModal(true);
-          if (currentStep !== "phone-type-selection")
-            setCurrentStep("phone-type-selection");
-          return;
-        }
-
-        // Step 2: Phone type selection (separate screen)
-        if (!pendingOnboardingData.phoneType) {
-          if (showTermsModal) onSetShowTermsModal(false);
-          if (currentStep !== "phone-type-selection")
-            setCurrentStep("phone-type-selection");
-          return;
-        }
-
-        // Step 3: Email onboarding (after phone type is selected)
-        if (!pendingOnboardingData.emailConnected) {
-          if (currentStep !== "phone-type-selection") {
-            if (showTermsModal) onSetShowTermsModal(false);
-            if (currentStep !== "email-onboarding")
-              setCurrentStep("email-onboarding");
-          }
-          return;
-        }
-
-        // Step 4: All pre-DB onboarding complete - now initialize database
-        if (
-          isMacOS &&
-          currentStep !== "email-onboarding" &&
-          currentStep !== "phone-type-selection" &&
-          currentStep !== "keychain-explanation"
-        ) {
-          setCurrentStep("keychain-explanation");
-        }
-        return;
-      }
-
-      // POST-DB FLOW: Database initialized, user authenticated
-      if (isAuthenticated && !needsTermsAcceptance) {
-        // Special case: Returning user just completed login via keychain-explanation
-        // They need to transition to the appropriate next step (dashboard/permissions)
-        // This is NOT part of OnboardingFlow, so we handle it explicitly
-        if (currentStep === "keychain-explanation") {
-          // Returning users go straight to dashboard or permissions
-          const needsPermissions = isMacOS && !hasPermissions;
-          if (needsPermissions) {
-            setCurrentStep("permissions");
-          } else {
-            setCurrentStep("dashboard");
-          }
-          return;
-        }
-
-        // Onboarding steps handled by the new OnboardingFlow - don't interfere
-        const onboardingSteps = [
-          "phone-type-selection",
-          "email-onboarding",
-          "apple-driver-setup",
-          "android-coming-soon",
-          "permissions",
-        ];
-
-        if (onboardingSteps.includes(currentStep)) {
-          // New OnboardingFlow handles all navigation within onboarding
-          return;
-        }
-
-        // Wait for user data to load before routing to onboarding
-        // This prevents showing wrong screens before we know what the user needs
-        if (isStillLoading) {
-          return;
-        }
-
-        // Check what's missing to determine the right starting point
-        // Note: hasCompletedEmailOnboarding means user finished the email step (connected OR skipped)
-        const needsPhoneSelection = !hasSelectedPhoneType;
-        // User needs email onboarding if: not completed AND not already connected
-        // (connected users don't need to see the email step even if flag isn't set)
-        const needsEmailOnboarding =
-          !hasCompletedEmailOnboarding && !hasEmailConnected;
-        const needsDrivers = isWindows && needsDriverSetup;
-        const needsPermissions = isMacOS && !hasPermissions;
-
-        // Route to the first incomplete step
-        if (needsPhoneSelection) {
-          // New user - start from phone selection
-          if (currentStep !== "phone-type-selection") {
-            setCurrentStep("phone-type-selection");
-          }
-        } else if (needsEmailOnboarding) {
-          // Returning user who hasn't completed email step
-          if (currentStep !== "email-onboarding") {
-            setCurrentStep("email-onboarding");
-          }
-        } else if (needsDrivers) {
-          // Returning user who needs driver setup (Windows + iPhone)
-          if (currentStep !== "apple-driver-setup") {
-            setCurrentStep("apple-driver-setup");
-          }
-        } else if (needsPermissions) {
-          // Returning user who only needs permissions (macOS)
-          if (currentStep !== "permissions") {
-            setCurrentStep("permissions");
-          }
-        } else if (currentStep !== "dashboard") {
-          // Everything complete - go to dashboard
-          setCurrentStep("dashboard");
-        }
-      } else if (!isAuthenticated && !pendingOAuthData) {
-        if (currentStep !== "login") setCurrentStep("login");
-      }
-    }
-  }, [
-    isAuthenticated,
-    isAuthLoading,
-    isDatabaseInitialized,
-    needsTermsAcceptance,
-    hasPermissions,
-    hasCompletedEmailOnboarding,
-    hasEmailConnected,
-    isCheckingEmailOnboarding,
-    isCheckingSecureStorage,
-    pendingOAuthData,
-    pendingOnboardingData,
-    hasSelectedPhoneType,
-    isLoadingPhoneType,
-    needsDriverSetup,
-    isWindows,
-    isMacOS,
-    currentStep,
-    showTermsModal,
-    onSetShowTermsModal,
-  ]);
-
-  // Windows: Skip permissions screen automatically
-  useEffect(() => {
-    if (isWindows && currentStep === "permissions") {
-      setCurrentStep("dashboard");
-    }
-  }, [isWindows, currentStep]);
-
-  const goToStep = useCallback((step: AppStep) => setCurrentStep(step), []);
-  const goToEmailOnboarding = useCallback(
-    () => setCurrentStep("email-onboarding"),
-    [],
-  );
-
+  // handleDismissSetupPrompt works - it's a UI-only concern
   const handleDismissSetupPrompt = useCallback((): void => {
     setShowSetupPromptDismissed(true);
   }, []);
 
+  // getPageTitle uses the derived step
   const getPageTitle = useCallback((): string => {
-    switch (currentStep) {
-      case "login":
-        return "Welcome";
-      case "email-onboarding":
-        return "Connect Email";
-      case "microsoft-login":
-        return "Login";
-      case "permissions":
-        return "Setup Permissions";
-      case "dashboard":
-        return "Magic Audit";
-      case "contacts":
-        return "Select Contacts for Export";
-      case "outlook":
-        return "Export to Outlook";
-      case "complete":
-        return "Export Complete";
-      default:
-        return "Magic Audit";
-    }
+    return derivePageTitle(currentStep);
   }, [currentStep]);
 
-  return useMemo(
-    () => ({
-      currentStep,
-      showSetupPromptDismissed,
-      isTourActive,
-      setCurrentStep,
-      setIsTourActive,
-      goToStep,
-      goToEmailOnboarding,
-      handleDismissSetupPrompt,
-      getPageTitle,
-    }),
-    [
-      currentStep,
-      showSetupPromptDismissed,
-      isTourActive,
-      goToStep,
-      goToEmailOnboarding,
-      handleDismissSetupPrompt,
-      getPageTitle,
-    ],
-  );
+  return {
+    currentStep,
+    showSetupPromptDismissed,
+    isTourActive,
+    setCurrentStep,
+    setIsTourActive,
+    goToStep,
+    goToEmailOnboarding,
+    handleDismissSetupPrompt,
+    getPageTitle,
+  };
 }
