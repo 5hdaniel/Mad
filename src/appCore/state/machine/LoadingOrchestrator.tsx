@@ -262,30 +262,151 @@ export function LoadingOrchestrator({
       return;
     }
 
-    // TODO: Load actual user data from database
-    // For now, dispatch placeholder data that will trigger onboarding
-    // if the user hasn't completed it yet
-    const userData: UserData = {
-      phoneType: null, // Will be set during onboarding
-      hasCompletedEmailOnboarding: false,
-      hasEmailConnected: false,
-      needsDriverSetup: authData.platform.isWindows, // Assume needed on Windows
-      hasPermissions: false, // Will be checked/set during onboarding
+    let cancelled = false;
+
+    // Load actual user data from database APIs
+    const loadUserData = async (): Promise<UserData> => {
+      const userId = authData.user!.id;
+      const platform = authData.platform;
+
+      // Load all user data in parallel for faster loading
+      const [phoneTypeResult, emailOnboardingResult, connectionsResult, permissionsResult] =
+        await Promise.all([
+          // Get phone type from database
+          window.api.user.getPhoneType(userId).catch(() => ({
+            success: false,
+            phoneType: null as "iphone" | "android" | null,
+          })),
+
+          // Check if email onboarding is completed
+          // Note: Type assertion needed due to incomplete MainAPI type definition
+          (
+            window.api.auth as unknown as {
+              checkEmailOnboarding: (
+                userId: string
+              ) => Promise<{ success: boolean; completed: boolean; error?: string }>;
+            }
+          )
+            .checkEmailOnboarding(userId)
+            .catch(() => ({
+              success: false,
+              completed: false,
+            })),
+
+          // Check if email is connected (any provider)
+          window.api.system.checkAllConnections(userId).catch(() => ({
+            success: false,
+            google: { connected: false },
+            microsoft: { connected: false },
+          })),
+
+          // Check permissions (macOS only)
+          platform.isMacOS
+            ? window.api.system.checkPermissions().catch(() => ({
+                hasPermission: false,
+                fullDiskAccess: false,
+              }))
+            : Promise.resolve({ hasPermission: true, fullDiskAccess: true }),
+        ]);
+
+      // Determine phone type
+      const phoneType =
+        phoneTypeResult.success && phoneTypeResult.phoneType
+          ? phoneTypeResult.phoneType
+          : null;
+
+      // Determine if email onboarding is completed
+      const hasCompletedEmailOnboarding =
+        emailOnboardingResult.success && emailOnboardingResult.completed;
+
+      // Determine if any email provider is connected
+      const hasEmailConnected =
+        connectionsResult.success &&
+        (connectionsResult.google?.connected === true ||
+          connectionsResult.microsoft?.connected === true);
+
+      // Determine permissions status (macOS only)
+      const hasPermissions = platform.isMacOS
+        ? permissionsResult.hasPermission === true ||
+          permissionsResult.fullDiskAccess === true
+        : true; // Windows doesn't require permissions
+
+      // Determine if driver setup is needed (Windows + iPhone only)
+      let needsDriverSetup = false;
+      if (platform.isWindows && phoneType === "iphone") {
+        try {
+          // Check if Apple drivers are installed
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const drivers = (window.api as any)?.drivers;
+          if (drivers) {
+            const driverStatus = await drivers.checkApple();
+            // Only check isInstalled - service might not be running after fresh install
+            needsDriverSetup = !driverStatus.isInstalled;
+          } else {
+            needsDriverSetup = true;
+          }
+        } catch {
+          // Assume drivers needed if check fails
+          needsDriverSetup = true;
+        }
+      }
+
+      return {
+        phoneType,
+        hasCompletedEmailOnboarding,
+        hasEmailConnected,
+        needsDriverSetup,
+        hasPermissions,
+      };
     };
 
-    // Dispatch with required context (user and platform from AUTH_LOADED)
-    dispatch({
-      type: "USER_DATA_LOADED",
-      data: userData,
-      // These are required by the reducer for state transition
-      user: authData.user,
-      platform: authData.platform,
-    } as {
-      type: "USER_DATA_LOADED";
-      data: UserData;
-      user: User;
-      platform: PlatformInfo;
-    });
+    loadUserData()
+      .then((userData) => {
+        if (cancelled) return;
+
+        // Dispatch with required context (user and platform from AUTH_LOADED)
+        dispatch({
+          type: "USER_DATA_LOADED",
+          data: userData,
+          // These are required by the reducer for state transition
+          user: authData.user,
+          platform: authData.platform,
+        } as {
+          type: "USER_DATA_LOADED";
+          data: UserData;
+          user: User;
+          platform: PlatformInfo;
+        });
+      })
+      .catch((error: Error) => {
+        if (cancelled) return;
+        console.error("[LoadingOrchestrator] Failed to load user data:", error);
+
+        // Fallback to empty user data - will trigger onboarding
+        const fallbackData: UserData = {
+          phoneType: null,
+          hasCompletedEmailOnboarding: false,
+          hasEmailConnected: false,
+          needsDriverSetup: authData.platform.isWindows,
+          hasPermissions: !authData.platform.isMacOS,
+        };
+
+        dispatch({
+          type: "USER_DATA_LOADED",
+          data: fallbackData,
+          user: authData.user,
+          platform: authData.platform,
+        } as {
+          type: "USER_DATA_LOADED";
+          data: UserData;
+          user: User;
+          platform: PlatformInfo;
+        });
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [state.status, loadingPhase, dispatch]);
 
   // ============================================
