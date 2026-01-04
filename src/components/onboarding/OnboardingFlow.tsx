@@ -7,11 +7,18 @@
  * @module onboarding/OnboardingFlow
  */
 
-import React, { useCallback, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import { useOnboardingFlow, type OnboardingAppState } from "./hooks";
 import { OnboardingShell } from "./shell/OnboardingShell";
 import { ProgressIndicator } from "./shell/ProgressIndicator";
 import { NavigationButtons } from "./shell/NavigationButtons";
+import { useOptionalMachineState } from "../../appCore/state/machine";
+import {
+  selectPhoneType,
+  selectHasEmailConnected,
+  selectHasPermissions,
+  selectIsDatabaseInitialized,
+} from "../../appCore/state/machine/selectors";
 import type { AppStateMachine } from "../../appCore/state/types";
 import type { StepAction } from "./types";
 
@@ -35,20 +42,45 @@ export interface OnboardingFlowProps {
  * ```
  */
 export function OnboardingFlow({ app }: OnboardingFlowProps) {
-  // Build app state from state machine
-  const appState: OnboardingAppState = {
-    phoneType: app.selectedPhoneType,
-    emailConnected: app.hasEmailConnected,
-    connectedEmail: app.currentUser?.email ?? null,
-    emailProvider: app.pendingOnboardingData?.emailProvider ?? null,
-    hasPermissions: app.hasPermissions,
-    hasSecureStorage: app.hasSecureStorageSetup,
-    driverSetupComplete: !app.needsDriverSetup,
-    termsAccepted: !app.needsTermsAcceptance,
-    authProvider: (app.pendingOAuthData?.provider ?? app.authProvider) as "google" | "microsoft" ?? "google",
-    isNewUser: app.isNewUserFlow,
-    isDatabaseInitialized: app.isDatabaseInitialized,
-  };
+  // Access state machine state when feature flag is enabled
+  const machineState = useOptionalMachineState();
+
+  // Build app state, deriving from state machine when available
+  // This fixes the flicker issue where legacy app properties have stale data during initial load
+  const appState: OnboardingAppState = useMemo(() => {
+    if (machineState) {
+      // State machine enabled - derive from state machine for consistent state
+      const { state } = machineState;
+      return {
+        phoneType: selectPhoneType(state),
+        emailConnected: selectHasEmailConnected(state),
+        connectedEmail: app.currentUser?.email ?? null,
+        emailProvider: app.pendingOnboardingData?.emailProvider ?? null,
+        hasPermissions: selectHasPermissions(state),
+        hasSecureStorage: app.hasSecureStorageSetup,
+        driverSetupComplete: !app.needsDriverSetup,
+        termsAccepted: !app.needsTermsAcceptance,
+        authProvider: (app.pendingOAuthData?.provider ?? app.authProvider) as "google" | "microsoft" ?? "google",
+        isNewUser: app.isNewUserFlow,
+        isDatabaseInitialized: selectIsDatabaseInitialized(state),
+      };
+    }
+
+    // Legacy fallback - use app properties directly
+    return {
+      phoneType: app.selectedPhoneType,
+      emailConnected: app.hasEmailConnected,
+      connectedEmail: app.currentUser?.email ?? null,
+      emailProvider: app.pendingOnboardingData?.emailProvider ?? null,
+      hasPermissions: app.hasPermissions,
+      hasSecureStorage: app.hasSecureStorageSetup,
+      driverSetupComplete: !app.needsDriverSetup,
+      termsAccepted: !app.needsTermsAcceptance,
+      authProvider: (app.pendingOAuthData?.provider ?? app.authProvider) as "google" | "microsoft" ?? "google",
+      isNewUser: app.isNewUserFlow,
+      isDatabaseInitialized: app.isDatabaseInitialized,
+    };
+  }, [machineState, app]);
 
 
   // Action handler that maps to existing app handlers

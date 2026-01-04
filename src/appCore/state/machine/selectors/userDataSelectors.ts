@@ -175,3 +175,21 @@ export function selectHasEmailConnected(state: AppState): boolean {
   // Loading state - default true to avoid flicker (matching legacy behavior)
   return true;
 }
+
+/**
+ * Returns true if user has macOS Full Disk Access permissions.
+ * Only relevant for macOS; always false for other platforms or during loading.
+ *
+ * @param state - Current application state
+ * @returns true if user has granted permissions
+ */
+export function selectHasPermissions(state: AppState): boolean {
+  if (state.status === "ready") {
+    return state.userData.hasPermissions;
+  }
+  if (state.status === "onboarding") {
+    // During onboarding, permissions check happens at the permissions step
+    return false;
+  }
+  return false;
+}

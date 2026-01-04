@@ -144,3 +144,54 @@ Also export from `src/appCore/state/machine/selectors/index.ts`.
 - BACKLOG-144: UI Flicker for Returning Users
 - TASK-948: Fix Returning User UI Flicker (partial fix - LoadingOrchestrator)
 - PR #304: Initial implementation (may need rebasing)
+
+---
+
+## Implementation Summary
+
+**Status:** COMPLETED
+**Date:** 2026-01-04
+
+### Changes Made
+
+1. **Created `selectHasPermissions` selector** (`src/appCore/state/machine/selectors/userDataSelectors.ts`)
+   - Returns `true` when ready state has `userData.hasPermissions` true
+   - Returns `false` during onboarding, loading, or error states
+   - Follows existing selector patterns
+
+2. **Updated `OnboardingFlow.tsx`** to derive `appState` from state machine
+   - Added `useOptionalMachineState()` hook to access state machine state
+   - Wrapped `appState` construction in `useMemo` for performance
+   - When state machine is enabled: derives `phoneType`, `emailConnected`, `hasPermissions`, `isDatabaseInitialized` from state machine selectors
+   - When state machine is disabled: falls back to legacy `app` properties
+
+3. **Added comprehensive tests** for `selectHasPermissions` and `selectHasEmailConnected`
+   - Tests all state types: ready, loading, onboarding, error, unauthenticated
+   - Verifies correct behavior in each scenario
+
+### Files Modified
+
+- `src/appCore/state/machine/selectors/userDataSelectors.ts` - Added `selectHasPermissions`
+- `src/components/onboarding/OnboardingFlow.tsx` - State machine derivation
+- `src/appCore/state/machine/selectors/userDataSelectors.test.ts` - Added tests
+
+### Quality Gates
+
+- [x] TypeScript check passes
+- [x] ESLint passes
+- [x] All onboarding and selector tests pass (140 tests)
+- [x] Selector exports verified (via barrel export)
+
+### Deviations
+
+None. Implementation follows the approach outlined in the task file and PR #304.
+
+### Engineer Checklist
+
+- [x] Created branch from develop
+- [x] Implemented all deliverables
+- [x] Added tests for new selector
+- [x] All quality gates pass
+- [x] Task file updated with implementation summary
+- [x] PR created: #307
+- [x] Ready for SR Engineer review

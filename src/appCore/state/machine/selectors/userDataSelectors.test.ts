@@ -19,6 +19,8 @@ import {
   selectIsStepComplete,
   selectCompletedSteps,
   selectPhoneType,
+  selectHasEmailConnected,
+  selectHasPermissions,
 } from "./userDataSelectors";
 
 describe("userDataSelectors", () => {
@@ -253,6 +255,68 @@ describe("userDataSelectors", () => {
 
     it("returns null when onboarding with hasIPhone false", () => {
       expect(selectPhoneType(onboardingPhoneType)).toBeNull();
+    });
+  });
+
+  describe("selectHasEmailConnected", () => {
+    it("returns true when ready with email connected", () => {
+      expect(selectHasEmailConnected(readyState)).toBe(true);
+    });
+
+    it("returns false when ready without email connected", () => {
+      const readyNoEmail: ReadyState = {
+        ...readyState,
+        userData: { ...readyState.userData, hasEmailConnected: false },
+      };
+      expect(selectHasEmailConnected(readyNoEmail)).toBe(false);
+    });
+
+    it("returns true when loading (default to avoid flicker)", () => {
+      expect(selectHasEmailConnected(loadingState)).toBe(true);
+    });
+
+    it("returns false when onboarding (email not yet connected)", () => {
+      expect(selectHasEmailConnected(onboardingPhoneType)).toBe(false);
+      expect(selectHasEmailConnected(onboardingEmail)).toBe(false);
+    });
+
+    it("returns true when unauthenticated (default to avoid flicker)", () => {
+      expect(selectHasEmailConnected(unauthenticatedState)).toBe(true);
+    });
+
+    it("returns true when error (default to avoid flicker)", () => {
+      expect(selectHasEmailConnected(errorState)).toBe(true);
+    });
+  });
+
+  describe("selectHasPermissions", () => {
+    it("returns true when ready with permissions granted", () => {
+      expect(selectHasPermissions(readyState)).toBe(true);
+    });
+
+    it("returns false when ready without permissions", () => {
+      const readyNoPermissions: ReadyState = {
+        ...readyState,
+        userData: { ...readyState.userData, hasPermissions: false },
+      };
+      expect(selectHasPermissions(readyNoPermissions)).toBe(false);
+    });
+
+    it("returns false when loading", () => {
+      expect(selectHasPermissions(loadingState)).toBe(false);
+    });
+
+    it("returns false when onboarding (permissions not yet granted)", () => {
+      expect(selectHasPermissions(onboardingPhoneType)).toBe(false);
+      expect(selectHasPermissions(onboardingPermissions)).toBe(false);
+    });
+
+    it("returns false when unauthenticated", () => {
+      expect(selectHasPermissions(unauthenticatedState)).toBe(false);
+    });
+
+    it("returns false when error", () => {
+      expect(selectHasPermissions(errorState)).toBe(false);
     });
   });
 });
