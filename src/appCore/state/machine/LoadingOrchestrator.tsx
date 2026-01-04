@@ -21,7 +21,7 @@ import {
   detectPlatform,
   autoInitializesStorage,
 } from "./utils/platformInit";
-import type { PlatformInfo, User, UserData, LoadingPhase } from "./types";
+import type { PlatformInfo, User, UserData } from "./types";
 
 interface LoadingOrchestratorProps {
   children: React.ReactNode;
@@ -54,15 +54,12 @@ export function LoadingOrchestrator({
     hasIPhone: false, // Determined during onboarding
   });
 
-  // Helper to check if we're in a specific loading phase
-  const isLoadingPhase = (phase: LoadingPhase): boolean =>
-    state.status === "loading" && loadingPhase === phase;
-
   // ============================================
   // PHASE 1: Check storage
   // ============================================
   useEffect(() => {
-    if (!isLoadingPhase("checking-storage")) {
+    // Guard: only run in the correct phase
+    if (state.status !== "loading" || loadingPhase !== "checking-storage") {
       return;
     }
 
@@ -92,13 +89,14 @@ export function LoadingOrchestrator({
     return () => {
       cancelled = true;
     };
-  }, [state.status, loadingPhase, dispatch, isLoadingPhase]);
+  }, [state.status, loadingPhase, dispatch]);
 
   // ============================================
   // PHASE 2: Initialize database (platform-specific)
   // ============================================
   useEffect(() => {
-    if (!isLoadingPhase("initializing-db")) {
+    // Guard: only run in the correct phase
+    if (state.status !== "loading" || loadingPhase !== "initializing-db") {
       return;
     }
 
@@ -167,13 +165,14 @@ export function LoadingOrchestrator({
         cancelled = true;
       };
     }
-  }, [state.status, loadingPhase, dispatch, isLoadingPhase]);
+  }, [state.status, loadingPhase, dispatch]);
 
   // ============================================
   // PHASE 3: Load auth state
   // ============================================
   useEffect(() => {
-    if (!isLoadingPhase("loading-auth")) {
+    // Guard: only run in the correct phase
+    if (state.status !== "loading" || loadingPhase !== "loading-auth") {
       return;
     }
 
@@ -236,13 +235,14 @@ export function LoadingOrchestrator({
     return () => {
       cancelled = true;
     };
-  }, [state.status, loadingPhase, dispatch, getPlatformInfo, isLoadingPhase]);
+  }, [state.status, loadingPhase, dispatch, getPlatformInfo]);
 
   // ============================================
   // PHASE 4: Load user data (if authenticated)
   // ============================================
   useEffect(() => {
-    if (!isLoadingPhase("loading-user-data")) {
+    // Guard: only run in the correct phase
+    if (state.status !== "loading" || loadingPhase !== "loading-user-data") {
       return;
     }
 
@@ -286,17 +286,17 @@ export function LoadingOrchestrator({
       user: User;
       platform: PlatformInfo;
     });
-  }, [state.status, loadingPhase, dispatch, isLoadingPhase]);
+  }, [state.status, loadingPhase, dispatch]);
 
   // ============================================
   // RENDER BASED ON STATE
   // ============================================
 
   // Loading states - show loading screen with platform-specific messages
-  if (state.status === "loading") {
+  if (state.status === "loading" && loadingPhase) {
     return (
       <LoadingScreen
-        phase={state.phase}
+        phase={loadingPhase}
         progress={state.progress}
         platform={platformRef.current}
       />
