@@ -1,6 +1,6 @@
 # Documentation Index
 
-**Last Updated:** 2024-12-24
+**Last Updated:** 2026-01-04
 
 This is the master index for all Claude agent documentation in Magic Audit.
 
@@ -48,6 +48,7 @@ These are the **canonical sources** for content that was previously duplicated a
 | **Plan-First Protocol** | `.claude/docs/shared/plan-first-protocol.md` | Mandatory planning steps for all agents |
 | **Metrics Templates** | `.claude/docs/shared/metrics-templates.md` | Engineer, SR, and PM metrics formats |
 | **Architecture Guardrails** | `.claude/docs/shared/architecture-guardrails.md` | Entry file budgets, state machine patterns |
+| **State Machine Architecture** | `.claude/docs/shared/state-machine-architecture.md` | App state machine states, transitions, usage |
 | **Effect Safety Patterns** | `.claude/docs/shared/effect-safety-patterns.md` | React effect patterns to prevent bugs |
 | **Git Branching** | `.claude/docs/shared/git-branching.md` | Branching strategy, merge policy |
 | **Native Module Fixes** | `.claude/docs/shared/native-module-fixes.md` | SQLite rebuild troubleshooting |
@@ -109,3 +110,4 @@ When updating documentation:
 | Date | Change | Author |
 |------|--------|--------|
 | 2024-12-24 | Created shared docs structure, consolidated duplicates | Claude |
+| 2026-01-04 | Added state machine architecture documentation (BACKLOG-142 complete) | Claude |
