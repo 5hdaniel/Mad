@@ -337,10 +337,11 @@ describe("LoadingOrchestrator phase transitions", () => {
     expect(screen.getByText("Checking secure storage...")).toBeInTheDocument();
 
     // After storage check completes, we should see initializing-db message
+    // (macOS shows "Waiting for Keychain access..." per platform-specific logic)
     await waitFor(
       () => {
         expect(
-          screen.getByText("Initializing secure database...")
+          screen.getByText("Waiting for Keychain access...")
         ).toBeInTheDocument();
       },
       { timeout: 2000 }
