@@ -1,92 +1,71 @@
-# BACKLOG-143: Prevent Stuck Jest Worker Processes from Agent Runs
+# BACKLOG-143: Prevent Duplicate Contact Imports
+
+## Summary
+
+When importing contacts from the database, contacts can be imported multiple times. The system should either filter out already-imported contacts from the import list, or show an informational message after import indicating how many were imported vs. already existed.
 
 ## Problem
 
-Engineer agents running `npm test` leave behind stuck Jest worker processes that consume 100% CPU each. In SPRINT-021, 5 Jest workers were found running at 100% CPU for over an hour, causing fan noise and system slowdown.
-
-**Incident:** 2026-01-04 during SPRINT-021 execution
-**Impact:** 5 processes × 100% CPU = system slowdown, loud fans
-
-## Root Cause
-
-Jest workers can hang indefinitely when:
-1. Tests use `setTimeout`/`setInterval` without cleanup
-2. EventEmitter listeners aren't removed
-3. Database connections aren't closed
-4. Agent terminates before Jest fully exits
-
-The `--forceExit` flag helps but doesn't always work, especially when workers hang during test loading phase.
+Currently when a user imports contacts:
+1. The same contacts can be imported repeatedly
+2. No indication is given that contacts already exist in the system
+3. This leads to duplicate contact entries
 
 ## Proposed Solutions
 
-### Option A: Process Cleanup Hook (Recommended)
+### Option A: Filter Import List (Recommended)
+- Before showing the list of contacts available for import, check which ones already exist in the system
+- Hide or gray out contacts that have already been imported
+- Show a count: "X contacts available (Y already imported)"
 
-Add a Claude Code hook that kills orphaned Jest processes when agents complete:
+### Option B: Post-Import Summary
+- Allow all contacts to be selected for import
+- During import, check for duplicates and skip them
+- Show a summary message after import:
+  - "Imported X new contacts"
+  - "Y contacts were already in your system and skipped"
 
-```json
-// .claude/hooks.json
-{
-  "SubagentStop": [
-    {
-      "command": "pkill -f 'jest-worker.*Mad' 2>/dev/null || true",
-      "description": "Kill orphaned Jest workers after agent completes"
-    }
-  ]
-}
-```
+### Option C: Hybrid Approach
+- Show all contacts in the import list
+- Mark already-imported contacts with a badge/icon
+- Allow re-import with confirmation ("This contact already exists. Update?")
+- Show summary after import
 
-**Pros:** Automatic cleanup, no code changes
-**Cons:** May kill intentional test runs (edge case)
+## Acceptance Criteria
 
-### Option B: Jest Config Improvements
+- [ ] Users cannot accidentally create duplicate contacts
+- [ ] Clear feedback on what was imported vs. skipped
+- [ ] Existing contacts are identified before or during import
+- [ ] Works for all contact import sources (database, vCard, etc.)
 
-Add timeout and worker limits to `jest.config.js`:
+## Technical Notes
 
-```javascript
-module.exports = {
-  // Kill workers after 30s idle
-  workerIdleMemoryLimit: '512MB',
-
-  // Force exit after all tests
-  forceExit: true,
-
-  // Limit concurrent workers
-  maxWorkers: 2,
-
-  // Global test timeout
-  testTimeout: 30000,
-};
-```
-
-**Pros:** Prevents hangs at source
-**Cons:** May mask real issues, doesn't help if worker hangs during load
-
-### Option C: Engineer Agent SOP Update
-
-Add to engineer agent instructions:
-1. Always run tests with `--forceExit --maxWorkers=2`
-2. Run `pkill -f jest-worker` before completing
-3. Verify no stuck processes before handoff
-
-**Pros:** Process-based solution
-**Cons:** Relies on agent compliance
-
-## Recommendation
-
-Implement Options A + B together:
-1. Add SubagentStop hook for automatic cleanup
-2. Update Jest config with sensible defaults
-3. Document in engineer agent SOP as backup
+- Need to define what makes a contact "the same" (email? phone? name combination?)
+- Consider matching logic: exact match vs. fuzzy match
+- May need to update contact import service and UI components
 
 ## Priority
 
-**Medium** - Not blocking but causes user frustration
+**Medium** - User experience issue, causes data quality problems
 
-## Effort
+## Category
 
-~2 hours to implement all options
+`enhancement`
+
+## Estimation
+
+| Factor | Estimate |
+|--------|----------|
+| Tokens | ~40K |
+| Token Cap | 160K |
+| Complexity | Medium |
 
 ## Related
 
-- BACKLOG-120: CI Test Gaps (Jest hanging in CI)
-- SPRINT-021: State Machine Migration (where incident occurred)
+- Contact import functionality
+- Contact management UI
+
+---
+
+*Created: 2026-01-03*
+*Status: Pending*
