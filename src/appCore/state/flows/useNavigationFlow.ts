@@ -3,11 +3,31 @@
  *
  * Manages navigation state and step transitions.
  * Contains the complex navigation effects that determine which step to show.
+ *
+ * @module appCore/state/flows/useNavigationFlow
+ *
+ * ## Migration Status
+ *
+ * This hook supports two execution paths:
+ * 1. **State Machine Path** (new): When feature flag enabled, derives navigation
+ *    state from the state machine. Navigation is pure derivation - no effects.
+ * 2. **Legacy Path** (existing): Original implementation with effect-based navigation.
+ *
+ * The state machine path uses `useOptionalMachineState()` to check if
+ * the feature flag is enabled and returns early with derived values.
+ *
+ * Key insight: The effect-based approach tried to PUSH navigation. The new approach
+ * DERIVES what should be shown. Components render based on derived step.
  */
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import type { AppStep, PendingOnboardingData } from "../types";
 import type { PendingOAuthData } from "../../../components/Login";
+import {
+  useOptionalMachineState,
+  deriveAppStep,
+  derivePageTitle,
+} from "../machine";
 
 export interface UseNavigationFlowOptions {
   // Auth state
@@ -88,6 +108,72 @@ export function useNavigationFlow({
   showTermsModal,
   onSetShowTermsModal,
 }: UseNavigationFlowOptions): UseNavigationFlowReturn {
+  // ============================================
+  // STATE MACHINE PATH
+  // ============================================
+  // Check if state machine is enabled and available.
+  // If so, derive all values from state machine and return early.
+  const machineState = useOptionalMachineState();
+
+  // UI-only local state (needed for both paths)
+  // These are not part of the state machine - they're purely UI concerns
+  const [showSetupPromptDismissedLocal, setShowSetupPromptDismissedLocal] =
+    useState<boolean>(false);
+  const [isTourActiveLocal, setIsTourActiveLocal] = useState<boolean>(false);
+
+  if (machineState) {
+    const { state } = machineState;
+
+    // Derive currentStep from state machine
+    // This is the key migration: no effects, just pure derivation
+    const currentStep = deriveAppStep(state);
+
+    // Setters are no-ops in state machine mode - navigation is derived from state
+    const setCurrentStep = useCallback((_step: AppStep) => {
+      // No-op in state machine mode
+      // Navigation is derived from state machine, not imperatively set
+    }, []);
+
+    // Navigation methods are also no-ops
+    // In state machine mode, navigation happens by dispatching actions
+    // that change state, which then derives the new step
+    const goToStep = useCallback((_step: AppStep) => {
+      // No-op in state machine mode
+    }, []);
+
+    const goToEmailOnboarding = useCallback(() => {
+      // No-op in state machine mode
+    }, []);
+
+    // handleDismissSetupPrompt works - it's a UI-only concern
+    const handleDismissSetupPrompt = useCallback((): void => {
+      setShowSetupPromptDismissedLocal(true);
+    }, []);
+
+    // getPageTitle uses the derived step
+    const getPageTitle = useCallback((): string => {
+      return derivePageTitle(currentStep);
+    }, [currentStep]);
+
+    return {
+      currentStep,
+      showSetupPromptDismissed: showSetupPromptDismissedLocal,
+      isTourActive: isTourActiveLocal,
+      setCurrentStep,
+      setIsTourActive: setIsTourActiveLocal,
+      goToStep,
+      goToEmailOnboarding,
+      handleDismissSetupPrompt,
+      getPageTitle,
+    };
+  }
+
+  // ============================================
+  // LEGACY PATH
+  // ============================================
+  // Original implementation with effect-based navigation.
+  // Used when state machine feature flag is disabled.
+
   const [currentStep, setCurrentStep] = useState<AppStep>("loading");
   const [showSetupPromptDismissed, setShowSetupPromptDismissed] =
     useState<boolean>(false);
