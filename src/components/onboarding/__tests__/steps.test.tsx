@@ -8,17 +8,25 @@ import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import PhoneTypeStep from "../steps/PhoneTypeStep";
+import PermissionsStep from "../steps/PermissionsStep";
 import type { OnboardingContext, StepAction } from "../types";
 
-// Mock context for testing
+// Mock context for testing - matches OnboardingContext interface
 const createMockContext = (
   overrides: Partial<OnboardingContext> = {}
 ): OnboardingContext => ({
   phoneType: null,
   emailConnected: false,
-  secureStorageInitialized: false,
+  connectedEmail: null,
+  emailSkipped: false,
+  driverSkipped: false,
+  driverSetupComplete: false,
   permissionsGranted: false,
+  termsAccepted: true,
+  emailProvider: null,
+  authProvider: "google",
   isNewUser: true,
+  isDatabaseInitialized: false,
   platform: "macos",
   ...overrides,
 });
@@ -173,6 +181,43 @@ describe("PhoneTypeStep", () => {
       const buttons = screen.getAllByRole("button");
       expect(buttons.length).toBe(2);
     });
+  });
+});
+
+describe("PermissionsStep", () => {
+  describe("meta.shouldShow", () => {
+    it("returns true when permissions not yet granted", () => {
+      const context = createMockContext({ permissionsGranted: false });
+      expect(PermissionsStep.meta.shouldShow?.(context)).toBe(true);
+    });
+
+    it("returns false when permissions already granted (returning user)", () => {
+      const context = createMockContext({ permissionsGranted: true });
+      expect(PermissionsStep.meta.shouldShow?.(context)).toBe(false);
+    });
+  });
+
+  describe("meta", () => {
+    it("has correct meta.id", () => {
+      expect(PermissionsStep.meta.id).toBe("permissions");
+    });
+
+    it("is macOS only", () => {
+      expect(PermissionsStep.meta.platforms).toContain("macos");
+      expect(PermissionsStep.meta.platforms).not.toContain("windows");
+    });
+  });
+});
+
+describe("PhoneTypeStep shouldShow (TASK-955)", () => {
+  it("returns true when phone type not selected", () => {
+    const context = createMockContext({ phoneType: null });
+    expect(PhoneTypeStep.meta.shouldShow?.(context)).toBe(true);
+  });
+
+  it("returns false when phone type already selected (returning user)", () => {
+    const context = createMockContext({ phoneType: "iphone" });
+    expect(PhoneTypeStep.meta.shouldShow?.(context)).toBe(false);
   });
 });
 

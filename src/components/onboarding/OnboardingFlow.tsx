@@ -194,6 +194,17 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
     isNextDisabled,
   } = flow;
 
+  // Action handler - flowHandleAction already calls onAction (which is handleAction)
+  // so we just need to call flowHandleAction, not both
+  // NOTE: This hook MUST be before any early return to follow React's rules of hooks
+  const handleStepAction = useCallback(
+    (action: StepAction) => {
+      // flowHandleAction calls onAction internally, then handles navigation
+      flowHandleAction(action);
+    },
+    [flowHandleAction]
+  );
+
   // When all steps are filtered out (returning user with everything complete),
   // navigate to dashboard. This handles the case where a returning user's data
   // loads and all onboarding steps are already complete.
@@ -207,19 +218,11 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
     }
   }, [steps.length, app]);
 
-  // Action handler - flowHandleAction already calls onAction (which is handleAction)
-  // so we just need to call flowHandleAction, not both
-  // NOTE: This hook MUST be before any early return to follow React's rules of hooks
-  const handleStepAction = useCallback(
-    (action: StepAction) => {
-      // flowHandleAction calls onAction internally, then handles navigation
-      flowHandleAction(action);
-    },
-    [flowHandleAction]
-  );
-
-  // Guard against no steps (shouldn't happen, but safety check)
-  if (!currentStep) {
+  // CRITICAL: Return null immediately when no steps are visible
+  // This prevents the flicker where onboarding screens briefly appear
+  // for returning users who have completed all onboarding steps.
+  // The useEffect above handles navigation to dashboard.
+  if (steps.length === 0 || !currentStep) {
     return null;
   }
 
