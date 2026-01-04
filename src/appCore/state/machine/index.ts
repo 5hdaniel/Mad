@@ -2,7 +2,7 @@
  * State Machine Module
  *
  * Barrel export for the unified state machine.
- * Exports types, reducer, context provider, and consumer hooks.
+ * Exports types, reducer, context provider, consumer hooks, and feature flags.
  *
  * @module appCore/state/machine
  */
@@ -24,3 +24,17 @@ export {
 export { LoadingOrchestrator } from "./LoadingOrchestrator";
 export { LoadingScreen } from "./components/LoadingScreen";
 export { ErrorScreen } from "./components/ErrorScreen";
+
+// Feature flag exports
+export {
+  FeatureFlaggedProvider,
+  StateMachineDebugPanel,
+  useNewStateMachine,
+} from "./FeatureFlag";
+export {
+  isNewStateMachineEnabled,
+  enableNewStateMachine,
+  disableNewStateMachine,
+  clearStateMachineFlag,
+  getFeatureFlagStatus,
+} from "./utils/featureFlags";
