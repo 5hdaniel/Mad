@@ -2,9 +2,10 @@
 
 **Priority:** Critical
 **Category:** refactor / architecture
-**Status:** Pending
+**Status:** Complete
 **Created:** 2026-01-03
-**Sprint:** SPRINT-020 (Phase 1)
+**Completed:** 2026-01-04
+**Sprints:** SPRINT-020 (Phase 1), SPRINT-021 (Phase 2), SPRINT-022 (Phase 3)
 
 ---
 
@@ -267,6 +268,39 @@ type AppAction =
 
 ---
 
+## Phase Completion Status
+
+### Phase 1: Foundation (SPRINT-020) - COMPLETE
+
+- State machine types and reducer implemented
+- AppStateContext and LoadingOrchestrator created
+- 49 tests (32 integration + 17 platform)
+- Feature flag defaults to false for safe rollout
+- PRs #287-294 merged
+
+### Phase 2: Migration (SPRINT-021) - COMPLETE
+
+- All hooks migrated to state machine
+- useSecureStorage, usePhoneTypeApi, useEmailOnboardingApi, useNavigationFlow updated
+- State derivation from machine for all components
+- Feature flag enabled by default
+- PRs #296-309 merged
+
+### Phase 3: Cleanup (SPRINT-022) - COMPLETE
+
+- State machine wired into main.tsx (TASK-957, PR #310)
+- Returning user flicker fixed (TASK-950)
+- Legacy code paths removed (TASK-952)
+- Architecture documentation created
+- BACKLOG-142 marked complete
+
+**Architecture Documentation:** `.claude/docs/shared/state-machine-architecture.md`
+
+---
+
 ## Changelog
 
 - 2026-01-03: Created BACKLOG-142 for state coordination overhaul
+- 2026-01-03: Phase 1 complete (SPRINT-020)
+- 2026-01-03: Phase 2 complete (SPRINT-021)
+- 2026-01-04: Phase 3 complete (SPRINT-022) - BACKLOG-142 COMPLETE
