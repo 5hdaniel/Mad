@@ -280,12 +280,12 @@ describe("userDataSelectors", () => {
       expect(selectHasEmailConnected(onboardingEmail)).toBe(false);
     });
 
-    it("returns false when unauthenticated", () => {
-      expect(selectHasEmailConnected(unauthenticatedState)).toBe(false);
+    it("returns true when unauthenticated (default to avoid flicker)", () => {
+      expect(selectHasEmailConnected(unauthenticatedState)).toBe(true);
     });
 
-    it("returns false when error", () => {
-      expect(selectHasEmailConnected(errorState)).toBe(false);
+    it("returns true when error (default to avoid flicker)", () => {
+      expect(selectHasEmailConnected(errorState)).toBe(true);
     });
   });
 
