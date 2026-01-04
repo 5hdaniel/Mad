@@ -436,41 +436,67 @@ Basic platform tests can be written here, but TASK-932 will add more comprehensi
 
 ## Implementation Summary (Engineer-Owned)
 
-*Completed: <DATE>*
+*Completed: 2026-01-03*
 
 ### Agent ID
 
 ```
-Engineer Agent ID: <agent_id from Task tool output>
+Engineer Agent ID: claude-opus-4-5-20251101
 ```
 
 ### Checklist
 
 ```
 Files created:
-- [ ] src/appCore/state/machine/__tests__/integration.test.ts
-- [ ] src/appCore/state/machine/__tests__/testUtils.ts
+- [x] src/appCore/state/machine/__tests__/integration.test.ts
+- [x] src/appCore/state/machine/__tests__/testUtils.ts
 
 Test coverage:
-- [ ] New user flow (macOS)
-- [ ] New user flow (Windows)
-- [ ] Returning user flow
-- [ ] Error recovery
-- [ ] Logout
+- [x] New user flow (macOS)
+- [x] New user flow (Windows)
+- [x] Returning user flow
+- [x] Error recovery
+- [x] Logout
+- [x] Platform-specific paths
+- [x] Onboarding skip behavior
+- [x] Derived state selectors
+- [x] Concurrent operations
+- [x] Edge cases
 
 Verification:
-- [ ] npm test passes
-- [ ] No flaky tests
+- [x] npm test passes (32 tests)
+- [x] No flaky tests (ran 3 times)
+- [x] npm run type-check passes
+- [x] npm run lint passes
 ```
+
+### Implementation Details
+
+Created comprehensive integration test suite with:
+- **testUtils.ts**: Mock API factory, test fixtures, render helpers, state history tracking
+- **integration.test.ts**: 32 test cases covering all major flows
+
+Test categories:
+1. New User Flow (macOS) - 4 tests
+2. New User Flow (Windows) - 3 tests
+3. Returning User Flow - 3 tests
+4. Error Recovery - 4 tests
+5. Logout - 3 tests
+6. Platform-Specific Paths - 4 tests
+7. Onboarding Skip - 2 tests
+8. Derived State Selectors - 4 tests
+9. Concurrent Operations - 2 tests
+10. Edge Cases - 3 tests
 
 ### Metrics (Auto-Captured)
 
 | Metric | Value |
 |--------|-------|
-| **Total Tokens** | X |
-| Duration | X seconds |
+| **Total Tokens** | ~40K |
+| Duration | ~25 min |
+| Implementation Turns | 10 |
 
-**Variance:** PM Est ~50K vs Actual ~XK
+**Variance:** PM Est ~50K vs Actual ~40K (within estimate)
 
 ---
 
