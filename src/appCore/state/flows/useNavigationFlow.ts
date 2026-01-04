@@ -223,12 +223,8 @@ export function useNavigationFlow({
 
     // CRITICAL: Don't make ANY routing decisions while still loading
     // This single guard prevents all flicker by ensuring we wait for complete data
+    // Don't reset step for users in the middle of onboarding
     if (isStillLoading) {
-      // Stay on loading screen until all data is ready
-      if (currentStep !== "loading" && currentStep !== "login") {
-        // Only reset to loading if we're not already there or on login
-        // This handles the case where we're in the middle of onboarding
-      }
       return;
     }
 
