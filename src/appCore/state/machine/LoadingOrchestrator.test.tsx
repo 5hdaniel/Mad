@@ -475,13 +475,33 @@ describe("LoadingScreen", () => {
     expect(screen.getByText("Checking secure storage...")).toBeInTheDocument();
   });
 
-  it("displays correct message for initializing-db phase", () => {
+  it("displays correct message for initializing-db phase (macOS)", () => {
+    // Default mock is MacIntel (set in beforeEach)
     render(
       <TestWrapper initialState={{ status: "loading", phase: "initializing-db" }}>
         <div>Children</div>
       </TestWrapper>
     );
 
+    // macOS shows Keychain-specific message
+    expect(
+      screen.getByText("Waiting for Keychain access...")
+    ).toBeInTheDocument();
+  });
+
+  it("displays correct message for initializing-db phase (Windows)", () => {
+    Object.defineProperty(window.navigator, "platform", {
+      value: "Win32",
+      configurable: true,
+    });
+
+    render(
+      <TestWrapper initialState={{ status: "loading", phase: "initializing-db" }}>
+        <div>Children</div>
+      </TestWrapper>
+    );
+
+    // Windows shows standard database message
     expect(
       screen.getByText("Initializing secure database...")
     ).toBeInTheDocument();

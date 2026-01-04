@@ -13,10 +13,14 @@
  * @module appCore/state/machine/LoadingOrchestrator
  */
 
-import React, { useEffect, useRef, useCallback } from "react";
+import React, { useEffect, useRef } from "react";
 import { useAppState } from "./useAppState";
 import { LoadingScreen } from "./components/LoadingScreen";
 import { ErrorScreen } from "./components/ErrorScreen";
+import {
+  detectPlatform,
+  autoInitializesStorage,
+} from "./utils/platformInit";
 import type { PlatformInfo, User, UserData, LoadingPhase } from "./types";
 
 interface LoadingOrchestratorProps {
@@ -41,15 +45,14 @@ export function LoadingOrchestrator({
     platform: PlatformInfo;
   } | null>(null);
 
-  // Detect platform once at startup
-  const getPlatformInfo = useCallback((): PlatformInfo => {
-    const platform = window.navigator.platform;
-    return {
-      isMacOS: platform.includes("Mac"),
-      isWindows: platform.includes("Win"),
-      hasIPhone: false, // Determined during onboarding
-    };
-  }, []);
+  // Detect platform once at startup (cached in ref to avoid re-detection)
+  const platformRef = useRef(detectPlatform());
+
+  // Get full platform info including hasIPhone (determined during onboarding)
+  const getPlatformInfo = (): PlatformInfo => ({
+    ...platformRef.current,
+    hasIPhone: false, // Determined during onboarding
+  });
 
   // Helper to check if we're in a specific loading phase
   const isLoadingPhase = (phase: LoadingPhase): boolean =>
@@ -92,40 +95,78 @@ export function LoadingOrchestrator({
   }, [state.status, loadingPhase, dispatch, isLoadingPhase]);
 
   // ============================================
-  // PHASE 2: Initialize database
+  // PHASE 2: Initialize database (platform-specific)
   // ============================================
   useEffect(() => {
     if (!isLoadingPhase("initializing-db")) {
       return;
     }
 
-    let cancelled = false;
+    const platform = platformRef.current;
 
-    // Signal that init has started (for progress indicator)
-    dispatch({ type: "DB_INIT_STARTED" });
+    // Windows: Auto-initialize (DPAPI is silent, no user interaction needed)
+    // macOS: Also auto-initialize for now, but may show Keychain prompt
+    // Future: macOS may wait for user to click Continue before triggering init
+    if (autoInitializesStorage(platform)) {
+      // Windows path: Silent auto-initialization
+      let cancelled = false;
 
-    window.api.system
-      .initializeSecureStorage()
-      .then((result) => {
-        if (cancelled) return;
-        dispatch({
-          type: "DB_INIT_COMPLETE",
-          success: result.success,
-          error: result.error,
+      dispatch({ type: "DB_INIT_STARTED" });
+
+      window.api.system
+        .initializeSecureStorage()
+        .then((result) => {
+          if (cancelled) return;
+          dispatch({
+            type: "DB_INIT_COMPLETE",
+            success: result.success,
+            error: result.error,
+          });
+        })
+        .catch((error: Error) => {
+          if (cancelled) return;
+          dispatch({
+            type: "DB_INIT_COMPLETE",
+            success: false,
+            error: error.message || "Database initialization failed",
+          });
         });
-      })
-      .catch((error: Error) => {
-        if (cancelled) return;
-        dispatch({
-          type: "DB_INIT_COMPLETE",
-          success: false,
-          error: error.message || "Database initialization failed",
-        });
-      });
 
-    return () => {
-      cancelled = true;
-    };
+      return () => {
+        cancelled = true;
+      };
+    } else {
+      // macOS path: Auto-initialize but may trigger Keychain prompt
+      // Note: For new users, the UI may show a keychain explanation first,
+      // but the actual initialization happens here. The Keychain prompt
+      // is a system-level dialog that appears during initializeSecureStorage.
+      let cancelled = false;
+
+      dispatch({ type: "DB_INIT_STARTED" });
+
+      window.api.system
+        .initializeSecureStorage()
+        .then((result) => {
+          if (cancelled) return;
+          dispatch({
+            type: "DB_INIT_COMPLETE",
+            success: result.success,
+            error: result.error,
+          });
+        })
+        .catch((error: Error) => {
+          if (cancelled) return;
+          dispatch({
+            type: "DB_INIT_COMPLETE",
+            success: false,
+            error: error.message || "Database initialization failed",
+          });
+        });
+
+      return () => {
+        cancelled = true;
+      };
+    }
   }, [state.status, loadingPhase, dispatch, isLoadingPhase]);
 
   // ============================================
@@ -251,9 +292,15 @@ export function LoadingOrchestrator({
   // RENDER BASED ON STATE
   // ============================================
 
-  // Loading states - show loading screen
+  // Loading states - show loading screen with platform-specific messages
   if (state.status === "loading") {
-    return <LoadingScreen phase={state.phase} progress={state.progress} />;
+    return (
+      <LoadingScreen
+        phase={state.phase}
+        progress={state.progress}
+        platform={platformRef.current}
+      />
+    );
   }
 
   // Non-recoverable error - show error screen
