@@ -33,28 +33,31 @@ Complete the State Coordination Overhaul (BACKLOG-142) by fixing remaining bugs,
 
 | ID | Title | Category | Est Tokens | Token Cap | Depends On | Priority |
 |----|-------|----------|------------|-----------|------------|----------|
+| TASK-957 | Wire state machine into main.tsx | fix | ~35K | 140K | None | **CRITICAL** |
 | TASK-950 | Fix OnboardingFlow state derivation | fix | ~40K | 160K | None | **CRITICAL** |
 | TASK-949 | Fix duplicate contact keys | fix | ~15K | 60K | None | Medium |
-| TASK-951 | Manual platform validation | test | ~10K | 40K | TASK-950 | High |
+| TASK-951 | Manual platform validation | test | ~10K | 40K | TASK-950, TASK-957 | High |
 | TASK-952 | Remove legacy hook code paths | refactor | ~50K | 200K | TASK-951 | Medium |
 | TASK-953 | Update architecture documentation | docs | ~15K | 60K | TASK-952 | Low |
 | TASK-954 | Performance optimization (memoization) | refactor | ~25K | 100K | TASK-952 | Low |
 
-**Total Estimated Tokens:** ~155K (adjusted for category factors)
-**Sprint Token Budget:** ~200K (includes SR review overhead)
+**Total Estimated Tokens:** ~190K (adjusted for category factors)
+**Sprint Token Budget:** ~240K (includes SR review overhead)
 
 ---
 
 ## Dependency Graph
 
 ```
-TASK-950 (OnboardingFlow fix) ─────────────────┐
-    |                                           |
-    v                                           |
-TASK-951 (Platform validation) ────────────────┤
-    |                                           |
-    v                                           |
-TASK-952 (Remove legacy code) ←────────────────┘
+TASK-957 (state machine wiring) ──────────┐
+    |                                      |
+TASK-950 (OnboardingFlow fix) ────────────┤
+    |                                      |
+    v                                      v
+TASK-951 (Platform validation) ────────────
+    |
+    v
+TASK-952 (Remove legacy code)
     |
     +─────────────+
     |             |
@@ -69,8 +72,8 @@ TASK-949 (contact keys) ──────────────────�
 
 | Batch | Tasks | Type | Rationale |
 |-------|-------|------|-----------|
-| **1** | TASK-950, TASK-949 | **Parallel** | Independent fixes, different files |
-| **2** | TASK-951 | Sequential | Must validate TASK-950 before proceeding |
+| **1** | TASK-957, TASK-950, TASK-949 | **Parallel** | Independent fixes, different files |
+| **2** | TASK-951 | Sequential | Must validate TASK-950 + TASK-957 before proceeding |
 | **3** | TASK-952 | Sequential | Only after validation passes |
 | **4** | TASK-953, TASK-954 | **Parallel** | Independent cleanup, different scopes |
 
@@ -264,6 +267,13 @@ All PRs must pass:
 
 ## PM Notes
 
+### Retroactive Task Added
+
+**TASK-957** was added retroactively to document a critical bug fix discovered during sprint execution:
+- State machine infrastructure was built in Phase 2 but never wired into main.tsx
+- This caused returning user UI flicker (onboarding screens briefly appearing)
+- PR #310 is ready to merge
+
 ### Carryover Tasks
 
 Two tasks carried over from SPRINT-021:
@@ -289,15 +299,16 @@ This is intentionally a smaller sprint (~155K tokens) to allow thorough validati
 
 | Metric | Estimated | Actual |
 |--------|-----------|--------|
-| Total Tokens | ~155K | TBD |
-| Tasks Completed | 6 | TBD |
+| Total Tokens | ~190K | TBD |
+| Tasks Completed | 7 | TBD |
 | Blocked Tasks | 0 | TBD |
-| PRs Created | 6 | TBD |
+| PRs Created | 7 | TBD |
 
 ### Task Completion Summary
 
 | Task | PR | Tokens | Status |
 |------|-----|--------|--------|
+| TASK-957 | #310 | TBD | READY TO MERGE |
 | TASK-950 | - | - | NOT STARTED |
 | TASK-949 | - | - | NOT STARTED |
 | TASK-951 | - | - | NOT STARTED |
@@ -539,3 +550,4 @@ Proceed with engineer assignment following the batch order specified.
 
 - 2026-01-04: Sprint created (Phase 3 of BACKLOG-142)
 - 2026-01-04: SR Engineer technical review completed (APPROVED)
+- 2026-01-04: TASK-957 added retroactively (state machine wiring fix, PR #310)
