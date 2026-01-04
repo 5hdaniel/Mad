@@ -7,12 +7,30 @@
  * - Database initialization (with platform-specific handling)
  * - Windows DPAPI auto-initialization
  * - macOS keychain prompts
+ *
+ * @module appCore/state/flows/useSecureStorage
+ *
+ * ## Migration Status
+ *
+ * This hook supports two execution paths:
+ * 1. **State Machine Path** (new): When feature flag enabled, derives state
+ *    from the state machine. The LoadingOrchestrator handles initialization.
+ * 2. **Legacy Path** (existing): Original implementation with local state.
+ *
+ * The state machine path uses `useOptionalMachineState()` to check if
+ * the feature flag is enabled and returns early with derived values.
  */
 
 import { useState, useEffect, useCallback } from "react";
 import type { PendingOnboardingData, PendingEmailTokens } from "../types";
 import type { PendingOAuthData } from "../../../components/Login";
 import type { Subscription } from "../../../../electron/types/models";
+import {
+  useOptionalMachineState,
+  selectIsDatabaseInitialized,
+  selectIsCheckingSecureStorage,
+  selectIsInitializingDatabase,
+} from "../machine";
 
 interface UseSecureStorageOptions {
   isWindows: boolean;
@@ -67,6 +85,65 @@ export function useSecureStorage({
   onNewUserFlowSet,
   onNeedsDriverSetup,
 }: UseSecureStorageOptions): UseSecureStorageReturn {
+  // ============================================
+  // STATE MACHINE PATH
+  // ============================================
+  // Check if state machine is enabled and available.
+  // If so, derive all values from state machine and return early.
+  const machineState = useOptionalMachineState();
+
+  // Note: We read skipKeychainExplanation from localStorage regardless of path,
+  // because this is a UI preference not managed by the state machine.
+  const skipKeychainExplanationFromStorage =
+    typeof window !== "undefined" &&
+    localStorage.getItem("skipKeychainExplanation") === "true";
+
+  if (machineState) {
+    const { state } = machineState;
+
+    // Derive boolean states from state machine
+    const isDatabaseInitialized = selectIsDatabaseInitialized(state);
+    const isCheckingSecureStorage = selectIsCheckingSecureStorage(state);
+    const isInitializingDatabase = selectIsInitializingDatabase(state);
+
+    // hasSecureStorageSetup is true once we're past the storage check phase
+    // In the state machine flow, if we're not in checking-storage phase, storage exists
+    const hasSecureStorageSetup =
+      state.status !== "loading" || state.phase !== "checking-storage";
+
+    // initializeSecureStorage in state machine mode:
+    // - The LoadingOrchestrator handles actual initialization automatically
+    // - This function only saves the user's "don't show again" preference
+    // - Returns true since initialization is managed by orchestrator
+    const initializeSecureStorage = async (
+      dontShowAgain: boolean
+    ): Promise<boolean> => {
+      // Save preference if user checked "don't show again"
+      if (dontShowAgain) {
+        localStorage.setItem("skipKeychainExplanation", "true");
+      }
+      // In state machine mode, initialization is handled by LoadingOrchestrator.
+      // This function is called from UI components (e.g., keychain explanation screen)
+      // but the actual DB initialization happens via the orchestrator.
+      return true;
+    };
+
+    return {
+      hasSecureStorageSetup,
+      isCheckingSecureStorage,
+      isDatabaseInitialized,
+      isInitializingDatabase,
+      skipKeychainExplanation: skipKeychainExplanationFromStorage,
+      initializeSecureStorage,
+    };
+  }
+
+  // ============================================
+  // LEGACY PATH
+  // ============================================
+  // Original implementation with local state management.
+  // Used when state machine feature flag is disabled.
+
   const [hasSecureStorageSetup, setHasSecureStorageSetup] =
     useState<boolean>(true); // Default true for returning users
   const [isCheckingSecureStorage, setIsCheckingSecureStorage] =
