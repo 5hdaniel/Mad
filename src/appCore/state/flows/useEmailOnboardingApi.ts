@@ -5,9 +5,26 @@
  * Checks:
  * - Whether user has completed email onboarding
  * - Whether user has any email connected
+ *
+ * @module appCore/state/flows/useEmailOnboardingApi
+ *
+ * ## Migration Status
+ *
+ * This hook supports two execution paths:
+ * 1. **State Machine Path** (new): When feature flag enabled, derives state
+ *    from the state machine. Values are read-only; setters are no-ops.
+ * 2. **Legacy Path** (existing): Original implementation with local state.
+ *
+ * The state machine path uses `useOptionalMachineState()` to check if
+ * the feature flag is enabled and returns early with derived values.
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import {
+  useOptionalMachineState,
+  selectHasCompletedEmailOnboarding,
+  selectHasEmailConnected,
+} from "../machine";
 
 interface UseEmailOnboardingApiOptions {
   userId: string | undefined;
@@ -25,6 +42,85 @@ interface UseEmailOnboardingApiReturn {
 export function useEmailOnboardingApi({
   userId,
 }: UseEmailOnboardingApiOptions): UseEmailOnboardingApiReturn {
+  // ============================================
+  // STATE MACHINE PATH
+  // ============================================
+  // Check if state machine is enabled and available.
+  // If so, derive all values from state machine and return early.
+  const machineState = useOptionalMachineState();
+
+  if (machineState) {
+    const { state, dispatch } = machineState;
+
+    // Derive hasCompletedEmailOnboarding from state machine
+    const hasCompletedEmailOnboarding = selectHasCompletedEmailOnboarding(state);
+
+    // Derive hasEmailConnected from state machine
+    const hasEmailConnected = selectHasEmailConnected(state);
+
+    // Loading if we're in loading phase before user data
+    const isCheckingEmailOnboarding =
+      state.status === "loading" &&
+      ["checking-storage", "initializing-db", "loading-auth", "loading-user-data"].includes(
+        state.phase
+      );
+
+    // Setters are no-ops in state machine mode - state machine is source of truth
+    const setHasCompletedEmailOnboarding = useCallback((_completed: boolean) => {
+      // No-op in state machine mode
+    }, []);
+
+    const setHasEmailConnected = useCallback((_connected: boolean) => {
+      // No-op in state machine mode
+    }, []);
+
+    // completeEmailOnboarding persists to API and dispatches onboarding step complete
+    const completeEmailOnboarding = useCallback(async (): Promise<void> => {
+      // userId comes from state machine in this path
+      const currentUserId =
+        state.status === "ready" || state.status === "onboarding"
+          ? state.user.id
+          : null;
+
+      if (!currentUserId) return;
+
+      try {
+        const authApi = window.api.auth as typeof window.api.auth & {
+          completeEmailOnboarding: (
+            userId: string
+          ) => Promise<{ success: boolean; error?: string }>;
+        };
+        await authApi.completeEmailOnboarding(currentUserId);
+
+        // Dispatch onboarding step complete
+        dispatch({
+          type: "ONBOARDING_STEP_COMPLETE",
+          step: "email-connect",
+        });
+      } catch (error) {
+        console.error(
+          "[useEmailOnboardingApi] Failed to complete email onboarding:",
+          error
+        );
+      }
+    }, [state, dispatch]);
+
+    return {
+      hasCompletedEmailOnboarding,
+      hasEmailConnected,
+      isCheckingEmailOnboarding,
+      setHasCompletedEmailOnboarding,
+      setHasEmailConnected,
+      completeEmailOnboarding,
+    };
+  }
+
+  // ============================================
+  // LEGACY PATH
+  // ============================================
+  // Original implementation with local state management.
+  // Used when state machine feature flag is disabled.
+
   const [hasCompletedEmailOnboarding, setHasCompletedEmailOnboarding] =
     useState<boolean>(true); // Default true to avoid flicker
   const [hasEmailConnected, setHasEmailConnected] = useState<boolean>(true); // Default true to avoid flicker
