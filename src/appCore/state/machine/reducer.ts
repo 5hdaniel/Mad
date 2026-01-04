@@ -18,6 +18,7 @@ import type {
   PlatformInfo,
   User,
   UserData,
+  LoginSuccessAction,
 } from "./types";
 import { INITIAL_APP_STATE } from "./types";
 
@@ -41,7 +42,7 @@ interface UserDataLoadedWithContext {
 /**
  * Union type for actions that the reducer can handle with full context.
  */
-type AppActionWithContext = Exclude<AppAction, { type: "USER_DATA_LOADED" }> | UserDataLoadedWithContext;
+type AppActionWithContext = Exclude<AppAction, { type: "USER_DATA_LOADED" }> | UserDataLoadedWithContext | LoginSuccessAction;
 
 // ============================================
 // ONBOARDING STEP PROGRESSION
@@ -249,14 +250,60 @@ export function appStateReducer(
       };
     }
 
+    // ============================================
+    // LOGIN_SUCCESS - Fresh login from unauthenticated state
+    // ============================================
+
+    case "LOGIN_SUCCESS": {
+      // Only valid from unauthenticated state
+      if (state.status !== "unauthenticated") {
+        return state; // Invalid transition
+      }
+
+      if (action.isNewUser) {
+        // New user - start onboarding immediately
+        const firstStep = getNextOnboardingStep([], action.platform, {
+          phoneType: null,
+          hasCompletedEmailOnboarding: false,
+          hasEmailConnected: false,
+          needsDriverSetup: true, // Assume needed until checked
+          hasPermissions: false,
+        });
+
+        return {
+          status: "onboarding",
+          step: firstStep || "phone-type", // Default to phone-type if null
+          user: action.user,
+          platform: action.platform,
+          completedSteps: [],
+        };
+      }
+
+      // Returning user - need to load their data
+      // Store user/platform in loading state for Phase 4 to use
+      return {
+        status: "loading",
+        phase: "loading-user-data",
+        progress: 75, // Skip phases 1-3, go directly to user data loading
+        user: action.user,
+        platform: action.platform,
+      };
+    }
+
     case "USER_DATA_LOADED": {
       if (state.status !== "loading" || state.phase !== "loading-user-data") {
         return state;
       }
 
-      // Action must include user and platform context
-      // (set by orchestrator from previous AUTH_LOADED)
-      const { data, user, platform } = action as UserDataLoadedWithContext;
+      // User and platform context can come from:
+      // 1. Action (app restart flow via authDataRef in LoadingOrchestrator)
+      // 2. State (fresh login flow via LOGIN_SUCCESS)
+      const actionWithContext = action as UserDataLoadedWithContext;
+      const loadingState = state as LoadingState;
+
+      const user = actionWithContext.user || loadingState.user;
+      const platform = actionWithContext.platform || loadingState.platform;
+      const { data } = actionWithContext;
 
       // Check if user and platform are provided
       if (!user || !platform) {

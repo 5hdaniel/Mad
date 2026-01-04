@@ -145,6 +145,16 @@ export interface LoadingState {
   phase: LoadingPhase;
   /** Optional progress 0-100 for long phases */
   progress?: number;
+  /**
+   * User info from LOGIN_SUCCESS action.
+   * Only present when entering loading-user-data from fresh login.
+   */
+  user?: User;
+  /**
+   * Platform info from LOGIN_SUCCESS action.
+   * Only present when entering loading-user-data from fresh login.
+   */
+  platform?: PlatformInfo;
 }
 
 /**
@@ -212,6 +222,7 @@ export type AppAction =
   | DbInitStartedAction
   | DbInitCompleteAction
   | AuthLoadedAction
+  | LoginSuccessAction
   | UserDataLoadedAction
   | OnboardingStepCompleteAction
   | OnboardingSkipAction
@@ -259,6 +270,21 @@ export interface AuthLoadedAction {
   isNewUser: boolean;
   /** Platform information */
   platform: PlatformInfo;
+}
+
+/**
+ * Fresh login completed successfully.
+ * Dispatched when a user logs in (not during app restart).
+ * Transitions state machine from unauthenticated to loading-user-data.
+ */
+export interface LoginSuccessAction {
+  type: "LOGIN_SUCCESS";
+  /** Authenticated user */
+  user: User;
+  /** Platform information */
+  platform: PlatformInfo;
+  /** True if this is a new user (needs full onboarding) */
+  isNewUser: boolean;
 }
 
 /**

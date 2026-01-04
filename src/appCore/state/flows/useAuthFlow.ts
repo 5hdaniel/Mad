@@ -9,6 +9,7 @@ import { useState, useCallback, useMemo } from "react";
 import type { PendingOAuthData } from "../../../components/Login";
 import type { Subscription } from "../../../../electron/types/models";
 import type { PendingOnboardingData, AppStep } from "../types";
+import type { User, PlatformInfo, AppAction } from "../machine/types";
 
 // Default pending onboarding state
 const DEFAULT_PENDING_ONBOARDING: PendingOnboardingData = {
@@ -39,6 +40,16 @@ export interface UseAuthFlowOptions {
   onSetHasSelectedPhoneType: (value: boolean) => void;
   onSetSelectedPhoneType: (value: "iphone" | "android" | null) => void;
   onSetCurrentStep: (step: AppStep) => void;
+  /**
+   * Optional dispatch function to dispatch LOGIN_SUCCESS to state machine.
+   * When provided, handleLoginSuccess will dispatch LOGIN_SUCCESS after login.
+   */
+  stateMachineDispatch?: React.Dispatch<AppAction>;
+  /**
+   * Platform info for LOGIN_SUCCESS action.
+   * Required when stateMachineDispatch is provided.
+   */
+  platform?: { isMacOS: boolean; isWindows: boolean };
 }
 
 export interface UseAuthFlowReturn {
@@ -83,6 +94,8 @@ export function useAuthFlow({
   onSetHasSelectedPhoneType,
   onSetSelectedPhoneType,
   onSetCurrentStep,
+  stateMachineDispatch,
+  platform,
 }: UseAuthFlowOptions): UseAuthFlowReturn {
   const [isNewUserFlow, setIsNewUserFlow] = useState<boolean>(false);
   const [pendingOAuthData, setPendingOAuthData] =
@@ -106,8 +119,33 @@ export function useAuthFlow({
       setIsNewUserFlow(isNewUser);
       setPendingOAuthData(null);
       login(user, token, provider, subscriptionData, isNewUser);
+
+      // Dispatch LOGIN_SUCCESS to state machine if dispatch is available
+      // This transitions the state machine from unauthenticated to loading-user-data
+      // (or onboarding for new users)
+      if (stateMachineDispatch && platform) {
+        const stateMachineUser: User = {
+          id: user.id,
+          email: user.email,
+          displayName: user.display_name,
+          avatarUrl: user.avatar_url,
+        };
+
+        const platformInfo: PlatformInfo = {
+          isMacOS: platform.isMacOS,
+          isWindows: platform.isWindows,
+          hasIPhone: false, // Determined during onboarding
+        };
+
+        stateMachineDispatch({
+          type: "LOGIN_SUCCESS",
+          user: stateMachineUser,
+          platform: platformInfo,
+          isNewUser,
+        });
+      }
     },
-    [login],
+    [login, stateMachineDispatch, platform],
   );
 
   const handleLoginPending = useCallback(

@@ -246,10 +246,17 @@ export function LoadingOrchestrator({
       return;
     }
 
-    // Get auth context from ref (set during AUTH_LOADED phase)
+    // User/platform context can come from:
+    // 1. authDataRef (app restart flow - set during AUTH_LOADED phase)
+    // 2. state.user/state.platform (fresh login flow - set by LOGIN_SUCCESS action)
+    const loadingState = state as import("./types").LoadingState;
     const authData = authDataRef.current;
 
-    if (!authData || !authData.user) {
+    // Prefer state (LOGIN_SUCCESS flow), fall back to ref (app restart flow)
+    const user = loadingState.user || authData?.user;
+    const platform = loadingState.platform || authData?.platform;
+
+    if (!user || !platform) {
       // This shouldn't happen - loading-user-data phase means we had a user
       dispatch({
         type: "ERROR",
@@ -266,8 +273,7 @@ export function LoadingOrchestrator({
 
     // Load actual user data from database APIs
     const loadUserData = async (): Promise<UserData> => {
-      const userId = authData.user!.id;
-      const platform = authData.platform;
+      const userId = user.id;
 
       // Load all user data in parallel for faster loading
       const [phoneTypeResult, emailOnboardingResult, connectionsResult, permissionsResult] =
@@ -364,13 +370,13 @@ export function LoadingOrchestrator({
       .then((userData) => {
         if (cancelled) return;
 
-        // Dispatch with required context (user and platform from AUTH_LOADED)
+        // Dispatch with required context (user and platform from state or ref)
         dispatch({
           type: "USER_DATA_LOADED",
           data: userData,
           // These are required by the reducer for state transition
-          user: authData.user,
-          platform: authData.platform,
+          user,
+          platform,
         } as {
           type: "USER_DATA_LOADED";
           data: UserData;
@@ -387,15 +393,15 @@ export function LoadingOrchestrator({
           phoneType: null,
           hasCompletedEmailOnboarding: false,
           hasEmailConnected: false,
-          needsDriverSetup: authData.platform.isWindows,
-          hasPermissions: !authData.platform.isMacOS,
+          needsDriverSetup: platform.isWindows,
+          hasPermissions: !platform.isMacOS,
         };
 
         dispatch({
           type: "USER_DATA_LOADED",
           data: fallbackData,
-          user: authData.user,
-          platform: authData.platform,
+          user,
+          platform,
         } as {
           type: "USER_DATA_LOADED";
           data: UserData;
@@ -407,6 +413,9 @@ export function LoadingOrchestrator({
     return () => {
       cancelled = true;
     };
+    // Note: We read state.user and state.platform for LOGIN_SUCCESS flow,
+    // but those are set atomically with loadingPhase, so state.status and loadingPhase
+    // are sufficient dependencies.
   }, [state.status, loadingPhase, dispatch]);
 
   // ============================================
