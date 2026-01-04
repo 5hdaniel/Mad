@@ -192,7 +192,8 @@ describe("LoadingScreen phases", () => {
     expect(screen.queryByText("Children")).not.toBeInTheDocument();
   });
 
-  it("displays correct message for initializing-db phase", () => {
+  it("displays correct message for initializing-db phase (macOS)", () => {
+    // Default mock is MacIntel (set in beforeEach)
     render(
       <TestWrapper
         initialState={{ status: "loading", phase: "initializing-db" }}
@@ -201,6 +202,25 @@ describe("LoadingScreen phases", () => {
       </TestWrapper>
     );
 
+    // macOS shows Keychain-specific message
+    expect(
+      screen.getByText("Waiting for Keychain access...")
+    ).toBeInTheDocument();
+  });
+
+  it("displays correct message for initializing-db phase (Windows)", () => {
+    Object.defineProperty(window.navigator, "platform", {
+      value: "Win32",
+      configurable: true,
+    });
+
+    render(
+      <TestWrapper initialState={{ status: "loading", phase: "initializing-db" }}>
+        <div>Children</div>
+      </TestWrapper>
+    );
+
+    // Windows shows standard database message
     expect(
       screen.getByText("Initializing secure database...")
     ).toBeInTheDocument();
@@ -317,10 +337,11 @@ describe("LoadingOrchestrator phase transitions", () => {
     expect(screen.getByText("Checking secure storage...")).toBeInTheDocument();
 
     // After storage check completes, we should see initializing-db message
+    // (macOS shows "Waiting for Keychain access..." per platform-specific logic)
     await waitFor(
       () => {
         expect(
-          screen.getByText("Initializing secure database...")
+          screen.getByText("Waiting for Keychain access...")
         ).toBeInTheDocument();
       },
       { timeout: 2000 }
