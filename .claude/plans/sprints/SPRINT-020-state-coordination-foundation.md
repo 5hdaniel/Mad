@@ -501,7 +501,7 @@ Before merging to project branch:
 
 - [x] All 7 tasks merged to project/state-coordination
 - [x] Integration tests pass for all flows (32 tests)
-- [ ] Manual testing on macOS passes
+- [x] Manual testing on macOS passes (returning user flow verified)
 - [ ] Manual testing on Windows passes
 - [x] Feature flag rollback works (default false)
 - [x] No changes to existing hooks
