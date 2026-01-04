@@ -150,8 +150,10 @@ export function usePhoneTypeApi({
   // Original implementation with local state management.
   // Used when state machine feature flag is disabled.
 
+  // Default to true to avoid flicker for returning users
+  // The actual status will be verified by the effect below
   const [hasSelectedPhoneType, setHasSelectedPhoneType] =
-    useState<boolean>(false);
+    useState<boolean>(true);
   const [selectedPhoneType, setSelectedPhoneType] = useState<PhoneType>(null);
   const [isLoadingPhoneType, setIsLoadingPhoneType] = useState<boolean>(true);
   const [needsDriverSetup, setNeedsDriverSetup] = useState<boolean>(false);
