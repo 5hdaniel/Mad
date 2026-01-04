@@ -5,6 +5,7 @@
 
 import { ipcMain } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
+import { randomUUID } from "crypto";
 import databaseService from "./services/databaseService";
 import { getContactNames } from "./services/contactsService";
 import auditService from "./services/auditService";
@@ -179,7 +180,7 @@ export function registerContactHandlers(): void {
             seenContacts.add(contactInfo.name);
 
             availableContacts.push({
-              id: `contacts-app-${contactInfo.name}`, // Temporary ID for UI
+              id: `contacts-app-${randomUUID()}`, // Unique ID for UI (names aren't unique)
               name: contactInfo.name,
               phone: contactInfo.phones?.[0] || null, // Primary phone
               email: contactInfo.emails?.[0] || null, // Primary email
