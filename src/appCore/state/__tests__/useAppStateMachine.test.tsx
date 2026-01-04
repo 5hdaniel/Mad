@@ -15,7 +15,17 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { AuthProvider } from "../../../contexts/AuthContext";
 import { NetworkProvider } from "../../../contexts/NetworkContext";
 import { PlatformProvider } from "../../../contexts/PlatformContext";
+import { AppStateProvider } from "../machine/AppStateContext";
 import { useAppStateMachine } from "../useAppStateMachine";
+import * as featureFlags from "../machine/utils/featureFlags";
+
+// Mock the feature flags module to enable state machine
+jest.mock("../machine/utils/featureFlags", () => ({
+  isNewStateMachineEnabled: jest.fn(),
+}));
+
+const mockIsNewStateMachineEnabled =
+  featureFlags.isNewStateMachineEnabled as jest.Mock;
 
 // Capture state from hook for testing
 let capturedState: ReturnType<typeof useAppStateMachine> | null = null;
@@ -41,12 +51,14 @@ function TestComponent() {
   );
 }
 
-// Wrapper with all required providers
+// Wrapper with all required providers including AppStateProvider
 function TestWrapper({ children }: { children: React.ReactNode }) {
   return (
     <PlatformProvider>
       <NetworkProvider>
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <AppStateProvider>{children}</AppStateProvider>
+        </AuthProvider>
       </NetworkProvider>
     </PlatformProvider>
   );
@@ -129,6 +141,8 @@ describe("useAppStateMachine", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     capturedState = null;
+    // Enable state machine feature flag (required after legacy code removal)
+    mockIsNewStateMachineEnabled.mockReturnValue(true);
     setupMocks();
   });
 
