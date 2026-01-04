@@ -89,4 +89,27 @@ id: `contacts-app-${Date.now()}-${index}`,
 
 ## Implementation Summary (Engineer-Owned)
 
-*To be filled by engineer agent*
+### Changes Made
+
+1. **electron/contact-handlers.ts** (line 183):
+   - Added import for `randomUUID` from Node's `crypto` module
+   - Changed ID generation from `contactInfo.name` to `randomUUID()`
+   - This ensures each contact from macOS Contacts app gets a unique ID regardless of name duplicates
+
+### Technical Notes
+
+- Used `import { randomUUID } from "crypto"` instead of `crypto.randomUUID()` because Jest's test environment doesn't expose `crypto` as a global, but the Node `crypto` module is always available when imported explicitly
+- The UUID prefix `contacts-app-` is preserved for consistency with existing logic that checks `id.startsWith("contacts-app-")`
+
+### Testing
+
+- All 33 contact-handler tests pass
+- TypeScript type-check passes
+- ESLint passes
+
+### Acceptance Criteria
+
+- [x] No "Encountered two children with the same key" warnings (UUIDs are unique)
+- [x] Contact import still works correctly (same flow, just different ID)
+- [x] Selection behavior works for contacts with same name (each has unique ID)
+- [x] All existing tests pass (33/33)
