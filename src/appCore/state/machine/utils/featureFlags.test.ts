@@ -49,8 +49,8 @@ describe("featureFlags", () => {
   });
 
   describe("isNewStateMachineEnabled", () => {
-    it("returns false by default (Phase 1 safety)", () => {
-      expect(isNewStateMachineEnabled()).toBe(false);
+    it("returns true by default (Phase 2 enabled)", () => {
+      expect(isNewStateMachineEnabled()).toBe(true);
     });
 
     it("returns true when localStorage is set to true", () => {
@@ -81,9 +81,9 @@ describe("featureFlags", () => {
       expect(isNewStateMachineEnabled()).toBe(true);
     });
 
-    it("ignores invalid localStorage values", () => {
+    it("ignores invalid localStorage values and uses default (true)", () => {
       localStorage.setItem("useNewStateMachine", "invalid");
-      expect(isNewStateMachineEnabled()).toBe(false);
+      expect(isNewStateMachineEnabled()).toBe(true);
     });
 
     it("handles URL param with other params", () => {
@@ -145,10 +145,10 @@ describe("featureFlags", () => {
   });
 
   describe("getFeatureFlagStatus", () => {
-    it("returns default source when no flag is set", () => {
+    it("returns default source when no flag is set (enabled in Phase 2)", () => {
       const status = getFeatureFlagStatus();
       expect(status.source).toBe("default");
-      expect(status.value).toBe(false);
+      expect(status.value).toBe(true);
     });
 
     it("returns localStorage source when localStorage is set", () => {

@@ -50,9 +50,9 @@ export function isNewStateMachineEnabled(): boolean {
     }
   }
 
-  // Default: disabled in Phase 1 (safety)
-  // Change to true in Phase 2 when ready for testing
-  return false;
+  // Default: enabled in Phase 2 (gradual rollout complete)
+  // Set localStorage.setItem('useNewStateMachine', 'false') to rollback
+  return true;
 }
 
 /**
@@ -133,5 +133,5 @@ export function getFeatureFlagStatus(): {
     }
   }
 
-  return { source: "default", value: false };
+  return { source: "default", value: true };
 }
