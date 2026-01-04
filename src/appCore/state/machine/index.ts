@@ -20,6 +20,11 @@ export {
   useAppError,
 } from "./useAppState";
 
+// Orchestrator and UI components
+export { LoadingOrchestrator } from "./LoadingOrchestrator";
+export { LoadingScreen } from "./components/LoadingScreen";
+export { ErrorScreen } from "./components/ErrorScreen";
+
 // Feature flag exports
 export {
   FeatureFlaggedProvider,
