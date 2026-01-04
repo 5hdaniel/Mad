@@ -42,3 +42,6 @@ export {
 // Migration utilities
 export { useOptionalMachineState } from "./hooks/useOptionalMachineState";
 export * from "./selectors";
+
+// Derivation utilities (pure functions for step/navigation logic)
+export * from "./derivation";
