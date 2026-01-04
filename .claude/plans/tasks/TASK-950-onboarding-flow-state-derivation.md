@@ -82,6 +82,7 @@ const appState: OnboardingAppState = useMemo(() => {
 ## SR Engineer Pre-Implementation Review
 
 **Status:** APPROVED
+**Review Date:** 2026-01-04
 
 ### Branch Information
 
@@ -92,6 +93,41 @@ const appState: OnboardingAppState = useMemo(() => {
 ### Priority
 
 **CRITICAL** - Completes the state machine migration (BACKLOG-142 Phase 3)
+
+### Technical Notes (SPRINT-022 Review)
+
+**IMPORTANT: Missing Selector**
+
+The `selectHasPermissions` selector referenced in the implementation notes does not exist yet. You must create it as part of this task.
+
+Add to `src/appCore/state/machine/selectors/userDataSelectors.ts`:
+
+```typescript
+/**
+ * Returns true if user has macOS Full Disk Access permissions.
+ * Only relevant for macOS; always false for other platforms or during loading.
+ *
+ * @param state - Current application state
+ * @returns true if user has granted permissions
+ */
+export function selectHasPermissions(state: AppState): boolean {
+  if (state.status === "ready") {
+    return state.userData.hasPermissions;
+  }
+  if (state.status === "onboarding") {
+    // During onboarding, permissions check happens at the permissions step
+    return false;
+  }
+  return false;
+}
+```
+
+Also export from `src/appCore/state/machine/selectors/index.ts`.
+
+**Other Required Selectors (already exist):**
+- `selectPhoneType` - EXISTS
+- `selectHasEmailConnected` - EXISTS
+- `selectHasCompletedEmailOnboarding` - EXISTS
 
 ---
 

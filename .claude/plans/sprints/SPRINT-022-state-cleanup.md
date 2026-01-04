@@ -307,6 +307,235 @@ This is intentionally a smaller sprint (~155K tokens) to allow thorough validati
 
 ---
 
+---
+
+## SR Engineer Technical Review
+
+**Review Date:** 2026-01-04
+**Reviewer:** SR Engineer Agent
+**Status:** APPROVED
+
+### Executive Summary
+
+All 6 tasks are technically feasible with well-defined scope. The dependency graph is correct. I identified one minor issue in TASK-950 that needs attention during implementation (missing selector), but this is an implementation detail, not a blocker.
+
+### Shared File Analysis
+
+| File | Tasks | Conflict Risk | Notes |
+|------|-------|---------------|-------|
+| `OnboardingFlow.tsx` | TASK-950 | None | Isolated change |
+| `contact-handlers.ts:182` | TASK-949 | None | Isolated change |
+| `useSecureStorage.ts` | TASK-952 | None | Sequential dep on TASK-951 |
+| `usePhoneTypeApi.ts` | TASK-952 | None | Sequential dep on TASK-951 |
+| `useEmailOnboardingApi.ts` | TASK-952 | None | Sequential dep on TASK-951 |
+| `useNavigationFlow.ts` | TASK-952 | None | Sequential dep on TASK-951 |
+| `selectors/userDataSelectors.ts` | TASK-950 (implicit) | Low | May need new selector |
+| `.claude/docs/` | TASK-953 | None | Docs only |
+| State machine selectors | TASK-954 | None | Performance audit only |
+
+**Conflict Assessment:** LOW RISK - Tasks are well-isolated.
+
+### Execution Order Validation
+
+**Proposed Order (from sprint plan):**
+
+| Batch | Tasks | Validation |
+|-------|-------|------------|
+| **1** | TASK-950, TASK-949 | CORRECT - Independent, different files |
+| **2** | TASK-951 | CORRECT - Manual validation gates TASK-952 |
+| **3** | TASK-952 | CORRECT - Must wait for TASK-951 GO decision |
+| **4** | TASK-953, TASK-954 | CORRECT - Independent cleanup tasks |
+
+**Recommendation:** The proposed execution order is sound. Proceed as planned.
+
+### Task-by-Task Technical Assessment
+
+#### TASK-950: Fix OnboardingFlow State Derivation (CRITICAL)
+
+**Feasibility:** HIGH
+
+**Verification:**
+- `OnboardingFlow.tsx` (228 lines) - Current implementation builds `appState` directly from legacy `app` props (lines 39-51)
+- `useOptionalMachineState` hook exists in `src/appCore/state/machine/hooks/useOptionalMachineState.ts`
+- Required selectors exist:
+  - `selectPhoneType` - EXISTS in `userDataSelectors.ts`
+  - `selectHasEmailConnected` - EXISTS in `userDataSelectors.ts`
+  - `selectHasCompletedEmailOnboarding` - EXISTS in `userDataSelectors.ts`
+  - `selectHasPermissions` - MISSING (referenced in task notes but not implemented)
+
+**Technical Issue Identified:**
+The task notes reference `selectHasPermissions` which does not exist. The `UserData` interface has `hasPermissions: boolean`, but no selector function exists.
+
+**Resolution:** Engineer should create `selectHasPermissions` in `userDataSelectors.ts` as part of implementation. This is a trivial addition:
+```typescript
+export function selectHasPermissions(state: AppState): boolean {
+  if (state.status === "ready") {
+    return state.userData.hasPermissions;
+  }
+  return false;
+}
+```
+
+**Risk Level:** MEDIUM (due to critical bug fix nature)
+**Estimate Accuracy:** 40K tokens appears reasonable
+
+---
+
+#### TASK-949: Fix Duplicate Contact Keys
+
+**Feasibility:** HIGH
+
+**Verification:**
+- Bug location confirmed at `electron/contact-handlers.ts:182`:
+  ```typescript
+  id: `contacts-app-${contactInfo.name}`, // Temporary ID for UI
+  ```
+- This clearly uses name which is not unique
+- Fix is straightforward: use index or UUID
+
+**Recommended Fix:**
+```typescript
+id: `contacts-app-${Date.now()}-${index}`,
+```
+Using index + timestamp is simpler than UUID and avoids crypto import in Electron main process.
+
+**Risk Level:** LOW
+**Estimate Accuracy:** 15K tokens is appropriate for this simple fix
+
+---
+
+#### TASK-951: Manual Platform Validation
+
+**Feasibility:** HIGH (but requires human tester)
+
+**Verification:**
+- This is a manual testing task, not a code task
+- Test cases are comprehensive and cover all critical paths
+- Correct that this gates TASK-952
+
+**Technical Consideration:**
+This task cannot be completed by an engineer agent. It requires:
+1. Access to physical macOS device
+2. Access to physical Windows device (or VM)
+3. Ability to install fresh app builds
+4. OAuth accounts for testing
+
+**Risk Level:** LOW (risk is in finding bugs, not in the task itself)
+**Estimate Accuracy:** 10K tokens for coordination is reasonable
+
+---
+
+#### TASK-952: Remove Legacy Hook Code Paths
+
+**Feasibility:** HIGH (conditional on TASK-951 GO)
+
+**Verification:**
+Confirmed legacy code sizes by examining files:
+- `useSecureStorage.ts`: Lines 141-536 (legacy path ~395 lines, not ~150 as estimated)
+- `usePhoneTypeApi.ts`: Lines 147-265 (legacy path ~118 lines, close to ~100 estimate)
+- `useEmailOnboardingApi.ts`: Lines 118-202 (legacy path ~84 lines, close to ~80 estimate)
+- `useNavigationFlow.ts`: Lines 171-444 (legacy path ~273 lines, not ~120 as estimated)
+
+**Estimate Correction:**
+Legacy code is larger than task estimates suggest:
+- Total estimated: ~450 lines
+- Total actual: ~870 lines
+
+This doesn't change feasibility but may increase tokens needed. The 200K cap should absorb this.
+
+**Recommendation:** Keep feature flag infrastructure as specified. The error throwing pattern for disabled flag is correct.
+
+**Risk Level:** MEDIUM (large code removal)
+**Estimate Accuracy:** May need up to 75K tokens due to larger legacy codebase, but within cap
+
+---
+
+#### TASK-953: Architecture Documentation
+
+**Feasibility:** HIGH
+
+**Verification:**
+- Target paths exist:
+  - `.claude/docs/` - EXISTS
+  - `.claude/docs/shared/` - EXISTS (for new state-machine-architecture.md)
+  - `.claude/plans/backlog/` - EXISTS
+
+**Scope Check:**
+Documentation scope is well-defined. No code changes required.
+
+**Risk Level:** LOW
+**Estimate Accuracy:** 15K tokens is appropriate
+
+---
+
+#### TASK-954: Performance Optimization
+
+**Feasibility:** HIGH
+
+**Verification:**
+Audit targets exist:
+- `src/appCore/state/machine/selectors/` - 2 selector files, ~180 lines each
+- `src/appCore/state/flows/` - 4 hook files, ~250-550 lines each
+- `src/appCore/state/machine/derivation/` - 2 derivation files
+
+**Technical Consideration:**
+React DevTools Profiler integration may require npm package addition for production profiling. Dev mode profiling is built-in.
+
+Current selector functions are NOT memoized (they're pure functions called directly). Memoization would require:
+1. Converting to `reselect` or similar library, OR
+2. Using `useMemo` in the hooks that call selectors
+
+**Recommendation:** Focus on hook-level memoization (`useMemo`/`useCallback`) rather than adding a selector library. This keeps changes minimal.
+
+**Risk Level:** LOW (optimization, not bug fix)
+**Estimate Accuracy:** 25K tokens is appropriate
+
+---
+
+### Risk Assessment Summary
+
+| Task | Risk | Mitigation |
+|------|------|------------|
+| TASK-950 | Medium - Missing selector | Add `selectHasPermissions` during impl |
+| TASK-949 | Low | Straightforward fix |
+| TASK-951 | Low | Manual testing is gating |
+| TASK-952 | Medium - Large removal | Comprehensive testing, keep flag |
+| TASK-953 | Low | Docs only |
+| TASK-954 | Low | Non-breaking optimization |
+
+### Branch Strategy Validation
+
+All tasks correctly target `develop`:
+- TASK-950: `fix/TASK-950-onboarding-state-derivation` -> `develop`
+- TASK-949: `fix/TASK-949-duplicate-contact-keys` -> `develop`
+- TASK-951: No PR (manual validation report)
+- TASK-952: `feature/TASK-952-remove-legacy-hooks` -> `develop`
+- TASK-953: `docs/TASK-953-architecture-docs` -> `develop`
+- TASK-954: `feature/TASK-954-performance-optimization` -> `develop`
+
+Branch naming follows conventions. All use traditional merge to develop.
+
+### Recommendations
+
+1. **TASK-950 Implementation Note:** Engineer must create `selectHasPermissions` selector. Add this to task file.
+
+2. **TASK-952 Scope Note:** Legacy code is ~870 lines, not ~450 lines. Estimate buffer is sufficient but engineer should be aware.
+
+3. **TASK-951 Ownership:** Clarify who performs manual testing (PM, developer, QA). Agent cannot complete this task.
+
+4. **Sprint Size:** With actual legacy code sizes, total estimated tokens may reach ~200K. This is within budget but leaves minimal buffer.
+
+### Final Decision
+
+**STATUS: APPROVED**
+
+The sprint plan is technically sound. All tasks are feasible. Dependencies are correctly ordered. Shared file conflicts are minimal due to sequential batching.
+
+Proceed with engineer assignment following the batch order specified.
+
+---
+
 ## Changelog
 
 - 2026-01-04: Sprint created (Phase 3 of BACKLOG-142)
+- 2026-01-04: SR Engineer technical review completed (APPROVED)

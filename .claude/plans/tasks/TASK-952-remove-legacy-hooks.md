@@ -109,6 +109,7 @@ Same pattern as useSecureStorage.
 ## SR Engineer Pre-Implementation Review
 
 **Status:** APPROVED (conditional on TASK-951 GO decision)
+**Review Date:** 2026-01-04
 
 ### Branch Information
 
@@ -122,6 +123,20 @@ Same pattern as useSecureStorage.
 - Keep feature flag - emergency rollback capability is worth the code overhead
 - Throwing error when machine is disabled is preferred over silent failure
 - Consider adding migration guide comment for anyone who disables flag
+
+### Scope Correction (SPRINT-022 Review)
+
+**Actual legacy code sizes (larger than original estimates):**
+
+| Hook | Estimated | Actual | Notes |
+|------|-----------|--------|-------|
+| `useSecureStorage.ts` | ~150 lines | ~395 lines | Lines 141-536 |
+| `usePhoneTypeApi.ts` | ~100 lines | ~118 lines | Lines 147-265 |
+| `useEmailOnboardingApi.ts` | ~80 lines | ~84 lines | Lines 118-202 |
+| `useNavigationFlow.ts` | ~120 lines | ~273 lines | Lines 171-444 |
+| **Total** | **~450 lines** | **~870 lines** | Nearly 2x estimate |
+
+The 200K token cap should still accommodate this, but engineer should be aware of the larger scope. Consider tackling hooks in order of size (smallest first) to build momentum.
 
 ---
 
