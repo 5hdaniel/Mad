@@ -179,7 +179,7 @@ Also export from `src/appCore/state/machine/selectors/index.ts`.
 
 - [x] TypeScript check passes
 - [x] ESLint passes
-- [x] All onboarding and selector tests pass (128 tests)
+- [x] All onboarding and selector tests pass (140 tests)
 - [x] Selector exports verified (via barrel export)
 
 ### Deviations
@@ -193,4 +193,5 @@ None. Implementation follows the approach outlined in the task file and PR #304.
 - [x] Added tests for new selector
 - [x] All quality gates pass
 - [x] Task file updated with implementation summary
-- [x] Ready for PR creation
+- [x] PR created: #307
+- [x] Ready for SR Engineer review
