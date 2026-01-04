@@ -2,9 +2,9 @@
 
 This index tracks all backlog items with their current status and metadata.
 
-**Last Updated:** 2026-01-03 (BACKLOG-142 Created - State Coordination Overhaul)
-**Total Items:** 155
-**Pending:** 79 | **In Progress:** 0 | **Completed:** 70 | **Partial:** 0 | **Obsolete:** 2 | **Deferred:** 2
+**Last Updated:** 2026-01-03 (BACKLOG-143 Created - Prevent Duplicate Contact Imports)
+**Total Items:** 156
+**Pending:** 80 | **In Progress:** 0 | **Completed:** 70 | **Partial:** 0 | **Obsolete:** 2 | **Deferred:** 2
 
 ---
 
@@ -53,11 +53,11 @@ This index tracks all backlog items with their current status and metadata.
 - **SPRINT-017 (Metrics Workflow Test):** Completed - TASK-921 (1 task, PR #283) - Validated auto-captured metrics workflow
 - **SPRINT-018 (Token Accounting):** Completed - TASK-922, TASK-923 (2 tasks, PRs #284-285) - Added billable_tokens to metrics
 - **SPRINT-019 (Database Gate):** Completed - BACKLOG-139, TASK-924 (PR #286 + 2 hotfixes) - Database init gate + backend fix
-- **SPRINT-020 (State Coordination Foundation):** Planning - BACKLOG-142 Phase 1 (7 tasks: TASK-927 to TASK-933)
+- **SPRINT-020 (State Coordination Foundation):** Complete - BACKLOG-142 Phase 1 (7 tasks: TASK-927 to TASK-933, PRs #287-294)
 - **Unassigned:** All others
 
 ### State Coordination Overhaul Project - IN PROGRESS
-- **Phase 1 (Foundation):** BACKLOG-142 / SPRINT-020 - Planning
+- **Phase 1 (Foundation):** BACKLOG-142 / SPRINT-020 - **Complete** (PRs #287-294)
 - **Phase 2 (Migration):** SPRINT-021 - Future
 - **Phase 3 (Cleanup):** SPRINT-022 - Future
 - **Note:** This replaces fragmented hook-based state coordination with unified state machine
@@ -226,6 +226,7 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-140 | Duplicate Transaction Re-Import Prevention | service | High | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-140.md](BACKLOG-140.md) |
 | BACKLOG-141 | Fix Onboarding Flicker for Returning Users (Quick Fix) | fix | Medium | Pending | - | - | ~10K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-141.md](BACKLOG-141.md) |
 | BACKLOG-142 | State Coordination Layer Overhaul | refactor/arch | Critical | Pending | SPRINT-020 | - | ~850K | - | - | - | - | - | - | - | - | - | - | - | - | - | Multi-phase | [BACKLOG-142.md](BACKLOG-142.md) |
+| BACKLOG-143 | Prevent Duplicate Contact Imports | enhancement | Medium | Pending | - | - | ~40K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-143.md](BACKLOG-143.md) |
 
 ---
 
@@ -442,6 +443,16 @@ This index tracks all backlog items with their current status and metadata.
   - Phases: Foundation (SPRINT-020), Migration (SPRINT-021), Cleanup (SPRINT-022)
   - SPRINT-020 created with 7 tasks (TASK-927 to TASK-933), ~295K tokens estimated
   - Risk register created with 4 active risks
+- 2026-01-03: **SPRINT-020 COMPLETE** - State Coordination Foundation (7 tasks: TASK-927 to TASK-933, PRs #287-294)
+  - All 7 tasks merged to project/state-coordination branch
+  - Unified state machine with discriminated union types implemented
+  - Feature flag defaults to false for safe rollout
+  - 49 total tests (32 integration + 17 platform)
+  - Sprint billable tokens: ~260K (vs ~295K estimated)
+- 2026-01-03: Added BACKLOG-143 (Prevent Duplicate Contact Imports) - Medium priority:
+  - User-reported issue: contacts can be imported multiple times
+  - Solution options: filter import list, show post-import summary, or hybrid approach
+  - Related to contact management UX
 
 ---
 
