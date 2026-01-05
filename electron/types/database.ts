@@ -123,6 +123,10 @@ export interface IDatabaseService {
     updates: Partial<Transaction>,
   ): Promise<void>;
   deleteTransaction(transactionId: string): Promise<void>;
+  findExistingTransactionsByAddresses(
+    userId: string,
+    propertyAddresses: string[],
+  ): Promise<Map<string, string>>;
 
   // Communication operations
   createCommunication(
