@@ -2,9 +2,9 @@
 
 This index tracks all backlog items with their current status and metadata.
 
-**Last Updated:** 2026-01-03 (BACKLOG-143 Created - Prevent Duplicate Contact Imports)
-**Total Items:** 156
-**Pending:** 80 | **In Progress:** 0 | **Completed:** 70 | **Partial:** 0 | **Obsolete:** 2 | **Deferred:** 2
+**Last Updated:** 2026-01-05 (SPRINT-022 Complete - BACKLOG-142 State Coordination Overhaul finished)
+**Total Items:** 161
+**Pending:** 85 | **In Progress:** 0 | **Completed:** 70 | **Partial:** 0 | **Obsolete:** 2 | **Deferred:** 2
 
 ---
 
@@ -30,9 +30,9 @@ This index tracks all backlog items with their current status and metadata.
 
 ### By Priority
 - **Critical:** BACKLOG-030 (done), 032 (done), 035 (done), 038 (done), 039 (done), 044 (done), 045 (done), 058 (done), 059 (done), 072 (done), 073 (done), 074 (done), 107 (done), 108 (done), 117 (done), 132 (done), 139 (done - database init gate), **142** (state coordination overhaul)
-- **High:** BACKLOG-008, 009, 013, 016, 018, 020, 021, 023, 026, 031, 033, 037, 056, 060 (done), 061, 062, 063, 067, 075 (done), 076 (done), 084 (done), 085 (done), 088, 090 (done), 091 (done), 098, 099, 109 (done), 110 (done), **111**, **118**, 121 (done), 126 (done), 130 (done), 133 (done), **134** (done - engineer token optimization), 136 (done), **137** (done - automatic token tracking), **140** (duplicate transaction re-import)
-- **Medium:** Multiple (see full index), 014 (done), 077 (done), 078 (done), 079 (done), 081, 086, 087, 089, 092, 093, 094, 095, 096, 097, 100, 101, 102, **112**, **113**, **114**, **115**, **116**, 122 (done), 124 (done), 127 (done), 128 (done), 129 (done), **131**, 135 (done), 138 (done)
-- **Low/Deferred:** BACKLOG-001, 003, 004, 010, 017, 069, 070, 071, **119**, **123**, **125**
+- **High:** BACKLOG-008, 009, 013, 016, 018, 020, 021, 023, 026, 031, 033, 037, 056, 060 (done), 061, 062, 063, 067, 075 (done), 076 (done), 084 (done), 085 (done), 088, 090 (done), 091 (done), 098, 099, 109 (done), 110 (done), **111**, **118**, 121 (done), 126 (done), 130 (done), 133 (done), **134** (done - engineer token optimization), 136 (done), **137** (done - automatic token tracking), **140** (duplicate transaction re-import), **148** (split databaseService.ts - regrown)
+- **Medium:** Multiple (see full index), 014 (done), 077 (done), 078 (done), 079 (done), 081, 086, 087, 089, 092, 093, 094, 095, 096, 097, 100, 101, 102, **112**, **113**, **114**, **115**, **116**, 122 (done), 124 (done), 127 (done), 128 (done), 129 (done), **131**, 135 (done), 138 (done), **149** (delete deprecated EmailOnboardingScreen), **152** (split TransactionDetails.tsx)
+- **Low/Deferred:** BACKLOG-001, 003, 004, 010, 017, 069, 070, 071, **119**, **123**, **125**, **150** (reduce useAppStateMachine), **151** (reduce AppModals.tsx)
 
 ### By Sprint Assignment
 - **SPRINT-001 (Onboarding Refactor):** Completed
@@ -54,6 +54,8 @@ This index tracks all backlog items with their current status and metadata.
 - **SPRINT-018 (Token Accounting):** Completed - TASK-922, TASK-923 (2 tasks, PRs #284-285) - Added billable_tokens to metrics
 - **SPRINT-019 (Database Gate):** Completed - BACKLOG-139, TASK-924 (PR #286 + 2 hotfixes) - Database init gate + backend fix
 - **SPRINT-020 (State Coordination Foundation):** Complete - BACKLOG-142 Phase 1 (7 tasks: TASK-927 to TASK-933, PRs #287-294)
+- **SPRINT-021 (State Coordination Migration):** Complete - BACKLOG-142 Phase 2 (PRs #296-309)
+- **SPRINT-022 (State Coordination Cleanup):** Complete - BACKLOG-142 Phase 3 (10 tasks, PRs #306-313, ~198K tokens)
 - **Unassigned:** All others
 
 ### State Coordination Overhaul Project - COMPLETE
@@ -228,6 +230,11 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-141 | Fix Onboarding Flicker for Returning Users (Quick Fix) | fix | Medium | Pending | - | - | ~10K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-141.md](BACKLOG-141.md) |
 | BACKLOG-142 | State Coordination Layer Overhaul | refactor/arch | Critical | Completed | SPRINT-020/021/022 | - | ~850K | - | - | - | - | - | - | - | - | - | - | - | - | - | Multi-phase | [BACKLOG-142.md](BACKLOG-142.md) |
 | BACKLOG-143 | Prevent Duplicate Contact Imports | enhancement | Medium | Pending | - | - | ~40K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-143.md](BACKLOG-143.md) |
+| BACKLOG-148 | Split databaseService.ts into Domain Services | refactor | High | Pending | - | - | ~60K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-148.md](BACKLOG-148.md) |
+| BACKLOG-149 | Delete Deprecated EmailOnboardingScreen.tsx | refactor | Medium | Pending | - | - | ~15K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-149.md](BACKLOG-149.md) |
+| BACKLOG-150 | Reduce useAppStateMachine.ts Return Object | refactor | Low | Pending | - | - | ~10K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-150.md](BACKLOG-150.md) |
+| BACKLOG-151 | Reduce AppModals.tsx Below 150-Line Trigger | refactor | Low | Pending | - | - | ~5K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-151.md](BACKLOG-151.md) |
+| BACKLOG-152 | Split TransactionDetails.tsx into Tab Components | refactor | Medium | Pending | - | - | ~25K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-152.md](BACKLOG-152.md) |
 
 ---
 
@@ -463,6 +470,18 @@ This index tracks all backlog items with their current status and metadata.
   - State machine is now the only code path
   - Architecture documentation added: `.claude/docs/shared/state-machine-architecture.md`
   - Total project span: 3 sprints (SPRINT-020, 021, 022)
+- 2026-01-04: **Added BACKLOG-148 to BACKLOG-152** from SR Engineer architecture review:
+  - BACKLOG-148 (HIGH): Split databaseService.ts (3,877 lines) into domain-specific services
+    - Note: BACKLOG-058 addressed this in SPRINT-002 but file has regrown
+  - BACKLOG-149 (MEDIUM): Delete deprecated EmailOnboardingScreen.tsx (1,203 lines)
+    - File marked @deprecated, migration to EmailConnectStep.tsx should be complete
+  - BACKLOG-150 (LOW): Reduce useAppStateMachine.ts (432 lines, 32 over 400 trigger)
+    - Maintenance-level after BACKLOG-107/SPRINT-013 major reduction
+  - BACKLOG-151 (LOW): Reduce AppModals.tsx (169 lines, 19 over 150 trigger)
+    - Extract iPhone Sync modal wrapper
+  - BACKLOG-152 (MEDIUM): Split TransactionDetails.tsx (832 lines) into tab components
+    - Also addresses direct window.api calls (architecture violation)
+  - Note: BACKLOG-098 (Split AuditTransactionModal.tsx) already exists for that item
 
 ---
 
