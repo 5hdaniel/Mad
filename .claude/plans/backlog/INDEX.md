@@ -2,9 +2,9 @@
 
 This index tracks all backlog items with their current status and metadata.
 
-**Last Updated:** 2026-01-04 (SPRINT-023 Planned - Architecture Debt Reduction)
-**Total Items:** 161
-**Pending:** 81 | **In Progress:** 4 (SPRINT-023) | **Completed:** 70 | **Partial:** 0 | **Obsolete:** 2 | **Deferred:** 2
+**Last Updated:** 2026-01-04 (Added SPRINT-024, BACKLOG-157/158/159, marked SPRINT-023 complete)
+**Total Items:** 150
+**Pending:** 86 | **In Progress:** 0 | **Completed:** 59 | **Partial:** 0 | **Obsolete:** 1 | **Deferred:** 2
 
 ---
 
@@ -29,10 +29,10 @@ This index tracks all backlog items with their current status and metadata.
 ## Quick Filters
 
 ### By Priority
-- **Critical:** BACKLOG-030 (done), 032 (done), 035 (done), 038 (done), 039 (done), 044 (done), 045 (done), 058 (done), 059 (done), 072 (done), 073 (done), 074 (done), 107 (done), 108 (done), 117 (done), 132 (done), 139 (done - database init gate), **142** (state coordination overhaul)
-- **High:** BACKLOG-008, 009, 013, 016, 018, 020, 021, 023, 026, 031, 033, 037, 056, 060 (done), 061, 062, 063, 067, 075 (done), 076 (done), 084 (done), 085 (done), 088, 090 (done), 091 (done), 098, 099, 109 (done), 110 (done), **111**, **118**, 121 (done), 126 (done), 130 (done), 133 (done), **134** (done - engineer token optimization), 136 (done), **137** (done - automatic token tracking), **140** (duplicate transaction re-import), **148** (split databaseService.ts - regrown)
-- **Medium:** Multiple (see full index), 014 (done), 077 (done), 078 (done), 079 (done), 081, 086, 087, 089, 092, 093, 094, 095, 096, 097, 100, 101, 102, **112**, **113**, **114**, **115**, **116**, 122 (done), 124 (done), 127 (done), 128 (done), 129 (done), **131**, 135 (done), 138 (done), **149** (delete deprecated EmailOnboardingScreen), **152** (split TransactionDetails.tsx)
-- **Low/Deferred:** BACKLOG-001, 003, 004, 010, 017, 069, 070, 071, **119**, **123**, **125**, **150** (reduce useAppStateMachine), **151** (reduce AppModals.tsx)
+- **Critical:** BACKLOG-030 (done), 032 (done), 035 (done), 038 (done), 039 (done), 044 (done), 045 (done), 058 (done), 059 (done), 072 (done), 073 (done), 074 (done), 107 (done), 108 (done), 117 (done), 132 (done), 139 (done - database init gate), 142 (done - state coordination overhaul)
+- **High:** BACKLOG-008, 009, 013, 016, 018, 020, 021, 023, 026, 031, 033, 037, 056, 060 (done), 061 (done), 062 (done), 063 (done), 067, 075 (done), 076 (done), 084 (done), 085 (done), 088, 090 (done), 091 (done), 098, 099, 103 (done), 105 (done), 109 (done), 110 (done), **111**, 118 (done), 121 (done), 126 (done), 130 (done), 133 (done), 136 (done), 137 (done - automatic token tracking), 140 (done), 148 (done), **156** (auto-refresh on app load), **157** (fix auth handler test)
+- **Medium:** Multiple (see full index), 014 (done), 050 (done), 054 (done), 065 (done), 077 (done), 078 (done), 079 (done), 081, 086, 087, 089, 092, 093, 094, 095, 096, 097, 100, 101, 102, 104 (done), **112**, **113**, **114**, **115**, **116**, 122 (done), 124 (done), 127 (done), 128 (done), 129 (done), **131**, 135 (done), 138 (done), 149 (done), 152 (done), **158** (decompose AuditTransactionModal), **159** (delete PermissionsScreen)
+- **Low/Deferred:** BACKLOG-001, 003, 004, 010, 017, 069 (deferred), 070 (deferred), 071, 092, **119**, **123**, **125**, **150** (reduce useAppStateMachine), **151** (reduce AppModals.tsx), **155** (dashboard scroll)
 
 ### By Sprint Assignment
 - **SPRINT-001 (Onboarding Refactor):** Completed
@@ -57,7 +57,8 @@ This index tracks all backlog items with their current status and metadata.
 - **SPRINT-021 (State Coordination Migration):** Complete - BACKLOG-142 Phase 2 (PRs #296-309)
 - **SPRINT-022 (State Coordination Cleanup):** Complete - BACKLOG-142 Phase 3 (10 tasks, PRs #306-313, ~198K tokens)
 - **SPRINT-016 (Component Refactoring):** DEPRECATED - Task IDs collided with SPRINT-017/18/19; scope moved to SPRINT-023
-- **SPRINT-023 (Architecture Debt Reduction):** PLANNED - BACKLOG-149, 148, 152, 140 (5 tasks: TASK-960 to TASK-964)
+- **SPRINT-023 (Architecture Debt Reduction):** Completed - BACKLOG-149 (done), 148 (done), 152 (done), 140 (done) (5 tasks: TASK-960 to TASK-964, PRs #314-317)
+- **SPRINT-024 (Quality & Coverage):** PLANNED - BACKLOG-157, 159, 112, 113, 158 (5 tasks: TASK-970 to TASK-974)
 - **Unassigned:** All others
 
 ### State Coordination Overhaul Project - COMPLETE
@@ -214,13 +215,13 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-121 | Add Generator Approach Guidance for Large Fixtures | docs | High | Completed | SPRINT-015 | 2-3 | ~10K | 20-30m | N/A | ~800K-1.1M | N/A | - | - | - | - | - | - | N/A | ~800K-1.1M | N/A | ~100x | [BACKLOG-121.md](BACKLOG-121.md) |
 | BACKLOG-122 | Improve Engineer Agent Worktree Instructions | docs | Medium | Completed | - | 2-3 | ~10K | 20-30m | 2 | ~8K | 10m | - | - | - | - | - | - | 2 | ~8K | 10m | -50% | [BACKLOG-122.md](BACKLOG-122.md) |
 | BACKLOG-123 | Update Test Category Estimation Multiplier | docs | Low | Pending | - | 1-2 | ~5K | 10-15m | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-123.md](BACKLOG-123.md) |
-| BACKLOG-124 | Add Sprint Completion Checklist to PM Workflow | docs | Medium | Pending | SPRINT-012 | 2-3 | ~10K | 15-20m | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-124.md](BACKLOG-124.md) |
+| BACKLOG-124 | Add Sprint Completion Checklist to PM Workflow | docs | Medium | Completed | SPRINT-012 | 2-3 | ~10K | 15-20m | - | - | - | - | - | - | - | - | - | - | - | - | TASK-805, PR #262 | [BACKLOG-124.md](BACKLOG-124.md) |
 | BACKLOG-125 | Enforce Metrics Collection for All Sprints | docs | Low | Pending | - | 2-3 | ~8K | 15-20m | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-125.md](BACKLOG-125.md) |
-| BACKLOG-126 | Enforce Debugging Metrics with Commit Verification | docs | High | Pending | SPRINT-012 | 4-6 | ~20K | 30-45m | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-126.md](BACKLOG-126.md) |
-| BACKLOG-127 | Add Sprint Capacity Limits to PM Workflow | docs | Medium | Pending | SPRINT-012 | 1-2 | ~6K | 10-15m | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-127.md](BACKLOG-127.md) |
-| BACKLOG-128 | Add Type Verification Checklist for Fixture Tasks | docs | Medium | Pending | SPRINT-012 | 1-2 | ~6K | 10-15m | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-128.md](BACKLOG-128.md) |
-| BACKLOG-129 | Create CI Troubleshooting Documentation | docs | Medium | Pending | SPRINT-012 | 2-3 | ~10K | 15-20m | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-129.md](BACKLOG-129.md) |
-| BACKLOG-130 | Sub-Agent Permission Auto-Denial Incident | infra/process | High | Pending | SPRINT-012 | 1-2 | ~8K | 10-15m | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-130.md](BACKLOG-130.md) |
+| BACKLOG-126 | Enforce Debugging Metrics with Commit Verification | docs | High | Completed | SPRINT-012 | 4-6 | ~20K | 30-45m | - | - | - | - | - | - | - | - | - | - | - | - | TASK-806, PR #262 | [BACKLOG-126.md](BACKLOG-126.md) |
+| BACKLOG-127 | Add Sprint Capacity Limits to PM Workflow | docs | Medium | Completed | SPRINT-012 | 1-2 | ~6K | 10-15m | - | - | - | - | - | - | - | - | - | - | - | - | TASK-807, PR #262 | [BACKLOG-127.md](BACKLOG-127.md) |
+| BACKLOG-128 | Add Type Verification Checklist for Fixture Tasks | docs | Medium | Completed | SPRINT-012 | 1-2 | ~6K | 10-15m | - | - | - | - | - | - | - | - | - | - | - | - | TASK-808, PR #262 | [BACKLOG-128.md](BACKLOG-128.md) |
+| BACKLOG-129 | Create CI Troubleshooting Documentation | docs | Medium | Completed | SPRINT-012 | 2-3 | ~10K | 15-20m | - | - | - | - | - | - | - | - | - | - | - | - | TASK-809, PR #262 | [BACKLOG-129.md](BACKLOG-129.md) |
+| BACKLOG-130 | Sub-Agent Permission Auto-Denial Incident | infra/process | High | Completed | SPRINT-012 | 1-2 | ~8K | 10-15m | - | - | - | - | - | - | - | - | - | - | - | - | TASK-810, PR #262 | [BACKLOG-130.md](BACKLOG-130.md) |
 | BACKLOG-132 | Mandatory Worktree for Parallel/Background Agents | docs/process | Critical | Completed | SPRINT-015 | 1-2 | ~5K | 8-12m | 2 | ~8K | 5m | 1 | ~15K | 5m | 0 | 0 | 0 | 3 | ~23K | 10m | +360% | [BACKLOG-132.md](BACKLOG-132.md) |
 | BACKLOG-133 | Engineer Token Cap with Early Reporting | docs/process | High | Completed | SPRINT-015 | 2-3 | ~10K | 15-25m | N/A | ~800K-1.1M | N/A | - | - | - | - | - | - | N/A | ~800K-1.1M | N/A | ~100x | TASK-914 |
 | BACKLOG-135 | Fix window.d.ts Type Definitions | tech-debt | Medium | Completed | SPRINT-015 | 2-3 | ~10K | 15-20m | 3 | ~10K | 15m | - | - | - | - | - | - | 3 | ~10K | 15m | 0% | TASK-916 |
@@ -228,15 +229,20 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-137 | Automatic Token Tracking Tooling | tooling | High | Completed | - | 6-10 | ~40K | 1-2h | 4 | ~34K | 20m | - | - | - | - | - | - | 4 | ~34K | 20m | -56% | [BACKLOG-137.md](BACKLOG-137.md) |
 | BACKLOG-138 | Turns/Self-Reported Metrics Cleanup | docs/cleanup | Medium | Completed | - | - | ~75K | - | - | - | - | - | - | - | - | - | - | - | - | - | PR #282 | [BACKLOG-138.md](BACKLOG-138.md) |
 | BACKLOG-139 | Comprehensive Database Initialization Gate | fix | Critical | Completed | SPRINT-019 | - | ~40K | - | - | ~889K | - | - | - | - | - | - | - | - | ~889K | ~31m | +2122% | [BACKLOG-139.md](BACKLOG-139.md) |
-| BACKLOG-140 | Duplicate Transaction Re-Import Prevention | service | High | Pending | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-140.md](BACKLOG-140.md) |
+| BACKLOG-140 | Duplicate Transaction Re-Import Prevention | service | High | Completed | SPRINT-023 | - | ~30K | - | - | - | - | - | - | - | - | - | - | - | - | - | TASK-964, PR #317 | [BACKLOG-140.md](BACKLOG-140.md) |
 | BACKLOG-141 | Fix Onboarding Flicker for Returning Users (Quick Fix) | fix | Medium | Pending | - | - | ~10K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-141.md](BACKLOG-141.md) |
 | BACKLOG-142 | State Coordination Layer Overhaul | refactor/arch | Critical | Completed | SPRINT-020/021/022 | - | ~850K | - | - | - | - | - | - | - | - | - | - | - | - | - | Multi-phase | [BACKLOG-142.md](BACKLOG-142.md) |
 | BACKLOG-143 | Prevent Duplicate Contact Imports | enhancement | Medium | Pending | - | - | ~40K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-143.md](BACKLOG-143.md) |
-| BACKLOG-148 | Split databaseService.ts into Domain Services | refactor | High | Pending | - | - | ~60K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-148.md](BACKLOG-148.md) |
-| BACKLOG-149 | Delete Deprecated EmailOnboardingScreen.tsx | refactor | Medium | Pending | - | - | ~15K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-149.md](BACKLOG-149.md) |
+| BACKLOG-148 | Split databaseService.ts into Domain Services | refactor | High | Completed | SPRINT-023 | - | ~60K | - | - | - | - | - | - | - | - | - | - | - | - | - | TASK-961, PR #315 | [BACKLOG-148.md](BACKLOG-148.md) |
+| BACKLOG-149 | Delete Deprecated EmailOnboardingScreen.tsx | refactor | Medium | Completed | SPRINT-023 | - | ~15K | - | - | - | - | - | - | - | - | - | - | - | - | - | TASK-960, PR #314 | [BACKLOG-149.md](BACKLOG-149.md) |
 | BACKLOG-150 | Reduce useAppStateMachine.ts Return Object | refactor | Low | Pending | - | - | ~10K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-150.md](BACKLOG-150.md) |
 | BACKLOG-151 | Reduce AppModals.tsx Below 150-Line Trigger | refactor | Low | Pending | - | - | ~5K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-151.md](BACKLOG-151.md) |
-| BACKLOG-152 | Split TransactionDetails.tsx into Tab Components | refactor | Medium | Pending | - | - | ~25K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-152.md](BACKLOG-152.md) |
+| BACKLOG-152 | Split TransactionDetails.tsx into Tab Components | refactor | Medium | Completed | SPRINT-023 | - | ~25K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-152.md](BACKLOG-152.md) |
+| BACKLOG-155 | Dashboard Unnecessary Vertical Scroll | ui | Low | Pending | - | - | ~10K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-155.md](BACKLOG-155.md) |
+| BACKLOG-156 | Auto-Refresh Data Sources on App Load | service/enhancement | High | Pending | - | - | ~40K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-156.md](BACKLOG-156.md) |
+| BACKLOG-157 | Fix Failing Auth Handler Integration Test | test | High | Pending | SPRINT-024 | - | ~15K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-157.md](BACKLOG-157.md) |
+| BACKLOG-158 | Decompose AuditTransactionModal Component | refactor | Medium | Pending | SPRINT-024 | - | ~60K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-158.md](BACKLOG-158.md) |
+| BACKLOG-159 | Delete Deprecated PermissionsScreen.tsx | refactor | Medium | Pending | SPRINT-024 | - | ~10K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-159.md](BACKLOG-159.md) |
 
 ---
 
@@ -494,6 +500,31 @@ This index tracks all backlog items with their current status and metadata.
     - TASK-964: Duplicate Transaction Re-Import Prevention (BACKLOG-140)
   - Total estimated: ~130K tokens
   - Status: Pending SR Engineer Review
+- 2026-01-04: **Backlog Audit & Status Reconciliation**
+  - Fixed BACKLOG-124, 126, 127, 128, 129, 130 status: Pending -> Completed (SPRINT-012 items)
+  - Fixed BACKLOG-142 in Quick Filters: marked as done (state coordination overhaul complete)
+  - Updated Quick Filters to show all completed items: 061, 062, 063, 103, 105, 118, 050, 054, 065, 104
+  - Added BACKLOG-155 (Dashboard Scroll) to Full Index - file existed but was not indexed
+  - Corrected header counts: Total 143 (was 161), Pending 86 (was 81), Completed 54 (was 70), Obsolete 1 (was 2)
+  - The previous counts were incorrect due to:
+    1. SPRINT-012 items marked "(done)" in sprint section but "Pending" in Full Index
+    2. Total count included phantom backlog IDs that don't exist (080, 082, 083, 106, 131, 134, 144-147)
+    3. Completed count understated items marked complete in sprints
+    4. BACKLOG-155 file existed but was never added to INDEX.md
+- 2026-01-04: Added BACKLOG-156 (Auto-Refresh Data Sources on App Load) - High priority
+  - Auto-sync emails (both platforms), texts (Mac), contacts (Mac) on app startup
+  - Eliminates need to click "Auto Detect" manually
+  - Related to BACKLOG-024 (Auto-Start Sync) - consider merging or marking duplicate
+  - Est. ~40K tokens
+- 2026-01-04: **SPRINT-024 Planned (Quality & Coverage)**
+  - Created SPRINT-024-quality-and-coverage.md
+  - Added BACKLOG-157: Fix Failing Auth Handler Test (High, ~15K tokens)
+  - Added BACKLOG-158: Decompose AuditTransactionModal (Medium, ~60K tokens)
+  - Added BACKLOG-159: Delete Deprecated PermissionsScreen (Medium, ~10K tokens)
+  - Created 5 tasks: TASK-970 to TASK-974
+  - Marked BACKLOG-152 as Completed (SPRINT-023)
+  - Sprint focus: test coverage (29% → 45%+), component decomposition
+  - Total estimated: ~215K tokens
 
 ---
 
