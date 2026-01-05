@@ -231,10 +231,12 @@ function Transactions({
     const matchesSearch = t.property_address
       ?.toLowerCase()
       .includes(searchQuery.toLowerCase());
+    // "Active" filter includes both "active" and "pending" (open transactions)
+    // "Closed" filter includes "closed" and "rejected" (finalized transactions)
     const matchesStatus =
       statusFilter === "all" ||
-      (statusFilter === "active" && t.status === "active") ||
-      (statusFilter === "closed" && t.status === "closed");
+      (statusFilter === "active" && (t.status === "active" || t.status === "pending")) ||
+      (statusFilter === "closed" && (t.status === "closed" || t.status === "rejected"));
     return matchesSearch && matchesStatus;
   });
 
