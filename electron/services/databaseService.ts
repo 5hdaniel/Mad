@@ -348,6 +348,7 @@ class DatabaseService implements IDatabaseService {
       { name: 'financing_deadline', sql: `ALTER TABLE transactions ADD COLUMN financing_deadline DATE` },
       { name: 'closing_deadline', sql: `ALTER TABLE transactions ADD COLUMN closing_deadline DATE` },
       { name: 'export_status', sql: `ALTER TABLE transactions ADD COLUMN export_status TEXT DEFAULT 'not_exported'` },
+      { name: 'export_format', sql: `ALTER TABLE transactions ADD COLUMN export_format TEXT` },
       { name: 'export_count', sql: `ALTER TABLE transactions ADD COLUMN export_count INTEGER DEFAULT 0` },
       { name: 'last_exported_at', sql: `ALTER TABLE transactions ADD COLUMN last_exported_at DATETIME` },
     ]);
