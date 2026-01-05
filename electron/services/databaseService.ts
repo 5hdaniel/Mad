@@ -351,6 +351,7 @@ class DatabaseService implements IDatabaseService {
       { name: 'export_format', sql: `ALTER TABLE transactions ADD COLUMN export_format TEXT` },
       { name: 'export_count', sql: `ALTER TABLE transactions ADD COLUMN export_count INTEGER DEFAULT 0` },
       { name: 'last_exported_at', sql: `ALTER TABLE transactions ADD COLUMN last_exported_at DATETIME` },
+      { name: 'last_exported_on', sql: `ALTER TABLE transactions ADD COLUMN last_exported_on DATETIME` },
     ]);
 
     await addMissingColumns('messages', [
