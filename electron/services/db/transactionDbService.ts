@@ -21,9 +21,10 @@ import { validateFields } from "../../utils/sqlFieldWhitelist";
  * These are the only values allowed in the database.
  */
 export const VALID_TRANSACTION_STATUSES: readonly TransactionStatus[] = [
+  "pending",
   "active",
   "closed",
-  "archived",
+  "rejected",
 ] as const;
 
 /**
@@ -35,8 +36,9 @@ export const VALID_TRANSACTION_STATUSES: readonly TransactionStatus[] = [
  *
  * @example
  * validateTransactionStatus('active') // returns 'active'
+ * validateTransactionStatus('pending') // returns 'pending'
  * validateTransactionStatus(undefined) // returns 'active' (default)
- * validateTransactionStatus('pending') // throws DatabaseError
+ * validateTransactionStatus('invalid') // throws DatabaseError
  */
 export function validateTransactionStatus(
   status: unknown
