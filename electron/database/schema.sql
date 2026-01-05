@@ -694,44 +694,61 @@ BEGIN
 END;
 
 -- ============================================
--- COMMUNICATIONS TABLE (Transaction-related emails)
+-- COMMUNICATIONS TABLE (Junction table linking messages to transactions)
 -- ============================================
--- Stores communications linked to transactions for auditing.
--- Note: This is separate from 'messages' table which is for general message storage.
--- Communications are specifically for transaction-related correspondence.
+-- TASK-975: Refactored as a junction/reference table.
+--
+-- Architecture: messages (raw storage) -> communications (junction) -> transactions
+--
+-- This table links messages to transactions, enabling:
+-- - Both emails and texts to appear in transaction views
+-- - Content stored once in 'messages', referenced here
+-- - Link metadata (source, confidence, timestamp)
+--
+-- MIGRATION NOTE: Legacy content columns (subject, body, etc.) are preserved
+-- for backward compatibility but new records should use message_id reference.
 CREATE TABLE IF NOT EXISTS communications (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
   transaction_id TEXT,
 
-  -- Type & Source
+  -- TASK-975: Message reference (junction table pattern)
+  -- New communications should always set this to link to messages table
+  message_id TEXT,
+
+  -- Link metadata (TASK-975)
+  link_source TEXT CHECK (link_source IN ('auto', 'manual', 'scan')),
+  link_confidence REAL,
+  linked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+  -- Type & Source (legacy, use message_id for new records)
   communication_type TEXT DEFAULT 'email' CHECK (communication_type IN ('email', 'text', 'imessage')),
   source TEXT,
 
-  -- Email Threading
+  -- Email Threading (legacy, use message_id for new records)
   email_thread_id TEXT,
 
-  -- Participants
+  -- Participants (legacy, use message_id for new records)
   sender TEXT,
   recipients TEXT,
   cc TEXT,
   bcc TEXT,
 
-  -- Content
+  -- Content (legacy, use message_id for new records)
   subject TEXT,
   body TEXT,
   body_plain TEXT,
 
-  -- Timestamps
+  -- Timestamps (legacy, use message_id for new records)
   sent_at DATETIME,
   received_at DATETIME,
 
-  -- Attachments
+  -- Attachments (legacy, use message_id for new records)
   has_attachments INTEGER DEFAULT 0,
   attachment_count INTEGER DEFAULT 0,
   attachment_metadata TEXT,                -- JSON
 
-  -- Analysis/Classification
+  -- Analysis/Classification (legacy, use message_id for new records)
   keywords_detected TEXT,                  -- JSON array
   parties_involved TEXT,                   -- JSON array
   communication_category TEXT,
@@ -741,7 +758,8 @@ CREATE TABLE IF NOT EXISTS communications (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 
   FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE,
-  FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE SET NULL
+  FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE SET NULL,
+  FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
 );
 
 -- Communications indexes
@@ -749,6 +767,9 @@ CREATE INDEX IF NOT EXISTS idx_communications_user_id ON communications(user_id)
 CREATE INDEX IF NOT EXISTS idx_communications_transaction_id ON communications(transaction_id);
 CREATE INDEX IF NOT EXISTS idx_communications_sent_at ON communications(sent_at);
 CREATE INDEX IF NOT EXISTS idx_communications_sender ON communications(sender);
+-- TASK-975: Junction table indexes for message_id lookups
+CREATE INDEX IF NOT EXISTS idx_communications_message_id ON communications(message_id);
+CREATE INDEX IF NOT EXISTS idx_communications_txn_msg ON communications(transaction_id, message_id);
 
 -- ============================================
 -- IGNORED COMMUNICATIONS TABLE

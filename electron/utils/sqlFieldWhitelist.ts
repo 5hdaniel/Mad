@@ -155,6 +155,12 @@ export const TABLE_FIELDS = {
     "id",
     "user_id",
     "transaction_id",
+    // TASK-975: Junction table fields
+    "message_id",
+    "link_source",
+    "link_confidence",
+    "linked_at",
+    // Legacy content fields
     "communication_type",
     "source",
     "email_thread_id",

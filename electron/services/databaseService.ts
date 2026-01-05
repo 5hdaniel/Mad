@@ -363,6 +363,15 @@ class DatabaseService implements IDatabaseService {
       { name: 'duplicate_of', sql: `ALTER TABLE messages ADD COLUMN duplicate_of TEXT` },
     ]);
 
+    // TASK-975: Add message_id reference column and link metadata to communications table
+    // This transforms communications into a junction/reference table linking messages to transactions
+    await addMissingColumns('communications', [
+      { name: 'message_id', sql: `ALTER TABLE communications ADD COLUMN message_id TEXT REFERENCES messages(id) ON DELETE CASCADE` },
+      { name: 'link_source', sql: `ALTER TABLE communications ADD COLUMN link_source TEXT CHECK (link_source IN ('auto', 'manual', 'scan'))` },
+      { name: 'link_confidence', sql: `ALTER TABLE communications ADD COLUMN link_confidence REAL` },
+      { name: 'linked_at', sql: `ALTER TABLE communications ADD COLUMN linked_at DATETIME DEFAULT CURRENT_TIMESTAMP` },
+    ]);
+
     // Populate display_name from name column if it exists
     const contactsExists = db.prepare(
       `SELECT name FROM sqlite_master WHERE type='table' AND name='contacts'`
@@ -562,6 +571,12 @@ class DatabaseService implements IDatabaseService {
     if (!messagesColumns.includes('llm_analysis')) {
       runSafe(`ALTER TABLE messages ADD COLUMN llm_analysis TEXT`);
     }
+
+    // Migration 12 (TASK-975): Create indexes for communications.message_id column
+    // This supports the junction table pattern for linking messages to transactions
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_communications_message_id ON communications(message_id)`);
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_communications_txn_msg ON communications(transaction_id, message_id)`);
+    runSafe(`CREATE UNIQUE INDEX IF NOT EXISTS idx_communications_msg_txn_unique ON communications(message_id, transaction_id) WHERE message_id IS NOT NULL`);
 
     // Finalize schema version (create table if missing for backwards compatibility)
     const schemaVersionExists = db.prepare(

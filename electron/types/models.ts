@@ -356,6 +356,18 @@ export interface Message {
   is_compliance_related?: boolean;
   /** @deprecated Use is_false_positive instead */
   flagged_for_review?: boolean;
+
+  // ========== TASK-975: Junction Table Fields ==========
+  // These fields are used when storing as a communications record (junction table)
+  // linking a message to a transaction
+  /** Reference to the source message in the messages table (for junction table pattern) */
+  message_id?: string;
+  /** How the link was created: 'auto', 'manual', or 'scan' */
+  link_source?: 'auto' | 'manual' | 'scan';
+  /** Confidence score for the link (0.0 - 1.0) */
+  link_confidence?: number;
+  /** When the link was created */
+  linked_at?: Date | string;
 }
 
 // ============================================
