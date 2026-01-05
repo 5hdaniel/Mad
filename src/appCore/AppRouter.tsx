@@ -8,7 +8,6 @@
 import React from "react";
 import Login from "../components/Login";
 import MicrosoftLogin from "../components/MicrosoftLogin";
-import PermissionsScreen from "../components/PermissionsScreen";
 import ConversationList from "../components/ConversationList";
 import ExportComplete from "../components/ExportComplete";
 import OutlookExport from "../components/OutlookExport";
@@ -132,16 +131,6 @@ export function AppRouter({ app }: AppRouterProps) {
       <MicrosoftLogin
         onLoginComplete={handleMicrosoftLogin}
         onSkip={handleMicrosoftSkip}
-      />
-    );
-  }
-
-  // Permissions (macOS only)
-  if (currentStep === "permissions" && isMacOS) {
-    return (
-      <PermissionsScreen
-        onPermissionsGranted={handlePermissionsGranted}
-        onCheckAgain={checkPermissions}
       />
     );
   }
