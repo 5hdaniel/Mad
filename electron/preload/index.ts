@@ -5,7 +5,7 @@
 
 export { authBridge } from "./authBridge";
 export { transactionBridge } from "./transactionBridge";
-export type { ScanOptions, ExportEnhancedOptions } from "./transactionBridge";
+export type { ScanOptions, ExportEnhancedOptions, ExportFolderOptions } from "./transactionBridge";
 export { contactBridge, addressBridge } from "./contactBridge";
 export { feedbackBridge } from "./communicationBridge";
 export { preferencesBridge, userBridge, shellBridge } from "./settingsBridge";

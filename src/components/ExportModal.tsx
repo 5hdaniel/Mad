@@ -34,9 +34,15 @@ function ExportModal({
       : "",
   );
   const [contentType, setContentType] = useState("both"); // text, email, both
-  const [exportFormat, setExportFormat] = useState("pdf"); // pdf, excel, csv, json, txt_eml
+  const [exportFormat, setExportFormat] = useState("pdf"); // pdf, excel, csv, json, txt_eml, folder
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [exportProgress, setExportProgress] = useState<{
+    stage: string;
+    current: number;
+    total: number;
+    message: string;
+  } | null>(null);
 
   // Load user preferences to set default export format
   useEffect(() => {
@@ -74,6 +80,7 @@ function ExportModal({
   const handleExport = async () => {
     setExporting(true);
     setError(null);
+    setExportProgress(null);
     setStep(3);
 
     try {
@@ -84,11 +91,26 @@ function ExportModal({
         closing_date_verified: 1,
       });
 
-      // Export with the selected format (PDF or DOCX)
-      const result = await window.api.transactions.exportEnhanced(
-        transaction.id,
-        { exportFormat },
-      );
+      let result;
+
+      if (exportFormat === "folder") {
+        // Use folder export for comprehensive audit package
+        // Note: Type cast needed due to type inference issue with window.d.ts
+        const exportFolderFn = (window.api.transactions as unknown as {
+          exportFolder: (id: string, opts: { includeEmails: boolean; includeTexts: boolean; includeAttachments: boolean }) => Promise<{ success: boolean; path?: string; error?: string }>;
+        }).exportFolder;
+        result = await exportFolderFn(transaction.id, {
+          includeEmails: contentType === "email" || contentType === "both",
+          includeTexts: contentType === "text" || contentType === "both",
+          includeAttachments: true,
+        });
+      } else {
+        // Use enhanced export for single-file formats
+        result = await window.api.transactions.exportEnhanced(
+          transaction.id,
+          { exportFormat },
+        );
+      }
 
       if (result.success) {
         onExportComplete(result);
@@ -102,6 +124,7 @@ function ExportModal({
       setStep(2);
     } finally {
       setExporting(false);
+      setExportProgress(null);
     }
   };
 
@@ -364,7 +387,7 @@ function ExportModal({
                   </button>
                   <button
                     onClick={() => setExportFormat("txt_eml")}
-                    className={`px-4 py-3 rounded-lg font-medium transition-all text-left col-span-2 ${
+                    className={`px-4 py-3 rounded-lg font-medium transition-all text-left ${
                       exportFormat === "txt_eml"
                         ? "bg-purple-500 text-white shadow-md"
                         : "bg-gray-100 text-gray-700 hover:bg-gray-200"
@@ -372,10 +395,34 @@ function ExportModal({
                   >
                     <div className="font-semibold">TXT + EML Files</div>
                     <div className="text-xs opacity-80">
-                      Text files and email files in folders
+                      Text files and email files
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => setExportFormat("folder")}
+                    className={`px-4 py-3 rounded-lg font-medium transition-all text-left ${
+                      exportFormat === "folder"
+                        ? "bg-purple-500 text-white shadow-md"
+                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    }`}
+                  >
+                    <div className="font-semibold">Audit Package</div>
+                    <div className="text-xs opacity-80">
+                      Folder with individual PDFs
                     </div>
                   </button>
                 </div>
+                {exportFormat === "folder" && (
+                  <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-sm text-blue-800 font-medium">Audit Package includes:</p>
+                    <ul className="mt-2 text-xs text-blue-700 space-y-1">
+                      <li>Summary_Report.pdf - Transaction overview</li>
+                      <li>emails/ - Each email as individual PDF</li>
+                      <li>texts/ - Text conversations by contact</li>
+                      <li>attachments/ - All attachments with manifest</li>
+                    </ul>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -385,11 +432,28 @@ function ExportModal({
             <div className="py-8 text-center">
               <div className="w-16 h-16 border-4 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
               <h4 className="text-lg font-semibold text-gray-900 mb-2">
-                Exporting...
+                {exportFormat === "folder" ? "Creating Audit Package..." : "Exporting..."}
               </h4>
               <p className="text-sm text-gray-600">
-                Creating your compliance audit export. This may take a moment.
+                {exportProgress
+                  ? exportProgress.message
+                  : "Creating your compliance audit export. This may take a moment."}
               </p>
+              {exportProgress && exportFormat === "folder" && (
+                <div className="mt-4 max-w-xs mx-auto">
+                  <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-purple-600 transition-all duration-300"
+                      style={{
+                        width: `${Math.round((exportProgress.current / exportProgress.total) * 100)}%`,
+                      }}
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">
+                    {exportProgress.current} / {exportProgress.total}
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </div>
