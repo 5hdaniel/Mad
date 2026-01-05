@@ -506,7 +506,7 @@ export async function getOrCreateContactFromEmail(
     // Create new contact
     contact = await createContact({
       user_id: userId,
-      name: name || email.split("@")[0],
+      display_name: name || email.split("@")[0],
       email: email,
       source: "email",
       is_imported: true,
