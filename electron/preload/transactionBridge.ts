@@ -29,6 +29,15 @@ export interface ExportEnhancedOptions {
   includeSummary?: boolean;
 }
 
+/**
+ * Options for folder export
+ */
+export interface ExportFolderOptions {
+  includeEmails?: boolean;
+  includeTexts?: boolean;
+  includeAttachments?: boolean;
+}
+
 export const transactionBridge = {
   /**
    * Scans user's mailbox for real estate transaction emails
@@ -285,4 +294,14 @@ export const transactionBridge = {
    */
   autoLinkTexts: (transactionId: string) =>
     ipcRenderer.invoke("transactions:auto-link-texts", transactionId),
+
+  /**
+   * Exports transaction to an organized folder structure
+   * Creates: Summary_Report.pdf, emails/, texts/, attachments/
+   * @param transactionId - Transaction ID to export
+   * @param options - Export options (includeEmails, includeTexts, includeAttachments)
+   * @returns Export result with path to created folder
+   */
+  exportFolder: (transactionId: string, options?: ExportFolderOptions) =>
+    ipcRenderer.invoke("transactions:export-folder", transactionId, options),
 };

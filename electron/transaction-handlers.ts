@@ -20,6 +20,7 @@ import type {
 const pdfExportService = require("./services/pdfExportService").default;
 const enhancedExportService =
   require("./services/enhancedExportService").default;
+const folderExportService = require("./services/folderExportService").default;
 
 // Import validation utilities
 import {
@@ -1524,6 +1525,116 @@ export const registerTransactionHandlers = (
         };
       } catch (error) {
         logService.error("Auto-link texts failed", "Transactions", {
+          transactionId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // Export transaction to organized folder structure
+  ipcMain.handle(
+    "transactions:export-folder",
+    async (
+      event: IpcMainInvokeEvent,
+      transactionId: string,
+      options?: unknown,
+    ): Promise<TransactionResponse> => {
+      try {
+        logService.info("Starting folder export", "Transactions", {
+          transactionId,
+        });
+
+        // Validate inputs
+        const validatedTransactionId = validateTransactionId(transactionId);
+        if (!validatedTransactionId) {
+          throw new ValidationError(
+            "Transaction ID validation failed",
+            "transactionId",
+          );
+        }
+        const sanitizedOptions = sanitizeObject(options || {}) as {
+          includeEmails?: boolean;
+          includeTexts?: boolean;
+          includeAttachments?: boolean;
+        };
+
+        // Get transaction details with communications
+        const details = await transactionService.getTransactionDetails(
+          validatedTransactionId,
+        );
+
+        if (!details) {
+          return {
+            success: false,
+            error: "Transaction not found",
+          };
+        }
+
+        // Export to folder structure
+        const exportPath = await folderExportService.exportTransactionToFolder(
+          details,
+          (details as any).communications || [],
+          {
+            transactionId: validatedTransactionId,
+            includeEmails: sanitizedOptions.includeEmails ?? true,
+            includeTexts: sanitizedOptions.includeTexts ?? true,
+            includeAttachments: sanitizedOptions.includeAttachments ?? true,
+            onProgress: (progress: unknown) => {
+              // Send progress updates to renderer
+              if (mainWindow) {
+                mainWindow.webContents.send(
+                  "transactions:export-folder-progress",
+                  progress,
+                );
+              }
+            },
+          },
+        );
+
+        // Update export tracking in database
+        const db = require("./services/databaseService").default;
+        await db.updateTransaction(validatedTransactionId, {
+          export_status: "exported",
+          export_format: "folder",
+          last_exported_on: new Date().toISOString(),
+          export_count: (details.export_count || 0) + 1,
+        });
+
+        // Audit log data export
+        await auditService.log({
+          userId: details.user_id,
+          action: "DATA_EXPORT",
+          resourceType: "EXPORT",
+          resourceId: validatedTransactionId,
+          metadata: {
+            format: "folder",
+            propertyAddress: details.property_address,
+          },
+          success: true,
+        });
+
+        logService.info("Folder export successful", "Transactions", {
+          transactionId: validatedTransactionId,
+          path: exportPath,
+        });
+
+        return {
+          success: true,
+          path: exportPath,
+        };
+      } catch (error) {
+        logService.error("Folder export failed", "Transactions", {
           transactionId,
           error: error instanceof Error ? error.message : "Unknown error",
         });

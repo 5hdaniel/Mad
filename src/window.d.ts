@@ -947,6 +947,23 @@ interface MainAPI {
     ) => Promise<{
       success: boolean;
       filePath?: string;
+      path?: string;
+      error?: string;
+    }>;
+    /**
+     * Export transaction to an organized folder structure
+     * Creates: Summary_Report.pdf, emails/, texts/, attachments/
+     */
+    exportFolder: (
+      transactionId: string,
+      options?: {
+        includeEmails?: boolean;
+        includeTexts?: boolean;
+        includeAttachments?: boolean;
+      },
+    ) => Promise<{
+      success: boolean;
+      path?: string;
       error?: string;
     }>;
     bulkDelete: (transactionIds: string[]) => Promise<{
