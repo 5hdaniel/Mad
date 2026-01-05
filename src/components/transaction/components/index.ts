@@ -31,9 +31,9 @@ export {
   PendingReviewBadge,
 } from "./DetectionBadges";
 
-// TransactionDetails
-export { TransactionDetails } from "./TransactionDetails";
-export type { TransactionDetailsProps } from "./TransactionDetails";
+// NOTE: TransactionDetails has been moved to src/components/TransactionDetails.tsx
+// and uses the transactionDetailsModule for tab components.
+// Import it directly: import TransactionDetails from "./TransactionDetails";
 
 // EditTransactionModal
 export { EditTransactionModal } from "./EditTransactionModal";
