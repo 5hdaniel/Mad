@@ -818,3 +818,17 @@ SELECT
   (SELECT COUNT(*) FROM transaction_participants tp WHERE tp.transaction_id = t.id) as participant_count,
   (SELECT COUNT(*) FROM audit_packages ap WHERE ap.transaction_id = t.id) as audit_count
 FROM transactions t;
+
+-- ============================================
+-- SCHEMA VERSION TABLE (Migration tracking)
+-- ============================================
+-- Tracks which schema version is currently applied.
+-- Used by databaseService to determine which migrations to run.
+CREATE TABLE IF NOT EXISTS schema_version (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  version INTEGER NOT NULL DEFAULT 1,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Initialize schema version if not exists
+INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 8);

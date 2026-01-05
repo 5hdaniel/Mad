@@ -561,10 +561,25 @@ class DatabaseService implements IDatabaseService {
       runSafe(`ALTER TABLE messages ADD COLUMN llm_analysis TEXT`);
     }
 
-    // Finalize schema version
-    const currentVersion = (db.prepare("SELECT version FROM schema_version").get() as { version: number } | undefined)?.version || 0;
-    if (currentVersion < 8) {
-      db.exec("UPDATE schema_version SET version = 8");
+    // Finalize schema version (create table if missing for backwards compatibility)
+    const schemaVersionExists = db.prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'"
+    ).get();
+
+    if (!schemaVersionExists) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS schema_version (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          version INTEGER NOT NULL DEFAULT 1,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 8);
+      `);
+    } else {
+      const currentVersion = (db.prepare("SELECT version FROM schema_version").get() as { version: number } | undefined)?.version || 0;
+      if (currentVersion < 8) {
+        db.exec("UPDATE schema_version SET version = 8");
+      }
     }
 
     await logService.info("All database migrations completed successfully", "DatabaseService");
