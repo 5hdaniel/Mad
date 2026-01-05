@@ -2,9 +2,9 @@
 
 This index tracks all backlog items with their current status and metadata.
 
-**Last Updated:** 2026-01-04 (Added SPRINT-024, BACKLOG-157/158/159, marked SPRINT-023 complete)
-**Total Items:** 150
-**Pending:** 86 | **In Progress:** 0 | **Completed:** 59 | **Partial:** 0 | **Obsolete:** 1 | **Deferred:** 2
+**Last Updated:** 2026-01-05 (Added BACKLOG-160 tech debt from hotfix PRs #326-327)
+**Total Items:** 151
+**Pending:** 87 | **In Progress:** 0 | **Completed:** 59 | **Partial:** 0 | **Obsolete:** 1 | **Deferred:** 2
 
 ---
 
@@ -32,7 +32,7 @@ This index tracks all backlog items with their current status and metadata.
 - **Critical:** BACKLOG-030 (done), 032 (done), 035 (done), 038 (done), 039 (done), 044 (done), 045 (done), 058 (done), 059 (done), 072 (done), 073 (done), 074 (done), 107 (done), 108 (done), 117 (done), 132 (done), 139 (done - database init gate), 142 (done - state coordination overhaul)
 - **High:** BACKLOG-008, 009, 013, 016, 018, 020, 021, 023, 026, 031, 033, 037, 056, 060 (done), 061 (done), 062 (done), 063 (done), 067, 075 (done), 076 (done), 084 (done), 085 (done), 088, 090 (done), 091 (done), 098, 099, 103 (done), 105 (done), 109 (done), 110 (done), **111**, 118 (done), 121 (done), 126 (done), 130 (done), 133 (done), 136 (done), 137 (done - automatic token tracking), 140 (done), 148 (done), **156** (auto-refresh on app load), **157** (fix auth handler test)
 - **Medium:** Multiple (see full index), 014 (done), 050 (done), 054 (done), 065 (done), 077 (done), 078 (done), 079 (done), 081, 086, 087, 089, 092, 093, 094, 095, 096, 097, 100, 101, 102, 104 (done), **112**, **113**, **114**, **115**, **116**, 122 (done), 124 (done), 127 (done), 128 (done), 129 (done), **131**, 135 (done), 138 (done), 149 (done), 152 (done), **158** (decompose AuditTransactionModal), **159** (delete PermissionsScreen)
-- **Low/Deferred:** BACKLOG-001, 003, 004, 010, 017, 069 (deferred), 070 (deferred), 071, 092, **119**, **123**, **125**, **150** (reduce useAppStateMachine), **151** (reduce AppModals.tsx), **155** (dashboard scroll)
+- **Low/Deferred:** BACKLOG-001, 003, 004, 010, 017, 069 (deferred), 070 (deferred), 071, 092, **119**, **123**, **125**, **150** (reduce useAppStateMachine), **151** (reduce AppModals.tsx), **155** (dashboard scroll), **160** (column naming)
 
 ### By Sprint Assignment
 - **SPRINT-001 (Onboarding Refactor):** Completed
@@ -243,6 +243,7 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-157 | Fix Failing Auth Handler Integration Test | test | High | Pending | SPRINT-024 | - | ~15K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-157.md](BACKLOG-157.md) |
 | BACKLOG-158 | Decompose AuditTransactionModal Component | refactor | Medium | Pending | SPRINT-024 | - | ~60K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-158.md](BACKLOG-158.md) |
 | BACKLOG-159 | Delete Deprecated PermissionsScreen.tsx | refactor | Medium | Pending | SPRINT-024 | - | ~10K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-159.md](BACKLOG-159.md) |
+| BACKLOG-160 | Consolidate last_exported_at/on Column Naming | tech-debt | Low | Pending | - | - | ~5K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 
 ---
 
