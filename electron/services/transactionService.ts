@@ -918,6 +918,7 @@ class TransactionService {
   /**
    * Save detected transactions with detection metadata.
    * Sets detection_source, detection_status, detection_method, etc.
+   * Includes deduplication to skip transactions that already exist (TASK-964).
    * @private
    */
   private async _saveDetectedTransactions(
@@ -931,9 +932,37 @@ class TransactionService {
   ): Promise<TransactionWithSummary[]> {
     const transactions: TransactionWithSummary[] = [];
 
+    // TASK-964: Batch lookup existing transactions for deduplication (prevents N+1 queries)
+    const propertyAddresses = extractionResult.detectedTransactions.map(
+      (tx) => tx.propertyAddress
+    );
+    const existingTransactions = await databaseService.findExistingTransactionsByAddresses(
+      userId,
+      propertyAddresses,
+    );
+
+    let skippedCount = 0;
+
     for (const detected of extractionResult.detectedTransactions) {
       // Check for cancellation for each transaction save
       this.checkCancelled();
+
+      // TASK-964: Check for existing transaction (deduplication)
+      const normalizedAddress = detected.propertyAddress.toLowerCase().trim();
+      const existingTxId = existingTransactions.get(normalizedAddress);
+      if (existingTxId) {
+        skippedCount++;
+        await logService.debug(
+          "Skipping duplicate transaction import",
+          "TransactionService._saveDetectedTransactions",
+          {
+            propertyAddress: detected.propertyAddress,
+            existingTransactionId: existingTxId,
+            userId,
+          },
+        );
+        continue;
+      }
 
       // Parse address components
       const addressParts = this._parseAddress(detected.propertyAddress);
@@ -1017,6 +1046,20 @@ class TransactionService {
         id: transaction.id,
         ...detectedWithoutId,
       } as TransactionWithSummary);
+    }
+
+    // TASK-964: Log import summary including skipped duplicates
+    if (skippedCount > 0 || transactions.length > 0) {
+      await logService.info(
+        "Transaction import completed",
+        "TransactionService._saveDetectedTransactions",
+        {
+          userId,
+          totalDetected: extractionResult.detectedTransactions.length,
+          created: transactions.length,
+          skippedDuplicates: skippedCount,
+        },
+      );
     }
 
     return transactions;

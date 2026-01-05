@@ -754,6 +754,13 @@ class DatabaseService implements IDatabaseService {
     return transactionDb.deleteTransaction(transactionId);
   }
 
+  async findExistingTransactionsByAddresses(
+    userId: string,
+    propertyAddresses: string[],
+  ): Promise<Map<string, string>> {
+    return transactionDb.findExistingTransactionsByAddresses(userId, propertyAddresses);
+  }
+
   // ============================================
   // COMMUNICATION OPERATIONS (Delegate to communicationDbService)
   // ============================================
