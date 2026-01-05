@@ -1181,7 +1181,7 @@ export const registerTransactionHandlers = (
             const userId = existingTransaction?.user_id || "unknown";
 
             await transactionService.updateTransaction(transactionId, {
-              status: status as "active" | "closed",
+              status: status as "pending" | "active" | "closed" | "rejected",
             });
 
             // Audit log transaction update
