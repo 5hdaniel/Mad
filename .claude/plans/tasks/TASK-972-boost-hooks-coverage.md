@@ -13,29 +13,43 @@
 
 `src/hooks/` has 26.3% statement coverage (target: 60%+). This is a significant gap that reduces confidence in refactoring.
 
-## Current State
+## Current State (SR Engineer Verified 2026-01-04)
 
 ```
-src/hooks/: 26.3% statements
-Key gaps:
-- useIPhoneSync.ts (593 lines) - Complex sync logic
-- useExportWizard.ts - Export workflow
-- useTransactionValidation.ts - Validation rules
+src/hooks/: 26.3% statements (7 hooks total, 1173 lines)
+
+Hooks by size (lines):
+1. useIPhoneSync.ts          - 593 lines (50.5%) - Has tests, expand coverage
+2. useTransactionStatusUpdate.ts - 195 lines (16.6%) - NO TESTS
+3. useToast.ts               - 89 lines (7.6%)  - NO TESTS
+4. useConversations.ts       - 88 lines (7.5%)  - Has tests, expand
+5. usePendingTransactionCount.ts - 77 lines (6.6%) - Has tests, expand
+6. useTour.ts                - 68 lines (5.8%)  - Has tests
+7. useSelection.ts           - 63 lines (5.4%)  - Has tests
 ```
+
+**CRITICAL CORRECTION:** Previous task referenced hooks that DO NOT EXIST:
+- ~~useExportWizard.ts~~ - NOT FOUND
+- ~~useTransactionValidation.ts~~ - NOT FOUND
 
 ## Deliverables
 
 1. **Analyze coverage** - Run coverage report, identify lowest-covered hooks
-2. **Prioritize** - Focus on hooks with complex logic and low coverage
-3. **Write tests** - Add tests for top 5 hooks
-4. **Verify** - Achieve 50%+ coverage for src/hooks/
+2. **Prioritize** - Focus on hooks WITHOUT tests first, then expand existing
+3. **Write tests** - Add tests for hooks without coverage, expand others
+4. **Verify** - Achieve 40%+ coverage (stretch: 50%) for src/hooks/
 
 ## Target Hooks (Priority Order)
 
-1. `useIPhoneSync.ts` - Most complex, most lines
-2. `useExportWizard.ts` - User-facing workflow
-3. `useTransactionValidation.ts` - Business logic
-4. Other hooks with <30% coverage
+| Priority | Hook | Lines | Has Tests? | Action |
+|----------|------|-------|------------|--------|
+| 1 | `useIPhoneSync.ts` | 593 | Yes | Expand - most complex hook |
+| 2 | `useTransactionStatusUpdate.ts` | 195 | **NO** | Create new test file |
+| 3 | `useToast.ts` | 89 | **NO** | Create new test file |
+| 4 | `useConversations.ts` | 88 | Yes | Expand existing tests |
+| 5 | `usePendingTransactionCount.ts` | 77 | Yes | Expand existing tests |
+
+**Note:** useTour.ts and useSelection.ts have tests and are small - lower priority.
 
 ## Testing Approach
 
@@ -83,8 +97,9 @@ npm test -- --coverage --collectCoverageFrom="src/hooks/**/*.ts"
 
 ## Acceptance Criteria
 
-- [ ] src/hooks/ coverage ≥50%
-- [ ] Tests for top 5 hooks added
+- [ ] src/hooks/ coverage >=40% (stretch: 50%)
+- [ ] New test files for useTransactionStatusUpdate.ts and useToast.ts
+- [ ] Expanded tests for useIPhoneSync.ts (most lines = most impact)
 - [ ] All tests pass (no flaky tests)
 - [ ] Tests cover error paths and edge cases
 
