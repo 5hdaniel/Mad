@@ -30,7 +30,11 @@ export interface UseEmailHandlersOptions {
   setPendingOnboardingData: React.Dispatch<
     React.SetStateAction<PendingOnboardingData>
   >;
-  setHasEmailConnected: (connected: boolean) => void;
+  setHasEmailConnected: (
+    connected: boolean,
+    email?: string,
+    provider?: "google" | "microsoft"
+  ) => void;
   setCurrentStep: (step: AppStep) => void;
 
   // Email onboarding API
@@ -213,7 +217,7 @@ export function useEmailHandlers({
                 email: connectionResult.email,
                 tokens: connectionResult.tokens,
               });
-              setHasEmailConnected(true);
+              setHasEmailConnected(true, connectionResult.email, "google");
               setPendingOnboardingData((prev) => ({
                 ...prev,
                 emailProvider: "google",
@@ -229,8 +233,8 @@ export function useEmailHandlers({
             email?: string;
             error?: string;
           }) => {
-            if (connectionResult.success) {
-              setHasEmailConnected(true);
+            if (connectionResult.success && connectionResult.email) {
+              setHasEmailConnected(true, connectionResult.email, "google");
               // Also set email provider so EmailConnectStep shows as connected
               setPendingOnboardingData((prev) => ({
                 ...prev,
@@ -311,7 +315,7 @@ export function useEmailHandlers({
                   email: connectionResult.email,
                   tokens: connectionResult.tokens,
                 });
-                setHasEmailConnected(true);
+                setHasEmailConnected(true, connectionResult.email, "microsoft");
                 setPendingOnboardingData((prev) => ({
                   ...prev,
                   emailProvider: "microsoft",
@@ -327,8 +331,8 @@ export function useEmailHandlers({
               email?: string;
               error?: string;
             }) => {
-              if (connectionResult.success) {
-                setHasEmailConnected(true);
+              if (connectionResult.success && connectionResult.email) {
+                setHasEmailConnected(true, connectionResult.email, "microsoft");
                 // Also set email provider so EmailConnectStep shows as connected
                 setPendingOnboardingData((prev) => ({
                   ...prev,

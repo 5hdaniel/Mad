@@ -179,6 +179,8 @@ export interface OnboardingState {
   platform: PlatformInfo;
   /** Track which steps are complete */
   completedSteps: OnboardingStep[];
+  /** True if email was connected during this onboarding session */
+  hasEmailConnected?: boolean;
 }
 
 /**
@@ -226,6 +228,7 @@ export type AppAction =
   | UserDataLoadedAction
   | OnboardingStepCompleteAction
   | OnboardingSkipAction
+  | EmailConnectedAction
   | AppReadyAction
   | LogoutAction
   | ErrorAction
@@ -312,6 +315,18 @@ export interface OnboardingSkipAction {
   type: "ONBOARDING_SKIP";
   /** The step that was skipped */
   step: OnboardingStep;
+}
+
+/**
+ * Email connection completed during onboarding.
+ * Updates the onboarding state to track that email was connected.
+ */
+export interface EmailConnectedAction {
+  type: "EMAIL_CONNECTED";
+  /** The email address that was connected */
+  email: string;
+  /** The email provider (google or microsoft) */
+  provider: "google" | "microsoft";
 }
 
 /**

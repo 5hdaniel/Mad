@@ -316,6 +316,13 @@ export function Content({
   const primaryEmail = primaryConnected ? context.connectedEmail : null;
   const secondaryEmail = secondaryConnected ? context.connectedEmail : null;
 
+  // Reset connecting state when connection succeeds
+  React.useEffect(() => {
+    if (context.emailConnected) {
+      setConnectingProvider(null);
+    }
+  }, [context.emailConnected]);
+
   const handleConnect = (provider: "google" | "microsoft") => {
     setConnectingProvider(provider);
     onAction({

@@ -428,6 +428,18 @@ export function appStateReducer(
       });
     }
 
+    case "EMAIL_CONNECTED": {
+      if (state.status !== "onboarding") {
+        return state;
+      }
+
+      // Update onboarding state to track that email was connected
+      return {
+        ...state,
+        hasEmailConnected: true,
+      };
+    }
+
     // ============================================
     // READY STATE TRANSITIONS
     // ============================================

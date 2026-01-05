@@ -33,7 +33,19 @@ interface UseEmailOnboardingApiReturn {
   hasEmailConnected: boolean;
   isCheckingEmailOnboarding: boolean;
   setHasCompletedEmailOnboarding: (completed: boolean) => void;
-  setHasEmailConnected: (connected: boolean) => void;
+  /**
+   * Mark email as connected. During onboarding, dispatches EMAIL_CONNECTED action
+   * to update state machine.
+   *
+   * @param connected - Whether email is connected
+   * @param email - The connected email address (required for state machine)
+   * @param provider - The email provider (required for state machine)
+   */
+  setHasEmailConnected: (
+    connected: boolean,
+    email?: string,
+    provider?: "google" | "microsoft"
+  ) => void;
   completeEmailOnboarding: () => Promise<void>;
 }
 
@@ -75,9 +87,24 @@ export function useEmailOnboardingApi({
     []
   );
 
-  const setHasEmailConnected = useCallback((_connected: boolean) => {
-    // No-op: state machine is source of truth
-  }, []);
+  const setHasEmailConnected = useCallback(
+    (
+      connected: boolean,
+      email?: string,
+      provider?: "google" | "microsoft"
+    ) => {
+      if (connected && email && provider) {
+        // Dispatch EMAIL_CONNECTED to update state machine
+        dispatch({
+          type: "EMAIL_CONNECTED",
+          email,
+          provider,
+        });
+      }
+      // If not connected or missing info, no-op (state machine is source of truth)
+    },
+    [dispatch]
+  );
 
   // completeEmailOnboarding persists to API and dispatches onboarding step complete
   const completeEmailOnboarding = useCallback(async (): Promise<void> => {

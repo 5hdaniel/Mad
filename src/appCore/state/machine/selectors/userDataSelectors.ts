@@ -158,7 +158,7 @@ export function selectPhoneType(
  * Returns true if user has an email connected.
  * Only available from ready state where userData exists.
  *
- * During onboarding, defaults to false since email hasn't been connected yet.
+ * During onboarding, checks the hasEmailConnected flag on the onboarding state.
  * During loading, defaults to true to avoid flicker (matching legacy behavior).
  *
  * @param state - Current application state
@@ -169,8 +169,8 @@ export function selectHasEmailConnected(state: AppState): boolean {
     return state.userData.hasEmailConnected;
   }
   if (state.status === "onboarding") {
-    // During onboarding, email is not yet connected
-    return false;
+    // During onboarding, check if email was connected in this session
+    return state.hasEmailConnected ?? false;
   }
   // Loading state - default true to avoid flicker (matching legacy behavior)
   return true;
