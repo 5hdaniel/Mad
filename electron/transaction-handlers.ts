@@ -1196,9 +1196,14 @@ export const registerTransactionHandlers = (
 
             updatedCount++;
           } catch (err) {
-            errors.push(
-              `Failed to update ${transactionId}: ${err instanceof Error ? err.message : "Unknown error"}`,
-            );
+            const errorMsg = err instanceof Error ? err.message : "Unknown error";
+            logService.error("Failed to update transaction status", "Transactions", {
+              transactionId,
+              status,
+              error: errorMsg,
+              stack: err instanceof Error ? err.stack : undefined,
+            });
+            errors.push(`Failed to update ${transactionId}: ${errorMsg}`);
           }
         }
 
