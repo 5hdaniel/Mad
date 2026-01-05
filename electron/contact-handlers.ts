@@ -282,7 +282,7 @@ export function registerContactHandlers(): void {
             // Create new contact from macOS Contacts app
             const importedContact = await databaseService.createContact({
               user_id: validatedUserId,
-              name: validatedData.name || "Unknown",
+              display_name: validatedData.name || "Unknown",
               email: validatedData.email ?? undefined,
               phone: validatedData.phone ?? undefined,
               company: validatedData.company ?? undefined,
@@ -398,7 +398,7 @@ export function registerContactHandlers(): void {
 
         const contact = await databaseService.createContact({
           user_id: validatedUserId,
-          name: validatedData.name || "Unknown",
+          display_name: validatedData.name || "Unknown",
           email: validatedData.email ?? undefined,
           phone: validatedData.phone ?? undefined,
           company: validatedData.company ?? undefined,
