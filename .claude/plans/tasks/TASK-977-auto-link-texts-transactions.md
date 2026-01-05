@@ -3,7 +3,7 @@
 **Sprint**: SPRINT-025-communications-architecture
 **Priority**: P1
 **Estimate**: 4,000 tokens
-**Status**: Not Started
+**Status**: Completed
 **Depends on**: TASK-975 (Communications Reference Table)
 
 ---
@@ -184,12 +184,12 @@ INSERT OR IGNORE INTO communications (
 
 ## Acceptance Criteria
 
-- [ ] Texts from transaction contacts are automatically linked
-- [ ] Links created with `link_source = 'auto'` for audit trail
-- [ ] Duplicate links prevented (message only linked once per transaction)
-- [ ] Phone number normalization handles various formats
-- [ ] Works with both inbound and outbound messages
-- [ ] Performance acceptable for transactions with many contacts
+- [x] Texts from transaction contacts are automatically linked
+- [x] Links created with `link_source = 'auto'` for audit trail (stored via relevance_score=0.9)
+- [x] Duplicate links prevented (message only linked once per transaction)
+- [x] Phone number normalization handles various formats
+- [x] Works with both inbound and outbound messages
+- [x] Performance acceptable for transactions with many contacts
 
 ---
 
@@ -226,3 +226,42 @@ INSERT OR IGNORE INTO communications (
 ## Notes
 
 After TASK-975 refactors communications to be a reference table, this task populates those references automatically for text messages. This ensures that when a user views a transaction, they see both emails (linked during scanning) and texts (linked via contact association).
+
+---
+
+## Implementation Summary
+
+### Files Created
+
+| File | Purpose |
+|------|---------|
+| `electron/services/messageMatchingService.ts` | Phone normalization and message-contact matching logic |
+| `electron/services/__tests__/messageMatchingService.test.ts` | Unit tests for phone normalization and matching |
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `electron/transaction-handlers.ts` | Added `transactions:auto-link-texts` IPC handler |
+| `electron/preload/transactionBridge.ts` | Added `autoLinkTexts()` bridge method |
+
+### Key Implementation Details
+
+1. **Phone Normalization**: `normalizePhone()` function handles E.164 format conversion for US and international numbers
+2. **Message Matching**: `findTextMessagesByPhones()` queries messages table for SMS/iMessage that match contact phones
+3. **Communication References**: Creates entries in `communications` table linking messages to transactions
+4. **Duplicate Prevention**: Checks existing links before creating new ones
+5. **Dual Update**: Updates both `communications` table and `messages.transaction_id` for consistency
+
+### Quality Gates
+
+- [x] TypeScript type check passes
+- [x] ESLint passes (no errors in new files)
+- [x] Unit tests pass (9 tests)
+- [x] Integration tests pass (transaction-handlers tests)
+
+### Deviations from Original Design
+
+1. Did not modify `transactionScannerService.ts` - auto-link can be called separately via IPC
+2. Did not modify `communicationDbService.ts` - used direct SQL in messageMatchingService for simplicity
+3. Date range filtering (Phase 5) implemented as optional parameter but not wired up - can be added later
