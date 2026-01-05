@@ -1,79 +1,81 @@
-# BACKLOG-144: UI Flicker for Returning Users (State Machine Regression)
+# BACKLOG-144: Enforce SR Engineer Review Before PR Merge
 
-## Problem
+**Priority:** High
+**Category:** process / workflow
+**Status:** Pending
+**Created:** 2026-01-04
+**Source:** SPRINT-022 Retrospective - PRs merged without SR Engineer review
 
-Returning users briefly see onboarding screens flash before reaching the dashboard. This is a regression introduced by the Phase 2 state machine migration (SPRINT-021).
+---
 
-**Reported:** 2026-01-04 during SPRINT-021 manual testing
-**Severity:** High (blocks Phase 2 release)
-**Type:** Regression
+## Problem Statement
 
-## Expected Behavior
+During SPRINT-022, three PRs (#310, #311, #312) were merged to develop without proper SR Engineer review. The PR template includes an SR Engineer section, but nothing enforces that it must be completed before merge.
 
-Returning users should go directly from loading → dashboard with no visible onboarding screens.
+### Root Cause
 
-## Actual Behavior
+1. Engineer agents complete work and create PRs
+2. CI passes (tests, lint, type-check)
+3. No gate exists to verify SR Engineer review was performed
+4. PRs get merged based on CI passing + manual testing
 
-UI briefly flips through some onboarding screens before settling on dashboard.
+### Impact
 
-## Root Cause Analysis
+- Architecture concerns may be missed
+- Security review skipped
+- Metrics not captured properly
+- Process violations go undetected
 
-In `src/appCore/state/machine/reducer.ts`, the `USER_DATA_LOADED` action:
+---
 
-1. Checks `isOnboardingComplete(data, platform)` (line 277)
-2. If ANY condition fails, transitions to `status: 'onboarding'`
-3. The `deriveAppStep()` then maps this to an onboarding screen
+## Proposed Solutions
 
-The `isOnboardingComplete()` function (lines 110-132) checks:
-- `userData.hasCompletedEmailOnboarding`
-- `userData.phoneType`
-- `platform.isMacOS && !userData.hasPermissions`
+### Option A: CI Validation Check (Recommended)
 
-**Hypothesis:** One of these conditions is briefly false during initial data load, causing a transient onboarding state.
+Add validation to existing PR Metrics workflow:
 
-## Investigation Steps
-
-1. Add console logging to `USER_DATA_LOADED` handler to see what data is received
-2. Check what `isOnboardingComplete()` returns and which condition fails
-3. Verify the orchestrator is providing correct userData
-4. Compare with legacy path behavior
-
-## Potential Fixes
-
-### Option A: Add Loading Guard
-
-Keep showing loading screen until ALL user data is confirmed loaded:
-
-```typescript
-case "USER_DATA_LOADED": {
-  // Don't transition until data is fully validated
-  if (!data.phoneType && user.terms_accepted_at) {
-    // Returning user but phoneType not loaded yet - stay loading
-    return state;
-  }
-  // ... rest of logic
-}
+```yaml
+# Check SR Engineer section is filled (not placeholder)
+if grep -q "SR Engineer Agent ID: <paste" <<< "$PR_BODY"; then
+  echo "::error::SR Engineer review section not completed"
+  exit 1
+fi
 ```
 
-### Option B: Separate "Loading User Data" Screen
+**Pros:** Automated, blocks merge, clear error
+**Cons:** Requires workflow modification
 
-Instead of transitioning through onboarding, show a dedicated loading state.
+### Option B: Engineer Agent Handoff Requirement
 
-### Option C: Fix Data Loading Order
+Modify engineer agent to block until SR Engineer invoked.
 
-Ensure orchestrator waits for ALL data before dispatching USER_DATA_LOADED.
+**Pros:** Natural workflow
+**Cons:** Relies on agent compliance
 
-## Files to Investigate
+### Option C: Hybrid (Recommended)
 
-- `src/appCore/state/machine/reducer.ts` - USER_DATA_LOADED handler
-- `src/appCore/state/machine/AppStateContext.tsx` - Orchestrator logic
-- `src/appCore/state/flows/useNavigationFlow.ts` - deriveAppStep usage
+1. CI check validates SR Engineer section is filled
+2. Engineer agent instructions require SR Engineer handoff
+3. SR Engineer fills in section as part of review
 
-## Priority
+---
 
-**Critical** - Blocks SPRINT-021 merge to develop
+## Acceptance Criteria
+
+- [ ] PRs cannot be merged without SR Engineer section completed
+- [ ] Clear error message when validation fails
+- [ ] Documentation updated with new workflow
+- [ ] Tested on at least one PR
+
+---
 
 ## Related
 
-- SPRINT-021: State Machine Migration Phase 2
-- BACKLOG-142: State Coordination Root Cause (original architecture design)
+- BACKLOG-126: Debugging Metrics Enforcement (similar pattern)
+- `.github/workflows/ci.yml`: Existing CI workflow
+
+---
+
+## Changelog
+
+- 2026-01-04: Created from SPRINT-022 retrospective

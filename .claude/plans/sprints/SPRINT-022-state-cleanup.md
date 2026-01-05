@@ -40,6 +40,7 @@ Complete the State Coordination Overhaul (BACKLOG-142) by fixing remaining bugs,
 | TASK-952 | Remove legacy hook code paths | refactor | ~50K | 200K | TASK-951 | Medium |
 | TASK-953 | Update architecture documentation | docs | ~15K | 60K | TASK-952 | Low |
 | TASK-954 | Performance optimization (memoization) | refactor | ~25K | 100K | TASK-952 | Low |
+| TASK-958 | SR Engineer review fixes | fix | ~8K | 20K | TASK-953 | Low |
 
 **Total Estimated Tokens:** ~190K (adjusted for category factors)
 **Sprint Token Budget:** ~240K (includes SR review overhead)
@@ -308,13 +309,16 @@ This is intentionally a smaller sprint (~155K tokens) to allow thorough validati
 
 | Task | PR | Tokens | Status |
 |------|-----|--------|--------|
-| TASK-957 | #310 | TBD | READY TO MERGE |
-| TASK-950 | - | - | NOT STARTED |
-| TASK-949 | - | - | NOT STARTED |
-| TASK-951 | - | - | NOT STARTED |
-| TASK-952 | - | - | NOT STARTED |
-| TASK-953 | - | - | NOT STARTED |
-| TASK-954 | - | - | NOT STARTED |
+| TASK-957 | #310 | TBD | MERGED |
+| TASK-950 | #307 | TBD | MERGED |
+| TASK-949 | #306 | TBD | MERGED |
+| TASK-955 | #308 | TBD | MERGED |
+| TASK-956 | #309 | TBD | MERGED |
+| TASK-951 | N/A | N/A | COMPLETE (manual validation) |
+| TASK-952 | #311 | TBD | MERGED |
+| TASK-953 | #312 | TBD | MERGED |
+| TASK-954 | N/A | N/A | COMPLETE (analysis only) |
+| TASK-958 | TBD | TBD | IN PROGRESS |
 
 ---
 

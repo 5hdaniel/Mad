@@ -632,6 +632,12 @@ export interface WindowApi {
     acceptTerms: (
       userId: string,
     ) => Promise<{ success: boolean; error?: string }>;
+    completeEmailOnboarding: (
+      userId: string,
+    ) => Promise<{ success: boolean; error?: string }>;
+    checkEmailOnboarding: (
+      userId: string,
+    ) => Promise<{ success: boolean; completed: boolean; error?: string }>;
     // Complete pending login after keychain setup (login-first flow)
     completePendingLogin: (oauthData: unknown) => Promise<{
       success: boolean;

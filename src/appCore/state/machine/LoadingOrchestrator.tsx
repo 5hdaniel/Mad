@@ -285,14 +285,7 @@ export function LoadingOrchestrator({
           })),
 
           // Check if email onboarding is completed
-          // Note: Type assertion needed due to incomplete MainAPI type definition
-          (
-            window.api.auth as unknown as {
-              checkEmailOnboarding: (
-                userId: string
-              ) => Promise<{ success: boolean; completed: boolean; error?: string }>;
-            }
-          )
+          window.api.auth
             .checkEmailOnboarding(userId)
             .catch(() => ({
               success: false,
