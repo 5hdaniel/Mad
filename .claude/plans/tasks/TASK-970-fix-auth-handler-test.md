@@ -52,13 +52,33 @@ npm test -- --testPathPattern=auth-handlers
 
 ## Acceptance Criteria
 
-- [ ] Test passes
-- [ ] All 749 tests pass
-- [ ] No production behavior changes (unless bug found)
+- [x] Test passes
+- [x] All 749 tests pass (pre-existing vacuum test failure on develop unrelated to this fix)
+- [x] No production behavior changes (unless bug found)
+
+---
+
+## Implementation Summary
+
+### Root Cause
+The `handleGetCurrentUser` function in `sessionHandlers.ts` (line 411) checks `databaseService.isInitialized()` before proceeding. The test mock for `mockDatabaseService` did not include this method, causing the mock to return `undefined` (falsy), which triggered an early return with "Database not initialized" error.
+
+### Fix Applied
+Added `isInitialized: jest.fn().mockReturnValue(true)` to the `mockDatabaseService` object in `auth-handlers.integration.test.ts`.
+
+### Files Modified
+- `electron/__tests__/auth-handlers.integration.test.ts` (line 64)
+
+### Testing Results
+- All 66 auth-handler tests pass
+- Full test suite: 823 passed, 1 failed (pre-existing vacuum test failure on develop)
+
+### Note on Pre-existing Test Failure
+The `databaseService.test.ts` vacuum test failure exists on develop before this change. Verified by stashing changes and running the test on clean develop branch.
 
 ## Engineer Metrics
 
-**Agent ID:** _[Record immediately when Task tool returns]_
+**Agent ID:** engineer-task-970
 
 | Metric | Value |
 |--------|-------|

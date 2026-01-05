@@ -61,6 +61,7 @@ jest.mock("os", () => ({
 // Mock all services
 const mockDatabaseService = {
   initialize: jest.fn().mockResolvedValue(undefined),
+  isInitialized: jest.fn().mockReturnValue(true),
   getUserByOAuthId: jest.fn(),
   createUser: jest.fn(),
   updateUser: jest.fn(),
