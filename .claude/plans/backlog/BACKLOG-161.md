@@ -23,6 +23,7 @@ SPRINT-025 TASK-976 burned **14.2M tokens** (2849x over estimate) primarily in a
 3. **No loop detection** - Same command repeated 50+ times goes unnoticed
 4. **Background execution** - No human monitoring until too late
 5. **Perfectionism** - Agent won't commit until everything "feels right"
+6. **PM monitoring failure** - PM launched agent and didn't check until USER noticed the problem
 
 ## Proposed Solutions
 
@@ -110,6 +111,38 @@ Add to PM workflow:
 - Monitor background agents every 30 minutes
 - Kill agents exceeding budget with no output
 
+### Solution 4: PM Background Agent Monitoring Protocol (MANDATORY)
+
+**The hook is a safety net. Monitoring is the primary defense.**
+
+When launching background agents, PM MUST:
+
+```markdown
+## Background Agent Launch Checklist
+
+BEFORE launching:
+- [ ] Note the estimated token budget (e.g., 5K)
+- [ ] Set timer for 30-minute check-in
+- [ ] Record agent task_id
+
+AT 30-minute check-in:
+- [ ] Check agent status: `TaskOutput --task_id=<id> --block=false`
+- [ ] Verify progress: Has agent produced commits/PRs?
+- [ ] Check token consumption: Is it within 5x estimate?
+- [ ] If stuck: Kill agent, investigate, restart with guidance
+
+NEVER:
+- Launch and forget
+- Wait for user to notice problems
+- Assume "no news is good news"
+```
+
+**SPRINT-025 Failure Example:**
+- Agent launched at T+0
+- User noticed token burn at T+???
+- PM only investigated AFTER user raised concern
+- If user hadn't noticed, agent could have burned 100M+ tokens
+
 ## Acceptance Criteria
 
 - [ ] Hook detects exploration loop (>20 Read/Glob/Grep without Write)
@@ -118,6 +151,8 @@ Add to PM workflow:
 - [ ] Engineer agent prompt includes anti-loop rules
 - [ ] PM checklist includes "check file overlap before parallel execution"
 - [ ] Background agent monitoring documented
+- [ ] PM skill updated with mandatory monitoring protocol (Solution 4)
+- [ ] agentic-pm.md includes "30-minute check-in" requirement for background agents
 
 ## Incident Reference
 
@@ -127,6 +162,13 @@ Add to PM workflow:
 - Agent ran `npm run type-check` 20+ times
 - Agent read same files repeatedly
 - Code was DONE - agent couldn't recognize success
+
+**PM Monitoring Failure:**
+- PM launched agent in background and did NOT monitor
+- USER noticed the token consumption and asked about it
+- PM only verified work output AFTER user raised concerns
+- PM never proactively checked the worktree or agent progress
+- This is a discipline failure, not a tooling gap
 
 ## Estimate
 
