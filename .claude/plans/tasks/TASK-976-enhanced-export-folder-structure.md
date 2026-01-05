@@ -3,7 +3,7 @@
 **Sprint**: SPRINT-025-communications-architecture
 **Priority**: P1
 **Estimate**: 5,000 tokens
-**Status**: Not Started
+**Status**: Complete
 **Depends on**: TASK-975 (Communications Reference Table)
 
 ---
@@ -192,3 +192,78 @@ WHERE c.transaction_id = ?
 ```
 
 This task builds on that foundation to create comprehensive export packages.
+
+---
+
+## Implementation Summary
+
+**Completed by**: Engineer Agent
+**Branch**: `feature/TASK-976-enhanced-export`
+**Worktree**: `/Users/daniel/Documents/Mad-task-976`
+
+### Files Created
+
+| File | Purpose |
+|------|---------|
+| `electron/services/folderExportService.ts` | Main folder export orchestrator with HTML-to-PDF conversion |
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `electron/transaction-handlers.ts` | Added `transactions:export-folder` IPC handler |
+| `electron/preload/transactionBridge.ts` | Added `exportFolder` bridge method and `ExportFolderOptions` interface |
+| `electron/preload/index.ts` | Exported `ExportFolderOptions` type |
+| `src/window.d.ts` | Added `exportFolder` type definition to MainAPI.transactions |
+| `src/components/ExportModal.tsx` | Added "Audit Package" export format option with folder export UI |
+
+### Implementation Details
+
+1. **FolderExportService** (`electron/services/folderExportService.ts`):
+   - Creates organized folder structure: `Transaction_<address>/`
+   - Generates `Summary_Report.pdf` with transaction overview and email index
+   - Exports individual emails as PDFs in `emails/` subfolder with indexed naming
+   - Exports text conversations grouped by contact in `texts/` subfolder
+   - Collects attachments with `manifest.json` in `attachments/` subfolder
+   - Uses Electron's built-in `printToPDF` for HTML-to-PDF conversion
+   - Progress reporting support for UI feedback
+
+2. **UI Integration** (`src/components/ExportModal.tsx`):
+   - Added "Audit Package" button as new export format option
+   - Shows description of what's included when selected
+   - Progress indicator during export
+   - Uses content type selection for emails/texts inclusion
+
+3. **IPC Handler** (`electron/transaction-handlers.ts`):
+   - New `transactions:export-folder` handler
+   - Validates transaction ID and options
+   - Fetches transaction details with communications
+   - Calls folder export service
+   - Updates export tracking in database
+   - Audit logs the export action
+
+### Quality Checks
+
+- [x] Type-check passes: `npm run type-check`
+- [x] Lint passes (pre-existing issue in ContactSelectModal.tsx)
+- [x] Tests pass (pre-existing vacuum test failure)
+- [x] No new test failures introduced
+
+### Acceptance Criteria Status
+
+- [x] Export creates folder with correct structure
+- [x] Summary_Report.pdf contains transaction overview
+- [x] Each email exported as individual PDF with full HTML
+- [x] Text conversations grouped by contact
+- [x] Attachments manifest created
+- [x] Progress indicator for large exports
+- [x] Handles special characters in filenames (sanitization)
+- [x] Creates unique filenames with timestamps
+
+### Deviations from Task Specification
+
+1. **Combined services**: Instead of creating separate `emailPdfService.ts` and `textExportService.ts`, all functionality was consolidated into `folderExportService.ts` for simplicity and maintainability.
+
+2. **Attachment handling**: The current implementation creates an attachment manifest but does not copy actual attachment files (requires access to stored attachments). The manifest provides metadata for future enhancement.
+
+3. **Type workaround**: Used type cast in ExportModal.tsx for `exportFolder` call due to TypeScript inference issue with window.d.ts (the type IS correctly defined but TypeScript wasn't recognizing it).

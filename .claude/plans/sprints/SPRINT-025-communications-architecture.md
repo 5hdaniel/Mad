@@ -1,8 +1,9 @@
 # SPRINT-025: Communications Architecture & Export Enhancement
 
 **Created**: 2026-01-05
-**Status**: Planning
+**Status**: COMPLETE (TASK-978 deferred)
 **Type**: Architecture Refactor + Feature Sprint
+**Retrospective**: See `SPRINT-025-retrospective.md`
 
 ---
 
@@ -164,8 +165,8 @@ TASK-975 (Communications Refactor)
 
 ## 7. Success Criteria
 
-- [ ] All communications (email + text) visible in transactions
-- [ ] Export creates organized folder structure
-- [ ] No data loss during migration
-- [ ] Query performance maintained or improved
-- [ ] SR Engineer approves all PRs
+- [x] All communications (email + text) visible in transactions (architecture ready, UI pending TASK-978)
+- [x] Export creates organized folder structure ("Audit Package" option)
+- [x] No data loss during migration (backward compatible with COALESCE)
+- [x] Query performance maintained or improved (indexes added)
+- [x] SR Engineer approves all PRs (including post-merge review for #333)

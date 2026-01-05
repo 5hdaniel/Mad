@@ -2,8 +2,8 @@
 
 This index tracks all backlog items with their current status and metadata.
 
-**Last Updated:** 2026-01-05 (Added SPRINT-025 with TASK-975 to TASK-978 - communications architecture refactor)
-**Total Items:** 151
+**Last Updated:** 2026-01-05 (SPRINT-025 complete + BACKLOG-161, 162 added)
+**Total Items:** 153
 **Pending:** 87 | **In Progress:** 0 | **Completed:** 59 | **Partial:** 0 | **Obsolete:** 1 | **Deferred:** 2
 
 ---
@@ -59,7 +59,7 @@ This index tracks all backlog items with their current status and metadata.
 - **SPRINT-016 (Component Refactoring):** DEPRECATED - Task IDs collided with SPRINT-017/18/19; scope moved to SPRINT-023
 - **SPRINT-023 (Architecture Debt Reduction):** Completed - BACKLOG-149 (done), 148 (done), 152 (done), 140 (done) (5 tasks: TASK-960 to TASK-964, PRs #314-317)
 - **SPRINT-024 (Quality & Coverage):** PLANNED - BACKLOG-157, 159, 112, 113, 158 (5 tasks: TASK-970 to TASK-974)
-- **SPRINT-025 (Communications Architecture):** PLANNED - TASK-975 to TASK-978 (4 tasks: communications refactor, export folders, auto-link texts, manual link UI)
+- **SPRINT-025 (Communications Architecture):** COMPLETE - TASK-975 to TASK-977 (3 tasks completed: communications refactor, export folders, auto-link texts; TASK-978 deferred). **Incidents:** 14.2M token exploration loop (BACKLOG-161), PR merged without review, file overlap caused merge conflicts.
 - **Unassigned:** All others
 
 ### State Coordination Overhaul Project - COMPLETE
