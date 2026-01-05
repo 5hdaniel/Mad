@@ -1,10 +1,19 @@
 /**
- * Database Service
- * Manages local SQLite database operations for Mad application
- * Handles user data, transactions, communications, and sessions
+ * Database Service - Facade Layer
+ *
+ * This service acts as a thin facade over the domain-specific db/* services.
+ * It provides backward compatibility for existing consumers while delegating
+ * all operations to the appropriate domain service.
+ *
+ * ARCHITECTURE:
+ * - Initialization, encryption, and migration logic lives here
+ * - Domain operations (CRUD) delegate to db/* services
+ * - 37 consumer files import from here for backward compatibility
  *
  * SECURITY: Database is encrypted at rest using SQLCipher (AES-256)
  * Encryption key is stored in OS keychain via Electron safeStorage
+ *
+ * @see electron/services/db/ for domain-specific implementations
  */
 
 import Database from "better-sqlite3-multiple-ciphers";
@@ -14,7 +23,15 @@ import fs from "fs";
 import crypto from "crypto";
 import { app } from "electron";
 import logService from "./logService";
-import { setDb, setDbPath, setEncryptionKey } from "./db/core/dbConnection";
+import {
+  setDb,
+  setDbPath,
+  setEncryptionKey,
+  closeDb,
+  vacuumDb,
+} from "./db/core/dbConnection";
+
+// Import types
 import type {
   User,
   NewUser,
@@ -34,7 +51,6 @@ import type {
   OAuthProvider,
   OAuthPurpose,
   IDatabaseService,
-  QueryResult,
   IgnoredCommunication,
   NewIgnoredCommunication,
   Message,
@@ -43,247 +59,129 @@ import type {
 import { DatabaseError, NotFoundError } from "../types";
 import { databaseEncryptionService } from "./databaseEncryptionService";
 import type { AuditLogEntry, AuditLogDbRow } from "./auditService";
-import { validateFields } from "../utils/sqlFieldWhitelist";
-import {
-  getOAuthTokenSyncTime as getOAuthTokenSyncTimeDb,
-  updateOAuthTokenSyncTime as updateOAuthTokenSyncTimeDb,
-} from "./db/oauthTokenDbService";
 
-// Contact with activity metadata
-interface ContactWithActivity extends Contact {
-  last_communication_at?: string | null;
-  communication_count?: number;
-  address_mention_count?: number;
-}
+// Import domain services for delegation
+import * as userDb from "./db/userDbService";
+import * as sessionDb from "./db/sessionDbService";
+import * as oauthDb from "./db/oauthTokenDbService";
+import * as transactionDb from "./db/transactionDbService";
+import * as contactDb from "./db/contactDbService";
+import * as transactionContactDb from "./db/transactionContactDbService";
+import * as communicationDb from "./db/communicationDbService";
+import * as feedbackDb from "./db/feedbackDbService";
+import * as auditDb from "./db/auditLogDbService";
 
-// Transaction contact association
-interface TransactionContactData {
-  contact_id: string;
-  role?: string;
-  role_category?: string;
-  specific_role?: string;
-  is_primary?: number | boolean;
-  notes?: string;
-}
-
-// Transaction contact result with contact info
-interface TransactionContactResult extends TransactionContactData {
-  id: string;
-  transaction_id: string;
-  created_at: string;
-  updated_at: string;
-  contact_name?: string;
-  contact_email?: string;
-  contact_phone?: string;
-  contact_company?: string;
-  contact_title?: string;
-}
-
-// Transaction with roles for contact
-interface TransactionWithRoles {
-  id: string;
-  property_address: string;
-  closing_deadline?: string | null;
-  transaction_type?: string | null;
-  status: string;
-  roles: string;
-}
+// Re-export types for backward compatibility
+export type { ContactAssignmentOperation } from "./db/transactionContactDbService";
+export type {
+  TransactionContactData,
+  TransactionContactResult,
+} from "./db/transactionContactDbService";
+export type { ContactWithActivity, TransactionWithRoles } from "./db/contactDbService";
 
 /**
- * Contact assignment operation for batch updates
- * Used to add or remove contacts from a transaction in a single atomic operation
+ * DatabaseService - Facade for all database operations
+ *
+ * Maintains backward compatibility while delegating to domain services.
+ * Only initialization, encryption, and migration logic remains here.
  */
-export interface ContactAssignmentOperation {
-  /** The action to perform: 'add' to assign a contact, 'remove' to unassign */
-  action: "add" | "remove";
-  /** The contact ID to add or remove */
-  contactId: string;
-  /** Role name (e.g., "Buyer's Agent") - required for 'add', ignored for 'remove' */
-  role?: string;
-  /** Role category (e.g., "buyer_side", "seller_side", "neutral") */
-  roleCategory?: string;
-  /** Specific role from predefined list */
-  specificRole?: string;
-  /** Whether this is the primary contact for the role */
-  isPrimary?: boolean;
-  /** Additional notes about the assignment */
-  notes?: string;
-}
-
-// Feedback data for submission
-interface _FeedbackData {
-  transaction_id: string;
-  field_name: string;
-  original_value?: string;
-  corrected_value?: string;
-  original_confidence?: number;
-  feedback_type: "correction" | "confirmation" | "rejection";
-  source_communication_id?: string;
-  user_notes?: string;
-}
-
 class DatabaseService implements IDatabaseService {
   private db: DatabaseType | null = null;
   private dbPath: string | null = null;
   private encryptionKey: string | null = null;
+
+  // ============================================
+  // INITIALIZATION & LIFECYCLE (Keep in facade)
+  // ============================================
 
   /**
    * Initialize database - creates DB file and tables if needed
    * Handles encryption and migration from unencrypted databases
    */
   async initialize(): Promise<boolean> {
-    // Prevent double initialization
     if (this.db) {
-      await logService.debug(
-        "Database already initialized, skipping",
-        "DatabaseService",
-      );
+      await logService.debug("Database already initialized, skipping", "DatabaseService");
       return true;
     }
 
     try {
-      // Get user data path
       const userDataPath = app.getPath("userData");
       this.dbPath = path.join(userDataPath, "mad.db");
 
-      await logService.info("Initializing database", "DatabaseService", {
-        path: this.dbPath,
-      });
+      await logService.info("Initializing database", "DatabaseService", { path: this.dbPath });
 
-      // Ensure directory exists
       const dbDir = path.dirname(this.dbPath);
       if (!fs.existsSync(dbDir)) {
         fs.mkdirSync(dbDir, { recursive: true });
       }
 
-      // Initialize encryption service and get key
       await databaseEncryptionService.initialize();
       this.encryptionKey = await databaseEncryptionService.getEncryptionKey();
 
-      // Check if migration from unencrypted database is needed
       const needsMigration = await this._checkMigrationNeeded();
-
       if (needsMigration) {
-        await logService.info(
-          "Migrating existing database to encrypted storage",
-          "DatabaseService",
-        );
+        await logService.info("Migrating existing database to encrypted storage", "DatabaseService");
         await this._migrateToEncryptedDatabase();
       }
 
-      // Open database connection with encryption
       this.db = this._openDatabase();
 
       // Share connection with dbConnection module for sub-services
-      // (transactionDbService, contactDbService, etc. use dbConnection.ensureDb())
       setDb(this.db);
       setDbPath(this.dbPath);
       setEncryptionKey(this.encryptionKey);
 
-      // Run schema migrations
       await this.runMigrations();
 
-      await logService.info(
-        "Database initialized successfully with encryption",
-        "DatabaseService",
-      );
+      await logService.info("Database initialized successfully with encryption", "DatabaseService");
       return true;
     } catch (error) {
-      await logService.error(
-        "Failed to initialize database",
-        "DatabaseService",
-        { error: error instanceof Error ? error.message : String(error) },
-      );
+      await logService.error("Failed to initialize database", "DatabaseService", {
+        error: error instanceof Error ? error.message : String(error),
+      });
       throw error;
     }
   }
 
-  /**
-   * Check if database is initialized
-   * Used to determine if we can perform database operations
-   */
   isInitialized(): boolean {
     return this.db !== null;
   }
 
-  /**
-   * Ensure database is initialized and return it
-   * @private
-   * @throws {DatabaseError} If database is not initialized
-   */
   private _ensureDb(): DatabaseType {
     if (!this.db) {
-      throw new DatabaseError(
-        "Database is not initialized. Call initialize() first.",
-      );
+      throw new DatabaseError("Database is not initialized. Call initialize() first.");
     }
     return this.db;
   }
 
-  /**
-   * Get raw database instance for bulk operations.
-   * Use with caution - prefer using service methods when possible.
-   *
-   * This is exposed for performance-critical bulk operations like
-   * iPhone sync which need direct transaction control.
-   *
-   * @returns The underlying better-sqlite3 database instance
-   * @throws {DatabaseError} If database is not initialized
-   */
   getRawDatabase(): DatabaseType {
     return this._ensureDb();
   }
 
-  /**
-   * Open database connection with encryption
-   */
   private _openDatabase(): DatabaseType {
-    if (!this.dbPath) {
-      throw new DatabaseError("Database path is not set");
-    }
-    if (!this.encryptionKey) {
-      throw new DatabaseError("Encryption key is not set");
-    }
+    if (!this.dbPath) throw new DatabaseError("Database path is not set");
+    if (!this.encryptionKey) throw new DatabaseError("Encryption key is not set");
 
     const db = new Database(this.dbPath);
-
-    // Configure SQLCipher encryption
     db.pragma(`key = "x'${this.encryptionKey}'"`);
     db.pragma("cipher_compatibility = 4");
-
-    // Enable foreign keys
     db.pragma("foreign_keys = ON");
 
-    // Verify database is accessible (will throw if key is wrong)
     try {
       db.pragma("cipher_integrity_check");
-    } catch (error) {
-      throw new DatabaseError(
-        "Failed to decrypt database. Encryption key may be invalid.",
-      );
+    } catch {
+      throw new DatabaseError("Failed to decrypt database. Encryption key may be invalid.");
     }
 
     return db;
   }
 
-  /**
-   * Check if migration from unencrypted to encrypted database is needed
-   */
   private async _checkMigrationNeeded(): Promise<boolean> {
-    if (!this.dbPath || !fs.existsSync(this.dbPath)) {
-      return false; // New database, will be created encrypted
-    }
-
-    const isEncrypted = await databaseEncryptionService.isDatabaseEncrypted(
-      this.dbPath,
-    );
+    if (!this.dbPath || !fs.existsSync(this.dbPath)) return false;
+    const isEncrypted = await databaseEncryptionService.isDatabaseEncrypted(this.dbPath);
     return !isEncrypted;
   }
 
-  /**
-   * Migrate existing unencrypted database to encrypted format
-   * Uses table-by-table copy approach for compatibility
-   */
   private async _migrateToEncryptedDatabase(): Promise<void> {
     if (!this.dbPath || !this.encryptionKey) {
       throw new DatabaseError("Database path or encryption key not set");
@@ -294,82 +192,42 @@ class DatabaseService implements IDatabaseService {
     const encryptedPath = `${this.dbPath}.encrypted`;
 
     try {
-      await logService.info(
-        "Starting database encryption migration",
-        "DatabaseService",
-      );
-
-      // Create backup of original database
+      await logService.info("Starting database encryption migration", "DatabaseService");
       fs.copyFileSync(unencryptedPath, backupPath);
-      await logService.debug(
-        "Created backup of unencrypted database",
-        "DatabaseService",
-      );
 
-      // Open the unencrypted database (read-only)
       const oldDb = new Database(unencryptedPath, { readonly: true });
+      const tables = oldDb.prepare(`
+        SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'
+      `).all() as { name: string }[];
 
-      // Get all table names from the old database
-      const tables = oldDb
-        .prepare(
-          `
-        SELECT name FROM sqlite_master
-        WHERE type='table' AND name NOT LIKE 'sqlite_%'
-      `,
-        )
-        .all() as { name: string }[];
+      const indexes = oldDb.prepare(`
+        SELECT sql FROM sqlite_master WHERE type='index' AND sql IS NOT NULL
+      `).all() as { sql: string }[];
 
-      // Get all index definitions
-      const indexes = oldDb
-        .prepare(
-          `
-        SELECT sql FROM sqlite_master
-        WHERE type='index' AND sql IS NOT NULL
-      `,
-        )
-        .all() as { sql: string }[];
+      const triggers = oldDb.prepare(`
+        SELECT sql FROM sqlite_master WHERE type='trigger' AND sql IS NOT NULL
+      `).all() as { sql: string }[];
 
-      // Get all trigger definitions
-      const triggers = oldDb
-        .prepare(
-          `
-        SELECT sql FROM sqlite_master
-        WHERE type='trigger' AND sql IS NOT NULL
-      `,
-        )
-        .all() as { sql: string }[];
-
-      // Create new encrypted database
       const newDb = new Database(encryptedPath);
       newDb.pragma(`key = "x'${this.encryptionKey}'"`);
 
-      // Copy schema and data for each table
       for (const { name: tableName } of tables) {
-        // Get table schema
-        const tableInfo = oldDb
-          .prepare(
-            `SELECT sql FROM sqlite_master WHERE type='table' AND name=?`,
-          )
-          .get(tableName) as { sql: string } | undefined;
+        const tableInfo = oldDb.prepare(
+          `SELECT sql FROM sqlite_master WHERE type='table' AND name=?`
+        ).get(tableName) as { sql: string } | undefined;
+
         if (tableInfo?.sql) {
           newDb.exec(tableInfo.sql);
-
-          // Copy data
           const rows = oldDb.prepare(`SELECT * FROM "${tableName}"`).all();
           if (rows.length > 0) {
             const columns = Object.keys(rows[0] as object);
             const placeholders = columns.map(() => "?").join(", ");
             const insertStmt = newDb.prepare(
-              `INSERT INTO "${tableName}" (${columns.map((c) => `"${c}"`).join(", ")}) VALUES (${placeholders})`,
+              `INSERT INTO "${tableName}" (${columns.map((c) => `"${c}"`).join(", ")}) VALUES (${placeholders})`
             );
-
             const insertMany = newDb.transaction((data: unknown[]) => {
               for (const row of data) {
-                insertStmt.run(
-                  ...columns.map(
-                    (col) => (row as Record<string, unknown>)[col],
-                  ),
-                );
+                insertStmt.run(...columns.map((col) => (row as Record<string, unknown>)[col]));
               }
             });
             insertMany(rows);
@@ -377,127 +235,63 @@ class DatabaseService implements IDatabaseService {
         }
       }
 
-      // Recreate indexes
       for (const { sql } of indexes) {
-        try {
-          newDb.exec(sql);
-        } catch {
-          // Index may already exist from table creation
-        }
+        try { newDb.exec(sql); } catch { /* Index may already exist */ }
       }
 
-      // Recreate triggers
       for (const { sql } of triggers) {
-        try {
-          newDb.exec(sql);
-        } catch {
-          // Trigger may already exist
-        }
+        try { newDb.exec(sql); } catch { /* Trigger may already exist */ }
       }
 
       oldDb.close();
       newDb.close();
 
-      await logService.debug(
-        "Exported data to encrypted database",
-        "DatabaseService",
-      );
-
-      // Securely delete the unencrypted database
       await this._secureDelete(unencryptedPath);
-
-      // Rename encrypted to original name
       fs.renameSync(encryptedPath, unencryptedPath);
+      if (fs.existsSync(backupPath)) fs.unlinkSync(backupPath);
 
-      // Remove backup after successful migration
-      if (fs.existsSync(backupPath)) {
-        fs.unlinkSync(backupPath);
-      }
-
-      await logService.info(
-        "Database encryption migration completed successfully",
-        "DatabaseService",
-      );
+      await logService.info("Database encryption migration completed successfully", "DatabaseService");
     } catch (error) {
-      await logService.error(
-        "Database encryption migration failed",
-        "DatabaseService",
-        { error: error instanceof Error ? error.message : String(error) },
-      );
+      await logService.error("Database encryption migration failed", "DatabaseService", {
+        error: error instanceof Error ? error.message : String(error),
+      });
 
-      // Restore from backup if migration failed
       if (fs.existsSync(backupPath)) {
-        await logService.warn(
-          "Restoring database from backup",
-          "DatabaseService",
-        );
-        if (fs.existsSync(unencryptedPath)) {
-          fs.unlinkSync(unencryptedPath);
-        }
+        if (fs.existsSync(unencryptedPath)) fs.unlinkSync(unencryptedPath);
         fs.renameSync(backupPath, unencryptedPath);
       }
-
-      // Clean up encrypted file if it exists
-      if (fs.existsSync(encryptedPath)) {
-        fs.unlinkSync(encryptedPath);
-      }
+      if (fs.existsSync(encryptedPath)) fs.unlinkSync(encryptedPath);
 
       throw error;
     }
   }
 
-  /**
-   * Securely delete a file by overwriting with random data before unlinking
-   */
   private async _secureDelete(filePath: string): Promise<void> {
     try {
       const stats = fs.statSync(filePath);
       const fd = fs.openSync(filePath, "r+");
-
-      // Overwrite with random data (3 passes)
       for (let pass = 0; pass < 3; pass++) {
         const randomData = crypto.randomBytes(stats.size);
         fs.writeSync(fd, randomData, 0, randomData.length, 0);
         fs.fsyncSync(fd);
       }
-
       fs.closeSync(fd);
       fs.unlinkSync(filePath);
-
-      await logService.debug("Securely deleted file", "DatabaseService", {
-        filePath,
-      });
-    } catch (error) {
-      await logService.warn(
-        "Secure delete failed, using standard delete",
-        "DatabaseService",
-        {
-          filePath,
-          error: error instanceof Error ? error.message : String(error),
-        },
-      );
-      // Fall back to standard delete
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
-      }
+    } catch {
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     }
   }
 
-  /**
-   * Run database migrations (execute schema.sql)
-   */
+  // Migration code stays in facade - see runMigrations() in original
+
   async runMigrations(): Promise<void> {
     const db = this._ensureDb();
     const schemaPath = path.join(__dirname, "../database/schema.sql");
     const schemaSql = fs.readFileSync(schemaPath, "utf8");
 
     try {
-      // Run pre-schema migrations to add missing columns to existing tables
-      // This prevents errors when schema.sql tries to create indexes on missing columns
       await this._runPreSchemaMigrations();
-
       db.exec(schemaSql);
-      // Run additional migrations for existing databases
       await this._runAdditionalMigrations();
     } catch (error) {
       await logService.error("Failed to run migrations", "DatabaseService", {
@@ -507,19 +301,14 @@ class DatabaseService implements IDatabaseService {
     }
   }
 
-  /**
-   * Run pre-schema migrations to add missing columns to existing tables
-   * This runs BEFORE schema.sql to prevent index creation errors
-   */
+  // Pre-schema migrations helper
   private async _runPreSchemaMigrations(): Promise<void> {
     const db = this._ensureDb();
 
-    // Helper to add missing columns to a table
     const addMissingColumns = async (tableName: string, columns: { name: string; sql: string }[]) => {
       const tableExists = db.prepare(
         `SELECT name FROM sqlite_master WHERE type='table' AND name=?`
       ).get(tableName);
-
       if (!tableExists) return;
 
       const tableColumns = db.prepare(`PRAGMA table_info(${tableName})`).all() as { name: string }[];
@@ -529,22 +318,11 @@ class DatabaseService implements IDatabaseService {
         if (!columnNames.includes(col.name)) {
           try {
             db.exec(col.sql);
-            await logService.debug(
-              `Pre-migration: Added ${col.name} column to ${tableName}`,
-              "DatabaseService"
-            );
-          } catch (err) {
-            await logService.warn(
-              `Pre-migration: Could not add ${col.name} column to ${tableName}`,
-              "DatabaseService",
-              { error: (err as Error).message }
-            );
-          }
+          } catch { /* Column may already exist */ }
         }
       }
     };
 
-    // Contacts table columns
     await addMissingColumns('contacts', [
       { name: 'display_name', sql: `ALTER TABLE contacts ADD COLUMN display_name TEXT` },
       { name: 'company', sql: `ALTER TABLE contacts ADD COLUMN company TEXT` },
@@ -557,7 +335,6 @@ class DatabaseService implements IDatabaseService {
       { name: 'tags', sql: `ALTER TABLE contacts ADD COLUMN tags TEXT` },
     ]);
 
-    // Transactions table columns
     await addMissingColumns('transactions', [
       { name: 'stage', sql: `ALTER TABLE transactions ADD COLUMN stage TEXT` },
       { name: 'stage_source', sql: `ALTER TABLE transactions ADD COLUMN stage_source TEXT` },
@@ -575,18 +352,16 @@ class DatabaseService implements IDatabaseService {
       { name: 'last_exported_at', sql: `ALTER TABLE transactions ADD COLUMN last_exported_at DATETIME` },
     ]);
 
-    // Messages table columns (for iPhone sync)
     await addMissingColumns('messages', [
       { name: 'external_id', sql: `ALTER TABLE messages ADD COLUMN external_id TEXT` },
       { name: 'thread_id', sql: `ALTER TABLE messages ADD COLUMN thread_id TEXT` },
       { name: 'participants_flat', sql: `ALTER TABLE messages ADD COLUMN participants_flat TEXT` },
-      // Deduplication columns (TASK-905)
       { name: 'message_id_header', sql: `ALTER TABLE messages ADD COLUMN message_id_header TEXT` },
       { name: 'content_hash', sql: `ALTER TABLE messages ADD COLUMN content_hash TEXT` },
       { name: 'duplicate_of', sql: `ALTER TABLE messages ADD COLUMN duplicate_of TEXT` },
     ]);
 
-    // Try to populate display_name from 'name' column if it exists in contacts
+    // Populate display_name from name column if it exists
     const contactsExists = db.prepare(
       `SELECT name FROM sqlite_master WHERE type='table' AND name='contacts'`
     ).get();
@@ -595,3189 +370,532 @@ class DatabaseService implements IDatabaseService {
       if (contactColumns.some(c => c.name === 'name')) {
         try {
           db.exec(`UPDATE contacts SET display_name = name WHERE display_name IS NULL AND name IS NOT NULL`);
-        } catch {
-          // Ignore errors
-        }
+        } catch { /* Ignore */ }
       }
     }
   }
 
-  /**
-   * Run additional migrations for schema changes
-   */
+  // Additional migrations - condensed version
   private async _runAdditionalMigrations(): Promise<void> {
-    await logService.info("Starting database migrations", "DatabaseService");
-    try {
-      // Migration 1: Add legal compliance columns to users_local
-      await logService.debug(
-        "Running Migration 1: User compliance columns",
-        "DatabaseService",
-      );
-      const userColumns = this._all<{ name: string }>(
-        `PRAGMA table_info(users_local)`,
-      );
-      if (!userColumns.some((col) => col.name === "terms_accepted_at")) {
-        await logService.debug(
-          "Adding terms_accepted_at column to users_local",
-          "DatabaseService",
-        );
-        this._run(
-          `ALTER TABLE users_local ADD COLUMN terms_accepted_at DATETIME`,
-        );
-      }
-      if (!userColumns.some((col) => col.name === "terms_version_accepted")) {
-        await logService.debug(
-          "Adding terms_version_accepted column to users_local",
-          "DatabaseService",
-        );
-        this._run(
-          `ALTER TABLE users_local ADD COLUMN terms_version_accepted TEXT`,
-        );
-      }
-      if (
-        !userColumns.some((col) => col.name === "privacy_policy_accepted_at")
-      ) {
-        await logService.debug(
-          "Adding privacy_policy_accepted_at column to users_local",
-          "DatabaseService",
-        );
-        this._run(
-          `ALTER TABLE users_local ADD COLUMN privacy_policy_accepted_at DATETIME`,
-        );
-      }
-      if (
-        !userColumns.some(
-          (col) => col.name === "privacy_policy_version_accepted",
-        )
-      ) {
-        await logService.debug(
-          "Adding privacy_policy_version_accepted column to users_local",
-          "DatabaseService",
-        );
-        this._run(
-          `ALTER TABLE users_local ADD COLUMN privacy_policy_version_accepted TEXT`,
-        );
-      }
-      if (
-        !userColumns.some((col) => col.name === "email_onboarding_completed_at")
-      ) {
-        await logService.debug(
-          "Adding email_onboarding_completed_at column to users_local",
-          "DatabaseService",
-        );
-        this._run(
-          `ALTER TABLE users_local ADD COLUMN email_onboarding_completed_at DATETIME`,
-        );
-      }
-      if (!userColumns.some((col) => col.name === "mobile_phone_type")) {
-        await logService.debug(
-          "Adding mobile_phone_type column to users_local",
-          "DatabaseService",
-        );
-        this._run(`ALTER TABLE users_local ADD COLUMN mobile_phone_type TEXT`);
-      }
-
-      // Migration 2: Add new transaction columns
-      await logService.debug(
-        "Running Migration 2: Transaction columns",
-        "DatabaseService",
-      );
-      const transactionColumns = this._all<{ name: string }>(
-        `PRAGMA table_info(transactions)`,
-      );
-      const transactionMigrations = [
-        {
-          name: "status",
-          sql: `ALTER TABLE transactions ADD COLUMN status TEXT DEFAULT 'active'`,
-        },
-        {
-          name: "representation_start_date",
-          sql: `ALTER TABLE transactions ADD COLUMN representation_start_date DATE`,
-        },
-        {
-          name: "closing_date_verified",
-          sql: `ALTER TABLE transactions ADD COLUMN closing_date_verified INTEGER DEFAULT 0`,
-        },
-        {
-          name: "representation_start_confidence",
-          sql: `ALTER TABLE transactions ADD COLUMN representation_start_confidence INTEGER`,
-        },
-        {
-          name: "closing_date_confidence",
-          sql: `ALTER TABLE transactions ADD COLUMN closing_date_confidence INTEGER`,
-        },
-        {
-          name: "buyer_agent_id",
-          sql: `ALTER TABLE transactions ADD COLUMN buyer_agent_id TEXT`,
-        },
-        {
-          name: "seller_agent_id",
-          sql: `ALTER TABLE transactions ADD COLUMN seller_agent_id TEXT`,
-        },
-        {
-          name: "escrow_officer_id",
-          sql: `ALTER TABLE transactions ADD COLUMN escrow_officer_id TEXT`,
-        },
-        {
-          name: "inspector_id",
-          sql: `ALTER TABLE transactions ADD COLUMN inspector_id TEXT`,
-        },
-        {
-          name: "other_contacts",
-          sql: `ALTER TABLE transactions ADD COLUMN other_contacts TEXT`,
-        },
-      ];
-
-      for (const migration of transactionMigrations) {
-        if (!transactionColumns.some((col) => col.name === migration.name)) {
-          await logService.debug(
-            `Adding ${migration.name} column to transactions`,
-            "DatabaseService",
-          );
-          this._run(migration.sql);
-        }
-      }
-
-      // Create trigger for transactions timestamp (after ensuring updated_at column exists)
-      this._run(`
-        CREATE TRIGGER IF NOT EXISTS update_transactions_timestamp
-        AFTER UPDATE ON transactions
-        BEGIN
-          UPDATE transactions SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
-        END;
-      `);
-
-      // Create index for status column (added by migration)
-      this._run(
-        `CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions(status)`,
-      );
-
-      // Migration 3: Enhanced contact roles for transaction_contacts
-      await logService.debug(
-        "Running Migration 3: Transaction contacts enhanced roles",
-        "DatabaseService",
-      );
-      const tcColumns = this._all<{ name: string }>(
-        `PRAGMA table_info(transaction_contacts)`,
-      );
-      await logService.debug(
-        "Current transaction_contacts columns",
-        "DatabaseService",
-        { columns: tcColumns.map((c) => c.name).join(", ") },
-      );
-      const tcMigrations = [
-        {
-          name: "role_category",
-          sql: `ALTER TABLE transaction_contacts ADD COLUMN role_category TEXT`,
-        },
-        {
-          name: "specific_role",
-          sql: `ALTER TABLE transaction_contacts ADD COLUMN specific_role TEXT`,
-        },
-        {
-          name: "is_primary",
-          sql: `ALTER TABLE transaction_contacts ADD COLUMN is_primary INTEGER DEFAULT 0`,
-        },
-        {
-          name: "notes",
-          sql: `ALTER TABLE transaction_contacts ADD COLUMN notes TEXT`,
-        },
-        {
-          name: "updated_at",
-          sql: `ALTER TABLE transaction_contacts ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP`,
-        },
-      ];
-
-      for (const migration of tcMigrations) {
-        if (!tcColumns.some((col) => col.name === migration.name)) {
-          await logService.debug(
-            `Adding ${migration.name} column to transaction_contacts`,
-            "DatabaseService",
-          );
-          try {
-            this._run(migration.sql);
-            await logService.debug(
-              `Successfully added ${migration.name} column`,
-              "DatabaseService",
-            );
-          } catch (err) {
-            await logService.error(
-              `Failed to add ${migration.name} column`,
-              "DatabaseService",
-              { error: (err as Error).message },
-            );
-            throw err;
-          }
-        }
-      }
-
-      // Create index for better performance
-      this._run(
-        `CREATE INDEX IF NOT EXISTS idx_transaction_contacts_specific_role ON transaction_contacts(specific_role)`,
-      );
-      this._run(
-        `CREATE INDEX IF NOT EXISTS idx_transaction_contacts_category ON transaction_contacts(role_category)`,
-      );
-      this._run(
-        `CREATE INDEX IF NOT EXISTS idx_transaction_contacts_primary ON transaction_contacts(is_primary)`,
-      );
-
-      // Create trigger for transaction_contacts timestamp updates
-      this._run(`
-        CREATE TRIGGER IF NOT EXISTS update_transaction_contacts_timestamp
-        AFTER UPDATE ON transaction_contacts
-        BEGIN
-          UPDATE transaction_contacts SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
-        END;
-      `);
-
-      // Verify all columns were added successfully
-      const verifyTcColumns = this._all<{ name: string }>(
-        `PRAGMA table_info(transaction_contacts)`,
-      );
-      const columnNames = verifyTcColumns.map((c) => c.name);
-      await logService.debug(
-        "Migration 3 complete. Final transaction_contacts columns",
-        "DatabaseService",
-        { columns: columnNames.join(", ") },
-      );
-
-      const requiredColumns = [
-        "role_category",
-        "specific_role",
-        "is_primary",
-        "notes",
-        "updated_at",
-      ];
-      const missingColumns = requiredColumns.filter(
-        (col) => !columnNames.includes(col),
-      );
-      if (missingColumns.length > 0) {
-        await logService.error(
-          "Missing required columns after migration",
-          "DatabaseService",
-          { missingColumns },
-        );
-      } else {
-        await logService.debug(
-          "All required columns present",
-          "DatabaseService",
-        );
-      }
-
-      // Migration 4: Add export tracking columns to transactions
-      const exportStatusExists = transactionColumns.some(
-        (col) => col.name === "export_status",
-      );
-      if (!exportStatusExists) {
-        await logService.debug(
-          "Adding export tracking columns to transactions",
-          "DatabaseService",
-        );
-        this._run(
-          `ALTER TABLE transactions ADD COLUMN export_status TEXT DEFAULT 'not_exported' CHECK (export_status IN ('not_exported', 'exported', 're_export_needed'))`,
-        );
-        this._run(
-          `ALTER TABLE transactions ADD COLUMN export_format TEXT CHECK (export_format IN ('pdf', 'csv', 'json', 'txt_eml', 'excel'))`,
-        );
-        this._run(
-          `ALTER TABLE transactions ADD COLUMN export_count INTEGER DEFAULT 0`,
-        );
-        this._run(
-          `ALTER TABLE transactions ADD COLUMN last_exported_on DATETIME`,
-        );
-
-        // Create indexes for better query performance
-        this._run(
-          `CREATE INDEX IF NOT EXISTS idx_transactions_export_status ON transactions(export_status)`,
-        );
-        this._run(
-          `CREATE INDEX IF NOT EXISTS idx_transactions_last_exported_on ON transactions(last_exported_on)`,
-        );
-      }
-
-      // Migration 5: User feedback and extraction metrics
-      const feedbackTableExists = this._get<{ name: string }>(
-        `SELECT name FROM sqlite_master WHERE type='table' AND name='user_feedback'`,
-      );
-      if (!feedbackTableExists) {
-        await logService.debug(
-          "Creating user feedback tables",
-          "DatabaseService",
-        );
-
-        // User feedback table
-        this._run(`
-          CREATE TABLE user_feedback (
-            id TEXT PRIMARY KEY,
-            user_id TEXT NOT NULL,
-            transaction_id TEXT NOT NULL,
-            field_name TEXT NOT NULL,
-            original_value TEXT,
-            corrected_value TEXT,
-            original_confidence INTEGER,
-            feedback_type TEXT CHECK (feedback_type IN ('correction', 'confirmation', 'rejection')),
-            source_communication_id TEXT,
-            user_notes TEXT,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE,
-            FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE CASCADE,
-            FOREIGN KEY (source_communication_id) REFERENCES communications(id) ON DELETE SET NULL
-          )
-        `);
-
-        // Extraction metrics table
-        this._run(`
-          CREATE TABLE extraction_metrics (
-            id TEXT PRIMARY KEY,
-            user_id TEXT NOT NULL,
-            field_name TEXT NOT NULL,
-            total_extractions INTEGER DEFAULT 0,
-            confirmed_correct INTEGER DEFAULT 0,
-            user_corrected INTEGER DEFAULT 0,
-            completely_wrong INTEGER DEFAULT 0,
-            avg_confidence INTEGER,
-            high_confidence_count INTEGER DEFAULT 0,
-            medium_confidence_count INTEGER DEFAULT 0,
-            low_confidence_count INTEGER DEFAULT 0,
-            period_start DATETIME,
-            period_end DATETIME,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE,
-            UNIQUE(user_id, field_name, period_start)
-          )
-        `);
-
-        // Indexes
-        this._run(
-          `CREATE INDEX idx_user_feedback_user_id ON user_feedback(user_id)`,
-        );
-        this._run(
-          `CREATE INDEX idx_user_feedback_transaction_id ON user_feedback(transaction_id)`,
-        );
-        this._run(
-          `CREATE INDEX idx_user_feedback_field_name ON user_feedback(field_name)`,
-        );
-        this._run(
-          `CREATE INDEX idx_user_feedback_type ON user_feedback(feedback_type)`,
-        );
-        this._run(
-          `CREATE INDEX idx_extraction_metrics_user_id ON extraction_metrics(user_id)`,
-        );
-        this._run(
-          `CREATE INDEX idx_extraction_metrics_field ON extraction_metrics(field_name)`,
-        );
-
-        // Trigger
-        this._run(`
-          CREATE TRIGGER update_extraction_metrics_timestamp
-          AFTER UPDATE ON extraction_metrics
-          BEGIN
-            UPDATE extraction_metrics SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
-          END;
-        `);
-      }
-
-      // Migration 6: Contact import tracking and schema sync
-      const contactColumns = this._all<{ name: string }>(
-        `PRAGMA table_info(contacts)`,
-      );
-
-      // Add display_name column if missing (needed for iPhone sync)
-      if (!contactColumns.some((col) => col.name === "display_name")) {
-        await logService.debug(
-          "Adding display_name column to contacts",
-          "DatabaseService",
-        );
-        this._run(
-          `ALTER TABLE contacts ADD COLUMN display_name TEXT`,
-        );
-        // Populate display_name from existing name column if it exists
-        const hasNameCol = contactColumns.some((col) => col.name === "name");
-        if (hasNameCol) {
-          this._run(`UPDATE contacts SET display_name = name WHERE display_name IS NULL`);
-        }
-        await logService.debug(
-          "Successfully added display_name column",
-          "DatabaseService",
-        );
-      }
-
-      // Add company column if missing
-      if (!contactColumns.some((col) => col.name === "company")) {
-        await logService.debug(
-          "Adding company column to contacts",
-          "DatabaseService",
-        );
-        this._run(
-          `ALTER TABLE contacts ADD COLUMN company TEXT`,
-        );
-      }
-
-      // Add title column if missing
-      if (!contactColumns.some((col) => col.name === "title")) {
-        await logService.debug(
-          "Adding title column to contacts",
-          "DatabaseService",
-        );
-        this._run(
-          `ALTER TABLE contacts ADD COLUMN title TEXT`,
-        );
-      }
-
-      // Add source column if missing
-      if (!contactColumns.some((col) => col.name === "source")) {
-        await logService.debug(
-          "Adding source column to contacts",
-          "DatabaseService",
-        );
-        this._run(
-          `ALTER TABLE contacts ADD COLUMN source TEXT DEFAULT 'manual'`,
-        );
-      }
-
-      // Add metadata column if missing
-      if (!contactColumns.some((col) => col.name === "metadata")) {
-        await logService.debug(
-          "Adding metadata column to contacts",
-          "DatabaseService",
-        );
-        this._run(
-          `ALTER TABLE contacts ADD COLUMN metadata TEXT`,
-        );
-      }
-
-      if (!contactColumns.some((col) => col.name === "is_imported")) {
-        await logService.debug(
-          "Adding is_imported column to contacts",
-          "DatabaseService",
-        );
-        this._run(
-          `ALTER TABLE contacts ADD COLUMN is_imported INTEGER DEFAULT 1`,
-        );
-        await logService.debug(
-          "Successfully added is_imported column",
-          "DatabaseService",
-        );
-        // Mark all existing manual and email contacts as imported
-        this._run(
-          `UPDATE contacts SET is_imported = 1 WHERE source IN ('manual', 'email')`,
-        );
-        await logService.debug(
-          "Marked existing contacts as imported",
-          "DatabaseService",
-        );
-        // Create index for better performance
-        this._run(
-          `CREATE INDEX IF NOT EXISTS idx_contacts_is_imported ON contacts(is_imported)`,
-        );
-        this._run(
-          `CREATE INDEX IF NOT EXISTS idx_contacts_user_imported ON contacts(user_id, is_imported)`,
-        );
-        await logService.debug(
-          "Created indexes for is_imported",
-          "DatabaseService",
-        );
-      } else {
-        await logService.debug(
-          "is_imported column already exists",
-          "DatabaseService",
-        );
-      }
-
-      // Migration 7: Audit logs table (immutable)
-      const auditTableExists = this._get<{ name: string }>(
-        `SELECT name FROM sqlite_master WHERE type='table' AND name='audit_logs'`,
-      );
-      if (!auditTableExists) {
-        await logService.info(
-          "Running Migration 7: Creating audit_logs table",
-          "DatabaseService",
-        );
-
-        // Create the audit_logs table
-        this._run(`
-          CREATE TABLE audit_logs (
-            id TEXT PRIMARY KEY,
-            timestamp DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            user_id TEXT NOT NULL,
-            session_id TEXT,
-            action TEXT NOT NULL,
-            resource_type TEXT NOT NULL,
-            resource_id TEXT,
-            metadata TEXT,
-            ip_address TEXT,
-            user_agent TEXT,
-            success INTEGER NOT NULL DEFAULT 1,
-            error_message TEXT,
-            synced_at DATETIME,
-
-            CHECK (action IN (
-              'LOGIN', 'LOGOUT', 'LOGIN_FAILED',
-              'DATA_ACCESS', 'DATA_EXPORT', 'DATA_DELETE',
-              'TRANSACTION_CREATE', 'TRANSACTION_UPDATE', 'TRANSACTION_DELETE',
-              'CONTACT_CREATE', 'CONTACT_UPDATE', 'CONTACT_DELETE',
-              'SETTINGS_CHANGE', 'MAILBOX_CONNECT', 'MAILBOX_DISCONNECT'
-            )),
-
-            CHECK (resource_type IN (
-              'USER', 'SESSION', 'TRANSACTION', 'CONTACT',
-              'COMMUNICATION', 'EXPORT', 'MAILBOX', 'SETTINGS'
-            ))
-          )
-        `);
-
-        // Create indexes
-        this._run(`CREATE INDEX idx_audit_logs_user_id ON audit_logs(user_id)`);
-        this._run(
-          `CREATE INDEX idx_audit_logs_timestamp ON audit_logs(timestamp)`,
-        );
-        this._run(`CREATE INDEX idx_audit_logs_action ON audit_logs(action)`);
-        this._run(
-          `CREATE INDEX idx_audit_logs_synced ON audit_logs(synced_at)`,
-        );
-        this._run(
-          `CREATE INDEX idx_audit_logs_resource_type ON audit_logs(resource_type)`,
-        );
-        this._run(
-          `CREATE INDEX idx_audit_logs_session_id ON audit_logs(session_id)`,
-        );
-
-        // Create immutability triggers
-        this._run(`
-          CREATE TRIGGER prevent_audit_update
-          BEFORE UPDATE ON audit_logs
-          BEGIN
-            SELECT RAISE(ABORT, 'Audit logs cannot be modified');
-          END
-        `);
-
-        this._run(`
-          CREATE TRIGGER prevent_audit_delete
-          BEFORE DELETE ON audit_logs
-          BEGIN
-            SELECT RAISE(ABORT, 'Audit logs cannot be deleted');
-          END
-        `);
-
-        await logService.info(
-          "Audit logs table created with immutability constraints",
-          "DatabaseService",
-        );
-      }
-
-      // Migration 8: Normalize transaction status values
-      // This ensures all status values conform to the canonical set: 'active', 'closed', 'archived'
-      // Legacy values are normalized to prevent CHECK constraint violations
-      await logService.debug(
-        "Running Migration 8: Normalize transaction status values",
-        "DatabaseService",
-      );
-
-      // Count legacy status values before migration
-      const legacyStatusCounts = this._all<{ status: string | null; count: number }>(
-        `SELECT status, COUNT(*) as count FROM transactions
-         WHERE status NOT IN ('active', 'closed', 'archived') OR status IS NULL
-         GROUP BY status`
-      );
-
-      if (legacyStatusCounts.length > 0) {
-        await logService.info(
-          "Found legacy transaction status values to normalize",
-          "DatabaseService",
-          { legacyStatuses: legacyStatusCounts }
-        );
-
-        // Normalize 'completed' -> 'closed'
-        const completedResult = this._run(
-          `UPDATE transactions SET status = 'closed' WHERE status = 'completed'`
-        );
-        if (completedResult.changes > 0) {
-          await logService.debug(
-            `Normalized ${completedResult.changes} 'completed' status values to 'closed'`,
-            "DatabaseService"
-          );
-        }
-
-        // Normalize 'pending' -> 'active'
-        const pendingResult = this._run(
-          `UPDATE transactions SET status = 'active' WHERE status = 'pending'`
-        );
-        if (pendingResult.changes > 0) {
-          await logService.debug(
-            `Normalized ${pendingResult.changes} 'pending' status values to 'active'`,
-            "DatabaseService"
-          );
-        }
-
-        // Normalize 'open' -> 'active'
-        const openResult = this._run(
-          `UPDATE transactions SET status = 'active' WHERE status = 'open'`
-        );
-        if (openResult.changes > 0) {
-          await logService.debug(
-            `Normalized ${openResult.changes} 'open' status values to 'active'`,
-            "DatabaseService"
-          );
-        }
-
-        // Normalize null or empty -> 'active'
-        const nullResult = this._run(
-          `UPDATE transactions SET status = 'active' WHERE status IS NULL OR status = ''`
-        );
-        if (nullResult.changes > 0) {
-          await logService.debug(
-            `Normalized ${nullResult.changes} null/empty status values to 'active'`,
-            "DatabaseService"
-          );
-        }
-
-        // Normalize 'cancelled' -> 'archived'
-        const cancelledResult = this._run(
-          `UPDATE transactions SET status = 'archived' WHERE status = 'cancelled'`
-        );
-        if (cancelledResult.changes > 0) {
-          await logService.debug(
-            `Normalized ${cancelledResult.changes} 'cancelled' status values to 'archived'`,
-            "DatabaseService"
-          );
-        }
-
-        await logService.info(
-          "Transaction status normalization complete",
-          "DatabaseService"
-        );
-      } else {
-        await logService.debug(
-          "No legacy transaction status values found - all values already normalized",
-          "DatabaseService"
-        );
-      }
-
-      // Migration 9: Normalize contacts display_name
-      // Ensures all contacts have display_name populated (TASK-202)
-      await logService.debug(
-        "Running Migration 9: Normalize contacts display_name",
-        "DatabaseService",
-      );
-
-      const nullDisplayNames = this._get<{ count: number }>(
-        `SELECT COUNT(*) as count FROM contacts WHERE display_name IS NULL OR display_name = ''`
-      );
-
-      if (nullDisplayNames && nullDisplayNames.count > 0) {
-        // Copy name -> display_name where display_name is null/empty
-        const copyResult = this._run(`
-          UPDATE contacts
-          SET display_name = name
-          WHERE (display_name IS NULL OR display_name = '')
-            AND name IS NOT NULL
-            AND name != ''
-        `);
-
-        // Set default for any remaining nulls
-        const defaultResult = this._run(`
-          UPDATE contacts
-          SET display_name = 'Unknown'
-          WHERE display_name IS NULL OR display_name = ''
-        `);
-
-        await logService.info(
-          `Normalized ${copyResult.changes + defaultResult.changes} contacts display_name values`,
-          "DatabaseService"
-        );
-      }
-
-      // Migration 10: Remove orphaned tables (TASK-204)
-      const orphanedTablesExist = this._get<{ name: string }>(
-        `SELECT name FROM sqlite_master WHERE type='table' AND name='extraction_metrics'`
-      );
-      if (orphanedTablesExist) {
-        await logService.debug(
-          "Removing orphaned extraction_metrics and user_feedback tables",
-          "DatabaseService"
-        );
-
-        // Drop indexes
-        this._run(`DROP INDEX IF EXISTS idx_extraction_metrics_user_id`);
-        this._run(`DROP INDEX IF EXISTS idx_extraction_metrics_field`);
-        this._run(`DROP INDEX IF EXISTS idx_user_feedback_user_id`);
-        this._run(`DROP INDEX IF EXISTS idx_user_feedback_transaction_id`);
-        this._run(`DROP INDEX IF EXISTS idx_user_feedback_field_name`);
-        this._run(`DROP INDEX IF EXISTS idx_user_feedback_type`);
-
-        // Drop trigger
-        this._run(`DROP TRIGGER IF EXISTS update_extraction_metrics_timestamp`);
-
-        // Drop tables
-        this._run(`DROP TABLE IF EXISTS extraction_metrics`);
-        this._run(`DROP TABLE IF EXISTS user_feedback`);
-
-        await logService.info(
-          "Successfully removed orphaned tables",
-          "DatabaseService"
-        );
-      }
-
-// Migration 11: AI Detection Fields for Transactions (TASK-301)
-      // Part of Migration 008 group - version increment deferred to TASK-305
-      const txDetectionColumns = this._all<{ name: string }>(
-        `PRAGMA table_info(transactions)`
-      );
-      const txColumnNames = txDetectionColumns.map((col) => col.name);
-
-      if (!txColumnNames.includes("detection_source")) {
-        await logService.debug(
-          "Running Migration 11: Adding AI detection fields to transactions",
-          "DatabaseService"
-        );
-
-        // detection_source: how the transaction was created
-        if (!txColumnNames.includes("detection_source")) {
-          this._run(`
-            ALTER TABLE transactions ADD COLUMN detection_source TEXT DEFAULT 'manual'
-              CHECK (detection_source IN ('manual', 'auto', 'hybrid'))
-          `);
-        }
-
-        // detection_status: user review status of detected transaction
-        if (!txColumnNames.includes("detection_status")) {
-          this._run(`
-            ALTER TABLE transactions ADD COLUMN detection_status TEXT DEFAULT 'confirmed'
-              CHECK (detection_status IN ('pending', 'confirmed', 'rejected'))
-          `);
-        }
-
-        // detection_confidence: 0.0 - 1.0 confidence score from detection
-        if (!txColumnNames.includes("detection_confidence")) {
-          this._run(`ALTER TABLE transactions ADD COLUMN detection_confidence REAL`);
-        }
-
-        // detection_method: which algorithm detected it
-        if (!txColumnNames.includes("detection_method")) {
-          this._run(`ALTER TABLE transactions ADD COLUMN detection_method TEXT`);
-        }
-
-        // suggested_contacts: JSON array of suggested contact assignments
-        if (!txColumnNames.includes("suggested_contacts")) {
-          this._run(`ALTER TABLE transactions ADD COLUMN suggested_contacts TEXT`);
-        }
-
-        // reviewed_at: when user reviewed the detected transaction
-        if (!txColumnNames.includes("reviewed_at")) {
-          this._run(`ALTER TABLE transactions ADD COLUMN reviewed_at DATETIME`);
-        }
-
-        // rejection_reason: why user rejected (if detection_status='rejected')
-        if (!txColumnNames.includes("rejection_reason")) {
-          this._run(`ALTER TABLE transactions ADD COLUMN rejection_reason TEXT`);
-        }
-
-        await logService.info(
-          "Added AI detection fields to transactions table",
-          "DatabaseService"
-        );
-      }
-
-// Migration 11: Create llm_settings table (TASK-302)
-      // Part of SPRINT-004 schema migrations - version increment deferred to TASK-305
-      const llmSettingsExists = this._get<{ name: string }>(
-        `SELECT name FROM sqlite_master WHERE type='table' AND name='llm_settings'`
-      );
-
-      if (!llmSettingsExists) {
-        await logService.debug(
-          "Running Migration 11: Creating llm_settings table",
-          "DatabaseService"
-        );
-
-        this._run(`
-          CREATE TABLE IF NOT EXISTS llm_settings (
-            id TEXT PRIMARY KEY,
-            user_id TEXT NOT NULL UNIQUE,
-            -- Provider Config
-            openai_api_key_encrypted TEXT,
-            anthropic_api_key_encrypted TEXT,
-            preferred_provider TEXT DEFAULT 'openai' CHECK (preferred_provider IN ('openai', 'anthropic')),
-            openai_model TEXT DEFAULT 'gpt-4o-mini',
-            anthropic_model TEXT DEFAULT 'claude-3-haiku-20240307',
-            -- Usage Tracking
-            tokens_used_this_month INTEGER DEFAULT 0,
-            budget_limit_tokens INTEGER,
-            budget_reset_date DATE,
-            -- Platform Allowance
-            platform_allowance_tokens INTEGER DEFAULT 0,
-            platform_allowance_used INTEGER DEFAULT 0,
-            use_platform_allowance INTEGER DEFAULT 0,
-            -- Feature Flags
-            enable_auto_detect INTEGER DEFAULT 1,
-            enable_role_extraction INTEGER DEFAULT 1,
-            -- Consent (Security Option C)
-            llm_data_consent INTEGER DEFAULT 0,
-            llm_data_consent_at DATETIME,
-            -- Timestamps
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE
-          )
-        `);
-
-        this._run(`
-          CREATE INDEX IF NOT EXISTS idx_llm_settings_user ON llm_settings(user_id)
-        `);
-
-        await logService.info(
-          "Created llm_settings table",
-          "DatabaseService"
-        );
-      }
-
-      // Migration 11: Add llm_analysis column to messages (TASK-303)
-      // Part of SPRINT-004 schema migrations - version increment deferred to TASK-305
-      const messagesColumns = this._all<{ name: string }>(
-        `PRAGMA table_info(messages)`
-      );
-      const messageColumnNames = messagesColumns.map((col) => col.name);
-
-      if (!messageColumnNames.includes("llm_analysis")) {
-        await logService.debug(
-          "Running Migration 11: Adding llm_analysis column to messages",
-          "DatabaseService"
-        );
-
-        this._run(`ALTER TABLE messages ADD COLUMN llm_analysis TEXT`);
-
-        await logService.info(
-          "Added llm_analysis column to messages table",
-          "DatabaseService"
-        );
-      }
-
-      // Migration 008: Finalize schema version (TASK-305)
-      // Increment version after all TASK-301, 302, 303 changes are complete
-      const currentSchemaVersion =
-        this._get<{ version: number }>("SELECT version FROM schema_version")
-          ?.version || 0;
-
-      if (currentSchemaVersion < 8) {
-        this._run("UPDATE schema_version SET version = 8");
-        await logService.info(
-          "Migration 008 completed: AI Detection Support schema",
-          "DatabaseService"
-        );
-      }
-
-      await logService.info(
-        "All database migrations completed successfully",
-        "DatabaseService",
-      );
-    } catch (error) {
-      await logService.error("Migration failed", "DatabaseService", {
-        error: (error as Error).message,
-        stack: (error as Error).stack,
-      });
-    }
-  }
-
-  /**
-   * Helper: Run a query that returns a single row
-   * Uses better-sqlite3's synchronous API
-   */
-  private _get<T = any>(sql: string, params: any[] = []): T | undefined {
     const db = this._ensureDb();
-    const stmt = db.prepare(sql);
-    return stmt.get(...params) as T | undefined;
-  }
 
-  /**
-   * Helper: Run a query that returns multiple rows
-   * Uses better-sqlite3's synchronous API
-   */
-  private _all<T = any>(sql: string, params: any[] = []): T[] {
-    const db = this._ensureDb();
-    const stmt = db.prepare(sql);
-    return stmt.all(...params) as T[];
-  }
-
-  /**
-   * Helper: Run a query that modifies data (INSERT, UPDATE, DELETE)
-   * Uses better-sqlite3's synchronous API
-   */
-  private _run(sql: string, params: any[] = []): QueryResult {
-    const db = this._ensureDb();
-    const stmt = db.prepare(sql);
-    const result = stmt.run(...params);
-    return {
-      lastInsertRowid: result.lastInsertRowid as number,
-      changes: result.changes,
-    };
-  }
-
-  // ============================================
-  // USER OPERATIONS
-  // ============================================
-
-  /**
-   * Create a new user
-   */
-  async createUser(userData: NewUser): Promise<User> {
-    const id = crypto.randomUUID();
-    const sql = `
-      INSERT INTO users_local (
-        id, email, first_name, last_name, display_name, avatar_url,
-        oauth_provider, oauth_id, subscription_tier, subscription_status,
-        trial_ends_at, timezone, theme, company, job_title
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `;
-
-    const params = [
-      id,
-      userData.email,
-      userData.first_name || null,
-      userData.last_name || null,
-      userData.display_name || null,
-      userData.avatar_url || null,
-      userData.oauth_provider,
-      userData.oauth_id,
-      userData.subscription_tier || "free",
-      userData.subscription_status || "trial",
-      userData.trial_ends_at || null,
-      userData.timezone || "America/Los_Angeles",
-      userData.theme || "light",
-      userData.company || null,
-      userData.job_title || null,
-    ];
-
-    this._run(sql, params);
-    const user = await this.getUserById(id);
-    if (!user) {
-      throw new DatabaseError("Failed to create user");
-    }
-    return user;
-  }
-
-  /**
-   * Get user by ID
-   */
-  async getUserById(userId: string): Promise<User | null> {
-    const sql = "SELECT * FROM users_local WHERE id = ?";
-    const user = this._get<User>(sql, [userId]);
-    return user || null;
-  }
-
-  /**
-   * Get user by email
-   */
-  async getUserByEmail(email: string): Promise<User | null> {
-    const sql = "SELECT * FROM users_local WHERE email = ?";
-    const user = this._get<User>(sql, [email]);
-    return user || null;
-  }
-
-  /**
-   * Get user by OAuth provider and ID
-   */
-  async getUserByOAuthId(
-    provider: OAuthProvider,
-    oauthId: string,
-  ): Promise<User | null> {
-    const sql =
-      "SELECT * FROM users_local WHERE oauth_provider = ? AND oauth_id = ?";
-    const user = this._get<User>(sql, [provider, oauthId]);
-    return user || null;
-  }
-
-  /**
-   * Update user data
-   */
-  async updateUser(userId: string, updates: Partial<User>): Promise<void> {
-    const allowedFields = [
-      "email",
-      "first_name",
-      "last_name",
-      "display_name",
-      "avatar_url",
-      "subscription_tier",
-      "subscription_status",
-      "trial_ends_at",
-      "timezone",
-      "theme",
-      "notification_preferences",
-      "company",
-      "job_title",
-      "last_cloud_sync_at",
-      "terms_accepted_at",
-      "privacy_policy_accepted_at",
-      "terms_version_accepted",
-      "privacy_policy_version_accepted",
-      "email_onboarding_completed_at",
-      "mobile_phone_type",
-    ];
-
-    const fields: string[] = [];
-    const values: any[] = [];
-
-    Object.keys(updates).forEach((key) => {
-      if (allowedFields.includes(key)) {
-        fields.push(`${key} = ?`);
-        values.push((updates as any)[key]);
-      }
-    });
-
-    if (fields.length === 0) {
-      throw new DatabaseError("No valid fields to update");
-    }
-
-    // Validate fields against whitelist before SQL construction
-    validateFields("users_local", fields);
-
-    values.push(userId);
-
-    const sql = `UPDATE users_local SET ${fields.join(", ")} WHERE id = ?`;
-    this._run(sql, values);
-  }
-
-  /**
-   * Delete user
-   */
-  async deleteUser(userId: string): Promise<void> {
-    const sql = "DELETE FROM users_local WHERE id = ?";
-    this._run(sql, [userId]);
-  }
-
-  /**
-   * Update last login timestamp and increment login count
-   */
-  async updateLastLogin(userId: string): Promise<void> {
-    const sql = `
-      UPDATE users_local
-      SET last_login_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `;
-    this._run(sql, [userId]);
-  }
-
-  /**
-   * Accept terms and conditions for a user
-   */
-  async acceptTerms(
-    userId: string,
-    termsVersion: string,
-    privacyVersion: string,
-  ): Promise<User> {
-    const sql = `
-      UPDATE users_local
-      SET terms_accepted_at = CURRENT_TIMESTAMP,
-          terms_version_accepted = ?,
-          privacy_policy_accepted_at = CURRENT_TIMESTAMP,
-          privacy_policy_version_accepted = ?
-      WHERE id = ?
-    `;
-    this._run(sql, [termsVersion, privacyVersion, userId]);
-    const user = await this.getUserById(userId);
-    if (!user) {
-      throw new NotFoundError(
-        "User not found after accepting terms",
-        "User",
-        userId,
-      );
-    }
-    return user;
-  }
-
-  /**
-   * Mark email onboarding as completed for a user
-   */
-  async completeEmailOnboarding(userId: string): Promise<void> {
-    const sql = `
-      UPDATE users_local
-      SET email_onboarding_completed_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `;
-    this._run(sql, [userId]);
-  }
-
-  /**
-   * Check if user has completed email onboarding
-   */
-  async hasCompletedEmailOnboarding(userId: string): Promise<boolean> {
-    const sql = `
-      SELECT email_onboarding_completed_at
-      FROM users_local
-      WHERE id = ?
-    `;
-    const result = this._get<{ email_onboarding_completed_at: string | null }>(
-      sql,
-      [userId],
-    );
-    return (
-      result?.email_onboarding_completed_at !== null &&
-      result?.email_onboarding_completed_at !== undefined
-    );
-  }
-
-  // ============================================
-  // SESSION OPERATIONS
-  // ============================================
-
-  /**
-   * Create a new session for a user
-   */
-  async createSession(userId: string): Promise<string> {
-    const id = crypto.randomUUID();
-    const sessionToken = crypto.randomUUID();
-
-    // Sessions expire after 24 hours (security hardened)
-    const expiresAt = new Date();
-    expiresAt.setTime(expiresAt.getTime() + 24 * 60 * 60 * 1000);
-
-    const sql = `
-      INSERT INTO sessions (id, user_id, session_token, expires_at)
-      VALUES (?, ?, ?, ?)
-    `;
-
-    this._run(sql, [id, userId, sessionToken, expiresAt.toISOString()]);
-    return sessionToken;
-  }
-
-  /**
-   * Validate a session token
-   */
-  async validateSession(
-    sessionToken: string,
-  ): Promise<(Session & User) | null> {
-    const sql = `
-      SELECT s.*, u.*
-      FROM sessions s
-      JOIN users_local u ON s.user_id = u.id
-      WHERE s.session_token = ?
-    `;
-
-    const session = this._get<Session & User>(sql, [sessionToken]);
-
-    if (!session) {
-      return null;
-    }
-
-    // Check if expired
-    const expiresAt = new Date(session.expires_at);
-    if (expiresAt < new Date()) {
-      await this.deleteSession(sessionToken);
-      return null;
-    }
-
-    // Update last accessed time
-    this._run(
-      "UPDATE sessions SET last_accessed_at = CURRENT_TIMESTAMP WHERE session_token = ?",
-      [sessionToken],
-    );
-
-    return session;
-  }
-
-  /**
-   * Delete a session (logout)
-   */
-  async deleteSession(sessionToken: string): Promise<void> {
-    const sql = "DELETE FROM sessions WHERE session_token = ?";
-    this._run(sql, [sessionToken]);
-  }
-
-  /**
-   * Delete all sessions for a user
-   */
-  async deleteAllUserSessions(userId: string): Promise<void> {
-    const sql = "DELETE FROM sessions WHERE user_id = ?";
-    this._run(sql, [userId]);
-  }
-
-  /**
-   * Clear all sessions (for session-only OAuth on app startup)
-   * This forces all users to re-authenticate each app launch
-   */
-  async clearAllSessions(): Promise<void> {
-    const sql = "DELETE FROM sessions";
-    this._run(sql, []);
-    logService.info(
-      "[DatabaseService] Cleared all sessions for session-only OAuth",
-      "DatabaseService",
-    );
-  }
-
-  /**
-   * Clear all OAuth tokens (for session-only OAuth on app startup)
-   * This forces all users to re-authenticate each app launch
-   */
-  async clearAllOAuthTokens(): Promise<void> {
-    const sql = "DELETE FROM oauth_tokens";
-    this._run(sql, []);
-    logService.info(
-      "[DatabaseService] Cleared all OAuth tokens for session-only OAuth",
-      "DatabaseService",
-    );
-  }
-
-  // ============================================
-  // CONTACT OPERATIONS
-  // ============================================
-
-  /**
-   * Create a new contact
-   */
-  async createContact(contactData: NewContact): Promise<Contact> {
-    const id = crypto.randomUUID();
-    const sql = `
-      INSERT INTO contacts (
-        id, user_id, display_name, company, title, source, is_imported
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)
-    `;
-
-    const params = [
-      id,
-      contactData.user_id,
-      contactData.display_name || contactData.name || "Unknown",
-      contactData.company || null,
-      contactData.title || null,
-      contactData.source || "manual",
-      contactData.is_imported !== undefined
-        ? contactData.is_imported
-          ? 1
-          : 0
-        : 1,
-    ];
-
-    this._run(sql, params);
-    const contact = await this.getContactById(id);
-    if (!contact) {
-      throw new DatabaseError("Failed to create contact");
-    }
-    return contact;
-  }
-
-  /**
-   * Get contact by ID
-   */
-  async getContactById(contactId: string): Promise<Contact | null> {
-    const sql = "SELECT * FROM contacts WHERE id = ?";
-    const contact = this._get<Contact>(sql, [contactId]);
-    return contact || null;
-  }
-
-  /**
-   * Get all contacts for a user
-   */
-  async getContacts(filters?: ContactFilters): Promise<Contact[]> {
-    let sql = "SELECT * FROM contacts WHERE 1=1";
-    const params: any[] = [];
-
-    if (filters?.user_id) {
-      sql += " AND user_id = ?";
-      params.push(filters.user_id);
-    }
-
-    if (filters?.source) {
-      sql += " AND source = ?";
-      params.push(filters.source);
-    }
-
-    if (filters?.is_imported !== undefined) {
-      sql += " AND is_imported = ?";
-      params.push(filters.is_imported ? 1 : 0);
-    }
-
-    sql += " ORDER BY display_name ASC";
-
-    return this._all<Contact>(sql, params);
-  }
-
-  /**
-   * Get only imported contacts for a user
-   * Returns contacts with display_name aliased as 'name' for backwards compatibility
-   * Also includes primary email and phone from child tables
-   */
-  async getImportedContactsByUserId(userId: string): Promise<Contact[]> {
-    // Use subqueries with COALESCE to fall back to any email/phone if no primary is set
-    const sql = `
-      SELECT
-        c.*,
-        c.display_name as name,
-        COALESCE(
-          (SELECT email FROM contact_emails WHERE contact_id = c.id AND is_primary = 1 LIMIT 1),
-          (SELECT email FROM contact_emails WHERE contact_id = c.id LIMIT 1)
-        ) as email,
-        COALESCE(
-          (SELECT phone_e164 FROM contact_phones WHERE contact_id = c.id AND is_primary = 1 LIMIT 1),
-          (SELECT phone_e164 FROM contact_phones WHERE contact_id = c.id LIMIT 1)
-        ) as phone
-      FROM contacts c
-      WHERE c.user_id = ? AND c.is_imported = 1
-      ORDER BY c.display_name ASC
-    `;
-    return this._all<Contact>(sql, [userId]);
-  }
-
-  /**
-   * Get unimported contacts for a user (available to import)
-   * These are contacts synced from iPhone that haven't been imported yet
-   * Returns contacts with display_name aliased as 'name' for backwards compatibility
-   * Also includes primary email and phone from child tables
-   */
-  async getUnimportedContactsByUserId(userId: string): Promise<Contact[]> {
-    // First, try to get contacts with is_primary = 1 (preferred)
-    // If no primary set, fall back to getting any email/phone
-    const sql = `
-      SELECT
-        c.*,
-        c.display_name as name,
-        COALESCE(
-          (SELECT email FROM contact_emails WHERE contact_id = c.id AND is_primary = 1 LIMIT 1),
-          (SELECT email FROM contact_emails WHERE contact_id = c.id LIMIT 1)
-        ) as email,
-        COALESCE(
-          (SELECT phone_e164 FROM contact_phones WHERE contact_id = c.id AND is_primary = 1 LIMIT 1),
-          (SELECT phone_e164 FROM contact_phones WHERE contact_id = c.id LIMIT 1)
-        ) as phone
-      FROM contacts c
-      WHERE c.user_id = ? AND c.is_imported = 0
-      ORDER BY c.display_name ASC
-    `;
-    return this._all<Contact>(sql, [userId]);
-  }
-
-  /**
-   * Mark a contact as imported (change is_imported from 0 to 1)
-   */
-  async markContactAsImported(contactId: string): Promise<void> {
-    const sql = "UPDATE contacts SET is_imported = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?";
-    this._run(sql, [contactId]);
-  }
-
-  /**
-   * Get contacts sorted by recent communication and optionally by property address relevance
-   * Note: emails are stored in contact_emails child table, not directly on contacts
-   */
-  async getContactsSortedByActivity(
-    userId: string,
-    propertyAddress?: string,
-  ): Promise<ContactWithActivity[]> {
-    const sql = `
-      SELECT
-        c.*,
-        c.display_name as name,
-        ce_primary.email as email,
-        cp_primary.phone_e164 as phone,
-        MAX(comm.sent_at) as last_communication_at,
-        COUNT(DISTINCT comm.id) as communication_count,
-        ${
-          propertyAddress
-            ? `
-          SUM(CASE
-            WHEN comm.subject LIKE ? OR comm.body_plain LIKE ? OR comm.body LIKE ?
-            THEN 1 ELSE 0
-          END) as address_mention_count
-        `
-            : "0 as address_mention_count"
-        }
-      FROM contacts c
-      LEFT JOIN contact_emails ce_primary ON c.id = ce_primary.contact_id AND ce_primary.is_primary = 1
-      LEFT JOIN contact_phones cp_primary ON c.id = cp_primary.contact_id AND cp_primary.is_primary = 1
-      LEFT JOIN contact_emails ce_all ON c.id = ce_all.contact_id
-      LEFT JOIN communications comm ON (
-        ce_all.email IS NOT NULL
-        AND (comm.sender = ce_all.email OR comm.recipients LIKE '%' || ce_all.email || '%')
-        AND comm.user_id = c.user_id
-      )
-      WHERE c.user_id = ? AND c.is_imported = 1
-      GROUP BY c.id
-      ORDER BY
-        ${propertyAddress ? "address_mention_count DESC," : ""}
-        CASE WHEN last_communication_at IS NULL THEN 1 ELSE 0 END,
-        last_communication_at DESC,
-        c.display_name ASC
-    `;
-
-    const params = propertyAddress
-      ? [
-          `%${propertyAddress}%`,
-          `%${propertyAddress}%`,
-          `%${propertyAddress}%`,
-          userId,
-        ]
-      : [userId];
-
-    try {
-      return this._all<ContactWithActivity>(sql, params);
-    } catch (error) {
-      logService.error("Error getting sorted contacts", "DatabaseService", {
-        error: (error as Error).message,
-        sql,
-        params,
-      });
-      throw error;
-    }
-  }
-
-  /**
-   * Search contacts by name or email
-   */
-  async searchContacts(query: string, userId: string): Promise<Contact[]> {
-    const sql = `
-      SELECT * FROM contacts
-      WHERE user_id = ? AND (display_name LIKE ? OR display_name LIKE ?)
-      ORDER BY display_name ASC
-    `;
-    const searchPattern = `%${query}%`;
-    return this._all<Contact>(sql, [userId, searchPattern, searchPattern]);
-  }
-
-  /**
-   * Update contact information
-   */
-  async updateContact(
-    contactId: string,
-    updates: Partial<Contact>,
-  ): Promise<void> {
-    const allowedFields = ["display_name", "company", "title"];
-    const fields: string[] = [];
-    const values: any[] = [];
-
-    Object.keys(updates).forEach((key) => {
-      if (allowedFields.includes(key)) {
-        fields.push(`${key} = ?`);
-        values.push((updates as any)[key]);
-      }
-    });
-
-    if (fields.length === 0) {
-      throw new DatabaseError("No valid fields to update");
-    }
-
-    // Validate fields against whitelist before SQL construction
-    validateFields("contacts", fields);
-
-    values.push(contactId);
-    const sql = `UPDATE contacts SET ${fields.join(", ")} WHERE id = ?`;
-    this._run(sql, values);
-  }
-
-  /**
-   * Get all transactions associated with a contact
-   */
-  async getTransactionsByContact(
-    contactId: string,
-  ): Promise<TransactionWithRoles[]> {
-    const transactionMap = new Map<
-      string,
-      {
-        id: string;
-        property_address: string;
-        closing_deadline?: string | null;
-        transaction_type?: string | null;
-        status: string;
-        roles: string[];
-      }
-    >();
-
-    // 1. Check direct FK references
-    const directQuery = `
-      SELECT DISTINCT
-        id,
-        property_address,
-        closing_deadline,
-        transaction_type,
-        status,
-        CASE
-          WHEN buyer_agent_id = ? THEN 'Buyer Agent'
-          WHEN seller_agent_id = ? THEN 'Seller Agent'
-          WHEN escrow_officer_id = ? THEN 'Escrow Officer'
-          WHEN inspector_id = ? THEN 'Inspector'
-        END as role
-      FROM transactions
-      WHERE buyer_agent_id = ?
-         OR seller_agent_id = ?
-         OR escrow_officer_id = ?
-         OR inspector_id = ?
-    `;
-
-    const directResults = this._all<{
-      id: string;
-      property_address: string;
-      closing_deadline?: string | null;
-      transaction_type?: string | null;
-      status: string;
-      role: string;
-    }>(directQuery, [
-      contactId,
-      contactId,
-      contactId,
-      contactId,
-      contactId,
-      contactId,
-      contactId,
-      contactId,
-    ]);
-
-    directResults.forEach((txn) => {
-      if (!transactionMap.has(txn.id)) {
-        transactionMap.set(txn.id, {
-          id: txn.id,
-          property_address: txn.property_address,
-          closing_deadline: txn.closing_deadline,
-          transaction_type: txn.transaction_type,
-          status: txn.status,
-          roles: [txn.role],
-        });
-      } else {
-        transactionMap.get(txn.id)?.roles.push(txn.role);
-      }
-    });
-
-    // 2. Check junction table (transaction_contacts)
-    const junctionQuery = `
-      SELECT DISTINCT
-        t.id,
-        t.property_address,
-        t.closing_deadline,
-        t.transaction_type,
-        t.status,
-        tc.specific_role,
-        tc.role_category
-      FROM transaction_contacts tc
-      JOIN transactions t ON tc.transaction_id = t.id
-      WHERE tc.contact_id = ?
-    `;
-
-    const junctionResults = this._all<{
-      id: string;
-      property_address: string;
-      closing_deadline?: string | null;
-      transaction_type?: string | null;
-      status: string;
-      specific_role?: string;
-      role_category?: string;
-    }>(junctionQuery, [contactId]);
-
-    junctionResults.forEach((txn) => {
-      const role =
-        txn.specific_role || txn.role_category || "Associated Contact";
-      if (!transactionMap.has(txn.id)) {
-        transactionMap.set(txn.id, {
-          id: txn.id,
-          property_address: txn.property_address,
-          closing_deadline: txn.closing_deadline,
-          transaction_type: txn.transaction_type,
-          status: txn.status,
-          roles: [role],
-        });
-      } else {
-        transactionMap.get(txn.id)?.roles.push(role);
-      }
-    });
-
-    // 3. Check JSON array (other_contacts)
-    try {
-      const jsonQuery = `
-        SELECT DISTINCT
-          t.id,
-          t.property_address,
-          t.closing_deadline,
-          t.transaction_type,
-          t.status
-        FROM transactions t, json_each(t.other_contacts) j
-        WHERE j.value = ?
-      `;
-
-      const jsonResults = this._all<{
-        id: string;
-        property_address: string;
-        closing_deadline?: string | null;
-        transaction_type?: string | null;
-        status: string;
-      }>(jsonQuery, [contactId]);
-
-      jsonResults.forEach((txn) => {
-        if (!transactionMap.has(txn.id)) {
-          transactionMap.set(txn.id, {
-            id: txn.id,
-            property_address: txn.property_address,
-            closing_deadline: txn.closing_deadline,
-            transaction_type: txn.transaction_type,
-            status: txn.status,
-            roles: ["Other Contact"],
-          });
-        } else {
-          transactionMap.get(txn.id)?.roles.push("Other Contact");
-        }
-      });
-    } catch (error) {
-      logService.warn(
-        "json_each not supported, using LIKE fallback",
-        "DatabaseService",
-        { error: (error as Error).message },
-      );
-      // Fallback implementation using LIKE
-      const fallbackQuery = `
-        SELECT id, property_address, closing_deadline, transaction_type, status, other_contacts
-        FROM transactions
-        WHERE other_contacts LIKE ?
-      `;
-
-      const fallbackResults = this._all<{
-        id: string;
-        property_address: string;
-        closing_deadline?: string | null;
-        transaction_type?: string | null;
-        status: string;
-        other_contacts?: string;
-      }>(fallbackQuery, [`%"${contactId}"%`]);
-
-      fallbackResults.forEach((txn) => {
-        try {
-          const contacts = JSON.parse(txn.other_contacts || "[]");
-          if (contacts.includes(contactId)) {
-            if (!transactionMap.has(txn.id)) {
-              transactionMap.set(txn.id, {
-                id: txn.id,
-                property_address: txn.property_address,
-                closing_deadline: txn.closing_deadline,
-                transaction_type: txn.transaction_type,
-                status: txn.status,
-                roles: ["Other Contact"],
-              });
-            } else {
-              transactionMap.get(txn.id)?.roles.push("Other Contact");
-            }
-          }
-        } catch (parseError) {
-          logService.error(
-            "Error parsing other_contacts JSON",
-            "DatabaseService",
-            { error: (parseError as Error).message },
-          );
-        }
-      });
-    }
-
-    // Convert map to array and format roles
-    return Array.from(transactionMap.values()).map((txn) => ({
-      ...txn,
-      roles: [...new Set(txn.roles)].join(", "),
-    }));
-  }
-
-  /**
-   * Delete a contact
-   */
-  async deleteContact(contactId: string): Promise<void> {
-    const sql = "DELETE FROM contacts WHERE id = ?";
-    this._run(sql, [contactId]);
-  }
-
-  /**
-   * Remove a contact from local database (un-import)
-   */
-  async removeContact(contactId: string): Promise<void> {
-    const sql = "UPDATE contacts SET is_imported = 0 WHERE id = ?";
-    this._run(sql, [contactId]);
-  }
-
-  /**
-   * Get or create contact from email address
-   */
-  async getOrCreateContactFromEmail(
-    userId: string,
-    email: string,
-    name?: string,
-  ): Promise<Contact> {
-    // Try to find existing contact
-    let contact = this._get<Contact>(
-      "SELECT * FROM contacts WHERE user_id = ? AND email = ?",
-      [userId, email],
-    );
-
-    if (!contact) {
-      // Create new contact
-      contact = await this.createContact({
-        user_id: userId,
-        name: name || email.split("@")[0],
-        email: email,
-        source: "email",
-        is_imported: true,
-      });
-    }
-
-    return contact;
-  }
-
-  // ============================================
-  // OAUTH TOKEN OPERATIONS
-  // ============================================
-
-  /**
-   * Save OAuth token (encrypted)
-   */
-  async saveOAuthToken(
-    userId: string,
-    provider: OAuthProvider,
-    purpose: OAuthPurpose,
-    tokenData: Partial<OAuthToken>,
-  ): Promise<string> {
-    const id = crypto.randomUUID();
-
-    const sql = `
-      INSERT INTO oauth_tokens (
-        id, user_id, provider, purpose,
-        access_token, refresh_token, token_expires_at, scopes_granted,
-        connected_email_address, mailbox_connected, permissions_granted_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(user_id, provider, purpose) DO UPDATE SET
-        access_token = excluded.access_token,
-        refresh_token = excluded.refresh_token,
-        token_expires_at = excluded.token_expires_at,
-        scopes_granted = excluded.scopes_granted,
-        connected_email_address = excluded.connected_email_address,
-        mailbox_connected = excluded.mailbox_connected,
-        permissions_granted_at = excluded.permissions_granted_at,
-        is_active = 1,
-        token_last_refreshed_at = CURRENT_TIMESTAMP
-    `;
-
-    const params = [
-      id,
-      userId,
-      provider,
-      purpose,
-      tokenData.access_token || null,
-      tokenData.refresh_token || null,
-      tokenData.token_expires_at || null,
-      tokenData.scopes_granted
-        ? JSON.stringify(tokenData.scopes_granted)
-        : null,
-      tokenData.connected_email_address || null,
-      tokenData.mailbox_connected ? 1 : 0,
-      tokenData.permissions_granted_at || new Date().toISOString(),
-    ];
-
-    this._run(sql, params);
-    return id;
-  }
-
-  /**
-   * Get OAuth token
-   */
-  async getOAuthToken(
-    userId: string,
-    provider: OAuthProvider,
-    purpose: OAuthPurpose,
-  ): Promise<OAuthToken | null> {
-    const sql = `
-      SELECT * FROM oauth_tokens
-      WHERE user_id = ? AND provider = ? AND purpose = ? AND is_active = 1
-    `;
-    const token = this._get<OAuthToken & { scopes_granted?: string }>(sql, [
-      userId,
-      provider,
-      purpose,
-    ]);
-
-    if (
-      token &&
-      token.scopes_granted &&
-      typeof token.scopes_granted === "string"
-    ) {
-      (token as any).scopes_granted = JSON.parse(token.scopes_granted);
-    }
-
-    return token || null;
-  }
-
-  /**
-   * Update OAuth token
-   */
-  async updateOAuthToken(
-    tokenId: string,
-    updates: Partial<OAuthToken>,
-  ): Promise<void> {
-    const allowedFields = [
-      "access_token",
-      "refresh_token",
-      "token_expires_at",
-      "scopes_granted",
-      "connected_email_address",
-      "mailbox_connected",
-      "token_last_refreshed_at",
-      "token_refresh_failed_count",
-      "last_sync_at",
-      "last_sync_error",
-      "is_active",
-    ];
-
-    const fields: string[] = [];
-    const values: any[] = [];
-
-    Object.keys(updates).forEach((key) => {
-      if (allowedFields.includes(key)) {
-        let value = (updates as any)[key];
-        if (key === "scopes_granted" && Array.isArray(value)) {
-          value = JSON.stringify(value);
-        }
-        fields.push(`${key} = ?`);
-        values.push(value);
-      }
-    });
-
-    if (fields.length === 0) {
-      throw new DatabaseError("No valid fields to update");
-    }
-
-    // Validate fields against whitelist before SQL construction
-    validateFields("oauth_tokens", fields);
-
-    values.push(tokenId);
-
-    const sql = `UPDATE oauth_tokens SET ${fields.join(", ")} WHERE id = ?`;
-    this._run(sql, values);
-  }
-
-  /**
-   * Delete OAuth token
-   */
-  async deleteOAuthToken(
-    userId: string,
-    provider: OAuthProvider,
-    purpose: OAuthPurpose,
-  ): Promise<void> {
-    const sql =
-      "DELETE FROM oauth_tokens WHERE user_id = ? AND provider = ? AND purpose = ?";
-    this._run(sql, [userId, provider, purpose]);
-  }
-
-  /**
-   * Get the last sync timestamp for an OAuth token
-   * Used for incremental email fetching
-   * @param userId - User ID
-   * @param provider - OAuth provider (google | microsoft)
-   * @returns Date of last sync, or null if never synced
-   */
-  async getOAuthTokenSyncTime(
-    userId: string,
-    provider: OAuthProvider,
-  ): Promise<Date | null> {
-    return getOAuthTokenSyncTimeDb(userId, provider);
-  }
-
-  /**
-   * Update the last sync timestamp for an OAuth token
-   * Should only be called AFTER successful email storage
-   * @param userId - User ID
-   * @param provider - OAuth provider (google | microsoft)
-   * @param syncTime - Timestamp of the sync
-   */
-  async updateOAuthTokenSyncTime(
-    userId: string,
-    provider: OAuthProvider,
-    syncTime: Date,
-  ): Promise<void> {
-    return updateOAuthTokenSyncTimeDb(userId, provider, syncTime);
-  }
-
-  // ============================================
-  // TRANSACTION OPERATIONS
-  // ============================================
-
-  /**
-   * Create a new transaction
-   */
-  async createTransaction(
-    transactionData: NewTransaction,
-  ): Promise<Transaction> {
-    const id = crypto.randomUUID();
-
-    // Debug log to trace detection field values
-    logService.debug("[DEBUG createTransaction] detection fields:", "DatabaseService", {
-      detection_source: transactionData.detection_source,
-      detection_status: transactionData.detection_status,
-      detection_confidence: transactionData.detection_confidence,
-      detection_method: transactionData.detection_method,
-    });
-
-    const sql = `
-      INSERT INTO transactions (
-        id, user_id, property_address, property_street, property_city,
-        property_state, property_zip, property_coordinates,
-        transaction_type, status, closing_deadline,
-        detection_source, detection_status, detection_confidence,
-        detection_method, suggested_contacts
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `;
-
-    const params = [
-      id,
-      transactionData.user_id,
-      transactionData.property_address,
-      transactionData.property_street || null,
-      transactionData.property_city || null,
-      transactionData.property_state || null,
-      transactionData.property_zip || null,
-      transactionData.property_coordinates
-        ? JSON.stringify(transactionData.property_coordinates)
-        : null,
-      transactionData.transaction_type || null,
-      // Map legacy status values to valid schema values
-      (() => {
-        const rawStatus = transactionData.transaction_status || transactionData.status || "active";
-        // Map "completed" -> "closed", "pending" -> "active"
-        if (rawStatus === "completed") return "closed";
-        if (rawStatus === "pending") return "active";
-        if (["active", "closed", "archived"].includes(rawStatus)) return rawStatus;
-        return "active"; // Default fallback
-      })(),
-      transactionData.closing_deadline || transactionData.closing_deadline || null,
-      // AI detection fields (Migration 11)
-      transactionData.detection_source || "manual",
-      transactionData.detection_status || "confirmed",
-      transactionData.detection_confidence ?? null,
-      transactionData.detection_method || null,
-      transactionData.suggested_contacts || null,
-    ];
-
-    this._run(sql, params);
-    const transaction = await this.getTransactionById(id);
-    if (!transaction) {
-      throw new DatabaseError("Failed to create transaction");
-    }
-    // Debug: verify detection fields were saved
-    logService.debug("[DEBUG createTransaction] saved transaction detection fields:", "DatabaseService", {
-      detection_source: transaction.detection_source,
-      detection_status: transaction.detection_status,
-      detection_confidence: transaction.detection_confidence,
-    });
-    return transaction;
-  }
-
-  /**
-   * Get all transactions for a user
-   */
-  async getTransactions(filters?: TransactionFilters): Promise<Transaction[]> {
-    // Use subquery to compute actual email count from communications table
-    // This overrides the stored total_communications_count to ensure accuracy
-    let sql = `SELECT t.*,
-               (SELECT COUNT(*) FROM communications c WHERE c.transaction_id = t.id) as total_communications_count
-               FROM transactions t WHERE 1=1`;
-    const params: any[] = [];
-
-    if (filters?.user_id) {
-      sql += " AND t.user_id = ?";
-      params.push(filters.user_id);
-    }
-
-    if (filters?.transaction_type) {
-      sql += " AND t.transaction_type = ?";
-      params.push(filters.transaction_type);
-    }
-
-    if (filters?.transaction_status || filters?.status) {
-      sql += " AND t.status = ?";
-      params.push(filters.transaction_status || filters.status);
-    }
-
-    if (filters?.export_status) {
-      sql += " AND t.export_status = ?";
-      params.push(filters.export_status);
-    }
-
-    if (filters?.start_date) {
-      sql += " AND t.closing_deadline >= ?";
-      params.push(filters.start_date);
-    }
-
-    if (filters?.end_date) {
-      sql += " AND t.closing_deadline <= ?";
-      params.push(filters.end_date);
-    }
-
-    if (filters?.property_address) {
-      sql += " AND t.property_address LIKE ?";
-      params.push(`%${filters.property_address}%`);
-    }
-
-    sql += " ORDER BY t.created_at DESC";
-
-    return this._all<Transaction>(sql, params);
-  }
-
-  /**
-   * Get transaction by ID
-   */
-  async getTransactionById(transactionId: string): Promise<Transaction | null> {
-    const sql = "SELECT * FROM transactions WHERE id = ?";
-    const transaction = this._get<Transaction>(sql, [transactionId]);
-    return transaction || null;
-  }
-
-  /**
-   * Get transaction with associated contacts
-   */
-  async getTransactionWithContacts(
-    transactionId: string,
-  ): Promise<TransactionWithContacts | null> {
-    const transaction = await this.getTransactionById(transactionId);
-    if (!transaction) {
-      return null;
-    }
-
-    const contacts = await this.getTransactionContactsWithRoles(transactionId);
-
-    const result: TransactionWithContacts = {
-      ...transaction,
-      all_contacts: contacts.map((tc) => ({
-        id: tc.contact_id,
-        user_id: transaction.user_id,
-        name: tc.contact_name || "",
-        email: tc.contact_email,
-        phone: tc.contact_phone,
-        company: tc.contact_company,
-        title: tc.contact_title,
-        source: "manual" as const,
-        is_imported: true,
-        created_at: tc.created_at,
-        updated_at: tc.updated_at,
-      })),
+    // Helper to get column info
+    const getColumns = (table: string) => {
+      return (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map(c => c.name);
     };
 
-    // Find specific role contacts
-    const buyerAgent = contacts.find((c) => c.specific_role === "Buyer Agent");
-    const sellerAgent = contacts.find(
-      (c) => c.specific_role === "Seller Agent",
-    );
-    const escrowOfficer = contacts.find(
-      (c) => c.specific_role === "Escrow Officer",
-    );
-    const inspector = contacts.find((c) => c.specific_role === "Inspector");
+    // Helper to run SQL safely
+    const runSafe = (sql: string) => {
+      try { db.exec(sql); } catch { /* Ignore */ }
+    };
 
-    if (buyerAgent) {
-      result.buyer_agent = {
-        id: buyerAgent.contact_id,
-        user_id: transaction.user_id,
-        name: buyerAgent.contact_name || "",
-        email: buyerAgent.contact_email,
-        phone: buyerAgent.contact_phone,
-        company: buyerAgent.contact_company,
-        title: buyerAgent.contact_title,
-        source: "manual" as const,
-        is_imported: true,
-        created_at: buyerAgent.created_at,
-        updated_at: buyerAgent.updated_at,
-      };
-    }
+    // Migration 1: User compliance columns
+    const userColumns = getColumns('users_local');
+    if (!userColumns.includes('terms_accepted_at')) runSafe(`ALTER TABLE users_local ADD COLUMN terms_accepted_at DATETIME`);
+    if (!userColumns.includes('terms_version_accepted')) runSafe(`ALTER TABLE users_local ADD COLUMN terms_version_accepted TEXT`);
+    if (!userColumns.includes('privacy_policy_accepted_at')) runSafe(`ALTER TABLE users_local ADD COLUMN privacy_policy_accepted_at DATETIME`);
+    if (!userColumns.includes('privacy_policy_version_accepted')) runSafe(`ALTER TABLE users_local ADD COLUMN privacy_policy_version_accepted TEXT`);
+    if (!userColumns.includes('email_onboarding_completed_at')) runSafe(`ALTER TABLE users_local ADD COLUMN email_onboarding_completed_at DATETIME`);
+    if (!userColumns.includes('mobile_phone_type')) runSafe(`ALTER TABLE users_local ADD COLUMN mobile_phone_type TEXT`);
 
-    if (sellerAgent) {
-      result.seller_agent = {
-        id: sellerAgent.contact_id,
-        user_id: transaction.user_id,
-        name: sellerAgent.contact_name || "",
-        email: sellerAgent.contact_email,
-        phone: sellerAgent.contact_phone,
-        company: sellerAgent.contact_company,
-        title: sellerAgent.contact_title,
-        source: "manual" as const,
-        is_imported: true,
-        created_at: sellerAgent.created_at,
-        updated_at: sellerAgent.updated_at,
-      };
-    }
-
-    if (escrowOfficer) {
-      result.escrow_officer = {
-        id: escrowOfficer.contact_id,
-        user_id: transaction.user_id,
-        name: escrowOfficer.contact_name || "",
-        email: escrowOfficer.contact_email,
-        phone: escrowOfficer.contact_phone,
-        company: escrowOfficer.contact_company,
-        title: escrowOfficer.contact_title,
-        source: "manual" as const,
-        is_imported: true,
-        created_at: escrowOfficer.created_at,
-        updated_at: escrowOfficer.updated_at,
-      };
-    }
-
-    if (inspector) {
-      result.inspector = {
-        id: inspector.contact_id,
-        user_id: transaction.user_id,
-        name: inspector.contact_name || "",
-        email: inspector.contact_email,
-        phone: inspector.contact_phone,
-        company: inspector.contact_company,
-        title: inspector.contact_title,
-        source: "manual" as const,
-        is_imported: true,
-        created_at: inspector.created_at,
-        updated_at: inspector.updated_at,
-      };
-    }
-
-    return result;
-  }
-
-  /**
-   * Update transaction
-   */
-  async updateTransaction(
-    transactionId: string,
-    updates: Partial<Transaction>,
-  ): Promise<void> {
-    const allowedFields = [
-      "property_address",
-      "property_street",
-      "property_city",
-      "property_state",
-      "property_zip",
-      "property_coordinates",
-      "transaction_type",
-      "status",
-      "closing_deadline",
-      "representation_start_date",
-      "closing_date_verified",
-      "representation_start_confidence",
-      "closing_date_confidence",
-      "buyer_agent_id",
-      "seller_agent_id",
-      "escrow_officer_id",
-      "inspector_id",
-      "other_contacts",
-      "export_generated_at",
-      "export_status",
-      "export_format",
-      "export_count",
-      "last_exported_on",
-      "communications_scanned",
-      "extraction_confidence",
-      "first_communication_date",
-      "last_communication_date",
-      "total_communications_count",
-      "mutual_acceptance_date",
-      "earnest_money_amount",
-      "earnest_money_delivered_date",
-      "listing_price",
-      "sale_price",
-      "other_parties",
-      "offer_count",
-      "failed_offers_count",
-      "key_dates",
-      // AI detection fields (Migration 11)
-      "detection_source",
-      "detection_status",
-      "detection_confidence",
-      "detection_method",
-      "suggested_contacts",
-      "reviewed_at",
-      "rejection_reason",
+    // Migration 2: Transaction columns
+    const txColumns = getColumns('transactions');
+    const txMigrations = [
+      { name: 'status', sql: `ALTER TABLE transactions ADD COLUMN status TEXT DEFAULT 'active'` },
+      { name: 'representation_start_date', sql: `ALTER TABLE transactions ADD COLUMN representation_start_date DATE` },
+      { name: 'closing_date_verified', sql: `ALTER TABLE transactions ADD COLUMN closing_date_verified INTEGER DEFAULT 0` },
+      { name: 'representation_start_confidence', sql: `ALTER TABLE transactions ADD COLUMN representation_start_confidence INTEGER` },
+      { name: 'closing_date_confidence', sql: `ALTER TABLE transactions ADD COLUMN closing_date_confidence INTEGER` },
+      { name: 'buyer_agent_id', sql: `ALTER TABLE transactions ADD COLUMN buyer_agent_id TEXT` },
+      { name: 'seller_agent_id', sql: `ALTER TABLE transactions ADD COLUMN seller_agent_id TEXT` },
+      { name: 'escrow_officer_id', sql: `ALTER TABLE transactions ADD COLUMN escrow_officer_id TEXT` },
+      { name: 'inspector_id', sql: `ALTER TABLE transactions ADD COLUMN inspector_id TEXT` },
+      { name: 'other_contacts', sql: `ALTER TABLE transactions ADD COLUMN other_contacts TEXT` },
     ];
-
-    const fields: string[] = [];
-    const values: any[] = [];
-
-    Object.keys(updates).forEach((key) => {
-      if (allowedFields.includes(key)) {
-        let value = (updates as any)[key];
-        if (
-          [
-            "property_coordinates",
-            "other_parties",
-            "key_dates",
-            "other_contacts",
-          ].includes(key) &&
-          typeof value === "object"
-        ) {
-          value = JSON.stringify(value);
-        }
-        fields.push(`${key} = ?`);
-        values.push(value);
-      }
-    });
-
-    if (fields.length === 0) {
-      throw new DatabaseError("No valid fields to update");
+    for (const m of txMigrations) {
+      if (!txColumns.includes(m.name)) runSafe(m.sql);
     }
 
-    // Validate fields against whitelist before SQL construction
-    validateFields("transactions", fields);
+    runSafe(`CREATE TRIGGER IF NOT EXISTS update_transactions_timestamp AFTER UPDATE ON transactions BEGIN UPDATE transactions SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id; END;`);
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions(status)`);
 
-    values.push(transactionId);
+    // Migration 3: Transaction contacts enhanced roles
+    const tcColumns = getColumns('transaction_contacts');
+    if (!tcColumns.includes('role_category')) runSafe(`ALTER TABLE transaction_contacts ADD COLUMN role_category TEXT`);
+    if (!tcColumns.includes('specific_role')) runSafe(`ALTER TABLE transaction_contacts ADD COLUMN specific_role TEXT`);
+    if (!tcColumns.includes('is_primary')) runSafe(`ALTER TABLE transaction_contacts ADD COLUMN is_primary INTEGER DEFAULT 0`);
+    if (!tcColumns.includes('notes')) runSafe(`ALTER TABLE transaction_contacts ADD COLUMN notes TEXT`);
+    if (!tcColumns.includes('updated_at')) runSafe(`ALTER TABLE transaction_contacts ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP`);
 
-    const sql = `UPDATE transactions SET ${fields.join(", ")} WHERE id = ?`;
-    this._run(sql, values);
-  }
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_transaction_contacts_specific_role ON transaction_contacts(specific_role)`);
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_transaction_contacts_category ON transaction_contacts(role_category)`);
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_transaction_contacts_primary ON transaction_contacts(is_primary)`);
+    runSafe(`CREATE TRIGGER IF NOT EXISTS update_transaction_contacts_timestamp AFTER UPDATE ON transaction_contacts BEGIN UPDATE transaction_contacts SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id; END;`);
 
-  /**
-   * Delete transaction
-   */
-  async deleteTransaction(transactionId: string): Promise<void> {
-    const sql = "DELETE FROM transactions WHERE id = ?";
-    this._run(sql, [transactionId]);
-  }
-
-  // ============================================
-  // COMMUNICATION OPERATIONS
-  // ============================================
-
-  /**
-   * Save communication (email) to database
-   */
-  async createCommunication(
-    communicationData: NewCommunication,
-  ): Promise<Communication> {
-    const id = crypto.randomUUID();
-
-    const sql = `
-      INSERT INTO communications (
-        id, user_id, transaction_id, communication_type, source,
-        email_thread_id, sender, recipients, cc, bcc,
-        subject, body, body_plain, sent_at, received_at,
-        has_attachments, attachment_count, attachment_metadata,
-        keywords_detected, parties_involved, communication_category,
-        relevance_score, is_compliance_related
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `;
-
-    const params = [
-      id,
-      communicationData.user_id,
-      communicationData.transaction_id || null,
-      communicationData.communication_type || "email",
-      communicationData.source || null,
-      communicationData.email_thread_id || null,
-      communicationData.sender || null,
-      communicationData.recipients || null,
-      communicationData.cc || null,
-      communicationData.bcc || null,
-      communicationData.subject || null,
-      communicationData.body || null,
-      communicationData.body_plain || null,
-      communicationData.sent_at || null,
-      communicationData.received_at || null,
-      communicationData.has_attachments ? 1 : 0,
-      communicationData.attachment_count || 0,
-      communicationData.attachment_metadata
-        ? JSON.stringify(communicationData.attachment_metadata)
-        : null,
-      communicationData.keywords_detected
-        ? JSON.stringify(communicationData.keywords_detected)
-        : null,
-      communicationData.parties_involved
-        ? JSON.stringify(communicationData.parties_involved)
-        : null,
-      communicationData.communication_category || null,
-      communicationData.relevance_score || null,
-      communicationData.is_compliance_related ? 1 : 0,
-    ];
-
-    this._run(sql, params);
-    const communication = await this.getCommunicationById(id);
-    if (!communication) {
-      throw new DatabaseError("Failed to create communication");
-    }
-    return communication;
-  }
-
-  /**
-   * Get communication by ID
-   */
-  async getCommunicationById(
-    communicationId: string,
-  ): Promise<Communication | null> {
-    const sql = "SELECT * FROM communications WHERE id = ?";
-    const communication = this._get<Communication>(sql, [communicationId]);
-    return communication || null;
-  }
-
-  /**
-   * Get communications with filters
-   */
-  async getCommunications(
-    filters?: CommunicationFilters,
-  ): Promise<Communication[]> {
-    let sql = "SELECT * FROM communications WHERE 1=1";
-    const params: any[] = [];
-
-    if (filters?.user_id) {
-      sql += " AND user_id = ?";
-      params.push(filters.user_id);
+    // Migration 4: Export tracking
+    if (!txColumns.includes('export_status')) {
+      runSafe(`ALTER TABLE transactions ADD COLUMN export_status TEXT DEFAULT 'not_exported' CHECK (export_status IN ('not_exported', 'exported', 're_export_needed'))`);
+      runSafe(`ALTER TABLE transactions ADD COLUMN export_format TEXT CHECK (export_format IN ('pdf', 'csv', 'json', 'txt_eml', 'excel'))`);
+      runSafe(`ALTER TABLE transactions ADD COLUMN export_count INTEGER DEFAULT 0`);
+      runSafe(`ALTER TABLE transactions ADD COLUMN last_exported_on DATETIME`);
+      runSafe(`CREATE INDEX IF NOT EXISTS idx_transactions_export_status ON transactions(export_status)`);
+      runSafe(`CREATE INDEX IF NOT EXISTS idx_transactions_last_exported_on ON transactions(last_exported_on)`);
     }
 
-    if (filters?.transaction_id) {
-      sql += " AND transaction_id = ?";
-      params.push(filters.transaction_id);
+    // Migration 5-6: Contact import tracking
+    const contactColumns = getColumns('contacts');
+    if (!contactColumns.includes('display_name')) runSafe(`ALTER TABLE contacts ADD COLUMN display_name TEXT`);
+    if (!contactColumns.includes('company')) runSafe(`ALTER TABLE contacts ADD COLUMN company TEXT`);
+    if (!contactColumns.includes('title')) runSafe(`ALTER TABLE contacts ADD COLUMN title TEXT`);
+    if (!contactColumns.includes('source')) runSafe(`ALTER TABLE contacts ADD COLUMN source TEXT DEFAULT 'manual'`);
+    if (!contactColumns.includes('metadata')) runSafe(`ALTER TABLE contacts ADD COLUMN metadata TEXT`);
+    if (!contactColumns.includes('is_imported')) {
+      runSafe(`ALTER TABLE contacts ADD COLUMN is_imported INTEGER DEFAULT 1`);
+      runSafe(`UPDATE contacts SET is_imported = 1 WHERE source IN ('manual', 'email')`);
+      runSafe(`CREATE INDEX IF NOT EXISTS idx_contacts_is_imported ON contacts(is_imported)`);
+      runSafe(`CREATE INDEX IF NOT EXISTS idx_contacts_user_imported ON contacts(user_id, is_imported)`);
     }
 
-    if (filters?.communication_type) {
-      sql += " AND communication_type = ?";
-      params.push(filters.communication_type);
-    }
-
-    if (filters?.start_date) {
-      sql += " AND sent_at >= ?";
-      params.push(filters.start_date);
-    }
-
-    if (filters?.end_date) {
-      sql += " AND sent_at <= ?";
-      params.push(filters.end_date);
-    }
-
-    if (filters?.has_attachments !== undefined) {
-      sql += " AND has_attachments = ?";
-      params.push(filters.has_attachments ? 1 : 0);
-    }
-
-    sql += " ORDER BY sent_at DESC";
-
-    return this._all<Communication>(sql, params);
-  }
-
-  /**
-   * Get communications for a transaction
-   */
-  async getCommunicationsByTransaction(
-    transactionId: string,
-  ): Promise<Communication[]> {
-    const sql = `
-      SELECT * FROM communications
-      WHERE transaction_id = ?
-      ORDER BY sent_at DESC
-    `;
-    return this._all<Communication>(sql, [transactionId]);
-  }
-
-  /**
-   * Update communication
-   */
-  async updateCommunication(
-    communicationId: string,
-    updates: Partial<Communication>,
-  ): Promise<void> {
-    const allowedFields = [
-      "transaction_id",
-      "communication_type",
-      "source",
-      "email_thread_id",
-      "sender",
-      "recipients",
-      "cc",
-      "bcc",
-      "subject",
-      "body",
-      "body_plain",
-      "sent_at",
-      "received_at",
-      "has_attachments",
-      "attachment_count",
-      "attachment_metadata",
-      "keywords_detected",
-      "parties_involved",
-      "communication_category",
-      "relevance_score",
-      "flagged_for_review",
-      "is_compliance_related",
-    ];
-
-    const fields: string[] = [];
-    const values: any[] = [];
-
-    Object.keys(updates).forEach((key) => {
-      if (allowedFields.includes(key)) {
-        let value = (updates as any)[key];
-        if (
-          [
-            "attachment_metadata",
-            "keywords_detected",
-            "parties_involved",
-          ].includes(key) &&
-          typeof value === "object"
-        ) {
-          value = JSON.stringify(value);
-        }
-        fields.push(`${key} = ?`);
-        values.push(value);
-      }
-    });
-
-    if (fields.length === 0) {
-      throw new DatabaseError("No valid fields to update");
-    }
-
-    // Validate fields against whitelist before SQL construction
-    validateFields("communications", fields);
-
-    values.push(communicationId);
-
-    const sql = `UPDATE communications SET ${fields.join(", ")} WHERE id = ?`;
-    this._run(sql, values);
-  }
-
-  /**
-   * Delete communication
-   */
-  async deleteCommunication(communicationId: string): Promise<void> {
-    const sql = "DELETE FROM communications WHERE id = ?";
-    this._run(sql, [communicationId]);
-  }
-
-  // ============================================
-  // IGNORED COMMUNICATION OPERATIONS
-  // ============================================
-
-  /**
-   * Add a communication to the ignored list for a transaction
-   * This prevents the email from being re-added during future scans
-   */
-  async addIgnoredCommunication(
-    data: NewIgnoredCommunication,
-  ): Promise<IgnoredCommunication> {
-    const id = crypto.randomUUID();
-
-    const sql = `
-      INSERT INTO ignored_communications (
-        id, user_id, transaction_id, email_subject, email_sender,
-        email_sent_at, email_thread_id, original_communication_id, reason
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `;
-
-    const params = [
-      id,
-      data.user_id,
-      data.transaction_id,
-      data.email_subject || null,
-      data.email_sender || null,
-      data.email_sent_at || null,
-      data.email_thread_id || null,
-      data.original_communication_id || null,
-      data.reason || null,
-    ];
-
-    this._run(sql, params);
-
-    const ignoredComm = this._get<IgnoredCommunication>(
-      "SELECT * FROM ignored_communications WHERE id = ?",
-      [id],
-    );
-
-    if (!ignoredComm) {
-      throw new DatabaseError("Failed to create ignored communication record");
-    }
-
-    return ignoredComm;
-  }
-
-  /**
-   * Get all ignored communications for a transaction
-   */
-  async getIgnoredCommunicationsByTransaction(
-    transactionId: string,
-  ): Promise<IgnoredCommunication[]> {
-    const sql = `
-      SELECT * FROM ignored_communications
-      WHERE transaction_id = ?
-      ORDER BY ignored_at DESC
-    `;
-    return this._all<IgnoredCommunication>(sql, [transactionId]);
-  }
-
-  /**
-   * Get all ignored communications for a user
-   */
-  async getIgnoredCommunicationsByUser(
-    userId: string,
-  ): Promise<IgnoredCommunication[]> {
-    const sql = `
-      SELECT * FROM ignored_communications
-      WHERE user_id = ?
-      ORDER BY ignored_at DESC
-    `;
-    return this._all<IgnoredCommunication>(sql, [userId]);
-  }
-
-  /**
-   * Check if a communication is ignored for a transaction
-   * Uses email sender, subject, and sent_at to identify the email
-   */
-  async isEmailIgnoredForTransaction(
-    transactionId: string,
-    emailSender: string,
-    emailSubject: string,
-    emailSentAt: string,
-  ): Promise<boolean> {
-    const sql = `
-      SELECT id FROM ignored_communications
-      WHERE transaction_id = ?
-        AND email_sender = ?
-        AND email_subject = ?
-        AND email_sent_at = ?
-      LIMIT 1
-    `;
-    const result = this._get(sql, [
-      transactionId,
-      emailSender,
-      emailSubject,
-      emailSentAt,
-    ]);
-    return !!result;
-  }
-
-  /**
-   * Check if a communication is ignored for any transaction of a user
-   * Used during email scanning to filter out previously ignored emails
-   */
-  async isEmailIgnoredByUser(
-    userId: string,
-    emailSender: string,
-    emailSubject: string,
-    emailSentAt: string,
-  ): Promise<boolean> {
-    const sql = `
-      SELECT id FROM ignored_communications
-      WHERE user_id = ?
-        AND email_sender = ?
-        AND email_subject = ?
-        AND email_sent_at = ?
-      LIMIT 1
-    `;
-    const result = this._get(sql, [userId, emailSender, emailSubject, emailSentAt]);
-    return !!result;
-  }
-
-  /**
-   * Remove an ignored communication (re-allow it to be linked)
-   */
-  async removeIgnoredCommunication(ignoredCommId: string): Promise<void> {
-    const sql = "DELETE FROM ignored_communications WHERE id = ?";
-    this._run(sql, [ignoredCommId]);
-  }
-
-  /**
-   * Link communication to transaction
-   */
-  async linkCommunicationToTransaction(
-    communicationId: string,
-    transactionId: string,
-  ): Promise<void> {
-    const sql = "UPDATE communications SET transaction_id = ? WHERE id = ?";
-    this._run(sql, [transactionId, communicationId]);
-  }
-
-  /**
-   * Save extracted transaction data (audit trail)
-   */
-  async saveExtractedData(
-    transactionId: string,
-    fieldName: string,
-    fieldValue: string,
-    sourceCommId?: string,
-    confidence?: number,
-  ): Promise<string> {
-    const id = crypto.randomUUID();
-
-    const sql = `
-      INSERT INTO extracted_transaction_data (
-        id, transaction_id, field_name, field_value,
-        source_communication_id, extraction_method, confidence_score
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)
-    `;
-
-    this._run(sql, [
-      id,
-      transactionId,
-      fieldName,
-      fieldValue,
-      sourceCommId || null,
-      "pattern_matching",
-      confidence || null,
-    ]);
-
-    return id;
-  }
-
-  // ============================================
-  // TRANSACTION CONTACT OPERATIONS
-  // ============================================
-
-  /**
-   * Assign contact to transaction with role
-   */
-  async linkContactToTransaction(
-    transactionId: string,
-    contactId: string,
-    role?: string,
-  ): Promise<void> {
-    const id = crypto.randomUUID();
-
-    const sql = `
-      INSERT INTO transaction_contacts (
-        id, transaction_id, contact_id, role, role_category, specific_role, is_primary, notes
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `;
-
-    const params = [
-      id,
-      transactionId,
-      contactId,
-      role || null,
-      null,
-      role || null,
-      0,
-      null,
-    ];
-
-    this._run(sql, params);
-  }
-
-  /**
-   * Assign contact to transaction with detailed role data
-   * Uses INSERT OR REPLACE to handle duplicate assignments gracefully
-   */
-  async assignContactToTransaction(
-    transactionId: string,
-    data: TransactionContactData,
-  ): Promise<string> {
-    // First check if this contact is already assigned to this transaction
-    const existingCheck = `
-      SELECT id FROM transaction_contacts
-      WHERE transaction_id = ? AND contact_id = ?
-    `;
-    const existing = this._get<{ id: string }>(existingCheck, [transactionId, data.contact_id]);
-
-    if (existing) {
-      // Update the existing assignment instead of inserting
-      const updateSql = `
-        UPDATE transaction_contacts
-        SET role = ?, role_category = ?, specific_role = ?, is_primary = ?, notes = ?, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `;
-      this._run(updateSql, [
-        data.role || null,
-        data.role_category || null,
-        data.specific_role || null,
-        data.is_primary ? 1 : 0,
-        data.notes || null,
-        existing.id,
-      ]);
-      return existing.id;
-    }
-
-    // Insert new assignment
-    const id = crypto.randomUUID();
-    const sql = `
-      INSERT INTO transaction_contacts (
-        id, transaction_id, contact_id, role, role_category, specific_role, is_primary, notes
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `;
-
-    const params = [
-      id,
-      transactionId,
-      data.contact_id,
-      data.role || null,
-      data.role_category || null,
-      data.specific_role || null,
-      data.is_primary ? 1 : 0,
-      data.notes || null,
-    ];
-
-    this._run(sql, params);
-    return id;
-  }
-
-  /**
-   * Get all contacts assigned to a transaction
-   */
-  async getTransactionContacts(transactionId: string): Promise<Contact[]> {
-    const sql = `
-      SELECT
-        c.*
-      FROM transaction_contacts tc
-      LEFT JOIN contacts c ON tc.contact_id = c.id
-      WHERE tc.transaction_id = ?
-      ORDER BY tc.is_primary DESC, tc.created_at ASC
-    `;
-
-    return this._all<Contact>(sql, [transactionId]);
-  }
-
-  /**
-   * Get all contacts assigned to a transaction with role details
-   * Uses COALESCE to fallback to any email/phone if primary is not set
-   */
-  async getTransactionContactsWithRoles(
-    transactionId: string,
-  ): Promise<TransactionContactResult[]> {
-    const sql = `
-      SELECT
-        tc.*,
-        c.display_name as contact_name,
-        COALESCE(
-          (SELECT email FROM contact_emails WHERE contact_id = c.id AND is_primary = 1 LIMIT 1),
-          (SELECT email FROM contact_emails WHERE contact_id = c.id LIMIT 1)
-        ) as contact_email,
-        COALESCE(
-          (SELECT phone_e164 FROM contact_phones WHERE contact_id = c.id AND is_primary = 1 LIMIT 1),
-          (SELECT phone_e164 FROM contact_phones WHERE contact_id = c.id LIMIT 1)
-        ) as contact_phone,
-        c.company as contact_company,
-        c.title as contact_title
-      FROM transaction_contacts tc
-      LEFT JOIN contacts c ON tc.contact_id = c.id
-      WHERE tc.transaction_id = ?
-      ORDER BY tc.is_primary DESC, tc.created_at ASC
-    `;
-
-    return this._all<TransactionContactResult>(sql, [transactionId]);
-  }
-
-  /**
-   * Get all contacts for a specific role in a transaction
-   * Uses COALESCE to fallback to any email/phone if primary is not set
-   */
-  async getTransactionContactsByRole(
-    transactionId: string,
-    role: string,
-  ): Promise<TransactionContactResult[]> {
-    const sql = `
-      SELECT
-        tc.*,
-        c.display_name as contact_name,
-        COALESCE(
-          (SELECT email FROM contact_emails WHERE contact_id = c.id AND is_primary = 1 LIMIT 1),
-          (SELECT email FROM contact_emails WHERE contact_id = c.id LIMIT 1)
-        ) as contact_email,
-        COALESCE(
-          (SELECT phone_e164 FROM contact_phones WHERE contact_id = c.id AND is_primary = 1 LIMIT 1),
-          (SELECT phone_e164 FROM contact_phones WHERE contact_id = c.id LIMIT 1)
-        ) as contact_phone,
-        c.company as contact_company,
-        c.title as contact_title
-      FROM transaction_contacts tc
-      LEFT JOIN contacts c ON tc.contact_id = c.id
-      WHERE tc.transaction_id = ? AND tc.specific_role = ?
-      ORDER BY tc.is_primary DESC
-    `;
-
-    return this._all<TransactionContactResult>(sql, [transactionId, role]);
-  }
-
-  /**
-   * Update contact role information
-   */
-  async updateContactRole(
-    transactionId: string,
-    contactId: string,
-    updates: Partial<TransactionContactData>,
-  ): Promise<void> {
-    const allowedFields = [
-      "role",
-      "role_category",
-      "specific_role",
-      "is_primary",
-      "notes",
-    ];
-    const fields: string[] = [];
-    const values: any[] = [];
-
-    Object.keys(updates).forEach((key) => {
-      if (allowedFields.includes(key)) {
-        fields.push(`${key} = ?`);
-        values.push((updates as any)[key]);
-      }
-    });
-
-    if (fields.length === 0) {
-      throw new DatabaseError("No valid fields to update");
-    }
-
-    // Validate fields against whitelist before SQL construction
-    validateFields("transaction_contacts", fields);
-
-    values.push(transactionId, contactId);
-
-    const sql = `
-      UPDATE transaction_contacts
-      SET ${fields.join(", ")}
-      WHERE transaction_id = ? AND contact_id = ?
-    `;
-
-    this._run(sql, values);
-  }
-
-  /**
-   * Remove contact from transaction
-   */
-  async unlinkContactFromTransaction(
-    transactionId: string,
-    contactId: string,
-  ): Promise<void> {
-    const sql =
-      "DELETE FROM transaction_contacts WHERE transaction_id = ? AND contact_id = ?";
-    this._run(sql, [transactionId, contactId]);
-  }
-
-  /**
-   * Check if contact is assigned to transaction
-   */
-  async isContactAssignedToTransaction(
-    transactionId: string,
-    contactId: string,
-  ): Promise<boolean> {
-    const sql =
-      "SELECT id FROM transaction_contacts WHERE transaction_id = ? AND contact_id = ? LIMIT 1";
-    const result = this._get(sql, [transactionId, contactId]);
-    return !!result;
-  }
-
-  /**
-   * Batch update contact assignments for a transaction
-   * Executes all add/remove operations in a single SQLite transaction for atomicity
-   * @param transactionId - The transaction to update
-   * @param operations - Array of operations to perform
-   */
-  async batchUpdateContactAssignments(
-    transactionId: string,
-    operations: ContactAssignmentOperation[],
-  ): Promise<void> {
-    if (operations.length === 0) {
-      return; // Nothing to do
-    }
-
-    const db = this._ensureDb();
-
-    const batchOperation = db.transaction(() => {
-      for (const op of operations) {
-        if (op.action === "remove") {
-          const deleteSql =
-            "DELETE FROM transaction_contacts WHERE transaction_id = ? AND contact_id = ?";
-          db.prepare(deleteSql).run(transactionId, op.contactId);
-        } else if (op.action === "add") {
-          // Check if already exists
-          const existingCheck =
-            "SELECT id FROM transaction_contacts WHERE transaction_id = ? AND contact_id = ?";
-          const existing = db
-            .prepare(existingCheck)
-            .get(transactionId, op.contactId) as { id: string } | undefined;
-
-          if (existing) {
-            // Update existing assignment
-            const updateSql = `
-              UPDATE transaction_contacts
-              SET role = ?, role_category = ?, specific_role = ?, is_primary = ?, notes = ?, updated_at = CURRENT_TIMESTAMP
-              WHERE id = ?
-            `;
-            db.prepare(updateSql).run(
-              op.role || null,
-              op.roleCategory || null,
-              op.specificRole || null,
-              op.isPrimary ? 1 : 0,
-              op.notes || null,
-              existing.id,
-            );
-          } else {
-            // Insert new assignment
-            const id = crypto.randomUUID();
-            const insertSql = `
-              INSERT INTO transaction_contacts (
-                id, transaction_id, contact_id, role, role_category, specific_role, is_primary, notes
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            `;
-            db.prepare(insertSql).run(
-              id,
-              transactionId,
-              op.contactId,
-              op.role || null,
-              op.roleCategory || null,
-              op.specificRole || null,
-              op.isPrimary ? 1 : 0,
-              op.notes || null,
-            );
-          }
-        }
-      }
-    });
-
-    // Execute the transaction - will rollback on any error
-    batchOperation();
-  }
-
-  // ============================================
-  // USER FEEDBACK OPERATIONS
-  // ============================================
-
-  /**
-   * Submit user feedback on extracted data
-   */
-  async saveFeedback(
-    feedbackData: Omit<UserFeedback, "id" | "created_at">,
-  ): Promise<UserFeedback> {
-    const id = crypto.randomUUID();
-
-    const sql = `
-      INSERT INTO user_feedback (
-        id, user_id, transaction_id, communication_id, feedback_type,
-        field_name, original_value, corrected_value, feedback_text
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `;
-
-    const params = [
-      id,
-      feedbackData.user_id,
-      feedbackData.transaction_id || null,
-      feedbackData.communication_id || null,
-      feedbackData.feedback_type,
-      feedbackData.field_name || null,
-      feedbackData.original_value || null,
-      feedbackData.corrected_value || null,
-      feedbackData.feedback_text || null,
-    ];
-
-    this._run(sql, params);
-
-    const feedback = this._get<UserFeedback>(
-      "SELECT * FROM user_feedback WHERE id = ?",
-      [id],
-    );
-    if (!feedback) {
-      throw new DatabaseError("Failed to save feedback");
-    }
-
-    return feedback;
-  }
-
-  /**
-   * Get all feedback for a transaction
-   */
-  async getFeedbackByTransaction(
-    transactionId: string,
-  ): Promise<UserFeedback[]> {
-    const sql = `
-      SELECT * FROM user_feedback
-      WHERE transaction_id = ?
-      ORDER BY created_at DESC
-    `;
-
-    return this._all<UserFeedback>(sql, [transactionId]);
-  }
-
-  /**
-   * Get feedback by field name
-   */
-  async getFeedbackByField(
-    userId: string,
-    fieldName: string,
-    limit: number = 100,
-  ): Promise<UserFeedback[]> {
-    const sql = `
-      SELECT * FROM user_feedback
-      WHERE user_id = ? AND field_name = ?
-      ORDER BY created_at DESC
-      LIMIT ?
-    `;
-
-    return this._all<UserFeedback>(sql, [userId, fieldName, limit]);
-  }
-
-  // ============================================
-  // AUDIT LOG OPERATIONS
-  // ============================================
-
-  /**
-   * Insert an audit log entry (append-only)
-   * Note: The audit_logs table has triggers that prevent UPDATE and DELETE
-   */
-  async insertAuditLog(entry: AuditLogEntry): Promise<void> {
-    const sql = `
-      INSERT INTO audit_logs (
-        id, timestamp, user_id, session_id, action, resource_type,
-        resource_id, metadata, ip_address, user_agent, success, error_message
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `;
-
-    const params = [
-      entry.id,
-      entry.timestamp.toISOString(),
-      entry.userId,
-      entry.sessionId || null,
-      entry.action,
-      entry.resourceType,
-      entry.resourceId || null,
-      entry.metadata ? JSON.stringify(entry.metadata) : null,
-      entry.ipAddress || null,
-      entry.userAgent || null,
-      entry.success ? 1 : 0,
-      entry.errorMessage || null,
-    ];
-
-    await this._run(sql, params);
-  }
-
-  /**
-   * Get audit logs that haven't been synced to cloud
-   */
-  async getUnsyncedAuditLogs(limit: number = 100): Promise<AuditLogEntry[]> {
-    const sql = `
-      SELECT * FROM audit_logs
-      WHERE synced_at IS NULL
-      ORDER BY timestamp ASC
-      LIMIT ?
-    `;
-
-    const rows = await this._all<AuditLogDbRow>(sql, [limit]);
-    return rows.map(this._mapAuditLogRowToEntry);
-  }
-
-  /**
-   * Mark audit logs as synced (only updates synced_at field)
-   * This is the ONLY allowed update to audit_logs - we need a special approach
-   * because the table has triggers preventing normal updates
-   */
-  async markAuditLogsSynced(ids: string[]): Promise<void> {
-    if (ids.length === 0) {
-      return;
-    }
-
-    // We need to temporarily disable the trigger for this specific update
-    // This is safe because we're only updating the synced_at timestamp
-    const db = this._ensureDb();
-    const syncedAt = new Date().toISOString();
-
-    try {
-      // Disable the update trigger temporarily
-      db.exec("DROP TRIGGER IF EXISTS prevent_audit_update");
-
-      // Update synced_at for the specified IDs
-      const placeholders = ids.map(() => "?").join(",");
-      const sql = `UPDATE audit_logs SET synced_at = ? WHERE id IN (${placeholders})`;
-      db.prepare(sql).run(syncedAt, ...ids);
-
-      // Recreate the trigger
+    // Migration 7: Audit logs table
+    const auditTableExists = db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='audit_logs'`).get();
+    if (!auditTableExists) {
       db.exec(`
-        CREATE TRIGGER IF NOT EXISTS prevent_audit_update
-        BEFORE UPDATE ON audit_logs
-        WHEN NEW.synced_at IS NULL OR OLD.synced_at IS NOT NULL
-        BEGIN
-          SELECT RAISE(ABORT, 'Audit logs cannot be modified');
-        END
+        CREATE TABLE audit_logs (
+          id TEXT PRIMARY KEY,
+          timestamp DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          user_id TEXT NOT NULL,
+          session_id TEXT,
+          action TEXT NOT NULL,
+          resource_type TEXT NOT NULL,
+          resource_id TEXT,
+          metadata TEXT,
+          ip_address TEXT,
+          user_agent TEXT,
+          success INTEGER NOT NULL DEFAULT 1,
+          error_message TEXT,
+          synced_at DATETIME,
+          CHECK (action IN ('LOGIN', 'LOGOUT', 'LOGIN_FAILED', 'DATA_ACCESS', 'DATA_EXPORT', 'DATA_DELETE', 'TRANSACTION_CREATE', 'TRANSACTION_UPDATE', 'TRANSACTION_DELETE', 'CONTACT_CREATE', 'CONTACT_UPDATE', 'CONTACT_DELETE', 'SETTINGS_CHANGE', 'MAILBOX_CONNECT', 'MAILBOX_DISCONNECT')),
+          CHECK (resource_type IN ('USER', 'SESSION', 'TRANSACTION', 'CONTACT', 'COMMUNICATION', 'EXPORT', 'MAILBOX', 'SETTINGS'))
+        )
       `);
-    } catch (error) {
-      // Ensure trigger is recreated even on error
-      try {
-        db.exec(`
-          CREATE TRIGGER IF NOT EXISTS prevent_audit_update
-          BEFORE UPDATE ON audit_logs
-          WHEN NEW.synced_at IS NULL OR OLD.synced_at IS NOT NULL
-          BEGIN
-            SELECT RAISE(ABORT, 'Audit logs cannot be modified');
-          END
-        `);
-      } catch {
-        // Ignore trigger recreation errors
-      }
-      throw error;
-    }
-  }
-
-  /**
-   * Get audit logs for a user with optional filters
-   */
-  async getAuditLogs(filters: {
-    userId?: string;
-    action?: string;
-    resourceType?: string;
-    startDate?: Date;
-    endDate?: Date;
-    limit?: number;
-    offset?: number;
-  }): Promise<AuditLogEntry[]> {
-    let sql = "SELECT * FROM audit_logs WHERE 1=1";
-    const params: (string | number)[] = [];
-
-    if (filters.userId) {
-      sql += " AND user_id = ?";
-      params.push(filters.userId);
+      runSafe(`CREATE INDEX idx_audit_logs_user_id ON audit_logs(user_id)`);
+      runSafe(`CREATE INDEX idx_audit_logs_timestamp ON audit_logs(timestamp)`);
+      runSafe(`CREATE INDEX idx_audit_logs_action ON audit_logs(action)`);
+      runSafe(`CREATE INDEX idx_audit_logs_synced ON audit_logs(synced_at)`);
+      runSafe(`CREATE INDEX idx_audit_logs_resource_type ON audit_logs(resource_type)`);
+      runSafe(`CREATE INDEX idx_audit_logs_session_id ON audit_logs(session_id)`);
+      runSafe(`CREATE TRIGGER prevent_audit_update BEFORE UPDATE ON audit_logs BEGIN SELECT RAISE(ABORT, 'Audit logs cannot be modified'); END`);
+      runSafe(`CREATE TRIGGER prevent_audit_delete BEFORE DELETE ON audit_logs BEGIN SELECT RAISE(ABORT, 'Audit logs cannot be deleted'); END`);
     }
 
-    if (filters.action) {
-      sql += " AND action = ?";
-      params.push(filters.action);
+    // Migration 8: Normalize transaction status
+    runSafe(`UPDATE transactions SET status = 'closed' WHERE status = 'completed'`);
+    runSafe(`UPDATE transactions SET status = 'active' WHERE status = 'pending'`);
+    runSafe(`UPDATE transactions SET status = 'active' WHERE status = 'open'`);
+    runSafe(`UPDATE transactions SET status = 'active' WHERE status IS NULL OR status = ''`);
+    runSafe(`UPDATE transactions SET status = 'archived' WHERE status = 'cancelled'`);
+
+    // Migration 9: Normalize contacts display_name
+    runSafe(`UPDATE contacts SET display_name = name WHERE (display_name IS NULL OR display_name = '') AND name IS NOT NULL AND name != ''`);
+    runSafe(`UPDATE contacts SET display_name = 'Unknown' WHERE display_name IS NULL OR display_name = ''`);
+
+    // Migration 10: Remove orphaned tables
+    const orphanedExists = db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='extraction_metrics'`).get();
+    if (orphanedExists) {
+      runSafe(`DROP INDEX IF EXISTS idx_extraction_metrics_user_id`);
+      runSafe(`DROP INDEX IF EXISTS idx_extraction_metrics_field`);
+      runSafe(`DROP INDEX IF EXISTS idx_user_feedback_user_id`);
+      runSafe(`DROP INDEX IF EXISTS idx_user_feedback_transaction_id`);
+      runSafe(`DROP INDEX IF EXISTS idx_user_feedback_field_name`);
+      runSafe(`DROP INDEX IF EXISTS idx_user_feedback_type`);
+      runSafe(`DROP TRIGGER IF EXISTS update_extraction_metrics_timestamp`);
+      runSafe(`DROP TABLE IF EXISTS extraction_metrics`);
+      runSafe(`DROP TABLE IF EXISTS user_feedback`);
     }
 
-    if (filters.resourceType) {
-      sql += " AND resource_type = ?";
-      params.push(filters.resourceType);
+    // Migration 11: AI Detection Fields
+    const txDetectionColumns = getColumns('transactions');
+    if (!txDetectionColumns.includes('detection_source')) {
+      runSafe(`ALTER TABLE transactions ADD COLUMN detection_source TEXT DEFAULT 'manual' CHECK (detection_source IN ('manual', 'auto', 'hybrid'))`);
+      runSafe(`ALTER TABLE transactions ADD COLUMN detection_status TEXT DEFAULT 'confirmed' CHECK (detection_status IN ('pending', 'confirmed', 'rejected'))`);
+      runSafe(`ALTER TABLE transactions ADD COLUMN detection_confidence REAL`);
+      runSafe(`ALTER TABLE transactions ADD COLUMN detection_method TEXT`);
+      runSafe(`ALTER TABLE transactions ADD COLUMN suggested_contacts TEXT`);
+      runSafe(`ALTER TABLE transactions ADD COLUMN reviewed_at DATETIME`);
+      runSafe(`ALTER TABLE transactions ADD COLUMN rejection_reason TEXT`);
     }
 
-    if (filters.startDate) {
-      sql += " AND timestamp >= ?";
-      params.push(filters.startDate.toISOString());
+    // Migration 11: LLM settings table
+    const llmSettingsExists = db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='llm_settings'`).get();
+    if (!llmSettingsExists) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS llm_settings (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL UNIQUE,
+          openai_api_key_encrypted TEXT,
+          anthropic_api_key_encrypted TEXT,
+          preferred_provider TEXT DEFAULT 'openai' CHECK (preferred_provider IN ('openai', 'anthropic')),
+          openai_model TEXT DEFAULT 'gpt-4o-mini',
+          anthropic_model TEXT DEFAULT 'claude-3-haiku-20240307',
+          tokens_used_this_month INTEGER DEFAULT 0,
+          budget_limit_tokens INTEGER,
+          budget_reset_date DATE,
+          platform_allowance_tokens INTEGER DEFAULT 0,
+          platform_allowance_used INTEGER DEFAULT 0,
+          use_platform_allowance INTEGER DEFAULT 0,
+          enable_auto_detect INTEGER DEFAULT 1,
+          enable_role_extraction INTEGER DEFAULT 1,
+          llm_data_consent INTEGER DEFAULT 0,
+          llm_data_consent_at DATETIME,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE
+        )
+      `);
+      runSafe(`CREATE INDEX IF NOT EXISTS idx_llm_settings_user ON llm_settings(user_id)`);
     }
 
-    if (filters.endDate) {
-      sql += " AND timestamp <= ?";
-      params.push(filters.endDate.toISOString());
+    // Migration 11: Add llm_analysis to messages
+    const messagesColumns = getColumns('messages');
+    if (!messagesColumns.includes('llm_analysis')) {
+      runSafe(`ALTER TABLE messages ADD COLUMN llm_analysis TEXT`);
     }
 
-    sql += " ORDER BY timestamp DESC";
-
-    if (filters.limit) {
-      sql += " LIMIT ?";
-      params.push(filters.limit);
+    // Finalize schema version
+    const currentVersion = (db.prepare("SELECT version FROM schema_version").get() as { version: number } | undefined)?.version || 0;
+    if (currentVersion < 8) {
+      db.exec("UPDATE schema_version SET version = 8");
     }
 
-    if (filters.offset) {
-      sql += " OFFSET ?";
-      params.push(filters.offset);
-    }
-
-    const rows = await this._all<AuditLogDbRow>(sql, params);
-    return rows.map(this._mapAuditLogRowToEntry);
-  }
-
-  /**
-   * Map database row to AuditLogEntry
-   */
-  private _mapAuditLogRowToEntry(row: AuditLogDbRow): AuditLogEntry {
-    return {
-      id: row.id,
-      timestamp: new Date(row.timestamp),
-      userId: row.user_id,
-      sessionId: row.session_id || undefined,
-      action: row.action as AuditLogEntry["action"],
-      resourceType: row.resource_type as AuditLogEntry["resourceType"],
-      resourceId: row.resource_id || undefined,
-      metadata: row.metadata ? JSON.parse(row.metadata) : undefined,
-      ipAddress: row.ip_address || undefined,
-      userAgent: row.user_agent || undefined,
-      success: row.success === 1,
-      errorMessage: row.error_message || undefined,
-      syncedAt: row.synced_at ? new Date(row.synced_at) : undefined,
-    };
+    await logService.info("All database migrations completed successfully", "DatabaseService");
   }
 
   // ============================================
-  // LLM ANALYSIS OPERATIONS (TASK-911)
+  // USER OPERATIONS (Delegate to userDbService)
   // ============================================
 
-  /**
-   * Get messages that are eligible for LLM analysis.
-   * Excludes already-analyzed messages and duplicates.
-   *
-   * @param userId - The user ID to filter messages for
-   * @param limit - Maximum number of messages to return (default: 100)
-   * @returns Messages pending LLM analysis
-   */
-  async getMessagesForLLMAnalysis(
-    userId: string,
-    limit = 100,
-  ): Promise<Message[]> {
+  async createUser(userData: NewUser): Promise<User> {
+    return userDb.createUser(userData);
+  }
+
+  async getUserById(userId: string): Promise<User | null> {
+    return userDb.getUserById(userId);
+  }
+
+  async getUserByEmail(email: string): Promise<User | null> {
+    return userDb.getUserByEmail(email);
+  }
+
+  async getUserByOAuthId(provider: OAuthProvider, oauthId: string): Promise<User | null> {
+    return userDb.getUserByOAuthId(provider, oauthId);
+  }
+
+  async updateUser(userId: string, updates: Partial<User>): Promise<void> {
+    return userDb.updateUser(userId, updates);
+  }
+
+  async deleteUser(userId: string): Promise<void> {
+    return userDb.deleteUser(userId);
+  }
+
+  async updateLastLogin(userId: string): Promise<void> {
+    return userDb.updateLastLogin(userId);
+  }
+
+  async acceptTerms(userId: string, termsVersion: string, privacyVersion: string): Promise<User> {
+    return userDb.acceptTerms(userId, termsVersion, privacyVersion);
+  }
+
+  async completeEmailOnboarding(userId: string): Promise<void> {
+    return userDb.completeEmailOnboarding(userId);
+  }
+
+  async hasCompletedEmailOnboarding(userId: string): Promise<boolean> {
+    return userDb.hasCompletedEmailOnboarding(userId);
+  }
+
+  // ============================================
+  // SESSION OPERATIONS (Delegate to sessionDbService)
+  // ============================================
+
+  async createSession(userId: string): Promise<string> {
+    return sessionDb.createSession(userId);
+  }
+
+  async validateSession(sessionToken: string): Promise<(Session & User) | null> {
+    return sessionDb.validateSession(sessionToken);
+  }
+
+  async deleteSession(sessionToken: string): Promise<void> {
+    return sessionDb.deleteSession(sessionToken);
+  }
+
+  async deleteAllUserSessions(userId: string): Promise<void> {
+    return sessionDb.deleteAllUserSessions(userId);
+  }
+
+  async clearAllSessions(): Promise<void> {
+    return sessionDb.clearAllSessions();
+  }
+
+  async clearAllOAuthTokens(): Promise<void> {
+    return oauthDb.clearAllOAuthTokens();
+  }
+
+  // ============================================
+  // CONTACT OPERATIONS (Delegate to contactDbService)
+  // ============================================
+
+  async createContact(contactData: NewContact): Promise<Contact> {
+    return contactDb.createContact(contactData);
+  }
+
+  async getContactById(contactId: string): Promise<Contact | null> {
+    return contactDb.getContactById(contactId);
+  }
+
+  async getContacts(filters?: ContactFilters): Promise<Contact[]> {
+    return contactDb.getContacts(filters);
+  }
+
+  async getImportedContactsByUserId(userId: string): Promise<Contact[]> {
+    return contactDb.getImportedContactsByUserId(userId);
+  }
+
+  async getUnimportedContactsByUserId(userId: string): Promise<Contact[]> {
+    return contactDb.getUnimportedContactsByUserId(userId);
+  }
+
+  async markContactAsImported(contactId: string): Promise<void> {
+    return contactDb.markContactAsImported(contactId);
+  }
+
+  async getContactsSortedByActivity(userId: string, propertyAddress?: string): Promise<contactDb.ContactWithActivity[]> {
+    return contactDb.getContactsSortedByActivity(userId, propertyAddress);
+  }
+
+  async searchContacts(query: string, userId: string): Promise<Contact[]> {
+    return contactDb.searchContacts(query, userId);
+  }
+
+  async updateContact(contactId: string, updates: Partial<Contact>): Promise<void> {
+    return contactDb.updateContact(contactId, updates);
+  }
+
+  async getTransactionsByContact(contactId: string): Promise<contactDb.TransactionWithRoles[]> {
+    return contactDb.getTransactionsByContact(contactId);
+  }
+
+  async deleteContact(contactId: string): Promise<void> {
+    return contactDb.deleteContact(contactId);
+  }
+
+  async removeContact(contactId: string): Promise<void> {
+    return contactDb.removeContact(contactId);
+  }
+
+  async getOrCreateContactFromEmail(userId: string, email: string, name?: string): Promise<Contact> {
+    return contactDb.getOrCreateContactFromEmail(userId, email, name);
+  }
+
+  // ============================================
+  // OAUTH TOKEN OPERATIONS (Delegate to oauthTokenDbService)
+  // ============================================
+
+  async saveOAuthToken(userId: string, provider: OAuthProvider, purpose: OAuthPurpose, tokenData: Partial<OAuthToken>): Promise<string> {
+    return oauthDb.saveOAuthToken(userId, provider, purpose, tokenData);
+  }
+
+  async getOAuthToken(userId: string, provider: OAuthProvider, purpose: OAuthPurpose): Promise<OAuthToken | null> {
+    return oauthDb.getOAuthToken(userId, provider, purpose);
+  }
+
+  async updateOAuthToken(tokenId: string, updates: Partial<OAuthToken>): Promise<void> {
+    return oauthDb.updateOAuthToken(tokenId, updates);
+  }
+
+  async deleteOAuthToken(userId: string, provider: OAuthProvider, purpose: OAuthPurpose): Promise<void> {
+    return oauthDb.deleteOAuthToken(userId, provider, purpose);
+  }
+
+  async getOAuthTokenSyncTime(userId: string, provider: OAuthProvider): Promise<Date | null> {
+    return oauthDb.getOAuthTokenSyncTime(userId, provider);
+  }
+
+  async updateOAuthTokenSyncTime(userId: string, provider: OAuthProvider, syncTime: Date): Promise<void> {
+    return oauthDb.updateOAuthTokenSyncTime(userId, provider, syncTime);
+  }
+
+  // ============================================
+  // TRANSACTION OPERATIONS (Delegate to transactionDbService)
+  // ============================================
+
+  async createTransaction(transactionData: NewTransaction): Promise<Transaction> {
+    return transactionDb.createTransaction(transactionData);
+  }
+
+  async getTransactions(filters?: TransactionFilters): Promise<Transaction[]> {
+    return transactionDb.getTransactions(filters);
+  }
+
+  async getTransactionById(transactionId: string): Promise<Transaction | null> {
+    return transactionDb.getTransactionById(transactionId);
+  }
+
+  async getTransactionWithContacts(transactionId: string): Promise<TransactionWithContacts | null> {
+    return transactionDb.getTransactionWithContacts(transactionId);
+  }
+
+  async updateTransaction(transactionId: string, updates: Partial<Transaction>): Promise<void> {
+    return transactionDb.updateTransaction(transactionId, updates);
+  }
+
+  async deleteTransaction(transactionId: string): Promise<void> {
+    return transactionDb.deleteTransaction(transactionId);
+  }
+
+  // ============================================
+  // COMMUNICATION OPERATIONS (Delegate to communicationDbService)
+  // ============================================
+
+  async createCommunication(communicationData: NewCommunication): Promise<Communication> {
+    return communicationDb.createCommunication(communicationData);
+  }
+
+  async getCommunicationById(communicationId: string): Promise<Communication | null> {
+    return communicationDb.getCommunicationById(communicationId);
+  }
+
+  async getCommunications(filters?: CommunicationFilters): Promise<Communication[]> {
+    return communicationDb.getCommunications(filters);
+  }
+
+  async getCommunicationsByTransaction(transactionId: string): Promise<Communication[]> {
+    return communicationDb.getCommunicationsByTransaction(transactionId);
+  }
+
+  async updateCommunication(communicationId: string, updates: Partial<Communication>): Promise<void> {
+    return communicationDb.updateCommunication(communicationId, updates);
+  }
+
+  async deleteCommunication(communicationId: string): Promise<void> {
+    return communicationDb.deleteCommunication(communicationId);
+  }
+
+  async addIgnoredCommunication(data: NewIgnoredCommunication): Promise<IgnoredCommunication> {
+    return communicationDb.addIgnoredCommunication(data);
+  }
+
+  async getIgnoredCommunicationsByTransaction(transactionId: string): Promise<IgnoredCommunication[]> {
+    return communicationDb.getIgnoredCommunicationsByTransaction(transactionId);
+  }
+
+  async getIgnoredCommunicationsByUser(userId: string): Promise<IgnoredCommunication[]> {
+    return communicationDb.getIgnoredCommunicationsByUser(userId);
+  }
+
+  async isEmailIgnoredForTransaction(transactionId: string, emailSender: string, emailSubject: string, emailSentAt: string): Promise<boolean> {
+    return communicationDb.isEmailIgnoredForTransaction(transactionId, emailSender, emailSubject, emailSentAt);
+  }
+
+  async isEmailIgnoredByUser(userId: string, emailSender: string, emailSubject: string, emailSentAt: string): Promise<boolean> {
+    return communicationDb.isEmailIgnoredByUser(userId, emailSender, emailSubject, emailSentAt);
+  }
+
+  async removeIgnoredCommunication(ignoredCommId: string): Promise<void> {
+    return communicationDb.removeIgnoredCommunication(ignoredCommId);
+  }
+
+  async linkCommunicationToTransaction(communicationId: string, transactionId: string): Promise<void> {
+    return communicationDb.linkCommunicationToTransaction(communicationId, transactionId);
+  }
+
+  async saveExtractedData(transactionId: string, fieldName: string, fieldValue: string, sourceCommId?: string, confidence?: number): Promise<string> {
+    return communicationDb.saveExtractedData(transactionId, fieldName, fieldValue, sourceCommId, confidence);
+  }
+
+  // ============================================
+  // TRANSACTION CONTACT OPERATIONS (Delegate to transactionContactDbService)
+  // ============================================
+
+  async linkContactToTransaction(transactionId: string, contactId: string, role?: string): Promise<void> {
+    return transactionContactDb.linkContactToTransaction(transactionId, contactId, role);
+  }
+
+  async assignContactToTransaction(transactionId: string, data: transactionContactDb.TransactionContactData): Promise<string> {
+    return transactionContactDb.assignContactToTransaction(transactionId, data);
+  }
+
+  async getTransactionContacts(transactionId: string): Promise<Contact[]> {
+    return transactionContactDb.getTransactionContacts(transactionId);
+  }
+
+  async getTransactionContactsWithRoles(transactionId: string): Promise<transactionContactDb.TransactionContactResult[]> {
+    return transactionContactDb.getTransactionContactsWithRoles(transactionId);
+  }
+
+  async getTransactionContactsByRole(transactionId: string, role: string): Promise<transactionContactDb.TransactionContactResult[]> {
+    return transactionContactDb.getTransactionContactsByRole(transactionId, role);
+  }
+
+  async updateContactRole(transactionId: string, contactId: string, updates: Partial<transactionContactDb.TransactionContactData>): Promise<void> {
+    return transactionContactDb.updateContactRole(transactionId, contactId, updates);
+  }
+
+  async unlinkContactFromTransaction(transactionId: string, contactId: string): Promise<void> {
+    return transactionContactDb.unlinkContactFromTransaction(transactionId, contactId);
+  }
+
+  async isContactAssignedToTransaction(transactionId: string, contactId: string): Promise<boolean> {
+    return transactionContactDb.isContactAssignedToTransaction(transactionId, contactId);
+  }
+
+  async batchUpdateContactAssignments(transactionId: string, operations: transactionContactDb.ContactAssignmentOperation[]): Promise<void> {
+    return transactionContactDb.batchUpdateContactAssignments(transactionId, operations);
+  }
+
+  // ============================================
+  // USER FEEDBACK OPERATIONS (Delegate to feedbackDbService)
+  // ============================================
+
+  async saveFeedback(feedbackData: Omit<UserFeedback, "id" | "created_at">): Promise<UserFeedback> {
+    return feedbackDb.saveFeedback(feedbackData);
+  }
+
+  async getFeedbackByTransaction(transactionId: string): Promise<UserFeedback[]> {
+    return feedbackDb.getFeedbackByTransaction(transactionId);
+  }
+
+  async getFeedbackByField(userId: string, fieldName: string, limit: number = 100): Promise<UserFeedback[]> {
+    return feedbackDb.getFeedbackByField(userId, fieldName, limit);
+  }
+
+  // ============================================
+  // AUDIT LOG OPERATIONS (Delegate to auditLogDbService)
+  // ============================================
+
+  async insertAuditLog(entry: AuditLogEntry): Promise<void> {
+    return auditDb.insertAuditLog(entry);
+  }
+
+  async getUnsyncedAuditLogs(limit: number = 100): Promise<AuditLogEntry[]> {
+    return auditDb.getUnsyncedAuditLogs(limit);
+  }
+
+  async markAuditLogsSynced(ids: string[]): Promise<void> {
+    return auditDb.markAuditLogsSynced(ids);
+  }
+
+  async getAuditLogs(filters: auditDb.AuditLogFilters): Promise<AuditLogEntry[]> {
+    return auditDb.getAuditLogs(filters);
+  }
+
+  // ============================================
+  // LLM ANALYSIS OPERATIONS (Keep in facade - no db/* equivalent)
+  // ============================================
+
+  async getMessagesForLLMAnalysis(userId: string, limit = 100): Promise<Message[]> {
+    const db = this._ensureDb();
     const sql = `
       SELECT * FROM messages
       WHERE user_id = ?
@@ -3786,24 +904,18 @@ class DatabaseService implements IDatabaseService {
       ORDER BY received_at DESC
       LIMIT ?
     `;
-    return this._all<Message>(sql, [userId, limit]);
+    return db.prepare(sql).all(userId, limit) as Message[];
   }
 
-  /**
-   * Get count of messages pending LLM analysis.
-   * Excludes already-analyzed messages and duplicates.
-   *
-   * @param userId - The user ID to filter messages for
-   * @returns Count of messages pending analysis
-   */
   async getPendingLLMAnalysisCount(userId: string): Promise<number> {
+    const db = this._ensureDb();
     const sql = `
       SELECT COUNT(*) as count FROM messages
       WHERE user_id = ?
         AND is_transaction_related IS NULL
         AND duplicate_of IS NULL
     `;
-    const result = this._get<{ count: number }>(sql, [userId]);
+    const result = db.prepare(sql).get(userId) as { count: number } | undefined;
     return result?.count ?? 0;
   }
 
@@ -3811,40 +923,25 @@ class DatabaseService implements IDatabaseService {
   // UTILITY OPERATIONS
   // ============================================
 
-  /**
-   * Vacuum the database to reclaim space
-   */
   async vacuum(): Promise<void> {
-    this._run("VACUUM");
+    vacuumDb();
   }
 
-  /**
-   * Close database connection
-   */
   async close(): Promise<void> {
-    if (this.db) {
-      this.db.close();
-      await logService.info("Database connection closed", "DatabaseService");
-    }
+    // Close and clear the shared connection in dbConnection module first
+    // This also clears the module-level db reference used by db/* services
+    await closeDb();
     this.db = null;
     this.encryptionKey = null;
+    await logService.info("Database connection closed", "DatabaseService");
   }
 
-  /**
-   * Re-key the database with a new encryption key (for key rotation)
-   * @param newKey - The new encryption key to use
-   */
   async rekeyDatabase(newKey: string): Promise<void> {
     const db = this._ensureDb();
-
     try {
-      // Use SQLCipher's rekey pragma to change the encryption key
       db.pragma(`rekey = "x'${newKey}'"`);
       this.encryptionKey = newKey;
-      await logService.info(
-        "Database re-keyed successfully",
-        "DatabaseService",
-      );
+      await logService.info("Database re-keyed successfully", "DatabaseService");
     } catch (error) {
       await logService.error("Failed to re-key database", "DatabaseService", {
         error: error instanceof Error ? error.message : String(error),
@@ -3853,10 +950,6 @@ class DatabaseService implements IDatabaseService {
     }
   }
 
-  /**
-   * Get database encryption status
-   * @returns Object containing encryption status information
-   */
   async getEncryptionStatus(): Promise<{
     isEncrypted: boolean;
     keyMetadata: { keyId: string; createdAt: string; version: number } | null;
@@ -3865,11 +958,7 @@ class DatabaseService implements IDatabaseService {
     const isEncrypted = this.dbPath
       ? await databaseEncryptionService.isDatabaseEncrypted(this.dbPath)
       : false;
-
-    return {
-      isEncrypted,
-      keyMetadata,
-    };
+    return { isEncrypted, keyMetadata };
   }
 }
 
