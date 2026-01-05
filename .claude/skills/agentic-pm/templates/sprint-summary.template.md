@@ -63,6 +63,58 @@ Based on this sprint's data, update the estimation multipliers:
 
 ---
 
+## 2.5 Unplanned Work Analysis
+
+**CRITICAL**: This section captures work that was NOT in the original sprint plan but was added during execution.
+
+### Unplanned Tasks
+
+| Task | Source | Root Cause | Est. Tokens | Actual Tokens | Impact |
+|------|--------|------------|-------------|---------------|--------|
+| TASK-XXX | <where discovered> | <why not planned> | ~XK | ~YK | +X/-Y lines |
+| TASK-XXX | <where discovered> | <why not planned> | ~XK | ~YK | +X/-Y lines |
+
+### Unplanned Work Summary
+
+| Metric | Value |
+|--------|-------|
+| Unplanned tasks | X (Y% of total) |
+| Unplanned PRs | X (Y% of total) |
+| Unplanned lines changed | +X/-Y |
+| Unplanned tokens (est) | ~XK |
+| Unplanned tokens (actual) | ~YK |
+| Discovery buffer | X% |
+
+### Root Cause Distribution
+
+| Category | Count | % of Unplanned | Key Examples |
+|----------|-------|----------------|--------------|
+| Integration gaps | X | Y% | <example: state machine not wired> |
+| Validation discoveries | X | Y% | <example: edge case in testing> |
+| Review findings | X | Y% | <example: SR Engineer found issue> |
+| Dependency discoveries | X | Y% | <example: Task A needs Task B first> |
+| Scope expansion | X | Y% | <example: feature needs more cases> |
+
+### Discovery Buffer Trend
+
+| Sprint | Planned Tasks | Unplanned Tasks | Discovery Buffer |
+|--------|---------------|-----------------|------------------|
+| SPRINT-XXX | X | Y | Z% |
+| SPRINT-XXX | X | Y | Z% |
+| **Average** | - | - | **Z%** |
+
+**Recommendation for Future Sprints:**
+- If discovery buffer > 30%: Reduce planned scope by 20%
+- If discovery buffer > 50%: Reduce planned scope by 30%
+- Current trend suggests: <recommendation>
+
+### Lessons from Unplanned Work
+
+1. **<Root Cause Category>**: <What we learned and how to prevent>
+2. **<Root Cause Category>**: <What we learned and how to prevent>
+
+---
+
 ## 3. Key Accomplishments
 
 ### By Category

@@ -147,6 +147,99 @@ Capture for each task:
 
 ---
 
+## Tracking Unplanned Work (MANDATORY)
+
+**CRITICAL: Unplanned work must be documented AS IT HAPPENS, not reconstructed during sprint reviews.**
+
+### Why Track Unplanned Work?
+
+1. **Estimation Accuracy**: Unplanned work reveals gaps in initial scoping
+2. **Future Prediction**: Patterns in unplanned work improve future estimates
+3. **Sprint Velocity**: True velocity = planned + unplanned work
+4. **Root Cause Analysis**: Tracking sources of unplanned work enables process improvements
+
+### What Counts as Unplanned Work?
+
+| Category | Example | Track As |
+|----------|---------|----------|
+| **Discovered Bug** | State machine wasn't wired into main.tsx | New TASK with `(unplanned)` tag |
+| **Integration Gap** | Login button not connected to state machine | New TASK with `(unplanned)` tag |
+| **Validation Discovery** | Returning users see onboarding again | New TASK with `(unplanned)` tag |
+| **Review Finding** | SR Engineer finds type assertion issue | New TASK referencing review |
+| **Scope Expansion** | Feature needs additional edge case handling | Update existing TASK, note in sprint file |
+| **Dependency Discovery** | Task X requires Task Y to be done first | Add TASK Y as `(unplanned)` |
+
+### Required Workflow: When Unplanned Work Arises
+
+1. **Create Task File Immediately**
+   ```markdown
+   # TASK-XXX: <Title> (Unplanned)
+
+   ## Source
+   - **Discovered During:** TASK-YYY / Platform Validation / SR Engineer Review
+   - **Root Cause:** <Why this wasn't in the original plan>
+   - **Discovery Date:** YYYY-MM-DD
+   ```
+
+2. **Update Sprint File**
+   Add to the "Unplanned Work" section (create if it doesn't exist):
+   ```markdown
+   ## Unplanned Work Log
+
+   | Task | Source | Root Cause | Added Date |
+   |------|--------|------------|------------|
+   | TASK-XXX | TASK-YYY validation | Integration not wired | 2026-01-04 |
+   ```
+
+3. **Update INDEX.md**
+   - Add task with sprint assignment
+   - Mark as `(unplanned)` in notes
+
+4. **Track Metrics Separately**
+   Unplanned tasks should be tracked separately for estimation analysis:
+   - Planned tasks: used for estimation accuracy
+   - Unplanned tasks: used for "discovery buffer" calculation
+
+### Sprint File Unplanned Work Section
+
+Every sprint file MUST have this section (add during sprint if missing):
+
+```markdown
+## Unplanned Work Log
+
+| Task | Source | Root Cause | Added Date | Impact |
+|------|--------|------------|------------|--------|
+| - | - | - | - | - |
+
+### Unplanned Work Summary
+
+| Metric | Value |
+|--------|-------|
+| Unplanned tasks | 0 |
+| Unplanned PRs | 0 |
+| Unplanned lines changed | 0 |
+| Root causes | - |
+```
+
+### Discovery Buffer Calculation
+
+After each sprint, calculate the discovery buffer:
+
+```
+Discovery Buffer = Unplanned Work / Planned Work
+
+Example:
+- Planned: 6 tasks, ~150K tokens
+- Unplanned: 4 tasks, ~50K tokens
+- Discovery Buffer: 4/6 = 67% or 50K/150K = 33%
+
+Future Sprint Adjustment:
+- If discovery buffer > 30%, reduce planned scope by 20%
+- If discovery buffer > 50%, reduce planned scope by 30%
+```
+
+---
+
 ## Moving Tasks Between Sprints
 
 ### When to Move a Task

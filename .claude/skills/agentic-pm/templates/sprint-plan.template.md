@@ -147,6 +147,35 @@ The following MUST pass before merge:
 - **Rationale**: <why>
 - **Impact**: <what it affects>
 
+## Unplanned Work Log
+
+**Instructions:** Update this section AS unplanned work is discovered during the sprint. Do NOT wait until sprint review.
+
+| Task | Source | Root Cause | Added Date | Est. Tokens | Actual Tokens |
+|------|--------|------------|------------|-------------|---------------|
+| - | - | - | - | - | - |
+
+### Unplanned Work Summary (Updated at Sprint Close)
+
+| Metric | Value |
+|--------|-------|
+| Unplanned tasks | 0 |
+| Unplanned PRs | 0 |
+| Unplanned lines changed | +0/-0 |
+| Unplanned tokens (est) | 0 |
+| Unplanned tokens (actual) | 0 |
+| Discovery buffer | 0% |
+
+### Root Cause Categories
+
+| Category | Count | Examples |
+|----------|-------|----------|
+| Integration gaps | 0 | State machine not wired |
+| Validation discoveries | 0 | Edge case found during testing |
+| Review findings | 0 | SR Engineer identified issue |
+| Dependency discoveries | 0 | Task X requires Task Y first |
+| Scope expansion | 0 | Feature needs more edge cases |
+
 ## End-of-Sprint Validation Checklist
 
 - [ ] All tasks merged to integration branch
