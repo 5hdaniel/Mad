@@ -303,7 +303,7 @@ CREATE TABLE IF NOT EXISTS transactions (
 
   -- Transaction Type & Status
   transaction_type TEXT CHECK (transaction_type IN ('purchase', 'sale', 'other')),
-  status TEXT DEFAULT 'active' CHECK (status IN ('active', 'closed', 'archived')),
+  status TEXT DEFAULT 'active' CHECK (status IN ('pending', 'active', 'closed', 'rejected')),
 
   -- Key Dates
   started_at DATETIME,                   -- Representation start / first contact
