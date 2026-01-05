@@ -405,6 +405,13 @@ async function handleValidateSession(
  */
 async function handleGetCurrentUser(): Promise<CurrentUserResponse> {
   try {
+    // Check if database is initialized first - early return if not
+    // This prevents race conditions where AuthContext calls this before
+    // LoadingOrchestrator has finished initializing the database
+    if (!databaseService.isInitialized()) {
+      return { success: false, error: "Database not initialized" };
+    }
+
     const session = await sessionService.loadSession();
 
     if (!session) {
