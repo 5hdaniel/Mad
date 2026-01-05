@@ -72,11 +72,11 @@ npm run type-check
 
 ## Acceptance Criteria
 
-- [ ] AuditTransactionModal.tsx <300 lines
-- [ ] 4-5 new files created
-- [ ] All existing tests pass
-- [ ] No functionality changes
-- [ ] Each component is independently testable
+- [x] AuditTransactionModal.tsx <300 lines (now 224 lines)
+- [x] 4-5 new files created (4 new files)
+- [x] All existing tests pass (35/35)
+- [x] No functionality changes
+- [x] Each component is independently testable
 
 ## PR Structure
 
@@ -89,7 +89,7 @@ Single PR with clear commit history:
 
 ## Engineer Metrics
 
-**Agent ID:** _[Record immediately when Task tool returns]_
+**Agent ID:** engineer-TASK-974
 
 | Metric | Value |
 |--------|-------|
@@ -97,4 +97,41 @@ Single PR with clear commit history:
 | Duration | _[From SubagentStop]_ |
 | API Calls | _[From SubagentStop]_ |
 
-**Variance:** _[(Actual - 60K) / 60K × 100]_%
+**Variance:** _[(Actual - 60K) / 60K x 100]_%
+
+---
+
+## Implementation Summary
+
+### Completed Extraction
+
+| File | Lines | Purpose |
+|------|-------|---------|
+| `src/hooks/useAuditTransaction.ts` | 316 | State management, handlers, effects |
+| `src/components/audit/AddressVerificationStep.tsx` | 129 | Step 1 - Address input with autocomplete |
+| `src/components/audit/ContactAssignmentStep.tsx` | 96 | Steps 2-3 - Contact role assignment |
+| `src/components/audit/RoleAssignment.tsx` | 298 | Individual role with contact selection |
+| `src/components/AuditTransactionModal.tsx` | 224 | Orchestrator (down from 1,187) |
+
+### Commits
+
+1. `refactor: extract useAuditTransaction hook` - State/handlers extraction
+2. `refactor: extract AddressVerificationStep component` - Step 1 UI
+3. `refactor: extract ContactAssignmentStep and RoleAssignment components` - Steps 2-3 UI
+
+### Results
+
+- **Before:** 1,187 lines in single file
+- **After:** 224 lines (modal) + 839 lines (4 extracted files) = 1,063 lines total
+- **Modal reduction:** 81% (1,187 -> 224)
+- **All 35 tests pass**
+- **No functionality changes**
+
+### Deviation from Plan
+
+The original plan mentioned:
+- `AddressInput.tsx` - Implemented as `AddressVerificationStep.tsx` (full step, not just input)
+- `ContactAssignment.tsx` - Split into `ContactAssignmentStep.tsx` + `RoleAssignment.tsx`
+- `AuditTransactionForm.tsx` - Not needed; step components handle form directly
+
+This decomposition better matches the modal's actual 3-step wizard structure.
