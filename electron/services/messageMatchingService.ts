@@ -252,7 +252,7 @@ export async function createCommunicationReference(
   messageId: string,
   transactionId: string,
   userId: string,
-  _linkSource: "auto" | "manual" | "scan" = "auto",
+  linkSource: "auto" | "manual" | "scan" = "auto",
   linkConfidence: number = 0.9
 ): Promise<string | null> {
   const id = crypto.randomUUID();
@@ -328,8 +328,8 @@ export async function createCommunicationReference(
       communication_type, sender, recipients,
       subject, body, body_plain,
       sent_at, received_at, has_attachments,
-      relevance_score
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      relevance_score, link_source
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   const params = [
@@ -347,6 +347,7 @@ export async function createCommunicationReference(
     message.received_at,
     message.has_attachments,
     linkConfidence,
+    linkSource,
   ];
 
   try {
