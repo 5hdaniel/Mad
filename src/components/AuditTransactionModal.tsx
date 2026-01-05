@@ -1,9 +1,5 @@
-import React, { useState } from "react";
-import {
-  SPECIFIC_ROLES,
-  ROLE_TO_CATEGORY,
-  AUDIT_WORKFLOW_STEPS,
-} from "../constants/contactRoles";
+import React from "react";
+import { AUDIT_WORKFLOW_STEPS } from "../constants/contactRoles";
 import {
   filterRolesByTransactionType,
   getTransactionTypeContext,
@@ -13,6 +9,13 @@ import ContactSelectModal from "./ContactSelectModal";
 import type { Contact, Transaction } from "../../electron/types/models";
 import { usePlatform } from "../contexts/PlatformContext";
 import { useAppStateMachine } from "../appCore";
+import {
+  useAuditTransaction,
+  type AddressData,
+  type AddressSuggestion,
+  type ContactAssignment,
+  type ContactAssignments,
+} from "../hooks/useAuditTransaction";
 
 // Type definitions
 interface AuditTransactionModalProps {
@@ -23,66 +26,10 @@ interface AuditTransactionModalProps {
   editTransaction?: Transaction; // For edit mode - pre-fill from existing transaction
 }
 
-interface AddressData {
-  property_address: string;
-  property_street: string;
-  property_city: string;
-  property_state: string;
-  property_zip: string;
-  property_coordinates: Coordinates | null;
-  transaction_type: string;
-}
-
-interface Coordinates {
-  lat: number;
-  lng: number;
-}
-
-interface AddressSuggestion {
-  placeId?: string;
-  place_id?: string;
-  description?: string;
-  formatted_address?: string;
-  main_text?: string;
-  secondary_text?: string;
-}
-
-interface ContactAssignment {
-  contactId: string;
-  isPrimary: boolean;
-  notes: string;
-}
-
-interface ContactAssignments {
-  [role: string]: ContactAssignment[];
-}
-
 interface ErrorState {
   type: string;
   message: string;
   action: string;
-}
-
-interface AddressDetails {
-  formatted_address?: string;
-  street?: string;
-  city?: string;
-  state_short?: string;
-  state?: string;
-  zip?: string;
-  coordinates?: Coordinates | null;
-}
-
-interface AddressDetailsResult {
-  success: boolean;
-  formatted_address?: string;
-  address?: AddressDetails;
-  street?: string;
-  city?: string;
-  state_short?: string;
-  state?: string;
-  zip?: string;
-  coordinates?: Coordinates | null;
 }
 
 interface StepConfig {
@@ -108,119 +55,32 @@ function AuditTransactionModal({
   onSuccess,
   editTransaction,
 }: AuditTransactionModalProps): React.ReactElement {
-  const { isMacOS, isWindows } = usePlatform();
   // Database initialization guard (belt-and-suspenders defense)
   const { isDatabaseInitialized } = useAppStateMachine();
-  const isEditing = !!editTransaction;
-  const [step, setStep] = useState<number>(1); // 1: Address, 2: Client & Agents, 3: Professional Services
-  const [loading, setLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
 
-  // Track original values for change detection in edit mode
-  const [originalAddressData, setOriginalAddressData] = useState<AddressData | null>(null);
-
-  // Step 1: Address Data
-  const [addressData, setAddressData] = useState<AddressData>({
-    property_address: "",
-    property_street: "",
-    property_city: "",
-    property_state: "",
-    property_zip: "",
-    property_coordinates: null,
-    transaction_type: "purchase",
+  // Use the extracted hook for all state and handlers
+  const {
+    step,
+    loading,
+    error,
+    isEditing,
+    addressData,
+    contactAssignments,
+    showAddressAutocomplete,
+    addressSuggestions,
+    setAddressData,
+    handleAddressChange,
+    selectAddress,
+    assignContact,
+    removeContact,
+    handleNextStep,
+    handlePreviousStep,
+  } = useAuditTransaction({
+    userId,
+    editTransaction,
+    onClose,
+    onSuccess,
   });
-
-  // Step 2-3: Contact Assignments
-  const [contactAssignments, setContactAssignments] =
-    useState<ContactAssignments>({});
-  // Structure: { [specific_role]: [{ contactId, isPrimary, notes }] }
-
-  const [showAddressAutocomplete, setShowAddressAutocomplete] =
-    useState<boolean>(false);
-  const [addressSuggestions, setAddressSuggestions] = useState<
-    AddressSuggestion[]
-  >([]);
-  const [sessionToken] = React.useState<string>(
-    () => `session_${Date.now()}_${Math.random()}`,
-  );
-
-  /**
-   * Initialize Google Places API (if available)
-   */
-  React.useEffect(() => {
-    const initializeAPI = async (): Promise<void> => {
-      if (window.api?.address?.initialize) {
-        // Try to initialize with API key from environment
-        // If no API key, address verification will gracefully degrade
-        try {
-          // Initialize with empty string - backend will use environment variable
-          await window.api.address.initialize("");
-        } catch (error: unknown) {
-          console.warn(
-            "[AuditTransaction] Address verification not available:",
-            error,
-          );
-        }
-      }
-    };
-    initializeAPI();
-  }, []);
-
-  /**
-   * Pre-fill form when editing an existing transaction
-   */
-  React.useEffect(() => {
-    if (editTransaction) {
-      // Parse coordinates if present
-      let coordinates: Coordinates | null = null;
-      if (editTransaction.property_coordinates) {
-        try {
-          coordinates = JSON.parse(editTransaction.property_coordinates);
-        } catch {
-          // Invalid JSON, leave as null
-        }
-      }
-
-      const prefillData: AddressData = {
-        property_address: editTransaction.property_address || "",
-        property_street: editTransaction.property_street || "",
-        property_city: editTransaction.property_city || "",
-        property_state: editTransaction.property_state || "",
-        property_zip: editTransaction.property_zip || "",
-        property_coordinates: coordinates,
-        transaction_type: editTransaction.transaction_type || "purchase",
-      };
-
-      setAddressData(prefillData);
-      setOriginalAddressData(prefillData);
-
-      // Parse and set suggested contacts if present
-      if (editTransaction.suggested_contacts) {
-        try {
-          const suggestedContacts = JSON.parse(editTransaction.suggested_contacts);
-          // Convert suggested contacts to ContactAssignments format
-          const assignments: ContactAssignments = {};
-          if (Array.isArray(suggestedContacts)) {
-            suggestedContacts.forEach((sc: { role?: string; contact_id?: string; is_primary?: boolean; notes?: string }) => {
-              if (sc.role && sc.contact_id) {
-                if (!assignments[sc.role]) {
-                  assignments[sc.role] = [];
-                }
-                assignments[sc.role].push({
-                  contactId: sc.contact_id,
-                  isPrimary: sc.is_primary || false,
-                  notes: sc.notes || "",
-                });
-              }
-            });
-          }
-          setContactAssignments(assignments);
-        } catch {
-          // Invalid JSON, leave assignments empty
-        }
-      }
-    }
-  }, [editTransaction]);
 
   // DEFENSIVE CHECK: Return loading state if database not initialized
   // Should never trigger if AppShell gate works, but prevents errors if bypassed
@@ -236,322 +96,6 @@ function AuditTransactionModal({
       </div>
     );
   }
-
-  /**
-   * Handle address input change with autocomplete
-   */
-  const handleAddressChange = async (value: string): Promise<void> => {
-    setAddressData({ ...addressData, property_address: value });
-
-    if (value.length > 3 && window.api?.address?.getSuggestions) {
-      try {
-        const result = await window.api.address.getSuggestions(
-          value,
-          sessionToken,
-        );
-        if (
-          result.success &&
-          result.suggestions &&
-          result.suggestions.length > 0
-        ) {
-          setAddressSuggestions(result.suggestions);
-          setShowAddressAutocomplete(true);
-        } else {
-          setAddressSuggestions([]);
-          setShowAddressAutocomplete(false);
-        }
-      } catch (error: unknown) {
-        console.error(
-          "[AuditTransaction] Failed to fetch address suggestions:",
-          error,
-        );
-        setShowAddressAutocomplete(false);
-      }
-    } else {
-      setShowAddressAutocomplete(false);
-      setAddressSuggestions([]);
-    }
-  };
-
-  /**
-   * Select address from autocomplete
-   */
-  const selectAddress = async (
-    suggestion: AddressSuggestion,
-  ): Promise<void> => {
-    if (!window.api?.address?.getDetails) {
-      // Fallback if API not available
-      setAddressData({
-        ...addressData,
-        property_address:
-          suggestion.formatted_address || suggestion.description || "",
-      });
-      setShowAddressAutocomplete(false);
-      return;
-    }
-
-    try {
-      const placeId = suggestion.place_id || suggestion.placeId || "";
-      const result: AddressDetailsResult =
-        await window.api.address.getDetails(placeId);
-      if (result.success) {
-        // API returns { success, address: {...} } - extract from address object
-        const addr: AddressDetails = result.address || {};
-        setAddressData({
-          ...addressData,
-          property_address:
-            addr.formatted_address ||
-            result.formatted_address ||
-            suggestion.formatted_address ||
-            suggestion.description ||
-            "",
-          property_street: addr.street || result.street || "",
-          property_city: addr.city || result.city || "",
-          property_state:
-            addr.state_short ||
-            addr.state ||
-            result.state_short ||
-            result.state ||
-            "",
-          property_zip: addr.zip || result.zip || "",
-          property_coordinates: addr.coordinates || result.coordinates || null,
-        });
-      } else {
-        // Fallback
-        setAddressData({
-          ...addressData,
-          property_address:
-            suggestion.formatted_address || suggestion.description || "",
-        });
-      }
-    } catch (error: unknown) {
-      console.error("[AuditTransaction] Failed to get address details:", error);
-      // Fallback
-      setAddressData({
-        ...addressData,
-        property_address:
-          suggestion.formatted_address || suggestion.description || "",
-      });
-    }
-    setShowAddressAutocomplete(false);
-  };
-
-  /**
-   * Assign contact to a role
-   */
-  const assignContact = (
-    role: string,
-    contactId: string,
-    isPrimary: boolean = false,
-    notes: string = "",
-  ): void => {
-    const existing = contactAssignments[role] || [];
-
-    // Find if this contact is already assigned
-    const existingIndex = existing.findIndex(
-      (c: ContactAssignment) => c.contactId === contactId,
-    );
-
-    if (existingIndex !== -1) {
-      // Update existing assignment
-      const updated = [...existing];
-      updated[existingIndex] = { contactId, isPrimary, notes };
-      setContactAssignments({ ...contactAssignments, [role]: updated });
-    } else {
-      // Add new assignment
-      setContactAssignments({
-        ...contactAssignments,
-        [role]: [...existing, { contactId, isPrimary, notes }],
-      });
-    }
-  };
-
-  /**
-   * Remove contact from a role
-   */
-  const removeContact = (role: string, contactId: string): void => {
-    const existing = contactAssignments[role] || [];
-    const filtered = existing.filter(
-      (c: ContactAssignment) => c.contactId !== contactId,
-    );
-    setContactAssignments({ ...contactAssignments, [role]: filtered });
-  };
-
-  /**
-   * Proceed to next step
-   */
-  const handleNextStep = (): void => {
-    if (step === 1) {
-      // Validate address
-      if (!addressData.property_address.trim()) {
-        setError("Property address is required");
-        return;
-      }
-      setError(null);
-      setStep(2);
-    } else if (step === 2) {
-      // Validate required contacts (client is required)
-      if (
-        !contactAssignments[SPECIFIC_ROLES.CLIENT] ||
-        contactAssignments[SPECIFIC_ROLES.CLIENT].length === 0
-      ) {
-        setError("Client contact is required");
-        return;
-      }
-      setError(null);
-      setStep(3);
-    } else if (step === 3) {
-      // Create transaction
-      handleCreateTransaction();
-    }
-  };
-
-  /**
-   * Go back to previous step
-   */
-  const handlePreviousStep = (): void => {
-    setError(null);
-    setStep(step - 1);
-  };
-
-  /**
-   * Detect changes between original and current address data
-   */
-  const getAddressChanges = (): Record<string, { original: string; corrected: string }> | null => {
-    if (!originalAddressData) return null;
-
-    const changes: Record<string, { original: string; corrected: string }> = {};
-
-    if (addressData.property_address !== originalAddressData.property_address) {
-      changes.property_address = {
-        original: originalAddressData.property_address,
-        corrected: addressData.property_address,
-      };
-    }
-    if (addressData.transaction_type !== originalAddressData.transaction_type) {
-      changes.transaction_type = {
-        original: originalAddressData.transaction_type,
-        corrected: addressData.transaction_type,
-      };
-    }
-    if (addressData.property_street !== originalAddressData.property_street) {
-      changes.property_street = {
-        original: originalAddressData.property_street,
-        corrected: addressData.property_street,
-      };
-    }
-    if (addressData.property_city !== originalAddressData.property_city) {
-      changes.property_city = {
-        original: originalAddressData.property_city,
-        corrected: addressData.property_city,
-      };
-    }
-    if (addressData.property_state !== originalAddressData.property_state) {
-      changes.property_state = {
-        original: originalAddressData.property_state,
-        corrected: addressData.property_state,
-      };
-    }
-    if (addressData.property_zip !== originalAddressData.property_zip) {
-      changes.property_zip = {
-        original: originalAddressData.property_zip,
-        corrected: addressData.property_zip,
-      };
-    }
-
-    return Object.keys(changes).length > 0 ? changes : null;
-  };
-
-  /**
-   * Create or update the transaction with all contact assignments
-   */
-  const handleCreateTransaction = async (): Promise<void> => {
-    // Prevent duplicate submissions
-    if (loading) {
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      // Prepare contact assignments for API
-      const assignments = Object.entries(contactAssignments).flatMap(
-        ([role, contacts]: [string, ContactAssignment[]]) =>
-          contacts.map((contact: ContactAssignment) => ({
-            role: role,
-            role_category: ROLE_TO_CATEGORY[role],
-            contact_id: contact.contactId,
-            is_primary: contact.isPrimary ? 1 : 0,
-            notes: contact.notes || null,
-          })),
-      );
-
-      let result: { success: boolean; transaction?: Transaction; error?: string };
-
-      if (isEditing && editTransaction) {
-        // Update existing transaction
-        const updateData = {
-          property_address: addressData.property_address,
-          property_street: addressData.property_street,
-          property_city: addressData.property_city,
-          property_state: addressData.property_state,
-          property_zip: addressData.property_zip,
-          property_coordinates: addressData.property_coordinates
-            ? JSON.stringify(addressData.property_coordinates)
-            : undefined,
-          transaction_type: addressData.transaction_type as Transaction["transaction_type"],
-          detection_status: "confirmed" as const,
-          reviewed_at: new Date().toISOString(),
-        };
-
-        const updateResult = await window.api.transactions.update(
-          editTransaction.id,
-          updateData,
-        );
-
-        // Record feedback if changes were made
-        const changes = getAddressChanges();
-        if (changes && window.api.feedback?.recordTransaction) {
-          await window.api.feedback.recordTransaction(userId, {
-            detectedTransactionId: editTransaction.id,
-            action: "confirm",
-            corrections: changes,
-          });
-        }
-
-        result = {
-          success: updateResult.success,
-          transaction: updateResult.success
-            ? { ...editTransaction, ...updateData } as Transaction
-            : undefined,
-          error: updateResult.error,
-        };
-      } else {
-        // Call API to create audited transaction
-        result = await window.api.transactions.createAudited(
-          userId,
-          {
-            ...addressData,
-            contact_assignments: assignments,
-          },
-        );
-      }
-
-      if (result.success && result.transaction) {
-        onSuccess(result.transaction);
-        onClose(); // Close modal immediately after success
-      } else {
-        setError(result.error || `Failed to ${isEditing ? "update" : "create"} transaction`);
-        setLoading(false); // Only reset loading on error
-      }
-    } catch (err: unknown) {
-      const errorMessage =
-        err instanceof Error ? err.message : `Failed to ${isEditing ? "update" : "create"} transaction`;
-      setError(errorMessage);
-      setLoading(false); // Only reset loading on error
-    }
-  };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
