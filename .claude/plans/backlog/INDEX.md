@@ -2,9 +2,9 @@
 
 This index tracks all backlog items with their current status and metadata.
 
-**Last Updated:** 2026-01-05 (SPRINT-025 complete + BACKLOG-161, 162 added)
-**Total Items:** 153
-**Pending:** 87 | **In Progress:** 0 | **Completed:** 59 | **Partial:** 0 | **Obsolete:** 1 | **Deferred:** 2
+**Last Updated:** 2026-01-05 (BACKLOG-165 duplicate contacts added)
+**Total Items:** 154
+**Pending:** 88 | **In Progress:** 0 | **Completed:** 59 | **Partial:** 0 | **Obsolete:** 1 | **Deferred:** 2
 
 ---
 
@@ -245,6 +245,7 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-158 | Decompose AuditTransactionModal Component | refactor | Medium | Pending | SPRINT-024 | - | ~60K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-158.md](BACKLOG-158.md) |
 | BACKLOG-159 | Delete Deprecated PermissionsScreen.tsx | refactor | Medium | Pending | SPRINT-024 | - | ~10K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-159.md](BACKLOG-159.md) |
 | BACKLOG-160 | Consolidate last_exported_at/on Column Naming | tech-debt | Low | Pending | - | - | ~5K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
+| BACKLOG-165 | Duplicate Contacts in Import Contacts Page | ui | Medium | Pending | - | - | ~20K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-165.md](BACKLOG-165.md) |
 
 ---
 
