@@ -122,6 +122,29 @@ feature/*, fix/*, claude/* (your work)
 
 **CRITICAL: Always use traditional merges (not squash) to preserve commit history.**
 
+### CRITICAL: Never Commit Directly to develop or main
+
+**ALL work MUST go through a branch + PR workflow. There are NO exceptions.**
+
+Before making any commit, check your branch:
+```bash
+git branch --show-current
+```
+
+If on `develop` or `main`:
+1. **STOP** - do not commit
+2. Create a branch: `git checkout -b fix/description`
+3. Then commit your changes
+4. Push and create a PR
+
+Even "quick fixes" and "obvious bugs" must use branches. This ensures:
+- PR review catches issues
+- CI validates changes
+- Audit trail exists
+- Rollback is possible
+
+**Incident Reference:** BACKLOG-154 documents a violation where a bug fix was committed directly to develop, bypassing review.
+
 ### Integration Branch Rules (MANDATORY)
 
 Integration branches (`int/*`) collect related feature work before merging to develop.
@@ -220,10 +243,6 @@ git add .
 git commit -m "feat: add feature description
 
 Detailed explanation if needed.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
 "
 ```
 
