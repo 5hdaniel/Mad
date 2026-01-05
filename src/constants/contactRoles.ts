@@ -113,19 +113,19 @@ export const AUDIT_WORKFLOW_STEPS = [
     title: "Client & Agents",
     description: "Core parties to the transaction",
     roles: [
-      { role: SPECIFIC_ROLES.CLIENT, required: true, multiple: false },
-      { role: SPECIFIC_ROLES.BUYER_AGENT, required: false, multiple: false },
-      { role: SPECIFIC_ROLES.SELLER_AGENT, required: false, multiple: false },
+      { role: SPECIFIC_ROLES.CLIENT, required: true, multiple: true },
+      { role: SPECIFIC_ROLES.BUYER_AGENT, required: false, multiple: true },
+      { role: SPECIFIC_ROLES.SELLER_AGENT, required: false, multiple: true },
     ],
   },
   {
     title: "Professional Services",
     description: "Title, escrow, inspection, and other professionals",
     roles: [
-      { role: SPECIFIC_ROLES.TITLE_COMPANY, required: false, multiple: false },
+      { role: SPECIFIC_ROLES.TITLE_COMPANY, required: false, multiple: true },
       { role: SPECIFIC_ROLES.ESCROW_OFFICER, required: false, multiple: true },
       { role: SPECIFIC_ROLES.INSPECTOR, required: false, multiple: true },
-      { role: SPECIFIC_ROLES.APPRAISER, required: false, multiple: false },
+      { role: SPECIFIC_ROLES.APPRAISER, required: false, multiple: true },
       { role: SPECIFIC_ROLES.SURVEYOR, required: false, multiple: true },
       { role: SPECIFIC_ROLES.MORTGAGE_BROKER, required: false, multiple: true },
       {
