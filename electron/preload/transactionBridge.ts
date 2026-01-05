@@ -275,4 +275,14 @@ export const transactionBridge = {
    */
   unlinkMessages: (messageIds: string[]) =>
     ipcRenderer.invoke("transactions:unlink-messages", messageIds),
+
+  /**
+   * Auto-links text messages to a transaction based on assigned contacts
+   * Finds SMS/iMessage messages from contacts' phone numbers and creates
+   * communication references linking them to the transaction.
+   * @param transactionId - Transaction ID to link messages to
+   * @returns Auto-link result with counts of linked/skipped messages
+   */
+  autoLinkTexts: (transactionId: string) =>
+    ipcRenderer.invoke("transactions:auto-link-texts", transactionId),
 };

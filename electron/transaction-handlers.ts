@@ -8,6 +8,7 @@ import type { IpcMainInvokeEvent } from "electron";
 import transactionService from "./services/transactionService";
 import auditService from "./services/auditService";
 import logService from "./services/logService";
+import { autoLinkTextsToTransaction } from "./services/messageMatchingService";
 import type {
   Transaction,
   NewTransaction,
@@ -1468,6 +1469,61 @@ export const registerTransactionHandlers = (
         };
       } catch (error) {
         logService.error("Enhanced export failed", "Transactions", {
+          transactionId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // Auto-link text messages to a transaction based on assigned contacts
+  ipcMain.handle(
+    "transactions:auto-link-texts",
+    async (
+      event: IpcMainInvokeEvent,
+      transactionId: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        logService.info("Auto-linking texts to transaction", "Transactions", {
+          transactionId,
+        });
+
+        // Validate transaction ID
+        const validatedTransactionId = validateTransactionId(transactionId);
+        if (!validatedTransactionId) {
+          throw new ValidationError(
+            "Transaction ID validation failed",
+            "transactionId",
+          );
+        }
+
+        const result = await autoLinkTextsToTransaction(validatedTransactionId);
+
+        logService.info("Auto-link texts complete", "Transactions", {
+          transactionId: validatedTransactionId,
+          linked: result.linked,
+          skipped: result.skipped,
+          errors: result.errors.length,
+        });
+
+        return {
+          success: result.errors.length === 0,
+          linked: result.linked,
+          skipped: result.skipped,
+          errors: result.errors.length > 0 ? result.errors : undefined,
+        };
+      } catch (error) {
+        logService.error("Auto-link texts failed", "Transactions", {
           transactionId,
           error: error instanceof Error ? error.message : "Unknown error",
         });
