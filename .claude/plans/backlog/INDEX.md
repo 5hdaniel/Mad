@@ -2,9 +2,9 @@
 
 This index tracks all backlog items with their current status and metadata.
 
-**Last Updated:** 2026-01-05 (SPRINT-022 Complete - BACKLOG-142 State Coordination Overhaul finished)
+**Last Updated:** 2026-01-04 (SPRINT-023 Planned - Architecture Debt Reduction)
 **Total Items:** 161
-**Pending:** 85 | **In Progress:** 0 | **Completed:** 70 | **Partial:** 0 | **Obsolete:** 2 | **Deferred:** 2
+**Pending:** 81 | **In Progress:** 4 (SPRINT-023) | **Completed:** 70 | **Partial:** 0 | **Obsolete:** 2 | **Deferred:** 2
 
 ---
 
@@ -56,6 +56,8 @@ This index tracks all backlog items with their current status and metadata.
 - **SPRINT-020 (State Coordination Foundation):** Complete - BACKLOG-142 Phase 1 (7 tasks: TASK-927 to TASK-933, PRs #287-294)
 - **SPRINT-021 (State Coordination Migration):** Complete - BACKLOG-142 Phase 2 (PRs #296-309)
 - **SPRINT-022 (State Coordination Cleanup):** Complete - BACKLOG-142 Phase 3 (10 tasks, PRs #306-313, ~198K tokens)
+- **SPRINT-016 (Component Refactoring):** DEPRECATED - Task IDs collided with SPRINT-017/18/19; scope moved to SPRINT-023
+- **SPRINT-023 (Architecture Debt Reduction):** PLANNED - BACKLOG-149, 148, 152, 140 (5 tasks: TASK-960 to TASK-964)
 - **Unassigned:** All others
 
 ### State Coordination Overhaul Project - COMPLETE
@@ -482,6 +484,16 @@ This index tracks all backlog items with their current status and metadata.
   - BACKLOG-152 (MEDIUM): Split TransactionDetails.tsx (832 lines) into tab components
     - Also addresses direct window.api calls (architecture violation)
   - Note: BACKLOG-098 (Split AuditTransactionModal.tsx) already exists for that item
+- 2026-01-04: **SPRINT-023 (Architecture Debt Reduction) PLANNED**
+  - SPRINT-016 marked DEPRECATED (task IDs TASK-920-926 collided with SPRINT-017/18/19)
+  - Created 5 tasks (TASK-960 to TASK-964):
+    - TASK-960: Delete deprecated EmailOnboardingScreen.tsx (BACKLOG-149)
+    - TASK-961: Split databaseService.ts - Analysis & Core (BACKLOG-148 Phase 1)
+    - TASK-962: Split databaseService.ts - Domain Services (BACKLOG-148 Phase 2)
+    - TASK-963: Split TransactionDetails.tsx (BACKLOG-152)
+    - TASK-964: Duplicate Transaction Re-Import Prevention (BACKLOG-140)
+  - Total estimated: ~130K tokens
+  - Status: Pending SR Engineer Review
 
 ---
 
