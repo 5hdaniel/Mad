@@ -115,6 +115,28 @@ describe("transactionRoleUtils", () => {
       );
       expect(result.length).toBe(0);
     });
+
+    it("should filter out non-matching roles for 'other' transaction type", () => {
+      const roles: RoleConfig[] = [
+        { role: SPECIFIC_ROLES.CLIENT, required: true, multiple: false },
+        { role: SPECIFIC_ROLES.BUYER_AGENT, required: false, multiple: false },
+        { role: SPECIFIC_ROLES.SELLER_AGENT, required: false, multiple: false },
+        { role: "custom_role", required: false, multiple: false },
+      ];
+
+      const result = filterRolesByTransactionType(
+        roles,
+        "other",
+        "Client & Agents",
+      );
+
+      // Only CLIENT should be included since 'other' matches neither purchase nor sale
+      expect(result.length).toBe(1);
+      expect(result.map((r) => r.role)).toContain(SPECIFIC_ROLES.CLIENT);
+      expect(result.map((r) => r.role)).not.toContain(SPECIFIC_ROLES.BUYER_AGENT);
+      expect(result.map((r) => r.role)).not.toContain(SPECIFIC_ROLES.SELLER_AGENT);
+      expect(result.map((r) => r.role)).not.toContain("custom_role");
+    });
   });
 
   describe("getTransactionTypeContext", () => {
@@ -132,6 +154,14 @@ describe("transactionRoleUtils", () => {
       expect(result.title).toBe("Transaction Type: Sale");
       expect(result.message).toContain("representing the seller");
       expect(result.message).toContain("buyer's agent");
+    });
+
+    it("should return sale context as default for 'other' transaction type", () => {
+      // 'other' transaction type falls through to default (sale context)
+      const result = getTransactionTypeContext("other");
+
+      expect(result.title).toBe("Transaction Type: Sale");
+      expect(result.message).toContain("representing the seller");
     });
   });
 
@@ -230,6 +260,68 @@ describe("transactionRoleUtils", () => {
         "purchase",
       );
       expect(result).toBe("Transaction Coordinator (TC)");
+    });
+
+    it("should fall back to ROLE_DISPLAY_NAMES for CLIENT role with 'other' transaction type", () => {
+      // When transaction type is 'other', CLIENT role should use standard display name
+      const result = getRoleDisplayName(SPECIFIC_ROLES.CLIENT, "other");
+      // Falls through to ROLE_DISPLAY_NAMES lookup
+      expect(result).toBe("Client (Buyer/Seller)");
+    });
+
+    it("should return the role string itself for unknown roles", () => {
+      const result = getRoleDisplayName("unknown_custom_role", "purchase");
+      // When role is not in ROLE_DISPLAY_NAMES, return the role string itself
+      expect(result).toBe("unknown_custom_role");
+    });
+
+    it("should handle empty string role", () => {
+      const result = getRoleDisplayName("", "sale");
+      expect(result).toBe("");
+    });
+  });
+
+  describe("validateRoleAssignments edge cases", () => {
+    it("should handle undefined assignment value", () => {
+      const contactAssignments: ContactAssignments = {
+        client: undefined,
+      };
+
+      const roles: RoleConfig[] = [
+        { role: "client", required: true, multiple: false },
+      ];
+
+      const result = validateRoleAssignments(contactAssignments, roles);
+
+      expect(result.isValid).toBe(false);
+      expect(result.missingRoles).toContain("client");
+    });
+
+    it("should handle multiple required roles missing", () => {
+      const contactAssignments: ContactAssignments = {};
+
+      const roles: RoleConfig[] = [
+        { role: "client", required: true, multiple: false },
+        { role: "inspector", required: true, multiple: false },
+        { role: "appraiser", required: false, multiple: false },
+      ];
+
+      const result = validateRoleAssignments(contactAssignments, roles);
+
+      expect(result.isValid).toBe(false);
+      expect(result.missingRoles).toHaveLength(2);
+      expect(result.missingRoles).toContain("client");
+      expect(result.missingRoles).toContain("inspector");
+    });
+
+    it("should handle empty roles array", () => {
+      const contactAssignments: ContactAssignments = {};
+      const roles: RoleConfig[] = [];
+
+      const result = validateRoleAssignments(contactAssignments, roles);
+
+      expect(result.isValid).toBe(true);
+      expect(result.missingRoles).toHaveLength(0);
     });
   });
 });
