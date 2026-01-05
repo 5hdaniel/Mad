@@ -362,3 +362,46 @@ export async function deleteTransaction(transactionId: string): Promise<void> {
   const sql = "DELETE FROM transactions WHERE id = ?";
   dbRun(sql, [transactionId]);
 }
+
+/**
+ * Find existing transactions by property addresses for a user.
+ * Used for deduplication during import to efficiently check if transactions
+ * already exist before creating new ones.
+ *
+ * @param userId - The user ID to scope the search
+ * @param propertyAddresses - Array of property addresses to look up
+ * @returns Map of normalized property address to existing transaction ID
+ */
+export async function findExistingTransactionsByAddresses(
+  userId: string,
+  propertyAddresses: string[],
+): Promise<Map<string, string>> {
+  if (propertyAddresses.length === 0) {
+    return new Map();
+  }
+
+  // Normalize addresses for comparison (lowercase, trim whitespace)
+  const normalizedAddresses = propertyAddresses.map((addr) =>
+    addr.toLowerCase().trim()
+  );
+
+  // Build SQL with placeholders for all addresses
+  const placeholders = normalizedAddresses.map(() => "LOWER(TRIM(property_address)) = ?").join(" OR ");
+  const sql = `
+    SELECT id, property_address
+    FROM transactions
+    WHERE user_id = ? AND (${placeholders})
+  `;
+
+  const params = [userId, ...normalizedAddresses];
+  const results = dbAll<{ id: string; property_address: string }>(sql, params);
+
+  // Build map of normalized address -> transaction ID
+  const addressMap = new Map<string, string>();
+  for (const row of results) {
+    const normalizedAddr = row.property_address.toLowerCase().trim();
+    addressMap.set(normalizedAddr, row.id);
+  }
+
+  return addressMap;
+}

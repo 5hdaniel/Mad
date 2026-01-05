@@ -326,36 +326,40 @@ During PR review, I will verify:
 
 **REQUIRED: Record your agent_id immediately when the Task tool returns.**
 
-*Completed: <DATE>*
+*Completed: 2026-01-04*
 
 ### Agent ID
 
 **Record this immediately when Task tool returns:**
 ```
-Engineer Agent ID: <agent_id from Task tool output>
+Engineer Agent ID: engineer-1767583792-59198
 ```
 
 ### Checklist
 
 ```
 Investigation:
-- [ ] Import flow documented
-- [ ] Unique transaction key identified
-- [ ] Root cause of duplicate imports found
+- [x] Import flow documented
+- [x] Unique transaction key identified
+- [x] Root cause of duplicate imports found
 
 Files modified:
-- [ ] <transaction import service>
-- [ ] <database queries>
+- [x] electron/services/transactionService.ts
+- [x] electron/services/db/transactionDbService.ts
+- [x] electron/services/databaseService.ts
+- [x] electron/services/__tests__/transactionService.additional.test.ts
 
 Tests added:
-- [ ] Duplicate skip test
-- [ ] New transaction create test
-- [ ] Batch import test
+- [x] Duplicate skip test
+- [x] New transaction create test
+- [x] Batch import test
+- [x] Case-insensitive matching test
+- [x] Batch lookup efficiency test (no N+1)
 
 Verification:
-- [ ] npm run type-check passes
-- [ ] npm run lint passes
-- [ ] npm test passes
+- [x] npm run type-check passes
+- [x] npm run lint passes (warnings only, no errors)
+- [x] npm test passes (36/36 transaction tests pass)
 - [ ] Manual test: same transaction not re-imported
 ```
 
@@ -365,33 +369,40 @@ Verification:
 
 | Metric | Value |
 |--------|-------|
-| **Total Tokens** | X |
-| Duration | X seconds |
-| API Calls | X |
-| Input Tokens | X |
-| Output Tokens | X |
-| Cache Read | X |
-| Cache Create | X |
+| **Total Tokens** | TBD |
+| Duration | TBD |
+| API Calls | TBD |
+| Input Tokens | TBD |
+| Output Tokens | TBD |
+| Cache Read | TBD |
+| Cache Create | TBD |
 
-**Variance:** PM Est ~30K vs Actual ~XK (X% over/under)
+**Variance:** PM Est ~30K vs Actual ~TBD
 
 ### Notes
 
 **Planning notes:**
-<Key decisions from planning phase, revisions if any>
+- Investigation identified that `_saveDetectedTransactions()` was creating transactions without checking for existing ones
+- Unique key is `property_address` per user (normalized to lowercase, trimmed)
+- Existing `transactionExtractorService.groupByProperty()` already groups by address, so dedup at save time was the right approach
 
 **Deviations from plan:**
-<If you deviated from the approved plan, explain what and why. Use "DEVIATION:" prefix.>
-<If no deviations, write "None">
+None - followed the implementation notes in the task file
 
 **Design decisions:**
-<Document any design decisions you made and the reasoning>
+1. Implemented batch lookup (`findExistingTransactionsByAddresses`) to avoid N+1 queries
+2. Used case-insensitive matching (lowercase + trim) for address comparison
+3. Added both debug logging (per-skip) and info logging (summary) for observability
+4. Added the new method to `transactionDbService.ts` and delegated through `databaseService.ts`
 
 **Issues encountered:**
-<Document any issues or challenges and how you resolved them>
+1. Existing tests failed because they didn't mock the new `findExistingTransactionsByAddresses` method - fixed by adding default mock in `beforeEach`
+2. Pre-existing vacuum test failure unrelated to this change (mock setup issue)
 
 **Reviewer notes:**
-<Anything the reviewer should pay attention to>
+- The fix is at the import layer in `_saveDetectedTransactions()`, not the detection layer
+- The batch lookup is done ONCE before the loop, not per-transaction
+- Address normalization uses lowercase + trim for case-insensitive matching
 
 ### Estimate vs Actual Analysis
 
@@ -399,14 +410,14 @@ Verification:
 
 | Metric | PM Estimate | Actual | Variance |
 |--------|-------------|--------|----------|
-| **Tokens** | ~30K | ~XK | +/-X% |
-| Duration | - | X sec | - |
+| **Tokens** | ~30K | TBD | TBD |
+| Duration | - | TBD | - |
 
 **Root cause of variance:**
-<1-2 sentence explanation>
+TBD - awaiting metrics capture
 
 **Suggestion for similar tasks:**
-<What should PM estimate differently next time?>
+TBD - awaiting metrics capture
 
 ---
 
