@@ -2,7 +2,7 @@
 
 **Sprint:** SPRINT-024
 **Backlog:** BACKLOG-112
-**Status:** Ready
+**Status:** Complete
 **Estimate:** ~80K tokens
 **Token Cap:** 200K
 **Can Parallelize With:** TASK-973
@@ -97,20 +97,131 @@ npm test -- --coverage --collectCoverageFrom="src/hooks/**/*.ts"
 
 ## Acceptance Criteria
 
-- [ ] src/hooks/ coverage >=40% (stretch: 50%)
-- [ ] New test files for useTransactionStatusUpdate.ts and useToast.ts
-- [ ] Expanded tests for useIPhoneSync.ts (most lines = most impact)
-- [ ] All tests pass (no flaky tests)
-- [ ] Tests cover error paths and edge cases
+- [x] src/hooks/ coverage >=40% (stretch: 50%) - **ACHIEVED: 92.97%**
+- [x] New test files for useTransactionStatusUpdate.ts and useToast.ts
+- [x] Expanded tests for useIPhoneSync.ts (most lines = most impact)
+- [x] All tests pass (no flaky tests)
+- [x] Tests cover error paths and edge cases
+
+---
+
+## Implementation Summary
+
+**Completed:** 2026-01-04
+**PR:** #324
+
+### Coverage Results
+
+| Hook | Before | After |
+|------|--------|-------|
+| useConversations.ts | ~100% | 100% |
+| useIPhoneSync.ts | minimal | 88.58% |
+| usePendingTransactionCount.ts | ~93% | 93.54% |
+| useSelection.ts | 100% | 100% |
+| useToast.ts | 0% | 100% |
+| useTour.ts | 100% | 100% |
+| useTransactionStatusUpdate.ts | 0% | 100% |
+| **Overall src/hooks/** | **26.3%** | **92.97%** |
+
+### New Test Files
+
+1. **useTransactionStatusUpdate.test.ts** (310+ lines)
+   - Initialization tests
+   - Approve operation (success, failure, no userId, callbacks)
+   - Reject operation (with/without reason, callbacks)
+   - Restore operation (success, error handling)
+   - clearError functionality
+   - Concurrent operations
+   - userId dependency handling
+
+2. **useToast.test.ts** (290+ lines)
+   - Initialization tests
+   - showToast with types and auto-dismiss
+   - showSuccess, showError, showWarning helpers
+   - removeToast functionality
+   - clearAll functionality
+   - Custom auto-dismiss timeout
+   - Edge cases (empty message, long messages, special chars)
+
+### Expanded Tests
+
+3. **useIPhoneSync.test.ts** (expanded from ~130 to 980 lines)
+   - Sync API path (vs device API fallback)
+   - Device connection/disconnection events
+   - Progress handling and phase mapping
+   - Password and passcode flows
+   - Sync error handling
+   - Sync complete and storage complete events
+   - startSync with device, blocking, and errors
+   - submitPassword flows
+   - cancelSync functionality
+   - checkSyncStatus polling
+   - Device disconnect during sync (safe vs unsafe phases)
+
+### Deviations
+
+None - implemented as specified.
+
+### Issues Encountered
+
+1. **jest-environment-jsdom missing** - Had to install it in the worktree
+2. **Infinite timer loop** - Fixed test that used `jest.runAllTimers()` with polling interval
 
 ## Engineer Metrics
 
-**Agent ID:** _[Record immediately when Task tool returns]_
+**Agent ID:** a837038
 
 | Metric | Value |
 |--------|-------|
-| Total Tokens | _[From SubagentStop]_ |
-| Duration | _[From SubagentStop]_ |
-| API Calls | _[From SubagentStop]_ |
+| Total Tokens | (auto-captured) |
+| Duration | (auto-captured) |
+| API Calls | (auto-captured) |
 
-**Variance:** _[(Actual - 80K) / 80K × 100]_%
+**Variance:** Pending final capture
+
+---
+
+## SR Engineer Review
+
+**Reviewed:** 2026-01-05
+**PR:** #324 (Merged)
+**Reviewer Agent ID:** sr-review-972
+
+### Review Checklist
+
+- [x] Engineer Agent ID present: a837038
+- [x] Implementation Summary complete
+- [x] All acceptance criteria met
+- [x] CI passed on all platforms
+
+### CI Results
+
+| Check | Status |
+|-------|--------|
+| Check Changes | pass |
+| Test & Lint (macOS, Node 20) | pass |
+| Test & Lint (Windows, Node 20) | pass |
+| Security Audit | pass |
+| Build Application (macOS) | pass |
+| Build Application (Windows) | pass |
+| Validate PR Metrics | pass |
+
+### Test Quality Assessment
+
+| Test File | Lines | Quality |
+|-----------|-------|---------|
+| useTransactionStatusUpdate.test.ts | 648 | Excellent |
+| useToast.test.ts | 445 | Excellent |
+| useIPhoneSync.test.ts | +847 | Excellent |
+
+**Total additions:** 1,940 lines of test code
+
+### Architecture Impact
+
+None - pure test coverage improvement.
+
+### Summary
+
+Outstanding work. Coverage target was 40%, achieved 93% (233% of target). Tests follow React Testing Library best practices with proper async handling, fake timers, and comprehensive edge case coverage. The useIPhoneSync tests are particularly well-structured given the complexity of that hook (593 lines, 12+ event handlers).
+
+**APPROVED and MERGED** via traditional merge to develop.
