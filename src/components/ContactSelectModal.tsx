@@ -36,9 +36,12 @@ function ContactSelectModal({
   const [selectedIds, setSelectedIds] = React.useState<string[]>(initialSelectedIds);
 
   // Sync selectedIds when initialSelectedIds prop changes (e.g., modal reopened with different selections)
+  // Use join() to create a stable string key - avoids infinite loop from default [] creating new reference each render
+  const initialIdsKey = initialSelectedIds.join(',');
   React.useEffect(() => {
     setSelectedIds(initialSelectedIds);
-  }, [initialSelectedIds]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialIdsKey]);
 
   const availableContacts = contacts.filter((c) => !excludeIds.includes(c.id));
 
