@@ -43,12 +43,12 @@ SPRINT-024 addresses quality issues identified in the SR Engineer architectural 
 | Task | Backlog | Title | Est. Tokens | Priority |
 |------|---------|-------|-------------|----------|
 | TASK-970 | BACKLOG-157 | Fix Failing Auth Handler Test | ~15K | HIGH |
-| TASK-971 | BACKLOG-159 | Delete Deprecated PermissionsScreen | ~10K | MEDIUM |
+| TASK-971 | BACKLOG-159 | Remove PermissionsScreen + Routing Refactor | ~25K | MEDIUM |
 | TASK-972 | BACKLOG-112 | Boost src/hooks/ Test Coverage | ~80K | HIGH |
 | TASK-973 | BACKLOG-113 | Boost src/utils/ Test Coverage | ~50K | MEDIUM |
 | TASK-974 | BACKLOG-158 | Decompose AuditTransactionModal | ~60K | MEDIUM |
 
-**Total Sprint Estimate:** ~215K tokens
+**Total Sprint Estimate:** ~230K tokens
 
 ### Out-of-Scope (Deferred)
 
@@ -116,7 +116,7 @@ Expected: true, Received: false
 **Deliverables:**
 - Investigate why session restore returns false
 - Fix the test or underlying code
-- Ensure all 749 tests pass
+- Ensure all 664 tests pass
 
 **Files:**
 - `electron/__tests__/auth-handlers.integration.test.ts`
@@ -124,30 +124,37 @@ Expected: true, Received: false
 
 ---
 
-### TASK-971: Delete Deprecated PermissionsScreen (BACKLOG-159)
+### TASK-971: Remove PermissionsScreen + Routing Refactor (BACKLOG-159)
 
 **Category:** refactor/cleanup
-**Estimate:** ~10K tokens
-**Token Cap:** 40K
+**Estimate:** ~25K tokens
+**Token Cap:** 80K
 **Priority:** MEDIUM
 
 **Problem:**
-File has `@deprecated` notice but still exists (873 lines):
+File has `@deprecated` notice but still exists (873 lines) AND is actively used:
 ```typescript
 /**
  * @deprecated Use `onboarding/steps/PermissionsStep.tsx` instead.
  */
 ```
 
+**CRITICAL (SR Engineer Finding):** PermissionsScreen is actively imported and used in:
+- `src/appCore/AppRouter.tsx:11` - import statement
+- `src/appCore/AppRouter.tsx:142` - rendered when `currentStep === "permissions" && isMacOS`
+
+This is NOT a simple file deletion - routing logic must be updated.
+
 **Deliverables:**
-- Verify PermissionsStep.tsx is fully functional replacement
+- Check if USE_NEW_ONBOARDING flag already handles routing
+- Update AppRouter.tsx routing to use PermissionsStep (or remove route)
+- Remove import from AppRouter.tsx
 - Delete `src/components/PermissionsScreen.tsx`
-- Remove all imports/references
-- Update any route definitions
+- Verify permissions flow works
 
 **Files:**
+- `src/appCore/AppRouter.tsx` (MODIFY - update routing, remove import)
 - `src/components/PermissionsScreen.tsx` (DELETE)
-- Any importing files (modify)
 
 ---
 
@@ -161,16 +168,25 @@ File has `@deprecated` notice but still exists (873 lines):
 **Current State:**
 - `src/hooks/`: 26.3% statements (target: 60%+)
 - Gap: ~34 percentage points
+- 7 hooks total, 1173 lines
 
-**Key Hooks to Cover:**
-1. `useIPhoneSync.ts` (593 lines) - Complex sync logic
-2. `useExportWizard.ts` - Export workflow
-3. `useTransactionValidation.ts` - Validation rules
-4. Other hooks with <50% coverage
+**CRITICAL (SR Engineer Finding):** Previously listed hooks DO NOT EXIST:
+- ~~useExportWizard.ts~~ - NOT FOUND
+- ~~useTransactionValidation.ts~~ - NOT FOUND
+
+**Actual Hooks to Cover (by size):**
+| Hook | Lines | Has Tests? | Action |
+|------|-------|------------|--------|
+| `useIPhoneSync.ts` | 593 | Yes | Expand - most complex |
+| `useTransactionStatusUpdate.ts` | 195 | **NO** | Create tests |
+| `useToast.ts` | 89 | **NO** | Create tests |
+| `useConversations.ts` | 88 | Yes | Expand |
+| `usePendingTransactionCount.ts` | 77 | Yes | Expand |
 
 **Deliverables:**
-- Add tests for top 5 lowest-coverage hooks
-- Achieve 50%+ coverage for src/hooks/
+- Create new test files for useTransactionStatusUpdate.ts and useToast.ts
+- Expand existing tests for useIPhoneSync.ts
+- Achieve 40%+ coverage (stretch: 50%) for src/hooks/
 - Tests must be non-flaky
 
 **Testing Approach:**
@@ -248,15 +264,15 @@ All PRs target `develop` directly. No integration branch needed.
 
 ### Coverage Targets
 
-| Directory | Current | Target | Task |
-|-----------|---------|--------|------|
-| `src/hooks/` | 26% | 50%+ | TASK-972 |
-| `src/utils/` | 50% | 75%+ | TASK-973 |
-| Global | 29% | 35%+ | Combined |
+| Directory | Current | Target | Stretch | Task |
+|-----------|---------|--------|---------|------|
+| `src/hooks/` | 26% | 40%+ | 50% | TASK-972 |
+| `src/utils/` | 50% | 75%+ | - | TASK-973 |
+| Global | 29% | 35%+ | - | Combined |
 
 ### Quality Gates
 
-- [ ] All 749 tests pass (fix failing test first)
+- [ ] All 664 tests pass (fix failing test first)
 - [ ] Coverage thresholds met per task
 - [ ] No new TypeScript errors
 - [ ] PR review by SR Engineer
@@ -276,10 +292,10 @@ All PRs target `develop` directly. No integration branch needed.
 
 ## Success Criteria
 
-1. **All tests passing** - 749/749 (currently 748/749)
+1. **All tests passing** - 664/664 (currently 663/664)
 2. **Coverage improved** - Global from 29% toward 35%
 3. **Large file reduced** - AuditTransactionModal from 1,187 to <300 lines
-4. **Dead code removed** - PermissionsScreen.tsx deleted
+4. **Dead code removed** - PermissionsScreen.tsx deleted + AppRouter routing updated
 
 ---
 
@@ -288,7 +304,7 @@ All PRs target `develop` directly. No integration branch needed.
 To be filled after sprint completion:
 
 ### Metrics
-- Estimated tokens: ~215K
+- Estimated tokens: ~230K
 - Actual tokens: TBD
 - Variance: TBD
 
