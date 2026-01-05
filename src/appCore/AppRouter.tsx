@@ -8,7 +8,6 @@
 import React from "react";
 import Login from "../components/Login";
 import MicrosoftLogin from "../components/MicrosoftLogin";
-import EmailOnboardingScreen from "../components/EmailOnboardingScreen";
 import PermissionsScreen from "../components/PermissionsScreen";
 import ConversationList from "../components/ConversationList";
 import ExportComplete from "../components/ExportComplete";
@@ -123,30 +122,6 @@ export function AppRouter({ app }: AppRouterProps) {
       <AppleDriverSetup
         onComplete={handleAppleDriverSetupComplete}
         onSkip={handleAppleDriverSetupSkip}
-      />
-    );
-  }
-
-  // Email onboarding
-  if (
-    currentStep === "email-onboarding" &&
-    (currentUser || pendingOAuthData) &&
-    (authProvider || pendingOAuthData?.provider)
-  ) {
-    return (
-      <EmailOnboardingScreen
-        userId={currentUser?.id || pendingOAuthData?.cloudUser.id || ""}
-        authProvider={
-          (authProvider || pendingOAuthData?.provider) as "google" | "microsoft"
-        }
-        selectedPhoneType={selectedPhoneType || pendingOnboardingData.phoneType}
-        onPhoneTypeChange={handlePhoneTypeChange}
-        onComplete={handleEmailOnboardingComplete}
-        onSkip={handleEmailOnboardingSkip}
-        onBack={handleEmailOnboardingBack}
-        isPreDbFlow={!!pendingOAuthData && !isAuthenticated}
-        emailHint={pendingOAuthData?.userInfo.email || currentUser?.email}
-        existingPendingTokens={pendingEmailTokens}
       />
     );
   }
