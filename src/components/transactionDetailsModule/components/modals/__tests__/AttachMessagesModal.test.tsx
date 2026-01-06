@@ -107,7 +107,7 @@ describe("AttachMessagesModal", () => {
     it("should render property address subtitle when provided", async () => {
       render(<AttachMessagesModal {...defaultProps} />);
       await waitFor(() => {
-        expect(screen.getByText(/Link messages to 123 Main St/)).toBeInTheDocument();
+        expect(screen.getByText(/Link chats to 123 Main St/)).toBeInTheDocument();
       });
     });
 
@@ -344,7 +344,7 @@ describe("AttachMessagesModal", () => {
       fireEvent.click(screen.getByTestId("thread-thread-1"));
 
       // Should show selection count
-      expect(screen.getByText(/1 thread selected/i)).toBeInTheDocument();
+      expect(screen.getByText(/1 chat selected/i)).toBeInTheDocument();
     });
 
     it("should show attach button in threads view", async () => {

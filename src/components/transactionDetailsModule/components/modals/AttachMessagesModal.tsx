@@ -69,16 +69,89 @@ function getPreviewText(messages: MessageLike[]): string {
 }
 
 /**
- * Get thread date from messages
+ * Get thread date range from messages
  */
-function getThreadDate(messages: MessageLike[]): string {
-  const lastMsg = messages[messages.length - 1];
-  const date = new Date(lastMsg?.sent_at || lastMsg?.received_at || 0);
-  return date.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+function getThreadDateRange(messages: MessageLike[]): string {
+  if (messages.length === 0) return "";
+
+  const dates = messages
+    .map(m => new Date(m.sent_at || m.received_at || 0).getTime())
+    .filter(d => d > 0)
+    .sort((a, b) => a - b);
+
+  if (dates.length === 0) return "";
+
+  const firstDate = new Date(dates[0]);
+  const lastDate = new Date(dates[dates.length - 1]);
+
+  const formatOpts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
+  const first = firstDate.toLocaleDateString(undefined, formatOpts);
+  const last = lastDate.toLocaleDateString(undefined, formatOpts);
+
+  // If same day, just show one date
+  if (first === last) {
+    return first;
+  }
+  return `${first} - ${last}`;
+}
+
+/**
+ * Get all unique participants in a thread
+ */
+function getThreadParticipants(messages: MessageLike[], selectedContact: string): string[] {
+  const participants = new Set<string>();
+
+  for (const msg of messages) {
+    try {
+      if (msg.participants) {
+        const parsed = typeof msg.participants === 'string'
+          ? JSON.parse(msg.participants)
+          : msg.participants;
+
+        if (parsed.from) participants.add(parsed.from);
+        if (parsed.to) {
+          const toList = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
+          toList.forEach((p: string) => participants.add(p));
+        }
+      }
+    } catch {
+      // Skip malformed participants
+    }
+  }
+
+  // Remove the selected contact and "me" from the list
+  participants.delete(selectedContact);
+  participants.delete('me');
+
+  return Array.from(participants);
+}
+
+/**
+ * Check if thread is a group chat (more than 2 total participants)
+ */
+function isGroupChat(messages: MessageLike[]): boolean {
+  const allParticipants = new Set<string>();
+
+  for (const msg of messages) {
+    try {
+      if (msg.participants) {
+        const parsed = typeof msg.participants === 'string'
+          ? JSON.parse(msg.participants)
+          : msg.participants;
+
+        if (parsed.from) allParticipants.add(parsed.from);
+        if (parsed.to) {
+          const toList = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
+          toList.forEach((p: string) => allParticipants.add(p));
+        }
+      }
+    } catch {
+      // Skip
+    }
+  }
+
+  allParticipants.delete('me');
+  return allParticipants.size > 2;
 }
 
 export function AttachMessagesModal({
@@ -278,10 +351,10 @@ export function AttachMessagesModal({
               </h3>
               <p className="text-green-100 text-sm">
                 {propertyAddress
-                  ? `Link messages to ${propertyAddress}`
+                  ? `Link chats to ${propertyAddress}`
                   : view === "contacts"
-                  ? "Choose a contact to view their messages"
-                  : "Select threads to attach"}
+                  ? "Choose a contact to view their chats"
+                  : "Select chats to attach to this transaction"}
               </p>
             </div>
           </div>
@@ -329,7 +402,7 @@ export function AttachMessagesModal({
         {view === "threads" && sortedThreads.length > 0 && (
           <div className="flex-shrink-0 p-4 border-b border-gray-200 flex items-center justify-between">
             <span className="text-sm text-gray-600">
-              {sortedThreads.length} thread{sortedThreads.length !== 1 ? "s" : ""} available
+              {sortedThreads.length} chat{sortedThreads.length !== 1 ? "s" : ""} found
             </span>
             <button
               onClick={handleSelectAll}
@@ -348,7 +421,7 @@ export function AttachMessagesModal({
             <div className="text-center py-12">
               <div className="w-8 h-8 border-4 border-green-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
               <p className="text-gray-500 mt-4">
-                {loadingContacts ? "Loading contacts..." : "Loading messages..."}
+                {loadingContacts ? "Loading contacts..." : "Loading chats..."}
               </p>
             </div>
           )}
@@ -423,12 +496,16 @@ export function AttachMessagesModal({
                   <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                   </svg>
-                  <p className="text-gray-600 mb-2">No message threads found</p>
+                  <p className="text-gray-600 mb-2">No chats found with this contact</p>
                 </div>
               ) : (
                 <div className="grid gap-3">
                   {sortedThreads.map(([threadId, messages]) => {
                     const isSelected = selectedThreadIds.has(threadId);
+                    const isGroup = isGroupChat(messages);
+                    const otherParticipants = getThreadParticipants(messages, selectedContact || "");
+                    const dateRange = getThreadDateRange(messages);
+
                     return (
                       <button
                         key={threadId}
@@ -440,10 +517,10 @@ export function AttachMessagesModal({
                         }`}
                         data-testid={`thread-${threadId}`}
                       >
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-start gap-3">
                           {/* Checkbox */}
                           <div
-                            className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 ${
+                            className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 mt-1 ${
                               isSelected ? "bg-green-500 border-green-500" : "border-gray-300 bg-white"
                             }`}
                           >
@@ -454,19 +531,54 @@ export function AttachMessagesModal({
                             )}
                           </div>
 
+                          {/* Chat Icon */}
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                            isGroup ? "bg-purple-100" : "bg-blue-100"
+                          }`}>
+                            {isGroup ? (
+                              <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                              </svg>
+                            ) : (
+                              <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                              </svg>
+                            )}
+                          </div>
+
                           {/* Thread Info */}
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="inline-block px-2 py-0.5 bg-green-100 text-green-700 text-xs font-medium rounded-full">
+                            {/* Thread title - participants */}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h4 className="font-semibold text-gray-900">
+                                {isGroup ? "Group Chat" : `Chat with ${selectedContactName || formatPhoneNumber(selectedContact || "")}`}
+                              </h4>
+                              {isGroup && (
+                                <span className="inline-block px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded-full">
+                                  {otherParticipants.length + 1} people
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Other participants in group */}
+                            {isGroup && otherParticipants.length > 0 && (
+                              <p className="text-xs text-gray-500 mt-1">
+                                Also includes: {otherParticipants.slice(0, 3).map(p => formatPhoneNumber(p)).join(", ")}
+                                {otherParticipants.length > 3 && ` +${otherParticipants.length - 3} more`}
+                              </p>
+                            )}
+
+                            {/* Preview and metadata */}
+                            <p className="text-sm text-gray-600 truncate mt-2">
+                              {getPreviewText(messages)}
+                            </p>
+                            <div className="flex items-center gap-3 mt-1">
+                              <span className="text-xs text-gray-500">{dateRange}</span>
+                              <span className="text-xs text-gray-400">•</span>
+                              <span className="text-xs text-gray-500">
                                 {messages.length} {messages.length === 1 ? "message" : "messages"}
                               </span>
                             </div>
-                            <p className="text-sm text-gray-600 truncate mt-1">
-                              {getPreviewText(messages)}
-                            </p>
-                            <p className="text-xs text-gray-500 mt-1">
-                              {getThreadDate(messages)}
-                            </p>
                           </div>
                         </div>
                       </button>
@@ -482,10 +594,10 @@ export function AttachMessagesModal({
         <div className="flex-shrink-0 px-6 py-4 bg-gray-50 rounded-b-xl flex items-center gap-3 justify-between border-t border-gray-200">
           <span className="text-sm text-gray-600">
             {view === "contacts"
-              ? "Select a contact to view messages"
+              ? "Select a contact to view their chats"
               : selectedThreadIds.size > 0
-              ? `${selectedThreadIds.size} thread${selectedThreadIds.size !== 1 ? "s" : ""} selected`
-              : "Select threads to attach"}
+              ? `${selectedThreadIds.size} chat${selectedThreadIds.size !== 1 ? "s" : ""} selected`
+              : "Select chats to attach"}
           </span>
           <div className="flex items-center gap-3">
             <button
