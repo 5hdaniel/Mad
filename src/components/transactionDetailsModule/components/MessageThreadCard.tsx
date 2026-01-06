@@ -114,8 +114,64 @@ export function MessageThreadCard({
 }
 
 /**
- * Utility function to group messages by thread_id.
- * Messages without a thread_id are grouped by their own id.
+ * Generate a normalized participant key for grouping messages into chats.
+ * Messages with the same participant set belong to the same chat.
+ */
+function getParticipantKey(msg: MessageLike): string {
+  try {
+    if (msg.participants) {
+      const parsed = typeof msg.participants === 'string'
+        ? JSON.parse(msg.participants)
+        : msg.participants;
+
+      // Collect all participants
+      const allParticipants = new Set<string>();
+
+      if (parsed.from) {
+        allParticipants.add(normalizeParticipant(parsed.from));
+      }
+      if (parsed.to) {
+        const toList = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
+        toList.forEach((p: string) => allParticipants.add(normalizeParticipant(p)));
+      }
+
+      // Remove "me" - we only care about external participants for grouping
+      allParticipants.delete('me');
+
+      // Sort and join to create a consistent key
+      if (allParticipants.size > 0) {
+        return Array.from(allParticipants).sort().join('|');
+      }
+    }
+  } catch {
+    // Fall through to default
+  }
+
+  // Fallback: use thread_id if available, otherwise message id
+  return msg.thread_id || msg.id;
+}
+
+/**
+ * Normalize a participant identifier (phone/email) for consistent grouping.
+ */
+function normalizeParticipant(participant: string): string {
+  if (!participant) return '';
+
+  // If it looks like a phone number, normalize to digits only
+  const digits = participant.replace(/\D/g, '');
+  if (digits.length >= 10) {
+    // Use last 10 digits to normalize +1 prefix variations
+    return digits.slice(-10);
+  }
+
+  // Otherwise return lowercase trimmed version
+  return participant.toLowerCase().trim();
+}
+
+/**
+ * Utility function to group messages by conversation/chat.
+ * Groups by the participant set - all messages with the same participants
+ * belong to the same chat (like on your phone).
  */
 export function groupMessagesByThread(
   messages: MessageLike[]
@@ -123,10 +179,10 @@ export function groupMessagesByThread(
   const threads = new Map<string, MessageLike[]>();
 
   messages.forEach((msg) => {
-    const threadId = msg.thread_id || msg.id;
-    const thread = threads.get(threadId) || [];
+    const threadKey = getParticipantKey(msg);
+    const thread = threads.get(threadKey) || [];
     thread.push(msg);
-    threads.set(threadId, thread);
+    threads.set(threadKey, thread);
   });
 
   // Sort messages within each thread chronologically
