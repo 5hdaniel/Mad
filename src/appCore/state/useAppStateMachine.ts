@@ -27,6 +27,7 @@ import {
   useKeychainHandlers,
 } from "./flows";
 import { useOptionalMachineState } from "./machine/hooks/useOptionalMachineState";
+import { useAutoSync } from "../../hooks/useAutoSync";
 import type { AppStateMachine, PendingEmailTokens } from "./types";
 
 export function useAppStateMachine(): AppStateMachine {
@@ -221,6 +222,18 @@ export function useAppStateMachine(): AppStateMachine {
   });
 
   // ============================================
+  // AUTO-SYNC
+  // ============================================
+  const autoSync = useAutoSync({
+    userId: currentUser?.id ?? null,
+    hasEmailConnected: emailOnboardingApi.hasEmailConnected,
+    isDatabaseInitialized: secureStorage.isDatabaseInitialized,
+    hasPermissions: permissions.hasPermissions,
+    isOnDashboard: nav.currentStep === "dashboard",
+    isOnboarding: nav.currentStep !== "dashboard",
+  });
+
+  // ============================================
   // NETWORK HANDLERS
   // ============================================
   const handleRetryConnection = useCallback(async () => {
@@ -312,6 +325,11 @@ export function useAppStateMachine(): AppStateMachine {
       showSetupPromptDismissed: nav.showSetupPromptDismissed,
       isTourActive: nav.isTourActive,
       appPath: permissions.appPath,
+
+      // Sync status
+      syncStatus: autoSync.syncStatus,
+      isAnySyncing: autoSync.isAnySyncing,
+      currentSyncMessage: autoSync.currentSyncMessage,
 
       // Semantic modal transitions
       openProfile: modal.openProfile,
@@ -423,6 +441,7 @@ export function useAppStateMachine(): AppStateMachine {
       phoneHandlers,
       emailHandlers,
       keychainHandlers,
+      autoSync,
       handleRetryConnection,
       handleDismissMovePrompt,
       handleNotNowMovePrompt,

@@ -21,6 +21,9 @@ interface PreferencesResult {
     scan?: {
       lookbackMonths?: number;
     };
+    sync?: {
+      autoSyncOnLogin?: boolean;
+    };
   };
 }
 
@@ -51,6 +54,7 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
   >(null);
   const [exportFormat, setExportFormat] = useState<string>("pdf"); // Default export format
   const [scanLookbackMonths, setScanLookbackMonths] = useState<number>(9); // Default 9 months
+  const [autoSyncOnLogin, setAutoSyncOnLogin] = useState<boolean>(true); // Default auto-sync ON
   const [loadingPreferences, setLoadingPreferences] = useState<boolean>(true);
 
   // Load connection status and preferences on mount
@@ -91,6 +95,10 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
         // Load scan lookback preference
         if (result.preferences.scan?.lookbackMonths) {
           setScanLookbackMonths(result.preferences.scan.lookbackMonths);
+        }
+        // Load auto-sync preference (default is true if not set)
+        if (typeof result.preferences.sync?.autoSyncOnLogin === "boolean") {
+          setAutoSyncOnLogin(result.preferences.sync.autoSyncOnLogin);
         }
       }
     } catch (error) {
@@ -133,6 +141,23 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
       }
     } catch (error) {
       console.debug("Could not save scan lookback preference");
+    }
+  };
+
+  const handleAutoSyncToggle = async (): Promise<void> => {
+    const newValue = !autoSyncOnLogin;
+    setAutoSyncOnLogin(newValue);
+    try {
+      const result = await window.api.preferences.update(userId, {
+        sync: {
+          autoSyncOnLogin: newValue,
+        },
+      });
+      if (!result.success) {
+        console.debug("Could not save auto-sync preference");
+      }
+    } catch (error) {
+      console.debug("Could not save auto-sync preference");
     }
   };
 
@@ -335,6 +360,34 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
                     <option value={18}>18 months</option>
                     <option value={24}>24 months</option>
                   </select>
+                </div>
+
+                {/* Auto-Sync on Login */}
+                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="flex-1">
+                    <h4 className="text-sm font-medium text-gray-900">
+                      Auto-Sync on Login
+                    </h4>
+                    <p className="text-xs text-gray-600 mt-1">
+                      Automatically sync emails and messages when you open the app
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleAutoSyncToggle}
+                    disabled={loadingPreferences}
+                    className={`ml-4 relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                      autoSyncOnLogin ? "bg-blue-500" : "bg-gray-300"
+                    }`}
+                    role="switch"
+                    aria-checked={autoSyncOnLogin}
+                    aria-label="Auto-sync on login"
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        autoSyncOnLogin ? "translate-x-6" : "translate-x-1"
+                      }`}
+                    />
+                  </button>
                 </div>
               </div>
             </div>

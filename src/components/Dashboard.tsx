@@ -2,12 +2,13 @@ import React, { useEffect, useRef, useCallback } from "react";
 import Joyride from "react-joyride";
 import { useTour } from "../hooks/useTour";
 import { usePendingTransactionCount } from "../hooks/usePendingTransactionCount";
-import { AIStatusCard } from "./dashboard/AIStatusCard";
+import { AIStatusCard, SyncStatusIndicator } from "./dashboard/index";
 import {
   getDashboardTourSteps,
   JOYRIDE_STYLES,
   JOYRIDE_LOCALE,
 } from "../config/tourSteps";
+import type { SyncStatus } from "../hooks/useSyncStatus";
 
 interface DashboardActionProps {
   onAuditNew: () => void;
@@ -18,6 +19,10 @@ interface DashboardActionProps {
   showSetupPrompt?: boolean;
   onContinueSetup?: () => void;
   onDismissSetupPrompt?: () => void;
+  // Sync status props (optional - only shown when syncing)
+  syncStatus?: SyncStatus;
+  isAnySyncing?: boolean;
+  currentSyncMessage?: string | null;
 }
 
 /**
@@ -34,6 +39,9 @@ function Dashboard({
   showSetupPrompt,
   onContinueSetup,
   onDismissSetupPrompt,
+  syncStatus,
+  isAnySyncing = false,
+  currentSyncMessage = null,
 }: DashboardActionProps) {
   // Initialize the onboarding tour for first-time users
   const { runTour, handleJoyrideCallback } = useTour(
@@ -139,12 +147,21 @@ function Dashboard({
           </div>
         )}
 
+        {/* Sync Status Indicator - shows when syncing in background */}
+        {syncStatus && (
+          <SyncStatusIndicator
+            status={syncStatus}
+            isAnySyncing={isAnySyncing}
+            currentMessage={currentSyncMessage}
+          />
+        )}
+
         {/* AI Detection Status Card */}
         <div className="mb-8" data-tour="ai-detection-status">
           <AIStatusCard
             pendingCount={pendingCount}
             onViewPending={handleViewPending}
-            isLoading={isPendingLoading}
+            isLoading={isPendingLoading || isAnySyncing}
           />
         </div>
 
