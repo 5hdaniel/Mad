@@ -4,7 +4,7 @@
 **Priority**: 0 (Blocking - must fix before Phase 1 tasks)
 **Estimated Tokens**: ~15,000
 **Phase**: Phase 0 (Pre-requisite)
-**Status**: Ready for Assignment
+**Status**: COMPLETE (Merged)
 
 ---
 
@@ -236,25 +236,42 @@ DEVIATION: The MessageThreadCard.tsx file did not need modification. The root ca
 
 **REQUIRED: Record your agent_id immediately when the Task tool returns.**
 
-*Review Date: <DATE>*
+*Review Date: 2026-01-06*
 
 ### Agent ID
 
 ```
-SR Engineer Agent ID: <agent_id from Task tool output>
+SR Engineer Agent ID: sr-engineer-pr-354-review
 ```
 
 ### Review Summary
 
-**Architecture Compliance:** PASS / FAIL
-**Security Review:** N/A
-**Test Coverage:** Adequate / Needs Improvement
+**Architecture Compliance:** PASS
+**Security Review:** PASS (parameterized queries, user isolation maintained)
+**Test Coverage:** Adequate
 
 **Review Notes:**
-<Key observations, concerns addressed, approval rationale>
+
+1. **Query Logic Validated**: The two-step query approach is sound:
+   - Step 1 correctly discovers all thread_ids where contact participates
+   - Step 2 correctly fetches ALL messages from those threads
+   - Fallback maintains backwards compatibility for messages without thread_id
+
+2. **Test Fix Verified**: The test fix from `msg-solo-1` to `msg-msg-solo-1` is correct.
+   - `getThreadKey()` returns `msg-${msg.id}` when no thread_id
+   - For `id: "msg-solo-1"` this produces `msg-msg-solo-1`
+   - The old test had an incorrect expectation
+
+3. **Performance Trade-off Acceptable**: Two queries vs one is acceptable because:
+   - First query returns only DISTINCT thread_ids (small result set)
+   - IN clause with thread_ids is indexed
+   - User-triggered action, not background sync
+
+4. **Security**: SQL injection protected via parameterized queries
 
 ### Merge Information
 
-**PR Number:** #XXX
-**Merge Commit:** <hash>
+**PR Number:** #354
+**Merge Commit:** 5503df1a5ebfc0c39b071cc10139e800f795b748
 **Merged To:** feature/contact-first-attach-messages
+**Merged At:** 2026-01-06T07:42:35Z
