@@ -4,10 +4,13 @@
  * This step guides macOS users through granting Full Disk Access permission,
  * which is required to read the Messages database.
  *
+ * After permission is granted, automatically imports messages from macOS
+ * Messages app before continuing to the next onboarding step.
+ *
  * @module onboarding/steps/PermissionsStep
  */
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import type {
   OnboardingStep,
   OnboardingStepContentProps,
@@ -178,19 +181,82 @@ function PermissionsStepContent({ onAction }: OnboardingStepContentProps) {
   const [isChecking, setIsChecking] = useState(false);
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
 
+  // Import state
+  const [isImporting, setIsImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState<{
+    current: number;
+    total: number;
+    percent: number;
+  } | null>(null);
+  const [importResult, setImportResult] = useState<{
+    success: boolean;
+    messagesImported: number;
+    error?: string;
+  } | null>(null);
+  const hasStartedImportRef = useRef(false);
+
+  // Subscribe to import progress updates
+  useEffect(() => {
+    const cleanup = window.api.messages.onImportProgress((progress) => {
+      setImportProgress(progress);
+    });
+    return cleanup;
+  }, []);
+
+  // Trigger import after permissions are granted
+  const triggerImport = useCallback(async () => {
+    if (hasStartedImportRef.current) return;
+    hasStartedImportRef.current = true;
+
+    setIsImporting(true);
+    setImportProgress(null);
+    setImportResult(null);
+
+    try {
+      // Get user ID from session - if not available, skip import and continue
+      const authResult = await window.api.auth.getCurrentUser();
+      if (!authResult.success || !authResult.user) {
+        // No user session yet, just continue to next step
+        onAction({ type: "PERMISSION_GRANTED" });
+        return;
+      }
+
+      const userId = (authResult.user as { id: string }).id;
+      const result = await window.api.messages.importMacOSMessages(userId);
+
+      setImportResult({
+        success: result.success,
+        messagesImported: result.messagesImported,
+        error: result.error,
+      });
+
+      // Brief delay to show result before proceeding
+      setTimeout(() => {
+        onAction({ type: "PERMISSION_GRANTED" });
+      }, 1500);
+    } catch (error) {
+      // On error, still proceed - import is not blocking
+      console.error("Error importing messages:", error);
+      onAction({ type: "PERMISSION_GRANTED" });
+    } finally {
+      setIsImporting(false);
+    }
+  }, [onAction]);
+
   // Auto-check permissions on mount and periodically after user starts the flow
   const checkPermissions = useCallback(async () => {
     try {
       const result = await window.api.system.checkPermissions();
       if (result.hasPermission) {
-        onAction({ type: "PERMISSION_GRANTED" });
+        // Permissions granted - trigger import first, then continue
+        triggerImport();
       }
       return result.hasPermission;
     } catch (error) {
       console.error("Error checking permissions:", error);
       return false;
     }
-  }, [onAction]);
+  }, [triggerImport]);
 
   // Initial permission check
   useEffect(() => {
@@ -458,7 +524,7 @@ function PermissionsStepContent({ onAction }: OnboardingStepContentProps) {
       />
 
       {/* Final: All steps complete */}
-      {completedSteps.has(5) && (
+      {completedSteps.has(5) && !isImporting && !importResult && (
         <div className="bg-green-50 border-2 border-green-300 rounded-lg p-4 text-center">
           <div className="inline-flex items-center justify-center w-12 h-12 bg-green-500 rounded-full mb-3">
             <CheckIcon className="w-6 h-6 text-white" />
@@ -480,6 +546,70 @@ function PermissionsStepContent({ onAction }: OnboardingStepContentProps) {
           >
             {isChecking ? "Checking..." : "Check Permissions"}
           </button>
+        </div>
+      )}
+
+      {/* Importing messages state */}
+      {isImporting && (
+        <div className="bg-blue-50 border-2 border-blue-300 rounded-lg p-6 text-center">
+          <div className="inline-flex items-center justify-center w-12 h-12 bg-blue-500 rounded-full mb-4">
+            <svg
+              className="w-6 h-6 text-white animate-spin"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              />
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              />
+            </svg>
+          </div>
+          <h3 className="text-lg font-bold text-gray-900 mb-2">
+            Importing Your Messages
+          </h3>
+          <p className="text-sm text-gray-600 mb-4">
+            Setting up access to your iMessages and texts...
+          </p>
+          {importProgress && (
+            <div className="max-w-xs mx-auto">
+              <div className="flex justify-between text-xs text-gray-600 mb-1">
+                <span>Progress</span>
+                <span>{importProgress.percent}%</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div
+                  className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${importProgress.percent}%` }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Import complete state */}
+      {importResult && (
+        <div className="bg-green-50 border-2 border-green-300 rounded-lg p-6 text-center">
+          <div className="inline-flex items-center justify-center w-12 h-12 bg-green-500 rounded-full mb-4">
+            <CheckIcon className="w-6 h-6 text-white" />
+          </div>
+          <h3 className="text-lg font-bold text-gray-900 mb-2">
+            Messages Imported!
+          </h3>
+          <p className="text-sm text-gray-600">
+            {importResult.messagesImported > 0
+              ? `Successfully imported ${importResult.messagesImported.toLocaleString()} messages.`
+              : "Your messages are ready to use."}
+          </p>
         </div>
       )}
 

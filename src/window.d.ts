@@ -229,6 +229,26 @@ interface ElectronAPI {
  * Main API namespace (preferred for new code)
  * Exposed via contextBridge in preload.js
  */
+/**
+ * Progress event from macOS message import
+ */
+interface MacOSImportProgress {
+  current: number;
+  total: number;
+  percent: number;
+}
+
+/**
+ * Result of macOS message import
+ */
+interface MacOSImportResult {
+  success: boolean;
+  messagesImported: number;
+  messagesSkipped: number;
+  duration: number;
+  error?: string;
+}
+
 interface MainAPI {
   // Messages API (iMessage/SMS - migrated from window.electron)
   messages: {
@@ -237,6 +257,12 @@ interface MainAPI {
     exportConversations: (
       conversationIds: string[],
     ) => Promise<{ success: boolean; exportPath?: string }>;
+    /** Import messages from macOS Messages app into the app database (macOS only) */
+    importMacOSMessages: (userId: string) => Promise<MacOSImportResult>;
+    /** Get count of messages available for import from macOS Messages */
+    getImportCount: () => Promise<{ success: boolean; count?: number; error?: string }>;
+    /** Listen for import progress updates */
+    onImportProgress: (callback: (progress: MacOSImportProgress) => void) => () => void;
   };
 
   // Outlook integration (migrated from window.electron)
