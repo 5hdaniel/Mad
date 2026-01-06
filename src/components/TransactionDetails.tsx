@@ -110,6 +110,7 @@ function TransactionDetails({
     messages: textMessages,
     loading: messagesLoading,
     error: messagesError,
+    refresh: refreshMessages,
   } = useTransactionMessages(transaction);
 
   // Attachments hook
@@ -317,6 +318,12 @@ function TransactionDetails({
               messages={textMessages}
               loading={messagesLoading}
               error={messagesError}
+              userId={userId}
+              transactionId={transaction.id}
+              propertyAddress={transaction.property_address}
+              onMessagesChanged={refreshMessages}
+              onShowSuccess={showSuccess}
+              onShowError={showError}
             />
           )}
 
