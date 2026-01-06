@@ -268,8 +268,9 @@ describe("groupMessagesByThread", () => {
     const threads = groupMessagesByThread(messages);
 
     expect(threads.size).toBe(2);
-    expect(threads.has("msg-solo-1")).toBe(true);
-    expect(threads.has("msg-solo-2")).toBe(true);
+    // Fallback key format is "msg-{id}"
+    expect(threads.has("msg-msg-solo-1")).toBe(true);
+    expect(threads.has("msg-msg-solo-2")).toBe(true);
   });
 
   it("should sort messages within thread chronologically", () => {

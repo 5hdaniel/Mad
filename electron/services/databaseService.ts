@@ -1031,22 +1031,57 @@ class DatabaseService implements IDatabaseService {
   /**
    * Get unlinked messages for a specific contact (phone number)
    * Used after user selects a contact in the contact-first UI
+   *
+   * Strategy: First find all thread_ids where the contact appears, then fetch
+   * ALL messages from those threads. This ensures group chats are fully captured
+   * even when individual messages have different handles.
    */
   async getMessagesByContact(userId: string, contact: string): Promise<Message[]> {
     const db = this._ensureDb();
-    // Match messages where the contact appears in participants (either from or to)
-    const sql = `
-      SELECT * FROM messages
+
+    // Step 1: Find all thread_ids where the contact appears in any message
+    const threadIdsSql = `
+      SELECT DISTINCT thread_id FROM messages
       WHERE user_id = ?
         AND transaction_id IS NULL
         AND channel IN ('sms', 'imessage')
+        AND thread_id IS NOT NULL
         AND (
           json_extract(participants, '$.from') = ?
           OR json_extract(participants, '$.to[0]') = ?
         )
+    `;
+    const threadRows = db.prepare(threadIdsSql).all(userId, contact, contact) as { thread_id: string }[];
+    const threadIds = threadRows.map(r => r.thread_id);
+
+    if (threadIds.length === 0) {
+      // Fallback: return messages directly matching the contact (for cases without thread_id)
+      const fallbackSql = `
+        SELECT * FROM messages
+        WHERE user_id = ?
+          AND transaction_id IS NULL
+          AND channel IN ('sms', 'imessage')
+          AND (
+            json_extract(participants, '$.from') = ?
+            OR json_extract(participants, '$.to[0]') = ?
+          )
+        ORDER BY sent_at DESC
+      `;
+      return db.prepare(fallbackSql).all(userId, contact, contact) as Message[];
+    }
+
+    // Step 2: Fetch ALL messages from those threads (not just messages where contact appears)
+    // This captures all messages in group chats where the contact is a participant
+    const placeholders = threadIds.map(() => '?').join(', ');
+    const messagesSql = `
+      SELECT * FROM messages
+      WHERE user_id = ?
+        AND transaction_id IS NULL
+        AND channel IN ('sms', 'imessage')
+        AND thread_id IN (${placeholders})
       ORDER BY sent_at DESC
     `;
-    return db.prepare(sql).all(userId, contact, contact) as Message[];
+    return db.prepare(messagesSql).all(userId, ...threadIds) as Message[];
   }
 
   /**
