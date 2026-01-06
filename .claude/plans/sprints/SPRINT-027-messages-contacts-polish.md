@@ -21,6 +21,8 @@ Before starting sprint work, engineers must:
 - **TASK-990**: Auto-linked messages display - Messages auto-linked via contact phone matching should appear in Transaction Details Messages tab
 - **TASK-991**: Manual thread management - Complete and test AttachMessagesModal for manually adding/removing message threads
 - **TASK-992**: Message bubble direction fix - Outgoing messages should appear on right side (phone-style), not all on left
+- **TASK-993**: Thread grouping fix - Group messages by actual iMessage chat_id (COMPLETED)
+- **TASK-994**: Multiple contacts per role bug - When assigning multiple contacts to a role, only one saves
 
 ## Out of Scope / Deferred
 
@@ -29,26 +31,34 @@ Before starting sprint work, engineers must:
 - BACKLOG-177: Dashboard import status cleanup - UX polish, not core functionality
 - Email attachment/unlinking UI changes - Future enhancement
 
-## Reprioritized Backlog (Top 3)
+## Reprioritized Backlog
 
-| ID | Title | Priority | Rationale | Dependencies | Conflicts |
-|----|-------|----------|-----------|--------------|-----------|
-| TASK-990 | Auto-linked messages display | 1 | Core bug: auto-linked messages invisible | None | None |
-| TASK-991 | Manual thread management | 2 | Completes attach/unlink workflow | TASK-990 (parallel ok) | None |
-| TASK-992 | Message bubble direction | 3 | Visual polish, simpler fix | None | None |
+| ID | Title | Priority | Status | Rationale | Dependencies |
+|----|-------|----------|--------|-----------|--------------|
+| TASK-993 | Thread grouping fix | 0 | **COMPLETED** | Blocking: threads must group correctly | None |
+| TASK-990 | Auto-linked messages display | 1 | Pending | Core bug: auto-linked messages invisible | None |
+| TASK-991 | Manual thread management | 2 | Pending | Completes attach/unlink workflow | TASK-990 |
+| TASK-992 | Message bubble direction | 3 | Pending | Visual polish, simpler fix | None |
+| TASK-994 | Multiple contacts per role | 4 | Pending | Bug: only one contact saves when assigning multiple | None |
 
 ## Phase Plan
+
+### Phase 0: Pre-requisite (COMPLETED)
+
+- ~~TASK-993: Thread grouping fix~~ **DONE** - Messages now group by iMessage chat_id
 
 ### Phase 1: Core Fixes (Parallelizable)
 
 - TASK-990: Auto-linked messages display (~25K tokens)
 - TASK-992: Message bubble direction fix (~10K tokens)
+- TASK-994: Multiple contacts per role bug (~12K tokens)
 
 **Rationale for parallel**: Different files, no shared code paths.
 - TASK-990: modifies `useTransactionMessages.ts`, `transactionService.ts`, database layer
 - TASK-992: modifies `MessageBubble.tsx`, `TransactionMessagesTab.tsx` only
+- TASK-994: modifies Edit Transaction modal, contact assignment logic
 
-**Integration checkpoint**: Both tasks merge to `feature/contact-first-attach-messages`, CI must pass.
+**Integration checkpoint**: All tasks merge to `feature/contact-first-attach-messages`, CI must pass.
 
 ### Phase 2: Thread Management (Sequential)
 
@@ -222,16 +232,18 @@ The following MUST pass before merge:
 
 ## Token Estimates Summary
 
-| Task | Category | Base Est. | Multiplier | Final Est. |
-|------|----------|-----------|------------|------------|
-| TASK-990 | service | ~30K | 0.5x | ~15K |
-| TASK-991 | ui | ~30K | 1.0x | ~30K |
-| TASK-992 | ui | ~10K | 1.0x | ~10K |
-| **Total** | | | | **~55K** |
+| Task | Category | Base Est. | Multiplier | Final Est. | Status |
+|------|----------|-----------|------------|------------|--------|
+| TASK-993 | service | ~15K | 1.0x | ~15K | **DONE** |
+| TASK-990 | service | ~30K | 0.5x | ~15K | Pending |
+| TASK-991 | ui | ~30K | 1.0x | ~30K | Pending |
+| TASK-992 | ui | ~10K | 1.0x | ~10K | Pending |
+| TASK-994 | ui/service | ~12K | 1.0x | ~12K | Pending |
+| **Total** | | | | **~82K** | |
 
-Add SR Review overhead: +30K (3 tasks x ~10K each)
+Add SR Review overhead: +40K (4 pending tasks x ~10K each)
 
-**Total Sprint Estimate: ~85K tokens**
+**Total Sprint Estimate: ~122K tokens** (including completed TASK-993)
 
 ## End-of-Sprint Validation Checklist
 
