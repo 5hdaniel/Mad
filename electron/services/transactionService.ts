@@ -6,6 +6,7 @@ import type {
   NewCommunication,
   OAuthProvider,
   Contact,
+  Message,
 } from "../types";
 
 import gmailFetchService from "./gmailFetchService";
@@ -1399,38 +1400,11 @@ class TransactionService {
 
   /**
    * Get unlinked messages for a user (messages not attached to any transaction)
-   * Filters to only SMS/iMessage channels
+   * Queries the messages table directly for SMS/iMessage channels
    */
-  async getUnlinkedMessages(userId: string): Promise<Communication[]> {
-    // Get all messages for the user
-    const allMessages = await databaseService.getCommunications({
-      user_id: userId,
-    });
-
-    // Filter to unlinked SMS/iMessage only
-    // Note: communications table uses "communication_type" with values "text"/"imessage"
-    // while messages table uses "channel" with values "sms"/"imessage"
-    const messages = allMessages.filter((msg) => {
-      if (msg.transaction_id) return false;
-      // Check both field names for compatibility with both tables
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const msgAny = msg as any;
-      const channel = msgAny.channel as string | undefined;
-      const commType = msgAny.communication_type as string | undefined;
-      return (
-        channel === "sms" ||
-        channel === "imessage" ||
-        commType === "text" ||
-        commType === "imessage"
-      );
-    });
-
-    // Sort by most recent first
-    messages.sort((a, b) => {
-      const dateA = new Date(a.sent_at || a.received_at || 0).getTime();
-      const dateB = new Date(b.sent_at || b.received_at || 0).getTime();
-      return dateB - dateA;
-    });
+  async getUnlinkedMessages(userId: string): Promise<Message[]> {
+    // Query messages table directly - much cleaner than filtering communications
+    const messages = await databaseService.getUnlinkedTextMessages(userId);
 
     await logService.info(
       "Retrieved unlinked messages",
@@ -1446,7 +1420,7 @@ class TransactionService {
 
   /**
    * Link messages to a transaction
-   * Sets transaction_id on the specified messages
+   * Sets transaction_id on the specified messages in the messages table
    */
   async linkMessages(messageIds: string[], transactionId: string): Promise<void> {
     // Verify transaction exists
@@ -1455,11 +1429,9 @@ class TransactionService {
       throw new Error("Transaction not found");
     }
 
-    // Update each message
+    // Update each message in the messages table
     for (const messageId of messageIds) {
-      await databaseService.updateCommunication(messageId, {
-        transaction_id: transactionId,
-      });
+      await databaseService.linkMessageToTransaction(messageId, transactionId);
     }
 
     // Update transaction message count
@@ -1488,16 +1460,14 @@ class TransactionService {
     const transactionCounts = new Map<string, number>();
 
     for (const messageId of messageIds) {
-      const message = await databaseService.getCommunicationById(messageId);
+      const message = await databaseService.getMessageById(messageId);
       if (message?.transaction_id) {
         const count = transactionCounts.get(message.transaction_id) || 0;
         transactionCounts.set(message.transaction_id, count + 1);
       }
 
-      // Remove the transaction link
-      await databaseService.updateCommunication(messageId, {
-        transaction_id: undefined,
-      });
+      // Remove the transaction link from messages table
+      await databaseService.unlinkMessageFromTransaction(messageId);
     }
 
     // Update transaction message counts

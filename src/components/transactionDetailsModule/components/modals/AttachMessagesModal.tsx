@@ -3,11 +3,11 @@
  * Modal for browsing and attaching unlinked message threads to a transaction
  */
 import React, { useState, useEffect, useMemo } from "react";
-import type { Communication } from "../../types";
 import {
   groupMessagesByThread,
   extractPhoneFromThread,
   sortThreadsByRecent,
+  type MessageLike,
 } from "../MessageThreadCard";
 
 interface AttachMessagesModalProps {
@@ -51,7 +51,7 @@ function formatPhoneNumber(phone: string): string {
 /**
  * Get most recent message date from a thread
  */
-function getThreadDate(messages: Communication[]): string {
+function getThreadDate(messages: MessageLike[]): string {
   const lastMsg = messages[messages.length - 1];
   const date = new Date(lastMsg?.sent_at || lastMsg?.received_at || 0);
   return date.toLocaleDateString(undefined, {
@@ -64,9 +64,10 @@ function getThreadDate(messages: Communication[]): string {
 /**
  * Get preview text from the most recent message
  */
-function getPreviewText(messages: Communication[]): string {
+function getPreviewText(messages: MessageLike[]): string {
   const lastMsg = messages[messages.length - 1];
-  const text = lastMsg?.body_text || lastMsg?.body || "";
+  // Use body_text (both types have this) or body (Communication only) as fallback
+  const text = lastMsg?.body_text || ("body" in lastMsg ? lastMsg.body : "") || "";
   if (text.length > 80) {
     return text.substring(0, 80) + "...";
   }
@@ -82,7 +83,7 @@ export function AttachMessagesModal({
 }: AttachMessagesModalProps): React.ReactElement {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [threads, setThreads] = useState<Map<string, Communication[]>>(new Map());
+  const [threads, setThreads] = useState<Map<string, MessageLike[]>>(new Map());
   const [selectedThreadIds, setSelectedThreadIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
   const [attaching, setAttaching] = useState(false);
@@ -94,7 +95,7 @@ export function AttachMessagesModal({
       setError(null);
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const result = await (window.api.transactions as any).getUnlinkedMessages(userId) as { success: boolean; messages?: Communication[]; error?: string };
+        const result = await (window.api.transactions as any).getUnlinkedMessages(userId) as { success: boolean; messages?: MessageLike[]; error?: string };
         if (result.success && result.messages) {
           const grouped = groupMessagesByThread(result.messages);
           setThreads(grouped);

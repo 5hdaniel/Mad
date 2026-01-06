@@ -959,6 +959,102 @@ class DatabaseService implements IDatabaseService {
   }
 
   // ============================================
+  // MESSAGES TABLE OPERATIONS (Direct queries for text messages)
+  // ============================================
+
+  /**
+   * Get unlinked text messages (SMS/iMessage) from the messages table
+   * These are messages not yet attached to any transaction
+   */
+  async getUnlinkedTextMessages(userId: string): Promise<Message[]> {
+    const db = this._ensureDb();
+    const sql = `
+      SELECT * FROM messages
+      WHERE user_id = ?
+        AND transaction_id IS NULL
+        AND channel IN ('sms', 'imessage')
+      ORDER BY sent_at DESC
+    `;
+    return db.prepare(sql).all(userId) as Message[];
+  }
+
+  /**
+   * Update a message in the messages table
+   */
+  async updateMessage(messageId: string, updates: Partial<Message>): Promise<void> {
+    const db = this._ensureDb();
+    const allowedFields = [
+      "transaction_id",
+      "transaction_link_confidence",
+      "transaction_link_source",
+      "is_transaction_related",
+      "classification_confidence",
+      "classification_method",
+      "classified_at",
+      "is_false_positive",
+      "false_positive_reason",
+      "stage_hint",
+      "stage_hint_source",
+      "stage_hint_confidence",
+      "llm_analysis",
+    ];
+
+    const entries = Object.entries(updates).filter(([key]) =>
+      allowedFields.includes(key)
+    );
+
+    if (entries.length === 0) return;
+
+    const setClause = entries.map(([key]) => `${key} = ?`).join(", ");
+    const values = entries.map(([, value]) => value);
+    values.push(messageId);
+
+    db.prepare(`UPDATE messages SET ${setClause} WHERE id = ?`).run(...values);
+  }
+
+  /**
+   * Link a message to a transaction
+   */
+  async linkMessageToTransaction(messageId: string, transactionId: string): Promise<void> {
+    const db = this._ensureDb();
+    db.prepare(`UPDATE messages SET transaction_id = ? WHERE id = ?`).run(
+      transactionId,
+      messageId
+    );
+  }
+
+  /**
+   * Unlink a message from a transaction
+   */
+  async unlinkMessageFromTransaction(messageId: string): Promise<void> {
+    const db = this._ensureDb();
+    db.prepare(`UPDATE messages SET transaction_id = NULL WHERE id = ?`).run(messageId);
+  }
+
+  /**
+   * Get messages linked to a transaction
+   */
+  async getMessagesByTransaction(transactionId: string): Promise<Message[]> {
+    const db = this._ensureDb();
+    const sql = `
+      SELECT * FROM messages
+      WHERE transaction_id = ?
+      ORDER BY sent_at DESC
+    `;
+    return db.prepare(sql).all(transactionId) as Message[];
+  }
+
+  /**
+   * Get a single message by ID
+   */
+  async getMessageById(messageId: string): Promise<Message | null> {
+    const db = this._ensureDb();
+    const sql = `SELECT * FROM messages WHERE id = ?`;
+    const result = db.prepare(sql).get(messageId) as Message | undefined;
+    return result || null;
+  }
+
+  // ============================================
   // UTILITY OPERATIONS
   // ============================================
 

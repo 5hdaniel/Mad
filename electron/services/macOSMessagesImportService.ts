@@ -274,21 +274,15 @@ class MacOSMessagesImportService {
       MacOSMessagesImportService.SERVICE_NAME
     );
 
-    // Prepare insert statements for both messages and communications tables
+    // Prepare insert statement for messages table only
+    // Note: We no longer need to insert into communications table - that's only for
+    // messages that are linked to transactions. The UI now queries messages directly.
     const insertMessageStmt = db.prepare(`
       INSERT OR IGNORE INTO messages (
         id, user_id, channel, external_id, direction,
         body_text, participants, thread_id, sent_at,
         has_attachments, metadata, created_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-    `);
-
-    // Communications table entry (links to messages, makes them visible in UI)
-    const insertCommStmt = db.prepare(`
-      INSERT OR IGNORE INTO communications (
-        id, user_id, message_id, communication_type,
-        sender, body, sent_at, link_source, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, 'auto', CURRENT_TIMESTAMP)
     `);
 
     // Process in batches
@@ -373,11 +367,10 @@ class MacOSMessagesImportService {
           });
 
           try {
-            // Generate IDs for both tables
+            // Generate ID for message
             const messageId = crypto.randomUUID();
-            const commId = crypto.randomUUID();
 
-            // Insert into messages table
+            // Insert into messages table only
             insertMessageStmt.run(
               messageId, // id
               userId, // user_id
@@ -390,19 +383,6 @@ class MacOSMessagesImportService {
               sentAt.toISOString(), // sent_at
               msg.cache_has_attachments > 0 ? 1 : 0, // has_attachments
               metadata // metadata
-            );
-
-            // Also insert into communications table (makes message visible in UI)
-            const commType = channel === "imessage" ? "imessage" : "text";
-            const sender = msg.is_from_me === 1 ? "me" : sanitizedHandle;
-            insertCommStmt.run(
-              commId, // id
-              userId, // user_id
-              messageId, // message_id (reference to messages table)
-              commType, // communication_type
-              sender, // sender
-              sanitizedText, // body
-              sentAt.toISOString() // sent_at
             );
 
             stored++;
