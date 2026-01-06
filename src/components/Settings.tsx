@@ -271,9 +271,8 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
           </button>
         </div>
 
-        {/* Settings Content - Scrollable area with inset scrollbar */}
-        <div className="flex-1 min-h-0 overflow-hidden px-2">
-          <div className="h-full overflow-y-auto px-4 py-6">
+        {/* Settings Content - Scrollable area */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6">
             {/* General Settings */}
             <div className="mb-8">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">
@@ -708,7 +707,6 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
                 </div>
               </div>
             </div>
-          </div>
         </div>
 
         {/* Footer */}
