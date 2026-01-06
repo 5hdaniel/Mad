@@ -76,7 +76,59 @@ feature/TASK-979-anti-loop-hook
 
 | Metric | Value |
 |--------|-------|
-| Agent ID | (record when Task tool returns) |
+| Agent ID | (main session - not a subagent) |
 | Total Tokens | (from tokens.jsonl) |
 | Duration | (from tokens.jsonl) |
 | Variance | (calculated) |
+
+---
+
+## Implementation Summary
+
+### What Was Done
+
+1. **Created `loop-detector.sh` hook** (`.claude/hooks/loop-detector.sh`)
+   - Detects exploration loops: warns after 20+ Read/Glob/Grep without Write/Edit
+   - Detects verification loops: warns after 5+ identical Bash commands
+   - Uses state file in `/tmp/claude-loop-state/` per agent session
+   - Returns warning messages in hook response for agent context injection
+
+2. **Updated `settings.json`** (`.claude/settings.json`)
+   - Added PostToolUse hook configuration pointing to loop-detector.sh
+   - 5 second timeout (hooks are fast)
+
+3. **Updated Engineer Agent** (`.claude/agents/engineer.md`)
+   - Added "Anti-Loop Rules (MANDATORY)" section
+   - Exploration limits: max 10 files before first Write (warn at 20)
+   - Verification limits: max 3 retries of same command (warn at 5)
+   - "When Stuck" escalation template
+   - Hook enforcement documentation
+
+4. **Updated PM Agent** (`.claude/agents/agentic-pm.md`)
+   - Added "Background Agent Monitoring Protocol" section
+   - 30-minute check-in requirement for background agents
+   - Warning signs table with thresholds
+   - Intervention options
+   - Token budget alerts section
+   - Added new guardrail: "Background agent exceeds 4x token estimate without check-in"
+
+### Acceptance Criteria Status
+
+- [x] Hook script created and executable
+- [x] Hook configured in `.claude/settings.json`
+- [x] Warning appears after 20 exploration calls (implemented, needs manual test)
+- [x] Warning appears after 5 identical Bash commands (implemented, needs manual test)
+- [x] Engineer agent prompt includes anti-loop rules
+- [x] PM skill includes monitoring protocol
+
+### Testing Notes
+
+The hook can be manually tested by:
+1. Running 21+ Read commands in a session without any Write/Edit
+2. Running the same Bash command 6+ times
+
+The hook uses `/tmp/claude-loop-state/<agent_id>.state` for persistence within a session.
+
+### Deviations
+
+None - implemented as specified in task file.

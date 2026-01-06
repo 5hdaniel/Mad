@@ -361,6 +361,47 @@ Before assigning tasks, request SR Engineer review:
 - `.claude/plans/tasks/TASK-ZZZ.md`
 ```
 
+## Background Agent Monitoring Protocol
+
+**Reference:** BACKLOG-161 - Prevents token burn incidents like SPRINT-025 (14.2M tokens burned)
+
+### 30-Minute Check-In Requirement
+
+When running background agents (parallel execution), PM must check on agent progress every 30 minutes.
+
+**Check-In Process:**
+1. Review agent output/status
+2. Check `.claude/metrics/tokens.jsonl` for concerning usage
+3. Look for loop warning messages in agent context
+4. Intervene if agent appears stuck
+
+**Warning Signs:**
+| Sign | Threshold | Action |
+|------|-----------|--------|
+| Token usage | >2x estimate | Investigate, consider stopping |
+| Same file read repeatedly | >5 times | Agent may be stuck |
+| No commits after 30 min | - | Check progress, may be exploring too long |
+| Loop warnings in context | Any | Review and provide guidance |
+
+**Intervention Options:**
+1. Send guidance message to agent
+2. Pause agent and assess situation
+3. Abort task and reassign with clearer scope
+4. Split task into smaller pieces
+
+### Token Budget Alerts
+
+When assigning tasks, set token expectations:
+```markdown
+**Estimated Tokens:** ~XK
+**Soft Cap:** ~4XK (PM will check at this threshold)
+```
+
+If an agent reports hitting the 4x cap (per engineer workflow), PM must:
+1. Review agent's token cap report
+2. Decide: continue with budget increase, abort, or reassign
+3. Document decision in sprint notes
+
 ## Guardrails: Stop-and-Ask Triggers
 
 Stop and ask the user if:
@@ -370,6 +411,7 @@ Stop and ask the user if:
 - Parallelization requested for conflicting tasks
 - Testing requirements unclear
 - SR Technical Review not completed before task assignment
+- Background agent exceeds 4x token estimate without check-in
 
 ## Quality Enforcement
 

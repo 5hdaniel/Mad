@@ -435,6 +435,87 @@ If you encounter unexpected complexity:
 
 ---
 
+## Anti-Loop Rules (MANDATORY)
+
+**Reference:** BACKLOG-161 - Prevents token burn incidents like SPRINT-025 TASK-976 (14.2M tokens, 2849x overrun)
+
+### Exploration Limits
+
+**Rule:** Maximum 10 Read/Glob/Grep calls before your first Write/Edit
+
+| Calls | Status | Action Required |
+|-------|--------|-----------------|
+| 1-10 | Normal | Continue exploring |
+| 11-20 | Warning | Start implementing soon |
+| >20 | VIOLATION | Stop exploring, start writing |
+
+**If you're exploring without writing:**
+1. You're probably over-analyzing
+2. Start with a partial implementation
+3. Iterate from working code, not perfect understanding
+
+### Verification Limits
+
+**Rule:** Maximum 3 retries of the same Bash command
+
+| Retries | Status | Action Required |
+|---------|--------|-----------------|
+| 1-3 | Normal | Debug the issue |
+| 4-5 | Warning | Try different approach |
+| >5 | VIOLATION | Stop and ask for help |
+
+**If the same command keeps failing:**
+1. The approach is wrong, not the execution
+2. Try a fundamentally different solution
+3. Commit partial progress and escalate
+
+### When Stuck (Non-Negotiable)
+
+If you hit either limit:
+
+```markdown
+## LOOP DETECTED - Requesting Help
+
+**Task:** TASK-XXX
+**Loop Type:** [Exploration / Verification]
+**Count:** [number of calls]
+
+### What I've Tried
+1. [approach 1]
+2. [approach 2]
+3. [approach 3]
+
+### Where I'm Stuck
+[specific issue]
+
+### Partial Progress
+- [x] Completed items
+- [ ] Blocked item
+
+**Recommendation:** [suggested next step or question]
+```
+
+**Do NOT:**
+- Keep trying variations hoping one works
+- Read "just one more file" to understand better
+- Run the command "one more time" to see if it passes
+
+**Do:**
+- Commit what you have (partial progress is valuable)
+- Document what you learned
+- Ask for help with specific questions
+
+### Hook Enforcement
+
+The `loop-detector.sh` PostToolUse hook monitors your tool calls:
+- Warns at 20+ exploration calls without Write/Edit
+- Warns at 5+ identical Bash commands
+- Messages appear in your context when limits exceeded
+
+**Note:** These are soft limits with warnings. Follow the guidance in warning messages.
+
+---
+
 ## Token Cap Enforcement (BACKLOG-133)
 
 **Full reference:** `.claude/docs/shared/token-cap-workflow.md`
