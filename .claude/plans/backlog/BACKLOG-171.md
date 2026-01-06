@@ -3,7 +3,8 @@
 **Created**: 2026-01-05
 **Priority**: High
 **Category**: Bug Fix
-**Status**: Pending
+**Status**: In Sprint
+**Assigned To**: TASK-995 (SPRINT-027)
 
 ---
 
