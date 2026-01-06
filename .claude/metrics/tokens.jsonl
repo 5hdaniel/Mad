@@ -1127,3 +1127,33 @@
   "started_at": "2026-01-05T18:51:06.296Z",
   "ended_at": "2026-01-05T18:52:45.910Z"
 }
+{
+  "timestamp": "2026-01-05T23:52:34Z",
+  "session_id": "23d51c74-1e7d-4830-a784-10a68bd660c2",
+  "agent_id": "a16f798",
+  "input_tokens": 3,
+  "output_tokens": 8,
+  "cache_read": 0,
+  "cache_create": 4535,
+  "billable_tokens": 4543,
+  "total_tokens": 4546,
+  "api_calls": 1,
+  "duration_secs": 2,
+  "started_at": "2026-01-05T23:52:32.283Z",
+  "ended_at": "2026-01-05T23:52:34.579Z"
+}
+{
+  "timestamp": "2026-01-05T23:52:35Z",
+  "session_id": "23d51c74-1e7d-4830-a784-10a68bd660c2",
+  "agent_id": "ad8e6d2",
+  "input_tokens": 3,
+  "output_tokens": 1,
+  "cache_read": 0,
+  "cache_create": 4407,
+  "billable_tokens": 4408,
+  "total_tokens": 4411,
+  "api_calls": 1,
+  "duration_secs": 3,
+  "started_at": "2026-01-05T23:52:32.280Z",
+  "ended_at": "2026-01-05T23:52:35.840Z"
+}

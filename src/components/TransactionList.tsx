@@ -214,8 +214,8 @@ function TransactionList({
   const handleTransactionClick = (transaction: Transaction): void => {
     if (selectionMode) {
       toggleSelection(transaction.id);
-    } else if (transaction.detection_status === "pending") {
-      // Pending transactions open in review mode with approve/reject buttons
+    } else if (transaction.detection_status === "pending" || transaction.status === "pending") {
+      // Pending transactions open in review mode with approve/reject/edit buttons
       setPendingReviewTransaction(transaction);
     } else {
       setSelectedTransaction(transaction);
@@ -317,7 +317,7 @@ function TransactionList({
         ) : (
           <div className="grid gap-6">
             {filteredTransactions.map((transaction) => {
-              const isPending = transaction.detection_status === "pending";
+              const isPending = transaction.detection_status === "pending" || transaction.status === "pending";
               const isRejected = transaction.detection_status === "rejected";
 
               // Handle wrapper action button click based on status

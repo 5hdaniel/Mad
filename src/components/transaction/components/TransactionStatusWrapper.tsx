@@ -86,7 +86,8 @@ export function getStatusConfig(transaction: Transaction): StatusConfig {
   const status = transaction.status;
 
   // Pending Review - Amber
-  if (detectionStatus === "pending") {
+  // Show pending styling if EITHER detection_status OR status is "pending"
+  if (detectionStatus === "pending" || status === "pending") {
     return {
       label: "Pending Review",
       headerBg: "bg-gradient-to-r from-amber-50 to-orange-50",
