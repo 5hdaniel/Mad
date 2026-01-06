@@ -4,14 +4,19 @@
  * and a scrollable list of messages.
  */
 import React from "react";
-import type { Communication } from "../types";
+import type { Communication, Message } from "../types";
 import { MessageBubble } from "./MessageBubble";
+
+/**
+ * Union type for messages - can be from messages table or communications table
+ */
+export type MessageLike = Message | Communication;
 
 export interface MessageThreadCardProps {
   /** Unique identifier for the thread */
   threadId: string;
   /** Messages in this thread, sorted chronologically */
-  messages: Communication[];
+  messages: MessageLike[];
   /** Contact name if available */
   contactName?: string;
   /** Phone number or identifier for the thread */
@@ -113,9 +118,9 @@ export function MessageThreadCard({
  * Messages without a thread_id are grouped by their own id.
  */
 export function groupMessagesByThread(
-  messages: Communication[]
-): Map<string, Communication[]> {
-  const threads = new Map<string, Communication[]>();
+  messages: MessageLike[]
+): Map<string, MessageLike[]> {
+  const threads = new Map<string, MessageLike[]>();
 
   messages.forEach((msg) => {
     const threadId = msg.thread_id || msg.id;
@@ -143,12 +148,12 @@ export function groupMessagesByThread(
  * Utility function to extract phone number from thread messages.
  * Looks at participants to find the external phone number.
  */
-export function extractPhoneFromThread(messages: Communication[]): string {
+export function extractPhoneFromThread(messages: MessageLike[]): string {
   for (const msg of messages) {
     // Try to parse participants JSON
     if (msg.participants) {
       try {
-        const participants = JSON.parse(msg.participants);
+        const participants = JSON.parse(msg.participants as string);
         // For inbound messages, "from" is the external phone
         // For outbound messages, "to" contains the external phone
         if (msg.direction === "inbound" && participants.from) {
@@ -162,8 +167,8 @@ export function extractPhoneFromThread(messages: Communication[]): string {
       }
     }
 
-    // Fallback to legacy sender field
-    if (msg.sender) {
+    // Fallback to legacy sender field (only on Communication type)
+    if ("sender" in msg && msg.sender) {
       return msg.sender;
     }
   }
@@ -175,8 +180,8 @@ export function extractPhoneFromThread(messages: Communication[]): string {
  * Sort threads by most recent message (newest first).
  */
 export function sortThreadsByRecent(
-  threads: Map<string, Communication[]>
-): [string, Communication[]][] {
+  threads: Map<string, MessageLike[]>
+): [string, MessageLike[]][] {
   return Array.from(threads.entries()).sort(([, msgsA], [, msgsB]) => {
     const lastA = msgsA[msgsA.length - 1];
     const lastB = msgsB[msgsB.length - 1];
