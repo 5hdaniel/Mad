@@ -96,6 +96,7 @@ export function TransactionHeader({
           <ActiveActions
             isRejecting={isRejecting}
             onShowRejectReasonModal={onShowRejectReasonModal}
+            onShowEditModal={onShowEditModal}
             onShowExportModal={onShowExportModal}
             onShowDeleteConfirm={onShowDeleteConfirm}
           />
@@ -227,16 +228,28 @@ function RejectedActions({
 function ActiveActions({
   isRejecting,
   onShowRejectReasonModal,
+  onShowEditModal,
   onShowExportModal,
   onShowDeleteConfirm,
 }: {
   isRejecting: boolean;
   onShowRejectReasonModal: () => void;
+  onShowEditModal: () => void;
   onShowExportModal: () => void;
   onShowDeleteConfirm: () => void;
 }) {
   return (
     <>
+      {/* Edit Button */}
+      <button
+        onClick={onShowEditModal}
+        className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-white text-green-600 hover:bg-opacity-90 shadow-md hover:shadow-lg"
+      >
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+        </svg>
+        Edit
+      </button>
       {/* Reject Button */}
       <button
         onClick={onShowRejectReasonModal}
