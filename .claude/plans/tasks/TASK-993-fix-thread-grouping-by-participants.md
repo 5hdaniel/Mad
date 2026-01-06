@@ -4,6 +4,7 @@
 **Priority**: 1 (Blocking - must fix before other tasks)
 **Estimated Tokens**: ~15,000
 **Phase**: Phase 0 (Pre-requisite)
+**Status**: IN PROGRESS - Initial fix attempted, needs further debugging
 
 ---
 
@@ -20,12 +21,27 @@ When selecting a contact in AttachMessagesModal, messages should be grouped into
 - "Group Chat: Paul Dorian, Alice, Bob" (3-person group)
 - "Group Chat: Paul Dorian, Charlie" (different 2-person group)
 
-## Root Cause Investigation
+## Work Done So Far
 
-The `getParticipantKey()` function in `MessageThreadCard.tsx` attempts to group by participant set, but:
-1. May not be parsing participants JSON correctly from the messages table
-2. Phone number normalization may be too aggressive or inconsistent
-3. The "me" identifier may vary (could be actual phone number, email, or literal "me")
+1. Changed `groupMessagesByThread` to prioritize `thread_id` field over participant-based grouping
+2. Added `getThreadKey()` function that uses `thread_id` (format: `macos-chat-{chat_id}`) first
+3. **Result**: Still not working correctly - messages still clustering into one thread
+
+## Root Cause Investigation (Still Needed)
+
+Possible issues:
+1. **`thread_id` not populated**: Messages may not have `thread_id` field set in the database
+2. **Query not returning thread_id**: The `getMessagesByContact` query may not be selecting `thread_id`
+3. **Type issue**: `thread_id` may not be on the `MessageLike` type being returned
+4. **Participant fallback not working**: When `thread_id` is null, participant-based grouping failing
+
+## Debug Steps Required
+
+1. Log actual message data returned from `getMessagesByContact` to see:
+   - Is `thread_id` populated?
+   - What does `participants` JSON look like?
+2. Check if messages table has `thread_id` values via SQL query
+3. Verify `Message` type includes `thread_id` field
 
 ## Technical Details
 
@@ -33,13 +49,17 @@ The `getParticipantKey()` function in `MessageThreadCard.tsx` attempts to group 
 
 **Current Implementation**:
 ```typescript
-function getParticipantKey(msg: MessageLike): string {
-  // Parses participants, normalizes phones, removes "me"
-  // Returns sorted participant list joined by "|"
+function getThreadKey(msg: MessageLike): string {
+  // FIRST: Use thread_id if available
+  if (msg.thread_id) {
+    return msg.thread_id;
+  }
+  // FALLBACK: Compute from participants
+  // ... normalize and join participants
 }
 ```
 
-**Data Source**: Messages from `getMessagesByContact` query which filters by contact appearing in participants JSON.
+**Data Source**: Messages from `getMessagesByContact` query
 
 ## Acceptance Criteria
 
@@ -51,10 +71,11 @@ function getParticipantKey(msg: MessageLike): string {
 
 ## Implementation Steps
 
-1. Debug: Log participant data to understand actual structure
-2. Fix `getParticipantKey` to handle real data format
-3. Handle variations in "me" identifier (phone, email, literal)
-4. Test with real data from user's message database
+1. **Debug**: Add console.log to see actual data structure returned from API
+2. **Verify DB**: Check if `thread_id` is populated in messages table
+3. **Fix query**: Ensure `getMessagesByContact` returns `thread_id`
+4. **Fix types**: Ensure `Message` type has `thread_id` property
+5. **Test**: Verify grouping works correctly with real data
 
 ## Dependencies
 
@@ -63,6 +84,7 @@ function getParticipantKey(msg: MessageLike): string {
 ## Files to Modify
 
 - `src/components/transactionDetailsModule/components/MessageThreadCard.tsx`
-- Possibly: `electron/services/db/databaseService.ts` (if query needs adjustment)
+- `electron/services/db/databaseService.ts` (getMessagesByContact query)
+- Possibly: Type definitions for Message
 
 ---

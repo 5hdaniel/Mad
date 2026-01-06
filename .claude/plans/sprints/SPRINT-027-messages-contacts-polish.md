@@ -35,17 +35,17 @@ Before starting sprint work, engineers must:
 
 | ID | Title | Priority | Status | Rationale | Dependencies |
 |----|-------|----------|--------|-----------|--------------|
-| TASK-993 | Thread grouping fix | 0 | **COMPLETED** | Blocking: threads must group correctly | None |
-| TASK-990 | Auto-linked messages display | 1 | Pending | Core bug: auto-linked messages invisible | None |
+| TASK-993 | Thread grouping fix | 0 | **IN PROGRESS** | Blocking: threads must group correctly | None |
+| TASK-990 | Auto-linked messages display | 1 | Pending | Core bug: auto-linked messages invisible | TASK-993 |
 | TASK-991 | Manual thread management | 2 | Pending | Completes attach/unlink workflow | TASK-990 |
 | TASK-992 | Message bubble direction | 3 | Pending | Visual polish, simpler fix | None |
 | TASK-994 | Multiple contacts per role | 4 | Pending | Bug: only one contact saves when assigning multiple | None |
 
 ## Phase Plan
 
-### Phase 0: Pre-requisite (COMPLETED)
+### Phase 0: Pre-requisite (IN PROGRESS)
 
-- ~~TASK-993: Thread grouping fix~~ **DONE** - Messages now group by iMessage chat_id
+- TASK-993: Thread grouping fix - Group messages by iMessage chat_id (needs debugging)
 
 ### Phase 1: Core Fixes (Parallelizable)
 
@@ -234,16 +234,16 @@ The following MUST pass before merge:
 
 | Task | Category | Base Est. | Multiplier | Final Est. | Status |
 |------|----------|-----------|------------|------------|--------|
-| TASK-993 | service | ~15K | 1.0x | ~15K | **DONE** |
+| TASK-993 | service | ~15K | 1.0x | ~15K | In Progress |
 | TASK-990 | service | ~30K | 0.5x | ~15K | Pending |
 | TASK-991 | ui | ~30K | 1.0x | ~30K | Pending |
 | TASK-992 | ui | ~10K | 1.0x | ~10K | Pending |
 | TASK-994 | ui/service | ~12K | 1.0x | ~12K | Pending |
 | **Total** | | | | **~82K** | |
 
-Add SR Review overhead: +40K (4 pending tasks x ~10K each)
+Add SR Review overhead: +50K (5 tasks x ~10K each)
 
-**Total Sprint Estimate: ~122K tokens** (including completed TASK-993)
+**Total Sprint Estimate: ~132K tokens**
 
 ## End-of-Sprint Validation Checklist
 
