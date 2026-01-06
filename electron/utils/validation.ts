@@ -399,6 +399,11 @@ export function validateContactData(
  */
 export interface ValidatedTransactionData {
   property_address?: string | null;
+  property_street?: string | null;
+  property_city?: string | null;
+  property_state?: string | null;
+  property_zip?: string | null;
+  property_coordinates?: string | null;
   transaction_type?: string;
   amount?: number;
   status?: string;
@@ -412,6 +417,17 @@ export interface ValidatedTransactionData {
   detection_status?: string;
   reviewed_at?: string;
   rejection_reason?: string | null;
+  // Contact assignments (for audited transaction creation)
+  contact_assignments?: ContactAssignmentData[];
+}
+
+// Contact assignment data for transaction creation
+export interface ContactAssignmentData {
+  contact_id: string;
+  role: string;
+  role_category?: string;
+  is_primary?: number;
+  notes?: string | null;
 }
 
 /**
@@ -419,6 +435,11 @@ export interface ValidatedTransactionData {
  */
 export interface RawTransactionData {
   property_address?: unknown;
+  property_street?: unknown;
+  property_city?: unknown;
+  property_state?: unknown;
+  property_zip?: unknown;
+  property_coordinates?: unknown;
   transaction_type?: unknown;
   amount?: unknown;
   status?: unknown;
@@ -432,6 +453,8 @@ export interface RawTransactionData {
   detection_status?: unknown;
   reviewed_at?: unknown;
   rejection_reason?: unknown;
+  // Contact assignments
+  contact_assignments?: unknown;
 }
 
 /**
@@ -466,6 +489,44 @@ export function validateTransactionData(
         maxLength: 500,
       },
     );
+  }
+
+  // Property address components (optional)
+  if (data.property_street !== undefined) {
+    validated.property_street = validateString(
+      data.property_street,
+      "property_street",
+      { required: false, maxLength: 200 },
+    );
+  }
+  if (data.property_city !== undefined) {
+    validated.property_city = validateString(
+      data.property_city,
+      "property_city",
+      { required: false, maxLength: 100 },
+    );
+  }
+  if (data.property_state !== undefined) {
+    validated.property_state = validateString(
+      data.property_state,
+      "property_state",
+      { required: false, maxLength: 100 },
+    );
+  }
+  if (data.property_zip !== undefined) {
+    validated.property_zip = validateString(
+      data.property_zip,
+      "property_zip",
+      { required: false, maxLength: 20 },
+    );
+  }
+  if (data.property_coordinates !== undefined) {
+    // Can be a string (JSON) or null
+    if (data.property_coordinates === null) {
+      validated.property_coordinates = null;
+    } else if (typeof data.property_coordinates === "string") {
+      validated.property_coordinates = data.property_coordinates;
+    }
   }
 
   // Transaction type
@@ -626,6 +687,29 @@ export function validateTransactionData(
         maxLength: 1000,
       },
     );
+  }
+
+  // Contact assignments (for audited transaction creation)
+  if (data.contact_assignments !== undefined && Array.isArray(data.contact_assignments)) {
+    validated.contact_assignments = data.contact_assignments.map((assignment: unknown) => {
+      if (typeof assignment !== "object" || assignment === null) {
+        throw new ValidationError("Contact assignment must be an object", "contact_assignments");
+      }
+      const a = assignment as { contact_id?: unknown; role?: unknown; role_category?: unknown; is_primary?: unknown; notes?: unknown };
+      if (!a.contact_id || typeof a.contact_id !== "string") {
+        throw new ValidationError("Contact assignment must have a valid contact_id", "contact_assignments");
+      }
+      if (!a.role || typeof a.role !== "string") {
+        throw new ValidationError("Contact assignment must have a valid role", "contact_assignments");
+      }
+      return {
+        contact_id: a.contact_id,
+        role: a.role,
+        role_category: typeof a.role_category === "string" ? a.role_category : undefined,
+        is_primary: typeof a.is_primary === "number" ? a.is_primary : 0,
+        notes: typeof a.notes === "string" ? a.notes : null,
+      };
+    });
   }
 
   return validated;
