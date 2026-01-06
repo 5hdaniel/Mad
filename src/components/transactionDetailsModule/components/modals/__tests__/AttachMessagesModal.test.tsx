@@ -39,11 +39,13 @@ describe("AttachMessagesModal", () => {
   const mockContacts = [
     {
       contact: "+14155550100",
+      contactName: "John Doe",
       messageCount: 5,
       lastMessageAt: "2024-01-18T10:00:00Z",
     },
     {
       contact: "+14155550200",
+      contactName: null,
       messageCount: 3,
       lastMessageAt: "2024-01-17T12:00:00Z",
     },
@@ -127,7 +129,7 @@ describe("AttachMessagesModal", () => {
       render(<AttachMessagesModal {...defaultProps} />);
       await waitFor(() => {
         expect(
-          screen.getByPlaceholderText(/Search by phone number/i)
+          screen.getByPlaceholderText(/Search by name or phone number/i)
         ).toBeInTheDocument();
       });
     });
@@ -186,8 +188,8 @@ describe("AttachMessagesModal", () => {
       render(<AttachMessagesModal {...defaultProps} />);
 
       await waitFor(() => {
-        // Should show formatted phone numbers (11-digit with +1 prefix)
-        expect(screen.getByText("+1 (415) 555-0100")).toBeInTheDocument();
+        // Should show contact name for first contact, phone for second (no name)
+        expect(screen.getByText("John Doe")).toBeInTheDocument();
         expect(screen.getByText("+1 (415) 555-0200")).toBeInTheDocument();
       });
     });
@@ -215,15 +217,15 @@ describe("AttachMessagesModal", () => {
       render(<AttachMessagesModal {...defaultProps} />);
 
       await waitFor(() => {
-        expect(screen.getByText("+1 (415) 555-0100")).toBeInTheDocument();
+        expect(screen.getByText("John Doe")).toBeInTheDocument();
       });
 
-      // Type search query
-      const searchInput = screen.getByPlaceholderText(/Search by phone number/i);
-      fireEvent.change(searchInput, { target: { value: "0100" } });
+      // Type search query (search by name)
+      const searchInput = screen.getByPlaceholderText(/Search by name or phone number/i);
+      fireEvent.change(searchInput, { target: { value: "John" } });
 
       // Should only show matching contact
-      expect(screen.getByText("+1 (415) 555-0100")).toBeInTheDocument();
+      expect(screen.getByText("John Doe")).toBeInTheDocument();
       expect(screen.queryByText("+1 (415) 555-0200")).not.toBeInTheDocument();
     });
   });
@@ -243,11 +245,11 @@ describe("AttachMessagesModal", () => {
 
       // Wait for contacts to load
       await waitFor(() => {
-        expect(screen.getByText("+1 (415) 555-0100")).toBeInTheDocument();
+        expect(screen.getByText("John Doe")).toBeInTheDocument();
       });
 
       // Click on a contact
-      fireEvent.click(screen.getByText("+1 (415) 555-0100"));
+      fireEvent.click(screen.getByText("John Doe"));
 
       // Should call getMessagesByContact
       await waitFor(() => {
@@ -271,11 +273,11 @@ describe("AttachMessagesModal", () => {
       render(<AttachMessagesModal {...defaultProps} />);
 
       await waitFor(() => {
-        expect(screen.getByText("+1 (415) 555-0100")).toBeInTheDocument();
+        expect(screen.getByText("John Doe")).toBeInTheDocument();
       });
 
       // Click on a contact
-      fireEvent.click(screen.getByText("+1 (415) 555-0100"));
+      fireEvent.click(screen.getByText("John Doe"));
 
       await waitFor(() => {
         expect(screen.getByTestId("back-button")).toBeInTheDocument();
@@ -295,11 +297,11 @@ describe("AttachMessagesModal", () => {
       render(<AttachMessagesModal {...defaultProps} />);
 
       await waitFor(() => {
-        expect(screen.getByText("+1 (415) 555-0100")).toBeInTheDocument();
+        expect(screen.getByText("John Doe")).toBeInTheDocument();
       });
 
       // Click on a contact
-      fireEvent.click(screen.getByText("+1 (415) 555-0100"));
+      fireEvent.click(screen.getByText("John Doe"));
 
       await waitFor(() => {
         expect(screen.getByTestId("back-button")).toBeInTheDocument();
@@ -329,10 +331,10 @@ describe("AttachMessagesModal", () => {
       render(<AttachMessagesModal {...defaultProps} />);
 
       await waitFor(() => {
-        expect(screen.getByText("+1 (415) 555-0100")).toBeInTheDocument();
+        expect(screen.getByText("John Doe")).toBeInTheDocument();
       });
 
-      fireEvent.click(screen.getByText("+1 (415) 555-0100"));
+      fireEvent.click(screen.getByText("John Doe"));
 
       await waitFor(() => {
         expect(screen.getByTestId("thread-thread-1")).toBeInTheDocument();
@@ -358,10 +360,10 @@ describe("AttachMessagesModal", () => {
       render(<AttachMessagesModal {...defaultProps} />);
 
       await waitFor(() => {
-        expect(screen.getByText("+1 (415) 555-0100")).toBeInTheDocument();
+        expect(screen.getByText("John Doe")).toBeInTheDocument();
       });
 
-      fireEvent.click(screen.getByText("+1 (415) 555-0100"));
+      fireEvent.click(screen.getByText("John Doe"));
 
       await waitFor(() => {
         expect(screen.getByTestId("attach-button")).toBeInTheDocument();
@@ -383,10 +385,10 @@ describe("AttachMessagesModal", () => {
       render(<AttachMessagesModal {...defaultProps} />);
 
       await waitFor(() => {
-        expect(screen.getByText("+1 (415) 555-0100")).toBeInTheDocument();
+        expect(screen.getByText("John Doe")).toBeInTheDocument();
       });
 
-      fireEvent.click(screen.getByText("+1 (415) 555-0100"));
+      fireEvent.click(screen.getByText("John Doe"));
 
       await waitFor(() => {
         expect(screen.getByTestId("thread-thread-1")).toBeInTheDocument();
@@ -420,10 +422,10 @@ describe("AttachMessagesModal", () => {
       render(<AttachMessagesModal {...defaultProps} />);
 
       await waitFor(() => {
-        expect(screen.getByText("+1 (415) 555-0100")).toBeInTheDocument();
+        expect(screen.getByText("John Doe")).toBeInTheDocument();
       });
 
-      fireEvent.click(screen.getByText("+1 (415) 555-0100"));
+      fireEvent.click(screen.getByText("John Doe"));
 
       await waitFor(() => {
         expect(screen.getByTestId("thread-thread-1")).toBeInTheDocument();

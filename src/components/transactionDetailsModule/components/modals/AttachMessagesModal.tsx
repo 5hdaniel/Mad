@@ -25,6 +25,7 @@ interface AttachMessagesModalProps {
 
 interface ContactInfo {
   contact: string;
+  contactName: string | null;
   messageCount: number;
   lastMessageAt: string;
 }
@@ -96,6 +97,7 @@ export function AttachMessagesModal({
 
   // Selected contact state
   const [selectedContact, setSelectedContact] = useState<string | null>(null);
+  const [selectedContactName, setSelectedContactName] = useState<string | null>(null);
 
   // Threads state (for selected contact)
   const [threads, setThreads] = useState<Map<string, MessageLike[]>>(new Map());
@@ -165,13 +167,14 @@ export function AttachMessagesModal({
     loadContactMessages();
   }, [userId, selectedContact]);
 
-  // Filter contacts by search
+  // Filter contacts by search (name or phone number)
   const filteredContacts = useMemo(() => {
     if (!searchQuery.trim()) return contacts;
     const query = searchQuery.toLowerCase();
     return contacts.filter((c) =>
       c.contact.toLowerCase().includes(query) ||
-      formatPhoneNumber(c.contact).toLowerCase().includes(query)
+      formatPhoneNumber(c.contact).toLowerCase().includes(query) ||
+      (c.contactName && c.contactName.toLowerCase().includes(query))
     );
   }, [contacts, searchQuery]);
 
@@ -180,14 +183,16 @@ export function AttachMessagesModal({
     return sortThreadsByRecent(threads);
   }, [threads]);
 
-  const handleSelectContact = (contact: string) => {
+  const handleSelectContact = (contact: string, contactName: string | null) => {
     setSelectedContact(contact);
+    setSelectedContactName(contactName);
     setSelectedThreadIds(new Set());
   };
 
   const handleBackToContacts = () => {
     setView("contacts");
     setSelectedContact(null);
+    setSelectedContactName(null);
     setThreads(new Map());
     setSelectedThreadIds(new Set());
   };
@@ -267,7 +272,9 @@ export function AttachMessagesModal({
             )}
             <div>
               <h3 className="text-lg font-bold text-white">
-                {view === "contacts" ? "Select Contact" : formatPhoneNumber(selectedContact || "")}
+                {view === "contacts"
+                  ? "Select Contact"
+                  : selectedContactName || formatPhoneNumber(selectedContact || "")}
               </h3>
               <p className="text-green-100 text-sm">
                 {propertyAddress
@@ -295,7 +302,7 @@ export function AttachMessagesModal({
             <div className="relative">
               <input
                 type="text"
-                placeholder="Search by phone number..."
+                placeholder="Search by name or phone number..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
@@ -373,24 +380,27 @@ export function AttachMessagesModal({
                   {filteredContacts.map((contact) => (
                     <button
                       key={contact.contact}
-                      onClick={() => handleSelectContact(contact.contact)}
+                      onClick={() => handleSelectContact(contact.contact, contact.contactName)}
                       className="text-left p-4 rounded-lg border-2 border-gray-200 bg-white hover:border-green-300 hover:bg-green-50 transition-all"
                       data-testid={`contact-${contact.contact}`}
                     >
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-teal-600 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0">
-                          #
+                          {contact.contactName ? contact.contactName.charAt(0).toUpperCase() : "#"}
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <h4 className="font-semibold text-gray-900 truncate">
-                              {formatPhoneNumber(contact.contact)}
+                              {contact.contactName || formatPhoneNumber(contact.contact)}
                             </h4>
                             <span className="inline-block px-2 py-0.5 bg-green-100 text-green-700 text-xs font-medium rounded-full flex-shrink-0">
                               {contact.messageCount} {contact.messageCount === 1 ? "msg" : "msgs"}
                             </span>
                           </div>
                           <p className="text-xs text-gray-500 mt-1">
+                            {contact.contactName && (
+                              <span className="mr-2">{formatPhoneNumber(contact.contact)}</span>
+                            )}
                             Last message: {formatDate(contact.lastMessageAt)}
                           </p>
                         </div>

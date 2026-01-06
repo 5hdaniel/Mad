@@ -15,6 +15,7 @@ import transactionExtractorService from "./transactionExtractorService";
 import databaseService from "./databaseService";
 import logService from "./logService";
 import supabaseService from "./supabaseService";
+import { getContactNames } from "./contactsService";
 
 // Hybrid extraction imports
 import { HybridExtractorService } from "./extraction/hybridExtractorService";
@@ -1440,8 +1441,31 @@ class TransactionService {
    * Get distinct contacts with unlinked message counts
    * Returns a list of phone numbers/contacts with their message counts
    */
-  async getMessageContacts(userId: string): Promise<{ contact: string; messageCount: number; lastMessageAt: string }[]> {
+  async getMessageContacts(userId: string): Promise<{ contact: string; contactName: string | null; messageCount: number; lastMessageAt: string }[]> {
     const contacts = await databaseService.getMessageContacts(userId);
+
+    // Resolve contact names from the macOS Contacts database
+    let contactNameMap: Record<string, string> = {};
+    try {
+      const { contactMap } = await getContactNames();
+      contactNameMap = contactMap;
+    } catch (err) {
+      await logService.warn(
+        "Failed to load contact names, will use phone numbers only",
+        "TransactionService.getMessageContacts",
+        { error: err instanceof Error ? err.message : String(err) },
+      );
+    }
+
+    // Enrich contacts with names
+    const enrichedContacts = contacts.map((c) => {
+      // Try to find name by phone number (normalized and raw)
+      const name = contactNameMap[c.contact] || contactNameMap[c.contact.replace(/\D/g, '')] || null;
+      return {
+        ...c,
+        contactName: name,
+      };
+    });
 
     await logService.info(
       "Retrieved message contacts",
@@ -1449,10 +1473,11 @@ class TransactionService {
       {
         userId,
         contactCount: contacts.length,
+        withNames: enrichedContacts.filter(c => c.contactName).length,
       },
     );
 
-    return contacts;
+    return enrichedContacts;
   }
 
   /**
