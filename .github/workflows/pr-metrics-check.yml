@@ -63,7 +63,12 @@ jobs:
       - name: Validate Engineer Metrics Section
         if: steps.skip-check.outputs.skip != 'true'
         run: |
-          PR_BODY='${{ github.event.pull_request.body }}'
+          # Use heredoc with single-quoted delimiter to prevent shell interpretation
+          # of special characters like backticks, $(), and patterns like "built-in"
+          PR_BODY=$(cat <<'EOFBODY'
+          ${{ github.event.pull_request.body }}
+          EOFBODY
+          )
 
           echo "=== Validating PR Metrics ==="
           echo ""
