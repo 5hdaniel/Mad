@@ -1408,11 +1408,22 @@ class TransactionService {
     });
 
     // Filter to unlinked SMS/iMessage only
-    const messages = allMessages.filter(
-      (msg) =>
-        !msg.transaction_id &&
-        (msg.channel === "sms" || msg.channel === "imessage"),
-    );
+    // Note: communications table uses "communication_type" with values "text"/"imessage"
+    // while messages table uses "channel" with values "sms"/"imessage"
+    const messages = allMessages.filter((msg) => {
+      if (msg.transaction_id) return false;
+      // Check both field names for compatibility with both tables
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const msgAny = msg as any;
+      const channel = msgAny.channel as string | undefined;
+      const commType = msgAny.communication_type as string | undefined;
+      return (
+        channel === "sms" ||
+        channel === "imessage" ||
+        commType === "text" ||
+        commType === "imessage"
+      );
+    });
 
     // Sort by most recent first
     messages.sort((a, b) => {
