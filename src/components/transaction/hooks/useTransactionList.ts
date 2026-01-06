@@ -81,8 +81,9 @@ export function useTransactionList(
   const filterCounts = useMemo<FilterCounts>(
     () => ({
       all: transactions.length,
-      pending: transactions.filter((t) => t.detection_status === "pending")
-        .length,
+      pending: transactions.filter(
+        (t) => t.detection_status === "pending" || t.status === "pending"
+      ).length,
       active: transactions.filter(
         (t) =>
           t.status === "active" &&
@@ -111,7 +112,8 @@ export function useTransactionList(
           matchesFilter = true;
           break;
         case "pending":
-          matchesFilter = t.detection_status === "pending";
+          // Pending = detection_status is pending OR status is pending
+          matchesFilter = t.detection_status === "pending" || t.status === "pending";
           break;
         case "active":
           // Active = status is active AND not pending review AND not rejected
