@@ -13,8 +13,22 @@ import {
   Platform,
 } from "../platform";
 
-// Store original window.api
+// Store originals
 const originalApi = window.api;
+const originalNavigator = window.navigator;
+
+// Helper to mock navigator properties
+function mockNavigator(platform: string, userAgent: string) {
+  Object.defineProperty(window, "navigator", {
+    value: {
+      ...originalNavigator,
+      platform,
+      userAgent,
+    },
+    writable: true,
+    configurable: true,
+  });
+}
 
 describe("Platform Detection Utility", () => {
   beforeEach(() => {
@@ -25,6 +39,12 @@ describe("Platform Detection Utility", () => {
     // Restore original window.api
     Object.defineProperty(window, "api", {
       value: originalApi,
+      writable: true,
+      configurable: true,
+    });
+    // Restore original navigator
+    Object.defineProperty(window, "navigator", {
+      value: originalNavigator,
       writable: true,
       configurable: true,
     });
@@ -61,42 +81,102 @@ describe("Platform Detection Utility", () => {
       expect(getPlatform()).toBe("linux");
     });
 
-    it('should default to "windows" when platform is unknown', () => {
+    it('should default to "windows" when platform is unknown and no navigator fallback', () => {
       const consoleWarnSpy = jest.spyOn(console, "warn").mockImplementation();
       Object.defineProperty(window, "api", {
         value: { ...originalApi, system: { ...originalApi?.system, platform: "unknown" } },
         writable: true,
         configurable: true,
       });
+      mockNavigator("", "");
 
       expect(getPlatform()).toBe("windows");
       expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining(
-          '[Platform] Unknown platform detected: "unknown"',
-        ),
+        expect.stringContaining("Could not detect platform"),
       );
 
       consoleWarnSpy.mockRestore();
     });
 
-    it('should default to "windows" when window.api is undefined', () => {
+    it('should fallback to navigator.platform when window.api is undefined', () => {
       Object.defineProperty(window, "api", {
         value: undefined,
         writable: true,
         configurable: true,
       });
+      mockNavigator("MacIntel", "");
+
+      expect(getPlatform()).toBe("macos");
+    });
+
+    it('should fallback to navigator.platform for Windows when window.api is undefined', () => {
+      Object.defineProperty(window, "api", {
+        value: undefined,
+        writable: true,
+        configurable: true,
+      });
+      mockNavigator("Win32", "");
 
       expect(getPlatform()).toBe("windows");
     });
 
-    it('should default to "windows" when platform property is missing', () => {
+    it('should fallback to navigator.platform for Linux when window.api is undefined', () => {
+      Object.defineProperty(window, "api", {
+        value: undefined,
+        writable: true,
+        configurable: true,
+      });
+      mockNavigator("Linux x86_64", "");
+
+      expect(getPlatform()).toBe("linux");
+    });
+
+    it('should fallback to userAgent when both api and navigator.platform are unavailable', () => {
+      Object.defineProperty(window, "api", {
+        value: undefined,
+        writable: true,
+        configurable: true,
+      });
+      mockNavigator("", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)");
+
+      expect(getPlatform()).toBe("macos");
+    });
+
+    it('should fallback to userAgent for Windows when navigator.platform is unavailable', () => {
+      Object.defineProperty(window, "api", {
+        value: undefined,
+        writable: true,
+        configurable: true,
+      });
+      mockNavigator("", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+
+      expect(getPlatform()).toBe("windows");
+    });
+
+    it('should fallback to userAgent for Linux when navigator.platform is unavailable', () => {
+      Object.defineProperty(window, "api", {
+        value: undefined,
+        writable: true,
+        configurable: true,
+      });
+      mockNavigator("", "Mozilla/5.0 (X11; Linux x86_64)");
+
+      expect(getPlatform()).toBe("linux");
+    });
+
+    it('should default to "windows" when all detection methods fail', () => {
+      const consoleWarnSpy = jest.spyOn(console, "warn").mockImplementation();
       Object.defineProperty(window, "api", {
         value: { system: {} },
         writable: true,
         configurable: true,
       });
+      mockNavigator("", "");
 
       expect(getPlatform()).toBe("windows");
+      expect(consoleWarnSpy).toHaveBeenCalled();
+
+      consoleWarnSpy.mockRestore();
     });
   });
 
