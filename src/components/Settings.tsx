@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { LLMSettings } from "./settings/LLMSettings";
+import { MacOSMessagesImportSettings } from "./settings/MacOSMessagesImportSettings";
 
 interface ConnectionStatus {
   connected: boolean;
@@ -482,6 +483,16 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
                     </button>
                   )}
                 </div>
+              </div>
+            </div>
+
+            {/* macOS Messages Import - Only shows on macOS */}
+            <div className="mb-8">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                Messages
+              </h3>
+              <div className="space-y-4">
+                <MacOSMessagesImportSettings userId={userId} />
               </div>
             </div>
 

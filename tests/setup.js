@@ -142,6 +142,10 @@ if (typeof window !== 'undefined') {
       getConversations: jest.fn(),
       getMessages: jest.fn(),
       exportConversations: jest.fn(),
+      // macOS Messages import (TASK-987)
+      importMacOSMessages: jest.fn(),
+      getImportCount: jest.fn(),
+      onImportProgress: jest.fn(() => jest.fn()),
     },
     // Outlook integration - migrated from window.electron
     outlook: {

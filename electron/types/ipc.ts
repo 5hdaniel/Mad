@@ -1093,6 +1093,18 @@ export interface WindowApi {
       canceled?: boolean;
       error?: string;
     }>;
+    /** Import messages from macOS Messages app into the app database (macOS only) */
+    importMacOSMessages: (userId: string) => Promise<{
+      success: boolean;
+      messagesImported: number;
+      messagesSkipped: number;
+      duration: number;
+      error?: string;
+    }>;
+    /** Get count of messages available for import from macOS Messages */
+    getImportCount: () => Promise<{ success: boolean; count?: number; error?: string }>;
+    /** Listen for import progress updates */
+    onImportProgress: (callback: (progress: { current: number; total: number; percent: number }) => void) => () => void;
   };
 
   // Outlook integration (migrated from window.electron)
