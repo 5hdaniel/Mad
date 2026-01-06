@@ -95,11 +95,11 @@ if (status === "pending" || status === "rejected") {
 
 ## Acceptance Criteria
 
-- [ ] Manual transactions cannot be set to "pending" via bulk edit UI
-- [ ] Manual transactions cannot be set to "rejected" via bulk edit UI
-- [ ] AI-detected transactions can still use all 4 statuses
-- [ ] Backend rejects invalid status changes with clear error
-- [ ] Mixed selection (manual + AI) shows only common valid statuses (active, closed)
+- [x] Manual transactions cannot be set to "pending" via bulk edit UI
+- [x] Manual transactions cannot be set to "rejected" via bulk edit UI
+- [x] AI-detected transactions can still use all 4 statuses
+- [x] Backend rejects invalid status changes with clear error
+- [x] Mixed selection (manual + AI) shows only common valid statuses (active, closed)
 
 ## Testing
 
@@ -119,7 +119,38 @@ feature/TASK-984-manual-transaction-status
 
 | Metric | Value |
 |--------|-------|
-| Agent ID | (record when Task tool returns) |
-| Total Tokens | (from tokens.jsonl) |
-| Duration | (from tokens.jsonl) |
-| Variance | (calculated) |
+| Agent ID | (auto-captured) |
+| Total Tokens | (auto-captured) |
+| Duration | (auto-captured) |
+| Variance | (auto-captured) |
+
+---
+
+## Implementation Summary
+
+### Changes Made
+
+1. **BulkActionBar.tsx** - Added status filtering based on transaction type
+   - Added `selectedTransactions` prop to receive transaction objects
+   - Added `hasManualTransactions` useMemo to check for manual transactions
+   - Conditionally render "Pending" and "Rejected" status options (hidden when manual transactions are selected)
+
+2. **TransactionList.tsx** - Pass selected transactions to BulkActionBar
+   - Added `selectedTransactions` prop with filtered transactions based on selectedIds
+
+3. **Transactions.tsx** - Pass selected transactions to BulkActionBar
+   - Added `selectedTransactions` prop with filtered transactions based on selectedIds
+
+4. **transaction-handlers.ts** - Backend validation for manual transaction status
+   - Added validation in `transactions:bulk-update-status` handler
+   - Checks if any transaction has `detection_source === "manual"` when status is "pending" or "rejected"
+   - Throws ValidationError with clear message if validation fails
+
+### Engineer Checklist
+
+- [x] Branch created from develop
+- [x] UI filters status options based on detection_source
+- [x] Backend validates and rejects invalid status changes
+- [x] Type-check passes
+- [x] Tests pass (63 tests)
+- [x] No new lint errors (existing error in unrelated file)

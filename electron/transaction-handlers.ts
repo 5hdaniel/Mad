@@ -1169,6 +1169,25 @@ export const registerTransactionHandlers = (
           validatedIds.push(validatedId);
         }
 
+        // TASK-984: Validate that manual transactions cannot be set to pending/rejected
+        // These statuses are only meaningful for AI-detected transactions
+        if (status === "pending" || status === "rejected") {
+          const manualTransactionIds: string[] = [];
+          for (const transactionId of validatedIds) {
+            const tx = await transactionService.getTransactionDetails(transactionId);
+            if (tx?.detection_source === "manual") {
+              manualTransactionIds.push(transactionId);
+            }
+          }
+
+          if (manualTransactionIds.length > 0) {
+            throw new ValidationError(
+              `Cannot set manual transactions to "${status}". Manual transactions can only be "active" or "closed".`,
+              "status",
+            );
+          }
+        }
+
         // Update each transaction
         let updatedCount = 0;
         const errors: string[] = [];
