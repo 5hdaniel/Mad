@@ -57,18 +57,6 @@ function formatDate(dateStr: string): string {
 }
 
 /**
- * Get preview text from the most recent message
- */
-function getPreviewText(messages: MessageLike[]): string {
-  const lastMsg = messages[messages.length - 1];
-  const text = lastMsg?.body_text || ("body" in lastMsg ? lastMsg.body : "") || "";
-  if (text.length > 80) {
-    return text.substring(0, 80) + "...";
-  }
-  return text || "(No message content)";
-}
-
-/**
  * Get thread date range from messages
  */
 function getThreadDateRange(messages: MessageLike[]): string {
@@ -178,6 +166,9 @@ export function AttachMessagesModal({
 
   // Selection state
   const [selectedThreadIds, setSelectedThreadIds] = useState<Set<string>>(new Set());
+
+  // Viewing thread messages state
+  const [viewingThreadId, setViewingThreadId] = useState<string | null>(null);
 
   // UI state
   const [searchQuery, setSearchQuery] = useState("");
@@ -568,11 +559,8 @@ export function AttachMessagesModal({
                               </p>
                             )}
 
-                            {/* Preview and metadata */}
-                            <p className="text-sm text-gray-600 truncate mt-2">
-                              {getPreviewText(messages)}
-                            </p>
-                            <div className="flex items-center gap-3 mt-1">
+                            {/* Metadata row */}
+                            <div className="flex items-center gap-3 mt-2">
                               <span className="text-xs text-gray-500">{dateRange}</span>
                               <span className="text-xs text-gray-400">•</span>
                               <span className="text-xs text-gray-500">
@@ -580,6 +568,19 @@ export function AttachMessagesModal({
                               </span>
                             </div>
                           </div>
+
+                          {/* View button */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setViewingThreadId(threadId);
+                            }}
+                            className="px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded-lg font-medium transition-all flex-shrink-0"
+                            data-testid={`view-thread-${threadId}`}
+                          >
+                            View
+                          </button>
                         </div>
                       </button>
                     );
@@ -635,6 +636,79 @@ export function AttachMessagesModal({
           </div>
         </div>
       </div>
+
+      {/* Message Viewer Panel */}
+      {viewingThreadId && threads.get(viewingThreadId) && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[80]">
+          <div className="bg-gray-100 w-full max-w-md h-[600px] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+            {/* Phone-style header */}
+            <div className="bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-3 flex items-center gap-3">
+              <button
+                onClick={() => setViewingThreadId(null)}
+                className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              <div className="flex-1">
+                <h4 className="text-white font-semibold">
+                  {selectedContactName || formatPhoneNumber(selectedContact || "")}
+                </h4>
+                <p className="text-blue-100 text-xs">
+                  {threads.get(viewingThreadId)?.length || 0} messages
+                </p>
+              </div>
+            </div>
+
+            {/* Messages list - phone style */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {threads.get(viewingThreadId)
+                ?.sort((a, b) => new Date(a.sent_at || 0).getTime() - new Date(b.sent_at || 0).getTime())
+                .map((msg) => {
+                  const isOutbound = msg.direction === "outbound";
+                  const msgText = msg.body_text || ("body" in msg ? (msg as { body?: string }).body : "") || "";
+                  const msgTime = new Date(msg.sent_at || msg.received_at || 0);
+
+                  return (
+                    <div
+                      key={msg.id}
+                      className={`flex ${isOutbound ? "justify-end" : "justify-start"}`}
+                    >
+                      <div
+                        className={`max-w-[80%] rounded-2xl px-4 py-2 ${
+                          isOutbound
+                            ? "bg-blue-500 text-white rounded-br-md"
+                            : "bg-white text-gray-900 rounded-bl-md shadow-sm"
+                        }`}
+                      >
+                        <p className="text-sm whitespace-pre-wrap break-words">{msgText || "(No content)"}</p>
+                        <p className={`text-xs mt-1 ${isOutbound ? "text-blue-100" : "text-gray-400"}`}>
+                          {msgTime.toLocaleString(undefined, {
+                            month: "short",
+                            day: "numeric",
+                            hour: "numeric",
+                            minute: "2-digit",
+                          })}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+
+            {/* Footer */}
+            <div className="bg-white border-t px-4 py-3 flex justify-center">
+              <button
+                onClick={() => setViewingThreadId(null)}
+                className="px-6 py-2 bg-gray-200 hover:bg-gray-300 rounded-full text-sm font-medium text-gray-700 transition-all"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

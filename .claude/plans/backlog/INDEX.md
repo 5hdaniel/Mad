@@ -2,9 +2,9 @@
 
 This index tracks all backlog items with their current status and metadata.
 
-**Last Updated:** 2026-01-05 (BACKLOG-167 restrict manual transaction status)
-**Total Items:** 156
-**Pending:** 90 | **In Progress:** 0 | **Completed:** 59 | **Partial:** 0 | **Obsolete:** 1 | **Deferred:** 2
+**Last Updated:** 2026-01-05 (BACKLOG-173 contact-first AttachMessagesModal)
+**Total Items:** 162
+**Pending:** 94 | **In Progress:** 1 | **Completed:** 60 | **Partial:** 0 | **Obsolete:** 1 | **Deferred:** 2
 
 ---
 
@@ -248,6 +248,12 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-165 | Duplicate Contacts in Import Contacts Page | ui | Medium | Pending | - | - | ~20K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-165.md](BACKLOG-165.md) |
 | BACKLOG-166 | Platform Detection Returns "unknown" in Renderer | fix | Medium | Pending | - | - | ~15K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-166.md](BACKLOG-166.md) |
 | BACKLOG-167 | Restrict Status Options for Manual Transactions | enhancement | Low | Pending | - | - | ~15K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-167.md](BACKLOG-167.md) |
+| BACKLOG-168 | Transaction Bulk Edit Multi-Select Modal | ui | Medium | Pending | - | - | ~20K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-168.md](BACKLOG-168.md) |
+| BACKLOG-169 | Sync Status Indicator | ui | Medium | Pending | - | - | ~15K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-169.md](BACKLOG-169.md) |
+| BACKLOG-170 | Messages Not Loading in Attach Modal | fix | Critical | Needs Feature | - | - | ~5K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-170.md](BACKLOG-170.md) |
+| BACKLOG-171 | Contacts Not Pre-Populated When Editing Transaction | fix | High | Pending | - | - | ~25K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-171.md](BACKLOG-171.md) |
+| BACKLOG-172 | macOS Messages Import | feature | High | Pending | - | - | ~25K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-172.md](BACKLOG-172.md) |
+| BACKLOG-173 | Contact-First AttachMessagesModal Interface | ui/perf | High | Completed | - | - | ~40K | - | - | - | - | - | - | - | - | - | - | - | - | - | TASK-989, PR #353 | [BACKLOG-173.md](BACKLOG-173.md) |
 
 ---
 
@@ -530,6 +536,21 @@ This index tracks all backlog items with their current status and metadata.
   - Marked BACKLOG-152 as Completed (SPRINT-023)
   - Sprint focus: test coverage (29% → 45%+), component decomposition
   - Total estimated: ~215K tokens
+- 2026-01-05: **Retroactive Documentation for PR #353 (Contact-First AttachMessagesModal)**
+  - Created BACKLOG-173: Contact-First AttachMessagesModal Interface (Completed, ~40K tokens)
+  - Created TASK-989: Retroactive task file for the feature work
+  - Related items already documented:
+    - BACKLOG-170: Messages Not Loading in Attach Modal (investigation that led to this)
+    - BACKLOG-172: macOS Messages Import (future feature discovered during investigation)
+    - TASK-985, TASK-986: Related investigation/feature tasks
+  - Key changes in PR #353:
+    - Fixed UI freeze when loading 579k+ messages (added LIMIT to query)
+    - Implemented contact-first interface (two-view: contacts list -> thread selection)
+    - Added new database methods: getMessageContacts(), getMessagesByContact(), getUnlinkedEmails()
+    - Added contact name resolution from macOS Contacts database
+    - Enhanced thread cards to show participants and date ranges
+    - Updated terminology from "messages" to "chats"
+  - Also added BACKLOG-168 to BACKLOG-172 to Full Index (were missing)
 
 ---
 
