@@ -224,6 +224,272 @@ describe("Contact Handlers", () => {
       expect(result.success).toBe(false);
       expect(result.error).toContain("Contacts access denied");
     });
+
+    // TASK-982: Deduplication tests
+    describe("deduplication by email", () => {
+      it("should dedupe contacts with same email from iPhone sync and macOS Contacts", async () => {
+        // Same contact exists in both sources with same email
+        mockDatabaseService.getUnimportedContactsByUserId.mockResolvedValue([
+          {
+            id: "db-1",
+            name: "John Doe",
+            email: "john@example.com",
+            phone: "555-1234",
+          },
+        ]);
+        mockContactsService.getContactNames.mockResolvedValue({
+          phoneToContactInfo: {
+            "555-9999": {
+              name: "John D.", // Slightly different name
+              phones: ["555-9999"],
+              emails: ["john@example.com"], // Same email
+            },
+          },
+          status: "loaded",
+        });
+        mockDatabaseService.getImportedContactsByUserId.mockResolvedValue([]);
+
+        const handler = registeredHandlers.get("contacts:get-available");
+        const result = await handler(mockEvent, TEST_USER_ID);
+
+        expect(result.success).toBe(true);
+        // Should only have 1 contact (iPhone-synced takes precedence)
+        expect(result.contacts).toHaveLength(1);
+        expect(result.contacts[0].id).toBe("db-1"); // DB contact wins
+        expect(result.contacts[0].isFromDatabase).toBe(true);
+      });
+
+      it("should be case-insensitive when deduping by email", async () => {
+        mockDatabaseService.getUnimportedContactsByUserId.mockResolvedValue([
+          {
+            id: "db-1",
+            name: "John Doe",
+            email: "John@Example.COM",
+            phone: "555-1234",
+          },
+        ]);
+        mockContactsService.getContactNames.mockResolvedValue({
+          phoneToContactInfo: {
+            "555-9999": {
+              name: "John D.",
+              phones: ["555-9999"],
+              emails: ["john@example.com"], // Same email, different case
+            },
+          },
+          status: "loaded",
+        });
+        mockDatabaseService.getImportedContactsByUserId.mockResolvedValue([]);
+
+        const handler = registeredHandlers.get("contacts:get-available");
+        const result = await handler(mockEvent, TEST_USER_ID);
+
+        expect(result.success).toBe(true);
+        expect(result.contacts).toHaveLength(1);
+      });
+    });
+
+    describe("deduplication by phone", () => {
+      it("should dedupe contacts with same phone number (different formats)", async () => {
+        // iPhone sync has one format, macOS Contacts has another
+        mockDatabaseService.getUnimportedContactsByUserId.mockResolvedValue([
+          {
+            id: "db-1",
+            name: "Jane Smith",
+            email: "jane@example.com",
+            phone: "+15551234567",
+          },
+        ]);
+        mockContactsService.getContactNames.mockResolvedValue({
+          phoneToContactInfo: {
+            "(555) 123-4567": {
+              name: "Jane S.", // Slightly different name
+              phones: ["(555) 123-4567"], // Same phone, different format
+              emails: ["janes@other.com"], // Different email
+            },
+          },
+          status: "loaded",
+        });
+        mockDatabaseService.getImportedContactsByUserId.mockResolvedValue([]);
+
+        const handler = registeredHandlers.get("contacts:get-available");
+        const result = await handler(mockEvent, TEST_USER_ID);
+
+        expect(result.success).toBe(true);
+        // Should only have 1 contact (iPhone-synced takes precedence)
+        expect(result.contacts).toHaveLength(1);
+        expect(result.contacts[0].id).toBe("db-1");
+      });
+
+      it("should handle phone numbers with and without country code", async () => {
+        mockDatabaseService.getUnimportedContactsByUserId.mockResolvedValue([
+          { id: "db-1", name: "Bob Jones", phone: "5559876543" }, // No country code
+        ]);
+        mockContactsService.getContactNames.mockResolvedValue({
+          phoneToContactInfo: {
+            "+1 555 987 6543": {
+              name: "Robert Jones",
+              phones: ["+1 555 987 6543"], // With country code
+              emails: [],
+            },
+          },
+          status: "loaded",
+        });
+        mockDatabaseService.getImportedContactsByUserId.mockResolvedValue([]);
+
+        const handler = registeredHandlers.get("contacts:get-available");
+        const result = await handler(mockEvent, TEST_USER_ID);
+
+        expect(result.success).toBe(true);
+        expect(result.contacts).toHaveLength(1);
+        expect(result.contacts[0].id).toBe("db-1");
+      });
+    });
+
+    describe("deduplication by name (fallback)", () => {
+      it("should dedupe contacts with same name when no email or phone overlap", async () => {
+        mockDatabaseService.getUnimportedContactsByUserId.mockResolvedValue([
+          { id: "db-1", name: "Alice Brown" }, // No email or phone
+        ]);
+        mockContactsService.getContactNames.mockResolvedValue({
+          phoneToContactInfo: {
+            "555-0000": {
+              name: "Alice Brown", // Same name
+              phones: ["555-0000"],
+              emails: ["alice@work.com"],
+            },
+          },
+          status: "loaded",
+        });
+        mockDatabaseService.getImportedContactsByUserId.mockResolvedValue([]);
+
+        const handler = registeredHandlers.get("contacts:get-available");
+        const result = await handler(mockEvent, TEST_USER_ID);
+
+        expect(result.success).toBe(true);
+        expect(result.contacts).toHaveLength(1);
+        expect(result.contacts[0].id).toBe("db-1");
+      });
+
+      it("should be case-insensitive when deduping by name", async () => {
+        mockDatabaseService.getUnimportedContactsByUserId.mockResolvedValue([
+          { id: "db-1", name: "CHARLIE DAVIS" },
+        ]);
+        mockContactsService.getContactNames.mockResolvedValue({
+          phoneToContactInfo: {
+            "555-1111": {
+              name: "charlie davis", // Same name, different case
+              phones: ["555-1111"],
+              emails: [],
+            },
+          },
+          status: "loaded",
+        });
+        mockDatabaseService.getImportedContactsByUserId.mockResolvedValue([]);
+
+        const handler = registeredHandlers.get("contacts:get-available");
+        const result = await handler(mockEvent, TEST_USER_ID);
+
+        expect(result.success).toBe(true);
+        expect(result.contacts).toHaveLength(1);
+      });
+    });
+
+    describe("iPhone-synced contacts take precedence", () => {
+      it("should prefer iPhone-synced contacts over macOS Contacts app", async () => {
+        // Same person in both sources
+        mockDatabaseService.getUnimportedContactsByUserId.mockResolvedValue([
+          {
+            id: "db-real-id",
+            name: "Priority Contact",
+            email: "priority@example.com",
+            phone: "555-2222",
+            company: "iPhone Company",
+          },
+        ]);
+        mockContactsService.getContactNames.mockResolvedValue({
+          phoneToContactInfo: {
+            "555-2222": {
+              name: "Priority Contact",
+              phones: ["555-2222"],
+              emails: ["priority@example.com"],
+            },
+          },
+          status: "loaded",
+        });
+        mockDatabaseService.getImportedContactsByUserId.mockResolvedValue([]);
+
+        const handler = registeredHandlers.get("contacts:get-available");
+        const result = await handler(mockEvent, TEST_USER_ID);
+
+        expect(result.success).toBe(true);
+        expect(result.contacts).toHaveLength(1);
+        // Should have the real DB ID from iPhone sync
+        expect(result.contacts[0].id).toBe("db-real-id");
+        expect(result.contacts[0].isFromDatabase).toBe(true);
+        expect(result.contacts[0].company).toBe("iPhone Company");
+      });
+    });
+
+    describe("no false positives in deduplication", () => {
+      it("should not dedupe contacts with different identifiers", async () => {
+        mockDatabaseService.getUnimportedContactsByUserId.mockResolvedValue([
+          {
+            id: "db-1",
+            name: "Person One",
+            email: "one@example.com",
+            phone: "555-1111",
+          },
+        ]);
+        mockContactsService.getContactNames.mockResolvedValue({
+          phoneToContactInfo: {
+            "555-2222": {
+              name: "Person Two", // Different name
+              phones: ["555-2222"], // Different phone
+              emails: ["two@example.com"], // Different email
+            },
+          },
+          status: "loaded",
+        });
+        mockDatabaseService.getImportedContactsByUserId.mockResolvedValue([]);
+
+        const handler = registeredHandlers.get("contacts:get-available");
+        const result = await handler(mockEvent, TEST_USER_ID);
+
+        expect(result.success).toBe(true);
+        // Should have both contacts (no deduplication)
+        expect(result.contacts).toHaveLength(2);
+      });
+    });
+
+    describe("already imported contacts filtered by phone", () => {
+      it("should filter out macOS contacts if phone matches already imported", async () => {
+        mockDatabaseService.getUnimportedContactsByUserId.mockResolvedValue([]);
+        mockContactsService.getContactNames.mockResolvedValue({
+          phoneToContactInfo: {
+            "(555) 333-4444": {
+              name: "Already Imported Person",
+              phones: ["(555) 333-4444"],
+              emails: ["different@email.com"],
+            },
+          },
+          status: "loaded",
+        });
+        mockDatabaseService.getImportedContactsByUserId.mockResolvedValue([
+          {
+            name: "Other Name",
+            email: "other@email.com",
+            phone: "+15553334444",
+          }, // Same phone normalized
+        ]);
+
+        const handler = registeredHandlers.get("contacts:get-available");
+        const result = await handler(mockEvent, TEST_USER_ID);
+
+        expect(result.success).toBe(true);
+        // Should be empty - phone matches already imported contact
+        expect(result.contacts).toHaveLength(0);
+      });
+    });
   });
 
   describe("contacts:import", () => {
