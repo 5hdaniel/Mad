@@ -965,8 +965,9 @@ class DatabaseService implements IDatabaseService {
   /**
    * Get unlinked text messages (SMS/iMessage) from the messages table
    * These are messages not yet attached to any transaction
+   * Limited to 1000 most recent messages to prevent UI freeze
    */
-  async getUnlinkedTextMessages(userId: string): Promise<Message[]> {
+  async getUnlinkedTextMessages(userId: string, limit = 1000): Promise<Message[]> {
     const db = this._ensureDb();
     const sql = `
       SELECT * FROM messages
@@ -974,8 +975,9 @@ class DatabaseService implements IDatabaseService {
         AND transaction_id IS NULL
         AND channel IN ('sms', 'imessage')
       ORDER BY sent_at DESC
+      LIMIT ?
     `;
-    return db.prepare(sql).all(userId) as Message[];
+    return db.prepare(sql).all(userId, limit) as Message[];
   }
 
   /**
