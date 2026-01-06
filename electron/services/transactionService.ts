@@ -1419,6 +1419,63 @@ class TransactionService {
   }
 
   /**
+   * Get unlinked emails for a user
+   */
+  async getUnlinkedEmails(userId: string): Promise<Message[]> {
+    const emails = await databaseService.getUnlinkedEmails(userId);
+
+    await logService.info(
+      "Retrieved unlinked emails",
+      "TransactionService.getUnlinkedEmails",
+      {
+        userId,
+        count: emails.length,
+      },
+    );
+
+    return emails;
+  }
+
+  /**
+   * Get distinct contacts with unlinked message counts
+   * Returns a list of phone numbers/contacts with their message counts
+   */
+  async getMessageContacts(userId: string): Promise<{ contact: string; messageCount: number; lastMessageAt: string }[]> {
+    const contacts = await databaseService.getMessageContacts(userId);
+
+    await logService.info(
+      "Retrieved message contacts",
+      "TransactionService.getMessageContacts",
+      {
+        userId,
+        contactCount: contacts.length,
+      },
+    );
+
+    return contacts;
+  }
+
+  /**
+   * Get unlinked messages for a specific contact
+   * Used after user selects a contact from the contact list
+   */
+  async getMessagesByContact(userId: string, contact: string): Promise<Message[]> {
+    const messages = await databaseService.getMessagesByContact(userId, contact);
+
+    await logService.info(
+      "Retrieved messages for contact",
+      "TransactionService.getMessagesByContact",
+      {
+        userId,
+        contact,
+        count: messages.length,
+      },
+    );
+
+    return messages;
+  }
+
+  /**
    * Link messages to a transaction
    * Sets transaction_id on the specified messages in the messages table
    */
