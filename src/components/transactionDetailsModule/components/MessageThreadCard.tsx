@@ -114,10 +114,18 @@ export function MessageThreadCard({
 }
 
 /**
- * Generate a normalized participant key for grouping messages into chats.
- * Messages with the same participant set belong to the same chat.
+ * Generate a key for grouping messages into chats.
+ * Uses thread_id (from macOS chat_id) first, as this is the actual conversation ID.
+ * Falls back to participant-based grouping only if thread_id is not available.
  */
-function getParticipantKey(msg: MessageLike): string {
+function getThreadKey(msg: MessageLike): string {
+  // FIRST: Use thread_id if available - this is the actual iMessage chat ID
+  // Format is "macos-chat-{chat_id}" from the import
+  if (msg.thread_id) {
+    return msg.thread_id;
+  }
+
+  // FALLBACK: Compute from participants if no thread_id
   try {
     if (msg.participants) {
       const parsed = typeof msg.participants === 'string'
@@ -140,15 +148,15 @@ function getParticipantKey(msg: MessageLike): string {
 
       // Sort and join to create a consistent key
       if (allParticipants.size > 0) {
-        return Array.from(allParticipants).sort().join('|');
+        return `participants-${Array.from(allParticipants).sort().join('|')}`;
       }
     }
   } catch {
     // Fall through to default
   }
 
-  // Fallback: use thread_id if available, otherwise message id
-  return msg.thread_id || msg.id;
+  // Last resort: use message id (each message is its own "thread")
+  return `msg-${msg.id}`;
 }
 
 /**
@@ -170,8 +178,8 @@ function normalizeParticipant(participant: string): string {
 
 /**
  * Utility function to group messages by conversation/chat.
- * Groups by the participant set - all messages with the same participants
- * belong to the same chat (like on your phone).
+ * Uses thread_id (actual iMessage chat ID) when available,
+ * falls back to participant-based grouping otherwise.
  */
 export function groupMessagesByThread(
   messages: MessageLike[]
@@ -179,7 +187,7 @@ export function groupMessagesByThread(
   const threads = new Map<string, MessageLike[]>();
 
   messages.forEach((msg) => {
-    const threadKey = getParticipantKey(msg);
+    const threadKey = getThreadKey(msg);
     const thread = threads.get(threadKey) || [];
     thread.push(msg);
     threads.set(threadKey, thread);

@@ -2,9 +2,9 @@
 
 This index tracks all backlog items with their current status and metadata.
 
-**Last Updated:** 2026-01-05 (BACKLOG-173 contact-first AttachMessagesModal)
-**Total Items:** 162
-**Pending:** 94 | **In Progress:** 1 | **Completed:** 60 | **Partial:** 0 | **Obsolete:** 1 | **Deferred:** 2
+**Last Updated:** 2026-01-05 (SPRINT-027 Messages & Contacts Polish)
+**Total Items:** 165
+**Pending:** 96 | **In Progress:** 1 | **Completed:** 61 | **Partial:** 0 | **Obsolete:** 1 | **Deferred:** 2
 
 ---
 
@@ -60,6 +60,7 @@ This index tracks all backlog items with their current status and metadata.
 - **SPRINT-023 (Architecture Debt Reduction):** Completed - BACKLOG-149 (done), 148 (done), 152 (done), 140 (done) (5 tasks: TASK-960 to TASK-964, PRs #314-317)
 - **SPRINT-024 (Quality & Coverage):** PLANNED - BACKLOG-157, 159, 112, 113, 158 (5 tasks: TASK-970 to TASK-974)
 - **SPRINT-025 (Communications Architecture):** COMPLETE - TASK-975 to TASK-977 (3 tasks completed: communications refactor, export folders, auto-link texts; TASK-978 deferred). **Incidents:** 14.2M token exploration loop (BACKLOG-161), PR merged without review, file overlap caused merge conflicts.
+- **SPRINT-027 (Messages & Contacts Polish):** PLANNED - 3 tasks (TASK-990 to TASK-992): auto-linked messages display, manual thread management, bubble direction fix. Base: feature/contact-first-attach-messages (PR #353)
 - **Unassigned:** All others
 
 ### State Coordination Overhaul Project - COMPLETE
@@ -254,6 +255,9 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-171 | Contacts Not Pre-Populated When Editing Transaction | fix | High | Pending | - | - | ~25K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-171.md](BACKLOG-171.md) |
 | BACKLOG-172 | macOS Messages Import | feature | High | Pending | - | - | ~25K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-172.md](BACKLOG-172.md) |
 | BACKLOG-173 | Contact-First AttachMessagesModal Interface | ui/perf | High | Completed | - | - | ~40K | - | - | - | - | - | - | - | - | - | - | - | - | - | TASK-989, PR #353 | [BACKLOG-173.md](BACKLOG-173.md) |
+| BACKLOG-178 | Auto-Linked Messages Display in Transaction Details | fix | High | Pending | SPRINT-027 | - | ~20K | - | - | - | - | - | - | - | - | - | - | - | - | - | TASK-990 | - |
+| BACKLOG-179 | Manual Thread Attach/Unlink in Messages Tab | ui | High | Pending | SPRINT-027 | - | ~30K | - | - | - | - | - | - | - | - | - | - | - | - | - | TASK-991 | - |
+| BACKLOG-180 | Message Bubble Direction Fix | fix | Medium | Pending | SPRINT-027 | - | ~10K | - | - | - | - | - | - | - | - | - | - | - | - | - | TASK-992 | - |
 
 ---
 
@@ -295,6 +299,7 @@ This index tracks all backlog items with their current status and metadata.
 | SPRINT-020 | State Coordination Foundation | Completed | BACKLOG-142 Phase 1 (7 tasks: TASK-927 to TASK-933, PRs #287-294) - State machine types, reducer, context, orchestrator |
 | SPRINT-021 | State Coordination Migration | Completed | BACKLOG-142 Phase 2 (PRs #296-309) - Hook migration to state machine, feature flag enabled |
 | SPRINT-022 | State Coordination Cleanup | Completed | BACKLOG-142 Phase 3 (7 tasks: TASK-949-957) - Legacy code removed, architecture documented |
+| SPRINT-027 | Messages & Contacts Polish | Planned | 3 tasks: TASK-990 to TASK-992 - Auto-linked display, manual threads, bubble direction |
 
 ---
 
@@ -551,6 +556,15 @@ This index tracks all backlog items with their current status and metadata.
     - Enhanced thread cards to show participants and date ranges
     - Updated terminology from "messages" to "chats"
   - Also added BACKLOG-168 to BACKLOG-172 to Full Index (were missing)
+- 2026-01-05: **SPRINT-027 (Messages & Contacts Polish) Created**
+  - Based on feature/contact-first-attach-messages branch (PR #353)
+  - Created 3 tasks: TASK-990, TASK-991, TASK-992
+  - Added BACKLOG-178, BACKLOG-179, BACKLOG-180 to Full Index
+  - Sprint deliverables:
+    - TASK-990: Fix auto-linked messages not appearing in Messages tab
+    - TASK-991: Complete manual thread attach/unlink functionality
+    - TASK-992: Fix message bubble direction (outgoing on right, incoming on left)
+  - Total estimated: ~60K tokens (+ ~30K SR review overhead)
 
 ---
 
