@@ -13,6 +13,7 @@ import type {
 } from "../../types";
 import { DatabaseError } from "../../types";
 import { dbGet, dbAll, dbRun } from "./core/dbConnection";
+import logService from "../logService";
 import { getTransactionContactsWithRoles } from "./transactionContactDbService";
 import { validateFields } from "../../utils/sqlFieldWhitelist";
 
@@ -354,7 +355,21 @@ export async function updateTransaction(
   values.push(transactionId);
 
   const sql = `UPDATE transactions SET ${fields.join(", ")} WHERE id = ?`;
-  dbRun(sql, values);
+  const result = dbRun(sql, values);
+
+  logService.info("Transaction update result", "TransactionDbService", {
+    transactionId,
+    fields,
+    rowsChanged: result.changes,
+    sql,
+  });
+
+  if (result.changes === 0) {
+    logService.warn("Transaction update changed 0 rows", "TransactionDbService", {
+      transactionId,
+      fields,
+    });
+  }
 }
 
 /**
