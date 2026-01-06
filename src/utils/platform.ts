@@ -16,7 +16,7 @@ export type Platform = "macos" | "windows" | "linux";
  */
 export function getPlatform(): Platform {
   // In Electron, we can access process.platform via preload
-  const platform = window.electron?.platform || "unknown";
+  const platform = window.api?.system?.platform || "unknown";
 
   switch (platform) {
     case "darwin":

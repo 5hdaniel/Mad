@@ -48,6 +48,7 @@ jest.mock("../services/auditService", () => ({
 jest.mock("../services/logService", () => ({
   __esModule: true,
   default: {
+    debug: jest.fn(),
     info: jest.fn(),
     error: jest.fn(),
     warn: jest.fn(),
@@ -66,6 +67,16 @@ jest.mock("../services/enhancedExportService", () => ({
   __esModule: true,
   default: {
     exportTransaction: jest.fn(),
+  },
+}));
+
+// Mock rate limiters to always allow in tests
+jest.mock("../utils/rateLimit", () => ({
+  rateLimiters: {
+    scan: {
+      canExecute: jest.fn().mockReturnValue({ allowed: true }),
+      clearAll: jest.fn(),
+    },
   },
 }));
 

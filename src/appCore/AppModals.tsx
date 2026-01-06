@@ -8,11 +8,12 @@
 import React, { useCallback } from "react";
 import Profile from "../components/Profile";
 import Settings from "../components/Settings";
-import Transactions from "../components/Transactions";
+import TransactionList from "../components/TransactionList";
 import Contacts from "../components/Contacts";
 import WelcomeTerms from "../components/WelcomeTerms";
 import AuditTransactionModal from "../components/AuditTransactionModal";
 import MoveAppPrompt from "../components/MoveAppPrompt";
+import IPhoneSyncFlow from "../components/iphone/IPhoneSyncFlow";
 import type { AppStateMachine } from "./state/types";
 
 interface AppModalsProps {
@@ -28,6 +29,9 @@ export function AppModals({ app }: AppModalsProps) {
     currentUser,
     authProvider,
     subscription,
+
+    // Database state (for modal guards)
+    isDatabaseInitialized,
 
     // Pending data for terms modal
     pendingOAuthData,
@@ -55,6 +59,9 @@ export function AppModals({ app }: AppModalsProps) {
     // Move app handlers
     handleDismissMovePrompt,
     handleNotNowMovePrompt,
+
+    // iPhone sync
+    closeIPhoneSync,
   } = app;
 
   // Compound action: close audit transaction modal and open transactions
@@ -92,18 +99,18 @@ export function AppModals({ app }: AppModalsProps) {
       )}
 
       {/* Transactions View */}
-      {modalState.showTransactions && currentUser && authProvider && (
+      {modalState.showTransactions && currentUser && authProvider && isDatabaseInitialized && (
         <div className="fixed inset-0 z-[60]">
-          <Transactions
+          <TransactionList
             userId={currentUser.id}
-            provider={authProvider}
+            provider={authProvider as "google" | "microsoft"}
             onClose={closeTransactions}
           />
         </div>
       )}
 
       {/* Contacts View */}
-      {modalState.showContacts && currentUser && (
+      {modalState.showContacts && currentUser && isDatabaseInitialized && (
         <div className="fixed inset-0 z-[60]">
           <Contacts userId={currentUser.id} onClose={closeContacts} />
         </div>
@@ -129,13 +136,33 @@ export function AppModals({ app }: AppModalsProps) {
       )}
 
       {/* Audit Transaction Modal */}
-      {modalState.showAuditTransaction && currentUser && authProvider && (
+      {modalState.showAuditTransaction && currentUser && authProvider && isDatabaseInitialized && (
         <AuditTransactionModal
-          userId={currentUser.id as any}
+          userId={currentUser.id}
           provider={authProvider}
           onClose={closeAuditTransaction}
           onSuccess={handleAuditTransactionSuccess}
         />
+      )}
+
+      {/* iPhone Sync Flow Modal */}
+      {modalState.showIPhoneSync && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
+            {/* Close button */}
+            <div className="flex justify-end p-4 pb-0">
+              <button
+                onClick={closeIPhoneSync}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <IPhoneSyncFlow onClose={closeIPhoneSync} />
+          </div>
+        </div>
       )}
     </>
   );

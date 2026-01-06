@@ -9,19 +9,86 @@ name: CI/CD
 
 on:
   push:
-    branches: [main, develop, 'feature/**', 'fix/**', 'claude/**']
+    branches: [main, develop, 'feature/**', 'fix/**', 'claude/**', 'docs/**']
   pull_request:
     branches: [main, develop]
 
 jobs:
+  # Fast check to determine if we can skip heavy CI jobs
+  check-changes:
+    name: Check Changes
+    runs-on: ubuntu-latest
+    outputs:
+      docs-only: ${{ steps.filter.outputs.docs-only }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for proper branch comparison
+
+      - name: Fetch base branch for PR comparison
+        if: github.event_name == 'pull_request'
+        run: git fetch origin ${{ github.base_ref }}
+
+      - name: Check for docs-only changes
+        id: filter
+        run: |
+          # Get changed files
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            CHANGED=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
+          else
+            CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || git diff --name-only HEAD)
+          fi
+
+          echo "Changed files:"
+          echo "$CHANGED"
+
+          # Check if all changes are docs/markdown only
+          DOCS_ONLY="true"
+          while IFS= read -r file; do
+            if [ -n "$file" ]; then
+              case "$file" in
+                *.md|.claude/*|docs/*|.github/ISSUE_TEMPLATE/*|.github/PULL_REQUEST_TEMPLATE/*|LICENSE|*.txt)
+                  # Documentation file, continue
+                  ;;
+                *)
+                  # Non-docs file found
+                  DOCS_ONLY="false"
+                  break
+                  ;;
+              esac
+            fi
+          done <<< "$CHANGED"
+
+          echo "docs-only=$DOCS_ONLY" >> $GITHUB_OUTPUT
+          echo "Result: docs-only=$DOCS_ONLY"
+
+  # For docs-only changes, provide passing status checks without running heavy tests
+  # Matrix must match the real test job to produce identical status check names
+  docs-pass:
+    name: Test & Lint
+    needs: check-changes
+    if: needs.check-changes.outputs.docs-only == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [macos-latest, windows-latest]
+        node-version: [20.x]
+    steps:
+      - name: Skip tests (docs-only change)
+        run: echo "Skipping tests for ${{ matrix.os }} / Node ${{ matrix.node-version }} - documentation-only changes detected"
+
   test:
     name: Test & Lint
+    needs: check-changes
+    if: needs.check-changes.outputs.docs-only != 'true'
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30  # Prevent CI from running indefinitely
 
     strategy:
       matrix:
         os: [macos-latest, windows-latest]
-        node-version: [18.x, 20.x]
+        node-version: [20.x]  # Node 18 dropped - better-sqlite3-multiple-ciphers requires Node 20+
 
     steps:
       - name: Checkout code
@@ -35,8 +102,8 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Rebuild native modules
-        run: npm rebuild better-sqlite3-multiple-ciphers
+      - name: Rebuild native modules for Electron
+        run: node scripts/rebuild-native.js
 
       - name: TypeScript type check
         run: npm run type-check
@@ -46,7 +113,9 @@ jobs:
         continue-on-error: true
 
       - name: Run tests
-        run: npm test -- --silent --maxWorkers=2
+        run: npm test -- --silent --maxWorkers=2 --workerIdleMemoryLimit=512MB --forceExit
+        env:
+          NODE_OPTIONS: "--max-old-space-size=4096"
 
       - name: Upload coverage to Codecov
         if: matrix.os == 'macos-latest' && matrix.node-version == '20.x'
@@ -59,7 +128,8 @@ jobs:
   build:
     name: Build Application
     runs-on: ${{ matrix.os }}
-    needs: test
+    needs: [check-changes, test]
+    if: needs.check-changes.outputs.docs-only != 'true'
 
     strategy:
       matrix:
@@ -87,8 +157,20 @@ jobs:
           path: dist/
           retention-days: 7
 
+  # For docs-only changes, provide passing security check
+  security-pass:
+    name: Security Audit
+    needs: check-changes
+    if: needs.check-changes.outputs.docs-only == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Skip security audit (docs-only change)
+        run: echo "Skipping security audit - documentation-only changes detected"
+
   security:
     name: Security Audit
+    needs: check-changes
+    if: needs.check-changes.outputs.docs-only != 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -112,8 +194,8 @@ jobs:
   package:
     name: Package Application
     runs-on: ${{ matrix.os }}
-    needs: [test, build]
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+    needs: [check-changes, test, build]
+    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') && needs.check-changes.outputs.docs-only != 'true'
 
     strategy:
       matrix:

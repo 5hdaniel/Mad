@@ -88,6 +88,28 @@ jest.mock("fs", () => ({
   renameSync: jest.fn(),
 }));
 
+// Mock dbConnection module for delegation support
+jest.mock("../db/core/dbConnection", () => ({
+  ensureDb: jest.fn(() => mockDatabase),
+  dbGet: jest.fn((sql: string, params: unknown[]) => {
+    const stmt = mockDatabase.prepare(sql);
+    return stmt.get(...params);
+  }),
+  dbAll: jest.fn((sql: string, params: unknown[]) => {
+    const stmt = mockDatabase.prepare(sql);
+    return stmt.all(...params);
+  }),
+  dbRun: jest.fn((sql: string, params: unknown[]) => {
+    const stmt = mockDatabase.prepare(sql);
+    return stmt.run(...params);
+  }),
+  setDb: jest.fn(),
+  setDbPath: jest.fn(),
+  setEncryptionKey: jest.fn(),
+  closeDb: jest.fn(),
+  vacuumDb: jest.fn(),
+}));
+
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const databaseService = require("../databaseService").default;
 

@@ -8,6 +8,7 @@ import type { IpcMainInvokeEvent } from "electron";
 import transactionService from "./services/transactionService";
 import auditService from "./services/auditService";
 import logService from "./services/logService";
+import { autoLinkTextsToTransaction } from "./services/messageMatchingService";
 import type {
   Transaction,
   NewTransaction,
@@ -19,6 +20,7 @@ import type {
 const pdfExportService = require("./services/pdfExportService").default;
 const enhancedExportService =
   require("./services/enhancedExportService").default;
+const folderExportService = require("./services/folderExportService").default;
 
 // Import validation utilities
 import {
@@ -31,6 +33,9 @@ import {
   validateProvider,
   sanitizeObject,
 } from "./utils/validation";
+
+// Import rate limiting
+import { rateLimiters } from "./utils/rateLimit";
 
 // Type definitions
 interface TransactionResponse {
@@ -106,6 +111,8 @@ export const registerTransactionHandlers = (
   );
 
   // Scan and extract transactions from emails
+  // Rate limited: 5 second cooldown per user to prevent scan spam.
+  // Scans hit external email APIs (Gmail, Outlook).
   ipcMain.handle(
     "transactions:scan",
     async (
@@ -123,6 +130,25 @@ export const registerTransactionHandlers = (
         if (!validatedUserId) {
           throw new ValidationError("User ID validation failed", "userId");
         }
+
+        // Rate limit check - 5 second cooldown per user
+        const { allowed, remainingMs } = rateLimiters.scan.canExecute(
+          "transactions:scan",
+          validatedUserId
+        );
+        if (!allowed && remainingMs !== undefined) {
+          const seconds = Math.ceil(remainingMs / 1000);
+          logService.warn(
+            `Rate limited transactions:scan for user ${validatedUserId}. Retry in ${seconds}s`,
+            "Transactions"
+          );
+          return {
+            success: false,
+            error: `Please wait ${seconds} seconds before starting another scan.`,
+            rateLimited: true,
+          };
+        }
+
         const sanitizedOptions = sanitizeObject(options || {}) as ScanOptions;
 
         const result = await transactionService.scanAndExtractTransactions(
@@ -184,6 +210,16 @@ export const registerTransactionHandlers = (
 
         const transactions =
           await transactionService.getTransactions(validatedUserId);
+
+        // Debug: log detection fields being returned to frontend
+        if (transactions.length > 0) {
+          logService.debug("First transaction detection fields", "TransactionHandlers", {
+            id: transactions[0].id,
+            detection_source: transactions[0].detection_source,
+            detection_status: transactions[0].detection_status,
+            detection_confidence: transactions[0].detection_confidence,
+          });
+        }
 
         return {
           success: true,
@@ -694,6 +730,109 @@ export const registerTransactionHandlers = (
     },
   );
 
+  // Batch update contact assignments for a transaction
+  ipcMain.handle(
+    "transactions:batchUpdateContacts",
+    async (
+      event: IpcMainInvokeEvent,
+      transactionId: string,
+      operations: Array<{
+        action: "add" | "remove";
+        contactId: string;
+        role?: string;
+        roleCategory?: string;
+        specificRole?: string;
+        isPrimary?: boolean;
+        notes?: string;
+      }>,
+    ): Promise<TransactionResponse> => {
+      try {
+        // Validate transaction ID
+        const validatedTransactionId = validateTransactionId(transactionId);
+        if (!validatedTransactionId) {
+          throw new ValidationError(
+            "Transaction ID validation failed",
+            "transactionId",
+          );
+        }
+
+        // Validate operations array
+        if (!Array.isArray(operations)) {
+          throw new ValidationError(
+            "Operations must be an array",
+            "operations",
+          );
+        }
+
+        // Validate each operation
+        const validatedOperations = operations.map((op, index) => {
+          if (!op.action || (op.action !== "add" && op.action !== "remove")) {
+            throw new ValidationError(
+              `Invalid action at index ${index}: must be 'add' or 'remove'`,
+              "operations",
+            );
+          }
+
+          const validatedContactId = validateContactId(op.contactId);
+          if (!validatedContactId) {
+            throw new ValidationError(
+              `Invalid contact ID at index ${index}`,
+              "operations",
+            );
+          }
+
+          return {
+            action: op.action,
+            contactId: validatedContactId,
+            role: op.role?.trim(),
+            roleCategory: op.roleCategory?.trim(),
+            specificRole: op.specificRole?.trim(),
+            isPrimary: op.isPrimary ?? false,
+            notes: op.notes?.trim(),
+          };
+        });
+
+        await transactionService.batchUpdateContactAssignments(
+          validatedTransactionId as string,
+          validatedOperations,
+        );
+
+        logService.info(
+          "Batch contact assignments updated",
+          "Transactions",
+          {
+            transactionId: validatedTransactionId,
+            operationCount: validatedOperations.length,
+          },
+        );
+
+        return {
+          success: true,
+        };
+      } catch (error) {
+        logService.error(
+          "Batch update contact assignments failed",
+          "Transactions",
+          {
+            transactionId,
+            operationCount: operations?.length ?? 0,
+            error: error instanceof Error ? error.message : "Unknown error",
+          },
+        );
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
   // Unlink communication (email) from transaction
   ipcMain.handle(
     "transactions:unlink-communication",
@@ -1009,10 +1148,10 @@ export const registerTransactionHandlers = (
           );
         }
 
-        // Validate status
-        if (!status || !["active", "closed"].includes(status)) {
+        // Validate status - allow all 4 transaction statuses
+        if (!status || !["pending", "active", "closed", "rejected"].includes(status)) {
           throw new ValidationError(
-            "Status must be 'active' or 'closed'",
+            "Status must be 'pending', 'active', 'closed', or 'rejected'",
             "status",
           );
         }
@@ -1042,7 +1181,7 @@ export const registerTransactionHandlers = (
             const userId = existingTransaction?.user_id || "unknown";
 
             await transactionService.updateTransaction(transactionId, {
-              status: status as "active" | "closed",
+              status: status as "pending" | "active" | "closed" | "rejected",
             });
 
             // Audit log transaction update
@@ -1057,9 +1196,14 @@ export const registerTransactionHandlers = (
 
             updatedCount++;
           } catch (err) {
-            errors.push(
-              `Failed to update ${transactionId}: ${err instanceof Error ? err.message : "Unknown error"}`,
-            );
+            const errorMsg = err instanceof Error ? err.message : "Unknown error";
+            logService.error("Failed to update transaction status", "Transactions", {
+              transactionId,
+              status,
+              error: errorMsg,
+              stack: err instanceof Error ? err.stack : undefined,
+            });
+            errors.push(`Failed to update ${transactionId}: ${errorMsg}`);
           }
         }
 
@@ -1075,6 +1219,170 @@ export const registerTransactionHandlers = (
         };
       } catch (error) {
         logService.error("Bulk status update failed", "Transactions", {
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // Get unlinked messages (not attached to any transaction)
+  ipcMain.handle(
+    "transactions:get-unlinked-messages",
+    async (
+      event: IpcMainInvokeEvent,
+      userId: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        logService.info("Getting unlinked messages", "Transactions", { userId });
+
+        // Validate input
+        const validatedUserId = validateUserId(userId);
+        if (!validatedUserId) {
+          throw new ValidationError("User ID validation failed", "userId");
+        }
+
+        const messages = await transactionService.getUnlinkedMessages(validatedUserId);
+
+        return {
+          success: true,
+          messages,
+        };
+      } catch (error) {
+        logService.error("Get unlinked messages failed", "Transactions", {
+          userId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // Link messages to a transaction
+  ipcMain.handle(
+    "transactions:link-messages",
+    async (
+      event: IpcMainInvokeEvent,
+      messageIds: string[],
+      transactionId: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        logService.info("Linking messages to transaction", "Transactions", {
+          messageCount: messageIds?.length || 0,
+          transactionId,
+        });
+
+        // Validate transaction ID
+        const validatedTransactionId = validateTransactionId(transactionId);
+        if (!validatedTransactionId) {
+          throw new ValidationError(
+            "Transaction ID validation failed",
+            "transactionId",
+          );
+        }
+
+        // Validate message IDs
+        if (!Array.isArray(messageIds) || messageIds.length === 0) {
+          throw new ValidationError(
+            "Message IDs must be a non-empty array",
+            "messageIds",
+          );
+        }
+
+        // Validate each message ID
+        for (const id of messageIds) {
+          if (!id || typeof id !== "string" || id.trim().length === 0) {
+            throw new ValidationError(`Invalid message ID: ${id}`, "messageIds");
+          }
+        }
+
+        await transactionService.linkMessages(messageIds, validatedTransactionId);
+
+        logService.info("Messages linked successfully", "Transactions", {
+          messageCount: messageIds.length,
+          transactionId: validatedTransactionId,
+        });
+
+        return {
+          success: true,
+        };
+      } catch (error) {
+        logService.error("Link messages failed", "Transactions", {
+          messageCount: messageIds?.length || 0,
+          transactionId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // Unlink messages from a transaction (sets transaction_id to null)
+  ipcMain.handle(
+    "transactions:unlink-messages",
+    async (
+      event: IpcMainInvokeEvent,
+      messageIds: string[],
+    ): Promise<TransactionResponse> => {
+      try {
+        logService.info("Unlinking messages from transaction", "Transactions", {
+          messageCount: messageIds?.length || 0,
+        });
+
+        // Validate message IDs
+        if (!Array.isArray(messageIds) || messageIds.length === 0) {
+          throw new ValidationError(
+            "Message IDs must be a non-empty array",
+            "messageIds",
+          );
+        }
+
+        // Validate each message ID
+        for (const id of messageIds) {
+          if (!id || typeof id !== "string" || id.trim().length === 0) {
+            throw new ValidationError(`Invalid message ID: ${id}`, "messageIds");
+          }
+        }
+
+        await transactionService.unlinkMessages(messageIds);
+
+        logService.info("Messages unlinked successfully", "Transactions", {
+          messageCount: messageIds.length,
+        });
+
+        return {
+          success: true,
+        };
+      } catch (error) {
+        logService.error("Unlink messages failed", "Transactions", {
+          messageCount: messageIds?.length || 0,
           error: error instanceof Error ? error.message : "Unknown error",
         });
         if (error instanceof ValidationError) {
@@ -1134,8 +1442,7 @@ export const registerTransactionHandlers = (
         );
 
         // Update export tracking in database
-        const { databaseService: db } =
-          require("./services/databaseService").default;
+        const db = require("./services/databaseService").default;
         await db.updateTransaction(validatedTransactionId, {
           export_status: "exported",
           export_format: sanitizedOptions.exportFormat || "pdf",
@@ -1168,6 +1475,171 @@ export const registerTransactionHandlers = (
         };
       } catch (error) {
         logService.error("Enhanced export failed", "Transactions", {
+          transactionId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // Auto-link text messages to a transaction based on assigned contacts
+  ipcMain.handle(
+    "transactions:auto-link-texts",
+    async (
+      event: IpcMainInvokeEvent,
+      transactionId: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        logService.info("Auto-linking texts to transaction", "Transactions", {
+          transactionId,
+        });
+
+        // Validate transaction ID
+        const validatedTransactionId = validateTransactionId(transactionId);
+        if (!validatedTransactionId) {
+          throw new ValidationError(
+            "Transaction ID validation failed",
+            "transactionId",
+          );
+        }
+
+        const result = await autoLinkTextsToTransaction(validatedTransactionId);
+
+        logService.info("Auto-link texts complete", "Transactions", {
+          transactionId: validatedTransactionId,
+          linked: result.linked,
+          skipped: result.skipped,
+          errors: result.errors.length,
+        });
+
+        return {
+          success: result.errors.length === 0,
+          linked: result.linked,
+          skipped: result.skipped,
+          errors: result.errors.length > 0 ? result.errors : undefined,
+        };
+      } catch (error) {
+        logService.error("Auto-link texts failed", "Transactions", {
+          transactionId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // Export transaction to organized folder structure
+  ipcMain.handle(
+    "transactions:export-folder",
+    async (
+      event: IpcMainInvokeEvent,
+      transactionId: string,
+      options?: unknown,
+    ): Promise<TransactionResponse> => {
+      try {
+        logService.info("Starting folder export", "Transactions", {
+          transactionId,
+        });
+
+        // Validate inputs
+        const validatedTransactionId = validateTransactionId(transactionId);
+        if (!validatedTransactionId) {
+          throw new ValidationError(
+            "Transaction ID validation failed",
+            "transactionId",
+          );
+        }
+        const sanitizedOptions = sanitizeObject(options || {}) as {
+          includeEmails?: boolean;
+          includeTexts?: boolean;
+          includeAttachments?: boolean;
+        };
+
+        // Get transaction details with communications
+        const details = await transactionService.getTransactionDetails(
+          validatedTransactionId,
+        );
+
+        if (!details) {
+          return {
+            success: false,
+            error: "Transaction not found",
+          };
+        }
+
+        // Export to folder structure
+        const exportPath = await folderExportService.exportTransactionToFolder(
+          details,
+          (details as any).communications || [],
+          {
+            transactionId: validatedTransactionId,
+            includeEmails: sanitizedOptions.includeEmails ?? true,
+            includeTexts: sanitizedOptions.includeTexts ?? true,
+            includeAttachments: sanitizedOptions.includeAttachments ?? true,
+            onProgress: (progress: unknown) => {
+              // Send progress updates to renderer
+              if (mainWindow) {
+                mainWindow.webContents.send(
+                  "transactions:export-folder-progress",
+                  progress,
+                );
+              }
+            },
+          },
+        );
+
+        // Update export tracking in database
+        const db = require("./services/databaseService").default;
+        await db.updateTransaction(validatedTransactionId, {
+          export_status: "exported",
+          export_format: "folder",
+          last_exported_on: new Date().toISOString(),
+          export_count: (details.export_count || 0) + 1,
+        });
+
+        // Audit log data export
+        await auditService.log({
+          userId: details.user_id,
+          action: "DATA_EXPORT",
+          resourceType: "EXPORT",
+          resourceId: validatedTransactionId,
+          metadata: {
+            format: "folder",
+            propertyAddress: details.property_address,
+          },
+          success: true,
+        });
+
+        logService.info("Folder export successful", "Transactions", {
+          transactionId: validatedTransactionId,
+          path: exportPath,
+        });
+
+        return {
+          success: true,
+          path: exportPath,
+        };
+      } catch (error) {
+        logService.error("Folder export failed", "Transactions", {
           transactionId,
           error: error instanceof Error ? error.message : "Unknown error",
         });

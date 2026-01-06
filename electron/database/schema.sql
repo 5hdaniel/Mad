@@ -1,9 +1,17 @@
 -- ============================================
 -- MAD - LOCAL SQLite DATABASE SCHEMA
 -- ============================================
--- Purpose: Store user data, transactions, communications locally
+-- Version: 2.0 (LLM + Agent Ready)
+-- Purpose: Store user data, transactions, messages locally
 -- Privacy: All sensitive data encrypted, local-first approach
 -- Sync: Users table synced from Supabase cloud
+--
+-- Design Principles:
+-- 1. Local-first: All sensitive data stays on device
+-- 2. LLM-ready: Structured for tool-based AI analysis
+-- 3. Agent-ready: Stage fields + history for future agents
+-- 4. MCP-ready: ID-based resources for clean tool interfaces
+-- ============================================
 
 -- ============================================
 -- USERS TABLE (Local Copy)
@@ -102,108 +110,289 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 
 -- ============================================
--- CONTACTS TABLE (Local)
+-- CONTACTS TABLE (Core entity)
 -- ============================================
+-- Contacts are looked up at query time via contact_emails/contact_phones
+-- This allows retroactive matching when users add missing info
 CREATE TABLE IF NOT EXISTS contacts (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
 
-  -- Contact Information
-  name TEXT NOT NULL,
-  email TEXT,
-  phone TEXT,
+  -- Display Info
+  display_name TEXT NOT NULL,
   company TEXT,
   title TEXT,
 
-  -- Source
-  source TEXT DEFAULT 'manual' CHECK (source IN ('manual', 'email', 'contacts_app')),
+  -- Source of this contact
+  source TEXT DEFAULT 'manual' CHECK (source IN ('manual', 'email', 'sms', 'contacts_app', 'inferred')),
+
+  -- Engagement Metrics (for CRM/Relationship Agent)
+  last_inbound_at DATETIME,              -- Last time they messaged us
+  last_outbound_at DATETIME,             -- Last time we messaged them
+  total_messages INTEGER DEFAULT 0,      -- Total message count
+  tags TEXT,                             -- JSON array: ["VIP", "past_client", "lead"]
 
   -- Import tracking
-  is_imported INTEGER DEFAULT 1,
+  is_imported INTEGER DEFAULT 1,         -- 1 = imported contact, 0 = manually created
 
   -- Metadata
+  metadata TEXT,                         -- JSON for additional notes/data
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  last_interaction_at DATETIME,
 
   FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE
 );
 
 -- ============================================
--- TRANSACTIONS TABLE (Local)
+-- CONTACT EMAILS (Child table for multi-email support)
+-- ============================================
+-- Allows contacts to have multiple emails
+-- Enables retroactive matching when users add new emails
+CREATE TABLE IF NOT EXISTS contact_emails (
+  id TEXT PRIMARY KEY,
+  contact_id TEXT NOT NULL,
+
+  email TEXT NOT NULL,
+  is_primary INTEGER DEFAULT 0,
+  label TEXT,                            -- work, personal, etc.
+  source TEXT CHECK (source IN ('import', 'manual', 'inferred')),
+
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+  FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE CASCADE,
+  UNIQUE(contact_id, email)
+);
+
+-- ============================================
+-- CONTACT PHONES (Child table for multi-phone support)
+-- ============================================
+-- Allows contacts to have multiple phone numbers
+-- Uses E.164 format for consistent matching
+CREATE TABLE IF NOT EXISTS contact_phones (
+  id TEXT PRIMARY KEY,
+  contact_id TEXT NOT NULL,
+
+  phone_e164 TEXT NOT NULL,              -- Normalized: +14155550000
+  phone_display TEXT,                    -- Display format: (415) 555-0000
+  is_primary INTEGER DEFAULT 0,
+  label TEXT,                            -- mobile, home, work, etc.
+  source TEXT CHECK (source IN ('import', 'manual', 'inferred')),
+
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+  FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE CASCADE,
+  UNIQUE(contact_id, phone_e164)
+);
+
+-- ============================================
+-- MESSAGES TABLE (Emails, SMS, iMessage)
+-- ============================================
+-- Primary communication storage - what LLMs analyze
+CREATE TABLE IF NOT EXISTS messages (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+
+  -- Channel/Source Info
+  channel_account_id TEXT,               -- Which mailbox/phone sent/received this
+  external_id TEXT,                      -- Provider ID (Gmail, Outlook, iMessage)
+
+  -- Type & Direction
+  channel TEXT CHECK (channel IN ('email', 'sms', 'imessage')),
+  direction TEXT CHECK (direction IN ('inbound', 'outbound')),
+
+  -- Content
+  subject TEXT,                          -- Email subject (null for SMS)
+  body_html TEXT,                        -- Original HTML (email only)
+  body_text TEXT,                        -- Normalized plain text - what LLMs see
+
+  -- Participants (JSON for flexibility)
+  -- Format: {"from": "email/phone", "to": [...], "cc": [...], "bcc": [...]}
+  participants TEXT,
+  participants_flat TEXT,                -- Denormalized: "from, to1, to2, cc1" for search
+
+  -- Threading
+  thread_id TEXT,                        -- Email thread ID or SMS conversation ID
+
+  -- Timestamps
+  sent_at DATETIME,
+  received_at DATETIME,
+
+  -- Attachments (count, actual files in attachments table)
+  has_attachments INTEGER DEFAULT 0,
+
+  -- Classification Results (LLM/Pattern outputs)
+  is_transaction_related INTEGER,        -- 1 = yes, 0 = no, NULL = not classified
+  classification_confidence REAL,        -- 0.0 - 1.0
+  classification_method TEXT CHECK (classification_method IN ('pattern', 'llm', 'user')),
+  classified_at DATETIME,
+
+  -- False Positive Tracking
+  is_false_positive INTEGER DEFAULT 0,
+  false_positive_reason TEXT CHECK (false_positive_reason IN ('signature', 'promotional', 'unrelated', 'other')),
+
+  -- Stage Hint (for future timeline features)
+  -- Values: intro, showing, offer, inspections, escrow, closing, post_closing
+  stage_hint TEXT,
+  stage_hint_source TEXT CHECK (stage_hint_source IN ('pattern', 'llm', 'user')),
+  stage_hint_confidence REAL,
+
+  -- Transaction Link
+  transaction_id TEXT,
+  transaction_link_confidence REAL,      -- How sure we are about this link
+  transaction_link_source TEXT CHECK (transaction_link_source IN ('pattern', 'llm', 'user')),
+
+  -- Deduplication (TASK-905)
+  message_id_header TEXT,                -- RFC 5322 Message-ID header for cross-provider dedup
+  content_hash TEXT,                     -- SHA-256 hash of normalized content for fallback dedup
+  duplicate_of TEXT,                     -- ID of original message if this is a duplicate
+
+  -- Metadata (provider-specific data)
+  metadata TEXT,                         -- JSON: labels, flags, etc.
+
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+  FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE,
+  FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE SET NULL
+);
+
+-- ============================================
+-- ATTACHMENTS TABLE (Files attached to messages)
+-- ============================================
+-- Separate table enables document classification and OCR
+CREATE TABLE IF NOT EXISTS attachments (
+  id TEXT PRIMARY KEY,
+  message_id TEXT NOT NULL,
+
+  -- File Info
+  filename TEXT NOT NULL,
+  mime_type TEXT,
+  file_size_bytes INTEGER,
+  storage_path TEXT,                     -- Local file path
+
+  -- Extracted Content (for LLMs)
+  text_content TEXT,                     -- OCR / extracted text from PDFs
+
+  -- Document Classification
+  document_type TEXT,                    -- offer, inspection, disclosure, contract, appraisal, amendment, addendum, other
+  document_type_confidence REAL,
+  document_type_source TEXT CHECK (document_type_source IN ('pattern', 'llm', 'user')),
+
+  -- Analysis Results (JSON)
+  -- Contains extracted fields: dates, amounts, parties, etc.
+  analysis_metadata TEXT,
+
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+  FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
+);
+
+-- ============================================
+-- TRANSACTIONS TABLE (Real estate deals)
 -- ============================================
 CREATE TABLE IF NOT EXISTS transactions (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
 
-  -- Property Information (USER INPUT)
-  property_address TEXT NOT NULL,
+  -- Property Information
+  property_address TEXT NOT NULL,        -- Full canonical address
   property_street TEXT,
   property_city TEXT,
   property_state TEXT,
   property_zip TEXT,
-  property_coordinates TEXT,
+  property_coordinates TEXT,             -- JSON: {"lat": ..., "lng": ...}
 
-  -- Transaction Details (AUTO-DETECTED + USER INPUT)
-  transaction_type TEXT CHECK (transaction_type IN ('purchase', 'sale')),
-  transaction_status TEXT DEFAULT 'completed' CHECK (transaction_status IN ('completed', 'pending')),
-  status TEXT DEFAULT 'active' CHECK (status IN ('active', 'closed')),
-  closing_date DATE,
-  representation_start_date DATE,
-  closing_date_verified INTEGER DEFAULT 0,
-  representation_start_confidence INTEGER,
-  closing_date_confidence INTEGER,
+  -- Transaction Type & Status
+  transaction_type TEXT CHECK (transaction_type IN ('purchase', 'sale', 'other')),
+  status TEXT DEFAULT 'active' CHECK (status IN ('pending', 'active', 'closed', 'rejected')),
 
-  -- Contact Associations
-  buyer_agent_id TEXT,
-  seller_agent_id TEXT,
-  escrow_officer_id TEXT,
-  inspector_id TEXT,
-  other_contacts TEXT, -- JSON array of contact IDs
+  -- Key Dates
+  started_at DATETIME,                   -- Representation start / first contact
+  closed_at DATETIME,                    -- Closing date
+  last_activity_at DATETIME,             -- Last message/update
 
-  -- Metadata
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  -- Confidence (how sure we are this is a real transaction cluster)
+  confidence_score REAL,
+
+  -- Stage (for future timeline/agent features)
+  -- Values: intro, showing, offer, inspections, escrow, closing, post_closing
+  stage TEXT,
+  stage_source TEXT CHECK (stage_source IN ('pattern', 'llm', 'user', 'import')),
+  stage_confidence REAL,
+  stage_updated_at DATETIME,
+
+  -- Financial Data (auto-extracted or user-entered)
+  listing_price REAL,
+  sale_price REAL,
+  earnest_money_amount REAL,
+
+  -- Key Dates (auto-extracted)
+  mutual_acceptance_date DATE,
+  inspection_deadline DATE,
+  financing_deadline DATE,
+  closing_deadline DATE,
+
+  -- Stats
+  message_count INTEGER DEFAULT 0,
+  attachment_count INTEGER DEFAULT 0,
 
   -- Export Tracking
   export_status TEXT DEFAULT 'not_exported' CHECK (export_status IN ('not_exported', 'exported', 're_export_needed')),
-  export_format TEXT CHECK (export_format IN ('pdf', 'csv', 'json', 'txt_eml', 'excel')),
   export_count INTEGER DEFAULT 0,
-  last_exported_on DATETIME,
-  export_generated_at DATETIME, -- Deprecated: Use last_exported_on instead
+  last_exported_at DATETIME,
 
-  -- Extraction Stats
-  communications_scanned INTEGER DEFAULT 0,
-  extraction_confidence INTEGER,
+  -- Metadata
+  metadata TEXT,                         -- JSON for additional data
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 
-  -- Auto-Extracted Data
-  first_communication_date DATETIME,
-  last_communication_date DATETIME,
-  total_communications_count INTEGER DEFAULT 0,
-  mutual_acceptance_date DATE,
-  earnest_money_amount DECIMAL(10, 2),
-  earnest_money_delivered_date DATE,
-  listing_price DECIMAL(12, 2),
-  sale_price DECIMAL(12, 2),
-  other_parties TEXT,
-  offer_count INTEGER DEFAULT 0,
-  failed_offers_count INTEGER DEFAULT 0,
-  key_dates TEXT,
-
-  FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE,
-  FOREIGN KEY (buyer_agent_id) REFERENCES contacts(id) ON DELETE SET NULL,
-  FOREIGN KEY (seller_agent_id) REFERENCES contacts(id) ON DELETE SET NULL,
-  FOREIGN KEY (escrow_officer_id) REFERENCES contacts(id) ON DELETE SET NULL,
-  FOREIGN KEY (inspector_id) REFERENCES contacts(id) ON DELETE SET NULL
+  FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE
 );
 
 -- ============================================
--- TRANSACTION CONTACTS (Many-to-Many)
+-- TRANSACTION PARTICIPANTS (Contacts linked to transactions)
 -- ============================================
+-- Links contacts to transactions with roles
+CREATE TABLE IF NOT EXISTS transaction_participants (
+  id TEXT PRIMARY KEY,
+  transaction_id TEXT NOT NULL,
+  contact_id TEXT NOT NULL,
+
+  -- Role (standardized enum for consistency)
+  role TEXT CHECK (role IN (
+    'buyer', 'seller',
+    'buyer_agent', 'listing_agent',
+    'lender', 'loan_officer',
+    'escrow_officer', 'title_officer',
+    'inspector', 'appraiser',
+    'attorney', 'tc',
+    'other', 'unknown'
+  )),
+
+  -- Confidence & Source
+  confidence REAL,                       -- 0.0 - 1.0
+  role_source TEXT CHECK (role_source IN ('pattern', 'llm', 'user')),
+
+  is_primary INTEGER DEFAULT 0,          -- Primary contact for this role
+  notes TEXT,
+
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+  FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE CASCADE,
+  FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE CASCADE,
+  UNIQUE(transaction_id, contact_id)
+);
+
+-- ============================================
+-- TRANSACTION CONTACTS (Junction table for contacts in transactions)
+-- ============================================
+-- Links contacts to transactions with detailed role information
 CREATE TABLE IF NOT EXISTS transaction_contacts (
   id TEXT PRIMARY KEY,
   transaction_id TEXT NOT NULL,
   contact_id TEXT NOT NULL,
+
+  -- Role information
   role TEXT,
   role_category TEXT,
   specific_role TEXT,
@@ -214,100 +403,150 @@ CREATE TABLE IF NOT EXISTS transaction_contacts (
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 
   FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE CASCADE,
+  FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE CASCADE,
   UNIQUE(transaction_id, contact_id)
 );
 
 -- ============================================
--- COMMUNICATIONS TABLE (Cached Emails/Texts)
+-- AUDIT LOGS TABLE (Compliance tracking)
 -- ============================================
-CREATE TABLE IF NOT EXISTS communications (
+-- Tracks all user actions for compliance/SOC 2
+CREATE TABLE IF NOT EXISTS audit_logs (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
+  session_id TEXT,
+  action TEXT NOT NULL CHECK (action IN (
+    'LOGIN', 'LOGOUT', 'SESSION_REFRESH',
+    'TRANSACTION_CREATE', 'TRANSACTION_UPDATE', 'TRANSACTION_DELETE',
+    'CONTACT_CREATE', 'CONTACT_UPDATE', 'CONTACT_DELETE',
+    'EXPORT_START', 'EXPORT_COMPLETE', 'EXPORT_FAIL',
+    'MAILBOX_CONNECT', 'MAILBOX_DISCONNECT',
+    'SETTINGS_UPDATE', 'TERMS_ACCEPT'
+  )),
+  resource_type TEXT,
+  resource_id TEXT,
+  details TEXT,                           -- JSON for additional context
+  metadata TEXT,                          -- JSON for additional metadata (used by AuditService)
+  ip_address TEXT,
+  user_agent TEXT,
+  success INTEGER DEFAULT 1,              -- Whether the action succeeded (1=true, 0=false)
+  error_message TEXT,                     -- Error message if action failed
+  timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+  synced_at DATETIME,                     -- When synced to cloud (if applicable)
+
+  FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE
+);
+
+-- ============================================
+-- AUDIT PACKAGES (Generated compliance bundles)
+-- ============================================
+-- Represents a complete audit export for a transaction
+CREATE TABLE IF NOT EXISTS audit_packages (
+  id TEXT PRIMARY KEY,
+  transaction_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+
+  -- Package Info
+  generated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  format TEXT CHECK (format IN ('pdf', 'zip', 'json', 'excel')),
+  storage_path TEXT,                     -- Local file path to package
+
+  -- Content Summary
+  message_count INTEGER,
+  attachment_count INTEGER,
+  date_range_start DATETIME,
+  date_range_end DATETIME,
+
+  -- LLM-Generated Summary
+  summary TEXT,
+
+  -- Quality Score
+  completeness_score REAL,               -- 0.0 - 1.0, how complete is this audit
+
+  -- Version tracking (for regeneration)
+  version INTEGER DEFAULT 1,
+
+  -- Metadata
+  metadata TEXT,
+
+  FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE
+);
+
+-- ============================================
+-- TRANSACTION STAGE HISTORY (Timeline tracking)
+-- ============================================
+-- Tracks stage changes over time for timeline reconstruction
+-- (Future use - agents can analyze progression)
+CREATE TABLE IF NOT EXISTS transaction_stage_history (
+  id TEXT PRIMARY KEY,
+  transaction_id TEXT NOT NULL,
+
+  stage TEXT NOT NULL,
+  source TEXT CHECK (source IN ('pattern', 'llm', 'user')),
+  confidence REAL,
+  changed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+  -- Optional: what triggered this change
+  trigger_message_id TEXT,
+
+  FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE CASCADE,
+  FOREIGN KEY (trigger_message_id) REFERENCES messages(id) ON DELETE SET NULL
+);
+
+-- ============================================
+-- CLASSIFICATION FEEDBACK (Training data collection)
+-- ============================================
+-- Tracks user corrections for future model improvement
+CREATE TABLE IF NOT EXISTS classification_feedback (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+
+  -- What was corrected
+  message_id TEXT,
+  attachment_id TEXT,
   transaction_id TEXT,
+  contact_id TEXT,
 
-  -- Communication Metadata
-  communication_type TEXT CHECK (communication_type IN ('email', 'text', 'imessage')),
-  source TEXT,
-  email_thread_id TEXT,
+  -- Feedback Type
+  feedback_type TEXT CHECK (feedback_type IN (
+    'message_relevance',                 -- Was this email transaction-related?
+    'transaction_link',                  -- Which transaction does this belong to?
+    'document_type',                     -- What type of document is this?
+    'contact_role',                      -- What role does this contact have?
+    'stage_hint'                         -- What stage is this message from?
+  )),
 
-  -- Participants
-  sender TEXT,
-  recipients TEXT,
-  cc TEXT,
-  bcc TEXT,
-
-  -- Content
-  subject TEXT,
-  body TEXT,
-  body_plain TEXT,
-
-  -- Timestamps
-  sent_at DATETIME,
-  received_at DATETIME,
-
-  -- Attachments
-  has_attachments INTEGER DEFAULT 0,
-  attachment_count INTEGER DEFAULT 0,
-  attachment_metadata TEXT,
-
-  -- Analysis
-  keywords_detected TEXT,
-  parties_involved TEXT,
-  communication_category TEXT,
-  flagged_for_review INTEGER DEFAULT 0,
-  is_compliance_related INTEGER DEFAULT 0,
-
-  -- Linking
-  relevance_score INTEGER,
+  -- Values (stored as text for flexibility)
+  original_value TEXT,
+  corrected_value TEXT,
+  reason TEXT,                           -- Why the correction was made
 
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 
   FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE,
-  FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE SET NULL
+  FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE SET NULL,
+  FOREIGN KEY (attachment_id) REFERENCES attachments(id) ON DELETE SET NULL,
+  FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE SET NULL,
+  FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE SET NULL
 );
 
 -- ============================================
--- IGNORED COMMUNICATIONS (User-unlinked emails)
+-- EXTRACTED TRANSACTION DATA (Field-level audit trail)
 -- ============================================
--- Tracks emails that users have manually unlinked from transactions
--- These emails won't be re-added during future auto scans
-CREATE TABLE IF NOT EXISTS ignored_communications (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL,
-  transaction_id TEXT NOT NULL,
-
-  -- Email identification (using multiple fields to uniquely identify an email)
-  email_subject TEXT,
-  email_sender TEXT,
-  email_sent_at DATETIME,
-  email_thread_id TEXT,
-
-  -- Original communication reference (may be null if comm was deleted)
-  original_communication_id TEXT,
-
-  -- Tracking
-  ignored_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  reason TEXT, -- Optional reason for unlinking
-
-  FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE,
-  FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE CASCADE
-);
-
--- ============================================
--- EXTRACTED TRANSACTION DATA (Audit Trail)
--- ============================================
+-- Tracks what was extracted from which message
 CREATE TABLE IF NOT EXISTS extracted_transaction_data (
   id TEXT PRIMARY KEY,
   transaction_id TEXT NOT NULL,
 
   -- Extracted Field
-  field_name TEXT NOT NULL,
+  field_name TEXT NOT NULL,              -- closing_date, sale_price, etc.
   field_value TEXT,
 
   -- Source
-  source_communication_id TEXT,
-  extraction_method TEXT,
-  confidence_score INTEGER,
+  source_message_id TEXT,
+  extraction_method TEXT CHECK (extraction_method IN ('pattern', 'llm', 'user')),
+  confidence_score REAL,
 
   -- Verification
   manually_verified INTEGER DEFAULT 0,
@@ -316,37 +555,94 @@ CREATE TABLE IF NOT EXISTS extracted_transaction_data (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 
   FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE CASCADE,
-  FOREIGN KEY (source_communication_id) REFERENCES communications(id) ON DELETE SET NULL
+  FOREIGN KEY (source_message_id) REFERENCES messages(id) ON DELETE SET NULL
 );
 
 -- ============================================
 -- INDEXES (Performance Optimization)
 -- ============================================
--- Note: Indexes for migration-added columns are created in the migration code
+
+-- Users & Auth
 CREATE INDEX IF NOT EXISTS idx_users_local_email ON users_local(email);
 CREATE INDEX IF NOT EXISTS idx_oauth_tokens_user_provider ON oauth_tokens(user_id, provider, purpose);
 CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(session_token);
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
+
+-- Contacts
 CREATE INDEX IF NOT EXISTS idx_contacts_user_id ON contacts(user_id);
-CREATE INDEX IF NOT EXISTS idx_contacts_email ON contacts(email);
+CREATE INDEX IF NOT EXISTS idx_contacts_display_name ON contacts(display_name);
 CREATE INDEX IF NOT EXISTS idx_contacts_is_imported ON contacts(is_imported);
 CREATE INDEX IF NOT EXISTS idx_contacts_user_imported ON contacts(user_id, is_imported);
+CREATE INDEX IF NOT EXISTS idx_contact_emails_contact_id ON contact_emails(contact_id);
+CREATE INDEX IF NOT EXISTS idx_contact_emails_email ON contact_emails(email);
+CREATE INDEX IF NOT EXISTS idx_contact_phones_contact_id ON contact_phones(contact_id);
+CREATE INDEX IF NOT EXISTS idx_contact_phones_phone ON contact_phones(phone_e164);
+
+-- Messages
+CREATE INDEX IF NOT EXISTS idx_messages_user_id ON messages(user_id);
+CREATE INDEX IF NOT EXISTS idx_messages_transaction_id ON messages(transaction_id);
+CREATE INDEX IF NOT EXISTS idx_messages_sent_at ON messages(sent_at);
+CREATE INDEX IF NOT EXISTS idx_messages_channel ON messages(channel);
+CREATE INDEX IF NOT EXISTS idx_messages_external_id ON messages(external_id);
+CREATE INDEX IF NOT EXISTS idx_messages_thread_id ON messages(thread_id);
+CREATE INDEX IF NOT EXISTS idx_messages_is_transaction_related ON messages(is_transaction_related);
+CREATE INDEX IF NOT EXISTS idx_messages_participants_flat ON messages(participants_flat);
+-- Deduplication indexes (TASK-905)
+CREATE INDEX IF NOT EXISTS idx_messages_message_id_header ON messages(message_id_header);
+CREATE INDEX IF NOT EXISTS idx_messages_content_hash ON messages(content_hash);
+CREATE INDEX IF NOT EXISTS idx_messages_duplicate_of ON messages(duplicate_of);
+
+-- Attachments
+CREATE INDEX IF NOT EXISTS idx_attachments_message_id ON attachments(message_id);
+CREATE INDEX IF NOT EXISTS idx_attachments_document_type ON attachments(document_type);
+
+-- Transactions
 CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id);
-CREATE INDEX IF NOT EXISTS idx_transactions_property ON transactions(property_address);
-CREATE INDEX IF NOT EXISTS idx_transaction_contacts_transaction_id ON transaction_contacts(transaction_id);
-CREATE INDEX IF NOT EXISTS idx_communications_user_id ON communications(user_id);
-CREATE INDEX IF NOT EXISTS idx_communications_transaction_id ON communications(transaction_id);
-CREATE INDEX IF NOT EXISTS idx_communications_sent_at ON communications(sent_at);
-CREATE INDEX IF NOT EXISTS idx_extracted_data_transaction_id ON extracted_transaction_data(transaction_id);
-CREATE INDEX IF NOT EXISTS idx_ignored_communications_user_id ON ignored_communications(user_id);
-CREATE INDEX IF NOT EXISTS idx_ignored_communications_transaction_id ON ignored_communications(transaction_id);
-CREATE INDEX IF NOT EXISTS idx_ignored_communications_email ON ignored_communications(email_sender, email_subject, email_sent_at);
+CREATE INDEX IF NOT EXISTS idx_transactions_property_address ON transactions(property_address);
+CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions(status);
+CREATE INDEX IF NOT EXISTS idx_transactions_stage ON transactions(stage);
+
+-- Transaction Participants
+CREATE INDEX IF NOT EXISTS idx_transaction_participants_transaction ON transaction_participants(transaction_id);
+CREATE INDEX IF NOT EXISTS idx_transaction_participants_contact ON transaction_participants(contact_id);
+CREATE INDEX IF NOT EXISTS idx_transaction_participants_role ON transaction_participants(role);
+
+-- Transaction Contacts
+CREATE INDEX IF NOT EXISTS idx_transaction_contacts_transaction ON transaction_contacts(transaction_id);
+CREATE INDEX IF NOT EXISTS idx_transaction_contacts_contact ON transaction_contacts(contact_id);
+CREATE INDEX IF NOT EXISTS idx_transaction_contacts_role ON transaction_contacts(role);
+CREATE INDEX IF NOT EXISTS idx_transaction_contacts_specific_role ON transaction_contacts(specific_role);
+CREATE INDEX IF NOT EXISTS idx_transaction_contacts_category ON transaction_contacts(role_category);
+CREATE INDEX IF NOT EXISTS idx_transaction_contacts_primary ON transaction_contacts(is_primary);
+
+-- Audit Logs
+CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_synced ON audit_logs(synced_at);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_resource_type ON audit_logs(resource_type);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_session_id ON audit_logs(session_id);
+
+-- Audit Packages
+CREATE INDEX IF NOT EXISTS idx_audit_packages_transaction ON audit_packages(transaction_id);
+CREATE INDEX IF NOT EXISTS idx_audit_packages_user ON audit_packages(user_id);
+
+-- Stage History
+CREATE INDEX IF NOT EXISTS idx_stage_history_transaction ON transaction_stage_history(transaction_id);
+CREATE INDEX IF NOT EXISTS idx_stage_history_changed_at ON transaction_stage_history(changed_at);
+
+-- Classification Feedback
+CREATE INDEX IF NOT EXISTS idx_feedback_user ON classification_feedback(user_id);
+CREATE INDEX IF NOT EXISTS idx_feedback_message ON classification_feedback(message_id);
+CREATE INDEX IF NOT EXISTS idx_feedback_type ON classification_feedback(feedback_type);
+
+-- Extracted Data
+CREATE INDEX IF NOT EXISTS idx_extracted_data_transaction ON extracted_transaction_data(transaction_id);
+CREATE INDEX IF NOT EXISTS idx_extracted_data_field ON extracted_transaction_data(field_name);
 
 -- ============================================
 -- TRIGGERS (Auto-update timestamps)
 -- ============================================
--- Note: Additional triggers are created in the migration code
--- after ensuring required columns exist
 
 CREATE TRIGGER IF NOT EXISTS update_users_local_timestamp
 AFTER UPDATE ON users_local
@@ -365,3 +661,195 @@ AFTER UPDATE ON contacts
 BEGIN
   UPDATE contacts SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
 END;
+
+CREATE TRIGGER IF NOT EXISTS update_transactions_timestamp
+AFTER UPDATE ON transactions
+BEGIN
+  UPDATE transactions SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS update_transaction_participants_timestamp
+AFTER UPDATE ON transaction_participants
+BEGIN
+  UPDATE transaction_participants SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS update_transaction_contacts_timestamp
+AFTER UPDATE ON transaction_contacts
+BEGIN
+  UPDATE transaction_contacts SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+END;
+
+-- Audit logs are append-only (no updates/deletes allowed)
+CREATE TRIGGER IF NOT EXISTS prevent_audit_update
+BEFORE UPDATE ON audit_logs
+BEGIN
+  SELECT RAISE(ABORT, 'Audit logs cannot be modified');
+END;
+
+CREATE TRIGGER IF NOT EXISTS prevent_audit_delete
+BEFORE DELETE ON audit_logs
+BEGIN
+  SELECT RAISE(ABORT, 'Audit logs cannot be deleted');
+END;
+
+-- ============================================
+-- COMMUNICATIONS TABLE (Junction table linking messages to transactions)
+-- ============================================
+-- TASK-975: Refactored as a junction/reference table.
+--
+-- Architecture: messages (raw storage) -> communications (junction) -> transactions
+--
+-- This table links messages to transactions, enabling:
+-- - Both emails and texts to appear in transaction views
+-- - Content stored once in 'messages', referenced here
+-- - Link metadata (source, confidence, timestamp)
+--
+-- MIGRATION NOTE: Legacy content columns (subject, body, etc.) are preserved
+-- for backward compatibility but new records should use message_id reference.
+CREATE TABLE IF NOT EXISTS communications (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  transaction_id TEXT,
+
+  -- TASK-975: Message reference (junction table pattern)
+  -- New communications should always set this to link to messages table
+  message_id TEXT,
+
+  -- Link metadata (TASK-975)
+  link_source TEXT CHECK (link_source IN ('auto', 'manual', 'scan')),
+  link_confidence REAL,
+  linked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+  -- Type & Source (legacy, use message_id for new records)
+  communication_type TEXT DEFAULT 'email' CHECK (communication_type IN ('email', 'text', 'imessage')),
+  source TEXT,
+
+  -- Email Threading (legacy, use message_id for new records)
+  email_thread_id TEXT,
+
+  -- Participants (legacy, use message_id for new records)
+  sender TEXT,
+  recipients TEXT,
+  cc TEXT,
+  bcc TEXT,
+
+  -- Content (legacy, use message_id for new records)
+  subject TEXT,
+  body TEXT,
+  body_plain TEXT,
+
+  -- Timestamps (legacy, use message_id for new records)
+  sent_at DATETIME,
+  received_at DATETIME,
+
+  -- Attachments (legacy, use message_id for new records)
+  has_attachments INTEGER DEFAULT 0,
+  attachment_count INTEGER DEFAULT 0,
+  attachment_metadata TEXT,                -- JSON
+
+  -- Analysis/Classification (legacy, use message_id for new records)
+  keywords_detected TEXT,                  -- JSON array
+  parties_involved TEXT,                   -- JSON array
+  communication_category TEXT,
+  relevance_score REAL,
+  is_compliance_related INTEGER DEFAULT 0,
+
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+  FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE,
+  FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE SET NULL,
+  FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
+);
+
+-- Communications indexes
+CREATE INDEX IF NOT EXISTS idx_communications_user_id ON communications(user_id);
+CREATE INDEX IF NOT EXISTS idx_communications_transaction_id ON communications(transaction_id);
+CREATE INDEX IF NOT EXISTS idx_communications_sent_at ON communications(sent_at);
+CREATE INDEX IF NOT EXISTS idx_communications_sender ON communications(sender);
+-- TASK-975: Junction table indexes for message_id lookups
+CREATE INDEX IF NOT EXISTS idx_communications_message_id ON communications(message_id);
+CREATE INDEX IF NOT EXISTS idx_communications_txn_msg ON communications(transaction_id, message_id);
+
+-- ============================================
+-- IGNORED COMMUNICATIONS TABLE
+-- ============================================
+-- Stores communications that have been explicitly ignored/hidden from transactions.
+-- This prevents them from being re-added during future email scans.
+CREATE TABLE IF NOT EXISTS ignored_communications (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  transaction_id TEXT NOT NULL,
+
+  -- Email identification fields (used to match incoming emails)
+  email_subject TEXT,
+  email_sender TEXT,
+  email_sent_at TEXT,
+  email_thread_id TEXT,
+
+  -- Original communication reference (if available)
+  original_communication_id TEXT,
+
+  -- Reason for ignoring (optional user note)
+  reason TEXT,
+
+  ignored_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+  FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE,
+  FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE CASCADE
+);
+
+-- Index for quick lookups during email scanning
+CREATE INDEX IF NOT EXISTS idx_ignored_comms_user_email
+  ON ignored_communications(user_id, email_sender, email_subject, email_sent_at);
+
+CREATE INDEX IF NOT EXISTS idx_ignored_comms_transaction
+  ON ignored_communications(transaction_id);
+
+-- ============================================
+-- VIEWS (Convenient queries for common operations)
+-- ============================================
+
+-- Contact lookup view (flattens emails/phones for easy querying)
+CREATE VIEW IF NOT EXISTS contact_lookup AS
+SELECT
+  c.id as contact_id,
+  c.user_id,
+  c.display_name,
+  ce.email,
+  cp.phone_e164 as phone
+FROM contacts c
+LEFT JOIN contact_emails ce ON c.id = ce.contact_id
+LEFT JOIN contact_phones cp ON c.id = cp.contact_id;
+
+-- Transaction summary view
+CREATE VIEW IF NOT EXISTS transaction_summary AS
+SELECT
+  t.id,
+  t.user_id,
+  t.property_address,
+  t.transaction_type,
+  t.status,
+  t.stage,
+  t.started_at,
+  t.closed_at,
+  t.message_count,
+  t.attachment_count,
+  t.confidence_score,
+  (SELECT COUNT(*) FROM transaction_participants tp WHERE tp.transaction_id = t.id) as participant_count,
+  (SELECT COUNT(*) FROM audit_packages ap WHERE ap.transaction_id = t.id) as audit_count
+FROM transactions t;
+
+-- ============================================
+-- SCHEMA VERSION TABLE (Migration tracking)
+-- ============================================
+-- Tracks which schema version is currently applied.
+-- Used by databaseService to determine which migrations to run.
+CREATE TABLE IF NOT EXISTS schema_version (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  version INTEGER NOT NULL DEFAULT 1,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Initialize schema version if not exists
+INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 8);

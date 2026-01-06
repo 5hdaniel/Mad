@@ -10,6 +10,7 @@ export { TrustComputerHint } from "./TrustComputerHint";
 export { DeviceInfo } from "./DeviceInfo";
 export { BackupPasswordModal } from "./BackupPasswordModal";
 export { SyncProgress } from "./SyncProgress";
+export { IPhoneSyncFlow } from "./IPhoneSyncFlow";
 
 // Re-export types for convenience
 export type {

@@ -1,10 +1,5 @@
 import React from "react";
-import type { Contact } from "../../electron/types/models";
-
-interface ExtendedContact extends Contact {
-  address_mention_count?: number;
-  last_communication_at?: string | Date;
-}
+import type { ExtendedContact } from "../types/components";
 
 interface ContactSelectModalProps {
   contacts: ExtendedContact[];
@@ -13,6 +8,8 @@ interface ContactSelectModalProps {
   onSelect: (contacts: ExtendedContact[]) => void;
   onClose: () => void;
   propertyAddress?: string;
+  /** Initial contact IDs to pre-select when modal opens */
+  initialSelectedIds?: string[];
 }
 
 /**
@@ -33,9 +30,18 @@ function ContactSelectModal({
   onSelect,
   onClose,
   propertyAddress,
+  initialSelectedIds = [],
 }: ContactSelectModalProps) {
   const [searchQuery, setSearchQuery] = React.useState("");
-  const [selectedIds, setSelectedIds] = React.useState<string[]>([]);
+  const [selectedIds, setSelectedIds] = React.useState<string[]>(initialSelectedIds);
+
+  // Sync selectedIds when initialSelectedIds prop changes (e.g., modal reopened with different selections)
+  // Use join() to create a stable string key - avoids infinite loop from default [] creating new reference each render
+  const initialIdsKey = initialSelectedIds.join(',');
+  React.useEffect(() => {
+    setSelectedIds(initialSelectedIds);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialIdsKey]);
 
   const availableContacts = contacts.filter((c) => !excludeIds.includes(c.id));
 

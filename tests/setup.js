@@ -72,6 +72,18 @@ if (typeof window !== 'undefined') {
       remove: jest.fn(),
     },
     system: {
+      // Platform detection (migrated from window.electron.platform)
+      platform: 'darwin',
+      // App info (migrated from window.electron)
+      getAppInfo: jest.fn(),
+      getMacOSVersion: jest.fn(),
+      checkAppLocation: jest.fn(),
+      // Permission checks (migrated from window.electron)
+      checkPermissions: jest.fn(),
+      triggerFullDiskAccess: jest.fn(),
+      requestPermissions: jest.fn(),
+      openSystemSettings: jest.fn(),
+      // Existing system methods
       checkFullDiskAccess: jest.fn(),
       checkContactsPermission: jest.fn(),
       checkAllPermissions: jest.fn(),
@@ -84,6 +96,8 @@ if (typeof window !== 'undefined') {
       getDiagnostics: jest.fn(),
       hasEncryptionKeyStore: jest.fn(),
       initializeSecureStorage: jest.fn(),
+      getSecureStorageStatus: jest.fn(),
+      setupFullDiskAccess: jest.fn(),
     },
     address: {
       initialize: jest.fn(),
@@ -94,12 +108,65 @@ if (typeof window !== 'undefined') {
       get: jest.fn(),
       update: jest.fn(),
     },
+    llm: {
+      getConfig: jest.fn(),
+      setApiKey: jest.fn(),
+      validateKey: jest.fn(),
+      removeApiKey: jest.fn(),
+      updatePreferences: jest.fn(),
+      recordConsent: jest.fn(),
+      getUsage: jest.fn(),
+      canUse: jest.fn(),
+    },
+    feedback: {
+      submit: jest.fn(),
+      getForTransaction: jest.fn(),
+      getMetrics: jest.fn(),
+      getSuggestion: jest.fn(),
+      getLearningStats: jest.fn(),
+      recordTransaction: jest.fn(),
+      recordRole: jest.fn(),
+      recordRelevance: jest.fn(),
+      getStats: jest.fn(),
+    },
     user: {
       getPhoneType: jest.fn(),
       setPhoneType: jest.fn(),
     },
     shell: {
       openExternal: jest.fn(),
+      openFolder: jest.fn(),
+    },
+    // iMessage conversations (macOS) - migrated from window.electron
+    messages: {
+      getConversations: jest.fn(),
+      getMessages: jest.fn(),
+      exportConversations: jest.fn(),
+    },
+    // Outlook integration - migrated from window.electron
+    outlook: {
+      initialize: jest.fn(),
+      isAuthenticated: jest.fn(),
+      authenticate: jest.fn(),
+      getUserEmail: jest.fn(),
+      exportEmails: jest.fn(),
+      onDeviceCode: jest.fn(() => jest.fn()),
+      onExportProgress: jest.fn(() => jest.fn()),
+    },
+    // Auto-update functionality - migrated from window.electron
+    update: {
+      onAvailable: jest.fn(() => jest.fn()),
+      onProgress: jest.fn(() => jest.fn()),
+      onDownloaded: jest.fn(() => jest.fn()),
+      install: jest.fn(),
+    },
+    // Apple drivers (Windows only)
+    drivers: {
+      checkApple: jest.fn(),
+      installApple: jest.fn(),
+      hasBundled: jest.fn(),
+      openITunesStore: jest.fn(),
+      checkUpdate: jest.fn(),
     },
     onTransactionScanProgress: jest.fn(() => jest.fn()),
     onGoogleMailboxConnected: jest.fn(() => jest.fn()),
@@ -171,3 +238,16 @@ global.console = {
   error: jest.fn(),
   warn: jest.fn(),
 };
+
+// Global cleanup to prevent Jest from hanging
+// Many tests use setTimeout which keeps the Node.js event loop alive
+afterAll(() => {
+  // Clear any pending timers
+  jest.clearAllTimers();
+  // Ensure real timers are restored
+  try {
+    jest.useRealTimers();
+  } catch (_e) {
+    // Already using real timers, ignore
+  }
+});

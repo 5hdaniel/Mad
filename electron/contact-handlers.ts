@@ -5,6 +5,7 @@
 
 import { ipcMain } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
+import { randomUUID } from "crypto";
 import databaseService from "./services/databaseService";
 import { getContactNames } from "./services/contactsService";
 import auditService from "./services/auditService";
@@ -89,7 +90,7 @@ export function registerContactHandlers(): void {
     },
   );
 
-  // Get available contacts for import (from external sources)
+  // Get available contacts for import (from external sources + unimported DB contacts)
   ipcMain.handle(
     "contacts:get-available",
     async (
@@ -97,9 +98,10 @@ export function registerContactHandlers(): void {
       userId: string,
     ): Promise<ContactResponse> => {
       try {
-        console.log(
-          "[Main] Getting available contacts for import for user:",
-          userId,
+        logService.info(
+          "[Main] Getting available contacts for import",
+          "Contacts",
+          { userId },
         );
 
         // Validate input
@@ -125,6 +127,34 @@ export function registerContactHandlers(): void {
         const availableContacts: any[] = [];
         const seenContacts = new Set<string>();
 
+        // STEP 1: Get unimported contacts from database (iPhone synced contacts)
+        const unimportedDbContacts =
+          await databaseService.getUnimportedContactsByUserId(validatedUserId);
+
+        logService.info(
+          `[Main] Found ${unimportedDbContacts.length} unimported contacts from database (iPhone sync)`,
+          "Contacts",
+        );
+
+        for (const dbContact of unimportedDbContacts) {
+          const nameLower = dbContact.name?.toLowerCase() || dbContact.display_name?.toLowerCase();
+
+          if (nameLower && !seenContacts.has(nameLower)) {
+            seenContacts.add(nameLower);
+
+            availableContacts.push({
+              id: dbContact.id, // Use actual DB ID so we can mark as imported
+              name: dbContact.name || dbContact.display_name,
+              phone: dbContact.phone || null,
+              email: dbContact.email || null,
+              company: dbContact.company || null,
+              source: dbContact.source || "contacts_app",
+              isFromDatabase: true, // Flag to distinguish from macOS Contacts app
+            });
+          }
+        }
+
+        // STEP 2: Add contacts from macOS Contacts app (if not already in list)
         if (phoneToContactInfo && Object.keys(phoneToContactInfo).length > 0) {
           for (const [_phone, contactInfo] of Object.entries(
             phoneToContactInfo,
@@ -142,24 +172,29 @@ export function registerContactHandlers(): void {
               continue;
             }
 
-            if (!seenContacts.has(contactInfo.name)) {
-              seenContacts.add(contactInfo.name);
-
-              availableContacts.push({
-                id: `contacts-app-${contactInfo.name}`, // Temporary ID for UI
-                name: contactInfo.name,
-                phone: contactInfo.phones?.[0] || null, // Primary phone
-                email: contactInfo.emails?.[0] || null, // Primary email
-                source: "contacts_app",
-                allPhones: contactInfo.phones || [],
-                allEmails: contactInfo.emails || [],
-              });
+            // Skip if already added from database
+            if (seenContacts.has(nameLower)) {
+              continue;
             }
+
+            seenContacts.add(contactInfo.name);
+
+            availableContacts.push({
+              id: `contacts-app-${randomUUID()}`, // Unique ID for UI (names aren't unique)
+              name: contactInfo.name,
+              phone: contactInfo.phones?.[0] || null, // Primary phone
+              email: contactInfo.emails?.[0] || null, // Primary email
+              source: "contacts_app",
+              allPhones: contactInfo.phones || [],
+              allEmails: contactInfo.emails || [],
+              isFromDatabase: false,
+            });
           }
         }
 
-        console.log(
-          `[Main] Found ${availableContacts.length} available contacts for import`,
+        logService.info(
+          `[Main] Found ${availableContacts.length} total available contacts for import`,
+          "Contacts",
         );
 
         return {
@@ -168,7 +203,7 @@ export function registerContactHandlers(): void {
           contactsStatus: status, // Include loading status
         };
       } catch (error) {
-        console.error("[Main] Get available contacts failed:", error);
+        logService.error("[Main] Get available contacts failed:", "Contacts", { error });
         if (error instanceof ValidationError) {
           return {
             success: false,
@@ -192,11 +227,10 @@ export function registerContactHandlers(): void {
       contactsToImport: unknown[],
     ): Promise<ContactResponse> => {
       try {
-        console.log(
-          "[Main] Importing contacts for user:",
-          userId,
-          "count:",
-          contactsToImport.length,
+        logService.info(
+          "[Main] Importing contacts",
+          "Contacts",
+          { userId, count: contactsToImport.length },
         );
 
         // Validate inputs
@@ -231,24 +265,38 @@ export function registerContactHandlers(): void {
 
         for (const contact of contactsToImport) {
           // Validate each contact's data (basic validation)
-          const sanitizedContact = sanitizeObject(contact);
+          const sanitizedContact = sanitizeObject(contact) as any;
           const validatedData = validateContactData(sanitizedContact, false);
 
-          const importedContact = await databaseService.createContact({
-            user_id: validatedUserId,
-            name: validatedData.name || "Unknown",
-            email: validatedData.email ?? undefined,
-            phone: validatedData.phone ?? undefined,
-            company: validatedData.company ?? undefined,
-            title: validatedData.title ?? undefined,
-            source: (sanitizedContact as any).source || "contacts_app",
-            is_imported: true,
-          });
-          importedContacts.push(importedContact);
+          // Check if this is a contact already in the database (from iPhone sync)
+          // If so, just mark it as imported instead of creating a new record
+          if (sanitizedContact.isFromDatabase && sanitizedContact.id && !sanitizedContact.id.startsWith("contacts-app-")) {
+            await databaseService.markContactAsImported(sanitizedContact.id);
+            // Fetch the updated contact to return
+            const updatedContact = await databaseService.getContactById(sanitizedContact.id);
+            if (updatedContact) {
+              importedContacts.push(updatedContact);
+            }
+            logService.info(`[Main] Marked existing contact as imported: ${sanitizedContact.id}`, "Contacts");
+          } else {
+            // Create new contact from macOS Contacts app
+            const importedContact = await databaseService.createContact({
+              user_id: validatedUserId,
+              display_name: validatedData.name || "Unknown",
+              email: validatedData.email ?? undefined,
+              phone: validatedData.phone ?? undefined,
+              company: validatedData.company ?? undefined,
+              title: validatedData.title ?? undefined,
+              source: sanitizedContact.source || "contacts_app",
+              is_imported: true,
+            });
+            importedContacts.push(importedContact);
+          }
         }
 
-        console.log(
+        logService.info(
           `[Main] Successfully imported ${importedContacts.length} contacts`,
+          "Contacts",
         );
 
         return {
@@ -256,7 +304,7 @@ export function registerContactHandlers(): void {
           contacts: importedContacts,
         };
       } catch (error) {
-        console.error("[Main] Import contacts failed:", error);
+        logService.error("[Main] Import contacts failed:", "Contacts", { error });
         if (error instanceof ValidationError) {
           return {
             success: false,
@@ -280,11 +328,10 @@ export function registerContactHandlers(): void {
       propertyAddress: string | null = null,
     ): Promise<ContactResponse> => {
       try {
-        console.log(
-          "[Main] Getting contacts sorted by activity for user:",
-          userId,
-          "address:",
-          propertyAddress,
+        logService.info(
+          "[Main] Getting contacts sorted by activity",
+          "Contacts",
+          { userId, propertyAddress },
         );
 
         // Validate inputs
@@ -308,8 +355,9 @@ export function registerContactHandlers(): void {
             validatedAddress ?? undefined,
           );
 
-        console.log(
+        logService.info(
           `[Main] Returning ${importedContacts.length} imported contacts sorted by activity`,
+          "Contacts",
         );
 
         return {
@@ -317,7 +365,7 @@ export function registerContactHandlers(): void {
           contacts: importedContacts,
         };
       } catch (error) {
-        console.error("[Main] Get sorted contacts failed:", error);
+        logService.error("[Main] Get sorted contacts failed:", "Contacts", { error });
         if (error instanceof ValidationError) {
           return {
             success: false,
@@ -350,7 +398,7 @@ export function registerContactHandlers(): void {
 
         const contact = await databaseService.createContact({
           user_id: validatedUserId,
-          name: validatedData.name || "Unknown",
+          display_name: validatedData.name || "Unknown",
           email: validatedData.email ?? undefined,
           phone: validatedData.phone ?? undefined,
           company: validatedData.company ?? undefined,
@@ -483,7 +531,7 @@ export function registerContactHandlers(): void {
       contactId: string,
     ): Promise<ContactResponse> => {
       try {
-        console.log("[Main] Checking if contact can be deleted:", contactId);
+        logService.info("[Main] Checking if contact can be deleted", "Contacts", { contactId });
 
         // Validate input
         const validatedContactId = validateContactId(contactId); // Validated, will throw if invalid
@@ -504,7 +552,7 @@ export function registerContactHandlers(): void {
           count: transactions.length,
         };
       } catch (error) {
-        console.error("[Main] Check can delete contact failed:", error);
+        logService.error("[Main] Check can delete contact failed:", "Contacts", { contactId, error });
         if (error instanceof ValidationError) {
           return {
             success: false,
@@ -602,7 +650,7 @@ export function registerContactHandlers(): void {
       contactId: string,
     ): Promise<ContactResponse> => {
       try {
-        console.log("[Main] Removing contact from local database:", contactId);
+        logService.info("[Main] Removing contact from local database", "Contacts", { contactId });
 
         // Validate input
         const validatedContactId = validateContactId(contactId); // Validated, will throw if invalid
@@ -632,7 +680,7 @@ export function registerContactHandlers(): void {
           success: true,
         };
       } catch (error) {
-        console.error("[Main] Remove contact failed:", error);
+        logService.error("[Main] Remove contact failed:", "Contacts", { contactId, error });
         if (error instanceof ValidationError) {
           return {
             success: false,

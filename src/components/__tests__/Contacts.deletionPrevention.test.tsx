@@ -16,6 +16,15 @@ import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom";
 import Contacts from "../Contacts";
 
+// Mock useAppStateMachine to return isDatabaseInitialized: true
+// This allows tests to render the actual component content
+jest.mock("../../appCore", () => ({
+  ...jest.requireActual("../../appCore"),
+  useAppStateMachine: () => ({
+    isDatabaseInitialized: true,
+  }),
+}));
+
 describe("Contacts - Deletion Prevention", () => {
   const mockUserId = "user-123";
   const mockOnClose = jest.fn();

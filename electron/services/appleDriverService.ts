@@ -251,7 +251,23 @@ export async function installAppleDrivers(): Promise<DriverInstallResult> {
     const result = await runMsiInstaller(msiPath);
 
     if (result.success) {
-      log.info("[AppleDriverService] Driver installation completed");
+      log.info("[AppleDriverService] Installer reported success, verifying...");
+
+      // Verify that drivers are actually installed
+      // This catches cases where UAC was declined but exit code was 0
+      const verification = await checkAppleDrivers();
+
+      if (!verification.isInstalled) {
+        log.warn("[AppleDriverService] Verification failed - drivers not installed despite success code");
+        return {
+          success: false,
+          error: null,
+          rebootRequired: false,
+          cancelled: true, // Assume user cancelled UAC
+        };
+      }
+
+      log.info("[AppleDriverService] Driver installation verified successfully");
 
       // Start the service if it's not running
       await startAppleMobileDeviceService();
@@ -271,18 +287,43 @@ export async function installAppleDrivers(): Promise<DriverInstallResult> {
 /**
  * Run MSI installer with elevated privileges using PowerShell
  * This triggers the UAC prompt for admin elevation
+ *
+ * SECURITY AUDIT (TASK-601):
+ * This function uses spawn("powershell", ...) with msiPath embedded in the command.
+ *
+ * RISK ANALYSIS:
+ * - msiPath comes from getBundledDriverPath() which returns paths from:
+ *   1. getDownloadedDriverPath() - paths within app.getPath("userData")
+ *   2. Bundled resources (process.resourcesPath or __dirname)
+ * - The path is NOT user-controlled - it's constructed internally from known directories
+ * - The path is validated by fs.existsSync() before being used
+ *
+ * CONCLUSION: SAFE - No user-controlled input flows into the spawn command.
+ * The msiPath is always from trusted internal sources (bundled resources or app's
+ * userData directory with fixed subdirectory structure).
+ *
+ * DEFENSE-IN-DEPTH: The path is quoted in the PowerShell command to handle
+ * paths with spaces, and msiexec.exe is the target executable (a known Windows binary).
  */
 function runMsiInstaller(msiPath: string): Promise<DriverInstallResult> {
   return new Promise((resolve) => {
     // Build msiexec arguments
+    // SECURITY: msiPath is from trusted internal sources (bundled or userData)
     const msiArgs = `/i "${msiPath}" /qn /norestart REBOOT=ReallySuppress`;
 
     // Use PowerShell Start-Process with -Verb RunAs to trigger UAC elevation
     // -Wait ensures we wait for the installation to complete
     // -PassThru returns the process object so we can get the exit code
+    // Wrap in try-catch to properly handle UAC decline (which throws an exception)
     const psCommand = `
-      $process = Start-Process -FilePath "msiexec.exe" -ArgumentList '${msiArgs}' -Verb RunAs -Wait -PassThru
-      exit $process.ExitCode
+      try {
+        $process = Start-Process -FilePath "msiexec.exe" -ArgumentList '${msiArgs}' -Verb RunAs -Wait -PassThru -ErrorAction Stop
+        exit $process.ExitCode
+      } catch {
+        # UAC declined or other error starting the elevated process
+        # Exit with 1602 (ERROR_INSTALL_USEREXIT) to indicate user cancellation
+        exit 1602
+      }
     `.trim();
 
     log.info("[AppleDriverService] Running elevated installer via PowerShell");

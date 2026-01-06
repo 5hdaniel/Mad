@@ -21,6 +21,126 @@ import type {
 import type { ExportResult, ExtractionResult, SyncStatus } from "./database";
 
 // ============================================
+// LLM TYPE DEFINITIONS
+// ============================================
+
+/**
+ * LLM provider type
+ */
+export type LLMProvider = "openai" | "anthropic";
+
+/**
+ * Response wrapper for consistent error handling across all LLM handlers.
+ */
+export interface LLMHandlerResponse<T> {
+  success: boolean;
+  data?: T;
+  error?: {
+    message: string;
+    type: string;
+    retryable: boolean;
+  };
+}
+
+/**
+ * User-facing LLM configuration summary.
+ * Never exposes raw API keys or sensitive settings.
+ */
+export interface LLMUserConfig {
+  hasOpenAI: boolean;
+  hasAnthropic: boolean;
+  preferredProvider: LLMProvider;
+  openAIModel: string;
+  anthropicModel: string;
+  tokensUsed: number;
+  budgetLimit?: number;
+  platformAllowanceRemaining: number;
+  usePlatformAllowance: boolean;
+  autoDetectEnabled: boolean;
+  roleExtractionEnabled: boolean;
+  hasConsent: boolean;
+}
+
+/**
+ * Preferences that can be updated by the user.
+ */
+export interface LLMPreferences {
+  preferredProvider?: LLMProvider;
+  openAIModel?: string;
+  anthropicModel?: string;
+  enableAutoDetect?: boolean;
+  enableRoleExtraction?: boolean;
+  usePlatformAllowance?: boolean;
+  budgetLimit?: number;
+}
+
+/**
+ * Usage statistics for display.
+ */
+export interface LLMUsageStats {
+  tokensThisMonth: number;
+  budgetLimit?: number;
+  budgetRemaining?: number;
+  platformAllowance: number;
+  platformUsed: number;
+  resetDate?: string;
+}
+
+/**
+ * Result of canUseLLM check.
+ */
+export interface LLMAvailability {
+  canUse: boolean;
+  reason?: string;
+}
+
+// ============================================
+// SHARED IPC TYPES
+// ============================================
+
+/**
+ * Export progress event data
+ */
+export interface ExportProgress {
+  current: number;
+  total: number;
+  contactName?: string;
+  phase?: "preparing" | "exporting" | "finishing";
+}
+
+/**
+ * Auto-update info
+ */
+export interface UpdateInfo {
+  version: string;
+  releaseDate?: string;
+  releaseNotes?: string;
+}
+
+/**
+ * Download progress info
+ */
+export interface UpdateProgress {
+  percent: number;
+  bytesPerSecond?: number;
+  total?: number;
+  transferred?: number;
+}
+
+/**
+ * Conversation summary for iMessage/SMS
+ */
+export interface ConversationSummary {
+  id: string;
+  name: string;
+  directChatCount: number;
+  groupChatCount: number;
+  directMessageCount: number;
+  groupMessageCount: number;
+  lastMessageDate: Date;
+}
+
+// ============================================
 // IPC CHANNEL DEFINITIONS
 // ============================================
 
@@ -353,6 +473,84 @@ export type IpcInvoke = <T extends keyof IpcChannels>(
 ) => Promise<IpcResponse<T>>;
 
 // ============================================
+// IPC RESULT TYPE GUARDS
+// ============================================
+
+/**
+ * Generic IPC result interface for consistent response handling
+ */
+export interface IpcResult<T = void> {
+  success: boolean;
+  error?: string;
+  data?: T;
+}
+
+/**
+ * Type guard to check if an IPC result is successful
+ */
+export function isIpcSuccess<T>(
+  result: IpcResult<T>,
+): result is IpcResult<T> & { success: true; data: T } {
+  return result.success === true && result.data !== undefined;
+}
+
+/**
+ * Type guard to check if an IPC result has an error
+ */
+export function isIpcError<T>(
+  result: IpcResult<T>,
+): result is IpcResult<T> & { success: false; error: string } {
+  return result.success === false && typeof result.error === "string";
+}
+
+/**
+ * Type guard for WindowApi result patterns (success + optional data)
+ */
+export function hasSuccessResult(
+  result: unknown,
+): result is { success: boolean; error?: string } {
+  return (
+    typeof result === "object" &&
+    result !== null &&
+    "success" in result &&
+    typeof (result as { success: unknown }).success === "boolean"
+  );
+}
+
+/**
+ * Type guard for transaction results
+ */
+export function isTransactionResult(
+  result: unknown,
+): result is { success: boolean; transaction?: Transaction; error?: string } {
+  if (!hasSuccessResult(result)) return false;
+  const r = result as { transaction?: unknown };
+  return r.transaction === undefined || typeof r.transaction === "object";
+}
+
+/**
+ * Type guard for contact results
+ */
+export function isContactResult(
+  result: unknown,
+): result is { success: boolean; contact?: Contact; error?: string } {
+  if (!hasSuccessResult(result)) return false;
+  const r = result as { contact?: unknown };
+  return r.contact === undefined || typeof r.contact === "object";
+}
+
+/**
+ * Type guard for contacts array results
+ */
+export function isContactsResult(
+  result: unknown,
+): result is { success: boolean; contacts?: Contact[]; error?: string } {
+  if (!hasSuccessResult(result)) return false;
+  const r = result as { contacts?: unknown };
+  return r.contacts === undefined || Array.isArray(r.contacts);
+}
+
+// ============================================
 // WINDOW API (exposed via preload)
 // ============================================
 
@@ -434,6 +632,12 @@ export interface WindowApi {
     acceptTerms: (
       userId: string,
     ) => Promise<{ success: boolean; error?: string }>;
+    completeEmailOnboarding: (
+      userId: string,
+    ) => Promise<{ success: boolean; error?: string }>;
+    checkEmailOnboarding: (
+      userId: string,
+    ) => Promise<{ success: boolean; completed: boolean; error?: string }>;
     // Complete pending login after keychain setup (login-first flow)
     completePendingLogin: (oauthData: unknown) => Promise<{
       success: boolean;
@@ -466,6 +670,30 @@ export interface WindowApi {
 
   // System methods
   system: {
+    // Platform detection (migrated from window.electron.platform)
+    platform: NodeJS.Platform;
+
+    // App info methods (migrated from window.electron)
+    getAppInfo: () => Promise<{ version: string; name: string }>;
+    getMacOSVersion: () => Promise<{ version: string | number; name?: string }>;
+    checkAppLocation: () => Promise<{
+      inApplications?: boolean;
+      shouldPrompt?: boolean;
+      appPath?: string;
+      path?: string;
+    }>;
+
+    // Permission checks (migrated from window.electron)
+    checkPermissions: () => Promise<{
+      hasPermission?: boolean;
+      fullDiskAccess?: boolean;
+      contacts?: boolean;
+    }>;
+    triggerFullDiskAccess: () => Promise<{ granted: boolean }>;
+    requestPermissions: () => Promise<Record<string, unknown>>;
+    openSystemSettings: () => Promise<{ success: boolean }>;
+
+    // Existing system methods
     runPermissionSetup: () => Promise<{ success: boolean }>;
     requestContactsPermission: () => Promise<{ granted: boolean }>;
     setupFullDiskAccess: () => Promise<{ success: boolean }>;
@@ -547,6 +775,99 @@ export interface WindowApi {
     ) => Promise<{ success: boolean }>;
   };
 
+  // LLM methods
+  llm: {
+    getConfig: (userId: string) => Promise<LLMHandlerResponse<LLMUserConfig>>;
+    setApiKey: (
+      userId: string,
+      provider: LLMProvider,
+      apiKey: string,
+    ) => Promise<LLMHandlerResponse<void>>;
+    validateKey: (
+      provider: LLMProvider,
+      apiKey: string,
+    ) => Promise<LLMHandlerResponse<boolean>>;
+    removeApiKey: (
+      userId: string,
+      provider: LLMProvider,
+    ) => Promise<LLMHandlerResponse<void>>;
+    updatePreferences: (
+      userId: string,
+      preferences: LLMPreferences,
+    ) => Promise<LLMHandlerResponse<void>>;
+    recordConsent: (
+      userId: string,
+      consent: boolean,
+    ) => Promise<LLMHandlerResponse<void>>;
+    getUsage: (userId: string) => Promise<LLMHandlerResponse<LLMUsageStats>>;
+    canUse: (userId: string) => Promise<LLMHandlerResponse<LLMAvailability>>;
+  };
+
+  // Feedback methods for AI transaction detection
+  feedback: {
+    submit: (
+      userId: string,
+      feedbackData: Record<string, unknown>,
+    ) => Promise<{ success: boolean; feedbackId?: string; error?: string }>;
+    getForTransaction: (
+      transactionId: string,
+    ) => Promise<{ success: boolean; feedback?: unknown[]; error?: string }>;
+    getMetrics: (
+      userId: string,
+      fieldName: string,
+    ) => Promise<{ success: boolean; metrics?: unknown; error?: string }>;
+    getSuggestion: (
+      userId: string,
+      fieldName: string,
+      extractedValue: unknown,
+      confidence: number,
+    ) => Promise<{ success: boolean; suggestion?: unknown; confidence?: number; error?: string }>;
+    getLearningStats: (
+      userId: string,
+      fieldName: string,
+    ) => Promise<{ success: boolean; stats?: unknown; error?: string }>;
+    recordTransaction: (
+      userId: string,
+      feedback: {
+        detectedTransactionId: string;
+        action: "confirm" | "reject" | "merge";
+        corrections?: {
+          propertyAddress?: string;
+          transactionType?: string;
+          addCommunications?: string[];
+          removeCommunications?: string[];
+          reason?: string;
+        };
+        modelVersion?: string;
+        promptVersion?: string;
+      },
+    ) => Promise<{ success: boolean; error?: string }>;
+    recordRole: (
+      userId: string,
+      feedback: {
+        transactionId: string;
+        contactId: string;
+        originalRole: string;
+        correctedRole: string;
+        modelVersion?: string;
+        promptVersion?: string;
+      },
+    ) => Promise<{ success: boolean; error?: string }>;
+    recordRelevance: (
+      userId: string,
+      feedback: {
+        communicationId: string;
+        wasRelevant: boolean;
+        correctTransactionId?: string;
+        modelVersion?: string;
+        promptVersion?: string;
+      },
+    ) => Promise<{ success: boolean; error?: string }>;
+    getStats: (
+      userId: string,
+    ) => Promise<{ success: boolean; data?: unknown; error?: string }>;
+  };
+
   // User preference methods (stored in local database)
   user: {
     getPhoneType: (userId: string) => Promise<{
@@ -593,7 +914,7 @@ export interface WindowApi {
     ) => Promise<{ success: boolean; error?: string }>;
     import: (
       userId: string,
-      contacts: any[],
+      contacts: NewContact[],
     ) => Promise<{ success: boolean; imported?: number; error?: string }>;
   };
 
@@ -619,7 +940,25 @@ export interface WindowApi {
     ) => Promise<{ success: boolean; cancelled?: boolean; error?: string }>;
     getDetails: (
       transactionId: string,
-    ) => Promise<{ success: boolean; transaction?: unknown; error?: string }>;
+    ) => Promise<{
+      success: boolean;
+      transaction?: Transaction & {
+        communications?: Communication[];
+        contact_assignments?: Array<{
+          id: string;
+          contact_id: string;
+          contact_name?: string;
+          contact_email?: string;
+          contact_phone?: string;
+          contact_company?: string;
+          role?: string;
+          specific_role?: string;
+          is_primary?: number;
+          notes?: string;
+        }>;
+      };
+      error?: string;
+    }>;
     create: (
       userId: string,
       transactionData: Record<string, unknown>,
@@ -659,6 +998,18 @@ export interface WindowApi {
       transactionId: string,
       contactId: string,
     ) => Promise<{ success: boolean; error?: string }>;
+    batchUpdateContacts: (
+      transactionId: string,
+      operations: Array<{
+        action: "add" | "remove";
+        contactId: string;
+        role?: string;
+        roleCategory?: string;
+        specificRole?: string;
+        isPrimary?: boolean;
+        notes?: string;
+      }>,
+    ) => Promise<{ success: boolean; error?: string }>;
     unlinkCommunication: (
       communicationId: string,
       reason?: string,
@@ -673,7 +1024,7 @@ export interface WindowApi {
     }>;
     bulkUpdateStatus: (
       transactionIds: string[],
-      status: "active" | "closed",
+      status: "pending" | "active" | "closed" | "rejected",
     ) => Promise<{
       success: boolean;
       updatedCount?: number;
@@ -723,6 +1074,68 @@ export interface WindowApi {
   // Shell methods
   shell: {
     openExternal: (url: string) => Promise<void>;
+    openFolder: (folderPath: string) => Promise<{ success: boolean }>;
+  };
+
+  // Messages API (iMessage/SMS - migrated from window.electron)
+  messages: {
+    getConversations: () => Promise<{
+      success: boolean;
+      conversations?: ConversationSummary[];
+      error?: string;
+    }>;
+    getMessages: (chatId: string) => Promise<unknown[]>;
+    exportConversations: (
+      conversationIds: string[],
+    ) => Promise<{
+      success: boolean;
+      exportPath?: string;
+      canceled?: boolean;
+      error?: string;
+    }>;
+  };
+
+  // Outlook integration (migrated from window.electron)
+  outlook: {
+    initialize: () => Promise<{ success: boolean; error?: string }>;
+    authenticate: () => Promise<{
+      success: boolean;
+      error?: string;
+      userInfo?: { username?: string };
+    }>;
+    isAuthenticated: () => Promise<boolean>;
+    getUserEmail: () => Promise<string | null>;
+    exportEmails: (
+      contacts: Array<{
+        name: string;
+        chatId?: string;
+        emails?: string[];
+        phones?: string[];
+      }>,
+    ) => Promise<{
+      success: boolean;
+      error?: string;
+      canceled?: boolean;
+      exportPath?: string;
+      results?: Array<{
+        contactName: string;
+        success: boolean;
+        textMessageCount: number;
+        emailCount?: number;
+        error: string | null;
+      }>;
+    }>;
+    signout: () => Promise<{ success: boolean }>;
+    onDeviceCode: (callback: (info: unknown) => void) => () => void;
+    onExportProgress: (callback: (progress: unknown) => void) => () => void;
+  };
+
+  // Auto-update (migrated from window.electron)
+  update: {
+    onAvailable: (callback: (info: unknown) => void) => () => void;
+    onProgress: (callback: (progress: unknown) => void) => () => void;
+    onDownloaded: (callback: (info: unknown) => void) => () => void;
+    install: () => void;
   };
 
   // Device detection methods (Windows)
@@ -931,6 +1344,8 @@ export interface WindowApi {
     onPasswordRequired: (callback: () => void) => () => void;
     onError: (callback: (error: { message: string }) => void) => () => void;
     onComplete: (callback: (result: unknown) => void) => () => void;
+    onWaitingForPasscode: (callback: () => void) => () => void;
+    onPasscodeEntered: (callback: () => void) => () => void;
   };
 
   // Event listeners for mailbox connections
@@ -1047,7 +1462,7 @@ declare global {
       openSystemSettings: () => Promise<{ success: boolean }>;
       getConversations: () => Promise<{
         success: boolean;
-        conversations?: any[];
+        conversations?: ConversationSummary[];
         error?: string;
       }>;
       exportConversations: (
@@ -1083,9 +1498,13 @@ declare global {
         }>;
       }>;
       onDeviceCode: (callback: (code: string) => void) => () => void;
-      onExportProgress: (callback: (progress: any) => void) => () => void;
-      onUpdateAvailable: (callback: (info: any) => void) => () => void;
-      onUpdateProgress: (callback: (progress: any) => void) => () => void;
+      onExportProgress: (
+        callback: (progress: ExportProgress) => void,
+      ) => () => void;
+      onUpdateAvailable: (callback: (info: UpdateInfo) => void) => () => void;
+      onUpdateProgress: (
+        callback: (progress: UpdateProgress) => void,
+      ) => () => void;
       onUpdateDownloaded: (callback: () => void) => () => void;
       installUpdate: () => void;
     };

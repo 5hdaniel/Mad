@@ -6,7 +6,14 @@
 import { ipcMain } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import databaseService from "./services/databaseService";
+import logService from "./services/logService";
 import type { UserFeedback } from "./types/models";
+import {
+  getFeedbackService,
+  TransactionFeedback,
+  RoleFeedback,
+  CommunicationFeedback,
+} from "./services/feedbackService";
 
 // Services (still JS - to be migrated)
 const feedbackLearningService =
@@ -30,6 +37,7 @@ interface FeedbackResponse {
   metrics?: unknown[];
   suggestion?: unknown;
   stats?: unknown;
+  data?: unknown;
 }
 
 /**
@@ -88,7 +96,7 @@ export const registerFeedbackHandlers = (): void => {
           feedbackId: feedback.id,
         };
       } catch (error) {
-        console.error("[Main] Submit feedback failed:", error);
+        logService.error("[Main] Submit feedback failed:", "Feedback", { error });
         if (error instanceof ValidationError) {
           return {
             success: false,
@@ -129,7 +137,7 @@ export const registerFeedbackHandlers = (): void => {
           feedback,
         };
       } catch (error) {
-        console.error("[Main] Get feedback failed:", error);
+        logService.error("[Main] Get feedback failed:", "Feedback", { error });
         if (error instanceof ValidationError) {
           return {
             success: false,
@@ -175,7 +183,7 @@ export const registerFeedbackHandlers = (): void => {
           metrics,
         };
       } catch (error) {
-        console.error("[Main] Get extraction metrics failed:", error);
+        logService.error("[Main] Get extraction metrics failed:", "Feedback", { error });
         if (error instanceof ValidationError) {
           return {
             success: false,
@@ -245,7 +253,7 @@ export const registerFeedbackHandlers = (): void => {
           suggestion,
         };
       } catch (error) {
-        console.error("[Main] Get suggestion failed:", error);
+        logService.error("[Main] Get suggestion failed:", "Feedback", { error });
         if (error instanceof ValidationError) {
           return {
             success: false,
@@ -289,7 +297,7 @@ export const registerFeedbackHandlers = (): void => {
           stats,
         };
       } catch (error) {
-        console.error("[Main] Get learning stats failed:", error);
+        logService.error("[Main] Get learning stats failed:", "Feedback", { error });
         if (error instanceof ValidationError) {
           return {
             success: false,
@@ -301,6 +309,98 @@ export const registerFeedbackHandlers = (): void => {
           success: false,
           error: error instanceof Error ? error.message : "Unknown error",
           stats: null,
+        };
+      }
+    },
+  );
+
+  // ============================================
+  // LLM FEEDBACK HANDLERS
+  // For recording user feedback on LLM-detected transactions
+  // ============================================
+
+  // Record transaction feedback (approve/reject/edit)
+  ipcMain.handle(
+    "feedback:record-transaction",
+    async (
+      _event: IpcMainInvokeEvent,
+      userId: string,
+      feedback: TransactionFeedback,
+    ): Promise<FeedbackResponse> => {
+      try {
+        const feedbackService = getFeedbackService();
+        await feedbackService.recordTransactionFeedback(userId, feedback);
+        return { success: true };
+      } catch (error) {
+        logService.error("[Feedback] Error recording transaction feedback:", "Feedback", { error });
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // Record role feedback (contact role corrections)
+  ipcMain.handle(
+    "feedback:record-role",
+    async (
+      _event: IpcMainInvokeEvent,
+      userId: string,
+      feedback: RoleFeedback,
+    ): Promise<FeedbackResponse> => {
+      try {
+        const feedbackService = getFeedbackService();
+        await feedbackService.recordRoleFeedback(userId, feedback);
+        return { success: true };
+      } catch (error) {
+        logService.error("[Feedback] Error recording role feedback:", "Feedback", { error });
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // Record communication relevance feedback
+  ipcMain.handle(
+    "feedback:record-relevance",
+    async (
+      _event: IpcMainInvokeEvent,
+      userId: string,
+      feedback: CommunicationFeedback,
+    ): Promise<FeedbackResponse> => {
+      try {
+        const feedbackService = getFeedbackService();
+        await feedbackService.recordCommunicationFeedback(userId, feedback);
+        return { success: true };
+      } catch (error) {
+        logService.error("[Feedback] Error recording relevance feedback:", "Feedback", { error });
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // Get aggregated feedback statistics
+  ipcMain.handle(
+    "feedback:get-stats",
+    async (
+      _event: IpcMainInvokeEvent,
+      userId: string,
+    ): Promise<FeedbackResponse> => {
+      try {
+        const feedbackService = getFeedbackService();
+        const stats = await feedbackService.getFeedbackStats(userId);
+        return { success: true, data: stats };
+      } catch (error) {
+        logService.error("[Feedback] Error getting stats:", "Feedback", { error });
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
         };
       }
     },

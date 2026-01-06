@@ -5,9 +5,24 @@
  * Checks:
  * - Whether user has completed email onboarding
  * - Whether user has any email connected
+ *
+ * @module appCore/state/flows/useEmailOnboardingApi
+ *
+ * ## State Machine Integration
+ *
+ * This hook derives all state from the state machine.
+ * Values are read-only; setters are no-ops (state machine is source of truth).
+ *
+ * Requires the state machine feature flag to be enabled.
+ * If disabled, throws an error - legacy code paths have been removed.
  */
 
-import { useState, useEffect } from "react";
+import { useCallback } from "react";
+import {
+  useOptionalMachineState,
+  selectHasCompletedEmailOnboarding,
+  selectHasEmailConnected,
+} from "../machine";
 
 interface UseEmailOnboardingApiOptions {
   userId: string | undefined;
@@ -18,82 +33,109 @@ interface UseEmailOnboardingApiReturn {
   hasEmailConnected: boolean;
   isCheckingEmailOnboarding: boolean;
   setHasCompletedEmailOnboarding: (completed: boolean) => void;
-  setHasEmailConnected: (connected: boolean) => void;
+  /**
+   * Mark email as connected. During onboarding, dispatches EMAIL_CONNECTED action
+   * to update state machine.
+   *
+   * @param connected - Whether email is connected
+   * @param email - The connected email address (required for state machine)
+   * @param provider - The email provider (required for state machine)
+   */
+  setHasEmailConnected: (
+    connected: boolean,
+    email?: string,
+    provider?: "google" | "microsoft"
+  ) => void;
   completeEmailOnboarding: () => Promise<void>;
 }
 
 export function useEmailOnboardingApi({
-  userId,
+  userId: _userId,
 }: UseEmailOnboardingApiOptions): UseEmailOnboardingApiReturn {
-  const [hasCompletedEmailOnboarding, setHasCompletedEmailOnboarding] =
-    useState<boolean>(true); // Default true to avoid flicker
-  const [hasEmailConnected, setHasEmailConnected] = useState<boolean>(true); // Default true to avoid flicker
-  const [isCheckingEmailOnboarding, setIsCheckingEmailOnboarding] =
-    useState<boolean>(true);
+  const machineState = useOptionalMachineState();
 
-  // Check if user has completed email onboarding and has email connected
-  useEffect(() => {
-    const checkEmailStatus = async () => {
-      if (userId) {
-        setIsCheckingEmailOnboarding(true);
-        try {
-          // Check onboarding status
-          const authApi = window.api.auth as typeof window.api.auth & {
-            checkEmailOnboarding: (userId: string) => Promise<{
-              success: boolean;
-              completed: boolean;
-              error?: string;
-            }>;
-          };
-          const onboardingResult = await authApi.checkEmailOnboarding(userId);
-          if (onboardingResult.success) {
-            setHasCompletedEmailOnboarding(onboardingResult.completed);
-          }
+  if (!machineState) {
+    throw new Error(
+      "useEmailOnboardingApi requires state machine to be enabled. " +
+        "Legacy code paths have been removed."
+    );
+  }
 
-          // Check if any email is connected
-          const connectionResult =
-            await window.api.system.checkAllConnections(userId);
-          if (connectionResult.success) {
-            const hasConnection =
-              connectionResult.google?.connected === true ||
-              connectionResult.microsoft?.connected === true;
-            setHasEmailConnected(hasConnection);
-          }
-        } catch (error) {
-          console.error(
-            "[useEmailOnboardingApi] Failed to check email status:",
-            error,
-          );
-        } finally {
-          setIsCheckingEmailOnboarding(false);
-        }
-      } else {
-        // No user logged in, nothing to check
-        setIsCheckingEmailOnboarding(false);
+  const { state, dispatch } = machineState;
+
+  // Derive hasCompletedEmailOnboarding from state machine
+  const hasCompletedEmailOnboarding = selectHasCompletedEmailOnboarding(state);
+
+  // Derive hasEmailConnected from state machine
+  const hasEmailConnected = selectHasEmailConnected(state);
+
+  // Loading if we're in loading phase before user data
+  const isCheckingEmailOnboarding =
+    state.status === "loading" &&
+    [
+      "checking-storage",
+      "initializing-db",
+      "loading-auth",
+      "loading-user-data",
+    ].includes(state.phase);
+
+  // Setters are no-ops - state machine is source of truth
+  const setHasCompletedEmailOnboarding = useCallback(
+    (_completed: boolean) => {
+      // No-op: state machine is source of truth
+    },
+    []
+  );
+
+  const setHasEmailConnected = useCallback(
+    (
+      connected: boolean,
+      email?: string,
+      provider?: "google" | "microsoft"
+    ) => {
+      if (connected && email && provider) {
+        // Dispatch EMAIL_CONNECTED to update state machine
+        dispatch({
+          type: "EMAIL_CONNECTED",
+          email,
+          provider,
+        });
       }
-    };
-    checkEmailStatus();
-  }, [userId]);
+      // If not connected or missing info, no-op (state machine is source of truth)
+    },
+    [dispatch]
+  );
 
-  // Mark email onboarding as completed in database
-  const completeEmailOnboarding = async () => {
-    if (userId) {
-      try {
-        const authApi = window.api.auth as typeof window.api.auth & {
-          completeEmailOnboarding: (
-            userId: string,
-          ) => Promise<{ success: boolean; error?: string }>;
-        };
-        await authApi.completeEmailOnboarding(userId);
-        setHasCompletedEmailOnboarding(true);
-      } catch (error) {
-        console.error(
-          "[useEmailOnboardingApi] Failed to complete email onboarding:",
-          error,
-        );
-      }
+  // completeEmailOnboarding persists to API and dispatches onboarding step complete
+  const completeEmailOnboarding = useCallback(async (): Promise<void> => {
+    // userId comes from state machine
+    const currentUserId =
+      state.status === "ready" || state.status === "onboarding"
+        ? state.user.id
+        : null;
+
+    if (!currentUserId) return;
+
+    try {
+      const authApi = window.api.auth as typeof window.api.auth & {
+        completeEmailOnboarding: (
+          userId: string
+        ) => Promise<{ success: boolean; error?: string }>;
+      };
+      await authApi.completeEmailOnboarding(currentUserId);
+
+      // Dispatch onboarding step complete
+      dispatch({
+        type: "ONBOARDING_STEP_COMPLETE",
+        step: "email-connect",
+      });
+    } catch (error) {
+      console.error(
+        "[useEmailOnboardingApi] Failed to complete email onboarding:",
+        error
+      );
     }
-  };
+  }, [state, dispatch]);
 
   return {
     hasCompletedEmailOnboarding,

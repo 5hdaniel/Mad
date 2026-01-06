@@ -1,11 +1,25 @@
 /**
  * iOS Messages Parser Service
  * Parses sms.db from iOS backups to extract conversations and messages
+ *
+ * Uses async yielding to prevent blocking the main Electron process
+ * when processing large databases (627k+ messages).
  */
 
 import Database from "better-sqlite3-multiple-ciphers";
 import path from "path";
 import log from "electron-log";
+
+/**
+ * Yield to event loop - allows UI to remain responsive during long operations
+ */
+function yieldToEventLoop(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
+// Async processing constants
+const CHAT_YIELD_INTERVAL = 50; // Yield every N chats processed
+const MESSAGE_YIELD_INTERVAL = 500; // Yield every N messages processed
 import {
   iOSMessage,
   iOSAttachment,
@@ -46,11 +60,23 @@ export class iOSMessagesParser {
   static readonly SMS_DB_HASH = "3d0d7e5fb2ce288813306e4d4636395e047a3d28";
 
   /**
+   * Get the full path to a file in an iOS backup.
+   * iOS backups store files in subdirectories based on the first 2 characters of the hash.
+   * e.g., hash "3d0d7e5f..." is stored at "3d/3d0d7e5f..."
+   */
+  private static getBackupFilePath(backupPath: string, hash: string): string {
+    return path.join(backupPath, hash.substring(0, 2), hash);
+  }
+
+  /**
    * Open the sms.db database from a backup
    * @param backupPath Path to the iOS backup directory
    */
   open(backupPath: string): void {
-    const dbPath = path.join(backupPath, iOSMessagesParser.SMS_DB_HASH);
+    const dbPath = iOSMessagesParser.getBackupFilePath(
+      backupPath,
+      iOSMessagesParser.SMS_DB_HASH,
+    );
 
     try {
       this.db = new Database(dbPath, { readonly: true });
@@ -123,7 +149,8 @@ export class iOSMessagesParser {
   }
 
   /**
-   * Get all conversations from the database
+   * Get all conversations from the database (sync version - may block UI)
+   * @deprecated Use getConversationsAsync() for large databases
    */
   getConversations(): iOSConversation[] {
     this.ensureOpen();
@@ -208,6 +235,112 @@ export class iOSMessagesParser {
   }
 
   /**
+   * Get all conversations from the database (async version with yielding)
+   * Yields to event loop periodically to prevent blocking the UI
+   * @param onProgress Optional callback for progress updates (current, total)
+   */
+  async getConversationsAsync(
+    onProgress?: (current: number, total: number) => void,
+  ): Promise<iOSConversation[]> {
+    this.ensureOpen();
+
+    try {
+      const chats = this.db!.prepare(
+        `
+        SELECT
+          chat.ROWID,
+          chat.guid,
+          chat.chat_identifier,
+          chat.display_name
+        FROM chat
+        ORDER BY chat.ROWID
+      `,
+      ).all() as RawChatRow[];
+
+      log.info(`iOSMessagesParser: Processing ${chats.length} chats async`);
+
+      const conversations: iOSConversation[] = [];
+
+      for (let i = 0; i < chats.length; i++) {
+        const chat = chats[i];
+
+        try {
+          // Get participants for this chat
+          const participants = this.getParticipants(chat.ROWID);
+
+          // Get last message date
+          const lastMessageRow = this.db!.prepare(
+            `
+            SELECT MAX(message.date) as last_date
+            FROM message
+            JOIN chat_message_join ON message.ROWID = chat_message_join.message_id
+            WHERE chat_message_join.chat_id = ?
+          `,
+          ).get(chat.ROWID) as { last_date: number | null } | undefined;
+
+          const lastMessageDate = convertAppleTimestamp(
+            lastMessageRow?.last_date || null,
+          );
+
+          // Skip chats with no messages
+          if (!lastMessageDate) {
+            continue;
+          }
+
+          // Determine if group chat (more than 1 participant or starts with 'chat')
+          const isGroupChat =
+            participants.length > 1 ||
+            (chat.chat_identifier?.startsWith("chat") &&
+              !chat.chat_identifier.includes("@"));
+
+          conversations.push({
+            chatId: chat.ROWID,
+            chatIdentifier: chat.chat_identifier || chat.display_name || "",
+            participants,
+            messages: [], // Messages loaded separately via getMessagesAsync()
+            lastMessage: lastMessageDate,
+            isGroupChat,
+          });
+        } catch (chatError) {
+          log.error("iOSMessagesParser: Error processing chat", {
+            chatId: chat.ROWID,
+            error:
+              chatError instanceof Error
+                ? chatError.message
+                : String(chatError),
+          });
+          // Continue with next chat
+        }
+
+        // Yield to event loop periodically
+        if ((i + 1) % CHAT_YIELD_INTERVAL === 0) {
+          onProgress?.(i + 1, chats.length);
+          await yieldToEventLoop();
+        }
+      }
+
+      // Final progress callback
+      onProgress?.(chats.length, chats.length);
+
+      // Sort by last message date descending
+      conversations.sort(
+        (a, b) => b.lastMessage.getTime() - a.lastMessage.getTime(),
+      );
+
+      log.info(
+        `iOSMessagesParser: Found ${conversations.length} conversations with messages`,
+      );
+
+      return conversations;
+    } catch (error) {
+      log.error("iOSMessagesParser: Error getting conversations async", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return [];
+    }
+  }
+
+  /**
    * Get participants for a chat
    */
   private getParticipants(chatId: number): string[] {
@@ -234,10 +367,11 @@ export class iOSMessagesParser {
   }
 
   /**
-   * Get messages for a specific chat
+   * Get messages for a specific chat (sync version - may block UI for large chats)
    * @param chatId The chat ID to get messages for
    * @param limit Optional limit on number of messages (for pagination)
    * @param offset Optional offset for pagination
+   * @deprecated Use getMessagesAsync() for large message counts
    */
   getMessages(chatId: number, limit?: number, offset?: number): iOSMessage[] {
     this.ensureOpen();
@@ -272,6 +406,70 @@ export class iOSMessagesParser {
       return rows.map((row) => this.mapMessage(row));
     } catch (error) {
       log.error("iOSMessagesParser: Error getting messages", {
+        chatId,
+        limit,
+        offset,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return [];
+    }
+  }
+
+  /**
+   * Get messages for a specific chat (async version with yielding)
+   * Yields to event loop periodically to prevent blocking the UI
+   * @param chatId The chat ID to get messages for
+   * @param limit Optional limit on number of messages (for pagination)
+   * @param offset Optional offset for pagination
+   */
+  async getMessagesAsync(
+    chatId: number,
+    limit?: number,
+    offset?: number,
+  ): Promise<iOSMessage[]> {
+    this.ensureOpen();
+
+    try {
+      let query = `
+        SELECT
+          message.ROWID,
+          message.guid,
+          message.text,
+          message.handle_id,
+          message.is_from_me,
+          message.date,
+          message.date_read,
+          message.date_delivered,
+          message.service
+        FROM message
+        JOIN chat_message_join ON message.ROWID = chat_message_join.message_id
+        WHERE chat_message_join.chat_id = ?
+        ORDER BY message.date ASC
+      `;
+
+      if (limit !== undefined) {
+        query += ` LIMIT ${Math.max(1, Math.floor(limit))}`;
+        if (offset !== undefined) {
+          query += ` OFFSET ${Math.max(0, Math.floor(offset))}`;
+        }
+      }
+
+      const rows = this.db!.prepare(query).all(chatId) as RawMessageRow[];
+
+      const messages: iOSMessage[] = [];
+
+      for (let i = 0; i < rows.length; i++) {
+        messages.push(this.mapMessage(rows[i]));
+
+        // Yield to event loop periodically
+        if ((i + 1) % MESSAGE_YIELD_INTERVAL === 0) {
+          await yieldToEventLoop();
+        }
+      }
+
+      return messages;
+    } catch (error) {
+      log.error("iOSMessagesParser: Error getting messages async", {
         chatId,
         limit,
         offset,

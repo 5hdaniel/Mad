@@ -4,6 +4,7 @@
  */
 
 import axios from "axios";
+import logService from "./logService";
 
 /**
  * Address suggestion from autocomplete
@@ -75,11 +76,11 @@ class AddressVerificationService {
     this.apiKey = apiKey || process.env.GOOGLE_MAPS_API_KEY || null;
 
     if (!this.apiKey) {
-      console.warn("[AddressVerification] No Google Maps API key configured");
+      logService.warn("[AddressVerification] No Google Maps API key configured", "AddressVerification");
       return false;
     }
 
-    console.log("[AddressVerification] Initialized with API key");
+    logService.info("[AddressVerification] Initialized with API key", "AddressVerification");
     return true;
   }
 
@@ -114,7 +115,7 @@ class AddressVerificationService {
         params.sessiontoken = sessionToken;
       }
 
-      console.log("[AddressVerification] Fetching suggestions for:", input);
+      logService.info("[AddressVerification] Fetching suggestions for:", "AddressVerification", { input });
 
       const response = await axios.get(url, { params });
 
@@ -122,10 +123,10 @@ class AddressVerificationService {
         response.data.status !== "OK" &&
         response.data.status !== "ZERO_RESULTS"
       ) {
-        console.error(
+        logService.error(
           "[AddressVerification] API error:",
-          response.data.status,
-          response.data.error_message,
+          "AddressVerification",
+          { status: response.data.status, errorMessage: response.data.error_message },
         );
         throw new Error(`Google Places API error: ${response.data.status}`);
       }
@@ -141,15 +142,17 @@ class AddressVerificationService {
         }),
       );
 
-      console.log(
+      logService.info(
         `[AddressVerification] Found ${suggestions.length} suggestions`,
+        "AddressVerification",
       );
 
       return suggestions;
     } catch (error) {
-      console.error(
+      logService.error(
         "[AddressVerification] Failed to fetch suggestions:",
-        (error as Error).message,
+        "AddressVerification",
+        { error: (error as Error).message },
       );
       throw error;
     }
@@ -173,12 +176,12 @@ class AddressVerificationService {
         fields: "address_components,formatted_address,geometry",
       };
 
-      console.log("[AddressVerification] Fetching details for place:", placeId);
+      logService.info("[AddressVerification] Fetching details for place:", "AddressVerification", { placeId });
 
       const response = await axios.get(url, { params });
 
       if (response.data.status !== "OK") {
-        console.error("[AddressVerification] API error:", response.data.status);
+        logService.error("[AddressVerification] API error:", "AddressVerification", { status: response.data.status });
         throw new Error(`Google Places API error: ${response.data.status}`);
       }
 
@@ -209,9 +212,10 @@ class AddressVerificationService {
         place_id: placeId,
       };
     } catch (error) {
-      console.error(
+      logService.error(
         "[AddressVerification] Failed to fetch address details:",
-        (error as Error).message,
+        "AddressVerification",
+        { error: (error as Error).message },
       );
       throw error;
     }
@@ -274,14 +278,15 @@ class AddressVerificationService {
         key: this.apiKey,
       };
 
-      console.log("[AddressVerification] Geocoding address:", address);
+      logService.info("[AddressVerification] Geocoding address:", "AddressVerification", { address });
 
       const response = await axios.get(url, { params });
 
       if (response.data.status !== "OK") {
-        console.error(
+        logService.error(
           "[AddressVerification] Geocoding error:",
-          response.data.status,
+          "AddressVerification",
+          { status: response.data.status },
         );
         throw new Error(`Geocoding failed: ${response.data.status}`);
       }
@@ -311,9 +316,10 @@ class AddressVerificationService {
         place_id: result.place_id,
       };
     } catch (error) {
-      console.error(
+      logService.error(
         "[AddressVerification] Geocoding failed:",
-        (error as Error).message,
+        "AddressVerification",
+        { error: (error as Error).message },
       );
       throw error;
     }

@@ -1,9 +1,12 @@
 import { google, gmail_v1, Auth } from "googleapis";
-// NOTE: tokenEncryptionService removed - using session-only OAuth
-// Tokens stored in encrypted database, no additional keychain encryption needed
 import databaseService from "./databaseService";
 import logService from "./logService";
 import { OAuthToken } from "../types/models";
+import { computeEmailHash } from "../utils/emailHash";
+import {
+  EmailDeduplicationService,
+  DuplicateCheckResult,
+} from "./emailDeduplicationService";
 
 /**
  * Email attachment metadata
@@ -35,6 +38,12 @@ interface ParsedEmail {
   attachments: EmailAttachment[];
   labels: string[];
   raw: gmail_v1.Schema$Message;
+  /** RFC 5322 Message-ID header for deduplication */
+  messageIdHeader: string | null;
+  /** SHA-256 content hash for fallback deduplication (TASK-918) */
+  contentHash: string;
+  /** ID of the original message if this is a duplicate (TASK-919) */
+  duplicateOf?: string;
 }
 
 /**
@@ -63,6 +72,21 @@ interface EmailSearchOptions {
  * Gmail Fetch Service
  * Fetches emails from Gmail for transaction extraction
  */
+/**
+ * Extract RFC 5322 Message-ID header from email headers
+ * Uses case-insensitive matching and returns full value including angle brackets
+ * @param headers - Array of header objects from Gmail API
+ * @returns Message-ID header value or null if not found
+ */
+function extractMessageIdHeader(
+  headers: Array<{ name?: string | null; value?: string | null }>,
+): string | null {
+  const messageIdHeader = headers.find(
+    (h) => h.name?.toLowerCase() === "message-id",
+  );
+  return messageIdHeader?.value ?? null;
+}
+
 class GmailFetchService {
   private gmail: gmail_v1.Gmail | null = null;
   private oauth2Client: Auth.OAuth2Client | null = null;
@@ -350,23 +374,39 @@ class GmailFetchService {
       message.payload.parts.forEach(extractAttachments);
     }
 
+    // Extract fields for hash computation
+    const subject = getHeader("Subject");
+    const from = getHeader("From");
+    const sentDate = new Date(parseInt(message.internalDate || "0"));
+    const bodyPlainForHash = bodyPlain || body;
+
+    // Compute content hash for deduplication fallback (TASK-918)
+    const contentHash = computeEmailHash({
+      subject,
+      from,
+      sentDate,
+      bodyPlain: bodyPlainForHash,
+    });
+
     return {
       id: message.id || "",
       threadId: message.threadId || "",
-      subject: getHeader("Subject"),
-      from: getHeader("From"),
+      subject: subject,
+      from: from,
       to: getHeader("To"),
       cc: getHeader("Cc"),
       bcc: getHeader("Bcc"),
-      date: new Date(parseInt(message.internalDate || "0")),
+      date: sentDate,
       body: body,
-      bodyPlain: bodyPlain || body,
+      bodyPlain: bodyPlainForHash,
       snippet: message.snippet || "",
       hasAttachments: attachments.length > 0,
       attachmentCount: attachments.length,
       attachments: attachments,
       labels: message.labelIds || [],
       raw: message,
+      messageIdHeader: extractMessageIdHeader(headers),
+      contentHash,
     };
   }
 
@@ -416,6 +456,65 @@ class GmailFetchService {
     } catch (error) {
       logService.error("Failed to get user email", "GmailFetch", { error });
       throw error;
+    }
+  }
+
+  /**
+   * Check emails for duplicates and populate duplicateOf field (TASK-919)
+   *
+   * Uses EmailDeduplicationService to detect duplicates by:
+   * 1. Message-ID header (most reliable)
+   * 2. Content hash (fallback)
+   *
+   * @param userId - User ID to scope the duplicate check
+   * @param emails - Array of parsed emails to check
+   * @returns Same emails with duplicateOf field populated where applicable
+   */
+  async checkDuplicates(
+    userId: string,
+    emails: ParsedEmail[]
+  ): Promise<ParsedEmail[]> {
+    if (emails.length === 0) {
+      return emails;
+    }
+
+    try {
+      const db = databaseService.getRawDatabase();
+      const dedupService = new EmailDeduplicationService(db);
+
+      // Use batch check for efficiency
+      const dedupInputs = emails.map((e) => ({
+        messageIdHeader: e.messageIdHeader,
+        contentHash: e.contentHash,
+      }));
+
+      const results = dedupService.checkForDuplicatesBatch(userId, dedupInputs);
+
+      // Populate duplicateOf field for each email
+      const enrichedEmails = emails.map((email, index) => {
+        const result = results.get(index);
+        if (result?.isDuplicate && result.originalId) {
+          return {
+            ...email,
+            duplicateOf: result.originalId,
+          };
+        }
+        return email;
+      });
+
+      const duplicateCount = enrichedEmails.filter((e) => e.duplicateOf).length;
+      if (duplicateCount > 0) {
+        logService.info(
+          `Duplicate check: ${duplicateCount}/${emails.length} duplicates found`,
+          "GmailFetch"
+        );
+      }
+
+      return enrichedEmails;
+    } catch (error) {
+      logService.error("Failed to check duplicates", "GmailFetch", { error });
+      // Return original emails without duplicate info on error
+      return emails;
     }
   }
 }

@@ -59,7 +59,7 @@ export function useConversations(): UseConversationsReturn {
 
     try {
       const result: GetConversationsResult =
-        await window.electron.getConversations();
+        await window.api.messages.getConversations();
 
       if (result.success) {
         setConversations(result.conversations || []);

@@ -94,6 +94,7 @@ export interface ModalState {
   showVersion: boolean;
   showMoveAppPrompt: boolean;
   showTermsModal: boolean;
+  showIPhoneSync: boolean;
 }
 
 /**
@@ -209,6 +210,10 @@ export interface AppStateMachine {
   openMoveAppPrompt(): void;
   closeMoveAppPrompt(): void;
 
+  // iPhone sync modal
+  openIPhoneSync(): void;
+  closeIPhoneSync(): void;
+
   // ============================================
   // NAVIGATION TRANSITIONS
   // ============================================
@@ -246,8 +251,8 @@ export interface AppStateMachine {
   handleAndroidGoBack: () => void;
   handleAndroidContinueWithEmail: () => Promise<void>;
   handlePhoneTypeChange: (phoneType: "iphone" | "android") => Promise<void>;
-  handleAppleDriverSetupComplete: () => void;
-  handleAppleDriverSetupSkip: () => void;
+  handleAppleDriverSetupComplete: () => Promise<void>;
+  handleAppleDriverSetupSkip: () => Promise<void>;
 
   // ============================================
   // EMAIL ONBOARDING HANDLERS
@@ -258,6 +263,18 @@ export interface AppStateMachine {
   ) => Promise<void>;
   handleEmailOnboardingSkip: () => Promise<void>;
   handleEmailOnboardingBack: () => void;
+
+  /**
+   * Start Google OAuth flow for email connection.
+   * Sets up event listeners and initiates the OAuth popup.
+   */
+  handleStartGoogleEmailConnect: () => Promise<void>;
+
+  /**
+   * Start Microsoft OAuth flow for email connection.
+   * Sets up event listeners and initiates the OAuth popup.
+   */
+  handleStartMicrosoftEmailConnect: () => Promise<void>;
 
   // ============================================
   // KEYCHAIN HANDLERS

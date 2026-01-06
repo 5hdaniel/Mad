@@ -2,6 +2,7 @@ import { BrowserWindow, app } from "electron";
 import path from "path";
 import fs from "fs/promises";
 import { Transaction, Communication } from "../types/models";
+import logService from "./logService";
 
 /**
  * PDF Export Service
@@ -28,9 +29,10 @@ class PDFExportService {
     outputPath: string,
   ): Promise<string> {
     try {
-      console.log(
+      logService.info(
         "[PDF Export] Generating PDF for transaction:",
-        transaction.id,
+        "PDFExport",
+        { transactionId: transaction.id },
       );
 
       // Create HTML content
@@ -69,10 +71,10 @@ class PDFExportService {
       this.exportWindow.close();
       this.exportWindow = null;
 
-      console.log("[PDF Export] PDF generated successfully:", outputPath);
+      logService.info("[PDF Export] PDF generated successfully:", "PDFExport", { outputPath });
       return outputPath;
     } catch (error) {
-      console.error("[PDF Export] Failed to generate PDF:", error);
+      logService.error("[PDF Export] Failed to generate PDF:", "PDFExport", { error });
       if (this.exportWindow) {
         this.exportWindow.close();
         this.exportWindow = null;
@@ -247,16 +249,7 @@ class PDFExportService {
     .communication .from {
       font-size: 13px;
       color: #4a5568;
-      margin-bottom: 8px;
-    }
-
-    .communication .body {
-      font-size: 12px;
-      color: #4a5568;
-      line-height: 1.6;
-      border-left: 3px solid #e2e8f0;
-      padding-left: 12px;
-      margin-top: 8px;
+      margin-bottom: 4px;
     }
 
     .footer {
@@ -354,37 +347,16 @@ class PDFExportService {
         .map(
           (comm) => `
         <div class="communication">
-          <div class="meta">
-            <span>${formatDateTime(comm.sent_at as string)}</span>
-            ${comm.has_attachments ? "<span>📎 Has Attachments</span>" : ""}
-          </div>
           <div class="subject">${comm.subject || "(No Subject)"}</div>
           <div class="from">From: ${comm.sender || "Unknown"}</div>
           ${comm.recipients ? `<div class="from">To: ${comm.recipients}</div>` : ""}
-          ${
-            comm.body_plain
-              ? `<div class="body">${comm.body_plain.substring(0, 500).replace(/</g, "&lt;").replace(/>/g, "&gt;")}${comm.body_plain.length > 500 ? "..." : ""}</div>`
-              : ""
-          }
+          <div class="meta">
+            <span>${formatDateTime(comm.sent_at as string)}</span>
+          </div>
         </div>
       `,
         )
         .join("")}
-    </div>
-  </div>
-
-  <!-- Extraction Details -->
-  <div class="section">
-    <h3>Extraction Details</h3>
-    <div class="detail-card">
-      <div class="label">Confidence Score</div>
-      <div class="value">${transaction.extraction_confidence || "N/A"}%</div>
-    </div>
-    <div class="detail-card" style="margin-top: 12px;">
-      <div class="label">Date Range</div>
-      <div class="value">
-        ${formatDate(transaction.first_communication_date)} - ${formatDate(transaction.last_communication_date)}
-      </div>
     </div>
   </div>
 

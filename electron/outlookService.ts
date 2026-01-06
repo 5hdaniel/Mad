@@ -8,6 +8,7 @@ import "isomorphic-fetch";
 import fs from "fs";
 import path from "path";
 import { app, BrowserWindow, shell } from "electron";
+import logService from "./services/logService";
 
 interface MsalConfig {
   auth: {
@@ -200,7 +201,7 @@ class OutlookService {
 
           // Open browser automatically
           shell.openExternal(response.verificationUri).catch((err) => {
-            console.error("Failed to open browser:", err);
+            logService.error("Failed to open browser:", "OutlookService", { error: err });
           });
 
           // Send to renderer if parentWindow is available
@@ -230,7 +231,7 @@ class OutlookService {
         },
       };
     } catch (error) {
-      console.error("Authentication error:", error);
+      logService.error("Authentication error:", "OutlookService", { error });
       return {
         success: false,
         error: (error as Error).message,
@@ -261,7 +262,7 @@ class OutlookService {
       const user = await this.graphClient.api("/me").get();
       return user.mail || user.userPrincipalName;
     } catch (error) {
-      console.error("Error getting user email:", error);
+      logService.error("Error getting user email:", "OutlookService", { error });
       throw error;
     }
   }
@@ -414,9 +415,10 @@ class OutlookService {
           // Merge the body into the email object
           matchingEmails.push(fullEmail);
         } catch (error) {
-          console.error(
+          logService.error(
             `[Email Fetch] Error fetching body for email ${email.id}:`,
-            (error as Error).message,
+            "OutlookService",
+            { error: (error as Error).message },
           );
           // Still include the email but without body
           matchingEmails.push(email);
@@ -425,8 +427,8 @@ class OutlookService {
 
       return matchingEmails;
     } catch (error) {
-      console.error("[Email Fetch] Error fetching emails:", error);
-      console.error("[Email Fetch] Error details:", {
+      logService.error("[Email Fetch] Error fetching emails:", "OutlookService", { error });
+      logService.error("[Email Fetch] Error details:", "OutlookService", {
         message: (error as Error).message,
         code: (error as any).code,
         statusCode: (error as any).statusCode,
@@ -592,7 +594,7 @@ class OutlookService {
         files: [fileName, jsonFileName],
       };
     } catch (error) {
-      console.error("Error exporting emails:", error);
+      logService.error("Error exporting emails:", "OutlookService", { error });
       return {
         success: false,
         error: (error as Error).message,

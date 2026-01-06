@@ -549,4 +549,176 @@ describe("GmailFetchService", () => {
       );
     });
   });
+
+  describe("Message-ID header extraction", () => {
+    const mockTokenRecord = {
+      id: "token-id",
+      user_id: mockUserId,
+      provider: "google" as const,
+      purpose: "mailbox" as const,
+      access_token: mockAccessToken,
+      refresh_token: mockRefreshToken,
+      token_expires_at: new Date(Date.now() + 3600000).toISOString(),
+      connected_email_address: "test@gmail.com",
+      is_active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    beforeEach(async () => {
+      mockDatabaseService.getOAuthToken.mockResolvedValue(mockTokenRecord);
+      mockMessagesList.mockResolvedValue({
+        data: { messages: [{ id: "msg-1" }] },
+      });
+      await gmailFetchService.initialize(mockUserId);
+    });
+
+    it("should extract Message-ID header with angle brackets", async () => {
+      mockMessagesGet.mockResolvedValue({
+        data: {
+          id: "msg-1",
+          threadId: "thread-1",
+          internalDate: "1700000000000",
+          payload: {
+            headers: [
+              { name: "Subject", value: "Test Subject" },
+              { name: "Message-ID", value: "<unique-id-123@mail.gmail.com>" },
+            ],
+            mimeType: "text/plain",
+            body: { data: Buffer.from("Body").toString("base64") },
+          },
+        },
+      });
+
+      const results = await gmailFetchService.searchEmails({});
+
+      expect(results[0].messageIdHeader).toBe("<unique-id-123@mail.gmail.com>");
+    });
+
+    it("should handle case-insensitive Message-ID header name", async () => {
+      mockMessagesGet.mockResolvedValue({
+        data: {
+          id: "msg-1",
+          threadId: "thread-1",
+          internalDate: "1700000000000",
+          payload: {
+            headers: [
+              { name: "message-id", value: "<lowercase@example.com>" },
+            ],
+            mimeType: "text/plain",
+            body: { data: Buffer.from("Body").toString("base64") },
+          },
+        },
+      });
+
+      const results = await gmailFetchService.searchEmails({});
+
+      expect(results[0].messageIdHeader).toBe("<lowercase@example.com>");
+    });
+
+    it("should handle Message-Id mixed case header name", async () => {
+      mockMessagesGet.mockResolvedValue({
+        data: {
+          id: "msg-1",
+          threadId: "thread-1",
+          internalDate: "1700000000000",
+          payload: {
+            headers: [
+              { name: "Message-Id", value: "<mixed-case@example.com>" },
+            ],
+            mimeType: "text/plain",
+            body: { data: Buffer.from("Body").toString("base64") },
+          },
+        },
+      });
+
+      const results = await gmailFetchService.searchEmails({});
+
+      expect(results[0].messageIdHeader).toBe("<mixed-case@example.com>");
+    });
+
+    it("should return null when Message-ID header is missing", async () => {
+      mockMessagesGet.mockResolvedValue({
+        data: {
+          id: "msg-1",
+          threadId: "thread-1",
+          internalDate: "1700000000000",
+          payload: {
+            headers: [
+              { name: "Subject", value: "No Message-ID" },
+              { name: "From", value: "sender@example.com" },
+            ],
+            mimeType: "text/plain",
+            body: { data: Buffer.from("Body").toString("base64") },
+          },
+        },
+      });
+
+      const results = await gmailFetchService.searchEmails({});
+
+      expect(results[0].messageIdHeader).toBeNull();
+    });
+
+    it("should return null when headers array is empty", async () => {
+      mockMessagesGet.mockResolvedValue({
+        data: {
+          id: "msg-1",
+          threadId: "thread-1",
+          internalDate: "1700000000000",
+          payload: {
+            headers: [],
+            mimeType: "text/plain",
+            body: { data: Buffer.from("Body").toString("base64") },
+          },
+        },
+      });
+
+      const results = await gmailFetchService.searchEmails({});
+
+      expect(results[0].messageIdHeader).toBeNull();
+    });
+
+    it("should use first Message-ID when duplicates exist", async () => {
+      mockMessagesGet.mockResolvedValue({
+        data: {
+          id: "msg-1",
+          threadId: "thread-1",
+          internalDate: "1700000000000",
+          payload: {
+            headers: [
+              { name: "Message-ID", value: "<first@example.com>" },
+              { name: "Message-ID", value: "<second@example.com>" },
+            ],
+            mimeType: "text/plain",
+            body: { data: Buffer.from("Body").toString("base64") },
+          },
+        },
+      });
+
+      const results = await gmailFetchService.searchEmails({});
+
+      expect(results[0].messageIdHeader).toBe("<first@example.com>");
+    });
+
+    it("should preserve Message-ID with special characters", async () => {
+      const specialMessageId =
+        "<CAD+XH4s=BKDQRKRm+_dK3sEq@mail.gmail.com>";
+      mockMessagesGet.mockResolvedValue({
+        data: {
+          id: "msg-1",
+          threadId: "thread-1",
+          internalDate: "1700000000000",
+          payload: {
+            headers: [{ name: "Message-ID", value: specialMessageId }],
+            mimeType: "text/plain",
+            body: { data: Buffer.from("Body").toString("base64") },
+          },
+        },
+      });
+
+      const results = await gmailFetchService.searchEmails({});
+
+      expect(results[0].messageIdHeader).toBe(specialMessageId);
+    });
+  });
 });

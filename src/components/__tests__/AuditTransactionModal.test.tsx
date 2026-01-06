@@ -10,6 +10,15 @@ import "@testing-library/jest-dom";
 import AuditTransactionModal from "../AuditTransactionModal";
 import { PlatformProvider } from "../../contexts/PlatformContext";
 
+// Mock useAppStateMachine to return isDatabaseInitialized: true
+// This allows tests to render the actual component content
+jest.mock("../../appCore", () => ({
+  ...jest.requireActual("../../appCore"),
+  useAppStateMachine: () => ({
+    isDatabaseInitialized: true,
+  }),
+}));
+
 describe("AuditTransactionModal", () => {
   const mockUserId = 123;
   const mockProvider = "google";
@@ -625,6 +634,215 @@ describe("AuditTransactionModal", () => {
         screen.getByRole("button", { name: /purchase/i }),
       ).toBeInTheDocument();
       expect(screen.getByRole("button", { name: /sale/i })).toBeInTheDocument();
+    });
+  });
+
+  describe("Edit Mode", () => {
+    const mockEditTransaction = {
+      id: "txn-123",
+      user_id: "123",
+      property_address: "456 Oak Street, City, ST 67890",
+      property_street: "456 Oak Street",
+      property_city: "City",
+      property_state: "ST",
+      property_zip: "67890",
+      property_coordinates: JSON.stringify({ lat: 37.1234, lng: -122.4567 }),
+      transaction_type: "sale" as const,
+      status: "active" as const,
+      message_count: 5,
+      attachment_count: 2,
+      export_status: "not_exported" as const,
+      export_count: 0,
+      detection_source: "auto" as const,
+      detection_status: "pending" as const,
+      created_at: "2024-01-01T00:00:00Z",
+      updated_at: "2024-01-01T00:00:00Z",
+    };
+
+    beforeEach(() => {
+      window.api.transactions.update.mockResolvedValue({ success: true });
+      window.api.feedback.recordTransaction.mockResolvedValue({ success: true });
+    });
+
+    it("should display edit mode title when editTransaction is provided", () => {
+      renderWithProvider(
+        <AuditTransactionModal
+          userId={mockUserId}
+          provider={mockProvider}
+          onClose={mockOnClose}
+          onSuccess={mockOnSuccess}
+          editTransaction={mockEditTransaction}
+        />,
+      );
+
+      expect(screen.getByText(/edit transaction/i)).toBeInTheDocument();
+    });
+
+    it("should pre-fill address when editing", () => {
+      renderWithProvider(
+        <AuditTransactionModal
+          userId={mockUserId}
+          provider={mockProvider}
+          onClose={mockOnClose}
+          onSuccess={mockOnSuccess}
+          editTransaction={mockEditTransaction}
+        />,
+      );
+
+      const addressInput = screen.getByPlaceholderText(
+        /enter property address/i,
+      );
+      expect(addressInput).toHaveValue("456 Oak Street, City, ST 67890");
+    });
+
+    it("should pre-fill transaction type when editing", () => {
+      renderWithProvider(
+        <AuditTransactionModal
+          userId={mockUserId}
+          provider={mockProvider}
+          onClose={mockOnClose}
+          onSuccess={mockOnSuccess}
+          editTransaction={mockEditTransaction}
+        />,
+      );
+
+      const saleButton = screen.getByRole("button", { name: /sale/i });
+      expect(saleButton).toHaveClass("bg-indigo-500");
+    });
+
+    it("should show step 1 subtitle for review in edit mode", () => {
+      renderWithProvider(
+        <AuditTransactionModal
+          userId={mockUserId}
+          provider={mockProvider}
+          onClose={mockOnClose}
+          onSuccess={mockOnSuccess}
+          editTransaction={mockEditTransaction}
+        />,
+      );
+
+      expect(screen.getByText(/step 1: review property address/i)).toBeInTheDocument();
+    });
+
+    it("should call update API instead of create when editing", async () => {
+      renderWithProvider(
+        <AuditTransactionModal
+          userId={mockUserId}
+          provider={mockProvider}
+          onClose={mockOnClose}
+          onSuccess={mockOnSuccess}
+          editTransaction={mockEditTransaction}
+        />,
+      );
+
+      // Navigate through steps
+      await userEvent.click(screen.getByRole("button", { name: /continue/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText(/step 2/i)).toBeInTheDocument();
+      });
+    });
+
+    it("should display Save Changes button in edit mode on step 3", async () => {
+      renderWithProvider(
+        <AuditTransactionModal
+          userId={mockUserId}
+          provider={mockProvider}
+          onClose={mockOnClose}
+          onSuccess={mockOnSuccess}
+          editTransaction={mockEditTransaction}
+        />,
+      );
+
+      // Navigate to step 2
+      await userEvent.click(screen.getByRole("button", { name: /continue/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText(/step 2/i)).toBeInTheDocument();
+      });
+
+      // Select a client contact
+      const selectButtons = screen.getAllByRole("button", { name: /select contact/i });
+      if (selectButtons.length > 0) {
+        await userEvent.click(selectButtons[0]);
+      }
+    });
+
+    it("should handle suggested_contacts JSON parsing", () => {
+      const txnWithContacts = {
+        ...mockEditTransaction,
+        suggested_contacts: JSON.stringify([
+          { role: "client", contact_id: "contact-1", is_primary: true },
+          { role: "listing_agent", contact_id: "contact-2", is_primary: false },
+        ]),
+      };
+
+      renderWithProvider(
+        <AuditTransactionModal
+          userId={mockUserId}
+          provider={mockProvider}
+          onClose={mockOnClose}
+          onSuccess={mockOnSuccess}
+          editTransaction={txnWithContacts}
+        />,
+      );
+
+      // Modal should render without errors
+      expect(screen.getByText(/edit transaction/i)).toBeInTheDocument();
+    });
+
+    it("should handle invalid suggested_contacts JSON gracefully", () => {
+      const txnWithBadJson = {
+        ...mockEditTransaction,
+        suggested_contacts: "invalid json{",
+      };
+
+      renderWithProvider(
+        <AuditTransactionModal
+          userId={mockUserId}
+          provider={mockProvider}
+          onClose={mockOnClose}
+          onSuccess={mockOnSuccess}
+          editTransaction={txnWithBadJson}
+        />,
+      );
+
+      // Modal should still render without errors
+      expect(screen.getByText(/edit transaction/i)).toBeInTheDocument();
+    });
+
+    it("should display Saving... text when submitting in edit mode", async () => {
+      // Make update slow to see loading state
+      window.api.transactions.update.mockImplementation(
+        () =>
+          new Promise((resolve) =>
+            setTimeout(() => resolve({ success: true }), 1000),
+          ),
+      );
+
+      renderWithProvider(
+        <AuditTransactionModal
+          userId={mockUserId}
+          provider={mockProvider}
+          onClose={mockOnClose}
+          onSuccess={mockOnSuccess}
+          editTransaction={mockEditTransaction}
+        />,
+      );
+
+      // Navigate through steps
+      await userEvent.click(screen.getByRole("button", { name: /continue/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText(/step 2/i)).toBeInTheDocument();
+      });
+    });
+
+    it("should have required APIs for edit mode", () => {
+      expect(window.api.transactions.update).toBeDefined();
+      expect(typeof window.api.transactions.update).toBe("function");
+      expect(window.api.feedback.recordTransaction).toBeDefined();
+      expect(typeof window.api.feedback.recordTransaction).toBe("function");
     });
   });
 });

@@ -6,6 +6,7 @@
 import databaseService from "./databaseService";
 import googleAuthService from "./googleAuthService";
 import microsoftAuthService from "./microsoftAuthService";
+import logService from "./logService";
 import { OAuthToken } from "../types/models";
 
 /**
@@ -109,15 +110,17 @@ class ConnectionStatusService {
 
       if (tokenExpiry < now) {
         // Token expired - try to refresh
-        console.log(
+        logService.info(
           "[ConnectionStatus] Google token expired, attempting refresh...",
+          "ConnectionStatus",
         );
         try {
           const refreshResult =
             await googleAuthService.refreshAccessToken(userId);
           if (refreshResult.success) {
-            console.log(
+            logService.info(
               "[ConnectionStatus] Google token refreshed successfully",
+              "ConnectionStatus",
             );
             this.connectionStatus.google = {
               connected: true,
@@ -127,15 +130,17 @@ class ConnectionStatusService {
             };
             return this.connectionStatus.google;
           } else {
-            console.error(
+            logService.error(
               "[ConnectionStatus] Google token refresh failed:",
-              refreshResult.error,
+              "ConnectionStatus",
+              { error: refreshResult.error },
             );
           }
         } catch (refreshError: any) {
-          console.error(
+          logService.error(
             "[ConnectionStatus] Google token refresh error:",
-            refreshError,
+            "ConnectionStatus",
+            { error: refreshError },
           );
         }
 
@@ -163,9 +168,10 @@ class ConnectionStatusService {
       };
       return this.connectionStatus.google;
     } catch (error: any) {
-      console.error(
+      logService.error(
         "[ConnectionStatus] Error checking Google connection:",
-        error,
+        "ConnectionStatus",
+        { error },
       );
 
       this.connectionStatus.google = {
@@ -219,15 +225,17 @@ class ConnectionStatusService {
 
       if (tokenExpiry < now) {
         // Token expired - try to refresh
-        console.log(
+        logService.info(
           "[ConnectionStatus] Microsoft token expired, attempting refresh...",
+          "ConnectionStatus",
         );
         try {
           const refreshResult =
             await microsoftAuthService.refreshAccessToken(userId);
           if (refreshResult.success) {
-            console.log(
+            logService.info(
               "[ConnectionStatus] Microsoft token refreshed successfully",
+              "ConnectionStatus",
             );
             this.connectionStatus.microsoft = {
               connected: true,
@@ -237,15 +245,17 @@ class ConnectionStatusService {
             };
             return this.connectionStatus.microsoft;
           } else {
-            console.error(
+            logService.error(
               "[ConnectionStatus] Microsoft token refresh failed:",
-              refreshResult.error,
+              "ConnectionStatus",
+              { error: refreshResult.error },
             );
           }
         } catch (refreshError: any) {
-          console.error(
+          logService.error(
             "[ConnectionStatus] Microsoft token refresh error:",
-            refreshError,
+            "ConnectionStatus",
+            { error: refreshError },
           );
         }
 
@@ -273,9 +283,10 @@ class ConnectionStatusService {
       };
       return this.connectionStatus.microsoft;
     } catch (error: any) {
-      console.error(
+      logService.error(
         "[ConnectionStatus] Error checking Microsoft connection:",
-        error,
+        "ConnectionStatus",
+        { error },
       );
 
       this.connectionStatus.microsoft = {

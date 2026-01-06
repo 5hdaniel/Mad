@@ -2,6 +2,7 @@ import path from "path";
 import fs from "fs/promises";
 import { app } from "electron";
 import pdfExportService from "./pdfExportService";
+import logService from "./logService";
 import { Transaction, Communication } from "../types/models";
 
 /**
@@ -44,7 +45,7 @@ class EnhancedExportService {
     } = options;
 
     try {
-      console.log("[Enhanced Export] Starting export:", {
+      logService.info("[Enhanced Export] Starting export:", "EnhancedExport", {
         format: exportFormat,
         contentType,
         transactionId: transaction.id,
@@ -75,8 +76,9 @@ class EnhancedExportService {
         return dateB - dateA;
       });
 
-      console.log(
+      logService.info(
         `[Enhanced Export] Filtered to ${filteredComms.length} communications (verified address relevance)`,
+        "EnhancedExport",
       );
 
       // Export based on format
@@ -103,10 +105,10 @@ class EnhancedExportService {
           throw new Error(`Unknown export format: ${exportFormat}`);
       }
 
-      console.log("[Enhanced Export] Export complete:", exportPath);
+      logService.info("[Enhanced Export] Export complete:", "EnhancedExport", { exportPath });
       return exportPath;
     } catch (error) {
-      console.error("[Enhanced Export] Export failed:", error);
+      logService.error("[Enhanced Export] Export failed:", "EnhancedExport", { error });
       throw error;
     }
   }
@@ -169,8 +171,9 @@ class EnhancedExportService {
     propertyAddress?: string,
   ): Communication[] {
     if (!propertyAddress) {
-      console.warn(
+      logService.warn(
         "[Enhanced Export] No property address provided, skipping address verification",
+        "EnhancedExport",
       );
       return communications;
     }
@@ -222,8 +225,9 @@ class EnhancedExportService {
       }
 
       // Log filtered out emails for debugging
-      console.log(
+      logService.info(
         `[Enhanced Export] Filtered out email (no address match): "${comm.subject}" from ${comm.sender}`,
+        "EnhancedExport",
       );
       return false;
     });

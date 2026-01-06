@@ -1,0 +1,153 @@
+name: PR Metrics Validation
+
+# This workflow enforces the Engineer Workflow Compliance requirements
+# by validating that all PRs include required metrics sections.
+#
+# Requirements (Updated 2026-01-03):
+# 1. Engineer Metrics section must be present
+# 2. Agent ID section must be present (for auto-captured metrics)
+# 3. Metrics table must have actual values (not placeholders)
+#
+# Note: Turn-based metrics are deprecated. New format uses auto-captured
+# metrics via SubagentStop hook (Total Tokens, Duration, API Calls).
+#
+# Exceptions:
+# - Dependabot PRs are exempt (automated dependency updates)
+# - PRs with [skip-metrics] in title are exempt (use sparingly)
+# - PRs with 'hotfix', 'quick-fix', or 'ci-fix' labels are exempt
+
+on:
+  pull_request:
+    branches: [main, develop]
+    types: [opened, edited, synchronize, reopened]
+
+jobs:
+  validate-metrics:
+    name: Validate PR Metrics
+    runs-on: ubuntu-latest
+
+    # Skip for Dependabot PRs
+    if: github.actor != 'dependabot[bot]'
+
+    steps:
+      - name: Check for exempt labels
+        id: label-check
+        run: |
+          # Check if PR has any exempt labels
+          LABELS='${{ toJson(github.event.pull_request.labels.*.name) }}'
+          echo "Labels on PR: $LABELS"
+
+          if echo "$LABELS" | grep -qiE '"(hotfix|quick-fix|ci-fix)"'; then
+            echo "exempt=true" >> $GITHUB_OUTPUT
+            echo "::notice::Metrics validation skipped - exempt label detected"
+          else
+            echo "exempt=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check for skip flag
+        id: skip-check
+        run: |
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          if [[ "$PR_TITLE" == *"[skip-metrics]"* ]]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "skip_reason=title flag" >> $GITHUB_OUTPUT
+            echo "::warning::Metrics validation skipped via [skip-metrics] flag"
+          elif [[ "${{ steps.label-check.outputs.exempt }}" == "true" ]]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "skip_reason=exempt label" >> $GITHUB_OUTPUT
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+            echo "skip_reason=" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Validate Engineer Metrics Section
+        if: steps.skip-check.outputs.skip != 'true'
+        run: |
+          PR_BODY='${{ github.event.pull_request.body }}'
+
+          echo "=== Validating PR Metrics ==="
+          echo ""
+
+          # Check 1: Engineer Metrics section exists
+          echo "Check 1: Engineer Metrics section..."
+          if [[ ! "$PR_BODY" =~ "## Engineer Metrics" ]]; then
+            echo "::error::PR missing '## Engineer Metrics' section"
+            echo "  Add the Engineer Metrics section to your PR description."
+            echo "  See .github/PULL_REQUEST_TEMPLATE.md for the required format."
+            exit 1
+          fi
+          echo "  [PASS] Engineer Metrics section found"
+
+          # Check 2: Agent ID section exists (for auto-captured metrics)
+          echo ""
+          echo "Check 2: Agent ID section..."
+          if [[ ! "$PR_BODY" =~ "Agent ID" ]] && [[ ! "$PR_BODY" =~ "Engineer Agent ID" ]]; then
+            echo "::error::PR missing 'Agent ID' section"
+            echo "  Add the Agent ID section with your agent_id for metrics lookup."
+            echo "  See .github/PULL_REQUEST_TEMPLATE.md for the required format."
+            exit 1
+          fi
+          echo "  [PASS] Agent ID section found"
+
+          # Check 3: Metrics table has structure (new auto-captured format)
+          echo ""
+          echo "Check 3: Metrics table structure..."
+          # Accept either new format (| Metric | Value |) or legacy format for transition period
+          if [[ ! "$PR_BODY" =~ "| Metric | Value |" ]] && [[ ! "$PR_BODY" =~ "Total Tokens" ]]; then
+            echo "::error::PR missing metrics table"
+            echo "  Ensure the Engineer Metrics section contains the required table."
+            echo "  New format: | Metric | Value | with Total Tokens, Duration, API Calls"
+            exit 1
+          fi
+          echo "  [PASS] Metrics table found"
+
+          # Check 4: Auto-captured metrics present (Total Tokens indicates hook data used)
+          echo ""
+          echo "Check 4: Auto-captured metrics..."
+          if [[ ! "$PR_BODY" =~ "Total Tokens" ]]; then
+            echo "::error::PR missing auto-captured metrics (Total Tokens)"
+            echo "  Use: grep '<agent_id>' .claude/metrics/tokens.jsonl | jq '.'"
+            echo "  Add Total Tokens from SubagentStop hook data."
+            exit 1
+          fi
+          echo "  [PASS] Auto-captured metrics found"
+
+          # Check 5: Variance section exists (estimation calibration)
+          echo ""
+          echo "Check 5: Variance section..."
+          if [[ ! "$PR_BODY" =~ "Variance" ]] && [[ ! "$PR_BODY" =~ "Estimated vs Actual" ]]; then
+            echo "::error::PR missing variance/estimation comparison"
+            echo "  Add the variance calculation to help calibrate future estimates."
+            exit 1
+          fi
+          echo "  [PASS] Variance section found"
+
+          echo ""
+          echo "=== All metrics validations passed ==="
+
+      - name: Summary
+        if: always()
+        run: |
+          if [[ "${{ steps.skip-check.outputs.skip }}" == "true" ]]; then
+            echo "## PR Metrics Validation: SKIPPED" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+
+            SKIP_REASON="${{ steps.skip-check.outputs.skip_reason }}"
+            if [[ "$SKIP_REASON" == "exempt label" ]]; then
+              echo "Metrics validation was skipped due to exempt label (hotfix/quick-fix/ci-fix)." >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "> **Note**: Exempt labels are appropriate for urgent fixes that bypass the sprint workflow." >> $GITHUB_STEP_SUMMARY
+            else
+              echo "Metrics validation was skipped due to [skip-metrics] flag in PR title." >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "> **Note**: Use [skip-metrics] sparingly. All sprint tasks should include metrics." >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "## PR Metrics Validation: PASSED" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "All required metrics sections are present:" >> $GITHUB_STEP_SUMMARY
+            echo "- [x] Engineer Metrics section" >> $GITHUB_STEP_SUMMARY
+            echo "- [x] Agent ID section" >> $GITHUB_STEP_SUMMARY
+            echo "- [x] Auto-captured metrics (Total Tokens)" >> $GITHUB_STEP_SUMMARY
+            echo "- [x] Variance comparison" >> $GITHUB_STEP_SUMMARY
+          fi
