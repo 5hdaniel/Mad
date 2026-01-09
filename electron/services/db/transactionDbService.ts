@@ -319,6 +319,8 @@ export async function updateTransaction(
     "offer_count",
     "failed_offers_count",
     "key_dates",
+    "message_count",
+    "attachment_count",
   ];
 
   // Validate status if it's being updated

@@ -4,12 +4,40 @@
  */
 
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { TransactionMessagesTab } from "../TransactionMessagesTab";
 import type { Communication } from "../../types";
 
+// Mock the window.api
+const mockUnlinkMessages = jest.fn();
+const mockGetMessageContacts = jest.fn();
+const mockGetMessagesByContact = jest.fn();
+const mockLinkMessages = jest.fn();
+
+beforeAll(() => {
+  Object.defineProperty(window, "api", {
+    value: {
+      transactions: {
+        unlinkMessages: mockUnlinkMessages,
+        getMessageContacts: mockGetMessageContacts,
+        getMessagesByContact: mockGetMessagesByContact,
+        linkMessages: mockLinkMessages,
+      },
+    },
+    writable: true,
+  });
+});
+
 describe("TransactionMessagesTab", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockUnlinkMessages.mockResolvedValue({ success: true });
+    mockGetMessageContacts.mockResolvedValue({ success: true, contacts: [] });
+    mockGetMessagesByContact.mockResolvedValue({ success: true, messages: [] });
+    mockLinkMessages.mockResolvedValue({ success: true });
+  });
+
   // Mock messages for testing
   const mockMessages: Partial<Communication>[] = [
     {
@@ -514,6 +542,247 @@ describe("TransactionMessagesTab", () => {
       // Newest thread should be first
       expect(threadCards[0]).toHaveAttribute("data-thread-id", "thread-new");
       expect(threadCards[1]).toHaveAttribute("data-thread-id", "thread-old");
+    });
+  });
+
+  describe("unlink flow", () => {
+    const messagesWithUserId: Partial<Communication>[] = [
+      {
+        id: "msg-1",
+        user_id: "user-456",
+        channel: "sms",
+        body_text: "Test message 1",
+        sent_at: "2024-01-16T11:00:00Z",
+        direction: "inbound",
+        thread_id: "thread-1",
+        participants: JSON.stringify({ from: "+14155550100", to: ["+14155550101"] }),
+        has_attachments: false,
+        is_false_positive: false,
+      },
+      {
+        id: "msg-2",
+        user_id: "user-456",
+        channel: "sms",
+        body_text: "Test message 2",
+        sent_at: "2024-01-17T11:00:00Z",
+        direction: "outbound",
+        thread_id: "thread-1",
+        participants: JSON.stringify({ from: "+14155550101", to: ["+14155550100"] }),
+        has_attachments: false,
+        is_false_positive: false,
+      },
+    ];
+
+    it("should show unlink button when userId and transactionId are provided", () => {
+      render(
+        <TransactionMessagesTab
+          messages={messagesWithUserId as Communication[]}
+          loading={false}
+          error={null}
+          userId="user-456"
+          transactionId="txn-123"
+        />
+      );
+
+      // Unlink button should be visible
+      expect(screen.getByTestId("unlink-thread-button")).toBeInTheDocument();
+    });
+
+    it("should not show unlink button when userId or transactionId is missing", () => {
+      render(
+        <TransactionMessagesTab
+          messages={messagesWithUserId as Communication[]}
+          loading={false}
+          error={null}
+        />
+      );
+
+      // Unlink button should not exist
+      expect(screen.queryByTestId("unlink-thread-button")).not.toBeInTheDocument();
+    });
+
+    it("should open unlink confirmation modal when unlink button is clicked", () => {
+      render(
+        <TransactionMessagesTab
+          messages={messagesWithUserId as Communication[]}
+          loading={false}
+          error={null}
+          userId="user-456"
+          transactionId="txn-123"
+        />
+      );
+
+      // Click the unlink button
+      fireEvent.click(screen.getByTestId("unlink-thread-button"));
+
+      // Modal should appear
+      expect(screen.getByTestId("unlink-message-modal")).toBeInTheDocument();
+      expect(screen.getByText("Remove Messages from Transaction?")).toBeInTheDocument();
+    });
+
+    it("should show phone number and message count in unlink modal", () => {
+      render(
+        <TransactionMessagesTab
+          messages={messagesWithUserId as Communication[]}
+          loading={false}
+          error={null}
+          userId="user-456"
+          transactionId="txn-123"
+        />
+      );
+
+      fireEvent.click(screen.getByTestId("unlink-thread-button"));
+
+      // Should show modal with correct message count
+      const modal = screen.getByTestId("unlink-message-modal");
+      expect(modal).toBeInTheDocument();
+      // Modal should contain the phone number somewhere
+      expect(modal).toHaveTextContent("+14155550100");
+      expect(modal).toHaveTextContent("2 messages");
+    });
+
+    it("should close modal when cancel is clicked", () => {
+      render(
+        <TransactionMessagesTab
+          messages={messagesWithUserId as Communication[]}
+          loading={false}
+          error={null}
+          userId="user-456"
+          transactionId="txn-123"
+        />
+      );
+
+      fireEvent.click(screen.getByTestId("unlink-thread-button"));
+      expect(screen.getByTestId("unlink-message-modal")).toBeInTheDocument();
+
+      fireEvent.click(screen.getByTestId("unlink-cancel-button"));
+      expect(screen.queryByTestId("unlink-message-modal")).not.toBeInTheDocument();
+    });
+
+    it("should call unlinkMessages API when confirmed", async () => {
+      const mockOnMessagesChanged = jest.fn();
+      const mockOnShowSuccess = jest.fn();
+
+      render(
+        <TransactionMessagesTab
+          messages={messagesWithUserId as Communication[]}
+          loading={false}
+          error={null}
+          userId="user-456"
+          transactionId="txn-123"
+          onMessagesChanged={mockOnMessagesChanged}
+          onShowSuccess={mockOnShowSuccess}
+        />
+      );
+
+      fireEvent.click(screen.getByTestId("unlink-thread-button"));
+      fireEvent.click(screen.getByTestId("unlink-confirm-button"));
+
+      await waitFor(() => {
+        expect(mockUnlinkMessages).toHaveBeenCalledWith(["msg-1", "msg-2"]);
+      });
+
+      await waitFor(() => {
+        expect(mockOnShowSuccess).toHaveBeenCalledWith("Messages removed from transaction");
+        expect(mockOnMessagesChanged).toHaveBeenCalled();
+      });
+    });
+
+    it("should show error message when unlink fails", async () => {
+      mockUnlinkMessages.mockResolvedValue({
+        success: false,
+        error: "Network error occurred",
+      });
+
+      const mockOnShowError = jest.fn();
+
+      render(
+        <TransactionMessagesTab
+          messages={messagesWithUserId as Communication[]}
+          loading={false}
+          error={null}
+          userId="user-456"
+          transactionId="txn-123"
+          onShowError={mockOnShowError}
+        />
+      );
+
+      fireEvent.click(screen.getByTestId("unlink-thread-button"));
+      fireEvent.click(screen.getByTestId("unlink-confirm-button"));
+
+      await waitFor(() => {
+        expect(mockOnShowError).toHaveBeenCalledWith("Network error occurred");
+      });
+    });
+
+    it("should handle API exception during unlink", async () => {
+      mockUnlinkMessages.mockRejectedValue(new Error("Connection failed"));
+
+      const mockOnShowError = jest.fn();
+
+      render(
+        <TransactionMessagesTab
+          messages={messagesWithUserId as Communication[]}
+          loading={false}
+          error={null}
+          userId="user-456"
+          transactionId="txn-123"
+          onShowError={mockOnShowError}
+        />
+      );
+
+      fireEvent.click(screen.getByTestId("unlink-thread-button"));
+      fireEvent.click(screen.getByTestId("unlink-confirm-button"));
+
+      await waitFor(() => {
+        expect(mockOnShowError).toHaveBeenCalledWith("Connection failed");
+      });
+    });
+  });
+
+  describe("attach flow", () => {
+    it("should show Attach Messages button when userId and transactionId are provided", () => {
+      render(
+        <TransactionMessagesTab
+          messages={[]}
+          loading={false}
+          error={null}
+          userId="user-456"
+          transactionId="txn-123"
+        />
+      );
+
+      expect(screen.getByTestId("attach-messages-button")).toBeInTheDocument();
+    });
+
+    it("should not show Attach Messages button when userId or transactionId is missing", () => {
+      render(
+        <TransactionMessagesTab
+          messages={[]}
+          loading={false}
+          error={null}
+        />
+      );
+
+      expect(screen.queryByTestId("attach-messages-button")).not.toBeInTheDocument();
+    });
+
+    it("should open attach modal when Attach Messages button is clicked", async () => {
+      render(
+        <TransactionMessagesTab
+          messages={[]}
+          loading={false}
+          error={null}
+          userId="user-456"
+          transactionId="txn-123"
+        />
+      );
+
+      fireEvent.click(screen.getByTestId("attach-messages-button"));
+
+      await waitFor(() => {
+        expect(screen.getByTestId("attach-messages-modal")).toBeInTheDocument();
+      });
     });
   });
 });

@@ -1295,6 +1295,114 @@ export const registerTransactionHandlers = (
     },
   );
 
+  // Get unlinked emails (not attached to any transaction)
+  ipcMain.handle(
+    "transactions:get-unlinked-emails",
+    async (
+      event: IpcMainInvokeEvent,
+      userId: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        logService.info("Getting unlinked emails", "Transactions", { userId });
+
+        const validatedUserId = validateUserId(userId);
+        if (!validatedUserId) {
+          throw new ValidationError("User ID validation failed", "userId");
+        }
+
+        const emails = await transactionService.getUnlinkedEmails(validatedUserId);
+
+        return {
+          success: true,
+          emails,
+        };
+      } catch (error) {
+        logService.error("Get unlinked emails failed", "Transactions", {
+          userId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // Get message contacts for contact-first browsing
+  ipcMain.handle(
+    "transactions:get-message-contacts",
+    async (
+      event: IpcMainInvokeEvent,
+      userId: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        logService.info("Getting message contacts", "Transactions", { userId });
+
+        const validatedUserId = validateUserId(userId);
+        if (!validatedUserId) {
+          throw new ValidationError("User ID validation failed", "userId");
+        }
+
+        const contacts = await transactionService.getMessageContacts(validatedUserId);
+
+        return {
+          success: true,
+          contacts,
+        };
+      } catch (error) {
+        logService.error("Get message contacts failed", "Transactions", {
+          userId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // Get messages for a specific contact
+  ipcMain.handle(
+    "transactions:get-messages-by-contact",
+    async (
+      event: IpcMainInvokeEvent,
+      userId: string,
+      contact: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        logService.info("Getting messages by contact", "Transactions", { userId, contact });
+
+        const validatedUserId = validateUserId(userId);
+        if (!validatedUserId) {
+          throw new ValidationError("User ID validation failed", "userId");
+        }
+
+        if (!contact || typeof contact !== "string") {
+          throw new ValidationError("Contact is required", "contact");
+        }
+
+        const messages = await transactionService.getMessagesByContact(validatedUserId, contact);
+
+        return {
+          success: true,
+          messages,
+        };
+      } catch (error) {
+        logService.error("Get messages by contact failed", "Transactions", {
+          userId,
+          contact,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
   // Link messages to a transaction
   ipcMain.handle(
     "transactions:link-messages",

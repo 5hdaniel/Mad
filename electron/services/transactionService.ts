@@ -15,6 +15,7 @@ import transactionExtractorService from "./transactionExtractorService";
 import databaseService from "./databaseService";
 import logService from "./logService";
 import supabaseService from "./supabaseService";
+import { getContactNames } from "./contactsService";
 
 // Hybrid extraction imports
 import { HybridExtractorService } from "./extraction/hybridExtractorService";
@@ -1411,6 +1412,87 @@ class TransactionService {
       "TransactionService.getUnlinkedMessages",
       {
         userId,
+        count: messages.length,
+      },
+    );
+
+    return messages;
+  }
+
+  /**
+   * Get unlinked emails for a user
+   */
+  async getUnlinkedEmails(userId: string): Promise<Message[]> {
+    const emails = await databaseService.getUnlinkedEmails(userId);
+
+    await logService.info(
+      "Retrieved unlinked emails",
+      "TransactionService.getUnlinkedEmails",
+      {
+        userId,
+        count: emails.length,
+      },
+    );
+
+    return emails;
+  }
+
+  /**
+   * Get distinct contacts with unlinked message counts
+   * Returns a list of phone numbers/contacts with their message counts
+   */
+  async getMessageContacts(userId: string): Promise<{ contact: string; contactName: string | null; messageCount: number; lastMessageAt: string }[]> {
+    const contacts = await databaseService.getMessageContacts(userId);
+
+    // Resolve contact names from the macOS Contacts database
+    let contactNameMap: Record<string, string> = {};
+    try {
+      const { contactMap } = await getContactNames();
+      contactNameMap = contactMap;
+    } catch (err) {
+      await logService.warn(
+        "Failed to load contact names, will use phone numbers only",
+        "TransactionService.getMessageContacts",
+        { error: err instanceof Error ? err.message : String(err) },
+      );
+    }
+
+    // Enrich contacts with names
+    const enrichedContacts = contacts.map((c) => {
+      // Try to find name by phone number (normalized and raw)
+      const name = contactNameMap[c.contact] || contactNameMap[c.contact.replace(/\D/g, '')] || null;
+      return {
+        ...c,
+        contactName: name,
+      };
+    });
+
+    await logService.info(
+      "Retrieved message contacts",
+      "TransactionService.getMessageContacts",
+      {
+        userId,
+        contactCount: contacts.length,
+        withNames: enrichedContacts.filter(c => c.contactName).length,
+      },
+    );
+
+    return enrichedContacts;
+  }
+
+  /**
+   * Get unlinked messages for a specific contact
+   * Used after user selects a contact from the contact list
+   */
+  async getMessagesByContact(userId: string, contact: string): Promise<Message[]> {
+    const messages = await databaseService.getMessagesByContact(userId, contact);
+
+    await logService.info(
+      "Retrieved messages for contact",
+      "TransactionService.getMessagesByContact",
+      {
+        userId,
+        contact,
         count: messages.length,
       },
     );

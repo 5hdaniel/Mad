@@ -269,6 +269,31 @@ export const transactionBridge = {
     ipcRenderer.invoke("transactions:get-unlinked-messages", userId),
 
   /**
+   * Gets unlinked emails (not attached to any transaction)
+   * @param userId - User ID to get emails for
+   * @returns List of unlinked emails
+   */
+  getUnlinkedEmails: (userId: string) =>
+    ipcRenderer.invoke("transactions:get-unlinked-emails", userId),
+
+  /**
+   * Gets distinct contacts with unlinked message counts
+   * @param userId - User ID to get contacts for
+   * @returns List of contacts with message counts
+   */
+  getMessageContacts: (userId: string) =>
+    ipcRenderer.invoke("transactions:get-message-contacts", userId),
+
+  /**
+   * Gets unlinked messages for a specific contact
+   * @param userId - User ID
+   * @param contact - Phone number/contact identifier
+   * @returns List of messages for that contact
+   */
+  getMessagesByContact: (userId: string, contact: string) =>
+    ipcRenderer.invoke("transactions:get-messages-by-contact", userId, contact),
+
+  /**
    * Links messages to a transaction
    * @param messageIds - Array of message IDs to link
    * @param transactionId - Transaction ID to link messages to

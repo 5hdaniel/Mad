@@ -114,8 +114,72 @@ export function MessageThreadCard({
 }
 
 /**
- * Utility function to group messages by thread_id.
- * Messages without a thread_id are grouped by their own id.
+ * Generate a key for grouping messages into chats.
+ * Uses thread_id (from macOS chat_id) first, as this is the actual conversation ID.
+ * Falls back to participant-based grouping only if thread_id is not available.
+ */
+function getThreadKey(msg: MessageLike): string {
+  // FIRST: Use thread_id if available - this is the actual iMessage chat ID
+  // Format is "macos-chat-{chat_id}" from the import
+  if (msg.thread_id) {
+    return msg.thread_id;
+  }
+
+  // FALLBACK: Compute from participants if no thread_id
+  try {
+    if (msg.participants) {
+      const parsed = typeof msg.participants === 'string'
+        ? JSON.parse(msg.participants)
+        : msg.participants;
+
+      // Collect all participants
+      const allParticipants = new Set<string>();
+
+      if (parsed.from) {
+        allParticipants.add(normalizeParticipant(parsed.from));
+      }
+      if (parsed.to) {
+        const toList = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
+        toList.forEach((p: string) => allParticipants.add(normalizeParticipant(p)));
+      }
+
+      // Remove "me" - we only care about external participants for grouping
+      allParticipants.delete('me');
+
+      // Sort and join to create a consistent key
+      if (allParticipants.size > 0) {
+        return `participants-${Array.from(allParticipants).sort().join('|')}`;
+      }
+    }
+  } catch {
+    // Fall through to default
+  }
+
+  // Last resort: use message id (each message is its own "thread")
+  return `msg-${msg.id}`;
+}
+
+/**
+ * Normalize a participant identifier (phone/email) for consistent grouping.
+ */
+function normalizeParticipant(participant: string): string {
+  if (!participant) return '';
+
+  // If it looks like a phone number, normalize to digits only
+  const digits = participant.replace(/\D/g, '');
+  if (digits.length >= 10) {
+    // Use last 10 digits to normalize +1 prefix variations
+    return digits.slice(-10);
+  }
+
+  // Otherwise return lowercase trimmed version
+  return participant.toLowerCase().trim();
+}
+
+/**
+ * Utility function to group messages by conversation/chat.
+ * Uses thread_id (actual iMessage chat ID) when available,
+ * falls back to participant-based grouping otherwise.
  */
 export function groupMessagesByThread(
   messages: MessageLike[]
@@ -123,10 +187,10 @@ export function groupMessagesByThread(
   const threads = new Map<string, MessageLike[]>();
 
   messages.forEach((msg) => {
-    const threadId = msg.thread_id || msg.id;
-    const thread = threads.get(threadId) || [];
+    const threadKey = getThreadKey(msg);
+    const thread = threads.get(threadKey) || [];
     thread.push(msg);
-    threads.set(threadId, thread);
+    threads.set(threadKey, thread);
   });
 
   // Sort messages within each thread chronologically
