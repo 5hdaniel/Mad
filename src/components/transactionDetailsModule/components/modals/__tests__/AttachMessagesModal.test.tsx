@@ -464,4 +464,75 @@ describe("AttachMessagesModal", () => {
       expect(mockOnClose).toHaveBeenCalled();
     });
   });
+
+  describe("Error Handling in Attach Flow", () => {
+    it("should show error message when linkMessages fails", async () => {
+      mockGetMessageContacts.mockResolvedValue({
+        success: true,
+        contacts: mockContacts,
+      });
+      mockGetMessagesByContact.mockResolvedValue({
+        success: true,
+        messages: mockMessages,
+      });
+      mockLinkMessages.mockResolvedValue({
+        success: false,
+        error: "Failed to link messages",
+      });
+
+      render(<AttachMessagesModal {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByText("John Doe")).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByText("John Doe"));
+
+      await waitFor(() => {
+        expect(screen.getByTestId("thread-thread-1")).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByTestId("thread-thread-1"));
+      fireEvent.click(screen.getByTestId("attach-button"));
+
+      await waitFor(() => {
+        expect(screen.getByText("Failed to link messages")).toBeInTheDocument();
+      });
+
+      // Should not call onAttached or onClose on failure
+      expect(mockOnAttached).not.toHaveBeenCalled();
+      expect(mockOnClose).not.toHaveBeenCalled();
+    });
+
+    it("should show error message when linkMessages throws exception", async () => {
+      mockGetMessageContacts.mockResolvedValue({
+        success: true,
+        contacts: mockContacts,
+      });
+      mockGetMessagesByContact.mockResolvedValue({
+        success: true,
+        messages: mockMessages,
+      });
+      mockLinkMessages.mockRejectedValue(new Error("Network error"));
+
+      render(<AttachMessagesModal {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByText("John Doe")).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByText("John Doe"));
+
+      await waitFor(() => {
+        expect(screen.getByTestId("thread-thread-1")).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByTestId("thread-thread-1"));
+      fireEvent.click(screen.getByTestId("attach-button"));
+
+      await waitFor(() => {
+        expect(screen.getByText("Network error")).toBeInTheDocument();
+      });
+    });
+  });
 });
