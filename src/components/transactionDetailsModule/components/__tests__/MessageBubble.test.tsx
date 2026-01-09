@@ -72,6 +72,26 @@ describe("MessageBubble", () => {
     });
   });
 
+  describe("undefined direction (safe default)", () => {
+    it("should align to the left when direction is undefined", () => {
+      const message = createMockMessage({ direction: undefined });
+
+      render(<MessageBubble message={message} />);
+
+      const bubble = screen.getByTestId("message-bubble");
+      expect(bubble).toHaveClass("justify-start");
+    });
+
+    it("should have gray background when direction is undefined", () => {
+      const message = createMockMessage({ direction: undefined });
+
+      const { container } = render(<MessageBubble message={message} />);
+
+      const bubbleContent = container.querySelector(".bg-gray-200");
+      expect(bubbleContent).toBeInTheDocument();
+    });
+  });
+
   describe("outbound messages", () => {
     it("should align to the right", () => {
       const message = createMockMessage({ direction: "outbound" });
