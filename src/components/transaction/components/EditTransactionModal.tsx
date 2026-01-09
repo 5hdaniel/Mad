@@ -138,6 +138,7 @@ export function EditTransactionModal({
   };
 
   // Handle adding contact to a role
+  // Uses functional update to handle rapid consecutive calls (e.g., multi-select)
   const handleAssignContact = (
     role: string,
     contact: {
@@ -150,20 +151,19 @@ export function EditTransactionModal({
       notes?: string;
     }
   ) => {
-    setContactAssignments({
-      ...contactAssignments,
-      [role]: [...(contactAssignments[role] || []), contact],
-    });
+    setContactAssignments((prev) => ({
+      ...prev,
+      [role]: [...(prev[role] || []), contact],
+    }));
   };
 
   // Handle removing contact from a role
+  // Uses functional update for consistency with handleAssignContact
   const handleRemoveContact = (role: string, contactId: string) => {
-    setContactAssignments({
-      ...contactAssignments,
-      [role]: (contactAssignments[role] || []).filter(
-        (c) => c.contactId !== contactId
-      ),
-    });
+    setContactAssignments((prev) => ({
+      ...prev,
+      [role]: (prev[role] || []).filter((c) => c.contactId !== contactId),
+    }));
   };
 
   const handleSave = async () => {
