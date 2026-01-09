@@ -810,7 +810,8 @@ class DatabaseService implements IDatabaseService {
   }
 
   async getCommunicationsByTransaction(transactionId: string): Promise<Communication[]> {
-    return communicationDb.getCommunicationsByTransaction(transactionId);
+    // TASK-992: Use getCommunicationsWithMessages to include direction from messages table
+    return communicationDb.getCommunicationsWithMessages(transactionId);
   }
 
   async updateCommunication(communicationId: string, updates: Partial<Communication>): Promise<void> {
