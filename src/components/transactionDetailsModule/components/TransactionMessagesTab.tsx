@@ -106,7 +106,17 @@ export function TransactionMessagesTab({
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const result = await (window.api.contacts as any).getNamesByPhones(phones);
         if (result.success && result.names) {
-          setContactNames(result.names);
+          // Build a lookup map with both original and normalized phone keys
+          const namesWithNormalized: Record<string, string> = {};
+          Object.entries(result.names as Record<string, string>).forEach(([phone, name]) => {
+            namesWithNormalized[phone] = name;
+            // Also add normalized version (last 10 digits)
+            const normalized = phone.replace(/\D/g, '').slice(-10);
+            if (normalized.length >= 7) {
+              namesWithNormalized[normalized] = name;
+            }
+          });
+          setContactNames(namesWithNormalized);
         }
       } catch (err) {
         console.error("Failed to look up contact names:", err);
