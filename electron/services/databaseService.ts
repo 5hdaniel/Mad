@@ -682,6 +682,13 @@ class DatabaseService implements IDatabaseService {
     return contactDb.createContact(contactData);
   }
 
+  createContactsBatch(
+    contacts: Parameters<typeof contactDb.createContactsBatch>[0],
+    onProgress?: (current: number, total: number) => void
+  ): string[] {
+    return contactDb.createContactsBatch(contacts, onProgress);
+  }
+
   async getContactById(contactId: string): Promise<Contact | null> {
     return contactDb.getContactById(contactId);
   }

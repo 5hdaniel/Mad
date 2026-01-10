@@ -8,7 +8,7 @@ import type { IpcMainInvokeEvent } from "electron";
 import transactionService from "./services/transactionService";
 import auditService from "./services/auditService";
 import logService from "./services/logService";
-import { autoLinkTextsToTransaction } from "./services/messageMatchingService";
+import { autoLinkAllToTransaction } from "./services/messageMatchingService";
 import type {
   Transaction,
   NewTransaction,
@@ -515,6 +515,24 @@ export const registerTransactionHandlers = (
           validatedData as any,
         );
 
+        // Auto-link text messages from assigned contacts
+        if (transaction?.id) {
+          try {
+            const linkResult = await autoLinkAllToTransaction(transaction.id);
+            logService.info("Auto-linked communications after transaction creation", "Transactions", {
+              transactionId: transaction.id,
+              linked: linkResult.linked,
+              skipped: linkResult.skipped,
+            });
+          } catch (linkError) {
+            // Non-blocking - log but don't fail transaction creation
+            logService.warn("Auto-link communications failed after transaction creation", "Transactions", {
+              transactionId: transaction.id,
+              error: linkError instanceof Error ? linkError.message : "Unknown error",
+            });
+          }
+        }
+
         return {
           success: true,
           transaction,
@@ -651,6 +669,22 @@ export const registerTransactionHandlers = (
           isPrimary,
           validatedNotes ?? undefined,
         );
+
+        // Auto-link text messages from the assigned contact
+        try {
+          const linkResult = await autoLinkAllToTransaction(validatedTransactionId as string);
+          logService.info("Auto-linked communications after contact assignment", "Transactions", {
+            transactionId: validatedTransactionId,
+            contactId: validatedContactId,
+            linked: linkResult.linked,
+          });
+        } catch (linkError) {
+          // Non-blocking - log but don't fail assignment
+          logService.warn("Auto-link communications failed after contact assignment", "Transactions", {
+            transactionId: validatedTransactionId,
+            error: linkError instanceof Error ? linkError.message : "Unknown error",
+          });
+        }
 
         return {
           success: true,
@@ -1627,7 +1661,7 @@ export const registerTransactionHandlers = (
       transactionId: string,
     ): Promise<TransactionResponse> => {
       try {
-        logService.info("Auto-linking texts to transaction", "Transactions", {
+        logService.info("Auto-linking communications to transaction", "Transactions", {
           transactionId,
         });
 
@@ -1640,9 +1674,9 @@ export const registerTransactionHandlers = (
           );
         }
 
-        const result = await autoLinkTextsToTransaction(validatedTransactionId);
+        const result = await autoLinkAllToTransaction(validatedTransactionId);
 
-        logService.info("Auto-link texts complete", "Transactions", {
+        logService.info("Auto-link communications complete", "Transactions", {
           transactionId: validatedTransactionId,
           linked: result.linked,
           skipped: result.skipped,
@@ -1656,7 +1690,7 @@ export const registerTransactionHandlers = (
           errors: result.errors.length > 0 ? result.errors : undefined,
         };
       } catch (error) {
-        logService.error("Auto-link texts failed", "Transactions", {
+        logService.error("Auto-link communications failed", "Transactions", {
           transactionId,
           error: error instanceof Error ? error.message : "Unknown error",
         });

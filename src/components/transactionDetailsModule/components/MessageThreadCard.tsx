@@ -1,11 +1,11 @@
 /**
  * MessageThreadCard Component
- * Container for a conversation thread, displaying a header with contact info
- * and a scrollable list of messages.
+ * Container for a conversation thread, displaying a header with contact info.
+ * Clicking "View" opens the conversation in a phone-style popup modal.
  */
 import React, { useState } from "react";
 import type { Communication, Message } from "../types";
-import { MessageBubble } from "./MessageBubble";
+import { ConversationViewModal } from "./modals";
 
 /**
  * Union type for messages - can be from messages table or communications table
@@ -25,8 +25,6 @@ export interface MessageThreadCardProps {
   onUnlink?: (threadId: string) => void;
   /** Map of phone number -> contact name for resolving senders */
   contactNames?: Record<string, string>;
-  /** Whether the thread starts expanded (default: false - collapsed) */
-  defaultExpanded?: boolean;
 }
 
 /**
@@ -76,7 +74,7 @@ function normalizePhoneForLookup(phone: string): string {
 
 /**
  * MessageThreadCard component for displaying a conversation thread.
- * Shows a header with contact info and a scrollable message list.
+ * Shows a header with contact info. Clicking "View" opens a popup modal.
  */
 export function MessageThreadCard({
   threadId,
@@ -85,120 +83,92 @@ export function MessageThreadCard({
   phoneNumber,
   onUnlink,
   contactNames = {},
-  defaultExpanded = false,
 }: MessageThreadCardProps): React.ReactElement {
-  const [isExpanded, setIsExpanded] = useState(defaultExpanded);
+  const [showModal, setShowModal] = useState(false);
   const avatarInitial = getAvatarInitial(contactName, phoneNumber);
 
-  // Get preview of last message for collapsed state
+  // Get preview of last message
   const lastMessage = messages[messages.length - 1];
   const previewText = lastMessage
     ? (lastMessage.body_text || lastMessage.body_plain || lastMessage.body || "")?.slice(0, 60)
     : "";
 
   return (
-    <div
-      className="bg-white rounded-lg border border-gray-200 mb-4 overflow-hidden"
-      data-testid="message-thread-card"
-      data-thread-id={threadId}
-    >
-      {/* Thread Header */}
-      <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center gap-3">
-        <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-teal-600 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0">
-          {avatarInitial}
-        </div>
-        <div className="min-w-0 flex-1">
-          <h4 className="font-semibold text-gray-900 truncate" data-testid="thread-contact-name">
-            {contactName || phoneNumber}
-          </h4>
-          {contactName && phoneNumber && (
-            <p className="text-sm text-gray-500 truncate" data-testid="thread-phone-number">
-              {phoneNumber}
-            </p>
-          )}
-          {/* Preview of last message when collapsed */}
-          {!isExpanded && previewText && (
-            <p className="text-sm text-gray-400 truncate mt-1" data-testid="thread-preview">
-              {previewText}{previewText.length >= 60 ? "..." : ""}
-            </p>
-          )}
-        </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <span className="inline-block px-2 py-0.5 bg-green-100 text-green-700 text-xs font-medium rounded-full">
-            {messages.length} {messages.length === 1 ? "message" : "messages"}
-          </span>
-          <button
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="px-3 py-1 text-xs font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-all"
-            data-testid="toggle-thread-button"
-          >
-            {isExpanded ? "Hide" : "View"}
-          </button>
-          {onUnlink && (
+    <>
+      <div
+        className="bg-white rounded-lg border border-gray-200 mb-4 overflow-hidden"
+        data-testid="message-thread-card"
+        data-thread-id={threadId}
+      >
+        {/* Thread Header */}
+        <div className="bg-gray-50 px-4 py-3 flex items-center gap-3">
+          <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-teal-600 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0">
+            {avatarInitial}
+          </div>
+          <div className="min-w-0 flex-1">
+            <h4 className="font-semibold text-gray-900 truncate" data-testid="thread-contact-name">
+              {contactName || phoneNumber}
+            </h4>
+            {contactName && phoneNumber && (
+              <p className="text-sm text-gray-500 truncate" data-testid="thread-phone-number">
+                {phoneNumber}
+              </p>
+            )}
+            {/* Preview of last message */}
+            {previewText && (
+              <p className="text-sm text-gray-400 truncate mt-1" data-testid="thread-preview">
+                {previewText}{previewText.length >= 60 ? "..." : ""}
+              </p>
+            )}
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <span className="inline-block px-2 py-0.5 bg-green-100 text-green-700 text-xs font-medium rounded-full">
+              {messages.length} {messages.length === 1 ? "message" : "messages"}
+            </span>
             <button
-              onClick={() => onUnlink(threadId)}
-              className="text-gray-400 hover:text-red-600 hover:bg-red-50 rounded p-1 transition-all"
-              title="Remove from transaction"
-              data-testid="unlink-thread-button"
+              onClick={() => setShowModal(true)}
+              className="px-3 py-1 text-xs font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-all"
+              data-testid="toggle-thread-button"
             >
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
-                />
-              </svg>
+              View
             </button>
-          )}
+            {onUnlink && (
+              <button
+                onClick={() => onUnlink(threadId)}
+                className="text-gray-400 hover:text-red-600 hover:bg-red-50 rounded p-1 transition-all"
+                title="Remove from transaction"
+                data-testid="unlink-thread-button"
+              >
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
+                  />
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Messages - only shown when expanded */}
-      {isExpanded && (
-        <div
-          className="p-4 space-y-3 max-h-96 overflow-y-auto"
-          data-testid="thread-messages"
-        >
-          {messages.map((msg, index) => {
-            const senderPhone = getSenderPhone(msg);
-            let senderName: string | undefined;
-            let showSender = true;
-
-            if (senderPhone) {
-              // Look up contact name by phone (try original and normalized forms)
-              const normalized = normalizePhoneForLookup(senderPhone);
-              senderName = contactNames[senderPhone] || contactNames[normalized] || senderPhone;
-
-              // Don't show sender if same as previous message
-              if (index > 0) {
-                const prevSenderPhone = getSenderPhone(messages[index - 1]);
-                if (prevSenderPhone) {
-                  const prevNormalized = normalizePhoneForLookup(prevSenderPhone);
-                  if (normalized === prevNormalized) {
-                    showSender = false;
-                  }
-                }
-              }
-            }
-
-            return (
-              <MessageBubble
-                key={msg.id}
-                message={msg}
-                senderName={senderName}
-                showSender={showSender}
-              />
-            );
-          })}
-        </div>
+      {/* Conversation Popup Modal */}
+      {showModal && (
+        <ConversationViewModal
+          messages={messages}
+          contactName={contactName}
+          phoneNumber={phoneNumber}
+          contactNames={contactNames}
+          onClose={() => setShowModal(false)}
+        />
       )}
-    </div>
+    </>
   );
 }
 

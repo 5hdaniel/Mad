@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useCallback } from "react";
 import Joyride from "react-joyride";
 import { useTour } from "../hooks/useTour";
 import { usePendingTransactionCount } from "../hooks/usePendingTransactionCount";
-import { AIStatusCard, SyncStatusIndicator } from "./dashboard/index";
+import { SyncStatusIndicator } from "./dashboard/index";
 import {
   getDashboardTourSteps,
   JOYRIDE_STYLES,
@@ -147,23 +147,18 @@ function Dashboard({
           </div>
         )}
 
-        {/* Sync Status Indicator - shows when syncing in background */}
+        {/* Unified Sync Status - shows progress during sync, completion after */}
         {syncStatus && (
-          <SyncStatusIndicator
-            status={syncStatus}
-            isAnySyncing={isAnySyncing}
-            currentMessage={currentSyncMessage}
-          />
+          <div data-tour="ai-detection-status">
+            <SyncStatusIndicator
+              status={syncStatus}
+              isAnySyncing={isAnySyncing}
+              currentMessage={currentSyncMessage}
+              pendingCount={pendingCount}
+              onViewPending={handleViewPending}
+            />
+          </div>
         )}
-
-        {/* AI Detection Status Card */}
-        <div className="mb-8" data-tour="ai-detection-status">
-          <AIStatusCard
-            pendingCount={pendingCount}
-            onViewPending={handleViewPending}
-            isLoading={isPendingLoading || isAnySyncing}
-          />
-        </div>
 
         {/* Header */}
         <div className="text-center mb-12">

@@ -15,6 +15,7 @@ import type {
   OnboardingStep,
   OnboardingStepContentProps,
 } from "../types";
+import { markOnboardingImportComplete } from "../../../hooks/useSyncStatus";
 
 /**
  * Shield icon with lock - represents security/permissions
@@ -176,7 +177,7 @@ function InstructionStep({
  * 4. Add the application
  * 5. Restart the app
  */
-function PermissionsStepContent({ onAction }: OnboardingStepContentProps) {
+function PermissionsStepContent({ context, onAction }: OnboardingStepContentProps) {
   const [currentInstructionStep, setCurrentInstructionStep] = useState(0);
   const [isChecking, setIsChecking] = useState(false);
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
@@ -226,18 +227,34 @@ function PermissionsStepContent({ onAction }: OnboardingStepContentProps) {
 
   // Trigger import after permissions are granted
   const triggerImport = useCallback(async () => {
-    if (hasStartedImportRef.current) return;
-    hasStartedImportRef.current = true;
+    console.log("[PermissionsStep] triggerImport called, hasStartedImportRef:", hasStartedImportRef.current);
+    if (hasStartedImportRef.current) {
+      console.log("[PermissionsStep] Skipping - import already started");
+      return;
+    }
 
-    // Get user ID from session - if not available, skip import and continue
-    const authResult = await window.api.auth.getCurrentUser();
-    if (!authResult.success || !authResult.user) {
-      // No user session yet, just continue to next step
+    // Get user ID from context - if not available, skip import and continue
+    const userId = context.userId;
+    console.log("[PermissionsStep] userId from context:", userId);
+    if (!userId) {
+      // No user yet, just continue to next step
+      console.log("[PermissionsStep] No userId, calling PERMISSION_GRANTED");
       onAction({ type: "PERMISSION_GRANTED" });
       return;
     }
 
-    const userId = (authResult.user as { id: string }).id;
+    // Check if import has already been done for this user (persists across navigation)
+    const importKey = `onboarding_import_done_${userId}`;
+    if (localStorage.getItem(importKey)) {
+      console.log("[PermissionsStep] Import already done for this user, skipping");
+      onAction({ type: "PERMISSION_GRANTED" });
+      return;
+    }
+
+    hasStartedImportRef.current = true;
+
+    // Mark that we're doing the onboarding import - prevents duplicate imports on dashboard
+    markOnboardingImportComplete();
 
     // Start both imports in parallel
     setIsImportingMessages(true);
@@ -265,43 +282,54 @@ function PermissionsStepContent({ onAction }: OnboardingStepContentProps) {
     // Import contacts (get available, then import all)
     const contactsPromise = (async () => {
       try {
+        console.log("[PermissionsStep] Starting contacts import...");
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const availableResult = await (window.api.contacts as any).getAvailable(userId);
+        console.log("[PermissionsStep] getAvailable result:", availableResult?.success, availableResult?.contacts?.length || 0, "contacts");
         if (!availableResult.success || !availableResult.contacts?.length) {
-          setContactsResult({ success: true, contactsImported: 0 });
+          console.log("[PermissionsStep] No contacts to import or error");
+          setContactsResult({ success: availableResult.success !== false, contactsImported: 0, error: availableResult.error });
           return;
         }
 
+        console.log("[PermissionsStep] Importing", availableResult.contacts.length, "contacts...");
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const importResult = await (window.api.contacts as any).import(userId, availableResult.contacts);
+        console.log("[PermissionsStep] Import result:", importResult?.success, importResult?.contacts?.length || 0);
         setContactsResult({
           success: importResult.success,
           contactsImported: importResult.contacts?.length || 0,
           error: importResult.error,
         });
       } catch (error) {
-        console.error("Error importing contacts:", error);
+        console.error("[PermissionsStep] Error importing contacts:", error);
         setContactsResult({ success: false, contactsImported: 0, error: String(error) });
       } finally {
+        console.log("[PermissionsStep] Contacts import finished");
         setIsImportingContacts(false);
       }
     })();
 
-    // Wait for both to complete before proceeding
-    await Promise.all([messagesPromise, contactsPromise]);
+    // Don't wait for imports - let them continue in background
+    // User will see progress on the dashboard via SyncStatusIndicator
+    console.log("[PermissionsStep] Imports started, transitioning to dashboard immediately");
 
-    // Brief delay to show results before proceeding
+    // Brief delay to show "setting up" message, then transition
     setTimeout(() => {
+      console.log("[PermissionsStep] Dispatching PERMISSION_GRANTED action");
       onAction({ type: "PERMISSION_GRANTED" });
-    }, 1500);
+    }, 500);
   }, [onAction]);
 
   // Auto-check permissions on mount and periodically after user starts the flow
   const checkPermissions = useCallback(async () => {
+    console.log("[PermissionsStep] checkPermissions called");
     try {
       const result = await window.api.system.checkPermissions();
+      console.log("[PermissionsStep] checkPermissions result:", result);
       if (result.hasPermission) {
         // Permissions granted - trigger import first, then continue
+        console.log("[PermissionsStep] hasPermission=true, calling triggerImport");
         triggerImport();
       }
       return result.hasPermission;
@@ -437,6 +465,50 @@ function PermissionsStepContent({ onAction }: OnboardingStepContentProps) {
         >
           Grant Permission
         </button>
+      </div>
+    );
+  }
+
+  // Check if we're importing - show simple "Setting up" view
+  // Progress will be shown on the dashboard via SyncStatusIndicator
+  const isImporting = isImportingMessages || isImportingContacts;
+
+  if (isImporting) {
+    return (
+      <div className="max-w-2xl mx-auto">
+        <div className="text-center mb-5">
+          <div className="inline-flex items-center justify-center w-12 h-12 bg-primary/10 rounded-full mb-3">
+            <svg
+              className="w-6 h-6 text-primary animate-spin"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              />
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              />
+            </svg>
+          </div>
+          <h1 className="text-xl font-bold text-gray-900 mb-2">
+            Setting Up Your Account
+          </h1>
+          <p className="text-sm text-gray-600">
+            Please wait while we prepare your dashboard...
+          </p>
+        </div>
+
+        <p className="text-center text-xs text-gray-500 mt-6">
+          All data is stored locally on your device.
+        </p>
       </div>
     );
   }
@@ -602,123 +674,6 @@ function PermissionsStepContent({ onAction }: OnboardingStepContentProps) {
         </div>
       )}
 
-      {/* Importing state - show both progress bars */}
-      {(isImportingMessages || isImportingContacts) && (
-        <div className="bg-blue-50 border-2 border-blue-300 rounded-lg p-6 text-center">
-          <div className="inline-flex items-center justify-center w-12 h-12 bg-blue-500 rounded-full mb-4">
-            <svg
-              className="w-6 h-6 text-white animate-spin"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
-              <circle
-                className="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                strokeWidth="4"
-              />
-              <path
-                className="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-              />
-            </svg>
-          </div>
-          <h3 className="text-lg font-bold text-gray-900 mb-2">
-            Setting Up Your Data
-          </h3>
-          <p className="text-sm text-gray-600 mb-4">
-            Importing your messages and contacts...
-          </p>
-
-          {/* Messages Progress */}
-          <div className="max-w-xs mx-auto mb-4">
-            <div className="flex justify-between text-xs text-gray-600 mb-1">
-              <span>Messages</span>
-              <span>
-                {isImportingMessages
-                  ? `${messagesProgress?.percent || 0}%`
-                  : messagesResult?.success
-                    ? "Done"
-                    : "Error"}
-              </span>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-2">
-              <div
-                className={`h-2 rounded-full transition-all duration-300 ${
-                  !isImportingMessages && messagesResult?.success
-                    ? "bg-green-500"
-                    : !isImportingMessages && messagesResult && !messagesResult.success
-                      ? "bg-red-500"
-                      : "bg-blue-500"
-                }`}
-                style={{
-                  width: `${isImportingMessages ? messagesProgress?.percent || 0 : 100}%`,
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Contacts Progress */}
-          <div className="max-w-xs mx-auto">
-            <div className="flex justify-between text-xs text-gray-600 mb-1">
-              <span>Contacts</span>
-              <span>
-                {isImportingContacts
-                  ? `${contactsProgress?.percent || 0}%`
-                  : contactsResult?.success
-                    ? "Done"
-                    : "Error"}
-              </span>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-2">
-              <div
-                className={`h-2 rounded-full transition-all duration-300 ${
-                  !isImportingContacts && contactsResult?.success
-                    ? "bg-green-500"
-                    : !isImportingContacts && contactsResult && !contactsResult.success
-                      ? "bg-red-500"
-                      : "bg-blue-500"
-                }`}
-                style={{
-                  width: `${isImportingContacts ? contactsProgress?.percent || 0 : 100}%`,
-                }}
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Import complete state - show summary */}
-      {!isImportingMessages && !isImportingContacts && (messagesResult || contactsResult) && (
-        <div className="bg-green-50 border-2 border-green-300 rounded-lg p-6 text-center">
-          <div className="inline-flex items-center justify-center w-12 h-12 bg-green-500 rounded-full mb-4">
-            <CheckIcon className="w-6 h-6 text-white" />
-          </div>
-          <h3 className="text-lg font-bold text-gray-900 mb-2">
-            Import Complete!
-          </h3>
-          <div className="text-sm text-gray-600 space-y-1">
-            {messagesResult && (
-              <p>
-                {messagesResult.messagesImported > 0
-                  ? `${messagesResult.messagesImported.toLocaleString()} messages imported`
-                  : "Messages ready"}
-              </p>
-            )}
-            {contactsResult && (
-              <p>
-                {contactsResult.contactsImported > 0
-                  ? `${contactsResult.contactsImported.toLocaleString()} contacts imported`
-                  : "Contacts ready"}
-              </p>
-            )}
-          </div>
-        </div>
-      )}
-
       <p className="text-center text-xs text-gray-500 mt-6">
         All data is stored locally on your device.
       </p>
@@ -736,8 +691,12 @@ const permissionsStep: OnboardingStep = {
     platforms: ["macos"],
     navigation: {
       showBack: true,
+      hideContinue: false,
     },
-    canProceed: (context) => context.permissionsGranted,
+    // Disable Continue button - step auto-proceeds after import completes
+    canProceed: () => false,
+    // Step is never "complete" via button - it auto-proceeds via PERMISSION_GRANTED action
+    isStepComplete: () => false,
     // Only show if permissions not yet granted (returning users with FDA skip this)
     shouldShow: (context) => !context.permissionsGranted,
   },

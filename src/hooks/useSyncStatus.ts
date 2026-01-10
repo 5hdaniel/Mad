@@ -10,6 +10,27 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { usePlatform } from "../contexts/PlatformContext";
 
+// Module-level flag to track if onboarding import just completed
+// This is more reliable than localStorage across component remounts
+let skipNextMessagesSync = false;
+
+/**
+ * Mark that onboarding import just completed - skip the next messages sync
+ */
+export function markOnboardingImportComplete(): void {
+  console.log("[useSyncStatus] Marking onboarding import complete - will skip next messages sync");
+  skipNextMessagesSync = true;
+}
+
+/**
+ * Check if we should skip the next messages sync
+ * Does NOT clear the flag - only runAutoSync clears it
+ */
+export function shouldSkipMessagesSync(): boolean {
+  console.log("[useSyncStatus] shouldSkipMessagesSync:", skipNextMessagesSync);
+  return skipNextMessagesSync;
+}
+
 /**
  * Individual sync operation status
  */
@@ -85,17 +106,91 @@ export function useSyncStatus(): UseSyncStatusReturn {
   const abortControllerRef = useRef<AbortController | null>(null);
 
   // Subscribe to message import progress
+  // Shows progress from any import (including onboarding import started in PermissionsStep)
   useEffect(() => {
     const cleanup = window.api.messages.onImportProgress((progress) => {
-      setStatus((prev) => ({
-        ...prev,
-        messages: {
-          isSyncing: true,
-          progress: progress.percent,
-          message: `Importing messages... ${progress.current.toLocaleString()} / ${progress.total.toLocaleString()}`,
-          error: null,
-        },
-      }));
+      // When progress reaches 100%, mark as complete after a brief delay
+      // This handles imports started outside this hook (e.g., onboarding)
+      if (progress.percent >= 100) {
+        setStatus((prev) => ({
+          ...prev,
+          messages: {
+            isSyncing: true,
+            progress: 100,
+            message: `Importing messages... ${progress.current.toLocaleString()} / ${progress.total.toLocaleString()}`,
+            error: null,
+          },
+        }));
+        // Brief delay then mark complete
+        setTimeout(() => {
+          setStatus((prev) => ({
+            ...prev,
+            messages: {
+              isSyncing: false,
+              progress: 100,
+              message: "Messages imported",
+              error: null,
+            },
+          }));
+        }, 500);
+      } else {
+        setStatus((prev) => ({
+          ...prev,
+          messages: {
+            isSyncing: true,
+            progress: progress.percent,
+            message: `Importing messages... ${progress.current.toLocaleString()} / ${progress.total.toLocaleString()}`,
+            error: null,
+          },
+        }));
+      }
+    });
+
+    return cleanup;
+  }, []);
+
+  // Subscribe to contacts import progress
+  // Shows progress from contacts import (including onboarding import started in PermissionsStep)
+  useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const contactsApi = window.api.contacts as any;
+    if (!contactsApi?.onImportProgress) return;
+
+    const cleanup = contactsApi.onImportProgress((progress: { current: number; total: number; percent: number }) => {
+      // When progress reaches 100%, mark as complete after a brief delay
+      if (progress.percent >= 100) {
+        setStatus((prev) => ({
+          ...prev,
+          contacts: {
+            isSyncing: true,
+            progress: 100,
+            message: `Importing contacts... ${progress.current.toLocaleString()} / ${progress.total.toLocaleString()}`,
+            error: null,
+          },
+        }));
+        // Brief delay then mark complete
+        setTimeout(() => {
+          setStatus((prev) => ({
+            ...prev,
+            contacts: {
+              isSyncing: false,
+              progress: 100,
+              message: "Contacts imported",
+              error: null,
+            },
+          }));
+        }, 500);
+      } else {
+        setStatus((prev) => ({
+          ...prev,
+          contacts: {
+            isSyncing: true,
+            progress: progress.percent,
+            message: `Importing contacts... ${progress.current.toLocaleString()} / ${progress.total.toLocaleString()}`,
+            error: null,
+          },
+        }));
+      }
     });
 
     return cleanup;
@@ -254,8 +349,15 @@ export function useSyncStatus(): UseSyncStatusReturn {
       if (abortControllerRef.current?.signal.aborted) return;
 
       // Step 2: Messages sync (macOS only)
-      if (isMacOS) {
+      // Skip if we just imported during onboarding (avoid redundant "Importing messages..." UI)
+      console.log("[useSyncStatus] Checking skipNextMessagesSync flag:", skipNextMessagesSync);
+      if (isMacOS && !skipNextMessagesSync) {
+        console.log("[useSyncStatus] Starting messages sync");
         await startMessagesSync(userId);
+      } else if (skipNextMessagesSync) {
+        // Clear the flag so future syncs work normally
+        console.log("[useSyncStatus] Skipping messages sync - just did onboarding import");
+        skipNextMessagesSync = false;
       }
 
       // Check if aborted

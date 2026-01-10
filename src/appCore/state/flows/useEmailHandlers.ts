@@ -88,7 +88,11 @@ export function useEmailHandlers({
       }
 
       await completeEmailOnboarding();
-      setHasEmailConnected(true);
+      // Pass email and provider to properly dispatch EMAIL_CONNECTED action
+      const provider = emailTokens?.provider || (pendingOAuthData?.provider as "google" | "microsoft");
+      if (currentUserEmail && provider) {
+        setHasEmailConnected(true, currentUserEmail, provider);
+      }
 
       // Windows iPhone users need driver setup after email onboarding
       if (isWindows && selectedPhoneType === "iphone" && needsDriverSetup) {

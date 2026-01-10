@@ -7,11 +7,13 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import type { AppStep } from "../types";
+import type { AppAction } from "../machine/types";
 
 export interface UsePermissionsFlowOptions {
   isWindows: boolean;
   onSetShowMoveAppPrompt: (show: boolean) => void;
   onSetCurrentStep: (step: AppStep) => void;
+  stateMachineDispatch?: React.Dispatch<AppAction>;
 }
 
 export interface UsePermissionsFlowReturn {
@@ -31,6 +33,7 @@ export function usePermissionsFlow({
   isWindows,
   onSetShowMoveAppPrompt,
   onSetCurrentStep,
+  stateMachineDispatch,
 }: UsePermissionsFlowOptions): UsePermissionsFlowReturn {
   // Default to true to avoid flicker for returning users
   // The actual status will be verified by the effect below
@@ -72,9 +75,18 @@ export function usePermissionsFlow({
   }, [checkPermissions, checkAppLocation]);
 
   const handlePermissionsGranted = useCallback((): void => {
+    console.log("[usePermissionsFlow] handlePermissionsGranted called, stateMachineDispatch:", !!stateMachineDispatch);
     setHasPermissions(true);
+    // Dispatch to state machine to complete the permissions step
+    if (stateMachineDispatch) {
+      console.log("[usePermissionsFlow] Dispatching ONBOARDING_STEP_COMPLETE for permissions");
+      stateMachineDispatch({ type: "ONBOARDING_STEP_COMPLETE", step: "permissions" });
+    } else {
+      console.warn("[usePermissionsFlow] No stateMachineDispatch available!");
+    }
+    // Legacy fallback (no-op if state machine is enabled)
     onSetCurrentStep("dashboard");
-  }, [onSetCurrentStep]);
+  }, [onSetCurrentStep, stateMachineDispatch]);
 
   return useMemo(
     () => ({

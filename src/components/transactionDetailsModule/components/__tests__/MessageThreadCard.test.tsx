@@ -185,8 +185,8 @@ describe("MessageThreadCard", () => {
     });
   });
 
-  describe("messages container", () => {
-    it("should be collapsed by default", () => {
+  describe("view button and preview", () => {
+    it("should show View button to open modal", () => {
       const messages = [createMockMessage()];
 
       render(
@@ -197,62 +197,10 @@ describe("MessageThreadCard", () => {
         />
       );
 
-      expect(screen.queryByTestId("thread-messages")).not.toBeInTheDocument();
       expect(screen.getByTestId("toggle-thread-button")).toHaveTextContent("View");
     });
 
-    it("should render messages container when expanded", () => {
-      const messages = [createMockMessage()];
-
-      render(
-        <MessageThreadCard
-          threadId="thread-1"
-          messages={messages}
-          phoneNumber="+14155550100"
-          defaultExpanded={true}
-        />
-      );
-
-      expect(screen.getByTestId("thread-messages")).toBeInTheDocument();
-      expect(screen.getByTestId("toggle-thread-button")).toHaveTextContent("Hide");
-    });
-
-    it("should render all messages when expanded", () => {
-      const messages = [
-        createMockMessage({ id: "msg-1", body_text: "First message" }),
-        createMockMessage({ id: "msg-2", body_text: "Second message" }),
-      ];
-
-      render(
-        <MessageThreadCard
-          threadId="thread-1"
-          messages={messages}
-          phoneNumber="+14155550100"
-          defaultExpanded={true}
-        />
-      );
-
-      expect(screen.getByText("First message")).toBeInTheDocument();
-      expect(screen.getByText("Second message")).toBeInTheDocument();
-    });
-
-    it("should have scrollable container when expanded", () => {
-      const messages = [createMockMessage()];
-
-      render(
-        <MessageThreadCard
-          threadId="thread-1"
-          messages={messages}
-          phoneNumber="+14155550100"
-          defaultExpanded={true}
-        />
-      );
-
-      const messagesContainer = screen.getByTestId("thread-messages");
-      expect(messagesContainer).toHaveClass("overflow-y-auto");
-    });
-
-    it("should show preview text when collapsed", () => {
+    it("should show preview text of last message", () => {
       const messages = [
         createMockMessage({ id: "msg-1", body_text: "This is a preview message" }),
       ];
@@ -266,6 +214,26 @@ describe("MessageThreadCard", () => {
       );
 
       expect(screen.getByTestId("thread-preview")).toHaveTextContent("This is a preview message");
+    });
+
+    it("should truncate long preview text", () => {
+      const longText = "A".repeat(100);
+      const messages = [
+        createMockMessage({ id: "msg-1", body_text: longText }),
+      ];
+
+      render(
+        <MessageThreadCard
+          threadId="thread-1"
+          messages={messages}
+          phoneNumber="+14155550100"
+        />
+      );
+
+      const preview = screen.getByTestId("thread-preview");
+      // Should be truncated to 60 chars + "..."
+      expect(preview.textContent?.length).toBeLessThan(70);
+      expect(preview.textContent).toContain("...");
     });
   });
 });
