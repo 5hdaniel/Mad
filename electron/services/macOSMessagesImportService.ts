@@ -10,13 +10,16 @@
  * 3. Parses attributedBody blobs for message text
  * 4. Deduplicates messages using message GUID
  * 5. Stores messages in the app's messages table
+ * 6. Imports and stores image/GIF attachments (TASK-1012)
  */
 
 import crypto from "crypto";
 import path from "path";
 import os from "os";
+import fs from "fs";
 import sqlite3 from "sqlite3";
 import { promisify } from "util";
+import { app } from "electron";
 
 import databaseService from "./databaseService";
 import permissionService from "./permissionService";
@@ -31,6 +34,8 @@ export interface MacOSImportResult {
   success: boolean;
   messagesImported: number;
   messagesSkipped: number;
+  attachmentsImported: number;
+  attachmentsSkipped: number;
   duration: number;
   error?: string;
 }
@@ -50,6 +55,11 @@ const MAX_HANDLE_LENGTH = 500; // Phone numbers, emails, etc.
 const MAX_GUID_LENGTH = 100; // Message GUID format
 const BATCH_SIZE = 500; // Messages per batch
 const YIELD_INTERVAL = 2; // Yield every N batches
+
+// Attachment constants (TASK-1012)
+const SUPPORTED_IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".gif", ".heic"];
+const MAX_ATTACHMENT_SIZE = 50 * 1024 * 1024; // 50MB max per attachment
+const ATTACHMENTS_DIR = "message-attachments"; // Directory name in app data
 
 /**
  * Yield to event loop - allows UI to remain responsive
@@ -110,6 +120,53 @@ interface ChatMemberRow {
 }
 
 /**
+ * Raw attachment from macOS Messages database (TASK-1012)
+ */
+interface RawMacAttachment {
+  attachment_id: number;
+  message_id: number;
+  message_guid: string;
+  guid: string;
+  filename: string | null;
+  mime_type: string | null;
+  transfer_name: string | null;
+  total_bytes: number;
+  is_outgoing: number;
+}
+
+/**
+ * Check if a file extension is a supported image type
+ */
+function isSupportedImageType(filename: string | null): boolean {
+  if (!filename) return false;
+  const ext = path.extname(filename).toLowerCase();
+  return SUPPORTED_IMAGE_EXTENSIONS.includes(ext);
+}
+
+/**
+ * Get MIME type from filename
+ */
+function getMimeTypeFromFilename(filename: string): string {
+  const ext = path.extname(filename).toLowerCase();
+  const mimeTypes: Record<string, string> = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".gif": "image/gif",
+    ".heic": "image/heic",
+  };
+  return mimeTypes[ext] || "application/octet-stream";
+}
+
+/**
+ * Generate a content hash for deduplication
+ */
+function generateContentHash(filePath: string): string {
+  const fileBuffer = fs.readFileSync(filePath);
+  return crypto.createHash("sha256").update(fileBuffer).digest("hex");
+}
+
+/**
  * macOS Messages Import Service
  * Handles importing messages from the macOS Messages app
  */
@@ -138,6 +195,8 @@ class MacOSMessagesImportService {
         success: false,
         messagesImported: 0,
         messagesSkipped: 0,
+        attachmentsImported: 0,
+        attachmentsSkipped: 0,
         duration: 0,
         error: "Import already in progress",
       };
@@ -166,6 +225,8 @@ class MacOSMessagesImportService {
         success: false,
         messagesImported: 0,
         messagesSkipped: 0,
+        attachmentsImported: 0,
+        attachmentsSkipped: 0,
         duration: Date.now() - startTime,
         error: "macOS Messages import is only available on macOS",
       };
@@ -178,6 +239,8 @@ class MacOSMessagesImportService {
         success: false,
         messagesImported: 0,
         messagesSkipped: 0,
+        attachmentsImported: 0,
+        attachmentsSkipped: 0,
         duration: Date.now() - startTime,
         error:
           permissionCheck.userMessage ||
@@ -248,28 +311,53 @@ class MacOSMessagesImportService {
           MacOSMessagesImportService.SERVICE_NAME
         );
 
+        // Query attachments linked to messages (TASK-1012)
+        // We join through message_attachment_join to get the message relationship
+        const attachments = await dbAll<RawMacAttachment>(`
+          SELECT
+            attachment.ROWID as attachment_id,
+            message.ROWID as message_id,
+            message.guid as message_guid,
+            attachment.guid,
+            attachment.filename,
+            attachment.mime_type,
+            attachment.transfer_name,
+            attachment.total_bytes,
+            attachment.is_outgoing
+          FROM attachment
+          JOIN message_attachment_join ON attachment.ROWID = message_attachment_join.attachment_id
+          JOIN message ON message.ROWID = message_attachment_join.message_id
+          WHERE message.guid IS NOT NULL
+            AND attachment.filename IS NOT NULL
+        `);
+
         await dbClose();
 
         logService.info(
-          `Found ${messages.length} messages in macOS Messages`,
+          `Found ${messages.length} messages and ${attachments.length} attachments in macOS Messages`,
           MacOSMessagesImportService.SERVICE_NAME
         );
 
         // Store messages to app database
-        const result = await this.storeMessages(userId, messages, chatMembersMap, onProgress);
+        const messageResult = await this.storeMessages(userId, messages, chatMembersMap, onProgress);
+
+        // Store attachments (TASK-1012)
+        const attachmentResult = await this.storeAttachments(userId, attachments, messageResult.messageIdMap);
 
         const duration = Date.now() - startTime;
 
         logService.info(
-          `Import complete: ${result.stored} imported, ${result.skipped} skipped`,
+          `Import complete: ${messageResult.stored} messages imported, ${messageResult.skipped} skipped, ${attachmentResult.stored} attachments imported, ${attachmentResult.skipped} skipped`,
           MacOSMessagesImportService.SERVICE_NAME,
           { duration }
         );
 
         return {
           success: true,
-          messagesImported: result.stored,
-          messagesSkipped: result.skipped,
+          messagesImported: messageResult.stored,
+          messagesSkipped: messageResult.skipped,
+          attachmentsImported: attachmentResult.stored,
+          attachmentsSkipped: attachmentResult.skipped,
           duration,
         };
       } catch (error) {
@@ -291,6 +379,8 @@ class MacOSMessagesImportService {
         success: false,
         messagesImported: 0,
         messagesSkipped: 0,
+        attachmentsImported: 0,
+        attachmentsSkipped: 0,
         duration,
         error: errorMessage,
       };
@@ -299,15 +389,19 @@ class MacOSMessagesImportService {
 
   /**
    * Store messages to the app database with deduplication
+   * Returns a map of macOS message GUID -> internal message ID for attachment linking
    */
   private async storeMessages(
     userId: string,
     messages: RawMacMessage[],
     chatMembersMap: Map<number, string[]>,
     onProgress?: ImportProgressCallback
-  ): Promise<{ stored: number; skipped: number }> {
+  ): Promise<{ stored: number; skipped: number; messageIdMap: Map<string, string> }> {
+    // Map of macOS message GUID -> internal message ID (TASK-1012)
+    const messageIdMap = new Map<string, string>();
+
     if (messages.length === 0) {
-      return { stored: 0, skipped: 0 };
+      return { stored: 0, skipped: 0, messageIdMap };
     }
 
     let stored = 0;
@@ -460,6 +554,9 @@ class MacOSMessagesImportService {
             stored++;
             // Add to set to catch duplicates within same batch
             existingIds.add(msg.guid);
+
+            // Track GUID -> internal ID mapping for attachment linking (TASK-1012)
+            messageIdMap.set(msg.guid, messageId);
           } catch (insertError) {
             const errMsg =
               insertError instanceof Error
@@ -501,7 +598,188 @@ class MacOSMessagesImportService {
       }
     }
 
+    return { stored, skipped, messageIdMap };
+  }
+
+  /**
+   * Store attachments to the app database and file system (TASK-1012)
+   * Copies supported image files to app data directory with deduplication
+   */
+  private async storeAttachments(
+    userId: string,
+    attachments: RawMacAttachment[],
+    messageIdMap: Map<string, string>
+  ): Promise<{ stored: number; skipped: number }> {
+    if (attachments.length === 0) {
+      return { stored: 0, skipped: 0 };
+    }
+
+    let stored = 0;
+    let skipped = 0;
+
+    // Get database instance
+    const db = databaseService.getRawDatabase();
+
+    // Create attachments directory if it doesn't exist
+    const attachmentsDir = path.join(app.getPath("userData"), ATTACHMENTS_DIR);
+    if (!fs.existsSync(attachmentsDir)) {
+      fs.mkdirSync(attachmentsDir, { recursive: true });
+    }
+
+    // Load existing attachment hashes for deduplication
+    const existingHashes = new Set<string>();
+    const existingHashRows = db
+      .prepare(`SELECT storage_path FROM attachments WHERE storage_path IS NOT NULL`)
+      .all() as { storage_path: string }[];
+
+    // Extract hash from storage path (filename is the hash)
+    for (const row of existingHashRows) {
+      const filename = path.basename(row.storage_path, path.extname(row.storage_path));
+      existingHashes.add(filename);
+    }
+
+    logService.info(
+      `Processing ${attachments.length} attachments, ${existingHashes.size} already stored`,
+      MacOSMessagesImportService.SERVICE_NAME
+    );
+
+    // Prepare insert statement
+    const insertAttachmentStmt = db.prepare(`
+      INSERT OR IGNORE INTO attachments (
+        id, message_id, filename, mime_type, file_size_bytes, storage_path, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    `);
+
+    // Also need to query existing message IDs from DB for messages imported in previous runs
+    const existingMessageIdMap = new Map<string, string>();
+    const existingMsgRows = db
+      .prepare(`SELECT id, external_id FROM messages WHERE external_id IS NOT NULL`)
+      .all() as { id: string; external_id: string }[];
+    for (const row of existingMsgRows) {
+      existingMessageIdMap.set(row.external_id, row.id);
+    }
+
+    for (const attachment of attachments) {
+      try {
+        // Skip non-image attachments
+        const filename = attachment.transfer_name || attachment.filename;
+        if (!isSupportedImageType(filename)) {
+          skipped++;
+          continue;
+        }
+
+        // Skip oversized attachments
+        if (attachment.total_bytes > MAX_ATTACHMENT_SIZE) {
+          logService.warn(
+            `Skipping oversized attachment: ${attachment.total_bytes} bytes`,
+            MacOSMessagesImportService.SERVICE_NAME
+          );
+          skipped++;
+          continue;
+        }
+
+        // Get the internal message ID for this attachment's message
+        // First check the current import batch, then existing messages
+        let internalMessageId = messageIdMap.get(attachment.message_guid);
+        if (!internalMessageId) {
+          internalMessageId = existingMessageIdMap.get(attachment.message_guid);
+        }
+        if (!internalMessageId) {
+          // Message not found - skip this attachment
+          skipped++;
+          continue;
+        }
+
+        // Resolve the source file path
+        // macOS Messages stores attachments with paths like:
+        // ~/Library/Messages/Attachments/xx/yy/guid/filename
+        // The filename column contains the full path with ~ prefix
+        let sourcePath = attachment.filename;
+        if (!sourcePath) {
+          skipped++;
+          continue;
+        }
+
+        // Resolve ~ to home directory
+        if (sourcePath.startsWith("~")) {
+          sourcePath = path.join(process.env.HOME!, sourcePath.slice(1));
+        }
+
+        // Check if source file exists
+        if (!fs.existsSync(sourcePath)) {
+          logService.debug(
+            `Attachment file not found: ${sourcePath}`,
+            MacOSMessagesImportService.SERVICE_NAME
+          );
+          skipped++;
+          continue;
+        }
+
+        // Generate content hash for deduplication
+        const contentHash = generateContentHash(sourcePath);
+
+        // Skip if we already have this content
+        if (existingHashes.has(contentHash)) {
+          // File already exists - just link to existing file
+          const ext = path.extname(filename!);
+          const existingPath = path.join(attachmentsDir, `${contentHash}${ext}`);
+
+          // Still create a new attachment record linking to existing file
+          const attachmentId = crypto.randomUUID();
+          insertAttachmentStmt.run(
+            attachmentId,
+            internalMessageId,
+            filename,
+            attachment.mime_type || getMimeTypeFromFilename(filename!),
+            attachment.total_bytes,
+            existingPath
+          );
+          stored++;
+          continue;
+        }
+
+        // Copy file to app data directory with hash as filename
+        const ext = path.extname(filename!);
+        const destPath = path.join(attachmentsDir, `${contentHash}${ext}`);
+        fs.copyFileSync(sourcePath, destPath);
+
+        // Insert attachment record
+        const attachmentId = crypto.randomUUID();
+        insertAttachmentStmt.run(
+          attachmentId,
+          internalMessageId,
+          filename,
+          attachment.mime_type || getMimeTypeFromFilename(filename!),
+          attachment.total_bytes,
+          destPath
+        );
+
+        stored++;
+        existingHashes.add(contentHash);
+      } catch (error) {
+        const errMsg = error instanceof Error ? error.message : "Unknown error";
+        logService.warn(
+          `Failed to import attachment: ${errMsg}`,
+          MacOSMessagesImportService.SERVICE_NAME,
+          { guid: attachment.guid }
+        );
+        skipped++;
+      }
+    }
+
+    logService.info(
+      `Attachments: ${stored} imported, ${skipped} skipped`,
+      MacOSMessagesImportService.SERVICE_NAME
+    );
+
     return { stored, skipped };
+  }
+
+  /**
+   * Get the directory path for message attachments
+   */
+  getAttachmentsDirectory(): string {
+    return path.join(app.getPath("userData"), ATTACHMENTS_DIR);
   }
 
   /**
@@ -563,6 +841,85 @@ class MacOSMessagesImportService {
       };
     }
   }
+
+  /**
+   * Get attachments for a specific message (TASK-1012)
+   */
+  getAttachmentsByMessageId(messageId: string): MessageAttachment[] {
+    const db = databaseService.getRawDatabase();
+    const rows = db
+      .prepare(
+        `
+        SELECT id, message_id, filename, mime_type, file_size_bytes, storage_path
+        FROM attachments
+        WHERE message_id = ?
+      `
+      )
+      .all(messageId) as MessageAttachment[];
+    return rows;
+  }
+
+  /**
+   * Get attachments for multiple messages at once (TASK-1012)
+   */
+  getAttachmentsByMessageIds(messageIds: string[]): Map<string, MessageAttachment[]> {
+    if (messageIds.length === 0) {
+      return new Map();
+    }
+
+    const db = databaseService.getRawDatabase();
+    const placeholders = messageIds.map(() => "?").join(", ");
+    const rows = db
+      .prepare(
+        `
+        SELECT id, message_id, filename, mime_type, file_size_bytes, storage_path
+        FROM attachments
+        WHERE message_id IN (${placeholders})
+      `
+      )
+      .all(...messageIds) as MessageAttachment[];
+
+    // Group by message_id
+    const result = new Map<string, MessageAttachment[]>();
+    for (const row of rows) {
+      const existing = result.get(row.message_id) || [];
+      existing.push(row);
+      result.set(row.message_id, existing);
+    }
+    return result;
+  }
+
+  /**
+   * Read an attachment file as base64 for display (TASK-1012)
+   * Returns null if file doesn't exist
+   */
+  getAttachmentAsBase64(storagePath: string): string | null {
+    try {
+      if (!fs.existsSync(storagePath)) {
+        return null;
+      }
+      const buffer = fs.readFileSync(storagePath);
+      return buffer.toString("base64");
+    } catch (error) {
+      logService.warn(
+        `Failed to read attachment: ${error instanceof Error ? error.message : "Unknown"}`,
+        MacOSMessagesImportService.SERVICE_NAME
+      );
+      return null;
+    }
+  }
+}
+
+/**
+ * Attachment info returned from database (TASK-1012)
+ */
+export interface MessageAttachment {
+  id: string;
+  message_id: string;
+  filename: string;
+  mime_type: string | null;
+  file_size_bytes: number | null;
+  storage_path: string | null;
 }
 
 // Export singleton instance

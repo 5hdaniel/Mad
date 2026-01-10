@@ -1,9 +1,22 @@
 /**
  * ConversationViewModal Component
  * Phone-style popup modal for viewing a full conversation thread.
+ * Supports inline display of image/GIF attachments (TASK-1012).
  */
-import React from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import type { MessageLike } from "../MessageThreadCard";
+
+/**
+ * Attachment info for display (TASK-1012)
+ */
+interface MessageAttachmentInfo {
+  id: string;
+  message_id: string;
+  filename: string;
+  mime_type: string | null;
+  file_size_bytes: number | null;
+  data: string | null;
+}
 
 interface ConversationViewModalProps {
   /** Messages in the thread */
@@ -63,6 +76,72 @@ function formatMessageTime(date: Date): string {
   });
 }
 
+/**
+ * Check if a MIME type is a displayable image
+ */
+function isDisplayableImage(mimeType: string | null): boolean {
+  if (!mimeType) return false;
+  return (
+    mimeType.startsWith("image/") &&
+    !mimeType.includes("heic") // HEIC requires conversion
+  );
+}
+
+/**
+ * Attachment image component with loading state and error handling
+ */
+function AttachmentImage({
+  attachment,
+  isOutbound,
+}: {
+  attachment: MessageAttachmentInfo;
+  isOutbound: boolean;
+}): React.ReactElement | null {
+  const [imageError, setImageError] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  if (!attachment.data || imageError) {
+    // Show placeholder for missing/failed attachments
+    return (
+      <div
+        className={`text-xs italic ${isOutbound ? "text-green-100" : "text-gray-400"}`}
+      >
+        [Image: {attachment.filename || "attachment"}]
+      </div>
+    );
+  }
+
+  const mimeType = attachment.mime_type || "image/jpeg";
+  const dataUrl = `data:${mimeType};base64,${attachment.data}`;
+
+  return (
+    <div className="relative">
+      {isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-100 rounded">
+          <div className="w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
+        </div>
+      )}
+      <img
+        src={dataUrl}
+        alt={attachment.filename || "Attachment"}
+        className="max-w-full max-h-64 rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
+        onLoad={() => setIsLoading(false)}
+        onError={() => {
+          setIsLoading(false);
+          setImageError(true);
+        }}
+        onClick={() => {
+          // Open in new window for full-size view
+          const win = window.open("", "_blank");
+          if (win) {
+            win.document.write(`<img src="${dataUrl}" style="max-width: 100%; height: auto;" />`);
+          }
+        }}
+      />
+    </div>
+  );
+}
+
 export function ConversationViewModal({
   messages,
   contactName,
@@ -70,6 +149,12 @@ export function ConversationViewModal({
   contactNames = {},
   onClose,
 }: ConversationViewModalProps): React.ReactElement {
+  // Attachments state (TASK-1012)
+  const [attachmentsMap, setAttachmentsMap] = useState<
+    Record<string, MessageAttachmentInfo[]>
+  >({});
+  const [attachmentsLoading, setAttachmentsLoading] = useState(false);
+
   // Sort messages chronologically
   const sortedMessages = [...messages].sort((a, b) => {
     const dateA = new Date(a.sent_at || a.received_at || 0).getTime();
@@ -84,6 +169,35 @@ export function ConversationViewModal({
     if (sender) uniqueSenders.add(normalizePhoneForLookup(sender));
   });
   const isGroupChat = uniqueSenders.size > 1;
+
+  // Load attachments for messages that have them (TASK-1012)
+  const loadAttachments = useCallback(async () => {
+    // Get message IDs that have attachments
+    const messageIdsWithAttachments = messages
+      .filter((msg) => msg.has_attachments)
+      .map((msg) => msg.id);
+
+    if (messageIdsWithAttachments.length === 0) return;
+
+    setAttachmentsLoading(true);
+    try {
+      // Check if API is available (may not be on all platforms)
+      if (window.api?.messages?.getMessageAttachmentsBatch) {
+        const result = await window.api.messages.getMessageAttachmentsBatch(
+          messageIdsWithAttachments
+        );
+        setAttachmentsMap(result);
+      }
+    } catch (error) {
+      console.error("Failed to load attachments:", error);
+    } finally {
+      setAttachmentsLoading(false);
+    }
+  }, [messages]);
+
+  useEffect(() => {
+    loadAttachments();
+  }, [loadAttachments]);
 
   return (
     <div
@@ -164,6 +278,12 @@ export function ConversationViewModal({
               }
             }
 
+            // Get attachments for this message (TASK-1012)
+            const messageAttachments = attachmentsMap[msg.id] || [];
+            const displayableAttachments = messageAttachments.filter((att) =>
+              isDisplayableImage(att.mime_type)
+            );
+
             return (
               <div
                 key={msg.id}
@@ -181,8 +301,41 @@ export function ConversationViewModal({
                       {senderName}
                     </p>
                   )}
+                  {/* Display attachments (TASK-1012) */}
+                  {displayableAttachments.length > 0 && (
+                    <div className="mb-2 space-y-2">
+                      {displayableAttachments.map((att) => (
+                        <AttachmentImage
+                          key={att.id}
+                          attachment={att}
+                          isOutbound={isOutbound}
+                        />
+                      ))}
+                    </div>
+                  )}
+                  {/* Show placeholder for attachments still loading */}
+                  {msg.has_attachments &&
+                    displayableAttachments.length === 0 &&
+                    attachmentsLoading && (
+                      <div
+                        className={`text-xs italic mb-1 ${isOutbound ? "text-green-100" : "text-gray-400"}`}
+                      >
+                        Loading attachment...
+                      </div>
+                    )}
+                  {/* Show placeholder for unsupported attachments */}
+                  {msg.has_attachments &&
+                    displayableAttachments.length === 0 &&
+                    !attachmentsLoading &&
+                    messageAttachments.length === 0 && (
+                      <div
+                        className={`text-xs italic mb-1 ${isOutbound ? "text-green-100" : "text-gray-400"}`}
+                      >
+                        [Attachment]
+                      </div>
+                    )}
                   <p className="text-sm whitespace-pre-wrap break-words">
-                    {msgText || "(No content)"}
+                    {msgText || (displayableAttachments.length === 0 ? "(No content)" : "")}
                   </p>
                   <p
                     className={`text-xs mt-1 ${
