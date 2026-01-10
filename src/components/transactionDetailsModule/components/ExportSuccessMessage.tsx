@@ -48,7 +48,13 @@ export function ExportSuccessMessage({
           <p className="text-sm font-medium text-green-900">
             PDF exported successfully!
           </p>
-          <p className="text-xs text-green-700 mt-1 break-all">{message}</p>
+          <button
+            onClick={handleShowInFolder}
+            className="text-xs text-green-700 hover:text-green-900 hover:underline mt-1 break-all text-left cursor-pointer"
+            title="Click to open folder"
+          >
+            {message}
+          </button>
           <button
             onClick={handleShowInFolder}
             className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-green-700 bg-green-100 hover:bg-green-200 rounded-md transition-colors"
