@@ -29,6 +29,7 @@ interface TransactionWithRoles {
 
 /**
  * Create a new contact
+ * Also stores phone and email in their respective child tables if provided
  */
 export async function createContact(contactData: NewContact): Promise<Contact> {
   const id = crypto.randomUUID();
@@ -53,6 +54,41 @@ export async function createContact(contactData: NewContact): Promise<Contact> {
   ];
 
   dbRun(sql, params);
+
+  // Store phone in contact_phones table if provided
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const phoneData = (contactData as any).phone;
+  if (phoneData) {
+    const phoneId = crypto.randomUUID();
+    // Normalize phone to E.164 format (basic normalization)
+    const digits = phoneData.replace(/\D/g, '');
+    const phoneE164 = digits.length === 10 ? `+1${digits}` :
+                      digits.length === 11 && digits.startsWith('1') ? `+${digits}` :
+                      phoneData.startsWith('+') ? phoneData : `+${digits}`;
+
+    const phoneSql = `
+      INSERT OR IGNORE INTO contact_phones (
+        id, contact_id, phone_e164, phone_display, is_primary, source, created_at
+      ) VALUES (?, ?, ?, ?, 1, 'import', CURRENT_TIMESTAMP)
+    `;
+    dbRun(phoneSql, [phoneId, id, phoneE164, phoneData]);
+    logService.info(`[Contacts] Stored phone for contact ${id}: ${phoneE164}`, "Contacts");
+  }
+
+  // Store email in contact_emails table if provided
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const emailData = (contactData as any).email;
+  if (emailData) {
+    const emailId = crypto.randomUUID();
+    const emailSql = `
+      INSERT OR IGNORE INTO contact_emails (
+        id, contact_id, email, is_primary, source, created_at
+      ) VALUES (?, ?, ?, 1, 'import', CURRENT_TIMESTAMP)
+    `;
+    dbRun(emailSql, [emailId, id, emailData.toLowerCase()]);
+    logService.info(`[Contacts] Stored email for contact ${id}: ${emailData}`, "Contacts");
+  }
+
   const contact = await getContactById(id);
   if (!contact) {
     throw new DatabaseError("Failed to create contact");
