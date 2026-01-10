@@ -208,106 +208,166 @@ export function SyncStatusIndicator({
     return null;
   }
 
-  // Get progress for the current operation (the one shown in currentMessage)
-  // Priority: emails > messages > contacts (same as currentMessage priority)
-  const currentProgress = status.emails.isSyncing
-    ? status.emails.progress
-    : status.messages.isSyncing
-      ? status.messages.progress
-      : status.contacts.isSyncing
-        ? status.contacts.progress
-        : null;
+  // Helper to render individual sync item
+  const renderSyncItem = (
+    label: string,
+    isSyncing: boolean,
+    progress: number | null,
+    message: string,
+    isComplete: boolean
+  ) => {
+    // Determine state: complete (green), active (blue), or pending (gray)
+    const isActive = isSyncing;
+    const bgColor = isComplete
+      ? "bg-green-100"
+      : isActive
+        ? "bg-blue-100"
+        : "bg-gray-100";
+    const textColor = isComplete
+      ? "text-green-700"
+      : isActive
+        ? "text-blue-700"
+        : "text-gray-500";
+    const barBgColor = isComplete
+      ? "bg-green-200"
+      : isActive
+        ? "bg-blue-200"
+        : "bg-gray-200";
+    const barFillColor = isComplete
+      ? "bg-green-500"
+      : isActive
+        ? "bg-blue-500"
+        : "bg-gray-400";
 
-  // Show sync progress
+    return (
+      <div className={`${bgColor} rounded-lg p-3`}>
+        <div className="flex items-center justify-between mb-1.5">
+          <div className="flex items-center gap-2">
+            {/* Status icon */}
+            {isComplete ? (
+              <svg
+                className="w-4 h-4 text-green-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
+            ) : isActive ? (
+              <svg
+                className="w-4 h-4 text-blue-600 animate-spin"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                />
+              </svg>
+            ) : (
+              <div className="w-4 h-4 rounded-full border-2 border-gray-300" />
+            )}
+            <span className={`text-sm font-medium ${textColor}`}>{label}</span>
+          </div>
+          {progress !== null && isActive && (
+            <span className={`text-xs ${textColor}`}>{progress}%</span>
+          )}
+        </div>
+
+        {/* Progress bar */}
+        <div className={`w-full ${barBgColor} rounded-full h-1.5 overflow-hidden`}>
+          {isComplete ? (
+            <div className={`${barFillColor} h-1.5 rounded-full w-full`} />
+          ) : isActive && progress !== null ? (
+            <div
+              className={`${barFillColor} h-1.5 rounded-full transition-all duration-300 ease-out`}
+              style={{ width: `${progress}%` }}
+            />
+          ) : isActive ? (
+            <div className={`${barFillColor} h-1.5 rounded-full animate-indeterminate`} />
+          ) : (
+            <div className={`${barFillColor} h-1.5 rounded-full w-0`} />
+          )}
+        </div>
+
+        {/* Status message */}
+        {isActive && message && (
+          <p className={`text-xs ${textColor} mt-1 truncate`}>{message}</p>
+        )}
+        {isComplete && (
+          <p className="text-xs text-green-600 mt-1">Complete</p>
+        )}
+      </div>
+    );
+  };
+
+  // Check completion status (was syncing but now done)
+  const emailsComplete = !status.emails.isSyncing && status.emails.progress === 100;
+  const messagesComplete = !status.messages.isSyncing && status.messages.progress === 100;
+  const contactsComplete = !status.contacts.isSyncing && status.contacts.progress === 100;
+
+  // Show sync progress with all three categories
   return (
     <div
-      className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4 animate-fade-in"
+      className="bg-white border border-gray-200 rounded-xl p-4 mb-4 animate-fade-in shadow-sm"
       data-testid="sync-status-indicator"
     >
-      <div className="flex items-center gap-3">
-        {/* Animated loading spinner - spins clockwise */}
-        <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
-          <svg
-            className="w-5 h-5 text-blue-600 animate-spin"
-            fill="none"
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-          >
-            <circle
-              className="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              strokeWidth="4"
-            />
-            <path
-              className="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-            />
-          </svg>
-        </div>
-
-        {/* Status text and progress */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-sm font-medium text-blue-800 truncate">
-              {currentMessage || "Syncing..."}
-            </span>
-            {currentProgress !== null && (
-              <span className="text-xs text-blue-600 ml-2">
-                {currentProgress}%
-              </span>
-            )}
-          </div>
-
-          {/* Progress bar */}
-          {currentProgress !== null && (
-            <div className="w-full bg-blue-200 rounded-full h-1.5 overflow-hidden">
-              <div
-                className="bg-blue-500 h-1.5 rounded-full transition-all duration-300 ease-out"
-                style={{ width: `${currentProgress}%` }}
-              />
-            </div>
-          )}
-
-          {/* Indeterminate progress bar */}
-          {currentProgress === null && (
-            <div className="w-full bg-blue-200 rounded-full h-1.5 overflow-hidden">
-              <div className="bg-blue-500 h-1.5 rounded-full animate-indeterminate" />
-            </div>
-          )}
-        </div>
+      {/* Header */}
+      <div className="flex items-center gap-2 mb-4">
+        <svg
+          className="w-5 h-5 text-blue-600"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+          />
+        </svg>
+        <h3 className="text-sm font-semibold text-gray-900">Syncing Data</h3>
       </div>
 
-      {/* Show individual sync statuses if multiple are running */}
-      {((status.emails.isSyncing && status.messages.isSyncing) ||
-        (status.emails.isSyncing && status.contacts.isSyncing) ||
-        (status.messages.isSyncing && status.contacts.isSyncing)) && (
-        <div className="mt-3 pt-3 border-t border-blue-200">
-          <div className="flex flex-wrap gap-2 text-xs text-blue-600">
-            {status.emails.isSyncing && (
-              <span className="flex items-center gap-1">
-                <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
-                Emails
-              </span>
-            )}
-            {status.messages.isSyncing && (
-              <span className="flex items-center gap-1">
-                <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
-                Messages
-              </span>
-            )}
-            {status.contacts.isSyncing && (
-              <span className="flex items-center gap-1">
-                <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
-                Contacts
-              </span>
-            )}
-          </div>
-        </div>
-      )}
+      {/* Individual sync items */}
+      <div className="space-y-3">
+        {renderSyncItem(
+          "Emails",
+          status.emails.isSyncing,
+          status.emails.progress,
+          status.emails.message,
+          emailsComplete
+        )}
+        {renderSyncItem(
+          "Messages",
+          status.messages.isSyncing,
+          status.messages.progress,
+          status.messages.message,
+          messagesComplete
+        )}
+        {renderSyncItem(
+          "Contacts",
+          status.contacts.isSyncing,
+          status.contacts.progress,
+          status.contacts.message,
+          contactsComplete
+        )}
+      </div>
     </div>
   );
 }
