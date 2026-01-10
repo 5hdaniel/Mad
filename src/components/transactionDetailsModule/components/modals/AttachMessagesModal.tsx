@@ -97,8 +97,39 @@ function getThreadDateRange(messages: MessageLike[]): string {
 
 /**
  * Get all unique participants in a thread
+ * Uses chat_members (actual group membership) when available,
+ * falls back to collecting from/to from individual messages
  */
 function getThreadParticipants(messages: MessageLike[], selectedContact: string): string[] {
+  // First, try to get chat_members from any message (they all share the same chat)
+  for (const msg of messages) {
+    try {
+      if (msg.participants) {
+        const parsed = typeof msg.participants === 'string'
+          ? JSON.parse(msg.participants)
+          : msg.participants;
+
+        // If chat_members exists, use it (authoritative group membership)
+        if (parsed.chat_members && Array.isArray(parsed.chat_members)) {
+          const members = new Set<string>(parsed.chat_members);
+          members.delete(selectedContact);
+          members.delete('me');
+          // Normalize selected contact for comparison (handle +1 prefix)
+          const selectedNormalized = normalizePhone(selectedContact);
+          for (const m of members) {
+            if (normalizePhone(m) === selectedNormalized) {
+              members.delete(m);
+            }
+          }
+          return Array.from(members);
+        }
+      }
+    } catch {
+      // Continue to next message
+    }
+  }
+
+  // Fallback: collect from/to from individual messages (legacy behavior)
   const participants = new Set<string>();
 
   for (const msg of messages) {
@@ -128,8 +159,28 @@ function getThreadParticipants(messages: MessageLike[], selectedContact: string)
 
 /**
  * Check if thread is a group chat (more than 2 total participants)
+ * Uses chat_members when available for accurate detection
  */
 function isGroupChat(messages: MessageLike[]): boolean {
+  // First check for chat_members (authoritative)
+  for (const msg of messages) {
+    try {
+      if (msg.participants) {
+        const parsed = typeof msg.participants === 'string'
+          ? JSON.parse(msg.participants)
+          : msg.participants;
+
+        if (parsed.chat_members && Array.isArray(parsed.chat_members)) {
+          // Group chat = more than 1 other person (2+ members excluding "me")
+          return parsed.chat_members.length > 1;
+        }
+      }
+    } catch {
+      // Continue
+    }
+  }
+
+  // Fallback: count unique participants from messages
   const allParticipants = new Set<string>();
 
   for (const msg of messages) {
