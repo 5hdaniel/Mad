@@ -906,6 +906,51 @@ export function registerSystemHandlers(): void {
   );
 
   /**
+   * Show file in folder (Finder on macOS, Explorer on Windows)
+   */
+  ipcMain.handle(
+    "system:show-in-folder",
+    async (
+      event: IpcMainInvokeEvent,
+      filePath: string,
+    ): Promise<SystemResponse> => {
+      try {
+        // Validate file path
+        const validatedPath = validateString(filePath, "filePath", {
+          required: true,
+          maxLength: 2000,
+        });
+
+        if (!validatedPath) {
+          return {
+            success: false,
+            error: "File path is required",
+          };
+        }
+
+        shell.showItemInFolder(validatedPath);
+        return { success: true };
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        logService.error("Failed to show item in folder", "SystemHandlers", {
+          error: errorMessage,
+        });
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return {
+          success: false,
+          error: errorMessage,
+        };
+      }
+    },
+  );
+
+  /**
    * Open support email with pre-filled content
    */
   ipcMain.handle(
