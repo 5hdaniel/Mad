@@ -203,7 +203,7 @@ describe("TransactionMessagesTab", () => {
       expect(screen.getByText("Text Messages (3)")).toBeInTheDocument();
     });
 
-    it("should render all messages", () => {
+    it("should render thread cards with preview text", () => {
       render(
         <TransactionMessagesTab
           messages={mockMessages as Communication[]}
@@ -212,10 +212,11 @@ describe("TransactionMessagesTab", () => {
         />
       );
 
-      // Check for message content
-      expect(screen.getByText("Got your message about the property!")).toBeInTheDocument();
-      expect(screen.getByText("Can we schedule a showing tomorrow?")).toBeInTheDocument();
-      expect(screen.getByText("Thanks for the update!")).toBeInTheDocument();
+      // Thread cards should show preview text (last message in each thread)
+      // Thread 1's last message is "Can we schedule a showing tomorrow?"
+      // Thread 2's message is "Thanks for the update!"
+      const previews = screen.getAllByTestId("thread-preview");
+      expect(previews.length).toBe(2);
     });
 
     it("should group messages into threads", () => {
@@ -348,8 +349,8 @@ describe("TransactionMessagesTab", () => {
     });
   });
 
-  describe("message bubble styling", () => {
-    it("should render inbound messages with left alignment", () => {
+  describe("thread card display", () => {
+    it("should display View button to open conversation modal", () => {
       const inboundMessage: Partial<Communication>[] = [
         {
           id: "inbound-msg",
@@ -371,19 +372,31 @@ describe("TransactionMessagesTab", () => {
         />
       );
 
-      const messageBubble = screen.getByTestId("message-bubble");
-      expect(messageBubble).toHaveClass("items-start");
+      // Thread card should have View button
+      expect(screen.getByTestId("toggle-thread-button")).toHaveTextContent("View");
     });
 
-    it("should render outbound messages with right alignment", () => {
-      const outboundMessage: Partial<Communication>[] = [
+    it("should display message count badge", () => {
+      const messages: Partial<Communication>[] = [
         {
-          id: "outbound-msg",
+          id: "msg-1",
           user_id: "user-456",
           channel: "sms",
-          body_text: "Outbound message",
+          body_text: "Message 1",
           sent_at: "2024-01-20T10:00:00Z",
           direction: "outbound",
+          thread_id: "thread-1",
+          has_attachments: false,
+          is_false_positive: false,
+        },
+        {
+          id: "msg-2",
+          user_id: "user-456",
+          channel: "sms",
+          body_text: "Message 2",
+          sent_at: "2024-01-20T11:00:00Z",
+          direction: "inbound",
+          thread_id: "thread-1",
           has_attachments: false,
           is_false_positive: false,
         },
@@ -391,19 +404,19 @@ describe("TransactionMessagesTab", () => {
 
       render(
         <TransactionMessagesTab
-          messages={outboundMessage as Communication[]}
+          messages={messages as Communication[]}
           loading={false}
           error={null}
         />
       );
 
-      const messageBubble = screen.getByTestId("message-bubble");
-      expect(messageBubble).toHaveClass("items-end");
+      // Should show message count
+      expect(screen.getByText("2 messages")).toBeInTheDocument();
     });
   });
 
   describe("date formatting", () => {
-    it("should display timestamp in message bubbles", () => {
+    it("should render thread card for message with date", () => {
       const messageWithDate: Partial<Communication>[] = [
         {
           id: "dated-msg",
@@ -424,8 +437,10 @@ describe("TransactionMessagesTab", () => {
         />
       );
 
-      // Timestamp element should exist
-      expect(screen.getByTestId("message-timestamp")).toBeInTheDocument();
+      // Thread card should be rendered
+      expect(screen.getByTestId("message-thread-card")).toBeInTheDocument();
+      // Preview should show the message text
+      expect(screen.getByTestId("thread-preview")).toHaveTextContent("Dated message");
     });
 
     it("should use received_at as fallback for date", () => {
