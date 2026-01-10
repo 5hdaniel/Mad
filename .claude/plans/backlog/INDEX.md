@@ -255,6 +255,7 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-171 | Contacts Not Pre-Populated When Editing Transaction | fix | High | Pending | - | - | ~25K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-171.md](BACKLOG-171.md) |
 | BACKLOG-172 | macOS Messages Import | feature | High | Pending | - | - | ~25K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-172.md](BACKLOG-172.md) |
 | BACKLOG-173 | Contact-First AttachMessagesModal Interface | ui/perf | High | Completed | - | - | ~40K | - | - | - | - | - | - | - | - | - | - | - | - | - | TASK-989, PR #353 | [BACKLOG-173.md](BACKLOG-173.md) |
+| BACKLOG-174 | Redesign "Start New Audit" Flow | ui | High | Pending | SPRINT-029 | - | ~30K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-174.md](BACKLOG-174.md) |
 | BACKLOG-178 | Auto-Linked Messages Display in Transaction Details | fix | High | Completed | SPRINT-027 | - | ~20K | - | - | - | - | - | - | - | - | - | - | - | - | - | TASK-990, PR #358 | - |
 | BACKLOG-179 | Manual Thread Attach/Unlink in Messages Tab | ui | High | Completed | SPRINT-027 | - | ~30K | - | - | - | - | - | - | - | - | - | - | - | - | - | TASK-991, PR #359 | - |
 | BACKLOG-180 | Message Bubble Direction Fix | fix | Medium | Completed | SPRINT-027 | - | ~10K | - | - | - | - | - | - | - | - | - | - | - | - | - | TASK-992, PR #356 | - |
@@ -264,6 +265,7 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-184 | Contacts Import Failing (1000 Limit) | fix | High | Completed | SPRINT-027 | - | ~2K | - | - | - | - | - | - | - | - | - | - | - | - | - | direct commit | [BACKLOG-184.md](BACKLOG-184.md) |
 | BACKLOG-185 | Import Stuck at 100% on Progress Bar | fix | Medium | Completed | SPRINT-027 | - | ~3K | - | - | - | - | - | - | - | - | - | - | - | - | - | direct commit | [BACKLOG-185.md](BACKLOG-185.md) |
 | BACKLOG-186 | Continue Button Not Working After Import | fix | Critical | Completed | SPRINT-027 | - | ~5K | - | - | - | - | - | - | - | - | - | - | - | - | - | direct commit | [BACKLOG-186.md](BACKLOG-186.md) |
+| BACKLOG-187 | Display Attachments (Images/GIFs) in Text Messages | feature | Medium | Pending | SPRINT-029 | - | ~50K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-187.md](BACKLOG-187.md) |
 
 ---
 
