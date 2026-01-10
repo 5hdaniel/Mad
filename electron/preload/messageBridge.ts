@@ -21,8 +21,23 @@ export interface MacOSImportResult {
   success: boolean;
   messagesImported: number;
   messagesSkipped: number;
+  attachmentsImported: number;
+  attachmentsSkipped: number;
   duration: number;
   error?: string;
+}
+
+/**
+ * Attachment info for display (TASK-1012)
+ */
+export interface MessageAttachmentInfo {
+  id: string;
+  message_id: string;
+  filename: string;
+  mime_type: string | null;
+  file_size_bytes: number | null;
+  /** Base64-encoded file content for inline display */
+  data: string | null;
 }
 
 export const messageBridge = {
@@ -77,4 +92,20 @@ export const messageBridge = {
       ipcRenderer.removeListener("messages:import-progress", handler);
     };
   },
+
+  /**
+   * Get attachments for a message with base64 data (TASK-1012)
+   * @param messageId - Message ID to get attachments for
+   * @returns Array of attachments with base64 data
+   */
+  getMessageAttachments: (messageId: string): Promise<MessageAttachmentInfo[]> =>
+    ipcRenderer.invoke("messages:get-attachments", messageId),
+
+  /**
+   * Get attachments for multiple messages at once (TASK-1012)
+   * @param messageIds - Array of message IDs
+   * @returns Map of message ID to attachments
+   */
+  getMessageAttachmentsBatch: (messageIds: string[]): Promise<Record<string, MessageAttachmentInfo[]>> =>
+    ipcRenderer.invoke("messages:get-attachments-batch", messageIds),
 };

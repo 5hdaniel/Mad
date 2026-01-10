@@ -140,6 +140,19 @@ export interface ConversationSummary {
   lastMessageDate: Date;
 }
 
+/**
+ * Message attachment info for display (TASK-1012)
+ */
+export interface MessageAttachmentInfo {
+  id: string;
+  message_id: string;
+  filename: string;
+  mime_type: string | null;
+  file_size_bytes: number | null;
+  /** Base64-encoded file content for inline display */
+  data: string | null;
+}
+
 // ============================================
 // IPC CHANNEL DEFINITIONS
 // ============================================
@@ -1108,6 +1121,8 @@ export interface WindowApi {
       success: boolean;
       messagesImported: number;
       messagesSkipped: number;
+      attachmentsImported: number;
+      attachmentsSkipped: number;
       duration: number;
       error?: string;
     }>;
@@ -1115,6 +1130,10 @@ export interface WindowApi {
     getImportCount: () => Promise<{ success: boolean; count?: number; error?: string }>;
     /** Listen for import progress updates */
     onImportProgress: (callback: (progress: { current: number; total: number; percent: number }) => void) => () => void;
+    /** Get attachments for a message with base64 data (TASK-1012) */
+    getMessageAttachments: (messageId: string) => Promise<MessageAttachmentInfo[]>;
+    /** Get attachments for multiple messages at once (TASK-1012) */
+    getMessageAttachmentsBatch: (messageIds: string[]) => Promise<Record<string, MessageAttachmentInfo[]>>;
   };
 
   // Outlook integration (migrated from window.electron)
