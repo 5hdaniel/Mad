@@ -722,6 +722,14 @@ class DatabaseService implements IDatabaseService {
     return contactDb.deleteContact(contactId);
   }
 
+  async getContactByPhone(phone: string): Promise<{ id: string; display_name: string; phone: string } | null> {
+    return contactDb.getContactByPhone(phone);
+  }
+
+  async getContactNamesByPhones(phones: string[]): Promise<Map<string, string>> {
+    return contactDb.getContactNamesByPhones(phones);
+  }
+
   async removeContact(contactId: string): Promise<void> {
     return contactDb.removeContact(contactId);
   }

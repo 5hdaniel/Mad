@@ -372,7 +372,7 @@ describe("TransactionMessagesTab", () => {
       );
 
       const messageBubble = screen.getByTestId("message-bubble");
-      expect(messageBubble).toHaveClass("justify-start");
+      expect(messageBubble).toHaveClass("items-start");
     });
 
     it("should render outbound messages with right alignment", () => {
@@ -398,7 +398,7 @@ describe("TransactionMessagesTab", () => {
       );
 
       const messageBubble = screen.getByTestId("message-bubble");
-      expect(messageBubble).toHaveClass("justify-end");
+      expect(messageBubble).toHaveClass("items-end");
     });
   });
 
