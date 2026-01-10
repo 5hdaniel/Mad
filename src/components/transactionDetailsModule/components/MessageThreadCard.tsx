@@ -3,7 +3,7 @@
  * Container for a conversation thread, displaying a header with contact info
  * and a scrollable list of messages.
  */
-import React from "react";
+import React, { useState } from "react";
 import type { Communication, Message } from "../types";
 import { MessageBubble } from "./MessageBubble";
 
@@ -25,6 +25,8 @@ export interface MessageThreadCardProps {
   onUnlink?: (threadId: string) => void;
   /** Map of phone number -> contact name for resolving senders */
   contactNames?: Record<string, string>;
+  /** Whether the thread starts expanded (default: false - collapsed) */
+  defaultExpanded?: boolean;
 }
 
 /**
@@ -83,8 +85,16 @@ export function MessageThreadCard({
   phoneNumber,
   onUnlink,
   contactNames = {},
+  defaultExpanded = false,
 }: MessageThreadCardProps): React.ReactElement {
+  const [isExpanded, setIsExpanded] = useState(defaultExpanded);
   const avatarInitial = getAvatarInitial(contactName, phoneNumber);
+
+  // Get preview of last message for collapsed state
+  const lastMessage = messages[messages.length - 1];
+  const previewText = lastMessage
+    ? (lastMessage.body_text || lastMessage.body_plain || lastMessage.body || "")?.slice(0, 60)
+    : "";
 
   return (
     <div
@@ -106,11 +116,24 @@ export function MessageThreadCard({
               {phoneNumber}
             </p>
           )}
+          {/* Preview of last message when collapsed */}
+          {!isExpanded && previewText && (
+            <p className="text-sm text-gray-400 truncate mt-1" data-testid="thread-preview">
+              {previewText}{previewText.length >= 60 ? "..." : ""}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <span className="inline-block px-2 py-0.5 bg-green-100 text-green-700 text-xs font-medium rounded-full">
             {messages.length} {messages.length === 1 ? "message" : "messages"}
           </span>
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="px-3 py-1 text-xs font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-all"
+            data-testid="toggle-thread-button"
+          >
+            {isExpanded ? "Hide" : "View"}
+          </button>
           {onUnlink && (
             <button
               onClick={() => onUnlink(threadId)}
@@ -136,43 +159,45 @@ export function MessageThreadCard({
         </div>
       </div>
 
-      {/* Messages */}
-      <div
-        className="p-4 space-y-3 max-h-96 overflow-y-auto"
-        data-testid="thread-messages"
-      >
-        {messages.map((msg, index) => {
-          const senderPhone = getSenderPhone(msg);
-          let senderName: string | undefined;
-          let showSender = true;
+      {/* Messages - only shown when expanded */}
+      {isExpanded && (
+        <div
+          className="p-4 space-y-3 max-h-96 overflow-y-auto"
+          data-testid="thread-messages"
+        >
+          {messages.map((msg, index) => {
+            const senderPhone = getSenderPhone(msg);
+            let senderName: string | undefined;
+            let showSender = true;
 
-          if (senderPhone) {
-            // Look up contact name by phone (try original and normalized forms)
-            const normalized = normalizePhoneForLookup(senderPhone);
-            senderName = contactNames[senderPhone] || contactNames[normalized] || senderPhone;
+            if (senderPhone) {
+              // Look up contact name by phone (try original and normalized forms)
+              const normalized = normalizePhoneForLookup(senderPhone);
+              senderName = contactNames[senderPhone] || contactNames[normalized] || senderPhone;
 
-            // Don't show sender if same as previous message
-            if (index > 0) {
-              const prevSenderPhone = getSenderPhone(messages[index - 1]);
-              if (prevSenderPhone) {
-                const prevNormalized = normalizePhoneForLookup(prevSenderPhone);
-                if (normalized === prevNormalized) {
-                  showSender = false;
+              // Don't show sender if same as previous message
+              if (index > 0) {
+                const prevSenderPhone = getSenderPhone(messages[index - 1]);
+                if (prevSenderPhone) {
+                  const prevNormalized = normalizePhoneForLookup(prevSenderPhone);
+                  if (normalized === prevNormalized) {
+                    showSender = false;
+                  }
                 }
               }
             }
-          }
 
-          return (
-            <MessageBubble
-              key={msg.id}
-              message={msg}
-              senderName={senderName}
-              showSender={showSender}
-            />
-          );
-        })}
-      </div>
+            return (
+              <MessageBubble
+                key={msg.id}
+                message={msg}
+                senderName={senderName}
+                showSender={showSender}
+              />
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
