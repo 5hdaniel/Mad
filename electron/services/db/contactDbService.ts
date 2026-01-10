@@ -28,8 +28,20 @@ interface TransactionWithRoles {
 }
 
 /**
+ * Normalize phone to E.164 format
+ */
+function normalizeToE164(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`;
+  if (phone.startsWith('+')) return phone;
+  return `+${digits}`;
+}
+
+/**
  * Create a new contact
- * Also stores phone and email in their respective child tables if provided
+ * Also stores phones and emails in their respective child tables if provided.
+ * Supports both single phone/email and arrays (allPhones/allEmails) for complete data storage.
  */
 export async function createContact(contactData: NewContact): Promise<Contact> {
   const id = crypto.randomUUID();
@@ -55,38 +67,82 @@ export async function createContact(contactData: NewContact): Promise<Contact> {
 
   dbRun(sql, params);
 
-  // Store phone in contact_phones table if provided
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const phoneData = (contactData as any).phone;
-  if (phoneData) {
-    const phoneId = crypto.randomUUID();
-    // Normalize phone to E.164 format (basic normalization)
-    const digits = phoneData.replace(/\D/g, '');
-    const phoneE164 = digits.length === 10 ? `+1${digits}` :
-                      digits.length === 11 && digits.startsWith('1') ? `+${digits}` :
-                      phoneData.startsWith('+') ? phoneData : `+${digits}`;
+  const extendedData = contactData as any;
 
+  // Store ALL phones in contact_phones table
+  // Use allPhones array if available, otherwise fall back to single phone
+  const allPhones: string[] = extendedData.allPhones || [];
+  const singlePhone = extendedData.phone;
+
+  // If no allPhones but we have a single phone, use that
+  if (allPhones.length === 0 && singlePhone) {
+    allPhones.push(singlePhone);
+  }
+
+  // Track stored phones to avoid duplicates
+  const storedPhones = new Set<string>();
+  let isFirstPhone = true;
+
+  for (const phone of allPhones) {
+    if (!phone) continue;
+
+    const phoneE164 = normalizeToE164(phone);
+    const normalizedKey = phoneE164.replace(/\D/g, '').slice(-10);
+
+    // Skip if we've already stored this normalized phone
+    if (storedPhones.has(normalizedKey)) continue;
+    storedPhones.add(normalizedKey);
+
+    const phoneId = crypto.randomUUID();
     const phoneSql = `
       INSERT OR IGNORE INTO contact_phones (
         id, contact_id, phone_e164, phone_display, is_primary, source, created_at
-      ) VALUES (?, ?, ?, ?, 1, 'import', CURRENT_TIMESTAMP)
+      ) VALUES (?, ?, ?, ?, ?, 'import', CURRENT_TIMESTAMP)
     `;
-    dbRun(phoneSql, [phoneId, id, phoneE164, phoneData]);
-    logService.info(`[Contacts] Stored phone for contact ${id}: ${phoneE164}`, "Contacts");
+    dbRun(phoneSql, [phoneId, id, phoneE164, phone, isFirstPhone ? 1 : 0]);
+    isFirstPhone = false;
   }
 
-  // Store email in contact_emails table if provided
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const emailData = (contactData as any).email;
-  if (emailData) {
+  if (storedPhones.size > 0) {
+    logService.info(`[Contacts] Stored ${storedPhones.size} phone(s) for contact ${id}`, "Contacts");
+  }
+
+  // Store ALL emails in contact_emails table
+  // Use allEmails array if available, otherwise fall back to single email
+  const allEmails: string[] = extendedData.allEmails || [];
+  const singleEmail = extendedData.email;
+
+  // If no allEmails but we have a single email, use that
+  if (allEmails.length === 0 && singleEmail) {
+    allEmails.push(singleEmail);
+  }
+
+  // Track stored emails to avoid duplicates
+  const storedEmails = new Set<string>();
+  let isFirstEmail = true;
+
+  for (const email of allEmails) {
+    if (!email) continue;
+
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // Skip if we've already stored this email
+    if (storedEmails.has(normalizedEmail)) continue;
+    storedEmails.add(normalizedEmail);
+
     const emailId = crypto.randomUUID();
     const emailSql = `
       INSERT OR IGNORE INTO contact_emails (
         id, contact_id, email, is_primary, source, created_at
-      ) VALUES (?, ?, ?, 1, 'import', CURRENT_TIMESTAMP)
+      ) VALUES (?, ?, ?, ?, 'import', CURRENT_TIMESTAMP)
     `;
-    dbRun(emailSql, [emailId, id, emailData.toLowerCase()]);
-    logService.info(`[Contacts] Stored email for contact ${id}: ${emailData}`, "Contacts");
+    dbRun(emailSql, [emailId, id, normalizedEmail, isFirstEmail ? 1 : 0]);
+    isFirstEmail = false;
+  }
+
+  if (storedEmails.size > 0) {
+    logService.info(`[Contacts] Stored ${storedEmails.size} email(s) for contact ${id}`, "Contacts");
   }
 
   const contact = await getContactById(id);

@@ -440,6 +440,7 @@ export function registerContactHandlers(): void {
             );
           } else {
             // Create new contact from macOS Contacts app
+            // Pass all phones and emails arrays for complete data storage
             const importedContact = await databaseService.createContact({
               user_id: validatedUserId,
               display_name: validatedData.name || "Unknown",
@@ -449,7 +450,10 @@ export function registerContactHandlers(): void {
               title: validatedData.title ?? undefined,
               source: sanitizedContact.source || "contacts_app",
               is_imported: true,
-            });
+              // Pass all phones and emails for complete storage
+              allPhones: sanitizedContact.allPhones || [],
+              allEmails: sanitizedContact.allEmails || [],
+            } as any);
             importedContacts.push(importedContact);
           }
         }
