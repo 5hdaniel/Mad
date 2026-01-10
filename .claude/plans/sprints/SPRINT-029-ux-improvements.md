@@ -4,9 +4,10 @@
 
 Improve user experience with redesigned "Start New Audit" flow and add message attachment support for audit completeness.
 
-## Sprint Status: NOT STARTED
+## Sprint Status: IN PROGRESS
 
 **Created:** 2026-01-10
+**Started:** 2026-01-10
 **Target Branch:** develop
 **Estimated Duration:** 3-4 days
 **Total Estimated Tokens:** ~90K (with SR review overhead + buffer)

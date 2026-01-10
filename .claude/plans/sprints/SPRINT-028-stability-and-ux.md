@@ -259,5 +259,6 @@ graph TD
 | Sync status UI (all 3 types) | Feature | Only showed one sync type at a time | 2026-01-10 | ~8K | ~8K |
 | Compact sync status UI | UX polish | Vertical layout took too much space | 2026-01-10 | ~5K | ~5K |
 | Clickable export file path | UX polish | Users wanted to open export location | 2026-01-10 | ~3K | ~3K |
+| Final sync UI refinement | UX polish | Single spinning icon + simple pills (blue/green/gray) + single progress bar | 2026-01-10 | ~3K | ~3K |
 
-**Total Unplanned:** ~29K tokens (7 items)
+**Total Unplanned:** ~32K tokens (8 items)
