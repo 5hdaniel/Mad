@@ -44,7 +44,10 @@ export function usePermissionsFlow({
     }
     const result = await window.api.system.checkAllPermissions();
     // Set based on actual permission status
-    setHasPermissions(result.fullDiskAccess && result.contactsAccess);
+    // The result has permissions.fullDiskAccess.hasPermission and permissions.contacts.hasPermission
+    const fullDiskOk = result.permissions?.fullDiskAccess?.hasPermission ?? false;
+    const contactsOk = result.permissions?.contacts?.hasPermission ?? false;
+    setHasPermissions(fullDiskOk && contactsOk);
   }, [isWindows]);
 
   const checkAppLocation = useCallback(async (): Promise<void> => {

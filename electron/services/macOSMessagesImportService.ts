@@ -108,6 +108,9 @@ interface RawMacMessage {
 class MacOSMessagesImportService {
   private static readonly SERVICE_NAME = "MacOSMessagesImportService";
 
+  /** Flag to prevent concurrent imports */
+  private isImporting = false;
+
   /**
    * Import messages from macOS Messages app
    */
@@ -117,6 +120,38 @@ class MacOSMessagesImportService {
   ): Promise<MacOSImportResult> {
     const startTime = Date.now();
 
+    // Prevent concurrent imports - only one at a time
+    if (this.isImporting) {
+      logService.warn(
+        "Import already in progress, skipping duplicate request",
+        MacOSMessagesImportService.SERVICE_NAME
+      );
+      return {
+        success: false,
+        messagesImported: 0,
+        messagesSkipped: 0,
+        duration: 0,
+        error: "Import already in progress",
+      };
+    }
+
+    this.isImporting = true;
+
+    try {
+      return await this.doImport(userId, onProgress, startTime);
+    } finally {
+      this.isImporting = false;
+    }
+  }
+
+  /**
+   * Internal import implementation
+   */
+  private async doImport(
+    userId: string,
+    onProgress: ImportProgressCallback | undefined,
+    startTime: number
+  ): Promise<MacOSImportResult> {
     // Check platform - macOS only
     if (os.platform() !== "darwin") {
       return {

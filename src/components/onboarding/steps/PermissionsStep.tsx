@@ -181,26 +181,47 @@ function PermissionsStepContent({ onAction }: OnboardingStepContentProps) {
   const [isChecking, setIsChecking] = useState(false);
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
 
-  // Import state
-  const [isImporting, setIsImporting] = useState(false);
-  const [importProgress, setImportProgress] = useState<{
+  // Messages import state
+  const [isImportingMessages, setIsImportingMessages] = useState(false);
+  const [messagesProgress, setMessagesProgress] = useState<{
     current: number;
     total: number;
     percent: number;
   } | null>(null);
-  const [importResult, setImportResult] = useState<{
+  const [messagesResult, setMessagesResult] = useState<{
     success: boolean;
     messagesImported: number;
     error?: string;
   } | null>(null);
+
+  // Contacts import state
+  const [isImportingContacts, setIsImportingContacts] = useState(false);
+  const [contactsProgress, setContactsProgress] = useState<{
+    current: number;
+    total: number;
+    percent: number;
+  } | null>(null);
+  const [contactsResult, setContactsResult] = useState<{
+    success: boolean;
+    contactsImported: number;
+    error?: string;
+  } | null>(null);
+
   const hasStartedImportRef = useRef(false);
 
-  // Subscribe to import progress updates
+  // Subscribe to import progress updates for both messages and contacts
   useEffect(() => {
-    const cleanup = window.api.messages.onImportProgress((progress) => {
-      setImportProgress(progress);
+    const cleanupMessages = window.api.messages.onImportProgress((progress) => {
+      setMessagesProgress(progress);
     });
-    return cleanup;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const cleanupContacts = (window.api.contacts as any).onImportProgress?.((progress: { current: number; total: number; percent: number }) => {
+      setContactsProgress(progress);
+    });
+    return () => {
+      cleanupMessages();
+      cleanupContacts?.();
+    };
   }, []);
 
   // Trigger import after permissions are granted
@@ -208,39 +229,71 @@ function PermissionsStepContent({ onAction }: OnboardingStepContentProps) {
     if (hasStartedImportRef.current) return;
     hasStartedImportRef.current = true;
 
-    setIsImporting(true);
-    setImportProgress(null);
-    setImportResult(null);
-
-    try {
-      // Get user ID from session - if not available, skip import and continue
-      const authResult = await window.api.auth.getCurrentUser();
-      if (!authResult.success || !authResult.user) {
-        // No user session yet, just continue to next step
-        onAction({ type: "PERMISSION_GRANTED" });
-        return;
-      }
-
-      const userId = (authResult.user as { id: string }).id;
-      const result = await window.api.messages.importMacOSMessages(userId);
-
-      setImportResult({
-        success: result.success,
-        messagesImported: result.messagesImported,
-        error: result.error,
-      });
-
-      // Brief delay to show result before proceeding
-      setTimeout(() => {
-        onAction({ type: "PERMISSION_GRANTED" });
-      }, 1500);
-    } catch (error) {
-      // On error, still proceed - import is not blocking
-      console.error("Error importing messages:", error);
+    // Get user ID from session - if not available, skip import and continue
+    const authResult = await window.api.auth.getCurrentUser();
+    if (!authResult.success || !authResult.user) {
+      // No user session yet, just continue to next step
       onAction({ type: "PERMISSION_GRANTED" });
-    } finally {
-      setIsImporting(false);
+      return;
     }
+
+    const userId = (authResult.user as { id: string }).id;
+
+    // Start both imports in parallel
+    setIsImportingMessages(true);
+    setIsImportingContacts(true);
+    setMessagesProgress(null);
+    setContactsProgress(null);
+    setMessagesResult(null);
+    setContactsResult(null);
+
+    // Import messages
+    const messagesPromise = window.api.messages.importMacOSMessages(userId)
+      .then((result) => {
+        setMessagesResult({
+          success: result.success,
+          messagesImported: result.messagesImported,
+          error: result.error,
+        });
+      })
+      .catch((error) => {
+        console.error("Error importing messages:", error);
+        setMessagesResult({ success: false, messagesImported: 0, error: String(error) });
+      })
+      .finally(() => setIsImportingMessages(false));
+
+    // Import contacts (get available, then import all)
+    const contactsPromise = (async () => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const availableResult = await (window.api.contacts as any).getAvailable(userId);
+        if (!availableResult.success || !availableResult.contacts?.length) {
+          setContactsResult({ success: true, contactsImported: 0 });
+          return;
+        }
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const importResult = await (window.api.contacts as any).import(userId, availableResult.contacts);
+        setContactsResult({
+          success: importResult.success,
+          contactsImported: importResult.contacts?.length || 0,
+          error: importResult.error,
+        });
+      } catch (error) {
+        console.error("Error importing contacts:", error);
+        setContactsResult({ success: false, contactsImported: 0, error: String(error) });
+      } finally {
+        setIsImportingContacts(false);
+      }
+    })();
+
+    // Wait for both to complete before proceeding
+    await Promise.all([messagesPromise, contactsPromise]);
+
+    // Brief delay to show results before proceeding
+    setTimeout(() => {
+      onAction({ type: "PERMISSION_GRANTED" });
+    }, 1500);
   }, [onAction]);
 
   // Auto-check permissions on mount and periodically after user starts the flow
@@ -524,7 +577,7 @@ function PermissionsStepContent({ onAction }: OnboardingStepContentProps) {
       />
 
       {/* Final: All steps complete */}
-      {completedSteps.has(5) && !isImporting && !importResult && (
+      {completedSteps.has(5) && !isImportingMessages && !isImportingContacts && !messagesResult && !contactsResult && (
         <div className="bg-green-50 border-2 border-green-300 rounded-lg p-4 text-center">
           <div className="inline-flex items-center justify-center w-12 h-12 bg-green-500 rounded-full mb-3">
             <CheckIcon className="w-6 h-6 text-white" />
@@ -549,8 +602,8 @@ function PermissionsStepContent({ onAction }: OnboardingStepContentProps) {
         </div>
       )}
 
-      {/* Importing messages state */}
-      {isImporting && (
+      {/* Importing state - show both progress bars */}
+      {(isImportingMessages || isImportingContacts) && (
         <div className="bg-blue-50 border-2 border-blue-300 rounded-lg p-6 text-center">
           <div className="inline-flex items-center justify-center w-12 h-12 bg-blue-500 rounded-full mb-4">
             <svg
@@ -574,42 +627,95 @@ function PermissionsStepContent({ onAction }: OnboardingStepContentProps) {
             </svg>
           </div>
           <h3 className="text-lg font-bold text-gray-900 mb-2">
-            Importing Your Messages
+            Setting Up Your Data
           </h3>
           <p className="text-sm text-gray-600 mb-4">
-            Setting up access to your iMessages and texts...
+            Importing your messages and contacts...
           </p>
-          {importProgress && (
-            <div className="max-w-xs mx-auto">
-              <div className="flex justify-between text-xs text-gray-600 mb-1">
-                <span>Progress</span>
-                <span>{importProgress.percent}%</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div
-                  className="bg-blue-500 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${importProgress.percent}%` }}
-                />
-              </div>
+
+          {/* Messages Progress */}
+          <div className="max-w-xs mx-auto mb-4">
+            <div className="flex justify-between text-xs text-gray-600 mb-1">
+              <span>Messages</span>
+              <span>
+                {isImportingMessages
+                  ? `${messagesProgress?.percent || 0}%`
+                  : messagesResult?.success
+                    ? "Done"
+                    : "Error"}
+              </span>
             </div>
-          )}
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div
+                className={`h-2 rounded-full transition-all duration-300 ${
+                  !isImportingMessages && messagesResult?.success
+                    ? "bg-green-500"
+                    : !isImportingMessages && messagesResult && !messagesResult.success
+                      ? "bg-red-500"
+                      : "bg-blue-500"
+                }`}
+                style={{
+                  width: `${isImportingMessages ? messagesProgress?.percent || 0 : 100}%`,
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Contacts Progress */}
+          <div className="max-w-xs mx-auto">
+            <div className="flex justify-between text-xs text-gray-600 mb-1">
+              <span>Contacts</span>
+              <span>
+                {isImportingContacts
+                  ? `${contactsProgress?.percent || 0}%`
+                  : contactsResult?.success
+                    ? "Done"
+                    : "Error"}
+              </span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div
+                className={`h-2 rounded-full transition-all duration-300 ${
+                  !isImportingContacts && contactsResult?.success
+                    ? "bg-green-500"
+                    : !isImportingContacts && contactsResult && !contactsResult.success
+                      ? "bg-red-500"
+                      : "bg-blue-500"
+                }`}
+                style={{
+                  width: `${isImportingContacts ? contactsProgress?.percent || 0 : 100}%`,
+                }}
+              />
+            </div>
+          </div>
         </div>
       )}
 
-      {/* Import complete state */}
-      {importResult && (
+      {/* Import complete state - show summary */}
+      {!isImportingMessages && !isImportingContacts && (messagesResult || contactsResult) && (
         <div className="bg-green-50 border-2 border-green-300 rounded-lg p-6 text-center">
           <div className="inline-flex items-center justify-center w-12 h-12 bg-green-500 rounded-full mb-4">
             <CheckIcon className="w-6 h-6 text-white" />
           </div>
           <h3 className="text-lg font-bold text-gray-900 mb-2">
-            Messages Imported!
+            Import Complete!
           </h3>
-          <p className="text-sm text-gray-600">
-            {importResult.messagesImported > 0
-              ? `Successfully imported ${importResult.messagesImported.toLocaleString()} messages.`
-              : "Your messages are ready to use."}
-          </p>
+          <div className="text-sm text-gray-600 space-y-1">
+            {messagesResult && (
+              <p>
+                {messagesResult.messagesImported > 0
+                  ? `${messagesResult.messagesImported.toLocaleString()} messages imported`
+                  : "Messages ready"}
+              </p>
+            )}
+            {contactsResult && (
+              <p>
+                {contactsResult.contactsImported > 0
+                  ? `${contactsResult.contactsImported.toLocaleString()} contacts imported`
+                  : "Contacts ready"}
+              </p>
+            )}
+          </div>
         </div>
       )}
 

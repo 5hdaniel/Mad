@@ -11,12 +11,22 @@ import type { IpcMainInvokeEvent } from "electron";
 
 // Mock electron module
 const mockIpcHandle = jest.fn();
+const mockWebContentsSend = jest.fn();
 
 jest.mock("electron", () => ({
   ipcMain: {
     handle: mockIpcHandle,
   },
+  BrowserWindow: jest.fn(),
 }));
+
+// Mock BrowserWindow instance for progress events
+const mockMainWindow = {
+  isDestroyed: jest.fn().mockReturnValue(false),
+  webContents: {
+    send: mockWebContentsSend,
+  },
+} as unknown as import("electron").BrowserWindow;
 
 // Mock services - inline factories since jest.mock is hoisted
 jest.mock("../services/databaseService", () => ({
@@ -90,8 +100,8 @@ describe("Contact Handlers", () => {
       registeredHandlers.set(channel, handler);
     });
 
-    // Register all handlers
-    registerContactHandlers();
+    // Register all handlers with mock window
+    registerContactHandlers(mockMainWindow);
   });
 
   beforeEach(() => {

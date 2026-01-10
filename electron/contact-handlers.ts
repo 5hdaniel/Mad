@@ -3,7 +3,7 @@
 // This file contains contact handlers to be registered in main.js
 // ============================================
 
-import { ipcMain } from "electron";
+import { ipcMain, BrowserWindow } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import { randomUUID } from "crypto";
 import databaseService from "./services/databaseService";
@@ -36,10 +36,15 @@ interface ContactResponse {
   transactionCount?: number;
 }
 
+/** Reference to mainWindow for emitting progress events */
+let _mainWindow: BrowserWindow | null = null;
+
 /**
  * Register all contact-related IPC handlers
+ * @param mainWindow - The main browser window for emitting progress events
  */
-export function registerContactHandlers(): void {
+export function registerContactHandlers(mainWindow: BrowserWindow): void {
+  _mainWindow = mainWindow;
   // Get all imported contacts for a user (local database only)
   ipcMain.handle(
     "contacts:get-all",
@@ -413,8 +418,21 @@ export function registerContactHandlers(): void {
         }
 
         const importedContacts: Contact[] = [];
+        const total = contactsToImport.length;
+        let processed = 0;
 
         for (const contact of contactsToImport) {
+          processed++;
+
+          // Emit progress to renderer
+          if (_mainWindow && !_mainWindow.isDestroyed()) {
+            _mainWindow.webContents.send("contacts:import-progress", {
+              current: processed,
+              total,
+              percent: Math.round((processed / total) * 100),
+            });
+          }
+
           // Validate each contact's data (basic validation)
           const sanitizedContact = sanitizeObject(contact) as any;
           const validatedData = validateContactData(sanitizedContact, false);
