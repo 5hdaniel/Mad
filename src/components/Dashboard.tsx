@@ -1,14 +1,16 @@
-import React, { useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import Joyride from "react-joyride";
 import { useTour } from "../hooks/useTour";
 import { usePendingTransactionCount } from "../hooks/usePendingTransactionCount";
 import { SyncStatusIndicator } from "./dashboard/index";
+import StartNewAuditModal from "./StartNewAuditModal";
 import {
   getDashboardTourSteps,
   JOYRIDE_STYLES,
   JOYRIDE_LOCALE,
 } from "../config/tourSteps";
 import type { SyncStatus } from "../hooks/useAutoRefresh";
+import type { Transaction } from "../types";
 
 interface DashboardActionProps {
   onAuditNew: () => void;
@@ -23,6 +25,8 @@ interface DashboardActionProps {
   syncStatus?: SyncStatus;
   isAnySyncing?: boolean;
   currentSyncMessage?: string | null;
+  /** Callback when user selects a pending transaction to review */
+  onSelectPendingTransaction?: (transaction: Transaction) => void;
 }
 
 /**
@@ -42,7 +46,11 @@ function Dashboard({
   syncStatus,
   isAnySyncing = false,
   currentSyncMessage = null,
+  onSelectPendingTransaction,
 }: DashboardActionProps) {
+  // State for the Start New Audit modal
+  const [showStartNewAuditModal, setShowStartNewAuditModal] = useState(false);
+
   // Initialize the onboarding tour for first-time users
   const { runTour, handleJoyrideCallback } = useTour(
     true,
@@ -57,6 +65,42 @@ function Dashboard({
   const handleViewPending = useCallback(() => {
     onViewTransactions();
   }, [onViewTransactions]);
+
+  // Handle "Start New Audit" click - show the redesigned modal
+  const handleStartNewAuditClick = useCallback(() => {
+    setShowStartNewAuditModal(true);
+  }, []);
+
+  // Handle selecting a pending transaction from the modal
+  const handleSelectPendingTransaction = useCallback(
+    (transaction: Transaction) => {
+      setShowStartNewAuditModal(false);
+      // If parent provides a handler, use it; otherwise navigate to transactions
+      if (onSelectPendingTransaction) {
+        onSelectPendingTransaction(transaction);
+      } else {
+        onViewTransactions();
+      }
+    },
+    [onSelectPendingTransaction, onViewTransactions]
+  );
+
+  // Handle "View Active Transactions" from the modal
+  const handleViewActiveTransactions = useCallback(() => {
+    setShowStartNewAuditModal(false);
+    onViewTransactions();
+  }, [onViewTransactions]);
+
+  // Handle "Add Manually" from the modal
+  const handleCreateManually = useCallback(() => {
+    setShowStartNewAuditModal(false);
+    onAuditNew();
+  }, [onAuditNew]);
+
+  // Handle closing the Start New Audit modal
+  const handleCloseStartNewAuditModal = useCallback(() => {
+    setShowStartNewAuditModal(false);
+  }, []);
 
   // Track last reported tour state to prevent infinite loops
   const lastReportedTourStateRef = useRef<boolean | null>(null);
@@ -174,7 +218,7 @@ function Dashboard({
         <div className="grid md:grid-cols-2 gap-8">
           {/* Start New Audit Card */}
           <button
-            onClick={onAuditNew}
+            onClick={handleStartNewAuditClick}
             className="group relative bg-white rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 p-8 text-left border-2 border-transparent hover:border-blue-500 transform hover:scale-105"
             data-tour="new-audit-card"
           >
@@ -364,6 +408,16 @@ function Dashboard({
         </div>
 
       </div>
+
+      {/* Start New Audit Modal */}
+      {showStartNewAuditModal && (
+        <StartNewAuditModal
+          onSelectPendingTransaction={handleSelectPendingTransaction}
+          onViewActiveTransactions={handleViewActiveTransactions}
+          onCreateManually={handleCreateManually}
+          onClose={handleCloseStartNewAuditModal}
+        />
+      )}
     </div>
   );
 }
