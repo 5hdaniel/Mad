@@ -1847,3 +1847,78 @@
   "started_at": "2026-01-10T08:20:24.546Z",
   "ended_at": "2026-01-10T08:24:15.184Z"
 }
+{
+  "timestamp": "2026-01-10T21:57:54Z",
+  "session_id": "4b8a6739-7adf-479e-8afe-591dfbee5330",
+  "agent_id": "abe41ed",
+  "input_tokens": 38,
+  "output_tokens": 552,
+  "cache_read": 1076079,
+  "cache_create": 132097,
+  "billable_tokens": 132649,
+  "total_tokens": 1208766,
+  "api_calls": 30,
+  "duration_secs": 366,
+  "started_at": "2026-01-10T21:51:48.230Z",
+  "ended_at": "2026-01-10T21:57:54.484Z"
+}
+{
+  "timestamp": "2026-01-10T22:02:07Z",
+  "session_id": "4b8a6739-7adf-479e-8afe-591dfbee5330",
+  "agent_id": "a6544d5",
+  "input_tokens": 6372,
+  "output_tokens": 7239,
+  "cache_read": 1683084,
+  "cache_create": 90078,
+  "billable_tokens": 97317,
+  "total_tokens": 1786773,
+  "api_calls": 48,
+  "duration_secs": 236,
+  "started_at": "2026-01-10T21:58:11.544Z",
+  "ended_at": "2026-01-10T22:02:07.545Z"
+}
+{
+  "timestamp": "2026-01-10T22:04:47Z",
+  "session_id": "4b8a6739-7adf-479e-8afe-591dfbee5330",
+  "agent_id": "a161d2c",
+  "input_tokens": 556,
+  "output_tokens": 2684,
+  "cache_read": 695541,
+  "cache_create": 88259,
+  "billable_tokens": 90943,
+  "total_tokens": 787040,
+  "api_calls": 26,
+  "duration_secs": 138,
+  "started_at": "2026-01-10T22:02:29.664Z",
+  "ended_at": "2026-01-10T22:04:47.861Z"
+}
+{
+  "timestamp": "2026-01-10T22:15:39Z",
+  "session_id": "4b8a6739-7adf-479e-8afe-591dfbee5330",
+  "agent_id": "abbd1c7",
+  "input_tokens": 39330,
+  "output_tokens": 18377,
+  "cache_read": 10063216,
+  "cache_create": 373097,
+  "billable_tokens": 391474,
+  "total_tokens": 10494020,
+  "api_calls": 115,
+  "duration_secs": 552,
+  "started_at": "2026-01-10T22:06:26.496Z",
+  "ended_at": "2026-01-10T22:15:38.964Z"
+}
+{
+  "timestamp": "2026-01-10T22:17:52Z",
+  "session_id": "4b8a6739-7adf-479e-8afe-591dfbee5330",
+  "agent_id": "a2f756c",
+  "input_tokens": 36417,
+  "output_tokens": 881,
+  "cache_read": 1224396,
+  "cache_create": 186086,
+  "billable_tokens": 186967,
+  "total_tokens": 1447780,
+  "api_calls": 30,
+  "duration_secs": 125,
+  "started_at": "2026-01-10T22:15:47.657Z",
+  "ended_at": "2026-01-10T22:17:52.623Z"
+}
