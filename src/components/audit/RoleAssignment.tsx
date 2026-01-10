@@ -289,6 +289,8 @@ function RoleAssignment({
           onSelect={handleContactsSelected as unknown as never}
           onClose={() => setShowContactSelect(false)}
           propertyAddress={propertyAddress}
+          userId={userId}
+          onRefreshContacts={loadContacts}
         />
       )}
     </div>

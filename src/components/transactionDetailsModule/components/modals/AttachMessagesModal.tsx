@@ -31,6 +31,18 @@ interface ContactInfo {
 }
 
 /**
+ * Normalize phone number to digits only for comparison
+ */
+function normalizePhone(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  // Remove leading 1 for US numbers to normalize 10 and 11 digit formats
+  if (digits.length === 11 && digits.startsWith("1")) {
+    return digits.slice(1);
+  }
+  return digits;
+}
+
+/**
  * Format phone number for display
  */
 function formatPhoneNumber(phone: string): string {
@@ -85,8 +97,39 @@ function getThreadDateRange(messages: MessageLike[]): string {
 
 /**
  * Get all unique participants in a thread
+ * Uses chat_members (actual group membership) when available,
+ * falls back to collecting from/to from individual messages
  */
 function getThreadParticipants(messages: MessageLike[], selectedContact: string): string[] {
+  // First, try to get chat_members from any message (they all share the same chat)
+  for (const msg of messages) {
+    try {
+      if (msg.participants) {
+        const parsed = typeof msg.participants === 'string'
+          ? JSON.parse(msg.participants)
+          : msg.participants;
+
+        // If chat_members exists, use it (authoritative group membership)
+        if (parsed.chat_members && Array.isArray(parsed.chat_members)) {
+          const members = new Set<string>(parsed.chat_members);
+          members.delete(selectedContact);
+          members.delete('me');
+          // Normalize selected contact for comparison (handle +1 prefix)
+          const selectedNormalized = normalizePhone(selectedContact);
+          for (const m of members) {
+            if (normalizePhone(m) === selectedNormalized) {
+              members.delete(m);
+            }
+          }
+          return Array.from(members);
+        }
+      }
+    } catch {
+      // Continue to next message
+    }
+  }
+
+  // Fallback: collect from/to from individual messages (legacy behavior)
   const participants = new Set<string>();
 
   for (const msg of messages) {
@@ -116,8 +159,28 @@ function getThreadParticipants(messages: MessageLike[], selectedContact: string)
 
 /**
  * Check if thread is a group chat (more than 2 total participants)
+ * Uses chat_members when available for accurate detection
  */
 function isGroupChat(messages: MessageLike[]): boolean {
+  // First check for chat_members (authoritative)
+  for (const msg of messages) {
+    try {
+      if (msg.participants) {
+        const parsed = typeof msg.participants === 'string'
+          ? JSON.parse(msg.participants)
+          : msg.participants;
+
+        if (parsed.chat_members && Array.isArray(parsed.chat_members)) {
+          // Group chat = more than 1 other person (2+ members excluding "me")
+          return parsed.chat_members.length > 1;
+        }
+      }
+    } catch {
+      // Continue
+    }
+  }
+
+  // Fallback: count unique participants from messages
   const allParticipants = new Set<string>();
 
   for (const msg of messages) {
@@ -155,6 +218,8 @@ export function AttachMessagesModal({
   // Contacts list state
   const [contacts, setContacts] = useState<ContactInfo[]>([]);
   const [loadingContacts, setLoadingContacts] = useState(true);
+  // All contacts for name resolution (includes contacts without unlinked messages)
+  const [allContacts, setAllContacts] = useState<Array<{ phone: string; name: string }>>([]);
 
   // Selected contact state
   const [selectedContact, setSelectedContact] = useState<string | null>(null);
@@ -181,16 +246,37 @@ export function AttachMessagesModal({
       setLoadingContacts(true);
       setError(null);
       try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const result = await (window.api.transactions as any).getMessageContacts(userId) as {
-          success: boolean;
-          contacts?: ContactInfo[];
-          error?: string;
-        };
-        if (result.success && result.contacts) {
-          setContacts(result.contacts);
+        // Load both message contacts and all contacts in parallel
+        const [messageContactsResult, allContactsResult] = await Promise.all([
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (window.api.transactions as any).getMessageContacts(userId) as Promise<{
+            success: boolean;
+            contacts?: ContactInfo[];
+            error?: string;
+          }>,
+          // Get all contacts for name resolution
+          window.api.contacts.getAll(userId) as Promise<{
+            success: boolean;
+            contacts?: Array<{ id: string; name?: string; phone?: string }>;
+            error?: string;
+          }>,
+        ]);
+
+        if (messageContactsResult.success && messageContactsResult.contacts) {
+          setContacts(messageContactsResult.contacts);
         } else {
-          setError(result.error || "Failed to load contacts");
+          setError(messageContactsResult.error || "Failed to load contacts");
+        }
+
+        // Build phone-to-name lookup from all contacts
+        if (allContactsResult.success && allContactsResult.contacts) {
+          const phoneLookup: Array<{ phone: string; name: string }> = [];
+          for (const c of allContactsResult.contacts) {
+            if (c.name && c.phone) {
+              phoneLookup.push({ phone: c.phone, name: c.name });
+            }
+          }
+          setAllContacts(phoneLookup);
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load contacts");
@@ -246,6 +332,29 @@ export function AttachMessagesModal({
   const sortedThreads = useMemo(() => {
     return sortThreadsByRecent(threads);
   }, [threads]);
+
+  // Create a phone-to-name lookup map for resolving participant names
+  const phoneToNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    // First add from all contacts (comprehensive list)
+    for (const c of allContacts) {
+      map.set(normalizePhone(c.phone), c.name);
+    }
+    // Then add from message contacts (may have more accurate names)
+    for (const c of contacts) {
+      if (c.contactName) {
+        map.set(normalizePhone(c.contact), c.contactName);
+      }
+    }
+    return map;
+  }, [contacts, allContacts]);
+
+  // Resolve phone number to name if available
+  const resolveParticipantName = (phone: string): string => {
+    const normalized = normalizePhone(phone);
+    const name = phoneToNameMap.get(normalized);
+    return name || formatPhoneNumber(phone);
+  };
 
   const handleSelectContact = (contact: string, contactName: string | null) => {
     setSelectedContact(contact);
@@ -557,7 +666,7 @@ export function AttachMessagesModal({
                             {/* Other participants in group */}
                             {isGroup && otherParticipants.length > 0 && (
                               <p className="text-xs text-gray-500 mt-1">
-                                Also includes: {otherParticipants.slice(0, 3).map(p => formatPhoneNumber(p)).join(", ")}
+                                Also includes: {otherParticipants.slice(0, 3).map(p => resolveParticipantName(p)).join(", ")}
                                 {otherParticipants.length > 3 && ` +${otherParticipants.length - 3} more`}
                               </p>
                             )}

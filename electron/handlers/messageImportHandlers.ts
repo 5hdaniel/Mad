@@ -50,7 +50,9 @@ export function registerMessageImportHandlers(mainWindow: BrowserWindow): void {
 
       // Create progress callback that sends updates to renderer
       const onProgress: ImportProgressCallback = (progress) => {
-        mainWindow.webContents.send("messages:import-progress", progress);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("messages:import-progress", progress);
+        }
       };
 
       try {

@@ -353,9 +353,12 @@ export interface IpcChannels {
   "system:check-all-permissions": {
     request: void;
     response: {
-      fullDiskAccess: boolean;
-      contactsAccess: boolean;
       allGranted: boolean;
+      permissions: {
+        fullDiskAccess?: { hasPermission: boolean; error?: string };
+        contacts?: { hasPermission: boolean; error?: string };
+      };
+      errors: Array<{ hasPermission: boolean; error?: string }>;
     };
   };
   "system:check-google-connection": {
@@ -702,9 +705,12 @@ export interface WindowApi {
     checkFullDiskAccess: () => Promise<{ hasAccess: boolean }>;
     checkContactsPermission: () => Promise<{ hasPermission: boolean }>;
     checkAllPermissions: () => Promise<{
-      fullDiskAccess: boolean;
-      contactsAccess: boolean;
       allGranted: boolean;
+      permissions: {
+        fullDiskAccess?: { hasPermission: boolean; error?: string };
+        contacts?: { hasPermission: boolean; error?: string };
+      };
+      errors: Array<{ hasPermission: boolean; error?: string }>;
     }>;
     checkGoogleConnection: (
       userId: string,
@@ -916,6 +922,10 @@ export interface WindowApi {
       userId: string,
       contacts: NewContact[],
     ) => Promise<{ success: boolean; imported?: number; error?: string }>;
+    /** Listen for import progress updates */
+    onImportProgress: (
+      callback: (progress: { current: number; total: number; percent: number }) => void
+    ) => () => void;
   };
 
   // Transaction methods

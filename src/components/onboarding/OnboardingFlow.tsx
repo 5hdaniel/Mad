@@ -63,6 +63,7 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
         authProvider: (app.pendingOAuthData?.provider ?? app.authProvider) as "google" | "microsoft" ?? "google",
         isNewUser: app.isNewUserFlow,
         isDatabaseInitialized: selectIsDatabaseInitialized(state),
+        userId: app.currentUser?.id ?? null,
       };
     }
 
@@ -79,6 +80,7 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
       authProvider: (app.pendingOAuthData?.provider ?? app.authProvider) as "google" | "microsoft" ?? "google",
       isNewUser: app.isNewUserFlow,
       isDatabaseInitialized: app.isDatabaseInitialized,
+      userId: app.currentUser?.id ?? null,
     };
   }, [machineState, app]);
 
@@ -155,6 +157,7 @@ export function OnboardingFlow({ app }: OnboardingFlowProps) {
 
   // Handle onboarding completion
   const handleComplete = useCallback(() => {
+    console.log("[OnboardingFlow] handleComplete called, navigating to dashboard");
     app.goToStep("dashboard");
   }, [app]);
 

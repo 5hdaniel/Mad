@@ -9,6 +9,7 @@
 
 import { useEffect, useRef, useCallback } from "react";
 import { usePlatform } from "../contexts/PlatformContext";
+import { shouldSkipMessagesSync } from "./useSyncStatus";
 
 interface UseMacOSMessagesImportOptions {
   /** User ID to associate messages with */
@@ -84,6 +85,15 @@ export function useMacOSMessagesImport({
     if (!isDatabaseInitialized) return;
     if (isOnboarding) return;
     if (hasImportedRef.current) return;
+
+    // Check if we just imported during onboarding - skip to avoid duplicate import
+    // Note: shouldSkipMessagesSync() also clears the flag, but useSyncStatus.runAutoSync
+    // will also check and clear it - the first one to run will clear it
+    if (shouldSkipMessagesSync()) {
+      console.log("[useMacOSMessagesImport] Skipping import - just completed onboarding import");
+      hasImportedRef.current = true; // Mark as done to prevent future attempts this session
+      return;
+    }
 
     // Mark as imported to prevent duplicate runs
     hasImportedRef.current = true;

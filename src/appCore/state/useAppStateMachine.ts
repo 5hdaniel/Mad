@@ -109,6 +109,7 @@ export function useAppStateMachine(): AppStateMachine {
     isWindows,
     onSetShowMoveAppPrompt: modal.setShowMoveAppPrompt,
     onSetCurrentStep: (step) => nav.setCurrentStep(step),
+    stateMachineDispatch: machineState?.dispatch,
   });
 
   // ============================================

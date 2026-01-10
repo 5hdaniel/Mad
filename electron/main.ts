@@ -189,7 +189,7 @@ app.whenReady().then(async () => {
   // Register existing handler modules
   registerAuthHandlers(mainWindow!);
   registerTransactionHandlers(mainWindow!);
-  registerContactHandlers();
+  registerContactHandlers(mainWindow!);
   registerAddressHandlers();
   registerFeedbackHandlers();
   registerSystemHandlers();

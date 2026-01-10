@@ -9,7 +9,7 @@
  * - TransactionContactsTab: Contacts tab with AI suggestions
  * - Various modal dialogs
  */
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import type { Transaction } from "@/types";
 import ExportModal from "./ExportModal";
 import AuditTransactionModal from "./AuditTransactionModal";
@@ -124,6 +124,15 @@ function TransactionDetails({
   // Transaction status update hook
   const { state: statusState, approve, reject, restore } = useTransactionStatusUpdate(userId);
   const { isApproving, isRejecting, isRestoring } = statusState;
+
+  // Filter emails only for Details tab (exclude SMS/iMessage)
+  const emailCommunications = useMemo(() => {
+    return communications.filter((comm) => {
+      const channel = comm.channel || comm.communication_type;
+      // Exclude SMS and iMessage - only show emails
+      return channel !== 'sms' && channel !== 'imessage';
+    });
+  }, [communications]);
 
   // Modal states
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
@@ -292,7 +301,7 @@ function TransactionDetails({
           {activeTab === "details" && (
             <TransactionDetailsTab
               transaction={transaction}
-              communications={communications}
+              communications={emailCommunications}
               loading={loading}
               unlinkingCommId={unlinkingCommId}
               onViewEmail={setViewingEmail}

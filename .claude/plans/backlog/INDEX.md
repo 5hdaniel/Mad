@@ -2,9 +2,9 @@
 
 This index tracks all backlog items with their current status and metadata.
 
-**Last Updated:** 2026-01-05 (SPRINT-027 Messages & Contacts Polish)
-**Total Items:** 165
-**Pending:** 96 | **In Progress:** 1 | **Completed:** 61 | **Partial:** 0 | **Obsolete:** 1 | **Deferred:** 2
+**Last Updated:** 2026-01-09 (SPRINT-027 Messages & Contacts Polish - COMPLETE, permissions step bugs documented)
+**Total Items:** 171
+**Pending:** 94 | **In Progress:** 0 | **Completed:** 69 | **Partial:** 0 | **Obsolete:** 1 | **Deferred:** 2
 
 ---
 
@@ -60,7 +60,7 @@ This index tracks all backlog items with their current status and metadata.
 - **SPRINT-023 (Architecture Debt Reduction):** Completed - BACKLOG-149 (done), 148 (done), 152 (done), 140 (done) (5 tasks: TASK-960 to TASK-964, PRs #314-317)
 - **SPRINT-024 (Quality & Coverage):** PLANNED - BACKLOG-157, 159, 112, 113, 158 (5 tasks: TASK-970 to TASK-974)
 - **SPRINT-025 (Communications Architecture):** COMPLETE - TASK-975 to TASK-977 (3 tasks completed: communications refactor, export folders, auto-link texts; TASK-978 deferred). **Incidents:** 14.2M token exploration loop (BACKLOG-161), PR merged without review, file overlap caused merge conflicts.
-- **SPRINT-027 (Messages & Contacts Polish):** PLANNED - 3 tasks (TASK-990 to TASK-992): auto-linked messages display, manual thread management, bubble direction fix. Base: feature/contact-first-attach-messages (PR #353)
+- **SPRINT-027 (Messages & Contacts Polish):** COMPLETE - 6 tasks (TASK-990 to TASK-995) + 9 unplanned fixes. PRs #354-362. Messages feature fully functional with thread grouping, auto-linking, manual attach/unlink, bubble direction, and contact fixes.
 - **Unassigned:** All others
 
 ### State Coordination Overhaul Project - COMPLETE
@@ -255,9 +255,15 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-171 | Contacts Not Pre-Populated When Editing Transaction | fix | High | Pending | - | - | ~25K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-171.md](BACKLOG-171.md) |
 | BACKLOG-172 | macOS Messages Import | feature | High | Pending | - | - | ~25K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-172.md](BACKLOG-172.md) |
 | BACKLOG-173 | Contact-First AttachMessagesModal Interface | ui/perf | High | Completed | - | - | ~40K | - | - | - | - | - | - | - | - | - | - | - | - | - | TASK-989, PR #353 | [BACKLOG-173.md](BACKLOG-173.md) |
-| BACKLOG-178 | Auto-Linked Messages Display in Transaction Details | fix | High | Pending | SPRINT-027 | - | ~20K | - | - | - | - | - | - | - | - | - | - | - | - | - | TASK-990 | - |
-| BACKLOG-179 | Manual Thread Attach/Unlink in Messages Tab | ui | High | Pending | SPRINT-027 | - | ~30K | - | - | - | - | - | - | - | - | - | - | - | - | - | TASK-991 | - |
-| BACKLOG-180 | Message Bubble Direction Fix | fix | Medium | Pending | SPRINT-027 | - | ~10K | - | - | - | - | - | - | - | - | - | - | - | - | - | TASK-992 | - |
+| BACKLOG-178 | Auto-Linked Messages Display in Transaction Details | fix | High | Completed | SPRINT-027 | - | ~20K | - | - | - | - | - | - | - | - | - | - | - | - | - | TASK-990, PR #358 | - |
+| BACKLOG-179 | Manual Thread Attach/Unlink in Messages Tab | ui | High | Completed | SPRINT-027 | - | ~30K | - | - | - | - | - | - | - | - | - | - | - | - | - | TASK-991, PR #359 | - |
+| BACKLOG-180 | Message Bubble Direction Fix | fix | Medium | Completed | SPRINT-027 | - | ~10K | - | - | - | - | - | - | - | - | - | - | - | - | - | TASK-992, PR #356 | - |
+| BACKLOG-181 | Streamline Terms and Conditions Onboarding Step | ui | Medium | Pending | - | - | ~15K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-181.md](BACKLOG-181.md) |
+| BACKLOG-182 | getCurrentUser() Returns False After Login | fix | High | Completed | SPRINT-027 | - | ~8K | - | - | - | - | - | - | - | - | - | - | - | - | - | direct commit | [BACKLOG-182.md](BACKLOG-182.md) |
+| BACKLOG-183 | Mixed UI During Import - Instructions With Progress | fix | Medium | Completed | SPRINT-027 | - | ~5K | - | - | - | - | - | - | - | - | - | - | - | - | - | direct commit | [BACKLOG-183.md](BACKLOG-183.md) |
+| BACKLOG-184 | Contacts Import Failing (1000 Limit) | fix | High | Completed | SPRINT-027 | - | ~2K | - | - | - | - | - | - | - | - | - | - | - | - | - | direct commit | [BACKLOG-184.md](BACKLOG-184.md) |
+| BACKLOG-185 | Import Stuck at 100% on Progress Bar | fix | Medium | Completed | SPRINT-027 | - | ~3K | - | - | - | - | - | - | - | - | - | - | - | - | - | direct commit | [BACKLOG-185.md](BACKLOG-185.md) |
+| BACKLOG-186 | Continue Button Not Working After Import | fix | Critical | Completed | SPRINT-027 | - | ~5K | - | - | - | - | - | - | - | - | - | - | - | - | - | direct commit | [BACKLOG-186.md](BACKLOG-186.md) |
 
 ---
 
@@ -299,7 +305,7 @@ This index tracks all backlog items with their current status and metadata.
 | SPRINT-020 | State Coordination Foundation | Completed | BACKLOG-142 Phase 1 (7 tasks: TASK-927 to TASK-933, PRs #287-294) - State machine types, reducer, context, orchestrator |
 | SPRINT-021 | State Coordination Migration | Completed | BACKLOG-142 Phase 2 (PRs #296-309) - Hook migration to state machine, feature flag enabled |
 | SPRINT-022 | State Coordination Cleanup | Completed | BACKLOG-142 Phase 3 (7 tasks: TASK-949-957) - Legacy code removed, architecture documented |
-| SPRINT-027 | Messages & Contacts Polish | Planned | 3 tasks: TASK-990 to TASK-992 - Auto-linked display, manual threads, bubble direction |
+| SPRINT-027 | Messages & Contacts Polish | Completed | 6 tasks (TASK-990 to TASK-995) + 9 unplanned fixes. PRs #354-362. Thread grouping, auto-linking, manual attach/unlink, bubble direction, contact SAVE/LOAD bugs |
 
 ---
 
@@ -565,6 +571,38 @@ This index tracks all backlog items with their current status and metadata.
     - TASK-991: Complete manual thread attach/unlink functionality
     - TASK-992: Fix message bubble direction (outgoing on right, incoming on left)
   - Total estimated: ~60K tokens (+ ~30K SR review overhead)
+- 2026-01-09: **SPRINT-027 (Messages & Contacts Polish) COMPLETE**
+  - All 6 planned tasks completed: TASK-990 to TASK-995
+  - PRs merged: #354 (thread grouping), #355 (contacts SAVE), #356 (bubble direction), #357 (contacts LOAD), #358 (auto-linked messages), #359 (manual threads)
+  - Additional polish PRs: #360 (contact names), #361 (attached messages display), #362 (thread grouping final)
+  - Unplanned fixes completed (9 items):
+    - Fixed permissions step bug (type mismatch for checkAllPermissions)
+    - Fixed duplicate import bug (added singleton guard)
+    - Implemented dual progress bars for contacts/messages import
+    - Fixed text messages appearing in Related Emails section
+    - Made message threads collapsed by default with View/Hide toggle
+    - Fixed contact import to store ALL phones and emails (not just first)
+  - feature/contact-first-attach-messages merged to develop (PR #353)
+  - Total actual: ~249K tokens (vs ~177K estimated, +41% variance from unplanned work)
+  - BACKLOG-178, 179, 180 marked complete
+  - Added BACKLOG-181: Streamline Terms and Conditions Onboarding Step
+- 2026-01-09: **Retroactive Documentation - Permissions Step Bugs (SPRINT-027)**
+  - Created BACKLOG-182: getCurrentUser() Returns False After Login (High, Completed)
+    - Root cause: Session-only OAuth design, getCurrentUser() looks for file-based session
+    - Fix: Pass userId through onboarding context from app.currentUser.id
+  - Created BACKLOG-183: Mixed UI During Import - Instructions With Progress (Medium, Completed)
+    - Root cause: No early return when import view should show
+    - Fix: Dedicated import view with early return pattern
+  - Created BACKLOG-184: Contacts Import Failing (1000 Limit) (High, Completed)
+    - Root cause: Hardcoded limit of 1000 contacts
+    - Fix: Increased limit from 1000 to 5000
+  - Created BACKLOG-185: Import Stuck at 100% on Progress Bar (Medium, Completed)
+    - Root cause: Promise.all waiting for both messages AND contacts
+    - Fix: Only wait for messages; contacts continue in background
+  - Created BACKLOG-186: Continue Button Not Working After Import (Critical, Completed)
+    - Root cause: goToStep("dashboard") is no-op when state machine enabled
+    - Fix: Added stateMachineDispatch to usePermissionsFlow, dispatch ONBOARDING_STEP_COMPLETE
+  - All 5 fixes committed directly to fix/messages-display-issues branch during SPRINT-027
 
 ---
 

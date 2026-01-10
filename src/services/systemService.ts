@@ -19,6 +19,26 @@ export interface AllPermissions {
 }
 
 /**
+ * Permission result from backend
+ */
+interface PermissionResult {
+  hasPermission: boolean;
+  error?: string;
+}
+
+/**
+ * Full permissions response from backend
+ */
+interface AllPermissionsResponse {
+  allGranted: boolean;
+  permissions: {
+    fullDiskAccess?: PermissionResult;
+    contacts?: PermissionResult;
+  };
+  errors: PermissionResult[];
+}
+
+/**
  * Provider connection status
  */
 export interface ConnectionStatus {
@@ -157,12 +177,12 @@ export const systemService = {
    */
   async checkAllPermissions(): Promise<ApiResult<AllPermissions>> {
     try {
-      const result = await window.api.system.checkAllPermissions();
+      const result = await window.api.system.checkAllPermissions() as AllPermissionsResponse;
       return {
         success: true,
         data: {
-          fullDiskAccess: result.fullDiskAccess,
-          contactsAccess: result.contactsAccess,
+          fullDiskAccess: result.permissions?.fullDiskAccess?.hasPermission ?? false,
+          contactsAccess: result.permissions?.contacts?.hasPermission ?? false,
           allGranted: result.allGranted,
         },
       };

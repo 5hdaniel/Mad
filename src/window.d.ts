@@ -492,7 +492,14 @@ interface MainAPI {
     setupFullDiskAccess: () => Promise<void>;
     checkFullDiskAccess: () => Promise<{ granted: boolean }>;
     checkContactsPermission: () => Promise<{ granted: boolean }>;
-    checkAllPermissions: () => Promise<Record<string, boolean>>;
+    checkAllPermissions: () => Promise<{
+      allGranted: boolean;
+      permissions: {
+        fullDiskAccess?: { hasPermission: boolean; error?: string };
+        contacts?: { hasPermission: boolean; error?: string };
+      };
+      errors: Array<{ hasPermission: boolean; error?: string }>;
+    }>;
     contactSupport: (
       errorDetails?: string,
     ) => Promise<{ success: boolean; error?: string }>;

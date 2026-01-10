@@ -482,11 +482,282 @@ export async function autoLinkTextsToTransaction(
   }
 }
 
+/**
+ * Get all email addresses for contacts linked to a transaction.
+ *
+ * @param transactionId - The transaction ID
+ * @returns Array of { contactId, email } pairs
+ */
+export async function getTransactionContactEmails(
+  transactionId: string
+): Promise<Array<{ contactId: string; email: string }>> {
+  const sql = `
+    SELECT
+      tc.contact_id as contactId,
+      ce.email as email
+    FROM transaction_contacts tc
+    JOIN contact_emails ce ON tc.contact_id = ce.contact_id
+    WHERE tc.transaction_id = ?
+  `;
+
+  const results = dbAll<{ contactId: string; email: string }>(sql, [transactionId]);
+  return results;
+}
+
+/**
+ * Find emails that match any of the given email addresses.
+ * Only returns emails not already linked to a transaction.
+ *
+ * @param userId - The user ID to scope the search
+ * @param emailAddresses - Array of email addresses to match
+ * @param transactionId - The transaction to check for existing links
+ * @returns Array of matching messages with contact attribution
+ */
+export async function findEmailsByAddresses(
+  userId: string,
+  emailAddresses: Array<{ contactId: string; email: string }>,
+  transactionId: string
+): Promise<MessageMatch[]> {
+  if (emailAddresses.length === 0) {
+    return [];
+  }
+
+  // Build a map of normalized email -> contactId for efficient lookup
+  const emailToContact = new Map<string, string>();
+  for (const { contactId, email } of emailAddresses) {
+    if (email) {
+      emailToContact.set(email.toLowerCase().trim(), contactId);
+    }
+  }
+
+  if (emailToContact.size === 0) {
+    return [];
+  }
+
+  // Query all email messages for this user that aren't already linked to this transaction
+  const sql = `
+    SELECT
+      m.id,
+      m.sender,
+      m.recipients,
+      m.direction,
+      m.channel
+    FROM messages m
+    WHERE m.user_id = ?
+      AND m.channel = 'email'
+      AND m.duplicate_of IS NULL
+      AND (
+        m.transaction_id IS NULL
+        OR m.transaction_id != ?
+      )
+      AND m.id NOT IN (
+        SELECT message_id FROM communications
+        WHERE transaction_id = ? AND message_id IS NOT NULL
+      )
+  `;
+
+  const messages = dbAll<{
+    id: string;
+    sender: string | null;
+    recipients: string | null;
+    direction: string | null;
+    channel: string;
+  }>(sql, [userId, transactionId, transactionId]);
+
+  const matches: MessageMatch[] = [];
+
+  for (const msg of messages) {
+    // Check sender and recipients for email matches
+    let matchedEmail: string | null = null;
+    let matchedContactId: string | null = null;
+
+    // Check sender
+    if (msg.sender) {
+      const normalizedSender = msg.sender.toLowerCase().trim();
+      // Extract email from "Name <email>" format if present
+      const emailMatch = normalizedSender.match(/<([^>]+)>/);
+      const emailToCheck = emailMatch ? emailMatch[1] : normalizedSender;
+
+      if (emailToContact.has(emailToCheck)) {
+        matchedEmail = emailToCheck;
+        matchedContactId = emailToContact.get(emailToCheck) || null;
+      }
+    }
+
+    // Check recipients if sender didn't match
+    if (!matchedEmail && msg.recipients) {
+      const recipientList = msg.recipients.split(/[,;]/).map(r => r.trim().toLowerCase());
+      for (const recipient of recipientList) {
+        // Extract email from "Name <email>" format if present
+        const emailMatch = recipient.match(/<([^>]+)>/);
+        const emailToCheck = emailMatch ? emailMatch[1] : recipient;
+
+        if (emailToContact.has(emailToCheck)) {
+          matchedEmail = emailToCheck;
+          matchedContactId = emailToContact.get(emailToCheck) || null;
+          break;
+        }
+      }
+    }
+
+    if (matchedEmail && matchedContactId) {
+      matches.push({
+        messageId: msg.id,
+        contactId: matchedContactId,
+        matchedPhone: matchedEmail, // Reusing field for email
+        direction: (msg.direction as "inbound" | "outbound") || "inbound",
+      });
+    }
+  }
+
+  return matches;
+}
+
+/**
+ * Auto-link emails to a transaction based on assigned contacts.
+ *
+ * @param transactionId - The transaction to link emails to
+ * @returns Result with counts of linked/skipped emails
+ */
+export async function autoLinkEmailsToTransaction(
+  transactionId: string
+): Promise<AutoLinkResult> {
+  const result: AutoLinkResult = {
+    linked: 0,
+    skipped: 0,
+    errors: [],
+  };
+
+  try {
+    // 1. Get the transaction to verify it exists and get user_id
+    const txnSql = "SELECT user_id FROM transactions WHERE id = ?";
+    const transaction = dbGet<{ user_id: string }>(txnSql, [transactionId]);
+
+    if (!transaction) {
+      result.errors.push(`Transaction ${transactionId} not found`);
+      return result;
+    }
+
+    const userId = transaction.user_id;
+
+    // 2. Get all email addresses for contacts linked to this transaction
+    const contactEmails = await getTransactionContactEmails(transactionId);
+
+    if (contactEmails.length === 0) {
+      logService.debug(
+        `No contact emails found for transaction ${transactionId}`,
+        "MessageMatchingService"
+      );
+      return result;
+    }
+
+    logService.info(
+      `Found ${contactEmails.length} email addresses for transaction ${transactionId}`,
+      "MessageMatchingService"
+    );
+
+    // 3. Find matching emails
+    const matches = await findEmailsByAddresses(
+      userId,
+      contactEmails,
+      transactionId
+    );
+
+    logService.info(
+      `Found ${matches.length} emails to link for transaction ${transactionId}`,
+      "MessageMatchingService"
+    );
+
+    // 4. Create communication references for each match
+    for (const match of matches) {
+      try {
+        const refId = await createCommunicationReference(
+          match.messageId,
+          transactionId,
+          userId,
+          "auto",
+          0.85 // Slightly lower confidence for email matching
+        );
+
+        if (refId) {
+          result.linked++;
+        } else {
+          result.skipped++; // Already linked or message not found
+        }
+      } catch (error) {
+        const errorMsg =
+          error instanceof Error ? error.message : "Unknown error";
+        result.errors.push(
+          `Failed to link email ${match.messageId}: ${errorMsg}`
+        );
+        logService.warn(
+          `Failed to link email ${match.messageId} to transaction ${transactionId}: ${errorMsg}`,
+          "MessageMatchingService"
+        );
+      }
+    }
+
+    // 5. Also update the message's transaction_id directly for consistency
+    if (result.linked > 0) {
+      const linkedMessageIds = matches
+        .slice(0, result.linked)
+        .map((m) => m.messageId);
+
+      // Update messages table to set transaction_id
+      const placeholders = linkedMessageIds.map(() => "?").join(",");
+      const updateSql = `
+        UPDATE messages
+        SET transaction_id = ?, transaction_link_source = 'pattern', transaction_link_confidence = 0.85
+        WHERE id IN (${placeholders}) AND transaction_id IS NULL
+      `;
+      dbRun(updateSql, [transactionId, ...linkedMessageIds]);
+    }
+
+    logService.info(
+      `Email auto-link complete for transaction ${transactionId}: ${result.linked} linked, ${result.skipped} skipped`,
+      "MessageMatchingService"
+    );
+
+    return result;
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : "Unknown error";
+    result.errors.push(`Email auto-link failed: ${errorMsg}`);
+    logService.error(
+      `Email auto-link failed for transaction ${transactionId}: ${errorMsg}`,
+      "MessageMatchingService"
+    );
+    return result;
+  }
+}
+
+/**
+ * Auto-link both texts and emails to a transaction based on assigned contacts.
+ *
+ * @param transactionId - The transaction to link communications to
+ * @returns Combined result with counts of linked/skipped messages
+ */
+export async function autoLinkAllToTransaction(
+  transactionId: string
+): Promise<AutoLinkResult> {
+  const textResult = await autoLinkTextsToTransaction(transactionId);
+  const emailResult = await autoLinkEmailsToTransaction(transactionId);
+
+  return {
+    linked: textResult.linked + emailResult.linked,
+    skipped: textResult.skipped + emailResult.skipped,
+    errors: [...textResult.errors, ...emailResult.errors],
+  };
+}
+
 export default {
   normalizePhone,
   phonesMatch,
   getTransactionContactPhones,
+  getTransactionContactEmails,
   findTextMessagesByPhones,
+  findEmailsByAddresses,
   createCommunicationReference,
   autoLinkTextsToTransaction,
+  autoLinkEmailsToTransaction,
+  autoLinkAllToTransaction,
 };

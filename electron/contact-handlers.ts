@@ -3,7 +3,7 @@
 // This file contains contact handlers to be registered in main.js
 // ============================================
 
-import { ipcMain } from "electron";
+import { ipcMain, BrowserWindow } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import { randomUUID } from "crypto";
 import databaseService from "./services/databaseService";
@@ -36,10 +36,15 @@ interface ContactResponse {
   transactionCount?: number;
 }
 
+/** Reference to mainWindow for emitting progress events */
+let _mainWindow: BrowserWindow | null = null;
+
 /**
  * Register all contact-related IPC handlers
+ * @param mainWindow - The main browser window for emitting progress events
  */
-export function registerContactHandlers(): void {
+export function registerContactHandlers(mainWindow: BrowserWindow): void {
+  _mainWindow = mainWindow;
   // Get all imported contacts for a user (local database only)
   ipcMain.handle(
     "contacts:get-all",
@@ -405,42 +410,32 @@ export function registerContactHandlers(): void {
           );
         }
 
-        if (contactsToImport.length > 1000) {
+        if (contactsToImport.length > 5000) {
           throw new ValidationError(
-            "Cannot import more than 1000 contacts at once",
+            "Cannot import more than 5000 contacts at once",
             "contactsToImport",
           );
         }
 
         const importedContacts: Contact[] = [];
+        const total = contactsToImport.length;
+
+        // Separate contacts into two groups
+        const existingDbContacts: { id: string; contact: any }[] = [];
+        const newContactsToCreate: any[] = [];
 
         for (const contact of contactsToImport) {
-          // Validate each contact's data (basic validation)
           const sanitizedContact = sanitizeObject(contact) as any;
           const validatedData = validateContactData(sanitizedContact, false);
 
-          // Check if this is a contact already in the database (from iPhone sync)
-          // If so, just mark it as imported instead of creating a new record
           if (
             sanitizedContact.isFromDatabase &&
             sanitizedContact.id &&
             !sanitizedContact.id.startsWith("contacts-app-")
           ) {
-            await databaseService.markContactAsImported(sanitizedContact.id);
-            // Fetch the updated contact to return
-            const updatedContact = await databaseService.getContactById(
-              sanitizedContact.id,
-            );
-            if (updatedContact) {
-              importedContacts.push(updatedContact);
-            }
-            logService.info(
-              `[Main] Marked existing contact as imported: ${sanitizedContact.id}`,
-              "Contacts",
-            );
+            existingDbContacts.push({ id: sanitizedContact.id, contact: sanitizedContact });
           } else {
-            // Create new contact from macOS Contacts app
-            const importedContact = await databaseService.createContact({
+            newContactsToCreate.push({
               user_id: validatedUserId,
               display_name: validatedData.name || "Unknown",
               email: validatedData.email ?? undefined,
@@ -449,8 +444,58 @@ export function registerContactHandlers(): void {
               title: validatedData.title ?? undefined,
               source: sanitizedContact.source || "contacts_app",
               is_imported: true,
+              allPhones: sanitizedContact.allPhones || [],
+              allEmails: sanitizedContact.allEmails || [],
             });
-            importedContacts.push(importedContact);
+          }
+        }
+
+        let processed = 0;
+
+        // Mark existing DB contacts as imported
+        for (const { id } of existingDbContacts) {
+          await databaseService.markContactAsImported(id);
+          const updatedContact = await databaseService.getContactById(id);
+          if (updatedContact) {
+            importedContacts.push(updatedContact);
+          }
+          processed++;
+          if (_mainWindow && !_mainWindow.isDestroyed()) {
+            _mainWindow.webContents.send("contacts:import-progress", {
+              current: processed,
+              total,
+              percent: Math.round((processed / total) * 100),
+            });
+          }
+        }
+
+        // Batch create new contacts (much faster with transaction)
+        if (newContactsToCreate.length > 0) {
+          logService.info(
+            `[Main] Batch importing ${newContactsToCreate.length} new contacts...`,
+            "Contacts"
+          );
+
+          const createdIds = databaseService.createContactsBatch(
+            newContactsToCreate,
+            (current, _batchTotal) => {
+              const overallCurrent = existingDbContacts.length + current;
+              if (_mainWindow && !_mainWindow.isDestroyed()) {
+                _mainWindow.webContents.send("contacts:import-progress", {
+                  current: overallCurrent,
+                  total,
+                  percent: Math.round((overallCurrent / total) * 100),
+                });
+              }
+            }
+          );
+
+          // Fetch created contacts
+          for (const id of createdIds) {
+            const contact = await databaseService.getContactById(id);
+            if (contact) {
+              importedContacts.push(contact);
+            }
           }
         }
 

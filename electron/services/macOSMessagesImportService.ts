@@ -102,11 +102,22 @@ interface RawMacMessage {
 }
 
 /**
+ * Chat member info from chat_handle_join
+ */
+interface ChatMemberRow {
+  chat_id: number;
+  handle_id: string;
+}
+
+/**
  * macOS Messages Import Service
  * Handles importing messages from the macOS Messages app
  */
 class MacOSMessagesImportService {
   private static readonly SERVICE_NAME = "MacOSMessagesImportService";
+
+  /** Flag to prevent concurrent imports */
+  private isImporting = false;
 
   /**
    * Import messages from macOS Messages app
@@ -117,6 +128,38 @@ class MacOSMessagesImportService {
   ): Promise<MacOSImportResult> {
     const startTime = Date.now();
 
+    // Prevent concurrent imports - only one at a time
+    if (this.isImporting) {
+      logService.warn(
+        "Import already in progress, skipping duplicate request",
+        MacOSMessagesImportService.SERVICE_NAME
+      );
+      return {
+        success: false,
+        messagesImported: 0,
+        messagesSkipped: 0,
+        duration: 0,
+        error: "Import already in progress",
+      };
+    }
+
+    this.isImporting = true;
+
+    try {
+      return await this.doImport(userId, onProgress, startTime);
+    } finally {
+      this.isImporting = false;
+    }
+  }
+
+  /**
+   * Internal import implementation
+   */
+  private async doImport(
+    userId: string,
+    onProgress: ImportProgressCallback | undefined,
+    startTime: number
+  ): Promise<MacOSImportResult> {
     // Check platform - macOS only
     if (os.platform() !== "darwin") {
       return {
@@ -155,15 +198,15 @@ class MacOSMessagesImportService {
       );
 
       const db = new sqlite3.Database(messagesDbPath, sqlite3.OPEN_READONLY);
-      const dbAll = promisify(db.all.bind(db)) as (
+      const dbAll = promisify(db.all.bind(db)) as <T>(
         sql: string,
         params?: unknown
-      ) => Promise<RawMacMessage[]>;
+      ) => Promise<T[]>;
       const dbClose = promisify(db.close.bind(db));
 
       try {
         // Query all messages with their handles and chat info
-        const messages = await dbAll(`
+        const messages = await dbAll<RawMacMessage>(`
           SELECT
             message.ROWID as id,
             message.guid,
@@ -182,6 +225,29 @@ class MacOSMessagesImportService {
           ORDER BY message.date ASC
         `);
 
+        // Query actual chat members from chat_handle_join
+        // This gives us the real participant list for group chats
+        const chatMemberRows = await dbAll<ChatMemberRow>(`
+          SELECT
+            chat_handle_join.chat_id,
+            handle.id as handle_id
+          FROM chat_handle_join
+          JOIN handle ON chat_handle_join.handle_id = handle.ROWID
+        `);
+
+        // Build a map of chat_id -> array of member handles
+        const chatMembersMap = new Map<number, string[]>();
+        for (const row of chatMemberRows) {
+          const members = chatMembersMap.get(row.chat_id) || [];
+          members.push(row.handle_id);
+          chatMembersMap.set(row.chat_id, members);
+        }
+
+        logService.info(
+          `Loaded ${chatMembersMap.size} chat member lists`,
+          MacOSMessagesImportService.SERVICE_NAME
+        );
+
         await dbClose();
 
         logService.info(
@@ -190,7 +256,7 @@ class MacOSMessagesImportService {
         );
 
         // Store messages to app database
-        const result = await this.storeMessages(userId, messages, onProgress);
+        const result = await this.storeMessages(userId, messages, chatMembersMap, onProgress);
 
         const duration = Date.now() - startTime;
 
@@ -237,6 +303,7 @@ class MacOSMessagesImportService {
   private async storeMessages(
     userId: string,
     messages: RawMacMessage[],
+    chatMembersMap: Map<number, string[]>,
     onProgress?: ImportProgressCallback
   ): Promise<{ stored: number; skipped: number }> {
     if (messages.length === 0) {
@@ -346,10 +413,15 @@ class MacOSMessagesImportService {
             "unknown"
           );
 
-          // Build participants JSON
+          // Get actual chat members for this chat (for group chats)
+          const chatMembers = msg.chat_id ? chatMembersMap.get(msg.chat_id) : undefined;
+
+          // Build participants JSON with actual chat members
           const participants = JSON.stringify({
             from: msg.is_from_me === 1 ? "me" : sanitizedHandle,
             to: msg.is_from_me === 1 ? [sanitizedHandle] : ["me"],
+            // Include actual chat members for group chats (more than 1 member)
+            ...(chatMembers && chatMembers.length > 1 ? { chat_members: chatMembers } : {}),
           });
 
           // Sanitize message text
