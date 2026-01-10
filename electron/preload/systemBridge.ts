@@ -194,4 +194,12 @@ export const systemBridge = {
    * @returns Diagnostic data
    */
   getDiagnostics: () => ipcRenderer.invoke("system:get-diagnostics"),
+
+  /**
+   * Shows a file in the system file manager (Finder on macOS, Explorer on Windows)
+   * @param filePath - Absolute path to the file to show
+   * @returns Result indicating success or failure
+   */
+  showInFolder: (filePath: string) =>
+    ipcRenderer.invoke("system:show-in-folder", filePath),
 };

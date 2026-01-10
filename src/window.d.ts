@@ -508,6 +508,10 @@ interface MainAPI {
       diagnostics?: string;
       error?: string;
     }>;
+    showInFolder: (filePath: string) => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
   };
   device: {
     /** Lists all currently connected iOS devices */
