@@ -59,7 +59,7 @@ describe("MessageBubble", () => {
       render(<MessageBubble message={message} />);
 
       const bubble = screen.getByTestId("message-bubble");
-      expect(bubble).toHaveClass("justify-start");
+      expect(bubble).toHaveClass("items-start");
     });
 
     it("should have gray background styling", () => {
@@ -79,7 +79,7 @@ describe("MessageBubble", () => {
       render(<MessageBubble message={message} />);
 
       const bubble = screen.getByTestId("message-bubble");
-      expect(bubble).toHaveClass("justify-start");
+      expect(bubble).toHaveClass("items-start");
     });
 
     it("should have gray background when direction is undefined", () => {
@@ -99,7 +99,7 @@ describe("MessageBubble", () => {
       render(<MessageBubble message={message} />);
 
       const bubble = screen.getByTestId("message-bubble");
-      expect(bubble).toHaveClass("justify-end");
+      expect(bubble).toHaveClass("items-end");
     });
 
     it("should have blue background styling", () => {

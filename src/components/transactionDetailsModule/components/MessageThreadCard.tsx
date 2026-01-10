@@ -23,6 +23,8 @@ export interface MessageThreadCardProps {
   phoneNumber: string;
   /** Callback when unlink button is clicked */
   onUnlink?: (threadId: string) => void;
+  /** Map of phone number -> contact name for resolving senders */
+  contactNames?: Record<string, string>;
 }
 
 /**
@@ -38,6 +40,39 @@ function getAvatarInitial(contactName?: string, phoneNumber?: string): string {
 }
 
 /**
+ * Extract sender phone from a message's participants.
+ */
+function getSenderPhone(msg: MessageLike): string | null {
+  if (msg.direction === "outbound") return null; // Outbound = user sent it
+
+  try {
+    if (msg.participants) {
+      const parsed = typeof msg.participants === 'string'
+        ? JSON.parse(msg.participants)
+        : msg.participants;
+      if (parsed.from) return parsed.from;
+    }
+  } catch {
+    // Fall through
+  }
+
+  // Fallback to sender field if available
+  if ("sender" in msg && msg.sender) {
+    return msg.sender;
+  }
+
+  return null;
+}
+
+/**
+ * Normalize phone for lookup (last 10 digits)
+ */
+function normalizePhoneForLookup(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  return digits.length >= 10 ? digits.slice(-10) : digits;
+}
+
+/**
  * MessageThreadCard component for displaying a conversation thread.
  * Shows a header with contact info and a scrollable message list.
  */
@@ -47,6 +82,7 @@ export function MessageThreadCard({
   contactName,
   phoneNumber,
   onUnlink,
+  contactNames = {},
 }: MessageThreadCardProps): React.ReactElement {
   const avatarInitial = getAvatarInitial(contactName, phoneNumber);
 
@@ -105,9 +141,37 @@ export function MessageThreadCard({
         className="p-4 space-y-3 max-h-96 overflow-y-auto"
         data-testid="thread-messages"
       >
-        {messages.map((msg) => (
-          <MessageBubble key={msg.id} message={msg} />
-        ))}
+        {messages.map((msg, index) => {
+          const senderPhone = getSenderPhone(msg);
+          let senderName: string | undefined;
+          let showSender = true;
+
+          if (senderPhone) {
+            // Look up contact name by phone (try original and normalized forms)
+            const normalized = normalizePhoneForLookup(senderPhone);
+            senderName = contactNames[senderPhone] || contactNames[normalized] || senderPhone;
+
+            // Don't show sender if same as previous message
+            if (index > 0) {
+              const prevSenderPhone = getSenderPhone(messages[index - 1]);
+              if (prevSenderPhone) {
+                const prevNormalized = normalizePhoneForLookup(prevSenderPhone);
+                if (normalized === prevNormalized) {
+                  showSender = false;
+                }
+              }
+            }
+          }
+
+          return (
+            <MessageBubble
+              key={msg.id}
+              message={msg}
+              senderName={senderName}
+              showSender={showSender}
+            />
+          );
+        })}
       </div>
     </div>
   );

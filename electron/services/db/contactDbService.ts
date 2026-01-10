@@ -239,6 +239,93 @@ export async function searchContacts(
 }
 
 /**
+ * Look up contact by phone number.
+ * Normalizes the phone number and searches across all contact phones.
+ * Returns the contact with display_name if found.
+ */
+export async function getContactByPhone(
+  phone: string
+): Promise<{ id: string; display_name: string; phone: string } | null> {
+  // Normalize phone to last 10 digits for matching
+  const digits = phone.replace(/\D/g, '');
+  const normalized = digits.length >= 10 ? digits.slice(-10) : digits;
+
+  if (!normalized || normalized.length < 7) {
+    return null;
+  }
+
+  const sql = `
+    SELECT
+      c.id,
+      c.display_name,
+      cp.phone_e164 as phone
+    FROM contacts c
+    JOIN contact_phones cp ON c.id = cp.contact_id
+    WHERE REPLACE(REPLACE(REPLACE(REPLACE(cp.phone_e164, '+', ''), '-', ''), ' ', ''), '(', '') LIKE ?
+    LIMIT 1
+  `;
+
+  // Match on last 10 digits
+  const pattern = `%${normalized}`;
+  const result = dbGet<{ id: string; display_name: string; phone: string }>(sql, [pattern]);
+  return result || null;
+}
+
+/**
+ * Batch lookup contacts by multiple phone numbers.
+ * Returns a map of normalized phone -> contact name.
+ */
+export async function getContactNamesByPhones(
+  phones: string[]
+): Promise<Map<string, string>> {
+  const result = new Map<string, string>();
+
+  if (phones.length === 0) return result;
+
+  // Normalize all phones
+  const normalizedPhones = phones.map(p => {
+    const digits = p.replace(/\D/g, '');
+    return digits.length >= 10 ? digits.slice(-10) : digits;
+  }).filter(p => p.length >= 7);
+
+  if (normalizedPhones.length === 0) return result;
+
+  // Build query with multiple OR conditions
+  const conditions = normalizedPhones.map(() =>
+    "REPLACE(REPLACE(REPLACE(REPLACE(cp.phone_e164, '+', ''), '-', ''), ' ', ''), '(', '') LIKE ?"
+  ).join(' OR ');
+
+  const sql = `
+    SELECT
+      c.display_name,
+      cp.phone_e164 as phone
+    FROM contacts c
+    JOIN contact_phones cp ON c.id = cp.contact_id
+    WHERE ${conditions}
+  `;
+
+  const params = normalizedPhones.map(p => `%${p}`);
+  const rows = dbAll<{ display_name: string; phone: string }>(sql, params);
+
+  // Map results back to original phone format
+  for (const row of rows) {
+    const rowDigits = row.phone.replace(/\D/g, '');
+    const rowNormalized = rowDigits.slice(-10);
+
+    // Find matching input phone
+    for (let i = 0; i < phones.length; i++) {
+      if (normalizedPhones[i] === rowNormalized) {
+        result.set(phones[i], row.display_name);
+      }
+    }
+    // Also store by normalized form
+    result.set(rowNormalized, row.display_name);
+  }
+
+  return result;
+}
+
+/**
  * Update contact information
  */
 export async function updateContact(

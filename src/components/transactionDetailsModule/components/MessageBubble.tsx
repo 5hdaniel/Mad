@@ -9,6 +9,10 @@ import type { Communication } from "../types";
 export interface MessageBubbleProps {
   /** The message to display */
   message: Communication;
+  /** Sender name to display above inbound messages (for group chats) */
+  senderName?: string;
+  /** Whether to show sender name (hide if same as previous message) */
+  showSender?: boolean;
 }
 
 /**
@@ -25,7 +29,7 @@ function formatMessageTime(timestamp: string | Date | undefined): string {
  * MessageBubble component for displaying individual messages.
  * Uses chat-style bubble UI with inbound/outbound distinction.
  */
-export function MessageBubble({ message }: MessageBubbleProps): React.ReactElement {
+export function MessageBubble({ message, senderName, showSender = true }: MessageBubbleProps): React.ReactElement {
   const isOutbound = message.direction === "outbound";
 
   // Use body_text as primary, body_plain as fallback (per SR Engineer guidance)
@@ -38,10 +42,19 @@ export function MessageBubble({ message }: MessageBubbleProps): React.ReactEleme
 
   return (
     <div
-      className={`flex ${isOutbound ? "justify-end" : "justify-start"}`}
+      className={`flex flex-col ${isOutbound ? "items-end" : "items-start"}`}
       data-testid="message-bubble"
       data-direction={message.direction}
     >
+      {/* Show sender name for inbound messages when provided and showSender is true */}
+      {!isOutbound && senderName && showSender && (
+        <span
+          className="text-xs text-gray-500 mb-1 ml-1"
+          data-testid="message-sender"
+        >
+          {senderName}
+        </span>
+      )}
       <div
         className={`max-w-[75%] rounded-2xl px-4 py-2 ${
           isOutbound

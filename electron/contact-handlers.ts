@@ -873,4 +873,38 @@ export function registerContactHandlers(): void {
       }
     },
   );
+
+  // Look up contact names by phone numbers (batch)
+  ipcMain.handle(
+    "contacts:get-names-by-phones",
+    async (
+      _event: IpcMainInvokeEvent,
+      phones: string[],
+    ): Promise<{ success: boolean; names: Record<string, string>; error?: string }> => {
+      try {
+        if (!Array.isArray(phones)) {
+          return { success: false, names: {}, error: "phones must be an array" };
+        }
+
+        const namesMap = await databaseService.getContactNamesByPhones(phones);
+
+        // Convert Map to plain object for IPC
+        const names: Record<string, string> = {};
+        namesMap.forEach((name, phone) => {
+          names[phone] = name;
+        });
+
+        return { success: true, names };
+      } catch (error) {
+        logService.error("Get contact names by phones failed", "Contacts", {
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        return {
+          success: false,
+          names: {},
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
 }
