@@ -70,6 +70,9 @@ export function extractTextFromAttributedBody(
 
 /**
  * Extract text by looking for NSString marker
+ * The NSKeyedArchiver format stores the string length before the actual text.
+ * Format after NSString: [metadata bytes][length byte(s)][actual text]
+ *
  * @param bodyText - The attributedBody as text
  * @returns Extracted text or null
  */
@@ -79,18 +82,48 @@ function extractFromNSString(bodyText: string): string | null {
     return null;
   }
 
-  // Skip NSString and more metadata bytes to get closer to actual text
-  const afterNSString = bodyText.substring(nsStringIndex + 20);
+  // Get everything after NSString
+  const afterNSString = bodyText.substring(nsStringIndex + 8); // 8 = length of "NSString"
 
-  // Find ALL sequences of printable text
-  const allMatches = afterNSString.match(REGEX_PATTERNS.MESSAGE_TEXT_READABLE);
-  if (!allMatches || allMatches.length === 0) {
+  // The text follows some binary metadata. Instead of using a fixed offset,
+  // scan for the first sequence of readable characters that looks like actual text.
+  // The key insight is that the actual message text is usually the LONGEST
+  // continuous sequence of printable characters in the buffer.
+
+  // Find all readable text sequences
+  const readablePattern = /[\x20-\x7E\u00A0-\uFFFF]{3,}/g;
+  const allMatches: string[] = [];
+  let match;
+
+  while ((match = readablePattern.exec(afterNSString)) !== null) {
+    // Skip known metadata strings
+    const text = match[0];
+    if (
+      text.includes("NSAttributedString") ||
+      text.includes("NSMutableString") ||
+      text.includes("NSObject") ||
+      text.includes("NSDictionary") ||
+      text.includes("NSArray") ||
+      text.includes("$class") ||
+      text.includes("$objects") ||
+      text.includes("$archiver") ||
+      text.includes("$version") ||
+      text.includes("$top") ||
+      text.startsWith("NS.")
+    ) {
+      continue;
+    }
+    allMatches.push(text);
+  }
+
+  if (allMatches.length === 0) {
     return null;
   }
 
-  // Find the longest match that contains alphanumeric characters
-  for (const match of allMatches.sort((a, b) => b.length - a.length)) {
-    const cleaned = match
+  // Sort by length (longest first) and find the best candidate
+  // The actual message is typically the longest readable sequence
+  for (const candidate of allMatches.sort((a, b) => b.length - a.length)) {
+    const cleaned = candidate
       .replace(REGEX_PATTERNS.LEADING_SYMBOLS, "")
       .replace(REGEX_PATTERNS.TRAILING_SYMBOLS, "")
       .trim();
