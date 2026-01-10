@@ -525,16 +525,31 @@ export function useAutoRefresh({
 
   /**
    * Get current status message to display
-   * Prioritizes active syncs
+   * Prioritizes syncs with actual progress (percentage) over indeterminate syncs
    */
-  const currentSyncMessage =
-    status.emails.isSyncing
-      ? status.emails.message
-      : status.messages.isSyncing
-        ? status.messages.message
-        : status.contacts.isSyncing
-          ? status.contacts.message
-          : null;
+  const currentSyncMessage = (() => {
+    // First priority: syncs with actual progress updates (more informative)
+    if (status.messages.isSyncing && status.messages.progress !== null) {
+      return status.messages.message;
+    }
+    if (status.contacts.isSyncing && status.contacts.progress !== null) {
+      return status.contacts.message;
+    }
+    if (status.emails.isSyncing && status.emails.progress !== null) {
+      return status.emails.message;
+    }
+    // Second priority: any active sync (indeterminate progress)
+    if (status.messages.isSyncing) {
+      return status.messages.message;
+    }
+    if (status.emails.isSyncing) {
+      return status.emails.message;
+    }
+    if (status.contacts.isSyncing) {
+      return status.contacts.message;
+    }
+    return null;
+  })();
 
   return {
     syncStatus: status,
