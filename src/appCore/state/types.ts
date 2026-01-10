@@ -8,7 +8,7 @@
 import type { Conversation } from "../../hooks/useConversations";
 import type { Subscription } from "../../../electron/types/models";
 import type { PendingOAuthData } from "../../components/Login";
-import type { SyncStatus } from "../../hooks/useSyncStatus";
+import type { SyncStatus } from "../../hooks/useAutoRefresh";
 
 // Application navigation steps
 export type AppStep =

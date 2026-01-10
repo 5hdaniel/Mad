@@ -17,7 +17,7 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import type { SyncStatus } from "../../hooks/useSyncStatus";
+import type { SyncStatus } from "../../hooks/useAutoRefresh";
 
 interface SyncStatusIndicatorProps {
   /** Current sync status for all operations */

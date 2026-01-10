@@ -17,7 +17,7 @@ import type {
   Subscription,
   Conversation,
 } from "./types";
-import type { SyncStatus } from "../../hooks/useSyncStatus";
+import type { SyncStatus } from "../../hooks/useAutoRefresh";
 
 // ============================================
 // TYPE DEFINITIONS FOR FLOW RETURNS

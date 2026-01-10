@@ -8,7 +8,7 @@ import {
   JOYRIDE_STYLES,
   JOYRIDE_LOCALE,
 } from "../config/tourSteps";
-import type { SyncStatus } from "../hooks/useSyncStatus";
+import type { SyncStatus } from "../hooks/useAutoRefresh";
 
 interface DashboardActionProps {
   onAuditNew: () => void;
