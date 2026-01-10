@@ -40,21 +40,16 @@ export function MessageBubble({ message, senderName, showSender = true }: Messag
     ? message.sent_at || message.received_at
     : message.received_at || message.sent_at;
 
+  // Build the timestamp line with optional sender name
+  const timestampDisplay = timestamp ? formatMessageTime(timestamp) : "";
+  const senderDisplay = !isOutbound && senderName && showSender ? senderName : null;
+
   return (
     <div
       className={`flex flex-col ${isOutbound ? "items-end" : "items-start"}`}
       data-testid="message-bubble"
       data-direction={message.direction}
     >
-      {/* Show sender name for inbound messages when provided and showSender is true */}
-      {!isOutbound && senderName && showSender && (
-        <span
-          className="text-xs text-gray-500 mb-1 ml-1"
-          data-testid="message-sender"
-        >
-          {senderName}
-        </span>
-      )}
       <div
         className={`max-w-[75%] rounded-2xl px-4 py-2 ${
           isOutbound
@@ -63,14 +58,20 @@ export function MessageBubble({ message, senderName, showSender = true }: Messag
         }`}
       >
         <p className="text-sm whitespace-pre-wrap break-words">{messageText}</p>
-        {timestamp && (
+        {(timestampDisplay || senderDisplay) && (
           <p
             className={`text-xs mt-1 ${
               isOutbound ? "text-blue-100" : "text-gray-500"
             }`}
             data-testid="message-timestamp"
           >
-            {formatMessageTime(timestamp)}
+            {senderDisplay && (
+              <span data-testid="message-sender" className="font-medium">
+                {senderDisplay}
+                {timestampDisplay && " • "}
+              </span>
+            )}
+            {timestampDisplay}
           </p>
         )}
       </div>

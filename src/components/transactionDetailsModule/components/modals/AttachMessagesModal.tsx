@@ -498,10 +498,13 @@ export function AttachMessagesModal({
                     const dateRange = getThreadDateRange(messages);
 
                     return (
-                      <button
+                      <div
                         key={threadId}
+                        role="button"
+                        tabIndex={0}
                         onClick={() => handleToggleThread(threadId)}
-                        className={`text-left p-4 rounded-lg border-2 transition-all ${
+                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleToggleThread(threadId); } }}
+                        className={`text-left p-4 rounded-lg border-2 transition-all cursor-pointer ${
                           isSelected
                             ? "border-green-500 bg-green-50"
                             : "border-gray-200 bg-white hover:border-green-300 hover:bg-green-50"
@@ -582,7 +585,7 @@ export function AttachMessagesModal({
                             View
                           </button>
                         </div>
-                      </button>
+                      </div>
                     );
                   })}
                 </div>
