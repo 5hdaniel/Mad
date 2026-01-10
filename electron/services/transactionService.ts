@@ -16,6 +16,7 @@ import databaseService from "./databaseService";
 import logService from "./logService";
 import supabaseService from "./supabaseService";
 import { getContactNames } from "./contactsService";
+import { createCommunicationReference } from "./messageMatchingService";
 
 // Hybrid extraction imports
 import { HybridExtractorService } from "./extraction/hybridExtractorService";
@@ -1511,13 +1512,29 @@ class TransactionService {
       throw new Error("Transaction not found");
     }
 
-    // Update each message in the messages table
+    let linkedCount = 0;
+
+    // Update each message and create communication reference
     for (const messageId of messageIds) {
+      // Update messages table
       await databaseService.linkMessageToTransaction(messageId, transactionId);
+
+      // Create communication reference so it shows in getDetails
+      const refId = await createCommunicationReference(
+        messageId,
+        transactionId,
+        transaction.user_id,
+        "manual", // Manual link from UI
+        1.0 // Full confidence for manual links
+      );
+
+      if (refId) {
+        linkedCount++;
+      }
     }
 
     // Update transaction message count
-    const newCount = (transaction.message_count || 0) + messageIds.length;
+    const newCount = (transaction.message_count || 0) + linkedCount;
     await databaseService.updateTransaction(transactionId, {
       message_count: newCount,
     });
@@ -1528,7 +1545,7 @@ class TransactionService {
       {
         messageIds,
         transactionId,
-        linkedCount: messageIds.length,
+        linkedCount,
       },
     );
   }
