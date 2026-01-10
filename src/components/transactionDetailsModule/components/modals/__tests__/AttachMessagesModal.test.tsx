@@ -10,6 +10,7 @@ import { AttachMessagesModal } from "../AttachMessagesModal";
 const mockGetMessageContacts = jest.fn();
 const mockGetMessagesByContact = jest.fn();
 const mockLinkMessages = jest.fn();
+const mockGetAllContacts = jest.fn();
 
 beforeAll(() => {
   // Set up window.api mock
@@ -19,6 +20,9 @@ beforeAll(() => {
         getMessageContacts: mockGetMessageContacts,
         getMessagesByContact: mockGetMessagesByContact,
         linkMessages: mockLinkMessages,
+      },
+      contacts: {
+        getAll: mockGetAllContacts,
       },
     },
     writable: true,
@@ -86,6 +90,10 @@ describe("AttachMessagesModal", () => {
     });
     mockLinkMessages.mockResolvedValue({
       success: true,
+    });
+    mockGetAllContacts.mockResolvedValue({
+      success: true,
+      contacts: [],
     });
   });
 
