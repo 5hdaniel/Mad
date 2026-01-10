@@ -510,6 +510,10 @@ export async function getCommunicationsWithMessages(
       COALESCE(m.received_at, c.received_at) as received_at,
       COALESCE(m.has_attachments, c.has_attachments) as has_attachments,
       COALESCE(m.thread_id, c.email_thread_id) as email_thread_id,
+      -- Thread ID for grouping messages into conversations
+      m.thread_id as thread_id,
+      -- Participants JSON for group chat detection and sender identification
+      m.participants as participants,
       -- TASK-992: Direction from messages table for bubble display
       m.direction as direction,
       -- Legacy columns preserved for backward compatibility
