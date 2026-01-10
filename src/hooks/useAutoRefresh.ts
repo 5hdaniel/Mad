@@ -481,14 +481,10 @@ export function useAutoRefresh({
     await runAutoRefresh(userId, hasEmailConnected);
   }, [userId, hasEmailConnected, runAutoRefresh]);
 
-  // Auto-trigger refresh when entering dashboard
+  // Auto-trigger refresh once per app session when first entering dashboard
   useEffect(() => {
-    // Skip if conditions not met
-    if (!isOnDashboard) {
-      // Reset trigger flag when leaving dashboard
-      hasTriggeredRef.current = false;
-      return;
-    }
+    // Skip if not on dashboard (but don't reset flag - we only want to trigger once per session)
+    if (!isOnDashboard) return;
     if (!userId) return;
     if (!isDatabaseInitialized) return;
     if (isOnboarding) return;
