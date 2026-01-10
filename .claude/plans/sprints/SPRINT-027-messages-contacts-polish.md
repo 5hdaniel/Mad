@@ -9,7 +9,8 @@ Complete the Messages feature by fixing auto-linked message display, finishing m
 **Initial Completion:** 2026-01-09
 **Extended Session:** 2026-01-10 (additional polish work)
 **Final Merge:** feature/contact-first-attach-messages merged to develop (PR #353)
-**Active Branch:** fix/messages-display-issues (post-merge polish)
+**Extended Session Merge:** fix/messages-display-issues merged to develop (PR #363)
+**Completion Date:** 2026-01-10
 
 ### Work Summary
 
@@ -54,6 +55,11 @@ This sprint completed all planned tasks plus significant unplanned polish work t
 | PDF format cleanup | 505c78a | Removed "To:" field, shows "You" for outbound messages |
 | Test updates | 505c78a | Updated MessageThreadCard tests for modal behavior |
 | Group chat participants | 505c78a | Store actual group chat members from chat_handle_join table |
+| PDF thread grouping | 7902bdd | Group text messages by thread/conversation in PDF (not individual messages) |
+| PDF hyperlinks | 7902bdd | Added "View Full →" links in PDF that jump to Full Messages appendix |
+| PDF appendix | 7902bdd | Full Messages appendix with complete conversation transcripts |
+| Test fixes (messages) | 337701a | Updated TransactionMessagesTab tests for thread-based display |
+| Test fixes (attach) | 65af4dc | Added missing contacts.getAll mock for AttachMessagesModal tests |
 
 ---
 
@@ -576,7 +582,7 @@ git worktree list
 ### PDF Export Improvements
 | File | Changes |
 |------|---------|
-| `electron/services/pdfExportService.ts` | Split communications into "Email Threads" and "Text Messages", contact name resolution, format cleanup |
+| `electron/services/pdfExportService.ts` | Split into "Email Threads" and "Text Conversations" sections; group texts by thread/conversation; contact name resolution; "View Full →" hyperlinks; Full Messages appendix with complete conversation transcripts |
 
 ### Other Updates
 | File | Changes |
@@ -593,8 +599,15 @@ git worktree list
 | `src/components/onboarding/steps/PermissionsStep.tsx` | Permissions step updates |
 | `src/components/onboarding/types/context.ts` | Type updates |
 
+### Test Fixes (PR #363 CI)
+| File | Changes |
+|------|---------|
+| `src/components/transactionDetailsModule/components/__tests__/TransactionMessagesTab.test.tsx` | Updated tests for thread card modal behavior (removed inline message bubble expectations) |
+| `src/components/transactionDetailsModule/components/modals/__tests__/AttachMessagesModal.test.tsx` | Added missing `window.api.contacts.getAll` mock |
+
 ### Summary Statistics (2026-01-10)
-- **Files Modified:** 22
+- **Files Modified:** 24
 - **Files Created:** 1 (ConversationViewModal.tsx)
 - **Files Deleted:** 2 (AIStatusCard.tsx, AIStatusCard.test.tsx)
-- **Major Features:** 4 (Sync display, Batch import, Conversation modal, Auto-link emails)
+- **Major Features:** 5 (Sync display, Batch import, Conversation modal, Auto-link emails, PDF hyperlinks/appendix)
+- **Final PR:** #363 (12 commits merged to develop)
