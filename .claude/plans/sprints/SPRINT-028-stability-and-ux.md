@@ -252,4 +252,12 @@ graph TD
 
 | Task | Source | Root Cause | Added Date | Est. Tokens | Actual Tokens |
 |------|--------|------------|------------|-------------|---------------|
-| - | - | - | - | - | - |
+| Message parser fix | User report | Truncated text extraction in parseMessages | 2026-01-10 | ~5K | ~5K |
+| Auto-refresh once per session | User feedback | Auto-refresh firing every dashboard visit | 2026-01-10 | ~3K | ~3K |
+| Settings reorder | UX polish | Coming soon items not grouped at bottom | 2026-01-10 | ~2K | ~2K |
+| Sync status priority fix | Bug | Progress-based status not shown first | 2026-01-10 | ~3K | ~3K |
+| Sync status UI (all 3 types) | Feature | Only showed one sync type at a time | 2026-01-10 | ~8K | ~8K |
+| Compact sync status UI | UX polish | Vertical layout took too much space | 2026-01-10 | ~5K | ~5K |
+| Clickable export file path | UX polish | Users wanted to open export location | 2026-01-10 | ~3K | ~3K |
+
+**Total Unplanned:** ~29K tokens (7 items)
