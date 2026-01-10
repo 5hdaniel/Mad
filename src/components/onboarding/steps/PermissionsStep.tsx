@@ -15,7 +15,7 @@ import type {
   OnboardingStep,
   OnboardingStepContentProps,
 } from "../types";
-import { markOnboardingImportComplete } from "../../../hooks/useSyncStatus";
+import { markOnboardingImportComplete } from "../../../hooks/useAutoRefresh";
 
 /**
  * Shield icon with lock - represents security/permissions

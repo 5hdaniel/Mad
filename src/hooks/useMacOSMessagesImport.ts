@@ -9,7 +9,7 @@
 
 import { useEffect, useRef, useCallback } from "react";
 import { usePlatform } from "../contexts/PlatformContext";
-import { shouldSkipMessagesSync } from "./useSyncStatus";
+import { shouldSkipMessagesSync } from "./useAutoRefresh";
 
 interface UseMacOSMessagesImportOptions {
   /** User ID to associate messages with */

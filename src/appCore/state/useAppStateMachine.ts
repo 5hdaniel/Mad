@@ -27,7 +27,7 @@ import {
   useKeychainHandlers,
 } from "./flows";
 import { useOptionalMachineState } from "./machine/hooks/useOptionalMachineState";
-import { useAutoSync } from "../../hooks/useAutoSync";
+import { useAutoRefresh } from "../../hooks/useAutoRefresh";
 import {
   constructStateProps,
   constructModalTransitions,
@@ -228,9 +228,9 @@ export function useAppStateMachine(): AppStateMachine {
   });
 
   // ============================================
-  // AUTO-SYNC
+  // AUTO-REFRESH (TASK-1003)
   // ============================================
-  const autoSync = useAutoSync({
+  const autoSync = useAutoRefresh({
     userId: currentUser?.id ?? null,
     hasEmailConnected: emailOnboardingApi.hasEmailConnected,
     isDatabaseInitialized: secureStorage.isDatabaseInitialized,
