@@ -222,7 +222,7 @@ export function SyncStatusIndicator({
         ? status.emails.progress
         : null;
 
-  // Render a status pill for each sync type
+  // Render a status pill for each sync type (no spinners, just color)
   const renderPill = (label: string, isSyncing: boolean, isComplete: boolean) => {
     if (isComplete) {
       return (
@@ -236,17 +236,13 @@ export function SyncStatusIndicator({
     }
     if (isSyncing) {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
-          <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-          </svg>
+        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
           {label}
         </span>
       );
     }
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
+      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
         {label}
       </span>
     );
@@ -260,7 +256,8 @@ export function SyncStatusIndicator({
     >
       {/* Status pills row */}
       <div className="flex items-center gap-2 mb-2">
-        <svg className="w-4 h-4 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        {/* Spinning sync icon */}
+        <svg className="w-4 h-4 text-blue-600 animate-spin flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
         </svg>
         <span className="text-xs font-medium text-blue-800">Syncing:</span>
