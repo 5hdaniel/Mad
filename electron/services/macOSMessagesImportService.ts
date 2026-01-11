@@ -900,16 +900,16 @@ class MacOSMessagesImportService {
   private async clearMacOSMessages(userId: string): Promise<void> {
     const db = databaseService.getRawDatabase();
 
-    // Get message IDs to delete (macOS messages have external_id)
-    const messagesToDelete = db
+    // Count messages to delete
+    const countResult = db
       .prepare(
-        `SELECT id FROM messages WHERE user_id = ? AND external_id IS NOT NULL`
+        `SELECT COUNT(*) as count FROM messages WHERE user_id = ? AND external_id IS NOT NULL`
       )
-      .all(userId) as { id: string }[];
+      .get(userId) as { count: number };
 
-    const messageIds = messagesToDelete.map((m) => m.id);
+    const messageCount = countResult?.count || 0;
 
-    if (messageIds.length === 0) {
+    if (messageCount === 0) {
       logService.info(
         `No existing macOS messages to clear`,
         MacOSMessagesImportService.SERVICE_NAME
@@ -918,17 +918,20 @@ class MacOSMessagesImportService {
     }
 
     logService.info(
-      `Clearing ${messageIds.length} existing macOS messages and their attachments`,
+      `Clearing ${messageCount} existing macOS messages and their attachments`,
       MacOSMessagesImportService.SERVICE_NAME
     );
 
-    // Delete in transaction
+    // Delete using subquery to avoid "too many SQL variables" error
+    // This is more efficient than listing all IDs as placeholders
     const clearTransaction = db.transaction(() => {
-      // Delete attachments for these messages
-      const placeholders = messageIds.map(() => "?").join(", ");
-      db.prepare(`DELETE FROM attachments WHERE message_id IN (${placeholders})`).run(
-        ...messageIds
-      );
+      // Delete attachments for macOS messages (using subquery)
+      db.prepare(`
+        DELETE FROM attachments
+        WHERE message_id IN (
+          SELECT id FROM messages WHERE user_id = ? AND external_id IS NOT NULL
+        )
+      `).run(userId);
 
       // Delete messages
       db.prepare(`DELETE FROM messages WHERE user_id = ? AND external_id IS NOT NULL`).run(
@@ -939,7 +942,7 @@ class MacOSMessagesImportService {
     clearTransaction();
 
     logService.info(
-      `Cleared ${messageIds.length} messages`,
+      `Cleared ${messageCount} messages`,
       MacOSMessagesImportService.SERVICE_NAME
     );
   }
