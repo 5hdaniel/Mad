@@ -226,6 +226,11 @@ export async function findTextMessagesByPhones(
         if (Array.isArray(participants.to)) {
           allParticipants.push(...participants.to);
         }
+        // IMPORTANT: For group chats, also check chat_members
+        // This is where all group participants are stored for inbound messages
+        if (Array.isArray(participants.chat_members)) {
+          allParticipants.push(...participants.chat_members);
+        }
 
         for (const participant of allParticipants) {
           const normalizedParticipant = normalizePhone(participant);
