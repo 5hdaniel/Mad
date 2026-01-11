@@ -178,10 +178,14 @@ class MacOSMessagesImportService {
 
   /**
    * Import messages from macOS Messages app
+   * @param userId - User ID
+   * @param onProgress - Progress callback
+   * @param forceReimport - If true, delete existing messages first and re-import all
    */
   async importMessages(
     userId: string,
-    onProgress?: ImportProgressCallback
+    onProgress?: ImportProgressCallback,
+    forceReimport = false
   ): Promise<MacOSImportResult> {
     const startTime = Date.now();
 
@@ -205,7 +209,7 @@ class MacOSMessagesImportService {
     this.isImporting = true;
 
     try {
-      return await this.doImport(userId, onProgress, startTime);
+      return await this.doImport(userId, onProgress, startTime, forceReimport);
     } finally {
       this.isImporting = false;
     }
@@ -217,7 +221,8 @@ class MacOSMessagesImportService {
   private async doImport(
     userId: string,
     onProgress: ImportProgressCallback | undefined,
-    startTime: number
+    startTime: number,
+    forceReimport: boolean
   ): Promise<MacOSImportResult> {
     // Check platform - macOS only
     if (os.platform() !== "darwin") {
@@ -249,6 +254,15 @@ class MacOSMessagesImportService {
     }
 
     try {
+      // If force reimport, delete existing macOS messages first
+      if (forceReimport) {
+        logService.info(
+          `Force reimport: clearing existing macOS messages`,
+          MacOSMessagesImportService.SERVICE_NAME
+        );
+        await this.clearMacOSMessages(userId);
+      }
+
       // Open macOS Messages database
       const messagesDbPath = path.join(
         process.env.HOME!,
@@ -836,6 +850,57 @@ class MacOSMessagesImportService {
     );
 
     return { stored, skipped };
+  }
+
+  /**
+   * Clear all macOS messages for a user (for force reimport)
+   * Deletes attachments first, then messages
+   */
+  private async clearMacOSMessages(userId: string): Promise<void> {
+    const db = databaseService.getRawDatabase();
+
+    // Get message IDs to delete (macOS messages have external_id)
+    const messagesToDelete = db
+      .prepare(
+        `SELECT id FROM messages WHERE user_id = ? AND external_id IS NOT NULL`
+      )
+      .all(userId) as { id: string }[];
+
+    const messageIds = messagesToDelete.map((m) => m.id);
+
+    if (messageIds.length === 0) {
+      logService.info(
+        `No existing macOS messages to clear`,
+        MacOSMessagesImportService.SERVICE_NAME
+      );
+      return;
+    }
+
+    logService.info(
+      `Clearing ${messageIds.length} existing macOS messages and their attachments`,
+      MacOSMessagesImportService.SERVICE_NAME
+    );
+
+    // Delete in transaction
+    const clearTransaction = db.transaction(() => {
+      // Delete attachments for these messages
+      const placeholders = messageIds.map(() => "?").join(", ");
+      db.prepare(`DELETE FROM attachments WHERE message_id IN (${placeholders})`).run(
+        ...messageIds
+      );
+
+      // Delete messages
+      db.prepare(`DELETE FROM messages WHERE user_id = ? AND external_id IS NOT NULL`).run(
+        userId
+      );
+    });
+
+    clearTransaction();
+
+    logService.info(
+      `Cleared ${messageIds.length} messages`,
+      MacOSMessagesImportService.SERVICE_NAME
+    );
   }
 
   /**

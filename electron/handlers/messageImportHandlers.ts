@@ -46,18 +46,20 @@ export function registerMessageImportHandlers(mainWindow: BrowserWindow): void {
    * IPC: messages:import-macos
    *
    * @param userId - The user ID to associate messages with
+   * @param forceReimport - If true, delete existing messages first
    * @returns Import result with counts and status
    */
   ipcMain.handle(
     "messages:import-macos",
     async (
       _event: IpcMainInvokeEvent,
-      userId: string
+      userId: string,
+      forceReimport = false
     ): Promise<MacOSImportResult> => {
       logService.info(
         `Starting macOS Messages import for user`,
         "MessageImportHandlers",
-        { userId }
+        { userId, forceReimport }
       );
 
       // Create progress callback that sends updates to renderer
@@ -70,7 +72,8 @@ export function registerMessageImportHandlers(mainWindow: BrowserWindow): void {
       try {
         const result = await macOSMessagesImportService.importMessages(
           userId,
-          onProgress
+          onProgress,
+          forceReimport
         );
 
         if (result.success) {

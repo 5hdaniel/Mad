@@ -45,7 +45,7 @@ export function MacOSMessagesImportSettings({
     return cleanup;
   }, [isMacOS]);
 
-  const handleImport = useCallback(async () => {
+  const handleImport = useCallback(async (forceReimport = false) => {
     if (!userId || isImporting) return;
 
     setIsImporting(true);
@@ -53,7 +53,13 @@ export function MacOSMessagesImportSettings({
     setLastResult(null);
 
     try {
-      const result = await window.api.messages.importMacOSMessages(userId);
+      // Type assertion: window.d.ts has the correct signature but TS doesn't pick it up
+      // See BACKLOG-199 for investigation
+      const importFn = window.api.messages.importMacOSMessages as (
+        userId: string,
+        forceReimport?: boolean
+      ) => Promise<{ success: boolean; messagesImported: number; error?: string }>;
+      const result = await importFn(userId, forceReimport);
       setLastResult({
         success: result.success,
         messagesImported: result.messagesImported,
@@ -144,13 +150,23 @@ export function MacOSMessagesImportSettings({
         </div>
       )}
 
-      <button
-        onClick={handleImport}
-        disabled={isImporting}
-        className="w-full px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        {isImporting ? "Importing..." : "Import Messages"}
-      </button>
+      <div className="flex gap-2">
+        <button
+          onClick={() => handleImport(false)}
+          disabled={isImporting}
+          className="flex-1 px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isImporting ? "Importing..." : "Import Messages"}
+        </button>
+        <button
+          onClick={() => handleImport(true)}
+          disabled={isImporting}
+          className="px-3 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          title="Delete all existing messages and re-import from scratch"
+        >
+          Force Re-import
+        </button>
+      </div>
     </div>
   );
 }
