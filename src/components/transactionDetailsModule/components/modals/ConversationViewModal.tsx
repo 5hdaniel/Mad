@@ -83,16 +83,40 @@ function formatMessageTime(date: Date): string {
 function sanitizeMessageText(text: string): string {
   if (!text) return "";
 
-  let cleaned = text
-    // Remove leading hex-like patterns followed by optional whitespace/newlines (e.g., "00\n", "0A ")
-    .replace(/^([0-9A-Fa-f]{2}[\s\n\r]*)+/, "")
+  let cleaned = text;
+
+  // Remove leading "00" or similar 2-character hex prefix (common in iMessage attributedBody parsing)
+  // Pattern: "00" directly followed by actual text (uppercase, lowercase, or digit)
+  // Examples: "00Hello" -> "Hello", "006 min away" -> "6 min away", "00AHome!" -> "AHome!"
+  // We use a lookahead to ensure we're removing the prefix, not valid content
+  cleaned = cleaned.replace(/^00(?=[A-Za-z0-9])/, "");
+
+  // Also handle case with whitespace/newline between hex and text
+  cleaned = cleaned.replace(/^[0-9A-Fa-f]{2}[\s\r\n]+/, "");
+
+  // Another pass in case there are multiple hex prefixes
+  cleaned = cleaned.replace(/^00(?=[A-Za-z0-9])/, "");
+
+  // Split into lines and filter out lines that are just hex bytes
+  const lines = cleaned.split(/[\r\n]+/);
+  const filteredLines = lines.filter((line) => {
+    const trimmed = line.trim();
+    if (trimmed.length === 0) return false;
+    // Remove lines that are just 2-4 hex characters
+    if (/^[0-9A-Fa-f]{2,4}$/.test(trimmed)) return false;
+    return true;
+  });
+
+  cleaned = filteredLines
+    .join("\n")
     // Remove iMessage internal attribute names
     .replace(/__kIM\w+/g, "")
     .replace(/kIMMessagePart\w*/g, "")
     .replace(/AttributeName/g, "")
     // Remove control characters
     .replace(/[\x00-\x08\x0B-\x1F\x7F]/g, "")
-    // Remove leading/trailing whitespace and newlines
+    // Remove leading single-character garbage
+    .replace(/^[^a-zA-Z0-9\s]{1,3}/, "")
     .trim();
 
   // If the text is just a single character that looks like garbage, return empty
