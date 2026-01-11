@@ -19,6 +19,36 @@ Use the Task tool to spawn the engineer agent instead.
 
 ---
 
+## Quick Start
+
+**Read this section first to understand what already exists.**
+
+### Current State (As of 2026-01-10)
+
+The codebase already has most of the infrastructure for this feature:
+
+1. **MessageBubble.tsx** (lines 9-16) already has the props:
+   ```tsx
+   export interface MessageBubbleProps {
+     message: Communication;
+     senderName?: string;      // Already exists!
+     showSender?: boolean;     // Already exists!
+   }
+   ```
+
+2. **ConversationViewModal.tsx** (lines 196-332) already:
+   - Detects group chats (`isGroupChat` on line 222)
+   - Extracts sender phone (`getSenderPhone` on lines 45-65)
+   - Resolves contact names (`contactNames` prop)
+   - Tracks consecutive sender grouping (lines 321-331)
+
+3. **What's Missing:**
+   - Thread header shows contact name even for group chats
+   - Header should show group chat name OR participant list
+   - Visual polish for sender name display above bubble
+
+---
+
 ## Goal
 
 Display sender name (or phone number) on each inbound message in group chats so users can identify who sent which message. Also update thread header to show group chat name or participant list.
@@ -30,15 +60,178 @@ Display sender name (or phone number) on each inbound message in group chats so 
 - Do NOT add participant management features
 - Do NOT change message data model/schema
 
+---
+
+## Step-by-Step Implementation Guide
+
+### Step 1: Review Existing Code (5 min)
+
+Read these files to understand current implementation:
+
+```bash
+# MessageBubble - already has senderName/showSender props
+cat src/components/transactionDetailsModule/components/MessageBubble.tsx
+
+# ConversationViewModal - has group chat detection and sender resolution
+cat src/components/transactionDetailsModule/components/modals/ConversationViewModal.tsx
+```
+
+**Key observations:**
+- `MessageBubble` shows sender inside the bubble (line 61-75), not above it
+- `ConversationViewModal` header always shows `contactName || phoneNumber`
+
+### Step 2: Update Thread Header for Group Chats
+
+**File:** `src/components/transactionDetailsModule/components/modals/ConversationViewModal.tsx`
+
+**Location:** Lines 282-292 (header section)
+
+**Current code:**
+```tsx
+<h4 className="text-white font-semibold">
+  {contactName || phoneNumber}
+  {isGroupChat && (
+    <span className="text-green-100 text-xs ml-2">(Group)</span>
+  )}
+</h4>
+```
+
+**Change to:**
+```tsx
+<h4 className="text-white font-semibold">
+  {isGroupChat ? getGroupChatTitle() : (contactName || phoneNumber)}
+</h4>
+```
+
+**Add helper function (around line 220):**
+```tsx
+// Get title for group chat header
+const getGroupChatTitle = (): string => {
+  // If we have a group name (from thread data), use it
+  // Note: Check if thread has groupName property
+
+  // Otherwise, show participant list
+  const participants = Object.entries(contactNames)
+    .map(([phone, name]) => name || phone)
+    .filter(Boolean);
+
+  if (participants.length > 0) {
+    // Show up to 3 names, then "+X more"
+    if (participants.length <= 3) {
+      return participants.join(', ');
+    }
+    return `${participants.slice(0, 3).join(', ')} +${participants.length - 3} more`;
+  }
+
+  return `Group (${uniqueSenders.size} participants)`;
+};
+```
+
+### Step 3: Verify Sender Name Display Position
+
+**File:** `src/components/transactionDetailsModule/components/MessageBubble.tsx`
+
+**Current implementation (lines 61-75):**
+The sender name is currently displayed INSIDE the bubble, after the message text:
+
+```tsx
+{(timestampDisplay || senderDisplay) && (
+  <p className={`text-xs mt-1 ...`}>
+    {senderDisplay && (
+      <span data-testid="message-sender" className="font-medium">
+        {senderDisplay}
+        {timestampDisplay && " • "}
+      </span>
+    )}
+    {timestampDisplay}
+  </p>
+)}
+```
+
+**Option A: Keep as-is (recommended)**
+The current design shows sender + timestamp together at bottom of bubble. This is a valid UX pattern (like Telegram).
+
+**Option B: Move sender above bubble**
+If the requirement is strictly "above the bubble", update the JSX:
+
+```tsx
+return (
+  <div className={`flex flex-col ${isOutbound ? "items-end" : "items-start"}`}>
+    {/* Sender name ABOVE the bubble for inbound group messages */}
+    {senderDisplay && (
+      <span className="text-xs text-gray-500 mb-1 ml-4" data-testid="message-sender">
+        {senderDisplay}
+      </span>
+    )}
+    <div className={`max-w-[75%] rounded-2xl px-4 py-2 ...`}>
+      <p className="text-sm whitespace-pre-wrap break-words">{messageText}</p>
+      {timestampDisplay && (
+        <p className={`text-xs mt-1 ...`}>
+          {timestampDisplay}
+        </p>
+      )}
+    </div>
+  </div>
+);
+```
+
+**Decision:** Discuss with PM if current "inside bubble" design is acceptable.
+
+### Step 4: Test Scenarios
+
+Run manual tests to verify:
+
+1. **Group chat with 3 participants:**
+   - Header shows all 3 names (or participant list)
+   - Each inbound message shows sender name
+   - Consecutive messages from same sender don't repeat name
+
+2. **Group chat with 5+ participants:**
+   - Header shows "Name1, Name2, Name3 +2 more"
+   - Sender resolution works for all
+
+3. **1:1 conversation:**
+   - Header shows contact name (unchanged)
+   - No sender names on messages (1:1 is always same sender)
+
+4. **Unknown sender (no contact):**
+   - Shows phone number instead of name
+
+### Step 5: Update Tests
+
+**File to update:** `src/components/transactionDetailsModule/components/__tests__/MessageBubble.test.tsx`
+
+**New test cases:**
+```tsx
+describe('MessageBubble sender display', () => {
+  it('shows sender name for inbound messages when provided', () => {
+    render(<MessageBubble message={inboundMessage} senderName="John Doe" showSender />);
+    expect(screen.getByTestId('message-sender')).toHaveTextContent('John Doe');
+  });
+
+  it('hides sender name when showSender is false', () => {
+    render(<MessageBubble message={inboundMessage} senderName="John Doe" showSender={false} />);
+    expect(screen.queryByTestId('message-sender')).not.toBeInTheDocument();
+  });
+
+  it('does not show sender name for outbound messages', () => {
+    render(<MessageBubble message={outboundMessage} senderName="John Doe" showSender />);
+    expect(screen.queryByTestId('message-sender')).not.toBeInTheDocument();
+  });
+});
+```
+
+---
+
 ## Deliverables
 
 1. Update: `src/components/transactionDetailsModule/components/modals/ConversationViewModal.tsx` - Thread header logic
-2. Update: `src/components/transactionDetailsModule/components/MessageBubble.tsx` - Add sender name display
-3. Update or Create: `src/components/transactionDetailsModule/components/ThreadListItem.tsx` - Group chat name in list
+2. Verify: `src/components/transactionDetailsModule/components/MessageBubble.tsx` - Sender name display (may already work)
+3. Tests: Update `MessageBubble.test.tsx` with sender scenarios
 
 ## Acceptance Criteria
 
-- [ ] Inbound messages in group chats show sender name above the bubble
+- [ ] Inbound messages in group chats show sender name
 - [ ] Consecutive messages from same sender don't repeat the name
 - [ ] Contact name used when available, falls back to phone number
 - [ ] Outbound messages (from user) don't show sender label
@@ -47,118 +240,15 @@ Display sender name (or phone number) on each inbound message in group chats so 
 - [ ] Works correctly for both group and 1:1 threads (1:1 unchanged)
 - [ ] All CI checks pass
 
-## Implementation Notes
-
-### Message Bubble Updates (MessageBubble.tsx)
-
-```tsx
-interface MessageBubbleProps {
-  message: Message;
-  isOutbound: boolean;
-  isGroupChat: boolean;  // NEW
-  senderName?: string;   // NEW - resolved name or phone
-  showSender: boolean;   // NEW - false if same as previous message
-}
-
-const MessageBubble: React.FC<MessageBubbleProps> = ({
-  message,
-  isOutbound,
-  isGroupChat,
-  senderName,
-  showSender
-}) => {
-  return (
-    <div className={`message-bubble ${isOutbound ? 'outbound' : 'inbound'}`}>
-      {/* Show sender only for inbound group messages when sender changed */}
-      {isGroupChat && !isOutbound && showSender && senderName && (
-        <div className="sender-name text-xs text-gray-500 mb-1">
-          {senderName}
-        </div>
-      )}
-      <div className="bubble-content">
-        {message.body}
-      </div>
-    </div>
-  );
-};
-```
-
-### Sender Resolution Logic
-
-Messages have a `participants` JSON field:
-```json
-{
-  "from": "+15551234567",
-  "to": ["+15559876543", "+15551111111"]
-}
-```
-
-Resolution order:
-1. Look up contact by phone number from `participants.from`
-2. If contact found, use contact name
-3. If not found, display phone number
-
-### Consecutive Message Grouping
-
-```typescript
-function shouldShowSender(
-  currentMessage: Message,
-  previousMessage: Message | null
-): boolean {
-  if (!previousMessage) return true;
-
-  const currentSender = JSON.parse(currentMessage.participants)?.from;
-  const previousSender = JSON.parse(previousMessage.participants)?.from;
-
-  return currentSender !== previousSender;
-}
-```
-
-### Thread Header Logic (ConversationViewModal.tsx)
-
-```tsx
-function getThreadTitle(thread: MessageThread): string {
-  // If group chat has a name, use it
-  if (thread.groupName) {
-    return thread.groupName;
-  }
-
-  // Otherwise, show participant list
-  if (thread.isGroupChat && thread.participants.length > 0) {
-    return thread.participants
-      .map(p => resolveContactName(p) || p)
-      .join(', ');
-  }
-
-  // 1:1 chat - show contact name
-  return thread.contactName || thread.contactIdentifier;
-}
-```
-
-### Data Available
-
-Check how threads are structured. Messages have:
-- `participants` JSON with `from` and `to` fields
-- `is_from_me` boolean to determine outbound
-
-Threads may have:
-- `group_name` or similar field
-- List of participant identifiers
-
-## Integration Notes
-
-- Imports from: Contacts service for name resolution
-- Exports to: ConversationViewModal uses MessageBubble
-- Used by: Message viewing in transaction details
-- Depends on: None (can run in parallel with TASK-1013, TASK-1015)
+---
 
 ## Do / Don't
 
 ### Do:
 - Parse participants JSON safely (handle malformed data)
-- Cache contact lookups to avoid repeated queries
 - Test with both group and 1:1 conversations
 - Handle missing/null sender gracefully
+- Keep changes minimal - infrastructure already exists
 
 ### Don't:
 - Add colors or avatars (future enhancement)
@@ -168,10 +258,12 @@ Threads may have:
 
 ## When to Stop and Ask
 
-- If MessageBubble component doesn't exist or is structured very differently
-- If participants field uses a different format than expected
-- If group chat detection isn't straightforward
-- If contact lookup service is unclear
+- If `contactNames` prop is not being passed correctly
+- If group chat detection logic differs from expected
+- If consecutive sender grouping breaks
+- If the current "inside bubble" design needs to change to "above bubble"
+
+---
 
 ## Testing Expectations (MANDATORY)
 
@@ -179,29 +271,19 @@ Threads may have:
 
 - Required: Yes
 - New tests to write:
-  - Sender name resolution logic
-  - Consecutive message grouping
-  - Thread title generation (group vs 1:1)
+  - Sender name display in MessageBubble
+  - Group chat header title generation
 - Existing tests to update:
-  - MessageBubble component tests (new props)
+  - MessageBubble component tests (verify senderName handling)
 
 ### Coverage
 
 - Coverage impact: Must not decrease
 
-### Integration / Feature Tests
-
-- Required scenarios:
-  - Group chat displays sender names correctly
-  - 1:1 chat unchanged (no sender labels)
-  - Contact names resolve from phone numbers
-
 ### CI Requirements
 
 This task's PR MUST pass:
 - [ ] Unit tests
-- [ ] Integration tests (if applicable)
-- [ ] Coverage checks
 - [ ] Type checking
 - [ ] Lint / format checks
 
@@ -219,9 +301,9 @@ This task's PR MUST pass:
 
 **Category:** `ui`
 
-**Estimated Tokens:** ~20-25K
+**Estimated Tokens:** ~15-20K (reduced - infrastructure exists)
 
-**Token Cap:** 100K (4x upper estimate)
+**Token Cap:** 80K (4x upper estimate)
 
 > If you reach this cap, STOP and report to PM. See `.claude/docs/shared/token-cap-workflow.md`.
 
@@ -229,18 +311,15 @@ This task's PR MUST pass:
 
 | Factor | Assumption | Impact |
 |--------|------------|--------|
-| Files to modify | 2-3 files | +8K |
-| UI complexity | Conditional rendering, name resolution | +8K |
-| Logic complexity | Consecutive grouping, contact lookup | +5K |
-| Test updates | Medium | +4K |
+| Infrastructure | Already exists (senderName, showSender props) | -10K |
+| Header logic | Simple string manipulation | +5K |
+| Visual position | May need adjustment | +5K |
+| Test updates | Moderate | +5K |
 
-**Confidence:** Medium
+**Confidence:** High (most code already exists)
 
 **Risk factors:**
-- Contact lookup service may be complex to integrate
-- Thread structure may differ from expectations
-
-**Similar past tasks:** TASK-992 (message bubble direction, simpler scope)
+- Design decision on sender name position (inside vs above bubble)
 
 ---
 
@@ -261,14 +340,14 @@ Engineer Agent ID: <agent_id from Task tool output>
 
 ```
 Files modified:
-- [ ] MessageBubble.tsx
-- [ ] ConversationViewModal.tsx
-- [ ] ThreadListItem.tsx (if exists)
+- [ ] ConversationViewModal.tsx (header logic)
+- [ ] MessageBubble.tsx (if position change needed)
+- [ ] MessageBubble.test.tsx (new test cases)
 
 Features implemented:
-- [ ] Sender name on inbound group messages
-- [ ] Consecutive message grouping
-- [ ] Thread header with group name/participants
+- [ ] Group chat header shows participants
+- [ ] Sender name displays correctly
+- [ ] Consecutive grouping works
 
 Verification:
 - [ ] npm run type-check passes
@@ -290,7 +369,7 @@ Verification:
 | Cache Read | X |
 | Cache Create | X |
 
-**Variance:** PM Est ~25K vs Actual ~XK (X% over/under)
+**Variance:** PM Est ~20K vs Actual ~XK (X% over/under)
 
 ### Notes
 
@@ -316,7 +395,7 @@ Verification:
 
 | Metric | PM Estimate | Actual | Variance |
 |--------|-------------|--------|----------|
-| **Tokens** | ~25K | ~XK | +/-X% |
+| **Tokens** | ~20K | ~XK | +/-X% |
 | Duration | - | X sec | - |
 
 **Root cause of variance:**

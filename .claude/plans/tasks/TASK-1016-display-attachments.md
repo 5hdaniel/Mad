@@ -1,5 +1,12 @@
 # Task TASK-1016: Display Attachments (Images/GIFs) in Text Messages
 
+**STATUS: DEFERRED TO SPRINT-031**
+
+This task has been deferred from SPRINT-030 because:
+1. TASK-1013 + hotfixes consumed sprint capacity
+2. This is a significant feature (~55K tokens) requiring new services and schema changes
+3. Better to complete Phase 1 (TASK-1014, TASK-1015) thoroughly
+
 ---
 
 ## WORKFLOW REQUIREMENT

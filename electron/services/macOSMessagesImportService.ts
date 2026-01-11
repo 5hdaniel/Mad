@@ -235,6 +235,18 @@ class MacOSMessagesImportService {
   }
 
   /**
+   * Force reset the import lock (for debugging stuck state)
+   */
+  resetImportLock(): void {
+    logService.info(
+      "Manually resetting import lock",
+      MacOSMessagesImportService.SERVICE_NAME
+    );
+    this.isImporting = false;
+    this.importStartedAt = null;
+  }
+
+  /**
    * Internal import implementation
    */
   private async doImport(

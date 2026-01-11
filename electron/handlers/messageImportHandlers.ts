@@ -223,6 +223,15 @@ export function registerMessageImportHandlers(mainWindow: BrowserWindow): void {
     }
   );
 
+  /**
+   * Reset import lock (for debugging stuck state)
+   * IPC: messages:reset-import-lock
+   */
+  ipcMain.handle("messages:reset-import-lock", async (): Promise<void> => {
+    logService.info("Resetting import lock via IPC", "MessageImportHandlers");
+    macOSMessagesImportService.resetImportLock();
+  });
+
   logService.info(
     "Message import handlers registered",
     "MessageImportHandlers"
