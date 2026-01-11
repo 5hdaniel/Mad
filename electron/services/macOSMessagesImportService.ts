@@ -175,6 +175,10 @@ class MacOSMessagesImportService {
 
   /** Flag to prevent concurrent imports */
   private isImporting = false;
+  /** Timestamp when import started (for stuck flag detection) */
+  private importStartedAt: number | null = null;
+  /** Max import duration before auto-reset (10 minutes) */
+  private static readonly MAX_IMPORT_DURATION_MS = 10 * 60 * 1000;
 
   /**
    * Import messages from macOS Messages app
@@ -188,6 +192,19 @@ class MacOSMessagesImportService {
     forceReimport = false
   ): Promise<MacOSImportResult> {
     const startTime = Date.now();
+
+    // Check if import flag is stuck (been true for too long)
+    if (this.isImporting && this.importStartedAt) {
+      const elapsed = Date.now() - this.importStartedAt;
+      if (elapsed > MacOSMessagesImportService.MAX_IMPORT_DURATION_MS) {
+        logService.warn(
+          `Import flag stuck for ${Math.round(elapsed / 1000)}s, auto-resetting`,
+          MacOSMessagesImportService.SERVICE_NAME
+        );
+        this.isImporting = false;
+        this.importStartedAt = null;
+      }
+    }
 
     // Prevent concurrent imports - only one at a time
     if (this.isImporting) {
@@ -207,11 +224,13 @@ class MacOSMessagesImportService {
     }
 
     this.isImporting = true;
+    this.importStartedAt = Date.now();
 
     try {
       return await this.doImport(userId, onProgress, startTime, forceReimport);
     } finally {
       this.isImporting = false;
+      this.importStartedAt = null;
     }
   }
 
