@@ -109,7 +109,13 @@ function extractFromNSString(bodyText: string): string | null {
       text.includes("$archiver") ||
       text.includes("$version") ||
       text.includes("$top") ||
-      text.startsWith("NS.")
+      text.startsWith("NS.") ||
+      // Filter out internal iMessage attribute keys
+      text.includes("__kIM") ||
+      text.includes("kIMMessagePart") ||
+      text.includes("AttributeName") ||
+      // Filter out hex-like patterns (e.g., "00", "0A", etc.)
+      /^[0-9A-Fa-f]{2,4}$/.test(text.trim())
     ) {
       continue;
     }
@@ -167,10 +173,19 @@ function extractFromStreamtyped(bodyText: string): string | null {
  * @returns Cleaned text
  */
 export function cleanExtractedText(text: string): string {
-  return text
+  let cleaned = text
     .replace(REGEX_PATTERNS.NULL_BYTES, "") // Remove null bytes
     .replace(REGEX_PATTERNS.CONTROL_CHARS, "") // Remove control chars
     .trim();
+
+  // Remove leading hex-like patterns (e.g., "00 ", "0A ")
+  cleaned = cleaned.replace(/^([0-9A-Fa-f]{2}\s*)+/, "").trim();
+
+  // Remove iMessage internal attribute names that might have leaked through
+  cleaned = cleaned.replace(/__kIM\w+/g, "").trim();
+  cleaned = cleaned.replace(/kIMMessagePart\w*/g, "").trim();
+
+  return cleaned;
 }
 
 /**
