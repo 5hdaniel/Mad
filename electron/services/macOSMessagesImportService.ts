@@ -441,9 +441,9 @@ class MacOSMessagesImportService {
     const insertMessageStmt = db.prepare(`
       INSERT OR IGNORE INTO messages (
         id, user_id, channel, external_id, direction,
-        body_text, participants, thread_id, sent_at,
+        body_text, participants, participants_flat, thread_id, sent_at,
         has_attachments, metadata, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     `);
 
     // Process in batches
@@ -511,12 +511,31 @@ class MacOSMessagesImportService {
           const chatMembers = msg.chat_id ? chatMembersMap.get(msg.chat_id) : undefined;
 
           // Build participants JSON with actual chat members
-          const participants = JSON.stringify({
+          const participantsObj = {
             from: msg.is_from_me === 1 ? "me" : sanitizedHandle,
             to: msg.is_from_me === 1 ? [sanitizedHandle] : ["me"],
             // Include actual chat members for group chats (more than 1 member)
             ...(chatMembers && chatMembers.length > 1 ? { chat_members: chatMembers } : {}),
-          });
+          };
+          const participants = JSON.stringify(participantsObj);
+
+          // Build participants_flat for fast phone number search
+          // Include from, to, and all chat_members (for group chats)
+          const allParticipantPhones: string[] = [];
+          if (participantsObj.from && participantsObj.from !== "me") {
+            allParticipantPhones.push(participantsObj.from.replace(/\D/g, ""));
+          }
+          for (const toPhone of participantsObj.to) {
+            if (toPhone !== "me") {
+              allParticipantPhones.push(toPhone.replace(/\D/g, ""));
+            }
+          }
+          if (chatMembers) {
+            for (const member of chatMembers) {
+              allParticipantPhones.push(member.replace(/\D/g, ""));
+            }
+          }
+          const participantsFlat = allParticipantPhones.join(",");
 
           // Sanitize message text
           const sanitizedText = sanitizeString(
@@ -545,6 +564,7 @@ class MacOSMessagesImportService {
               direction, // direction
               sanitizedText, // body_text
               participants, // participants JSON
+              participantsFlat, // participants_flat for search
               threadId, // thread_id
               sentAt.toISOString(), // sent_at
               msg.cache_has_attachments > 0 ? 1 : 0, // has_attachments
