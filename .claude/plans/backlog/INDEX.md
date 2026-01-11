@@ -2,9 +2,9 @@
 
 This index tracks all backlog items with their current status and metadata.
 
-**Last Updated:** 2026-01-10 (SPRINT-031 Codebase Health - PLANNED)
-**Total Items:** 179
-**Pending:** 97 | **In Progress:** 0 | **Completed:** 74 | **Partial:** 0 | **Obsolete:** 1 | **Deferred:** 2
+**Last Updated:** 2026-01-11 (BACKLOG-201 - "00" iMessage prefix bug fix)
+**Total Items:** 181
+**Pending:** 99 | **In Progress:** 0 | **Completed:** 75 | **Partial:** 0 | **Obsolete:** 1 | **Deferred:** 2
 
 ---
 
@@ -279,6 +279,8 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-196 | Implement or Remove Settings.tsx TODOs | ui | Low | Pending | - | - | ~20K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-196.md](BACKLOG-196.md) |
 | BACKLOG-197 | Enable Stricter TypeScript Rules | config | Low | Pending | - | - | ~25K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-197.md](BACKLOG-197.md) |
 | BACKLOG-198 | Decompose Large Component Files | refactor | Low | Pending | - | - | ~60K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-198.md](BACKLOG-198.md) |
+| BACKLOG-200 | Contacts import fails with email validation error | service | Medium | Pending | - | - | ~25K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-200.md](BACKLOG-200.md) |
+| BACKLOG-201 | "00" prefix appearing before iMessage text | ui | Medium | Completed | - | - | ~5K | - | ~180K | - | - | - | - | - | - | - | - | - | ~180K | ~3h | +3500% | [BACKLOG-201.md](BACKLOG-201.md) |
 
 ---
 
@@ -750,6 +752,7 @@ Categories with reliable data (2+ complete tasks): `test`, `service` (9 tasks).
 12. **Documentation tasks with iteration can spiral** - SPRINT-015 TASK-914/915 consumed ~100x estimated tokens due to iteration cycles and CI debugging. Self-reported metrics captured only final successful run. Docs category needs 5x buffer for iteration.
 13. **Pattern reference dramatically accelerates service tasks** - SPRINT-015 TASK-917 referenced TASK-909 pattern, completing at -40% variance. Well-specified task files with code examples reduce variance.
 14. **Sequential execution for shared files is mandatory** - SPRINT-015 Phase 3 (TASK-917/918/919) completed efficiently by strict sequential order. No merge conflicts despite all three touching fetch services.
+15. **SQLite integer booleans cause React rendering bugs** - BACKLOG-201: `msg.has_attachments` returns 0/1 from SQLite, not boolean. In JSX, `{0 && <Component/>}` renders "0" as text (React renders numbers but not false/null/undefined). Fix: Always use `!!field` or `Boolean(field)` for SQLite integer fields in JSX conditionals. Investigation took ~3h for a 2-line fix - browser DevTools "Inspect Element" was the breakthrough (revealed "00" as orphan text nodes).
 
 ### PM Estimation Guidelines (Update as patterns emerge)
 
