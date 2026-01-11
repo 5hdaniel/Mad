@@ -77,6 +77,27 @@ function formatMessageTime(date: Date): string {
 }
 
 /**
+ * Sanitize message text for display
+ * Removes iMessage internal attributes that may have leaked into the body text
+ */
+function sanitizeMessageText(text: string): string {
+  if (!text) return "";
+
+  let cleaned = text
+    // Remove leading hex-like patterns (e.g., "00 ", "0A ")
+    .replace(/^([0-9A-Fa-f]{2}\s*)+/, "")
+    // Remove iMessage internal attribute names
+    .replace(/__kIM\w+/g, "")
+    .replace(/kIMMessagePart\w*/g, "")
+    .replace(/AttributeName/g, "")
+    // Remove control characters
+    .replace(/[\x00-\x08\x0B-\x1F\x7F]/g, "")
+    .trim();
+
+  return cleaned;
+}
+
+/**
  * Check if a MIME type is a displayable image
  */
 function isDisplayableImage(mimeType: string | null): boolean {
@@ -245,11 +266,13 @@ export function ConversationViewModal({
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {sortedMessages.map((msg, index) => {
             const isOutbound = msg.direction === "outbound";
-            const msgText =
+            const rawText =
               msg.body_text ||
               msg.body_plain ||
               ("body" in msg ? (msg as { body?: string }).body : "") ||
               "";
+            // Sanitize to remove any iMessage internal attributes that leaked through
+            const msgText = sanitizeMessageText(rawText);
             const msgTime = new Date(msg.sent_at || msg.received_at || 0);
 
             // Get sender info for group chats
