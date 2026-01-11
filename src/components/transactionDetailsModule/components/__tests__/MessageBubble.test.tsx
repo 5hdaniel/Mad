@@ -228,4 +228,60 @@ describe("MessageBubble", () => {
       expect(textElement).toBeInTheDocument();
     });
   });
+
+  describe("sender name display (group chats)", () => {
+    it("should show sender name for inbound messages when provided", () => {
+      const message = createMockMessage({ direction: "inbound" });
+
+      render(<MessageBubble message={message} senderName="John Doe" showSender />);
+
+      expect(screen.getByTestId("message-sender")).toHaveTextContent("John Doe");
+    });
+
+    it("should hide sender name when showSender is false", () => {
+      const message = createMockMessage({ direction: "inbound" });
+
+      render(<MessageBubble message={message} senderName="John Doe" showSender={false} />);
+
+      expect(screen.queryByTestId("message-sender")).not.toBeInTheDocument();
+    });
+
+    it("should not show sender name for outbound messages", () => {
+      const message = createMockMessage({ direction: "outbound" });
+
+      render(<MessageBubble message={message} senderName="John Doe" showSender />);
+
+      expect(screen.queryByTestId("message-sender")).not.toBeInTheDocument();
+    });
+
+    it("should not show sender name when senderName is undefined", () => {
+      const message = createMockMessage({ direction: "inbound" });
+
+      render(<MessageBubble message={message} showSender />);
+
+      expect(screen.queryByTestId("message-sender")).not.toBeInTheDocument();
+    });
+
+    it("should show sender name by default when senderName is provided for inbound", () => {
+      const message = createMockMessage({ direction: "inbound" });
+
+      render(<MessageBubble message={message} senderName="Jane Smith" />);
+
+      expect(screen.getByTestId("message-sender")).toHaveTextContent("Jane Smith");
+    });
+
+    it("should display sender name with timestamp separator", () => {
+      const message = createMockMessage({
+        direction: "inbound",
+        sent_at: "2024-01-16T14:30:00Z",
+      });
+
+      render(<MessageBubble message={message} senderName="Alice" showSender />);
+
+      const timestampElement = screen.getByTestId("message-timestamp");
+      expect(timestampElement).toBeInTheDocument();
+      // Sender should be present
+      expect(screen.getByTestId("message-sender")).toHaveTextContent("Alice");
+    });
+  });
 });

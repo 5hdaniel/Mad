@@ -221,6 +221,56 @@ export function ConversationViewModal({
   });
   const isGroupChat = uniqueSenders.size > 1;
 
+  /**
+   * Get title for group chat header.
+   * Shows participant names (up to 3) with "+X more" for larger groups.
+   */
+  const getGroupChatTitle = (): string => {
+    // Build participant list from contactNames or unique senders
+    const participants: string[] = [];
+
+    // First, try to get names from contactNames prop
+    for (const [phone, name] of Object.entries(contactNames)) {
+      const normalized = normalizePhoneForLookup(phone);
+      if (uniqueSenders.has(normalized)) {
+        participants.push(name || phone);
+      }
+    }
+
+    // Add any senders not in contactNames (show phone number)
+    for (const sender of uniqueSenders) {
+      const hasName = participants.some((p) => {
+        // Check if this sender already has a name in the list
+        return Object.entries(contactNames).some(([phone, name]) => {
+          const normalized = normalizePhoneForLookup(phone);
+          return normalized === sender && (name === p || phone === p);
+        });
+      });
+      if (!hasName) {
+        // Find the original phone format for this sender
+        let originalPhone = sender;
+        for (const msg of messages) {
+          const msgSender = getSenderPhone(msg);
+          if (msgSender && normalizePhoneForLookup(msgSender) === sender) {
+            originalPhone = msgSender;
+            break;
+          }
+        }
+        participants.push(originalPhone);
+      }
+    }
+
+    if (participants.length === 0) {
+      return `Group (${uniqueSenders.size} participants)`;
+    }
+
+    // Show up to 3 names, then "+X more"
+    if (participants.length <= 3) {
+      return participants.join(", ");
+    }
+    return `${participants.slice(0, 3).join(", ")} +${participants.length - 3} more`;
+  };
+
   // Load attachments for messages that have them (TASK-1012)
   const loadAttachments = useCallback(async () => {
     // Get message IDs that have attachments
@@ -281,10 +331,7 @@ export function ConversationViewModal({
           </button>
           <div className="flex-1">
             <h4 className="text-white font-semibold">
-              {contactName || phoneNumber}
-              {isGroupChat && (
-                <span className="text-green-100 text-xs ml-2">(Group)</span>
-              )}
+              {isGroupChat ? getGroupChatTitle() : (contactName || phoneNumber)}
             </h4>
             <p className="text-green-100 text-xs">
               {messages.length} message{messages.length !== 1 ? "s" : ""}
@@ -350,7 +397,10 @@ export function ConversationViewModal({
                   }`}
                 >
                   {showSender && senderName && (
-                    <p className="text-xs font-semibold text-green-600 mb-1">
+                    <p
+                      className="text-xs font-semibold text-green-600 mb-1"
+                      data-testid="group-message-sender"
+                    >
                       {senderName}
                     </p>
                   )}
