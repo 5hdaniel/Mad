@@ -193,6 +193,16 @@ class MacOSMessagesImportService {
   ): Promise<MacOSImportResult> {
     const startTime = Date.now();
 
+    // Force reimport takes priority - reset lock if needed
+    if (forceReimport && this.isImporting) {
+      logService.warn(
+        "Force reimport requested, overriding existing import lock",
+        MacOSMessagesImportService.SERVICE_NAME
+      );
+      this.isImporting = false;
+      this.importStartedAt = null;
+    }
+
     // Check if import flag is stuck (been true for too long)
     if (this.isImporting && this.importStartedAt) {
       const elapsed = Date.now() - this.importStartedAt;
