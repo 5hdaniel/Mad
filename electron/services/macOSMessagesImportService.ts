@@ -459,7 +459,21 @@ class MacOSMessagesImportService {
       const end = Math.min(start + BATCH_SIZE, messages.length);
       const batch = messages.slice(start, end);
 
-      // Use a transaction for each batch
+      // Pre-process: Extract text from attributedBody for all messages in batch
+      // This must be done BEFORE the transaction since getMessageText is async
+      const messageTexts = new Map<string, string>();
+      for (const msg of batch) {
+        if (msg.guid && isValidGuid(msg.guid) && !existingIds.has(msg.guid)) {
+          const text = await getMessageText({
+            text: msg.text,
+            attributedBody: msg.attributedBody,
+            cache_has_attachments: msg.cache_has_attachments,
+          });
+          messageTexts.set(msg.guid, text);
+        }
+      }
+
+      // Use a transaction for each batch (synchronous)
       const insertBatch = db.transaction((msgs: RawMacMessage[]) => {
         for (const msg of msgs) {
           // Validate GUID
@@ -474,12 +488,8 @@ class MacOSMessagesImportService {
             continue;
           }
 
-          // Get message text (handle attributedBody parsing)
-          const messageText = getMessageText({
-            text: msg.text,
-            attributedBody: msg.attributedBody,
-            cache_has_attachments: msg.cache_has_attachments,
-          });
+          // Get pre-computed message text
+          const messageText = messageTexts.get(msg.guid) || "";
 
           // Skip messages with no useful content
           if (!messageText || messageText.startsWith("[")) {
