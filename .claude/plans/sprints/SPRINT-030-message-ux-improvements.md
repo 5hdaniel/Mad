@@ -4,12 +4,11 @@
 
 Fix critical app freeze when adding contacts with extensive message history, improve group chat UX, and address message-related bugs and features.
 
-## Sprint Status: PLANNED
+## Sprint Status: COMPLETE
 
 **Created:** 2026-01-10
+**Completed:** 2026-01-11
 **Target Branch:** develop
-**Estimated Duration:** 2-3 days
-**Total Estimated Tokens:** ~130K (with SR review overhead + buffer)
 
 ---
 
@@ -194,10 +193,11 @@ Before starting sprint work, engineers must:
 
 | Task | Phase | Status | Agent ID | Tokens | Duration | PR |
 |------|-------|--------|----------|--------|----------|-----|
-| TASK-1013 | 1 | Pending | - | - | - | - |
-| TASK-1014 | 1 | Pending | - | - | - | - |
-| TASK-1015 | 1 | Pending | - | - | - | - |
-| TASK-1016 | 2 | Pending | - | - | - | - |
+| TASK-1013 | 1 | COMPLETE | - | - | - | #376 |
+| Hotfixes | - | COMPLETE | - | - | - | #377-381 |
+| TASK-1014 | 1 | COMPLETE | a2545fc | ~18K | ~180s | #382 |
+| TASK-1015 | 1 | COMPLETE | a64f575 | ~12K | ~150s | #383 |
+| TASK-1016 | 2 | DEFERRED | - | - | - | - |
 
 ---
 
@@ -223,11 +223,11 @@ Before starting sprint work, engineers must:
 
 ## End-of-Sprint Validation Checklist
 
-- [ ] All tasks merged to develop
-- [ ] All CI checks passing
-- [ ] All acceptance criteria verified
-- [ ] Testing requirements met
-- [ ] No unresolved conflicts
+- [x] All tasks merged to develop (TASK-1013 #376, TASK-1014 #382, TASK-1015 #383)
+- [x] All CI checks passing
+- [x] All acceptance criteria verified
+- [x] Testing requirements met
+- [x] No unresolved conflicts
 - [ ] Documentation updated (sprint plan, backlog INDEX)
 
 ---
@@ -236,4 +236,50 @@ Before starting sprint work, engineers must:
 
 | Task | Source | Root Cause | Added Date | Est. Tokens | Actual Tokens |
 |------|--------|------------|------------|-------------|---------------|
-| - | - | - | - | - | - |
+| Hotfixes #377-381 | User report | "00" hex prefix in messages, NSKeyedArchiver parsing | 2026-01-10 | - | ~15K |
+
+---
+
+## Completed Work Details
+
+### TASK-1013: Transaction Date Range (PR #376)
+
+**Summary:** Added transaction start/end date fields to prevent app freeze when adding contacts with extensive message history.
+
+**Key Changes:**
+- Added date pickers to "Transaction Details" step
+- Message linking now filters by transaction date range
+- Performance: No longer loads all 1000+ messages for contacts
+
+### Message Display Hotfixes (PRs #377-381)
+
+**Summary:** Fixed "00" hex prefix appearing in message text and group chat linking issues.
+
+**Root Cause:** NSKeyedArchiver length prefix bytes were being extracted as text during attributedBody parsing.
+
+**Key Changes:**
+- Enhanced `sanitizeMessageText()` in ConversationViewModal
+- Fixed root cause in `messageParser.ts` extractFromNSString()
+- Fixed group chat message linking (chat_members array)
+- Documented in `.claude/docs/shared/imessage-attributedbody-parsing.md`
+
+### TASK-1014: Sender Names in Group Chats (PR #382)
+
+**Summary:** Display sender name on each inbound message in group chats.
+
+**Key Changes:**
+- Added `getGroupChatTitle()` helper to show participant names in header (up to 3, then "+X more")
+- Updated header to use group title instead of just "(Group)"
+- Added 6 new tests in MessageBubble.test.tsx
+- Added 7 new tests in ConversationViewModal.test.tsx
+
+### TASK-1015: Lookback Period Persistence (PR #383)
+
+**Summary:** Fixed the scan lookback period setting not persisting when changed.
+
+**Root Cause:** Silent error handling in `supabaseService.getPreferences()` was returning `{}` on ANY error, masking failures and causing preferences to appear lost.
+
+**Key Changes:**
+- Modified `getPreferences()` to throw errors on database failures
+- Changed truthy check to proper type check for lookbackMonths
+- Added 5 new tests for preference merge scenarios
