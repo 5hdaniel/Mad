@@ -4,6 +4,10 @@
 
 Display the sender's name (or phone number) on each message bubble in group chats so users can see who sent which message.
 
+**Additional Requirement (2026-01-10):** For the thread header/title:
+- If the group chat has a name, use the group chat name
+- Otherwise, show all participants of the group chat (e.g., "John, Jane, Bob")
+
 ## Priority
 
 High
@@ -43,6 +47,8 @@ Jane Doe
 - [ ] Use contact name if available, fall back to phone number
 - [ ] Outbound messages (from user) don't need sender label
 - [ ] Different colors/avatars for different senders (nice to have)
+- [ ] Thread header: Use group chat name if available
+- [ ] Thread header: If no group name, show comma-separated list of all participants
 
 ## Technical Approach
 
