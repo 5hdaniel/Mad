@@ -895,10 +895,11 @@ class MacOSMessagesImportService {
 
   /**
    * Clear all macOS messages for a user (for force reimport)
-   * Deletes attachments first, then messages
+   * Deletes in batches to avoid freezing the UI
    */
   private async clearMacOSMessages(userId: string): Promise<void> {
     const db = databaseService.getRawDatabase();
+    const BATCH_SIZE = 10000;
 
     // Count messages to delete
     const countResult = db
@@ -918,31 +919,61 @@ class MacOSMessagesImportService {
     }
 
     logService.info(
-      `Clearing ${messageCount} existing macOS messages and their attachments`,
+      `Clearing ${messageCount} existing macOS messages and their attachments in batches`,
       MacOSMessagesImportService.SERVICE_NAME
     );
 
-    // Delete using subquery to avoid "too many SQL variables" error
-    // This is more efficient than listing all IDs as placeholders
-    const clearTransaction = db.transaction(() => {
-      // Delete attachments for macOS messages (using subquery)
-      db.prepare(`
-        DELETE FROM attachments
-        WHERE message_id IN (
-          SELECT id FROM messages WHERE user_id = ? AND external_id IS NOT NULL
-        )
-      `).run(userId);
+    // Delete attachments first (in batches using LIMIT)
+    let deletedAttachments = 0;
+    const deleteAttachmentsBatch = db.prepare(`
+      DELETE FROM attachments
+      WHERE rowid IN (
+        SELECT a.rowid FROM attachments a
+        INNER JOIN messages m ON a.message_id = m.id
+        WHERE m.user_id = ? AND m.external_id IS NOT NULL
+        LIMIT ?
+      )
+    `);
 
-      // Delete messages
-      db.prepare(`DELETE FROM messages WHERE user_id = ? AND external_id IS NOT NULL`).run(
-        userId
-      );
-    });
-
-    clearTransaction();
+    while (true) {
+      const result = deleteAttachmentsBatch.run(userId, BATCH_SIZE);
+      deletedAttachments += result.changes;
+      if (result.changes < BATCH_SIZE) break;
+      await yieldToEventLoop(); // Let UI breathe
+    }
 
     logService.info(
-      `Cleared ${messageCount} messages`,
+      `Deleted ${deletedAttachments} attachments`,
+      MacOSMessagesImportService.SERVICE_NAME
+    );
+
+    // Delete messages in batches
+    let deletedMessages = 0;
+    const deleteMessagesBatch = db.prepare(`
+      DELETE FROM messages
+      WHERE rowid IN (
+        SELECT rowid FROM messages
+        WHERE user_id = ? AND external_id IS NOT NULL
+        LIMIT ?
+      )
+    `);
+
+    while (true) {
+      const result = deleteMessagesBatch.run(userId, BATCH_SIZE);
+      deletedMessages += result.changes;
+      if (result.changes < BATCH_SIZE) break;
+      await yieldToEventLoop(); // Let UI breathe
+
+      if (deletedMessages % 50000 === 0) {
+        logService.info(
+          `Deleted ${deletedMessages}/${messageCount} messages...`,
+          MacOSMessagesImportService.SERVICE_NAME
+        );
+      }
+    }
+
+    logService.info(
+      `Cleared ${deletedMessages} messages`,
       MacOSMessagesImportService.SERVICE_NAME
     );
   }
