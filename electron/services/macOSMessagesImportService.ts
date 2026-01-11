@@ -895,11 +895,10 @@ class MacOSMessagesImportService {
 
   /**
    * Clear all macOS messages for a user (for force reimport)
-   * Deletes in batches to avoid freezing the UI
+   * Deletes directly - simpler and reliable
    */
   private async clearMacOSMessages(userId: string): Promise<void> {
     const db = databaseService.getRawDatabase();
-    const BATCH_SIZE = 10000;
 
     // Count messages to delete
     const countResult = db
@@ -919,61 +918,32 @@ class MacOSMessagesImportService {
     }
 
     logService.info(
-      `Clearing ${messageCount} existing macOS messages and their attachments in batches`,
+      `Clearing ${messageCount} existing macOS messages and attachments`,
       MacOSMessagesImportService.SERVICE_NAME
     );
 
-    // Delete attachments first (in batches using LIMIT)
-    let deletedAttachments = 0;
-    const deleteAttachmentsBatch = db.prepare(`
+    // Delete attachments first using a simple subquery
+    const attachResult = db.prepare(`
       DELETE FROM attachments
-      WHERE rowid IN (
-        SELECT a.rowid FROM attachments a
-        INNER JOIN messages m ON a.message_id = m.id
-        WHERE m.user_id = ? AND m.external_id IS NOT NULL
-        LIMIT ?
+      WHERE message_id IN (
+        SELECT id FROM messages WHERE user_id = ? AND external_id IS NOT NULL
       )
-    `);
-
-    while (true) {
-      const result = deleteAttachmentsBatch.run(userId, BATCH_SIZE);
-      deletedAttachments += result.changes;
-      if (result.changes < BATCH_SIZE) break;
-      await yieldToEventLoop(); // Let UI breathe
-    }
+    `).run(userId);
 
     logService.info(
-      `Deleted ${deletedAttachments} attachments`,
+      `Deleted ${attachResult.changes} attachments`,
       MacOSMessagesImportService.SERVICE_NAME
     );
 
-    // Delete messages in batches
-    let deletedMessages = 0;
-    const deleteMessagesBatch = db.prepare(`
-      DELETE FROM messages
-      WHERE rowid IN (
-        SELECT rowid FROM messages
-        WHERE user_id = ? AND external_id IS NOT NULL
-        LIMIT ?
-      )
-    `);
+    await yieldToEventLoop();
 
-    while (true) {
-      const result = deleteMessagesBatch.run(userId, BATCH_SIZE);
-      deletedMessages += result.changes;
-      if (result.changes < BATCH_SIZE) break;
-      await yieldToEventLoop(); // Let UI breathe
-
-      if (deletedMessages % 50000 === 0) {
-        logService.info(
-          `Deleted ${deletedMessages}/${messageCount} messages...`,
-          MacOSMessagesImportService.SERVICE_NAME
-        );
-      }
-    }
+    // Delete all macOS messages in one go
+    const msgResult = db.prepare(
+      `DELETE FROM messages WHERE user_id = ? AND external_id IS NOT NULL`
+    ).run(userId);
 
     logService.info(
-      `Cleared ${deletedMessages} messages`,
+      `Cleared ${msgResult.changes} messages`,
       MacOSMessagesImportService.SERVICE_NAME
     );
   }
