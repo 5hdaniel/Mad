@@ -317,10 +317,17 @@ export async function createCommunicationReference(
   }
 
   // Map channel to communication_type
-  const commType =
-    message.communication_type === "sms" || message.communication_type === "imessage"
-      ? message.communication_type
-      : "text";
+  // The messages table uses 'sms' but communications table constraint expects 'text'
+  let commType: string;
+  if (message.communication_type === "sms") {
+    commType = "text"; // Map 'sms' to 'text' for the constraint
+  } else if (message.communication_type === "imessage") {
+    commType = "imessage";
+  } else if (message.communication_type === "email") {
+    commType = "email";
+  } else {
+    commType = "text"; // Default for unknown types
+  }
 
   const sql = `
     INSERT INTO communications (
