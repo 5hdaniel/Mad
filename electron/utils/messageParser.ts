@@ -178,8 +178,8 @@ export function cleanExtractedText(text: string): string {
     .replace(REGEX_PATTERNS.CONTROL_CHARS, "") // Remove control chars
     .trim();
 
-  // Remove leading hex-like patterns (e.g., "00 ", "0A ")
-  cleaned = cleaned.replace(/^([0-9A-Fa-f]{2}\s*)+/, "").trim();
+  // Remove leading hex-like patterns followed by optional whitespace/newlines (e.g., "00\n", "0A ")
+  cleaned = cleaned.replace(/^([0-9A-Fa-f]{2}[\s\n\r]*)+/, "").trim();
 
   // Remove iMessage internal attribute names that might have leaked through
   cleaned = cleaned.replace(/__kIM\w+/g, "").trim();

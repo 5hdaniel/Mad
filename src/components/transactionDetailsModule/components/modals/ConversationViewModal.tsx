@@ -84,15 +84,21 @@ function sanitizeMessageText(text: string): string {
   if (!text) return "";
 
   let cleaned = text
-    // Remove leading hex-like patterns (e.g., "00 ", "0A ")
-    .replace(/^([0-9A-Fa-f]{2}\s*)+/, "")
+    // Remove leading hex-like patterns followed by optional whitespace/newlines (e.g., "00\n", "0A ")
+    .replace(/^([0-9A-Fa-f]{2}[\s\n\r]*)+/, "")
     // Remove iMessage internal attribute names
     .replace(/__kIM\w+/g, "")
     .replace(/kIMMessagePart\w*/g, "")
     .replace(/AttributeName/g, "")
     // Remove control characters
     .replace(/[\x00-\x08\x0B-\x1F\x7F]/g, "")
+    // Remove leading/trailing whitespace and newlines
     .trim();
+
+  // If the text is just a single character that looks like garbage, return empty
+  if (cleaned.length === 1 && !/[a-zA-Z0-9]/.test(cleaned)) {
+    return "";
+  }
 
   return cleaned;
 }
