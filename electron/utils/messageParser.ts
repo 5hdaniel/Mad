@@ -129,10 +129,16 @@ function extractFromNSString(bodyText: string): string | null {
   // Sort by length (longest first) and find the best candidate
   // The actual message is typically the longest readable sequence
   for (const candidate of allMatches.sort((a, b) => b.length - a.length)) {
-    const cleaned = candidate
+    let cleaned = candidate
       .replace(REGEX_PATTERNS.LEADING_SYMBOLS, "")
       .replace(REGEX_PATTERNS.TRAILING_SYMBOLS, "")
       .trim();
+
+    // NSKeyedArchiver often includes length prefix bytes that get decoded as "00", "0A", etc.
+    // These appear at the start of the extracted text. Strip them.
+    // Pattern: 1-2 hex digit pairs at the start, followed by actual text
+    cleaned = cleaned.replace(/^[0-9A-Fa-f]{2}(?=[A-Za-z])/, "").trim();
+    cleaned = cleaned.replace(/^[0-9A-Fa-f]{2}(?=\d\s)/, "").trim(); // Handle "006 min..."
 
     // Accept if it has alphanumeric content and is reasonable length
     if (
