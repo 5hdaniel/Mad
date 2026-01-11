@@ -219,7 +219,11 @@ function Dashboard({
           {/* Start New Audit Card */}
           <button
             onClick={handleStartNewAuditClick}
-            className="group relative bg-white rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 p-8 text-left border-2 border-transparent hover:border-blue-500 transform hover:scale-105"
+            className={`group relative bg-white rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 p-8 text-left border-2 transform hover:scale-105 ${
+              pendingCount > 0
+                ? "border-indigo-500 ring-2 ring-indigo-300 ring-offset-2 hover:border-indigo-600"
+                : "border-transparent hover:border-blue-500"
+            }`}
             data-tour="new-audit-card"
           >
             <div className="absolute top-6 right-6">
@@ -241,9 +245,16 @@ function Dashboard({
             </div>
 
             <div className="pr-24">
-              <h2 className="text-2xl font-bold text-gray-900 mb-3">
-                Start New Audit
-              </h2>
+              <div className="flex items-center gap-2 mb-3">
+                <h2 className="text-2xl font-bold text-gray-900">
+                  Start New Audit
+                </h2>
+                {pendingCount > 0 && (
+                  <span className="inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-sm font-semibold bg-indigo-100 text-indigo-800 animate-pulse">
+                    {pendingCount} new
+                  </span>
+                )}
+              </div>
             </div>
 
             <div className="mt-6 flex items-center gap-2 text-blue-600 font-semibold group-hover:gap-4 transition-all">
