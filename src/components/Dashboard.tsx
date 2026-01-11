@@ -25,6 +25,8 @@ interface DashboardActionProps {
   syncStatus?: SyncStatus;
   isAnySyncing?: boolean;
   currentSyncMessage?: string | null;
+  /** Callback to trigger a manual sync refresh */
+  onTriggerRefresh?: () => void;
   /** Callback when user selects a pending transaction to review */
   onSelectPendingTransaction?: (transaction: Transaction) => void;
 }
@@ -46,6 +48,7 @@ function Dashboard({
   syncStatus,
   isAnySyncing = false,
   currentSyncMessage = null,
+  onTriggerRefresh,
   onSelectPendingTransaction,
 }: DashboardActionProps) {
   // State for the Start New Audit modal
@@ -427,6 +430,8 @@ function Dashboard({
           onViewActiveTransactions={handleViewActiveTransactions}
           onCreateManually={handleCreateManually}
           onClose={handleCloseStartNewAuditModal}
+          onSync={onTriggerRefresh}
+          isSyncing={isAnySyncing}
         />
       )}
     </div>

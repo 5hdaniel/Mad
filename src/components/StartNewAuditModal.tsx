@@ -11,6 +11,10 @@ interface StartNewAuditModalProps {
   onCreateManually: () => void;
   /** Callback to close the modal */
   onClose: () => void;
+  /** Callback to trigger a new sync */
+  onSync?: () => void;
+  /** Whether sync is currently in progress */
+  isSyncing?: boolean;
 }
 
 /**
@@ -30,8 +34,10 @@ function StartNewAuditModal({
   onViewActiveTransactions,
   onCreateManually,
   onClose,
+  onSync,
+  isSyncing = false,
 }: StartNewAuditModalProps): React.ReactElement {
-  const { pendingTransactions, isLoading, error } = usePendingTransactions();
+  const { pendingTransactions, isLoading, error, refetch } = usePendingTransactions();
 
   const formatDate = (dateString: string | Date | null | undefined): string => {
     if (!dateString) return "";
@@ -64,25 +70,59 @@ function StartNewAuditModal({
               Review AI-detected transactions or create one manually
             </p>
           </div>
-          <button
-            onClick={onClose}
-            className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-all"
-            aria-label="Close modal"
-          >
-            <svg
-              className="w-6 h-6"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+          <div className="flex items-center gap-2">
+            {onSync && (
+              <button
+                onClick={() => {
+                  onSync();
+                  // Refetch pending transactions after sync starts
+                  setTimeout(() => refetch(), 1000);
+                }}
+                disabled={isSyncing}
+                className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg transition-all ${
+                  isSyncing
+                    ? "bg-white bg-opacity-20 text-blue-100 cursor-not-allowed"
+                    : "bg-white bg-opacity-10 text-white hover:bg-white hover:bg-opacity-20"
+                }`}
+                aria-label="Sync now"
+              >
+                <svg
+                  className={`w-4 h-4 ${isSyncing ? "animate-spin" : ""}`}
+                  style={isSyncing ? { animationDirection: "reverse" } : undefined}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                  />
+                </svg>
+                {isSyncing ? "Syncing..." : "Sync Now"}
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-all"
+              aria-label="Close modal"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
+              <svg
+                className="w-6 h-6"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+            </button>
+          </div>
         </div>
 
         {/* Content */}

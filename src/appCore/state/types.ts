@@ -179,6 +179,7 @@ export interface AppStateMachine {
   syncStatus?: SyncStatus;
   isAnySyncing: boolean;
   currentSyncMessage: string | null;
+  triggerRefresh: () => Promise<void>;
 
   // ============================================
   // SEMANTIC MODAL TRANSITIONS
