@@ -14,6 +14,7 @@ interface Connections {
 
 interface PreferencesResult {
   success: boolean;
+  error?: string;
   preferences?: {
     export?: {
       defaultFormat?: string;
@@ -92,21 +93,21 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
         if (result.preferences.export?.defaultFormat) {
           setExportFormat(result.preferences.export.defaultFormat);
         }
-        // Load scan lookback preference
-        console.log("[Settings] Loaded preferences:", result.preferences);
-        if (result.preferences.scan?.lookbackMonths) {
-          console.log("[Settings] Setting lookback to:", result.preferences.scan.lookbackMonths);
-          setScanLookbackMonths(result.preferences.scan.lookbackMonths);
+        // Load scan lookback preference - use type check for numbers
+        const loadedLookback = result.preferences.scan?.lookbackMonths;
+        if (typeof loadedLookback === "number" && loadedLookback > 0) {
+          setScanLookbackMonths(loadedLookback);
         }
         // Load auto-sync preference (default is true if not set)
         if (typeof result.preferences.sync?.autoSyncOnLogin === "boolean") {
           setAutoSyncOnLogin(result.preferences.sync.autoSyncOnLogin);
         }
+      } else if (!result.success) {
+        console.error("[Settings] Failed to load preferences:", result.error);
       }
     } catch (error) {
-      // Silently handle preference loading errors - preferences are non-critical
-      // User will just get default values
-      console.debug("Preferences not available, using defaults");
+      // Log preference loading errors for debugging
+      console.error("[Settings] Error loading preferences:", error);
     } finally {
       setLoadingPreferences(false);
     }

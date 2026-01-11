@@ -237,8 +237,9 @@ class TransactionService {
     let lookbackMonths = 9; // Default 9 months
     try {
       const preferences = await supabaseService.getPreferences(userId);
-      if (preferences?.scan?.lookbackMonths) {
-        lookbackMonths = preferences.scan.lookbackMonths;
+      const savedLookback = preferences?.scan?.lookbackMonths;
+      if (typeof savedLookback === "number" && savedLookback > 0) {
+        lookbackMonths = savedLookback;
       }
     } catch {
       // Use default if preferences unavailable
