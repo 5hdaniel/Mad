@@ -71,20 +71,12 @@ function RoleAssignment({
       if (result.success) {
         setContacts(result.contacts || []);
 
-        // If no contacts returned, check if it's a permission issue
+        // If no contacts returned, prompt user to import
         if (!result.contacts || result.contacts.length === 0) {
           setError({
             type: "no_contacts",
-            message: isMacOS
-              ? "No contacts found. Make sure you have Full Disk Access enabled and have imported your emails."
-              : isWindows
-                ? "No contacts found. Make sure you have imported your emails and synced your iPhone messages."
-                : "No contacts found. Make sure you have imported your emails.",
-            action: isMacOS
-              ? "Check permissions in System Settings > Privacy & Security > Full Disk Access"
-              : isWindows
-                ? "Connect your iPhone via USB and create a backup to sync contacts and messages"
-                : "Import your emails",
+            message: "No contacts imported yet. Click 'Select Contact' to import contacts from your address book.",
+            action: "You can import contacts from macOS Contacts or create them manually.",
           });
         }
       } else {
@@ -171,16 +163,18 @@ function RoleAssignment({
                 {error.message}
               </p>
               <p className="text-xs text-yellow-700 mt-1">{error.action}</p>
-              <button
-                onClick={async () => {
-                  if (window.api?.system?.openPrivacyPane) {
-                    await window.api.system.openPrivacyPane("fullDiskAccess");
-                  }
-                }}
-                className="mt-2 text-xs font-medium text-yellow-800 hover:text-yellow-900 underline"
-              >
-                Open System Settings
-              </button>
+              {error.type !== "no_contacts" && (
+                <button
+                  onClick={async () => {
+                    if (window.api?.system?.openPrivacyPane) {
+                      await window.api.system.openPrivacyPane("fullDiskAccess");
+                    }
+                  }}
+                  className="mt-2 text-xs font-medium text-yellow-800 hover:text-yellow-900 underline"
+                >
+                  Open System Settings
+                </button>
+              )}
             </div>
           </div>
         </div>

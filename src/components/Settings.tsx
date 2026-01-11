@@ -93,7 +93,9 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
           setExportFormat(result.preferences.export.defaultFormat);
         }
         // Load scan lookback preference
+        console.log("[Settings] Loaded preferences:", result.preferences);
         if (result.preferences.scan?.lookbackMonths) {
+          console.log("[Settings] Setting lookback to:", result.preferences.scan.lookbackMonths);
           setScanLookbackMonths(result.preferences.scan.lookbackMonths);
         }
         // Load auto-sync preference (default is true if not set)
@@ -137,10 +139,12 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
         },
       });
       if (!result.success) {
-        console.debug("Could not save scan lookback preference");
+        console.error("[Settings] Failed to save scan lookback:", result);
+      } else {
+        console.log("[Settings] Saved scan lookback:", months);
       }
     } catch (error) {
-      console.debug("Could not save scan lookback preference");
+      console.error("[Settings] Error saving scan lookback:", error);
     }
   };
 
