@@ -159,10 +159,10 @@ function getMimeTypeFromFilename(filename: string): string {
 }
 
 /**
- * Generate a content hash for deduplication
+ * Generate a content hash for deduplication (async to avoid blocking)
  */
-function generateContentHash(filePath: string): string {
-  const fileBuffer = fs.readFileSync(filePath);
+async function generateContentHash(filePath: string): Promise<string> {
+  const fileBuffer = await fs.promises.readFile(filePath);
   return crypto.createHash("sha256").update(fileBuffer).digest("hex");
 }
 
@@ -342,7 +342,7 @@ class MacOSMessagesImportService {
         const messageResult = await this.storeMessages(userId, messages, chatMembersMap, onProgress);
 
         // Store attachments (TASK-1012)
-        const attachmentResult = await this.storeAttachments(userId, attachments, messageResult.messageIdMap);
+        const attachmentResult = await this.storeAttachments(userId, attachments, messageResult.messageIdMap, onProgress);
 
         const duration = Date.now() - startTime;
 
@@ -604,11 +604,13 @@ class MacOSMessagesImportService {
   /**
    * Store attachments to the app database and file system (TASK-1012)
    * Copies supported image files to app data directory with deduplication
+   * Uses async operations to avoid blocking the main thread
    */
   private async storeAttachments(
     userId: string,
     attachments: RawMacAttachment[],
-    messageIdMap: Map<string, string>
+    messageIdMap: Map<string, string>,
+    onProgress?: ImportProgressCallback
   ): Promise<{ stored: number; skipped: number }> {
     if (attachments.length === 0) {
       return { stored: 0, skipped: 0 };
@@ -622,9 +624,7 @@ class MacOSMessagesImportService {
 
     // Create attachments directory if it doesn't exist
     const attachmentsDir = path.join(app.getPath("userData"), ATTACHMENTS_DIR);
-    if (!fs.existsSync(attachmentsDir)) {
-      fs.mkdirSync(attachmentsDir, { recursive: true });
-    }
+    await fs.promises.mkdir(attachmentsDir, { recursive: true });
 
     // Load existing attachment hashes for deduplication
     const existingHashes = new Set<string>();
@@ -659,12 +659,17 @@ class MacOSMessagesImportService {
       existingMessageIdMap.set(row.external_id, row.id);
     }
 
+    // Process attachments with progress reporting and event loop yielding
+    const totalAttachments = attachments.length;
+    let processed = 0;
+
     for (const attachment of attachments) {
       try {
         // Skip non-image attachments
         const filename = attachment.transfer_name || attachment.filename;
         if (!isSupportedImageType(filename)) {
           skipped++;
+          processed++;
           continue;
         }
 
@@ -675,6 +680,7 @@ class MacOSMessagesImportService {
             MacOSMessagesImportService.SERVICE_NAME
           );
           skipped++;
+          processed++;
           continue;
         }
 
@@ -687,6 +693,7 @@ class MacOSMessagesImportService {
         if (!internalMessageId) {
           // Message not found - skip this attachment
           skipped++;
+          processed++;
           continue;
         }
 
@@ -697,6 +704,7 @@ class MacOSMessagesImportService {
         let sourcePath = attachment.filename;
         if (!sourcePath) {
           skipped++;
+          processed++;
           continue;
         }
 
@@ -705,18 +713,21 @@ class MacOSMessagesImportService {
           sourcePath = path.join(process.env.HOME!, sourcePath.slice(1));
         }
 
-        // Check if source file exists
-        if (!fs.existsSync(sourcePath)) {
+        // Check if source file exists (async)
+        try {
+          await fs.promises.access(sourcePath, fs.constants.R_OK);
+        } catch {
           logService.debug(
             `Attachment file not found: ${sourcePath}`,
             MacOSMessagesImportService.SERVICE_NAME
           );
           skipped++;
+          processed++;
           continue;
         }
 
-        // Generate content hash for deduplication
-        const contentHash = generateContentHash(sourcePath);
+        // Generate content hash for deduplication (async)
+        const contentHash = await generateContentHash(sourcePath);
 
         // Skip if we already have this content
         if (existingHashes.has(contentHash)) {
@@ -735,13 +746,14 @@ class MacOSMessagesImportService {
             existingPath
           );
           stored++;
+          processed++;
           continue;
         }
 
-        // Copy file to app data directory with hash as filename
+        // Copy file to app data directory with hash as filename (async)
         const ext = path.extname(filename!);
         const destPath = path.join(attachmentsDir, `${contentHash}${ext}`);
-        fs.copyFileSync(sourcePath, destPath);
+        await fs.promises.copyFile(sourcePath, destPath);
 
         // Insert attachment record
         const attachmentId = crypto.randomUUID();
@@ -755,6 +767,7 @@ class MacOSMessagesImportService {
         );
 
         stored++;
+        processed++;
         existingHashes.add(contentHash);
       } catch (error) {
         const errMsg = error instanceof Error ? error.message : "Unknown error";
@@ -764,6 +777,26 @@ class MacOSMessagesImportService {
           { guid: attachment.guid }
         );
         skipped++;
+        processed++;
+      }
+
+      // Report progress every 500 attachments
+      if (processed % 500 === 0) {
+        const percent = Math.round((processed / totalAttachments) * 100);
+        logService.info(
+          `Attachments: ${processed}/${totalAttachments} (${percent}%)`,
+          MacOSMessagesImportService.SERVICE_NAME
+        );
+        onProgress?.({
+          current: processed,
+          total: totalAttachments,
+          percent,
+        });
+      }
+
+      // Yield to event loop every 100 attachments to prevent UI freeze
+      if (processed % 100 === 0) {
+        await yieldToEventLoop();
       }
     }
 

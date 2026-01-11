@@ -152,6 +152,7 @@ interface AutoSyncReturn {
   syncStatus?: SyncStatus;
   isAnySyncing: boolean;
   currentSyncMessage: string | null;
+  triggerRefresh: () => Promise<void>;
 }
 
 // ============================================
@@ -217,6 +218,7 @@ export function constructStateProps(
   | "syncStatus"
   | "isAnySyncing"
   | "currentSyncMessage"
+  | "triggerRefresh"
 > {
   return {
     // Navigation state
@@ -287,6 +289,7 @@ export function constructStateProps(
     syncStatus: autoSync.syncStatus,
     isAnySyncing: autoSync.isAnySyncing,
     currentSyncMessage: autoSync.currentSyncMessage,
+    triggerRefresh: autoSync.triggerRefresh,
   };
 }
 

@@ -153,6 +153,7 @@ export function AppRouter({ app }: AppRouterProps) {
         syncStatus={app.syncStatus}
         isAnySyncing={app.isAnySyncing}
         currentSyncMessage={app.currentSyncMessage}
+        onTriggerRefresh={app.triggerRefresh}
       />
     );
   }
