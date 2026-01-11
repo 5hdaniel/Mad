@@ -710,7 +710,7 @@ describe("AuditTransactionModal", () => {
       expect(saleButton).toHaveClass("bg-indigo-500");
     });
 
-    it("should show step 1 subtitle for review in edit mode", () => {
+    it("should show step 1 subtitle for transaction details in edit mode", () => {
       renderWithProvider(
         <AuditTransactionModal
           userId={mockUserId}
@@ -721,7 +721,7 @@ describe("AuditTransactionModal", () => {
         />,
       );
 
-      expect(screen.getByText(/step 1: review property address/i)).toBeInTheDocument();
+      expect(screen.getByText(/step 1: transaction details/i)).toBeInTheDocument();
     });
 
     it("should call update API instead of create when editing", async () => {
