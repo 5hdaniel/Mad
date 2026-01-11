@@ -3,6 +3,18 @@
 **Priority:** Medium
 **Category:** UX/Onboarding
 **Created:** 2026-01-09
+**Status:** Mostly Complete (2026-01-10)
+
+---
+
+## Recent Updates
+
+**2026-01-10:** Added step indicator ("1 - Terms & Conditions") to match other onboarding steps. The WelcomeTerms component now shows a step number badge consistent with OnboardingShell styling.
+
+Remaining items were already completed in prior work:
+- Single checkbox ✓
+- Consistent card styling ✓
+- Removed decline button ✓
 
 ---
 
@@ -28,11 +40,12 @@ Streamline the terms acceptance to match the visual style and flow of other onbo
 
 ## Acceptance Criteria
 
-- [ ] Terms step matches visual style of other onboarding steps
-- [ ] Single acceptance action (not two separate checkboxes)
-- [ ] Terms and Privacy Policy remain accessible via links
-- [ ] Smooth transition to next step after acceptance
-- [ ] User greeting/personalization preserved
+- [x] Terms step matches visual style of other onboarding steps
+- [x] Single acceptance action (not two separate checkboxes)
+- [x] Terms and Privacy Policy remain accessible via links
+- [x] Smooth transition to next step after acceptance
+- [x] User greeting/personalization preserved
+- [x] Step indicator shown (added 2026-01-10)
 
 ## Technical Notes
 

@@ -46,6 +46,14 @@ function WelcomeTerms({ user, onAccept }: WelcomeTermsProps) {
       <div className="max-w-xl w-full mx-auto">
         {/* Card with responsive gap */}
         <div className="mt-4 sm:mt-6">
+          {/* Step indicator - matches OnboardingShell progress style */}
+          <div className="flex items-center justify-center gap-2 mb-4">
+            <div className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center text-sm font-semibold">
+              1
+            </div>
+            <span className="text-sm text-gray-600">Terms & Conditions</span>
+          </div>
+
           {/* Main card container - matches OnboardingShell styling */}
           <div className="bg-white rounded-2xl shadow-xl p-6">
             {/* Header with icon */}
