@@ -10,6 +10,8 @@ interface AddressVerificationStepProps {
   addressData: AddressData;
   onAddressChange: (value: string) => void;
   onTransactionTypeChange: (type: string) => void;
+  onStartDateChange: (date: string) => void;
+  onEndDateChange: (date: string | undefined) => void;
   showAutocomplete: boolean;
   suggestions: AddressSuggestion[];
   onSelectSuggestion: (suggestion: AddressSuggestion) => void;
@@ -19,6 +21,8 @@ function AddressVerificationStep({
   addressData,
   onAddressChange,
   onTransactionTypeChange,
+  onStartDateChange,
+  onEndDateChange,
   showAutocomplete,
   suggestions,
   onSelectSuggestion,
@@ -96,6 +100,49 @@ function AddressVerificationStep({
         </div>
       </div>
 
+      {/* Transaction Date Range */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-3">
+          Transaction Date Range
+        </label>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              Start Date *
+            </label>
+            <input
+              type="date"
+              value={addressData.started_at}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                onStartDateChange(e.target.value)
+              }
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              required
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              When the transaction started
+            </p>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              End Date (optional)
+            </label>
+            <input
+              type="date"
+              value={addressData.closed_at || ""}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                onEndDateChange(e.target.value || undefined)
+              }
+              min={addressData.started_at}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Leave empty if transaction is ongoing
+            </p>
+          </div>
+        </div>
+      </div>
+
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <div className="flex items-start gap-2">
           <svg
@@ -113,11 +160,12 @@ function AddressVerificationStep({
           </svg>
           <div>
             <p className="text-sm font-medium text-blue-900">
-              Address Verification
+              About Date Range
             </p>
             <p className="text-xs text-blue-700 mt-1">
-              We'll verify the address using Google Places API to ensure
-              accuracy for reports and exports.
+              Messages will be linked to this transaction only if they fall
+              within the specified date range. This prevents linking unrelated
+              older messages.
             </p>
           </div>
         </div>

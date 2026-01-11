@@ -42,6 +42,10 @@ export interface AutoLinkOptions {
   dateBuffer?: number; // Days before/after transaction to include
   /** Include archived/closed transaction messages */
   includeArchived?: boolean;
+  /** Start date for message filtering (ISO8601 string) */
+  startDate?: string;
+  /** End date for message filtering (ISO8601 string, optional) */
+  endDate?: string;
 }
 
 /**
@@ -121,12 +125,14 @@ export async function getTransactionContactPhones(
  * @param userId - The user ID to scope the search
  * @param phoneNumbers - Array of E.164 phone numbers to match
  * @param transactionId - The transaction to check for existing links
+ * @param options - Optional date filtering options
  * @returns Array of matching messages with contact attribution
  */
 export async function findTextMessagesByPhones(
   userId: string,
   phoneNumbers: Array<{ contactId: string; phone: string }>,
-  transactionId: string
+  transactionId: string,
+  options?: { startDate?: string; endDate?: string }
 ): Promise<MessageMatch[]> {
   if (phoneNumbers.length === 0) {
     return [];
@@ -143,6 +149,20 @@ export async function findTextMessagesByPhones(
 
   if (phoneToContact.size === 0) {
     return [];
+  }
+
+  // Build date filter clause if dates are provided
+  let dateFilter = "";
+  const params: (string | null)[] = [userId, transactionId, transactionId];
+
+  if (options?.startDate) {
+    dateFilter += " AND m.sent_at >= ?";
+    params.push(options.startDate);
+  }
+  if (options?.endDate) {
+    dateFilter += " AND m.sent_at <= ?";
+    // Add time component to include the full end date
+    params.push(options.endDate + "T23:59:59.999Z");
   }
 
   // Query all text messages for this user that aren't already linked to this transaction
@@ -165,7 +185,7 @@ export async function findTextMessagesByPhones(
       AND m.id NOT IN (
         SELECT message_id FROM communications
         WHERE transaction_id = ? AND message_id IS NOT NULL
-      )
+      )${dateFilter}
   `;
 
   const messages = dbAll<{
@@ -174,7 +194,7 @@ export async function findTextMessagesByPhones(
     participants_flat: string | null;
     direction: string | null;
     channel: string;
-  }>(sql, [userId, transactionId, transactionId]);
+  }>(sql, params);
 
   const matches: MessageMatch[] = [];
 
@@ -374,12 +394,12 @@ export async function createCommunicationReference(
  * This is the main entry point for the auto-linking feature.
  *
  * @param transactionId - The transaction to link messages to
- * @param options - Optional configuration
+ * @param options - Optional configuration including date range
  * @returns Result with counts of linked/skipped messages
  */
 export async function autoLinkTextsToTransaction(
   transactionId: string,
-  _options?: AutoLinkOptions
+  options?: AutoLinkOptions
 ): Promise<AutoLinkResult> {
   const result: AutoLinkResult = {
     linked: 0,
@@ -388,9 +408,9 @@ export async function autoLinkTextsToTransaction(
   };
 
   try {
-    // 1. Get the transaction to verify it exists and get user_id
-    const txnSql = "SELECT user_id FROM transactions WHERE id = ?";
-    const transaction = dbGet<{ user_id: string }>(txnSql, [transactionId]);
+    // 1. Get the transaction to verify it exists, get user_id and date range
+    const txnSql = "SELECT user_id, started_at, closed_at FROM transactions WHERE id = ?";
+    const transaction = dbGet<{ user_id: string; started_at: string | null; closed_at: string | null }>(txnSql, [transactionId]);
 
     if (!transaction) {
       result.errors.push(`Transaction ${transactionId} not found`);
@@ -398,6 +418,18 @@ export async function autoLinkTextsToTransaction(
     }
 
     const userId = transaction.user_id;
+
+    // Use dates from options if provided, otherwise fall back to transaction dates
+    const startDate = options?.startDate || transaction.started_at || undefined;
+    const endDate = options?.endDate || transaction.closed_at || undefined;
+
+    // Log date range for performance tracking
+    if (startDate || endDate) {
+      logService.info(
+        `Date filter applied for transaction ${transactionId}: ${startDate || "no start"} to ${endDate || "ongoing"}`,
+        "MessageMatchingService"
+      );
+    }
 
     // 2. Get all phone numbers for contacts linked to this transaction
     const contactPhones = await getTransactionContactPhones(transactionId);
@@ -415,11 +447,12 @@ export async function autoLinkTextsToTransaction(
       "MessageMatchingService"
     );
 
-    // 3. Find matching text messages
+    // 3. Find matching text messages with date filtering
     const matches = await findTextMessagesByPhones(
       userId,
       contactPhones,
-      transactionId
+      transactionId,
+      { startDate, endDate }
     );
 
     logService.info(
