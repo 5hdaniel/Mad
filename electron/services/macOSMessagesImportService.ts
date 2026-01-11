@@ -20,12 +20,26 @@ import fs from "fs";
 import sqlite3 from "sqlite3";
 import { promisify } from "util";
 import { app } from "electron";
+import cliProgress from "cli-progress";
 
 import databaseService from "./databaseService";
 import permissionService from "./permissionService";
 import logService from "./logService";
 import { getMessageText } from "../utils/messageParser";
 import { macTimestampToDate } from "../utils/dateUtils";
+
+/**
+ * Create a tqdm-style progress bar for console output
+ */
+function createProgressBar(label: string): cliProgress.SingleBar {
+  return new cliProgress.SingleBar({
+    format: `${label} |{bar}| {percentage}% | {value}/{total} | ETA: {eta}s`,
+    barCompleteChar: "█",
+    barIncompleteChar: "░",
+    hideCursor: true,
+    clearOnComplete: true,
+  }, cliProgress.Presets.shades_classic);
+}
 
 /**
  * Result of importing macOS messages
@@ -44,6 +58,7 @@ export interface MacOSImportResult {
  * Progress callback for import operations
  */
 export type ImportProgressCallback = (progress: {
+  phase: "deleting" | "importing" | "attachments";
   current: number;
   total: number;
   percent: number;
@@ -54,6 +69,7 @@ const MAX_MESSAGE_TEXT_LENGTH = 100000; // 100KB - truncate extremely long messa
 const MAX_HANDLE_LENGTH = 500; // Phone numbers, emails, etc.
 const MAX_GUID_LENGTH = 100; // Message GUID format
 const BATCH_SIZE = 500; // Messages per batch
+const DELETE_BATCH_SIZE = 5000; // Messages per delete batch (larger for efficiency)
 const YIELD_INTERVAL = 2; // Yield every N batches
 
 // Attachment constants (TASK-1012)
@@ -177,6 +193,10 @@ class MacOSMessagesImportService {
   private isImporting = false;
   /** Timestamp when import started (for stuck flag detection) */
   private importStartedAt: number | null = null;
+  /** Flag to signal that current import should be cancelled */
+  private cancelCurrentImport = false;
+  /** Flag to indicate force reimport is in progress (blocks all other imports) */
+  private forceReimportInProgress = false;
   /** Max import duration before auto-reset (10 minutes) */
   private static readonly MAX_IMPORT_DURATION_MS = 10 * 60 * 1000;
 
@@ -193,14 +213,35 @@ class MacOSMessagesImportService {
   ): Promise<MacOSImportResult> {
     const startTime = Date.now();
 
-    // Force reimport takes priority - reset lock if needed
-    if (forceReimport && this.isImporting) {
+    // If force reimport is in progress, block ALL other imports
+    if (this.forceReimportInProgress && !forceReimport) {
       logService.warn(
-        "Force reimport requested, overriding existing import lock",
+        "Force reimport in progress, blocking regular import",
         MacOSMessagesImportService.SERVICE_NAME
       );
+      return {
+        success: false,
+        messagesImported: 0,
+        messagesSkipped: 0,
+        attachmentsImported: 0,
+        attachmentsSkipped: 0,
+        duration: 0,
+        error: "Force reimport in progress",
+      };
+    }
+
+    // Force reimport takes priority - cancel any running import
+    if (forceReimport && this.isImporting) {
+      logService.warn(
+        "Force reimport requested, cancelling current import",
+        MacOSMessagesImportService.SERVICE_NAME
+      );
+      this.cancelCurrentImport = true;
+      // Wait a bit for the current import to notice the cancellation
+      await new Promise((resolve) => setTimeout(resolve, 500));
       this.isImporting = false;
       this.importStartedAt = null;
+      this.cancelCurrentImport = false;
     }
 
     // Check if import flag is stuck (been true for too long)
@@ -235,12 +276,18 @@ class MacOSMessagesImportService {
 
     this.isImporting = true;
     this.importStartedAt = Date.now();
+    if (forceReimport) {
+      this.forceReimportInProgress = true;
+    }
 
     try {
       return await this.doImport(userId, onProgress, startTime, forceReimport);
     } finally {
       this.isImporting = false;
       this.importStartedAt = null;
+      if (forceReimport) {
+        this.forceReimportInProgress = false;
+      }
     }
   }
 
@@ -301,7 +348,7 @@ class MacOSMessagesImportService {
           `Force reimport: clearing existing macOS messages`,
           MacOSMessagesImportService.SERVICE_NAME
         );
-        await this.clearMacOSMessages(userId);
+        await this.clearMacOSMessages(userId, onProgress);
       }
 
       // Open macOS Messages database
@@ -407,6 +454,14 @@ class MacOSMessagesImportService {
           { duration }
         );
 
+        // Send final 100% progress to update UI
+        onProgress?.({
+          phase: "importing",
+          current: messages.length,
+          total: messages.length,
+          percent: 100,
+        });
+
         return {
           success: true,
           messagesImported: messageResult.stored,
@@ -509,7 +564,21 @@ class MacOSMessagesImportService {
       MacOSMessagesImportService.SERVICE_NAME
     );
 
+    // Create progress bar for console output
+    const msgProgressBar = createProgressBar("Messages");
+    msgProgressBar.start(messages.length, 0);
+
     for (let batchNum = 0; batchNum < totalBatches; batchNum++) {
+      // Check for cancellation at start of each batch
+      if (this.cancelCurrentImport) {
+        msgProgressBar.stop();
+        logService.warn(
+          `Import cancelled at batch ${batchNum}/${totalBatches}`,
+          MacOSMessagesImportService.SERVICE_NAME
+        );
+        break;
+      }
+
       const start = batchNum * BATCH_SIZE;
       const end = Math.min(start + BATCH_SIZE, messages.length);
       const batch = messages.slice(start, end);
@@ -662,8 +731,12 @@ class MacOSMessagesImportService {
       // Execute batch
       insertBatch(batch);
 
-      // Report progress
+      // Update progress bar
+      msgProgressBar.update(end);
+
+      // Report progress to UI
       onProgress?.({
+        phase: "importing",
         current: end,
         total: messages.length,
         percent: Math.round((end / messages.length) * 100),
@@ -673,15 +746,10 @@ class MacOSMessagesImportService {
       if ((batchNum + 1) % YIELD_INTERVAL === 0) {
         await yieldToEventLoop();
       }
-
-      // Log progress every 10 batches
-      if ((batchNum + 1) % 10 === 0) {
-        logService.info(
-          `Progress: ${end}/${messages.length} messages (${Math.round((end / messages.length) * 100)}%)`,
-          MacOSMessagesImportService.SERVICE_NAME
-        );
-      }
     }
+
+    // Stop progress bar
+    msgProgressBar.stop();
 
     return { stored, skipped, messageIdMap };
   }
@@ -728,6 +796,10 @@ class MacOSMessagesImportService {
       MacOSMessagesImportService.SERVICE_NAME
     );
 
+    // Create progress bar for attachments
+    const attachProgressBar = createProgressBar("Attachments");
+    attachProgressBar.start(attachments.length, 0);
+
     // Prepare insert statement
     const insertAttachmentStmt = db.prepare(`
       INSERT OR IGNORE INTO attachments (
@@ -749,6 +821,16 @@ class MacOSMessagesImportService {
     let processed = 0;
 
     for (const attachment of attachments) {
+      // Check for cancellation
+      if (this.cancelCurrentImport) {
+        attachProgressBar.stop();
+        logService.warn(
+          `Attachment import cancelled at ${processed}/${totalAttachments}`,
+          MacOSMessagesImportService.SERVICE_NAME
+        );
+        break;
+      }
+
       try {
         // Skip non-image attachments
         const filename = attachment.transfer_name || attachment.filename;
@@ -855,24 +937,28 @@ class MacOSMessagesImportService {
         processed++;
         existingHashes.add(contentHash);
       } catch (error) {
+        // Silently skip FOREIGN KEY errors (expected for messages that were skipped)
+        // Only log other errors
         const errMsg = error instanceof Error ? error.message : "Unknown error";
-        logService.warn(
-          `Failed to import attachment: ${errMsg}`,
-          MacOSMessagesImportService.SERVICE_NAME,
-          { guid: attachment.guid }
-        );
+        if (!errMsg.includes("FOREIGN KEY")) {
+          logService.warn(
+            `Failed to import attachment: ${errMsg}`,
+            MacOSMessagesImportService.SERVICE_NAME,
+            { guid: attachment.guid }
+          );
+        }
         skipped++;
         processed++;
       }
 
-      // Report progress every 500 attachments
+      // Update progress bar
+      attachProgressBar.update(processed);
+
+      // Report progress to UI every 500 attachments
       if (processed % 500 === 0) {
         const percent = Math.round((processed / totalAttachments) * 100);
-        logService.info(
-          `Attachments: ${processed}/${totalAttachments} (${percent}%)`,
-          MacOSMessagesImportService.SERVICE_NAME
-        );
         onProgress?.({
+          phase: "attachments",
           current: processed,
           total: totalAttachments,
           percent,
@@ -885,6 +971,9 @@ class MacOSMessagesImportService {
       }
     }
 
+    // Stop progress bar
+    attachProgressBar.stop();
+
     logService.info(
       `Attachments: ${stored} imported, ${skipped} skipped`,
       MacOSMessagesImportService.SERVICE_NAME
@@ -895,9 +984,12 @@ class MacOSMessagesImportService {
 
   /**
    * Clear all macOS messages for a user (for force reimport)
-   * Deletes directly - simpler and reliable
+   * Uses batched deletes with progress reporting to keep UI responsive
    */
-  private async clearMacOSMessages(userId: string): Promise<void> {
+  private async clearMacOSMessages(
+    userId: string,
+    onProgress?: ImportProgressCallback
+  ): Promise<void> {
     const db = databaseService.getRawDatabase();
 
     // Count messages to delete
@@ -922,13 +1014,25 @@ class MacOSMessagesImportService {
       MacOSMessagesImportService.SERVICE_NAME
     );
 
-    // Delete attachments first using a simple subquery
-    const attachResult = db.prepare(`
+    // Report initial progress
+    onProgress?.({
+      phase: "deleting",
+      current: 0,
+      total: messageCount,
+      percent: 0,
+    });
+
+    // Delete attachments first (in one go - usually much fewer than messages)
+    const attachResult = db
+      .prepare(
+        `
       DELETE FROM attachments
       WHERE message_id IN (
         SELECT id FROM messages WHERE user_id = ? AND external_id IS NOT NULL
       )
-    `).run(userId);
+    `
+      )
+      .run(userId);
 
     logService.info(
       `Deleted ${attachResult.changes} attachments`,
@@ -937,13 +1041,49 @@ class MacOSMessagesImportService {
 
     await yieldToEventLoop();
 
-    // Delete all macOS messages in one go
-    const msgResult = db.prepare(
-      `DELETE FROM messages WHERE user_id = ? AND external_id IS NOT NULL`
-    ).run(userId);
+    // Create progress bar for delete
+    const deleteProgressBar = createProgressBar("Deleting");
+    deleteProgressBar.start(messageCount, 0);
+
+    // Delete messages in batches to keep UI responsive
+    let totalDeleted = 0;
+    const deleteStmt = db.prepare(`
+      DELETE FROM messages
+      WHERE id IN (
+        SELECT id FROM messages
+        WHERE user_id = ? AND external_id IS NOT NULL
+        LIMIT ?
+      )
+    `);
+
+    while (totalDeleted < messageCount) {
+      const result = deleteStmt.run(userId, DELETE_BATCH_SIZE);
+      totalDeleted += result.changes;
+
+      // Update progress bar
+      deleteProgressBar.update(totalDeleted);
+
+      // Report progress to UI
+      const percent = Math.round((totalDeleted / messageCount) * 100);
+      onProgress?.({
+        phase: "deleting",
+        current: totalDeleted,
+        total: messageCount,
+        percent,
+      });
+
+      // Yield to event loop
+      await yieldToEventLoop();
+
+      // If no rows were deleted, we're done
+      if (result.changes === 0) break;
+    }
+
+    // Stop progress bar
+    deleteProgressBar.stop();
 
     logService.info(
-      `Cleared ${msgResult.changes} messages`,
+      `Cleared ${totalDeleted} messages`,
       MacOSMessagesImportService.SERVICE_NAME
     );
   }

@@ -133,7 +133,7 @@ class DatabaseService implements IDatabaseService {
 
       await this.runMigrations();
 
-      await logService.info("Database initialized successfully with encryption", "DatabaseService");
+      await logService.debug("Database initialized successfully with encryption", "DatabaseService");
       return true;
     } catch (error) {
       await logService.error("Failed to initialize database", "DatabaseService", {

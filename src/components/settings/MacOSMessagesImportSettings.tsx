@@ -24,6 +24,7 @@ export function MacOSMessagesImportSettings({
   const { isMacOS } = usePlatform();
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState<{
+    phase: "deleting" | "importing" | "attachments";
     current: number;
     total: number;
     percent: number;
@@ -113,19 +114,47 @@ export function MacOSMessagesImportSettings({
       {isImporting && importProgress && (
         <div className="mb-3">
           <div className="flex justify-between text-xs text-gray-600 mb-1">
-            <span>Importing messages...</span>
+            <span>
+              {importProgress.phase === "deleting"
+                ? "Clearing existing messages..."
+                : importProgress.phase === "attachments"
+                ? "Processing attachments..."
+                : "Importing messages..."}
+            </span>
             <span>{importProgress.percent}%</span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-2">
             <div
-              className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+              className={`h-2 rounded-full transition-all duration-300 ${
+                importProgress.phase === "deleting"
+                  ? "bg-orange-500"
+                  : importProgress.phase === "attachments"
+                  ? "bg-green-500"
+                  : "bg-blue-500"
+              }`}
               style={{ width: `${importProgress.percent}%` }}
             />
           </div>
           <p className="text-xs text-gray-500 mt-1">
             {importProgress.current.toLocaleString()} /{" "}
-            {importProgress.total.toLocaleString()} messages
+            {importProgress.total.toLocaleString()}{" "}
+            {importProgress.phase === "deleting"
+              ? "deleted"
+              : importProgress.phase === "attachments"
+              ? "attachments"
+              : "messages"}
           </p>
+        </div>
+      )}
+      {/* Show "preparing" state when importing but no progress yet */}
+      {isImporting && !importProgress && (
+        <div className="mb-3">
+          <div className="flex justify-between text-xs text-gray-600 mb-1">
+            <span>Preparing...</span>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-2">
+            <div className="bg-gray-400 h-2 rounded-full w-full animate-pulse" />
+          </div>
         </div>
       )}
 

@@ -1129,7 +1129,7 @@ export interface WindowApi {
     /** Get count of messages available for import from macOS Messages */
     getImportCount: () => Promise<{ success: boolean; count?: number; error?: string }>;
     /** Listen for import progress updates */
-    onImportProgress: (callback: (progress: { current: number; total: number; percent: number }) => void) => () => void;
+    onImportProgress: (callback: (progress: { phase: "deleting" | "importing" | "attachments"; current: number; total: number; percent: number }) => void) => () => void;
     /** Get attachments for a message with base64 data (TASK-1012) */
     getMessageAttachments: (messageId: string) => Promise<MessageAttachmentInfo[]>;
     /** Get attachments for multiple messages at once (TASK-1012) */

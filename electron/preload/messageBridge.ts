@@ -9,6 +9,7 @@ import { ipcRenderer } from "electron";
  * Progress event from macOS message import
  */
 export interface ImportProgress {
+  phase: "deleting" | "importing" | "attachments";
   current: number;
   total: number;
   percent: number;

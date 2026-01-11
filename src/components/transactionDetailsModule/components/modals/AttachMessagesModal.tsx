@@ -68,6 +68,7 @@ function formatDate(dateStr: string): string {
   });
 }
 
+
 /**
  * Get thread date range from messages
  */

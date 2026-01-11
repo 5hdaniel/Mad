@@ -149,7 +149,7 @@ class AuditService {
     // Start periodic sync
     this.startSyncInterval();
 
-    logService.info("Audit service initialized", "AuditService");
+    logService.debug("Audit service initialized", "AuditService");
   }
 
   /**

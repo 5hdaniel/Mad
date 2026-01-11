@@ -2267,3 +2267,78 @@
   "started_at": "2026-01-11T05:07:44.448Z",
   "ended_at": "2026-01-11T05:10:05.016Z"
 }
+{
+  "timestamp": "2026-01-11T20:11:09Z",
+  "session_id": "beeeb2ec-db33-4b10-bf19-55c767a388d8",
+  "agent_id": "abbb721",
+  "input_tokens": 3,
+  "output_tokens": 2,
+  "cache_read": 0,
+  "cache_create": 7744,
+  "billable_tokens": 7746,
+  "total_tokens": 7749,
+  "api_calls": 1,
+  "duration_secs": 2,
+  "started_at": "2026-01-11T20:11:07.064Z",
+  "ended_at": "2026-01-11T20:11:09.506Z"
+}
+{
+  "timestamp": "2026-01-11T20:11:10Z",
+  "session_id": "beeeb2ec-db33-4b10-bf19-55c767a388d8",
+  "agent_id": "a44adbe",
+  "input_tokens": 3,
+  "output_tokens": 1,
+  "cache_read": 0,
+  "cache_create": 14234,
+  "billable_tokens": 14235,
+  "total_tokens": 14238,
+  "api_calls": 1,
+  "duration_secs": 3,
+  "started_at": "2026-01-11T20:11:07.041Z",
+  "ended_at": "2026-01-11T20:11:10.708Z"
+}
+{
+  "timestamp": "2026-01-11T20:11:14Z",
+  "session_id": "beeeb2ec-db33-4b10-bf19-55c767a388d8",
+  "agent_id": "aee74d7",
+  "input_tokens": 10,
+  "output_tokens": 222,
+  "cache_read": 14351,
+  "cache_create": 43326,
+  "billable_tokens": 43548,
+  "total_tokens": 57909,
+  "api_calls": 4,
+  "duration_secs": 7,
+  "started_at": "2026-01-11T20:11:07.064Z",
+  "ended_at": "2026-01-11T20:11:14.706Z"
+}
+{
+  "timestamp": "2026-01-11T20:30:27Z",
+  "session_id": "4b8a6739-7adf-479e-8afe-591dfbee5330",
+  "agent_id": "a2170cb",
+  "input_tokens": 5984,
+  "output_tokens": 461,
+  "cache_read": 646255,
+  "cache_create": 173669,
+  "billable_tokens": 174130,
+  "total_tokens": 826369,
+  "api_calls": 23,
+  "duration_secs": 68,
+  "started_at": "2026-01-11T20:29:19.599Z",
+  "ended_at": "2026-01-11T20:30:27.863Z"
+}
+{
+  "timestamp": "2026-01-11T20:33:02Z",
+  "session_id": "4b8a6739-7adf-479e-8afe-591dfbee5330",
+  "agent_id": "a94f23f",
+  "input_tokens": 44,
+  "output_tokens": 3537,
+  "cache_read": 1147890,
+  "cache_create": 86553,
+  "billable_tokens": 90090,
+  "total_tokens": 1238024,
+  "api_calls": 36,
+  "duration_secs": 138,
+  "started_at": "2026-01-11T20:30:44.681Z",
+  "ended_at": "2026-01-11T20:33:02.015Z"
+}

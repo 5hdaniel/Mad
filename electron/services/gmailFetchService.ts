@@ -148,7 +148,7 @@ class GmailFetchService {
       this.oauth2Client = oauth2Client;
       this.gmail = google.gmail({ version: "v1", auth: oauth2Client });
 
-      logService.info("Initialized successfully", "GmailFetch");
+      logService.debug("Initialized successfully", "GmailFetch");
       return true;
     } catch (error) {
       logService.error("Initialization failed", "GmailFetch", { error });

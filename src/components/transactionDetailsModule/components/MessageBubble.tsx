@@ -25,6 +25,7 @@ function formatMessageTime(timestamp: string | Date | undefined): string {
   return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
+
 /**
  * MessageBubble component for displaying individual messages.
  * Uses chat-style bubble UI with inbound/outbound distinction.
