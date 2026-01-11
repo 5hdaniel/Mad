@@ -378,5 +378,79 @@ describe("Preference Handlers", () => {
       expect(result.success).toBe(true);
       expect(result.preferences).toEqual(expectedMerged);
     });
+
+    it("should merge scan.lookbackMonths into existing preferences", async () => {
+      const existingPreferences = {
+        export: { format: "pdf" },
+      };
+      const partialUpdate = {
+        scan: { lookbackMonths: 3 },
+      };
+      const expectedMerged = {
+        export: { format: "pdf" },
+        scan: { lookbackMonths: 3 },
+      };
+
+      mockSupabaseService.getPreferences.mockResolvedValue(existingPreferences);
+      mockSupabaseService.syncPreferences.mockResolvedValue(undefined);
+
+      const handler = registeredHandlers.get("preferences:update");
+      const result = await handler(mockEvent, TEST_USER_ID, partialUpdate);
+
+      expect(result.success).toBe(true);
+      expect(result.preferences).toEqual(expectedMerged);
+      expect(mockSupabaseService.syncPreferences).toHaveBeenCalledWith(
+        TEST_USER_ID,
+        expectedMerged,
+      );
+    });
+
+    it("should update existing scan.lookbackMonths value", async () => {
+      const existingPreferences = {
+        scan: { lookbackMonths: 9 },
+      };
+      const partialUpdate = {
+        scan: { lookbackMonths: 3 },
+      };
+      const expectedMerged = {
+        scan: { lookbackMonths: 3 },
+      };
+
+      mockSupabaseService.getPreferences.mockResolvedValue(existingPreferences);
+      mockSupabaseService.syncPreferences.mockResolvedValue(undefined);
+
+      const handler = registeredHandlers.get("preferences:update");
+      const result = await handler(mockEvent, TEST_USER_ID, partialUpdate);
+
+      expect(result.success).toBe(true);
+      expect(result.preferences).toEqual(expectedMerged);
+      expect(mockSupabaseService.syncPreferences).toHaveBeenCalledWith(
+        TEST_USER_ID,
+        expectedMerged,
+      );
+    });
+
+    it("should add scan.lookbackMonths to empty preferences", async () => {
+      const existingPreferences = {};
+      const partialUpdate = {
+        scan: { lookbackMonths: 6 },
+      };
+      const expectedMerged = {
+        scan: { lookbackMonths: 6 },
+      };
+
+      mockSupabaseService.getPreferences.mockResolvedValue(existingPreferences);
+      mockSupabaseService.syncPreferences.mockResolvedValue(undefined);
+
+      const handler = registeredHandlers.get("preferences:update");
+      const result = await handler(mockEvent, TEST_USER_ID, partialUpdate);
+
+      expect(result.success).toBe(true);
+      expect(result.preferences).toEqual(expectedMerged);
+      expect(mockSupabaseService.syncPreferences).toHaveBeenCalledWith(
+        TEST_USER_ID,
+        expectedMerged,
+      );
+    });
   });
 });

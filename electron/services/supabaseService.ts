@@ -634,27 +634,25 @@ class SupabaseService {
   /**
    * Get user preferences from cloud
    * @param userId - User UUID
-   * @returns User preferences
+   * @returns User preferences (empty object if not found)
+   * @throws Error if there's a database error (not including "not found")
    */
   async getPreferences(userId: string): Promise<Record<string, any>> {
     const client = this._ensureClient();
 
-    try {
-      const { data, error } = await client
-        .from("user_preferences")
-        .select("preferences")
-        .eq("user_id", userId)
-        .single();
+    const { data, error } = await client
+      .from("user_preferences")
+      .select("preferences")
+      .eq("user_id", userId)
+      .single();
 
-      if (error && error.code !== "PGRST116") {
-        throw error;
-      }
-
-      return data?.preferences || {};
-    } catch (error) {
+    // PGRST116 = "not found" - this is expected for new users
+    if (error && error.code !== "PGRST116") {
       logService.error("[Supabase] Failed to get preferences:", "Supabase", { error });
-      return {};
+      throw error;
     }
+
+    return data?.preferences || {};
   }
 
   // ============================================
