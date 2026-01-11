@@ -12,19 +12,19 @@ import { FALLBACK_MESSAGES } from "../../constants";
 
 describe("messageParser", () => {
   describe("extractTextFromAttributedBody", () => {
-    it("should return fallback for null input", () => {
-      expect(extractTextFromAttributedBody(null)).toBe(
+    it("should return fallback for null input", async () => {
+      expect(await extractTextFromAttributedBody(null)).toBe(
         FALLBACK_MESSAGES.REACTION_OR_SYSTEM,
       );
     });
 
-    it("should return fallback for undefined input", () => {
-      expect(extractTextFromAttributedBody(undefined)).toBe(
+    it("should return fallback for undefined input", async () => {
+      expect(await extractTextFromAttributedBody(undefined)).toBe(
         FALLBACK_MESSAGES.REACTION_OR_SYSTEM,
       );
     });
 
-    it("should extract text from buffer with NSString marker", () => {
+    it("should extract text from buffer with NSString marker", async () => {
       // Create a buffer simulating macOS message format with NSString
       const messageText = "Hello, this is a test message!";
       const buffer = Buffer.from(
@@ -34,30 +34,30 @@ describe("messageParser", () => {
           "\x00more data",
       );
 
-      const result = extractTextFromAttributedBody(buffer);
+      const result = await extractTextFromAttributedBody(buffer);
 
       // Should extract readable text
       expect(result).toBeDefined();
       expect(typeof result).toBe("string");
     });
 
-    it("should extract text from buffer with streamtyped marker", () => {
+    it("should extract text from buffer with streamtyped marker", async () => {
       const messageText = "Test message with streamtyped";
       const buffer = Buffer.from(
         "streamtyped" + // marker
           messageText,
       );
 
-      const result = extractTextFromAttributedBody(buffer);
+      const result = await extractTextFromAttributedBody(buffer);
 
       expect(result).toBeDefined();
       expect(typeof result).toBe("string");
     });
 
-    it("should return unable to extract for unrecognized format", () => {
+    it("should return unable to extract for unrecognized format", async () => {
       const buffer = Buffer.from("random binary data without markers");
 
-      const result = extractTextFromAttributedBody(buffer);
+      const result = await extractTextFromAttributedBody(buffer);
 
       // Should return one of the fallback messages
       expect([
@@ -66,22 +66,22 @@ describe("messageParser", () => {
       ]).toContain(result);
     });
 
-    it("should handle very long text gracefully", () => {
+    it("should handle very long text gracefully", async () => {
       const longText = "A".repeat(15000); // Exceeds MAX_MESSAGE_TEXT_LENGTH
       const buffer = Buffer.from("NSString" + "\x00".repeat(20) + longText);
 
-      const result = extractTextFromAttributedBody(buffer);
+      const result = await extractTextFromAttributedBody(buffer);
 
       // Should return fallback for text too long
       expect(typeof result).toBe("string");
     });
 
-    it("should handle buffer with control characters", () => {
+    it("should handle buffer with control characters", async () => {
       const buffer = Buffer.from(
         "NSString" + "\x00".repeat(20) + "Hello\x00World\x01\x02\x03 Test",
       );
 
-      const result = extractTextFromAttributedBody(buffer);
+      const result = await extractTextFromAttributedBody(buffer);
 
       // Should clean up control characters
       expect(typeof result).toBe("string");
@@ -126,16 +126,16 @@ describe("messageParser", () => {
   });
 
   describe("getMessageText", () => {
-    it("should return plain text when available", () => {
+    it("should return plain text when available", async () => {
       const message: Message = {
         text: "Hello World",
         attributedBody: Buffer.from("some data"),
       };
 
-      expect(getMessageText(message)).toBe("Hello World");
+      expect(await getMessageText(message)).toBe("Hello World");
     });
 
-    it("should extract from attributedBody when text is null", () => {
+    it("should extract from attributedBody when text is null", async () => {
       const message: Message = {
         text: null,
         attributedBody: Buffer.from(
@@ -143,33 +143,33 @@ describe("messageParser", () => {
         ),
       };
 
-      const result = getMessageText(message);
+      const result = await getMessageText(message);
       expect(typeof result).toBe("string");
     });
 
-    it("should return attachment fallback when has attachments and no text", () => {
+    it("should return attachment fallback when has attachments and no text", async () => {
       const message: Message = {
         text: null,
         attributedBody: null,
         cache_has_attachments: 1,
       };
 
-      expect(getMessageText(message)).toBe(FALLBACK_MESSAGES.ATTACHMENT);
+      expect(await getMessageText(message)).toBe(FALLBACK_MESSAGES.ATTACHMENT);
     });
 
-    it("should return reaction fallback when no text, no body, and no attachments", () => {
+    it("should return reaction fallback when no text, no body, and no attachments", async () => {
       const message: Message = {
         text: null,
         attributedBody: null,
         cache_has_attachments: 0,
       };
 
-      expect(getMessageText(message)).toBe(
+      expect(await getMessageText(message)).toBe(
         FALLBACK_MESSAGES.REACTION_OR_SYSTEM,
       );
     });
 
-    it("should prefer text over attributedBody", () => {
+    it("should prefer text over attributedBody", async () => {
       const message: Message = {
         text: "Plain Text",
         attributedBody: Buffer.from(
@@ -177,10 +177,10 @@ describe("messageParser", () => {
         ),
       };
 
-      expect(getMessageText(message)).toBe("Plain Text");
+      expect(await getMessageText(message)).toBe("Plain Text");
     });
 
-    it("should handle empty text as no text", () => {
+    it("should handle empty text as no text", async () => {
       const message: Message = {
         text: "",
         attributedBody: Buffer.from(
@@ -189,17 +189,17 @@ describe("messageParser", () => {
       };
 
       // Empty string is falsy, so should use attributedBody
-      const result = getMessageText(message);
+      const result = await getMessageText(message);
       expect(typeof result).toBe("string");
     });
 
-    it("should handle undefined text", () => {
+    it("should handle undefined text", async () => {
       const message: Message = {
         text: undefined,
         cache_has_attachments: 1,
       };
 
-      expect(getMessageText(message)).toBe(FALLBACK_MESSAGES.ATTACHMENT);
+      expect(await getMessageText(message)).toBe(FALLBACK_MESSAGES.ATTACHMENT);
     });
   });
 });

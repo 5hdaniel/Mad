@@ -6,61 +6,74 @@ macOS Messages stores message content in an `attributedBody` column as a binary 
 
 ## The Format
 
-The `attributedBody` field contains an NSAttributedString serialized with NSKeyedArchiver. The structure is:
+The `attributedBody` field contains an NSAttributedString serialized with NSKeyedArchiver in binary plist (bplist) format. The structure is:
 
 ```
-[bplist header]
+[bplist header - "bplist00"]
 [NSKeyedArchiver metadata]
-[NSAttributedString class definition]
-[NSString marker][length prefix bytes][actual message text]
-[Attribute dictionaries (formatting, links, etc.)]
+  - $archiver: "NSKeyedArchiver"
+  - $version: 100000
+  - $top: { root: UID }
+  - $objects: [array of archived objects]
+[Objects include:]
+  - NSAttributedString class
+  - NSString with actual message text
+  - Attribute dictionaries (formatting, links, etc.)
 ```
 
-## Parsing Approach
+## Parsing Approach (PR #384)
 
-We use a heuristic approach rather than full plist parsing:
+**Current Implementation:** Uses proper bplist parsing via `bplist-parser` library.
 
-1. Convert the binary buffer to UTF-8 string
-2. Look for the "NSString" marker
-3. Find readable text sequences after the marker
-4. Select the longest sequence as the message text
+### How It Works
+
+1. **Parse binary plist** using `bplist-parser.parseBuffer()`
+2. **Navigate NSKeyedArchiver structure** - look for `$objects` array
+3. **Extract text** from `$objects`:
+   - Find string objects that aren't metadata (skip "NS*", "$*" prefixes)
+   - Check for `NS.string` keys in dictionary objects
+   - Return the longest non-metadata string as the message text
+4. **Fallback to heuristics** if bplist parsing fails
+
+### Why This Approach
+
+The previous heuristic approach had issues:
+- Converting binary to UTF-8 caused encoding artifacts
+- Length prefix bytes (like `0x30 0x30`) became "00" text
+- Regex-based extraction was fragile
+
+The bplist parser gives us clean, structured access to the archived data.
 
 See: `electron/utils/messageParser.ts`
 
 ## Known Issues & Fixes
 
-### Issue: "00" Prefix Before Message Text
+### Issue: "00" Prefix Before Message Text (FIXED in PR #384)
 
 **Symptom:** Messages displayed with "00" at the beginning, like:
 - "006 min away" instead of "6 min away"
 - "00AHome!" instead of "AHome!"
 
 **Root Cause:**
-The NSKeyedArchiver format includes length prefix bytes before string data. When we convert the binary buffer to UTF-8, bytes like `0x30` (ASCII digit "0") are included in the extracted text.
+The NSKeyedArchiver format includes length prefix bytes before string data. The old heuristic approach converted the binary buffer to UTF-8, which caused bytes like `0x30 0x30` to become "00".
 
-For example, a length prefix of `0x30 0x30` (which might encode a length value) becomes the string "00" when interpreted as UTF-8.
+**Fix:**
+Use proper bplist parsing which correctly interprets the binary format and extracts only the actual string content, without any length prefix bytes.
 
-**Fix (PR #381):**
-Strip hex digit prefixes during extraction in `extractFromNSString()`:
-
-```typescript
-// Strip length prefix bytes that got decoded as hex digits
-cleaned = cleaned.replace(/^[0-9A-Fa-f]{2}(?=[A-Za-z])/, "").trim();
-cleaned = cleaned.replace(/^[0-9A-Fa-f]{2}(?=\d\s)/, "").trim();
-```
-
-**Display-Side Fallback:**
-For existing data in the database, `ConversationViewModal.tsx` also sanitizes text at display time.
+**Migration:**
+For existing data in the database, either:
+1. Re-import messages (Settings → Messages → Re-sync with full re-import)
+2. The display-side `sanitizeMessageText()` in `ConversationViewModal.tsx` will clean up old data
 
 ### Issue: Internal Attribute Names Leaking
 
 **Symptom:** Messages showing `__kIMMessagePartAttributeName` or similar.
 
 **Root Cause:**
-The attributedBody contains attribute dictionaries with keys like `__kIMMessagePartAttributeName`. Our regex was matching these as "readable text."
+The attributedBody contains attribute dictionaries with keys like `__kIMMessagePartAttributeName`.
 
 **Fix:**
-Filter out strings containing `__kIM`, `kIMMessagePart`, etc. in the extraction logic.
+Both the bplist parser extraction and the fallback heuristic method filter out strings containing `__kIM`, `kIMMessagePart`, etc.
 
 ### Issue: Reactions Showing Raw Data
 
@@ -78,47 +91,73 @@ These are filtered as system messages. The `text` field is preferred when availa
 macOS Messages DB (chat.db)
     │
     ▼
-attributedBody (binary NSKeyedArchiver)
+attributedBody (binary NSKeyedArchiver/bplist)
     │
-    ▼ extractTextFromAttributedBody()
+    ▼ bplistParser.parseBuffer()
     │
-Extracted text (may have artifacts)
+Parsed NSKeyedArchiver structure
+    │
+    ▼ extractTextFromNSKeyedArchiver()
+    │
+Clean message text (no encoding artifacts)
     │
     ▼ cleanExtractedText()
     │
-Cleaned text (stored in messages.body_text)
-    │
-    ▼ sanitizeMessageText() [display-side fallback]
-    │
-Final display text
+Final text (stored in messages.body_text)
 ```
 
 ## Re-importing Messages
 
-After parser fixes, users should re-import messages to get clean data:
+After parser fixes, users can re-import messages to get clean data:
 
-1. Settings → Messages → Re-sync
-2. This re-parses all messages with the fixed logic
-3. Old data with artifacts will be replaced
+1. Settings → Messages → Re-sync (or full re-import option)
+2. This re-parses all messages with the new bplist parser
+3. Old data with "00" artifacts will be replaced with clean text
 
-## Future Improvements
+**Note:** Incremental sync only imports new messages. For existing messages with artifacts, a full re-import is needed.
 
-1. **Proper plist parsing**: Use a library like `bplist-parser` to properly decode NSKeyedArchiver format instead of string heuristics.
+## Technical Details
 
-2. **Binary-aware extraction**: Work with the buffer directly instead of converting to UTF-8 string first.
+### NSKeyedArchiver Structure
 
-3. **Reaction handling**: Better detection and display of tapback reactions.
+```javascript
+{
+  "$archiver": "NSKeyedArchiver",
+  "$version": 100000,
+  "$top": { "root": { "UID": 1 } },
+  "$objects": [
+    "$null",                           // Index 0: null placeholder
+    { "NS.string": { "UID": 2 } },     // Index 1: NSAttributedString
+    "Hello, this is the message",      // Index 2: Actual string content
+    // ... more objects (attributes, classes, etc.)
+  ]
+}
+```
+
+### UID References
+
+Objects in `$objects` reference each other using UID objects:
+```javascript
+{ "UID": 2 }  // Points to $objects[2]
+```
+
+The `resolveUID()` helper function handles these references.
+
+## Dependencies
+
+- `bplist-parser` (via `simple-plist` which includes it)
 
 ## Related Files
 
-- `electron/utils/messageParser.ts` - Core parsing logic
-- `electron/constants.ts` - Regex patterns and constants
-- `electron/services/macOSMessagesImportService.ts` - Import service
-- `src/components/transactionDetailsModule/components/modals/ConversationViewModal.tsx` - Display-side sanitization
+- `electron/utils/messageParser.ts` - Core parsing logic with bplist support
+- `electron/constants.ts` - Fallback messages and constants
+- `electron/services/macOSMessagesImportService.ts` - Import service (calls parser)
+- `src/components/transactionDetailsModule/components/modals/ConversationViewModal.tsx` - Display-side sanitization (fallback for old data)
 
 ## Related PRs
 
-- PR #377 - Initial message text sanitization
+- PR #377 - Initial message text sanitization (display-side)
 - PR #379 - Hex pattern with newline handling
 - PR #380 - Lookahead regex for direct prefix
-- PR #381 - Root cause fix in parser
+- PR #381 - Improved regex in parser
+- PR #384 - **Proper bplist parsing (root cause fix)**
