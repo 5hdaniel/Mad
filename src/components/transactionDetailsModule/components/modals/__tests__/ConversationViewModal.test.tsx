@@ -80,7 +80,48 @@ describe("ConversationViewModal", () => {
       expect(screen.getByText("+14155550100")).toBeInTheDocument();
     });
 
-    it("shows group chat indicator for multiple senders", () => {
+    it("shows participant names in header for group chats", () => {
+      const groupMessages = [
+        {
+          id: "msg-1",
+          user_id: "user-123",
+          channel: "imessage",
+          body_text: "Message from sender 1",
+          sent_at: "2024-01-15T10:00:00Z",
+          direction: "inbound" as const,
+          has_attachments: false,
+          participants: JSON.stringify({ from: "+14155550100", to: ["me"] }),
+        },
+        {
+          id: "msg-2",
+          user_id: "user-123",
+          channel: "imessage",
+          body_text: "Message from sender 2",
+          sent_at: "2024-01-15T10:05:00Z",
+          direction: "inbound" as const,
+          has_attachments: false,
+          participants: JSON.stringify({ from: "+14155550200", to: ["me"] }),
+        },
+      ];
+
+      const contactNamesForGroup = {
+        "+14155550100": "Alice Smith",
+        "+14155550200": "Bob Jones",
+      };
+
+      render(
+        <ConversationViewModal
+          {...defaultProps}
+          messages={groupMessages}
+          contactNames={contactNamesForGroup}
+        />
+      );
+
+      // Should show participant names instead of single contact name
+      expect(screen.getByText("Alice Smith, Bob Jones")).toBeInTheDocument();
+    });
+
+    it("shows phone numbers for unknown contacts in group chat header", () => {
       const groupMessages = [
         {
           id: "msg-1",
@@ -108,10 +149,283 @@ describe("ConversationViewModal", () => {
         <ConversationViewModal
           {...defaultProps}
           messages={groupMessages}
+          contactNames={{}}
         />
       );
 
-      expect(screen.getByText("(Group)")).toBeInTheDocument();
+      // Should show phone numbers when no contact names available
+      expect(screen.getByText("+14155550100, +14155550200")).toBeInTheDocument();
+    });
+
+    it("shows +X more for groups with more than 3 participants", () => {
+      const groupMessages = [
+        {
+          id: "msg-1",
+          user_id: "user-123",
+          channel: "imessage",
+          body_text: "Message 1",
+          sent_at: "2024-01-15T10:00:00Z",
+          direction: "inbound" as const,
+          has_attachments: false,
+          participants: JSON.stringify({ from: "+14155550100", to: ["me"] }),
+        },
+        {
+          id: "msg-2",
+          user_id: "user-123",
+          channel: "imessage",
+          body_text: "Message 2",
+          sent_at: "2024-01-15T10:01:00Z",
+          direction: "inbound" as const,
+          has_attachments: false,
+          participants: JSON.stringify({ from: "+14155550200", to: ["me"] }),
+        },
+        {
+          id: "msg-3",
+          user_id: "user-123",
+          channel: "imessage",
+          body_text: "Message 3",
+          sent_at: "2024-01-15T10:02:00Z",
+          direction: "inbound" as const,
+          has_attachments: false,
+          participants: JSON.stringify({ from: "+14155550300", to: ["me"] }),
+        },
+        {
+          id: "msg-4",
+          user_id: "user-123",
+          channel: "imessage",
+          body_text: "Message 4",
+          sent_at: "2024-01-15T10:03:00Z",
+          direction: "inbound" as const,
+          has_attachments: false,
+          participants: JSON.stringify({ from: "+14155550400", to: ["me"] }),
+        },
+        {
+          id: "msg-5",
+          user_id: "user-123",
+          channel: "imessage",
+          body_text: "Message 5",
+          sent_at: "2024-01-15T10:04:00Z",
+          direction: "inbound" as const,
+          has_attachments: false,
+          participants: JSON.stringify({ from: "+14155550500", to: ["me"] }),
+        },
+      ];
+
+      const contactNamesForGroup = {
+        "+14155550100": "Alice",
+        "+14155550200": "Bob",
+        "+14155550300": "Carol",
+        "+14155550400": "Dave",
+        "+14155550500": "Eve",
+      };
+
+      render(
+        <ConversationViewModal
+          {...defaultProps}
+          messages={groupMessages}
+          contactNames={contactNamesForGroup}
+        />
+      );
+
+      // Should show first 3 names plus "+2 more"
+      expect(screen.getByText(/Alice, Bob, Carol \+2 more/)).toBeInTheDocument();
+    });
+  });
+
+  describe("Sender Name Display in Group Chats", () => {
+    it("shows sender name on inbound messages in group chats", () => {
+      const groupMessages = [
+        {
+          id: "msg-1",
+          user_id: "user-123",
+          channel: "imessage",
+          body_text: "Hello from Alice",
+          sent_at: "2024-01-15T10:00:00Z",
+          direction: "inbound" as const,
+          has_attachments: false,
+          participants: JSON.stringify({ from: "+14155550100", to: ["me"] }),
+        },
+        {
+          id: "msg-2",
+          user_id: "user-123",
+          channel: "imessage",
+          body_text: "Hello from Bob",
+          sent_at: "2024-01-15T10:05:00Z",
+          direction: "inbound" as const,
+          has_attachments: false,
+          participants: JSON.stringify({ from: "+14155550200", to: ["me"] }),
+        },
+      ];
+
+      const contactNamesForGroup = {
+        "+14155550100": "Alice",
+        "+14155550200": "Bob",
+      };
+
+      render(
+        <ConversationViewModal
+          {...defaultProps}
+          messages={groupMessages}
+          contactNames={contactNamesForGroup}
+        />
+      );
+
+      // Should show sender names on messages
+      const senderElements = screen.getAllByTestId("group-message-sender");
+      expect(senderElements).toHaveLength(2);
+      expect(senderElements[0]).toHaveTextContent("Alice");
+      expect(senderElements[1]).toHaveTextContent("Bob");
+    });
+
+    it("hides sender name for consecutive messages from same sender", () => {
+      const groupMessages = [
+        {
+          id: "msg-1",
+          user_id: "user-123",
+          channel: "imessage",
+          body_text: "First message from Alice",
+          sent_at: "2024-01-15T10:00:00Z",
+          direction: "inbound" as const,
+          has_attachments: false,
+          participants: JSON.stringify({ from: "+14155550100", to: ["me"] }),
+        },
+        {
+          id: "msg-2",
+          user_id: "user-123",
+          channel: "imessage",
+          body_text: "Second message from Alice",
+          sent_at: "2024-01-15T10:01:00Z",
+          direction: "inbound" as const,
+          has_attachments: false,
+          participants: JSON.stringify({ from: "+14155550100", to: ["me"] }),
+        },
+        {
+          id: "msg-3",
+          user_id: "user-123",
+          channel: "imessage",
+          body_text: "Message from Bob",
+          sent_at: "2024-01-15T10:02:00Z",
+          direction: "inbound" as const,
+          has_attachments: false,
+          participants: JSON.stringify({ from: "+14155550200", to: ["me"] }),
+        },
+      ];
+
+      const contactNamesForGroup = {
+        "+14155550100": "Alice",
+        "+14155550200": "Bob",
+      };
+
+      render(
+        <ConversationViewModal
+          {...defaultProps}
+          messages={groupMessages}
+          contactNames={contactNamesForGroup}
+        />
+      );
+
+      // Should only show sender name for first Alice message and for Bob
+      const senderElements = screen.getAllByTestId("group-message-sender");
+      expect(senderElements).toHaveLength(2);
+      expect(senderElements[0]).toHaveTextContent("Alice");
+      expect(senderElements[1]).toHaveTextContent("Bob");
+    });
+
+    it("does not show sender name on outbound messages", () => {
+      const groupMessages = [
+        {
+          id: "msg-1",
+          user_id: "user-123",
+          channel: "imessage",
+          body_text: "Message from Alice",
+          sent_at: "2024-01-15T10:00:00Z",
+          direction: "inbound" as const,
+          has_attachments: false,
+          participants: JSON.stringify({ from: "+14155550100", to: ["me"] }),
+        },
+        {
+          id: "msg-2",
+          user_id: "user-123",
+          channel: "imessage",
+          body_text: "My reply",
+          sent_at: "2024-01-15T10:01:00Z",
+          direction: "outbound" as const,
+          has_attachments: false,
+          participants: JSON.stringify({ from: "me", to: ["+14155550100", "+14155550200"] }),
+        },
+        {
+          id: "msg-3",
+          user_id: "user-123",
+          channel: "imessage",
+          body_text: "Message from Bob",
+          sent_at: "2024-01-15T10:02:00Z",
+          direction: "inbound" as const,
+          has_attachments: false,
+          participants: JSON.stringify({ from: "+14155550200", to: ["me"] }),
+        },
+      ];
+
+      const contactNamesForGroup = {
+        "+14155550100": "Alice",
+        "+14155550200": "Bob",
+      };
+
+      render(
+        <ConversationViewModal
+          {...defaultProps}
+          messages={groupMessages}
+          contactNames={contactNamesForGroup}
+        />
+      );
+
+      // Should only show sender names for inbound messages
+      const senderElements = screen.getAllByTestId("group-message-sender");
+      expect(senderElements).toHaveLength(2);
+      expect(senderElements[0]).toHaveTextContent("Alice");
+      expect(senderElements[1]).toHaveTextContent("Bob");
+    });
+
+    it("falls back to phone number when contact name not available", () => {
+      const groupMessages = [
+        {
+          id: "msg-1",
+          user_id: "user-123",
+          channel: "imessage",
+          body_text: "Message from known contact",
+          sent_at: "2024-01-15T10:00:00Z",
+          direction: "inbound" as const,
+          has_attachments: false,
+          participants: JSON.stringify({ from: "+14155550100", to: ["me"] }),
+        },
+        {
+          id: "msg-2",
+          user_id: "user-123",
+          channel: "imessage",
+          body_text: "Message from unknown contact",
+          sent_at: "2024-01-15T10:01:00Z",
+          direction: "inbound" as const,
+          has_attachments: false,
+          participants: JSON.stringify({ from: "+14155550200", to: ["me"] }),
+        },
+      ];
+
+      const contactNamesForGroup = {
+        "+14155550100": "Alice",
+        // +14155550200 intentionally not in contactNames
+      };
+
+      render(
+        <ConversationViewModal
+          {...defaultProps}
+          messages={groupMessages}
+          contactNames={contactNamesForGroup}
+        />
+      );
+
+      const senderElements = screen.getAllByTestId("group-message-sender");
+      expect(senderElements).toHaveLength(2);
+      expect(senderElements[0]).toHaveTextContent("Alice");
+      expect(senderElements[1]).toHaveTextContent("+14155550200");
     });
   });
 
