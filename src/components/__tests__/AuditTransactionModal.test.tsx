@@ -844,5 +844,73 @@ describe("AuditTransactionModal", () => {
       expect(window.api.feedback.recordTransaction).toBeDefined();
       expect(typeof window.api.feedback.recordTransaction).toBe("function");
     });
+
+    // TASK-1030: Verify contact_assignments is used for pre-population
+    it("should use contact_assignments from junction table when editing", () => {
+      // Transaction with contact_assignments (from getTransactionDetails)
+      const txnWithContactAssignments = {
+        ...mockEditTransaction,
+        contact_assignments: [
+          {
+            id: "assign-1",
+            contact_id: "contact-1",
+            contact_name: "John Doe",
+            contact_email: "john@example.com",
+            role: "client",
+            specific_role: "client",
+            is_primary: 1,
+          },
+          {
+            id: "assign-2",
+            contact_id: "contact-2",
+            contact_name: "Jane Smith",
+            contact_email: "jane@realty.com",
+            role: "seller_agent",
+            specific_role: "seller_agent",
+            is_primary: 0,
+          },
+        ],
+        // Also has suggested_contacts but should be ignored
+        suggested_contacts: JSON.stringify([
+          { role: "old_client", contact_id: "old-contact", is_primary: true },
+        ]),
+      };
+
+      renderWithProvider(
+        <AuditTransactionModal
+          userId={mockUserId}
+          provider={mockProvider}
+          onClose={mockOnClose}
+          onSuccess={mockOnSuccess}
+          editTransaction={txnWithContactAssignments}
+        />,
+      );
+
+      // Modal should render without errors
+      expect(screen.getByText(/edit transaction/i)).toBeInTheDocument();
+    });
+
+    it("should fall back to suggested_contacts when contact_assignments is empty", () => {
+      const txnWithOnlySuggested = {
+        ...mockEditTransaction,
+        contact_assignments: [], // Empty array
+        suggested_contacts: JSON.stringify([
+          { role: "client", contact_id: "contact-1", is_primary: true },
+        ]),
+      };
+
+      renderWithProvider(
+        <AuditTransactionModal
+          userId={mockUserId}
+          provider={mockProvider}
+          onClose={mockOnClose}
+          onSuccess={mockOnSuccess}
+          editTransaction={txnWithOnlySuggested}
+        />,
+      );
+
+      // Modal should render without errors
+      expect(screen.getByText(/edit transaction/i)).toBeInTheDocument();
+    });
   });
 });

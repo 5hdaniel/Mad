@@ -39,6 +39,10 @@ export interface AddressSuggestion {
 
 export interface ContactAssignment {
   contactId: string;
+  contactName?: string;  // TASK-1030: Added for edit mode pre-population
+  contactEmail?: string;
+  contactPhone?: string;
+  contactCompany?: string;
   isPrimary: boolean;
   notes: string;
 }
@@ -203,8 +207,50 @@ export function useAuditTransaction({
       setAddressData(prefillData);
       setOriginalAddressData(prefillData);
 
-      // Parse and set suggested contacts if present
-      if (editTransaction.suggested_contacts) {
+      // TASK-1030: Load contacts from contact_assignments (junction table) first,
+      // fall back to suggested_contacts JSON if not available.
+      // contact_assignments is populated by getTransactionDetails() and contains
+      // actual assigned contacts from the database.
+      // suggested_contacts is a legacy JSON field populated during auto-detection.
+      const extendedTransaction = editTransaction as Transaction & {
+        contact_assignments?: Array<{
+          id: string;
+          contact_id: string;
+          contact_name?: string;
+          contact_email?: string;
+          contact_phone?: string;
+          contact_company?: string;
+          role?: string;
+          specific_role?: string;
+          is_primary?: number;
+          notes?: string;
+        }>;
+      };
+
+      if (extendedTransaction.contact_assignments && extendedTransaction.contact_assignments.length > 0) {
+        // Use actual contact assignments from junction table
+        const assignments: ContactAssignments = {};
+        extendedTransaction.contact_assignments.forEach((ca) => {
+          // Use role field first, fall back to specific_role (TASK-995 fix)
+          const role = ca.role || ca.specific_role;
+          if (role && ca.contact_id) {
+            if (!assignments[role]) {
+              assignments[role] = [];
+            }
+            assignments[role].push({
+              contactId: ca.contact_id,
+              contactName: ca.contact_name || "",
+              contactEmail: ca.contact_email,
+              contactPhone: ca.contact_phone,
+              contactCompany: ca.contact_company,
+              isPrimary: ca.is_primary === 1,
+              notes: ca.notes || "",
+            });
+          }
+        });
+        setContactAssignments(assignments);
+      } else if (editTransaction.suggested_contacts) {
+        // Fall back to suggested_contacts JSON for legacy data
         try {
           const suggestedContacts = JSON.parse(editTransaction.suggested_contacts);
           const assignments: ContactAssignments = {};
