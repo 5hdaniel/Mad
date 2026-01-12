@@ -1195,7 +1195,7 @@ describe("DatabaseService", () => {
       it("should run VACUUM command", async () => {
         await databaseService.vacuum();
 
-        expect(mockStatement.run).toHaveBeenCalled();
+        expect(mockDb.exec).toHaveBeenCalledWith("VACUUM");
       });
     });
 
