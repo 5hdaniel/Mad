@@ -2,9 +2,9 @@
 
 This index tracks all backlog items with their current status and metadata.
 
-**Last Updated:** 2026-01-11 (BACKLOG-201 - "00" iMessage prefix bug fix)
-**Total Items:** 181
-**Pending:** 99 | **In Progress:** 0 | **Completed:** 75 | **Partial:** 0 | **Obsolete:** 1 | **Deferred:** 2
+**Last Updated:** 2026-01-11 (BACKLOG-202, 203, 204 added; SPRINT-032 created)
+**Total Items:** 184
+**Pending:** 102 | **In Progress:** 0 | **Completed:** 75 | **Partial:** 0 | **Obsolete:** 1 | **Deferred:** 2
 
 ---
 
@@ -29,9 +29,9 @@ This index tracks all backlog items with their current status and metadata.
 ## Quick Filters
 
 ### By Priority
-- **Critical:** BACKLOG-030 (done), 032 (done), 035 (done), 038 (done), 039 (done), 044 (done), 045 (done), 058 (done), 059 (done), 072 (done), 073 (done), 074 (done), 107 (done), 108 (done), 117 (done), 132 (done), 139 (done - database init gate), 142 (done - state coordination overhaul), **191** (service layer tests - 0% coverage)
-- **High:** BACKLOG-008, 009, 013, 016, 018, 020, 021, 023, 026, 031, 033, 037, 056, 060 (done), 061 (done), 062 (done), 063 (done), 067, 075 (done), 076 (done), 084 (done), 085 (done), 088, 090 (done), 091 (done), 098, 099, 103 (done), 105 (done), 109 (done), 110 (done), **111**, 118 (done), 121 (done), 126 (done), 130 (done), 133 (done), 136 (done), 137 (done - automatic token tracking), 140 (done), 148 (done), 156 (done - auto-refresh on app load), **157** (fix auth handler test)
-- **Medium:** Multiple (see full index), 014 (done), 050 (done), 054 (done), 065 (done), 077 (done), 078 (done), 079 (done), 081, 086, 087, 089, 092, 093, 094, 095, 096, 097, 100, 101, 102, 104 (done), **112**, **113**, **114**, **115**, **116**, 122 (done), 124 (done), 127 (done), 128 (done), 129 (done), **131**, 135 (done), 138 (done), 149 (done), 152 (done), **158** (decompose AuditTransactionModal), **159** (delete PermissionsScreen), 169 (done - Show in Folder), 181 (done - T&C streamline)
+- **Critical:** BACKLOG-030 (done), 032 (done), 035 (done), 038 (done), 039 (done), 044 (done), 045 (done), 058 (done), 059 (done), 072 (done), 073 (done), 074 (done), 107 (done), 108 (done), 117 (done), 132 (done), 139 (done - database init gate), 142 (done - state coordination overhaul), **191** (service layer tests - 0% coverage), **202** (fix test regressions - contact-handlers/databaseService)
+- **High:** BACKLOG-008, 009, 013, 016, 018, 020, 021, 023, 026, 031, 033, 037, 056, 060 (done), 061 (done), 062 (done), 063 (done), 067, 075 (done), 076 (done), 084 (done), 085 (done), 088, 090 (done), 091 (done), 098, 099, 103 (done), 105 (done), 109 (done), 110 (done), **111**, 118 (done), 121 (done), 126 (done), 130 (done), 133 (done), 136 (done), 137 (done - automatic token tracking), 140 (done), 148 (done), 156 (done - auto-refresh on app load), **157** (fix auth handler test), **203** (macOS messages tests)
+- **Medium:** Multiple (see full index), 014 (done), 050 (done), 054 (done), 065 (done), 077 (done), 078 (done), 079 (done), 081, 086, 087, 089, 092, 093, 094, 095, 096, 097, 100, 101, 102, 104 (done), **112**, **113**, **114**, **115**, **116**, 122 (done), 124 (done), 127 (done), 128 (done), 129 (done), **131**, 135 (done), 138 (done), 149 (done), 152 (done), **158** (decompose AuditTransactionModal), **159** (delete PermissionsScreen), 169 (done - Show in Folder), 181 (done - T&C streamline), **204** (window.api abstraction)
 - **Low/Deferred:** BACKLOG-001, 003, 004, 010, 017, 069 (deferred), 070 (deferred), 071, 092, **119**, **123**, **125**, 150 (done - reduce useAppStateMachine), **151** (reduce AppModals.tsx), 155 (done - dashboard scroll), **160** (column naming)
 
 ### By Sprint Assignment
@@ -60,6 +60,7 @@ This index tracks all backlog items with their current status and metadata.
 - **SPRINT-023 (Architecture Debt Reduction):** Completed - BACKLOG-149 (done), 148 (done), 152 (done), 140 (done) (5 tasks: TASK-960 to TASK-964, PRs #314-317)
 - **SPRINT-024 (Quality & Coverage):** PLANNED - BACKLOG-157, 159, 112, 113, 158 (5 tasks: TASK-970 to TASK-974)
 - **SPRINT-031 (Codebase Health):** PLANNED - BACKLOG-191, 115 (partial), 192 (partial) (6 tasks: TASK-1017 to TASK-1022)
+- **SPRINT-032 (Bug Fixes & Stability):** PLANNED - BACKLOG-202, 157, 203, 204 (partial) (5 tasks: TASK-1023 to TASK-1027)
 - **SPRINT-025 (Communications Architecture):** COMPLETE - TASK-975 to TASK-977 (3 tasks completed: communications refactor, export folders, auto-link texts; TASK-978 deferred). **Incidents:** 14.2M token exploration loop (BACKLOG-161), PR merged without review, file overlap caused merge conflicts.
 - **SPRINT-027 (Messages & Contacts Polish):** COMPLETE - 6 tasks (TASK-990 to TASK-995) + 9 unplanned fixes. PRs #354-362. Messages feature fully functional with thread grouping, auto-linking, manual attach/unlink, bubble direction, and contact fixes.
 - **SPRINT-028 (Stability & UX Polish):** COMPLETE - 6 tasks (TASK-1003 to TASK-1009) + 7 unplanned fixes. PRs #364-369. npm audit fix, dashboard scroll, Show in Folder, state machine reduce, T&C streamline, auto-refresh.
@@ -281,6 +282,9 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-198 | Decompose Large Component Files | refactor | Low | Pending | - | - | ~60K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-198.md](BACKLOG-198.md) |
 | BACKLOG-200 | Contacts import fails with email validation error | service | Medium | Pending | - | - | ~25K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-200.md](BACKLOG-200.md) |
 | BACKLOG-201 | "00" prefix appearing before iMessage text | ui | Medium | Completed | - | - | ~5K | - | ~180K | - | - | - | - | - | - | - | - | - | ~180K | ~3h | +3500% | [BACKLOG-201.md](BACKLOG-201.md) |
+| BACKLOG-202 | Fix Test Regressions (contact-handlers/databaseService) | test/fix | Critical | Pending | SPRINT-032 | - | ~20K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-202.md](BACKLOG-202.md) |
+| BACKLOG-203 | Add Comprehensive Tests for macOSMessagesImportService | test | High | Pending | SPRINT-032 | - | ~40K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-203.md](BACKLOG-203.md) |
+| BACKLOG-204 | Abstract window.api Calls into Service Layer | refactor | Medium | Pending | SPRINT-032 | - | ~80K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-204.md](BACKLOG-204.md) |
 
 ---
 
@@ -327,6 +331,7 @@ This index tracks all backlog items with their current status and metadata.
 | SPRINT-029 | UX Improvements | Planned | TASK-1011, TASK-1012 (Start New Audit redesign, Message attachments) |
 | SPRINT-030 | Message & Transaction UX | Planned | TASK-1013-1016 (Date range filter, group chat names, lookback period, attachments) |
 | SPRINT-031 | Codebase Health | Planned | 6 tasks (TASK-1017-1022): Service layer tests, any type cleanup, console cleanup |
+| SPRINT-032 | Bug Fixes & Stability | Planned | 5 tasks (TASK-1023-1027): Test regressions, auth handler, macOS messages tests, window.api audit |
 
 ---
 
