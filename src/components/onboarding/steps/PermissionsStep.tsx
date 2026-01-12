@@ -227,18 +227,14 @@ function PermissionsStepContent({ context, onAction }: OnboardingStepContentProp
 
   // Trigger import after permissions are granted
   const triggerImport = useCallback(async () => {
-    console.log("[PermissionsStep] triggerImport called, hasStartedImportRef:", hasStartedImportRef.current);
     if (hasStartedImportRef.current) {
-      console.log("[PermissionsStep] Skipping - import already started");
       return;
     }
 
     // Get user ID from context - if not available, skip import and continue
     const userId = context.userId;
-    console.log("[PermissionsStep] userId from context:", userId);
     if (!userId) {
       // No user yet, just continue to next step
-      console.log("[PermissionsStep] No userId, calling PERMISSION_GRANTED");
       onAction({ type: "PERMISSION_GRANTED" });
       return;
     }
@@ -246,7 +242,6 @@ function PermissionsStepContent({ context, onAction }: OnboardingStepContentProp
     // Check if import has already been done for this user (persists across navigation)
     const importKey = `onboarding_import_done_${userId}`;
     if (localStorage.getItem(importKey)) {
-      console.log("[PermissionsStep] Import already done for this user, skipping");
       onAction({ type: "PERMISSION_GRANTED" });
       return;
     }
@@ -282,20 +277,15 @@ function PermissionsStepContent({ context, onAction }: OnboardingStepContentProp
     // Import contacts (get available, then import all)
     const contactsPromise = (async () => {
       try {
-        console.log("[PermissionsStep] Starting contacts import...");
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const availableResult = await (window.api.contacts as any).getAvailable(userId);
-        console.log("[PermissionsStep] getAvailable result:", availableResult?.success, availableResult?.contacts?.length || 0, "contacts");
         if (!availableResult.success || !availableResult.contacts?.length) {
-          console.log("[PermissionsStep] No contacts to import or error");
           setContactsResult({ success: availableResult.success !== false, contactsImported: 0, error: availableResult.error });
           return;
         }
 
-        console.log("[PermissionsStep] Importing", availableResult.contacts.length, "contacts...");
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const importResult = await (window.api.contacts as any).import(userId, availableResult.contacts);
-        console.log("[PermissionsStep] Import result:", importResult?.success, importResult?.contacts?.length || 0);
         setContactsResult({
           success: importResult.success,
           contactsImported: importResult.contacts?.length || 0,
@@ -305,31 +295,25 @@ function PermissionsStepContent({ context, onAction }: OnboardingStepContentProp
         console.error("[PermissionsStep] Error importing contacts:", error);
         setContactsResult({ success: false, contactsImported: 0, error: String(error) });
       } finally {
-        console.log("[PermissionsStep] Contacts import finished");
         setIsImportingContacts(false);
       }
     })();
 
     // Don't wait for imports - let them continue in background
     // User will see progress on the dashboard via SyncStatusIndicator
-    console.log("[PermissionsStep] Imports started, transitioning to dashboard immediately");
 
     // Brief delay to show "setting up" message, then transition
     setTimeout(() => {
-      console.log("[PermissionsStep] Dispatching PERMISSION_GRANTED action");
       onAction({ type: "PERMISSION_GRANTED" });
     }, 500);
   }, [onAction]);
 
   // Auto-check permissions on mount and periodically after user starts the flow
   const checkPermissions = useCallback(async () => {
-    console.log("[PermissionsStep] checkPermissions called");
     try {
       const result = await window.api.system.checkPermissions();
-      console.log("[PermissionsStep] checkPermissions result:", result);
       if (result.hasPermission) {
         // Permissions granted - trigger import first, then continue
-        console.log("[PermissionsStep] hasPermission=true, calling triggerImport");
         triggerImport();
       }
       return result.hasPermission;
