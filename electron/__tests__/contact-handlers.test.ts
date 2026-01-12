@@ -36,6 +36,7 @@ jest.mock("../services/databaseService", () => ({
     getUnimportedContactsByUserId: jest.fn(),
     getContactsSortedByActivity: jest.fn(),
     createContact: jest.fn(),
+    createContactsBatch: jest.fn(),
     updateContact: jest.fn(),
     getContactById: jest.fn(),
     deleteContact: jest.fn(),
@@ -509,20 +510,32 @@ describe("Contact Handlers", () => {
     ];
 
     it("should import contacts successfully", async () => {
-      mockDatabaseService.createContact.mockImplementation(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        async (data: any) => ({
-          id: `contact-${data.name}`,
-          ...data,
-        }),
-      );
+      // Mock createContactsBatch to return IDs for new contacts
+      mockDatabaseService.createContactsBatch.mockReturnValue([
+        "contact-john",
+        "contact-jane",
+      ]);
+      // Mock getContactById to return contact data for each created ID
+      mockDatabaseService.getContactById
+        .mockResolvedValueOnce({
+          id: "contact-john",
+          name: "John Doe",
+          email: "john@example.com",
+          phone: "555-1234",
+        })
+        .mockResolvedValueOnce({
+          id: "contact-jane",
+          name: "Jane Smith",
+          email: "jane@example.com",
+          phone: "555-5678",
+        });
 
       const handler = registeredHandlers.get("contacts:import");
       const result = await handler(mockEvent, TEST_USER_ID, contactsToImport);
 
       expect(result.success).toBe(true);
       expect(result.contacts).toHaveLength(2);
-      expect(mockDatabaseService.createContact).toHaveBeenCalledTimes(2);
+      expect(mockDatabaseService.createContactsBatch).toHaveBeenCalledTimes(1);
     });
 
     it("should handle invalid user ID", async () => {
@@ -549,8 +562,8 @@ describe("Contact Handlers", () => {
       expect(result.error).toContain("Validation error");
     });
 
-    it("should reject more than 1000 contacts", async () => {
-      const manyContacts = Array(1001).fill({
+    it("should reject more than 5000 contacts", async () => {
+      const manyContacts = Array(5001).fill({
         name: "Test",
         email: "test@example.com",
       });
@@ -559,13 +572,13 @@ describe("Contact Handlers", () => {
       const result = await handler(mockEvent, TEST_USER_ID, manyContacts);
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("1000");
+      expect(result.error).toContain("5000");
     });
 
     it("should handle import failure", async () => {
-      mockDatabaseService.createContact.mockRejectedValue(
-        new Error("Import failed"),
-      );
+      mockDatabaseService.createContactsBatch.mockImplementation(() => {
+        throw new Error("Import failed");
+      });
 
       const handler = registeredHandlers.get("contacts:import");
       const result = await handler(mockEvent, TEST_USER_ID, contactsToImport);
