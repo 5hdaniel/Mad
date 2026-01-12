@@ -3,6 +3,42 @@ import type { Transaction } from "@/types";
 import { ManualEntryBadge } from "./TransactionStatusWrapper";
 
 // ============================================
+// UTILITY FUNCTIONS
+// ============================================
+
+/**
+ * Formats email and text counts into a human-readable string.
+ * Handles singular/plural grammar and omits zero counts.
+ *
+ * @example
+ * formatCommunicationCounts(5, 0) // "5 emails"
+ * formatCommunicationCounts(0, 3) // "3 texts"
+ * formatCommunicationCounts(8, 4) // "8 emails, 4 texts"
+ * formatCommunicationCounts(1, 1) // "1 email, 1 text"
+ * formatCommunicationCounts(0, 0) // "No communications"
+ */
+export function formatCommunicationCounts(
+  emailCount: number,
+  textCount: number
+): string {
+  const parts: string[] = [];
+
+  if (emailCount > 0) {
+    parts.push(`${emailCount} ${emailCount === 1 ? "email" : "emails"}`);
+  }
+
+  if (textCount > 0) {
+    parts.push(`${textCount} ${textCount === 1 ? "text" : "texts"}`);
+  }
+
+  if (parts.length === 0) {
+    return "No communications";
+  }
+
+  return parts.join(", ");
+}
+
+// ============================================
 // TRANSACTION CARD COMPONENT
 // ============================================
 
@@ -146,7 +182,10 @@ function TransactionCard({
                   d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
                 />
               </svg>
-              {transaction.total_communications_count || 0} emails
+              {formatCommunicationCounts(
+                transaction.email_count || 0,
+                transaction.text_count || 0
+              )}
             </span>
             {transaction.extraction_confidence && (
               <span className="flex items-center gap-1">

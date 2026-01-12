@@ -10,6 +10,7 @@ import {
   ConfidencePill,
   PendingReviewBadge,
 } from "./DetectionBadges";
+import { formatCommunicationCounts } from "./TransactionCard";
 
 // ============================================
 // TYPES
@@ -158,7 +159,10 @@ export function TransactionListCard({
                   d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
                 />
               </svg>
-              {transaction.total_communications_count || 0} emails
+              {formatCommunicationCounts(
+                transaction.email_count || 0,
+                transaction.text_count || 0
+              )}
             </span>
             {transaction.extraction_confidence && (
               <span className="flex items-center gap-1">
