@@ -6,7 +6,7 @@
 import { ipcMain, BrowserWindow } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import { randomUUID } from "crypto";
-import databaseService from "./services/databaseService";
+import databaseService, { TransactionWithRoles as DbTransactionWithRoles } from "./services/databaseService";
 import { getContactNames } from "./services/contactsService";
 import auditService from "./services/auditService";
 import logService from "./services/logService";
@@ -23,15 +23,23 @@ import {
 } from "./utils/validation";
 import { normalizePhoneNumber } from "./utils/phoneNormalization";
 
+// Import handler types
+import type {
+  AvailableContact,
+  ImportableContact,
+  ExistingDbContactRecord,
+  NewContactData,
+} from "./types/handlerTypes";
+
 // Type definitions
 interface ContactResponse {
   success: boolean;
   error?: string;
   contact?: Contact;
-  contacts?: Contact[];
+  contacts?: Contact[] | AvailableContact[];
   contactsStatus?: unknown;
   canDelete?: boolean;
-  transactions?: Transaction[] | any[]; // Can be Transaction[] or TransactionWithRoles[]
+  transactions?: Transaction[] | DbTransactionWithRoles[];
   count?: number;
   transactionCount?: number;
 }
@@ -141,7 +149,7 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
         }
 
         // Convert Contacts app data to contact objects
-        const availableContacts: any[] = [];
+        const availableContacts: AvailableContact[] = [];
 
         // Deduplication sets for name, email, and phone
         const seenNames = new Set<string>();
@@ -421,11 +429,11 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
         const total = contactsToImport.length;
 
         // Separate contacts into two groups
-        const existingDbContacts: { id: string; contact: any }[] = [];
-        const newContactsToCreate: any[] = [];
+        const existingDbContacts: ExistingDbContactRecord[] = [];
+        const newContactsToCreate: NewContactData[] = [];
 
         for (const contact of contactsToImport) {
-          const sanitizedContact = sanitizeObject(contact) as any;
+          const sanitizedContact = sanitizeObject(contact) as ImportableContact;
           const validatedData = validateContactData(sanitizedContact, false);
 
           if (
