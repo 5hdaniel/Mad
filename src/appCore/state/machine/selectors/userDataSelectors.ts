@@ -188,8 +188,9 @@ export function selectHasPermissions(state: AppState): boolean {
     return state.userData.hasPermissions;
   }
   if (state.status === "onboarding") {
-    // During onboarding, permissions check happens at the permissions step
-    return false;
+    // Check if permissions were loaded during initialization
+    // This fixes the bug where returning users with FDA granted were stuck
+    return state.hasPermissions ?? false;
   }
   return false;
 }

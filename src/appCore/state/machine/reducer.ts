@@ -360,6 +360,9 @@ export function appStateReducer(
         user,
         platform,
         completedSteps,
+        // Preserve hasPermissions from loaded data so selector can access it
+        // Fixes bug where users with FDA granted were stuck on permissions step
+        hasPermissions: data.hasPermissions,
       };
     }
 
