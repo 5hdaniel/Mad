@@ -181,6 +181,8 @@ export interface OnboardingState {
   completedSteps: OnboardingStep[];
   /** True if email was connected during this onboarding session */
   hasEmailConnected?: boolean;
+  /** True if macOS Full Disk Access is granted (checked during loading) */
+  hasPermissions?: boolean;
 }
 
 /**
