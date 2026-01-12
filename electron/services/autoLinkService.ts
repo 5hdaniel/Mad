@@ -1,0 +1,493 @@
+/**
+ * Auto-Link Service
+ *
+ * Automatically links existing communications (emails and iMessages/SMS) when a
+ * contact is added to a transaction. This eliminates the manual process of
+ * attaching messages after adding a contact.
+ *
+ * @see TASK-1031
+ */
+
+import { dbAll, dbGet } from "./db/core/dbConnection";
+import logService from "./logService";
+import {
+  normalizePhone,
+  createCommunicationReference,
+} from "./messageMatchingService";
+
+// ============================================
+// TYPES
+// ============================================
+
+/**
+ * Options for auto-linking communications
+ */
+export interface AutoLinkOptions {
+  /** Contact ID to link communications for */
+  contactId: string;
+  /** Transaction ID to link communications to */
+  transactionId: string;
+  /** Optional date range (if not provided, uses transaction dates or 6 months) */
+  dateRange?: {
+    start: Date;
+    end: Date;
+  };
+  /** Maximum number of communications to link (default: 100) */
+  limit?: number;
+}
+
+/**
+ * Result of auto-linking communications for a contact
+ */
+export interface AutoLinkResult {
+  /** Number of emails successfully linked */
+  emailsLinked: number;
+  /** Number of text messages successfully linked */
+  messagesLinked: number;
+  /** Number of communications that were already linked */
+  alreadyLinked: number;
+  /** Number of errors encountered */
+  errors: number;
+}
+
+/**
+ * Contact info needed for auto-linking
+ */
+interface ContactInfo {
+  id: string;
+  emails: string[];
+  phoneNumbers: string[];
+}
+
+/**
+ * Transaction date range info
+ */
+interface TransactionDateRange {
+  startDate: string | null;
+  endDate: string | null;
+  userId: string;
+}
+
+// ============================================
+// CONSTANTS
+// ============================================
+
+const DEFAULT_LOOKBACK_MONTHS = 6;
+const DEFAULT_BUFFER_DAYS = 30; // Buffer after closing date
+const DEFAULT_LIMIT = 100;
+
+// ============================================
+// HELPER FUNCTIONS
+// ============================================
+
+/**
+ * Get a contact's email addresses and phone numbers
+ */
+async function getContactInfo(contactId: string): Promise<ContactInfo | null> {
+  // Get contact to verify it exists
+  const contactSql = "SELECT id FROM contacts WHERE id = ?";
+  const contact = dbGet<{ id: string }>(contactSql, [contactId]);
+
+  if (!contact) {
+    return null;
+  }
+
+  // Get all email addresses for this contact
+  const emailsSql = `
+    SELECT email FROM contact_emails
+    WHERE contact_id = ?
+  `;
+  const emailRows = dbAll<{ email: string }>(emailsSql, [contactId]);
+  const emails = emailRows.map((r) => r.email.toLowerCase().trim());
+
+  // Get all phone numbers for this contact
+  const phonesSql = `
+    SELECT phone_e164 FROM contact_phones
+    WHERE contact_id = ?
+  `;
+  const phoneRows = dbAll<{ phone_e164: string }>(phonesSql, [contactId]);
+  const phoneNumbers = phoneRows
+    .map((r) => normalizePhone(r.phone_e164))
+    .filter((p): p is string => p !== null);
+
+  return {
+    id: contactId,
+    emails,
+    phoneNumbers,
+  };
+}
+
+/**
+ * Get transaction date range for filtering communications
+ * Falls back to 6 months lookback if no dates are set
+ */
+async function getTransactionDateRange(
+  transactionId: string
+): Promise<TransactionDateRange | null> {
+  const sql = `
+    SELECT
+      user_id,
+      started_at,
+      closed_at,
+      representation_start_date,
+      closing_date
+    FROM transactions
+    WHERE id = ?
+  `;
+
+  const transaction = dbGet<{
+    user_id: string;
+    started_at: string | null;
+    closed_at: string | null;
+    representation_start_date: string | null;
+    closing_date: string | null;
+  }>(sql, [transactionId]);
+
+  if (!transaction) {
+    return null;
+  }
+
+  // Use the earliest available date as start
+  const startDate =
+    transaction.started_at ||
+    transaction.representation_start_date ||
+    null;
+
+  // Use the latest available date as end, with buffer
+  let endDate: string | null = null;
+  const closingDate = transaction.closed_at || transaction.closing_date;
+  if (closingDate) {
+    // Add buffer days after closing
+    const closeDateTime = new Date(closingDate);
+    closeDateTime.setDate(closeDateTime.getDate() + DEFAULT_BUFFER_DAYS);
+    endDate = closeDateTime.toISOString();
+  }
+
+  return {
+    startDate,
+    endDate,
+    userId: transaction.user_id,
+  };
+}
+
+/**
+ * Calculate default date range (6 months lookback)
+ */
+function getDefaultDateRange(): { start: Date; end: Date } {
+  const end = new Date();
+  const start = new Date();
+  start.setMonth(start.getMonth() - DEFAULT_LOOKBACK_MONTHS);
+  return { start, end };
+}
+
+/**
+ * Find unlinked emails matching the given email addresses
+ */
+async function findEmailsByContactEmails(
+  userId: string,
+  emails: string[],
+  transactionId: string,
+  dateRange: { start: Date; end: Date },
+  limit: number
+): Promise<string[]> {
+  if (emails.length === 0) {
+    return [];
+  }
+
+  // Build email patterns for LIKE matching
+  // Match emails in sender or recipients fields
+  const emailConditions = emails
+    .map(() => "(LOWER(m.sender) LIKE ? OR LOWER(m.recipients) LIKE ?)")
+    .join(" OR ");
+
+  const params: (string | number)[] = [userId, transactionId, transactionId];
+
+  // Add email patterns
+  for (const email of emails) {
+    params.push(`%${email}%`, `%${email}%`);
+  }
+
+  // Add date range
+  params.push(dateRange.start.toISOString());
+  params.push(dateRange.end.toISOString());
+  params.push(limit);
+
+  const sql = `
+    SELECT m.id
+    FROM messages m
+    WHERE m.user_id = ?
+      AND m.channel = 'email'
+      AND m.duplicate_of IS NULL
+      AND (
+        m.transaction_id IS NULL
+        OR m.transaction_id != ?
+      )
+      AND m.id NOT IN (
+        SELECT message_id FROM communications
+        WHERE transaction_id = ? AND message_id IS NOT NULL
+      )
+      AND (${emailConditions})
+      AND m.sent_at >= ?
+      AND m.sent_at <= ?
+    ORDER BY m.sent_at DESC
+    LIMIT ?
+  `;
+
+  const results = dbAll<{ id: string }>(sql, params);
+  return results.map((r) => r.id);
+}
+
+/**
+ * Find unlinked text messages matching the given phone numbers
+ */
+async function findMessagesByContactPhones(
+  userId: string,
+  phoneNumbers: string[],
+  transactionId: string,
+  dateRange: { start: Date; end: Date },
+  limit: number
+): Promise<string[]> {
+  if (phoneNumbers.length === 0) {
+    return [];
+  }
+
+  // Build phone patterns for matching
+  // Use participants_flat which contains normalized phone digits
+  const phoneConditions = phoneNumbers
+    .map(() => "m.participants_flat LIKE ?")
+    .join(" OR ");
+
+  const params: (string | number)[] = [userId, transactionId, transactionId];
+
+  // Add phone patterns (extract digits for matching)
+  for (const phone of phoneNumbers) {
+    const digits = phone.replace(/\D/g, "");
+    params.push(`%${digits}%`);
+  }
+
+  // Add date range
+  params.push(dateRange.start.toISOString());
+  params.push(dateRange.end.toISOString());
+  params.push(limit);
+
+  const sql = `
+    SELECT m.id
+    FROM messages m
+    WHERE m.user_id = ?
+      AND m.channel IN ('sms', 'imessage')
+      AND m.duplicate_of IS NULL
+      AND (
+        m.transaction_id IS NULL
+        OR m.transaction_id != ?
+      )
+      AND m.id NOT IN (
+        SELECT message_id FROM communications
+        WHERE transaction_id = ? AND message_id IS NOT NULL
+      )
+      AND (${phoneConditions})
+      AND m.sent_at >= ?
+      AND m.sent_at <= ?
+    ORDER BY m.sent_at DESC
+    LIMIT ?
+  `;
+
+  const results = dbAll<{ id: string }>(sql, params);
+  return results.map((r) => r.id);
+}
+
+// ============================================
+// MAIN FUNCTION
+// ============================================
+
+/**
+ * Auto-link communications for a contact added to a transaction.
+ *
+ * This function:
+ * 1. Gets the contact's email addresses and phone numbers
+ * 2. Searches for emails matching those addresses
+ * 3. Searches for text messages matching those phone numbers
+ * 4. Links found communications to the transaction
+ * 5. Returns counts for user notification
+ *
+ * @param options - Auto-link options including contactId and transactionId
+ * @returns Result with counts of linked communications
+ */
+export async function autoLinkCommunicationsForContact(
+  options: AutoLinkOptions
+): Promise<AutoLinkResult> {
+  const { contactId, transactionId, limit = DEFAULT_LIMIT } = options;
+
+  const result: AutoLinkResult = {
+    emailsLinked: 0,
+    messagesLinked: 0,
+    alreadyLinked: 0,
+    errors: 0,
+  };
+
+  const startTime = Date.now();
+
+  try {
+    // 1. Get contact info (emails and phone numbers)
+    const contactInfo = await getContactInfo(contactId);
+
+    if (!contactInfo) {
+      await logService.warn(
+        `Contact not found for auto-link: ${contactId}`,
+        "AutoLinkService"
+      );
+      return result;
+    }
+
+    // Skip if contact has no email or phone
+    if (contactInfo.emails.length === 0 && contactInfo.phoneNumbers.length === 0) {
+      await logService.debug(
+        `Contact ${contactId} has no email or phone, skipping auto-link`,
+        "AutoLinkService"
+      );
+      return result;
+    }
+
+    // 2. Get transaction info and date range
+    const transactionInfo = await getTransactionDateRange(transactionId);
+
+    if (!transactionInfo) {
+      await logService.warn(
+        `Transaction not found for auto-link: ${transactionId}`,
+        "AutoLinkService"
+      );
+      return result;
+    }
+
+    const { userId } = transactionInfo;
+
+    // 3. Determine date range for filtering
+    let dateRange: { start: Date; end: Date };
+
+    if (options.dateRange) {
+      // Use provided date range
+      dateRange = options.dateRange;
+    } else if (transactionInfo.startDate || transactionInfo.endDate) {
+      // Use transaction dates
+      dateRange = {
+        start: transactionInfo.startDate
+          ? new Date(transactionInfo.startDate)
+          : getDefaultDateRange().start,
+        end: transactionInfo.endDate
+          ? new Date(transactionInfo.endDate)
+          : new Date(),
+      };
+    } else {
+      // Fall back to default 6-month lookback
+      dateRange = getDefaultDateRange();
+    }
+
+    await logService.info(
+      `Auto-linking communications for contact ${contactId} to transaction ${transactionId}`,
+      "AutoLinkService",
+      {
+        emails: contactInfo.emails.length,
+        phones: contactInfo.phoneNumbers.length,
+        dateRange: {
+          start: dateRange.start.toISOString(),
+          end: dateRange.end.toISOString(),
+        },
+      }
+    );
+
+    // 4. Find matching emails
+    const emailIds = await findEmailsByContactEmails(
+      userId,
+      contactInfo.emails,
+      transactionId,
+      dateRange,
+      limit
+    );
+
+    // 5. Find matching text messages
+    const messageIds = await findMessagesByContactPhones(
+      userId,
+      contactInfo.phoneNumbers,
+      transactionId,
+      dateRange,
+      limit
+    );
+
+    // 6. Link emails to transaction
+    for (const emailId of emailIds) {
+      try {
+        const refId = await createCommunicationReference(
+          emailId,
+          transactionId,
+          userId,
+          "auto",
+          0.85 // Email matching confidence
+        );
+
+        if (refId) {
+          result.emailsLinked++;
+        } else {
+          result.alreadyLinked++;
+        }
+      } catch (error) {
+        result.errors++;
+        await logService.warn(
+          `Failed to link email ${emailId}: ${error instanceof Error ? error.message : "Unknown"}`,
+          "AutoLinkService"
+        );
+      }
+    }
+
+    // 7. Link text messages to transaction
+    for (const messageId of messageIds) {
+      try {
+        const refId = await createCommunicationReference(
+          messageId,
+          transactionId,
+          userId,
+          "auto",
+          0.9 // Phone matching confidence
+        );
+
+        if (refId) {
+          result.messagesLinked++;
+        } else {
+          result.alreadyLinked++;
+        }
+      } catch (error) {
+        result.errors++;
+        await logService.warn(
+          `Failed to link message ${messageId}: ${error instanceof Error ? error.message : "Unknown"}`,
+          "AutoLinkService"
+        );
+      }
+    }
+
+    const duration = Date.now() - startTime;
+
+    await logService.info(
+      `Auto-link complete for contact ${contactId}`,
+      "AutoLinkService",
+      {
+        emailsLinked: result.emailsLinked,
+        messagesLinked: result.messagesLinked,
+        alreadyLinked: result.alreadyLinked,
+        errors: result.errors,
+        durationMs: duration,
+      }
+    );
+
+    return result;
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    await logService.error(
+      `Auto-link failed for contact ${contactId}: ${errorMessage}`,
+      "AutoLinkService"
+    );
+
+    return result;
+  }
+}
+
+export default {
+  autoLinkCommunicationsForContact,
+};
