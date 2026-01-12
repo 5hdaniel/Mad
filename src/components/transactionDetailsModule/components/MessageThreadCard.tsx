@@ -88,10 +88,12 @@ export function MessageThreadCard({
   const avatarInitial = getAvatarInitial(contactName, phoneNumber);
 
   // Get preview of last message
+  // Clean Unicode replacement characters (U+FFFD) that indicate encoding failures
   const lastMessage = messages[messages.length - 1];
-  const previewText = lastMessage
-    ? (lastMessage.body_text || lastMessage.body_plain || lastMessage.body || "")?.slice(0, 60)
+  const rawPreview = lastMessage
+    ? (lastMessage.body_text || lastMessage.body_plain || lastMessage.body || "")
     : "";
+  const previewText = rawPreview.replace(/\uFFFD/g, "").trim().slice(0, 60);
 
   return (
     <>
