@@ -298,9 +298,7 @@ export function ConversationViewModal({
               ("body" in msg ? (msg as { body?: string }).body : "") ||
               "";
 
-            // Clean Unicode replacement characters (U+FFFD) that indicate encoding failures
-            // These appear as "�" when bytes couldn't be decoded as valid UTF-8
-            const msgText = rawText.replace(/\uFFFD/g, "").trim();
+            const msgText = rawText;
             const msgTime = new Date(msg.sent_at || msg.received_at || 0);
 
             // Get sender info for group chats

@@ -780,9 +780,7 @@ export function AttachMessagesModal({
                 ?.sort((a, b) => new Date(a.sent_at || 0).getTime() - new Date(b.sent_at || 0).getTime())
                 .map((msg) => {
                   const isOutbound = msg.direction === "outbound";
-                  // Clean Unicode replacement characters (U+FFFD) from display
-                  const rawText = msg.body_text || ("body" in msg ? (msg as { body?: string }).body : "") || "";
-                  const msgText = rawText.replace(/\uFFFD/g, "").trim();
+                  const msgText = msg.body_text || ("body" in msg ? (msg as { body?: string }).body : "") || "";
                   const msgTime = new Date(msg.sent_at || msg.received_at || 0);
 
                   return (

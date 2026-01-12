@@ -148,10 +148,6 @@ export function cleanExtractedText(text: string): string {
 
   let cleaned = text;
 
-  // Remove Unicode replacement characters (U+FFFD) - indicates failed decoding
-  // These appear when bytes can't be decoded as valid UTF-8
-  cleaned = cleaned.replace(/\uFFFD/g, "");
-
   // Remove null bytes and control characters FIRST
   cleaned = cleaned
     .replace(REGEX_PATTERNS.NULL_BYTES, "") // Remove null bytes
