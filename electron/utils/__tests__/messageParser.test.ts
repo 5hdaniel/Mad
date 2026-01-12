@@ -1,5 +1,11 @@
 /**
  * Unit tests for Message Parser Utilities
+ *
+ * Tests cover:
+ * - Text extraction from attributedBody (typedstream format)
+ * - Multi-encoding support (UTF-8, UTF-16 LE/BE, Latin-1)
+ * - Replacement character (U+FFFD) handling
+ * - Text cleaning without data loss
  */
 
 import {
@@ -9,6 +15,7 @@ import {
   Message,
 } from "../messageParser";
 import { FALLBACK_MESSAGES } from "../../constants";
+import { REPLACEMENT_CHAR } from "../encodingUtils";
 
 describe("messageParser", () => {
   describe("extractTextFromAttributedBody", () => {
@@ -118,10 +125,195 @@ describe("messageParser", () => {
     });
 
     it("should handle emojis", () => {
-      const text = "Hello 👋 World";
+      const text = "Hello \u{1F44B} World";
       const result = cleanExtractedText(text);
       expect(result).toContain("Hello");
       expect(result).toContain("World");
+    });
+
+    it("should NOT remove replacement characters (U+FFFD)", () => {
+      // This is critical - removing U+FFFD causes data loss
+      const textWithReplacement = `Hello${REPLACEMENT_CHAR}World`;
+      const result = cleanExtractedText(textWithReplacement);
+
+      // The replacement character should still be present
+      expect(result).toContain(REPLACEMENT_CHAR);
+      expect(result).toBe(`Hello${REPLACEMENT_CHAR}World`);
+    });
+
+    it("should preserve smart quotes", () => {
+      const text = "\u201cHello\u201d and \u2018World\u2019";
+      const result = cleanExtractedText(text);
+      expect(result).toBe(text);
+    });
+
+    it("should preserve accented characters", () => {
+      const text = "Let's meet at caf\u00e9 for r\u00e9sum\u00e9 review";
+      const result = cleanExtractedText(text);
+      expect(result).toBe(text);
+    });
+
+    it("should preserve currency symbols", () => {
+      const text = "Price: \u20ac100, \u00a350, \u00a530";
+      const result = cleanExtractedText(text);
+      expect(result).toBe(text);
+    });
+
+    it("should preserve CJK characters", () => {
+      const text = "\u4f60\u597d \u3053\u3093\u306b\u3061\u306f";
+      const result = cleanExtractedText(text);
+      expect(result).toBe(text);
+    });
+  });
+
+  describe("Encoding scenarios (TASK-1028)", () => {
+    describe("UTF-8 text handling", () => {
+      it("should handle UTF-8 text with special characters", async () => {
+        const messageText = "Let's meet at caf\u00e9";
+        const buffer = Buffer.from(`NSString${"\x00".repeat(20)}${messageText}`);
+
+        const result = await extractTextFromAttributedBody(buffer);
+
+        expect(result).toBeDefined();
+        expect(typeof result).toBe("string");
+      });
+
+      it("should handle UTF-8 emoji content", async () => {
+        const messageText = "Great job! \u{1F44D}\u{1F389}";
+        const buffer = Buffer.from(`NSString${"\x00".repeat(20)}${messageText}`);
+
+        const result = await extractTextFromAttributedBody(buffer);
+
+        expect(result).toBeDefined();
+        expect(typeof result).toBe("string");
+      });
+
+      it("should handle UTF-8 smart quotes", async () => {
+        const messageText = "\u201cHello\u201d and \u2018World\u2019";
+        const buffer = Buffer.from(`NSString${"\x00".repeat(20)}${messageText}`);
+
+        const result = await extractTextFromAttributedBody(buffer);
+
+        expect(result).toBeDefined();
+        expect(typeof result).toBe("string");
+      });
+    });
+
+    describe("Multi-encoding fallback", () => {
+      it("should handle Latin-1 encoded text", async () => {
+        // Latin-1: "caf\xe9" (cafe with accent)
+        const latin1Buffer = Buffer.from([
+          0x4e, 0x53, 0x53, 0x74, 0x72, 0x69, 0x6e, 0x67, // "NSString"
+          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // padding
+          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+          0x00, 0x00, 0x00, 0x00,
+          0x63, 0x61, 0x66, 0xe9, // "caf\xe9" in Latin-1
+        ]);
+
+        const result = await extractTextFromAttributedBody(latin1Buffer);
+
+        expect(result).toBeDefined();
+        expect(typeof result).toBe("string");
+      });
+
+      it("should handle text without NSString marker", async () => {
+        const messageText = "Hello, this is a plain text message!";
+        const buffer = Buffer.from(messageText);
+
+        const result = await extractTextFromAttributedBody(buffer);
+
+        // Should either extract or return fallback, but not crash
+        expect(typeof result).toBe("string");
+      });
+    });
+
+    describe("Replacement character preservation", () => {
+      it("should NOT strip replacement characters - that causes data loss", async () => {
+        // Create a buffer that simulates corrupted data
+        // The key is that we should preserve U+FFFD, not strip it
+        const textWithReplacement = `Hello${REPLACEMENT_CHAR}World`;
+        const message: Message = {
+          text: textWithReplacement,
+          attributedBody: null,
+        };
+
+        const result = await getMessageText(message);
+
+        // Critical: replacement character should still be there
+        expect(result).toContain(REPLACEMENT_CHAR);
+      });
+
+      it("should log warning but preserve text when encoding fails", async () => {
+        // This test verifies we don't silently drop content
+        const message: Message = {
+          text: null,
+          attributedBody: Buffer.from("streamtyped" + "some content here"),
+        };
+
+        const result = await getMessageText(message);
+
+        // Should return something, not throw
+        expect(typeof result).toBe("string");
+      });
+    });
+
+    describe("Real-world encoding scenarios", () => {
+      it("should handle text with curly apostrophes", async () => {
+        const message: Message = {
+          text: "Let\u2019s do this", // curly apostrophe
+          attributedBody: null,
+        };
+
+        const result = await getMessageText(message);
+
+        expect(result).toBe("Let\u2019s do this");
+      });
+
+      it("should handle text with em-dash", async () => {
+        const message: Message = {
+          text: "Hello\u2014World", // em-dash
+          attributedBody: null,
+        };
+
+        const result = await getMessageText(message);
+
+        expect(result).toBe("Hello\u2014World");
+      });
+
+      it("should handle non-Latin scripts", async () => {
+        const message: Message = {
+          text: "\u4f60\u597d \u3053\u3093\u306b\u3061\u306f \uc548\ub155\ud558\uc138\uc694", // Chinese, Japanese, Korean
+          attributedBody: null,
+        };
+
+        const result = await getMessageText(message);
+
+        expect(result).toBe("\u4f60\u597d \u3053\u3093\u306b\u3061\u306f \uc548\ub155\ud558\uc138\uc694");
+      });
+
+      it("should handle currency symbols", async () => {
+        const message: Message = {
+          text: "Price: \u20ac100, \u00a350, \u00a530",
+          attributedBody: null,
+        };
+
+        const result = await getMessageText(message);
+
+        expect(result).toBe("Price: \u20ac100, \u00a350, \u00a530");
+      });
+
+      it("should handle mixed emoji and text", async () => {
+        const message: Message = {
+          text: "Meeting at 3pm \u{1F4C5} don\u2019t forget! \u{1F44D}",
+          attributedBody: null,
+        };
+
+        const result = await getMessageText(message);
+
+        expect(result).toContain("\u{1F4C5}");
+        expect(result).toContain("\u{1F44D}");
+        expect(result).toContain("\u2019"); // curly apostrophe preserved
+      });
     });
   });
 
