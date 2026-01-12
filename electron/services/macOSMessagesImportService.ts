@@ -58,7 +58,7 @@ export interface MacOSImportResult {
  * Progress callback for import operations
  */
 export type ImportProgressCallback = (progress: {
-  phase: "deleting" | "importing" | "attachments";
+  phase: "querying" | "deleting" | "importing" | "attachments";
   current: number;
   total: number;
   percent: number;
@@ -70,7 +70,8 @@ const MAX_HANDLE_LENGTH = 500; // Phone numbers, emails, etc.
 const MAX_GUID_LENGTH = 100; // Message GUID format
 const BATCH_SIZE = 500; // Messages per batch
 const DELETE_BATCH_SIZE = 5000; // Messages per delete batch (larger for efficiency)
-const YIELD_INTERVAL = 2; // Yield every N batches
+const YIELD_INTERVAL = 1; // Yield every N batches (reduced from 2 for better UI responsiveness)
+const QUERY_BATCH_SIZE = 10000; // Messages per query batch (for pagination)
 
 // Attachment constants (TASK-1012)
 const SUPPORTED_IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".gif", ".heic"];
@@ -370,27 +371,26 @@ class MacOSMessagesImportService {
       const dbClose = promisify(db.close.bind(db));
 
       try {
-        // Query all messages with their handles and chat info
-        const messages = await dbAll<RawMacMessage>(`
-          SELECT
-            message.ROWID as id,
-            message.guid,
-            message.text,
-            message.attributedBody,
-            message.date,
-            message.is_from_me,
-            handle.id as handle_id,
-            message.service,
-            chat_message_join.chat_id,
-            message.cache_has_attachments
-          FROM message
-          LEFT JOIN handle ON message.handle_id = handle.ROWID
-          LEFT JOIN chat_message_join ON message.ROWID = chat_message_join.message_id
-          WHERE message.guid IS NOT NULL
-          ORDER BY message.date ASC
+        // First, get total message count for progress reporting
+        const countResult = await dbAll<{ count: number }>(`
+          SELECT COUNT(*) as count FROM message WHERE guid IS NOT NULL
         `);
+        const totalMessageCount = countResult[0]?.count || 0;
 
-        // Query actual chat members from chat_handle_join
+        logService.info(
+          `Found ${totalMessageCount} messages in macOS Messages, fetching in batches of ${QUERY_BATCH_SIZE}`,
+          MacOSMessagesImportService.SERVICE_NAME
+        );
+
+        // Report initial querying progress
+        onProgress?.({
+          phase: "querying",
+          current: 0,
+          total: totalMessageCount,
+          percent: 0,
+        });
+
+        // Query actual chat members from chat_handle_join (small table, load all at once)
         // This gives us the real participant list for group chats
         const chatMemberRows = await dbAll<ChatMemberRow>(`
           SELECT
@@ -412,6 +412,81 @@ class MacOSMessagesImportService {
           `Loaded ${chatMembersMap.size} chat member lists`,
           MacOSMessagesImportService.SERVICE_NAME
         );
+
+        await yieldToEventLoop();
+
+        // Fetch messages using cursor-based pagination to avoid loading all 600K+ at once
+        // This prevents the UI from freezing during the initial query
+        const allMessages: RawMacMessage[] = [];
+        let lastRowId = 0;
+        let fetchedCount = 0;
+
+        const queryProgressBar = createProgressBar("Querying");
+        queryProgressBar.start(totalMessageCount, 0);
+
+        while (fetchedCount < totalMessageCount) {
+          // Check for cancellation
+          if (this.cancelCurrentImport) {
+            queryProgressBar.stop();
+            logService.warn(
+              `Import cancelled during query phase at ${fetchedCount}/${totalMessageCount}`,
+              MacOSMessagesImportService.SERVICE_NAME
+            );
+            await dbClose();
+            return {
+              success: false,
+              messagesImported: 0,
+              messagesSkipped: 0,
+              attachmentsImported: 0,
+              attachmentsSkipped: 0,
+              duration: Date.now() - startTime,
+              error: "Import cancelled",
+            };
+          }
+
+          // Fetch next batch using cursor-based pagination (ROWID for efficient indexing)
+          const messageBatch = await dbAll<RawMacMessage>(`
+            SELECT
+              message.ROWID as id,
+              message.guid,
+              message.text,
+              message.attributedBody,
+              message.date,
+              message.is_from_me,
+              handle.id as handle_id,
+              message.service,
+              chat_message_join.chat_id,
+              message.cache_has_attachments
+            FROM message
+            LEFT JOIN handle ON message.handle_id = handle.ROWID
+            LEFT JOIN chat_message_join ON message.ROWID = chat_message_join.message_id
+            WHERE message.guid IS NOT NULL AND message.ROWID > ?
+            ORDER BY message.ROWID ASC
+            LIMIT ?
+          `, [lastRowId, QUERY_BATCH_SIZE]);
+
+          if (messageBatch.length === 0) {
+            break; // No more messages
+          }
+
+          allMessages.push(...messageBatch);
+          lastRowId = messageBatch[messageBatch.length - 1].id;
+          fetchedCount += messageBatch.length;
+
+          // Update progress
+          queryProgressBar.update(fetchedCount);
+          onProgress?.({
+            phase: "querying",
+            current: fetchedCount,
+            total: totalMessageCount,
+            percent: Math.round((fetchedCount / totalMessageCount) * 100),
+          });
+
+          // Yield to event loop to keep UI responsive
+          await yieldToEventLoop();
+        }
+
+        queryProgressBar.stop();
 
         // Query attachments linked to messages (TASK-1012)
         // We join through message_attachment_join to get the message relationship
@@ -436,12 +511,12 @@ class MacOSMessagesImportService {
         await dbClose();
 
         logService.info(
-          `Found ${messages.length} messages and ${attachments.length} attachments in macOS Messages`,
+          `Fetched ${allMessages.length} messages and ${attachments.length} attachments in macOS Messages`,
           MacOSMessagesImportService.SERVICE_NAME
         );
 
         // Store messages to app database
-        const messageResult = await this.storeMessages(userId, messages, chatMembersMap, onProgress);
+        const messageResult = await this.storeMessages(userId, allMessages, chatMembersMap, onProgress);
 
         // Store attachments (TASK-1012)
         const attachmentResult = await this.storeAttachments(userId, attachments, messageResult.messageIdMap, onProgress);
@@ -457,8 +532,8 @@ class MacOSMessagesImportService {
         // Send final 100% progress to update UI
         onProgress?.({
           phase: "importing",
-          current: messages.length,
-          total: messages.length,
+          current: allMessages.length,
+          total: allMessages.length,
           percent: 100,
         });
 
