@@ -273,7 +273,7 @@ interface MainAPI {
       conversationIds: string[],
     ) => Promise<{ success: boolean; exportPath?: string }>;
     /** Import messages from macOS Messages app into the app database (macOS only) */
-    importMacOSMessages: (userId: string) => Promise<MacOSImportResult>;
+    importMacOSMessages: (userId: string, forceReimport?: boolean) => Promise<MacOSImportResult>;
     /** Get count of messages available for import from macOS Messages */
     getImportCount: () => Promise<{ success: boolean; count?: number; error?: string }>;
     /** Listen for import progress updates */

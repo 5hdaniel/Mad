@@ -48,8 +48,7 @@ function ContactSelectModal({
   const initialIdsKey = initialSelectedIds.join(',');
   React.useEffect(() => {
     setSelectedIds(initialSelectedIds);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialIdsKey]);
+  }, [initialIdsKey, initialSelectedIds]);
 
   const availableContacts = contacts.filter((c) => !excludeIds.includes(c.id));
 
@@ -238,8 +237,7 @@ function ContactSelectModal({
                             {contact.name}
                           </h4>
                           {propertyAddress &&
-                            contact.address_mention_count != null &&
-                            contact.address_mention_count > 0 ? (
+                            (contact.address_mention_count ?? 0) > 0 && (
                               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 flex-shrink-0">
                                 <svg
                                   className="w-3 h-3 mr-1"
@@ -255,9 +253,9 @@ function ContactSelectModal({
                                   />
                                 </svg>
                                 {contact.address_mention_count} related email
-                                {contact.address_mention_count > 1 ? "s" : ""}
+                                {(contact.address_mention_count ?? 0) > 1 ? "s" : ""}
                               </span>
-                            ) : null}
+                            )}
                         </div>
                         <div className="text-sm text-gray-600 space-y-0.5">
                           {contact.email && (

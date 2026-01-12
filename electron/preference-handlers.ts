@@ -34,7 +34,7 @@ export function registerPreferenceHandlers(): void {
       userId: string,
     ): Promise<PreferenceResponse> => {
       try {
-        logService.info("[Preferences] Getting preferences", "Preferences", { userId });
+        logService.debug("[Preferences] Getting preferences", "Preferences", { userId });
 
         // Validate input
         const validatedUserId = validateUserId(userId)!;
@@ -173,7 +173,7 @@ export function registerPreferenceHandlers(): void {
     },
   );
 
-  logService.info("Handlers registered", "Preferences");
+  logService.debug("Handlers registered", "Preferences");
 }
 
 /**

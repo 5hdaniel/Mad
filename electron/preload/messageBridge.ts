@@ -9,6 +9,7 @@ import { ipcRenderer } from "electron";
  * Progress event from macOS message import
  */
 export interface ImportProgress {
+  phase: "deleting" | "importing" | "attachments";
   current: number;
   total: number;
   percent: number;
@@ -66,10 +67,11 @@ export const messageBridge = {
    * Import messages from macOS Messages app into the app database
    * This enables linking messages to transactions on macOS
    * @param userId - User ID to associate messages with
+   * @param forceReimport - If true, delete existing messages and re-import all
    * @returns Import result with counts
    */
-  importMacOSMessages: (userId: string): Promise<MacOSImportResult> =>
-    ipcRenderer.invoke("messages:import-macos", userId),
+  importMacOSMessages: (userId: string, forceReimport = false): Promise<MacOSImportResult> =>
+    ipcRenderer.invoke("messages:import-macos", userId, forceReimport),
 
   /**
    * Get count of messages available for import from macOS Messages

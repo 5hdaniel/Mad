@@ -19,6 +19,50 @@ Use the Task tool to spawn the engineer agent instead.
 
 ---
 
+## Quick Start
+
+**Read this section first to understand the data flow.**
+
+### Current Flow
+
+```
+User changes setting in UI
+         |
+         v
+Settings.tsx: handleScanLookbackChange(months)
+         |
+         v
+window.api.preferences.update(userId, { scan: { lookbackMonths: months } })
+         |
+         v
+preference-handlers.ts: ipcMain.handle("preferences:update", ...)
+         |
+         v
+supabaseService.getPreferences(userId)  <- Gets existing
+         |
+         v
+deepMerge(existing, new)  <- Merges nested objects
+         |
+         v
+supabaseService.syncPreferences(userId, merged)  <- Saves to Supabase
+```
+
+### Key Files
+
+| File | Role | Key Function |
+|------|------|--------------|
+| `src/components/Settings.tsx` | UI | `handleScanLookbackChange` (line 133) |
+| `electron/preference-handlers.ts` | IPC handler | `preferences:update` (line 117-174) |
+| `electron/services/supabaseService.ts` | Storage | `syncPreferences`, `getPreferences` |
+
+### What to Look For
+
+1. **Silent errors** - Errors caught but only logged, not surfaced
+2. **Deep merge bug** - `scan.lookbackMonths` may not merge correctly
+3. **Load timing** - Value may be overwritten after initial load
+
+---
+
 ## Goal
 
 Fix the bug where the "Scan Lookback Period" setting in Settings doesn't persist when changed. The value resets to the default (9 months) instead of saving the user's selection.
@@ -30,11 +74,172 @@ Fix the bug where the "Scan Lookback Period" setting in Settings doesn't persist
 - Do NOT modify other settings besides lookback period
 - Do NOT change the UI design of the settings page
 
+---
+
+## Step-by-Step Debugging Guide
+
+### Step 1: Add Diagnostic Logging (5 min)
+
+Add temporary logging to trace the issue. Look for where the value is lost.
+
+**File 1: `src/components/Settings.tsx`**
+
+```typescript
+// Line ~133 - handleScanLookbackChange
+const handleScanLookbackChange = async (months: number): Promise<void> => {
+  console.log('[Settings] 1. UI changing lookback to:', months);
+  setScanLookbackMonths(months);
+  try {
+    console.log('[Settings] 2. Calling preferences.update with:', { scan: { lookbackMonths: months } });
+    const result = await window.api.preferences.update(userId, {
+      scan: {
+        lookbackMonths: months,
+      },
+    });
+    console.log('[Settings] 3. Update result:', result);
+    if (!result.success) {
+      console.error("[Settings] 4. FAILED - Update returned error:", result.error);
+    } else {
+      console.log("[Settings] 4. SUCCESS - Saved lookback:", months);
+    }
+  } catch (error) {
+    console.error("[Settings] 4. EXCEPTION:", error);
+  }
+};
+```
+
+**File 2: `electron/preference-handlers.ts`**
+
+```typescript
+// Line ~117 - preferences:update handler
+ipcMain.handle(
+  "preferences:update",
+  async (event, userId, partialPreferences) => {
+    try {
+      console.log('[Prefs] 1. Received update request:', JSON.stringify(partialPreferences));
+
+      // ... validation code ...
+
+      const existingPreferences = await supabaseService.getPreferences(validatedUserId);
+      console.log('[Prefs] 2. Existing preferences:', JSON.stringify(existingPreferences));
+
+      const updatedPreferences = deepMerge(existingPreferences ?? {}, sanitizedPartialPreferences);
+      console.log('[Prefs] 3. After merge:', JSON.stringify(updatedPreferences));
+
+      await supabaseService.syncPreferences(validatedUserId, updatedPreferences);
+      console.log('[Prefs] 4. Synced to Supabase');
+
+      return { success: true, preferences: updatedPreferences };
+    } catch (error) {
+      console.error('[Prefs] ERROR:', error);
+      // ...
+    }
+  }
+);
+```
+
+### Step 2: Test and Observe (5 min)
+
+1. Open app, go to Settings
+2. Open DevTools (View > Toggle Developer Tools)
+3. Change lookback from 9 to 3 months
+4. Look at Console output:
+   - Do you see all 4 log messages?
+   - Does message 3 show `{ scan: { lookbackMonths: 3 } }`?
+   - Does message 4 say SUCCESS?
+
+### Step 3: Identify Root Cause
+
+**Possible Issues:**
+
+**Issue A: Deep merge not working**
+If existing preferences is `{ export: { format: 'pdf' } }` and you merge `{ scan: { lookbackMonths: 3 } }`, the result should be:
+```json
+{ "export": { "format": "pdf" }, "scan": { "lookbackMonths": 3 } }
+```
+
+Check the `deepMerge` function (line 185-206 in preference-handlers.ts).
+
+**Issue B: Supabase sync fails silently**
+Check if `syncPreferences` throws but error isn't surfaced.
+
+**Issue C: Load overwrites save**
+After saving, the `useEffect` that loads preferences on mount might overwrite with stale data.
+
+Check `Settings.tsx` line ~75-100 for the load logic.
+
+**Issue D: userId is stale/wrong**
+If `userId` is undefined or wrong, the preference won't be saved to the right user.
+
+### Step 4: Apply Fix
+
+Based on what you find, apply the appropriate fix:
+
+**Fix for Issue A (Deep Merge):**
+```typescript
+// Ensure nested object merges correctly
+function deepMerge(target, source) {
+  const output = { ...target };
+  for (const key of Object.keys(source)) {
+    if (isObject(source[key]) && isObject(target[key])) {
+      output[key] = deepMerge(target[key], source[key]);
+    } else {
+      output[key] = source[key];
+    }
+  }
+  return output;
+}
+```
+
+**Fix for Issue B (Silent Failure):**
+```typescript
+// Surface errors instead of swallowing
+try {
+  await supabaseService.syncPreferences(userId, merged);
+} catch (error) {
+  logService.error('[Prefs] Sync failed:', error);
+  return { success: false, error: error.message };
+}
+```
+
+**Fix for Issue C (Load Timing):**
+```typescript
+// Add flag to prevent load from overwriting recent save
+const [isLoading, setIsLoading] = useState(true);
+const [lastSaveTime, setLastSaveTime] = useState(0);
+
+// In useEffect load
+if (Date.now() - lastSaveTime < 5000) {
+  // Skip load if we just saved (within 5 seconds)
+  return;
+}
+
+// In handleScanLookbackChange
+setLastSaveTime(Date.now());
+```
+
+### Step 5: Verify the Fix
+
+1. Change lookback from 9 to 3 months
+2. Navigate to Dashboard and back to Settings - should still be 3
+3. Restart the app - should still be 3
+4. Check Supabase directly:
+   ```sql
+   SELECT preferences FROM user_preferences WHERE user_id = 'YOUR_USER_ID';
+   ```
+   Should show: `{ "scan": { "lookbackMonths": 3 } }`
+
+### Step 6: Remove Debug Logging
+
+After fix is verified, remove the temporary `console.log` statements (or keep only the error ones).
+
+---
+
 ## Deliverables
 
-1. Debug and fix: `src/components/Settings.tsx` - handleScanLookbackChange or related
-2. Possibly fix: `electron/handlers/preference-handlers.ts` - deep merge logic
-3. Possibly fix: `electron/services/supabaseService.ts` - syncPreferences
+1. Debug and fix: `src/components/Settings.tsx` - If issue is in UI layer
+2. Possibly fix: `electron/preference-handlers.ts` - If issue is in deep merge
+3. Possibly fix: `electron/services/supabaseService.ts` - If issue is in sync
 
 ## Acceptance Criteria
 
@@ -45,97 +250,7 @@ Fix the bug where the "Scan Lookback Period" setting in Settings doesn't persist
 - [ ] No regressions in other settings
 - [ ] All CI checks pass
 
-## Implementation Notes
-
-### Investigation Steps
-
-The bug could be in any of these layers:
-
-1. **UI Layer (Settings.tsx)**
-   - Check if `handleScanLookbackChange` is calling the API correctly
-   - Verify the value is being passed correctly
-
-2. **IPC Handler (preference-handlers.ts)**
-   - Check the deep merge logic for `scan.lookbackMonths`
-   - Look for silent failures (errors caught but not surfaced)
-
-3. **Supabase Sync (supabaseService.ts)**
-   - Check if `syncPreferences` is being called
-   - Verify data reaches Supabase
-
-### Debug Approach
-
-Add console.log at each layer to trace the flow:
-
-```typescript
-// Settings.tsx
-const handleScanLookbackChange = async (months: number) => {
-  console.log('[Settings] Changing lookback to:', months);
-  const result = await window.api.preferences.update(userId, {
-    scan: { lookbackMonths: months }
-  });
-  console.log('[Settings] Update result:', result);
-};
-
-// preference-handlers.ts
-ipcMain.handle('preferences:update', async (event, userId, updates) => {
-  console.log('[Prefs] Received update:', updates);
-  // ... merge logic
-  console.log('[Prefs] After merge:', merged);
-  // ... sync
-  console.log('[Prefs] Sync result:', syncResult);
-});
-```
-
-### Possible Fixes
-
-**If deep merge issue:**
-```typescript
-// Ensure nested object merges correctly
-const merged = {
-  ...existingPrefs,
-  scan: {
-    ...existingPrefs.scan,
-    ...updates.scan
-  }
-};
-```
-
-**If silent failure:**
-```typescript
-// Surface errors instead of swallowing them
-try {
-  await supabaseService.syncPreferences(userId, merged);
-} catch (error) {
-  console.error('[Prefs] Sync failed:', error);
-  throw error; // Re-throw to surface to caller
-}
-```
-
-**If async timing issue:**
-```typescript
-// Ensure state updates after successful persistence
-const result = await window.api.preferences.update(userId, updates);
-if (result.success) {
-  setLookbackMonths(months); // Only update UI if save succeeded
-}
-```
-
-### Verification
-
-After fix, verify:
-1. Change setting from 9 to 3 months
-2. Check DevTools Network tab for Supabase call
-3. Navigate away and back - setting should persist
-4. Close and reopen app - setting should persist
-5. Check Supabase directly: `user_preferences.scan.lookbackMonths = 3`
-
-## Integration Notes
-
-- Imports from: Supabase client for persistence
-- Exports to: Settings UI displays the value
-- Used by: Sync service uses lookback for filtering
-- Depends on: None (can run in parallel with other Phase 1 tasks)
+---
 
 ## Do / Don't
 
@@ -158,33 +273,51 @@ After fix, verify:
 - If fixing this would require significant refactoring
 - If other settings have the same bug (might indicate systemic issue)
 
+---
+
 ## Testing Expectations (MANDATORY)
 
 ### Unit Tests
 
 - Required: Yes
 - New tests to write:
-  - Preference update for scan.lookbackMonths
+  - Preference update for `scan.lookbackMonths`
   - Deep merge handles nested objects correctly
 - Existing tests to update:
   - Any preference-related tests if they exist
+
+**Test file:** `electron/__tests__/preference-handlers.test.ts`
+
+```typescript
+describe('preferences:update deep merge', () => {
+  it('should merge scan.lookbackMonths into existing preferences', async () => {
+    // Mock existing preferences
+    const existing = { export: { format: 'pdf' } };
+    mockSupabaseService.getPreferences.mockResolvedValue(existing);
+
+    // Call update
+    const result = await handlePreferencesUpdate('user-123', {
+      scan: { lookbackMonths: 3 }
+    });
+
+    // Verify merge result
+    expect(mockSupabaseService.syncPreferences).toHaveBeenCalledWith('user-123', {
+      export: { format: 'pdf' },
+      scan: { lookbackMonths: 3 }
+    });
+    expect(result.success).toBe(true);
+  });
+});
+```
 
 ### Coverage
 
 - Coverage impact: Must not decrease
 
-### Integration / Feature Tests
-
-- Required scenarios:
-  - Change lookback setting, verify persisted
-  - App restart preserves setting
-
 ### CI Requirements
 
 This task's PR MUST pass:
 - [ ] Unit tests
-- [ ] Integration tests (if applicable)
-- [ ] Coverage checks
 - [ ] Type checking
 - [ ] Lint / format checks
 

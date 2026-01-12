@@ -77,57 +77,6 @@ function formatMessageTime(date: Date): string {
 }
 
 /**
- * Sanitize message text for display
- * Removes iMessage internal attributes that may have leaked into the body text
- */
-function sanitizeMessageText(text: string): string {
-  if (!text) return "";
-
-  let cleaned = text;
-
-  // Remove leading "00" or similar 2-character hex prefix (common in iMessage attributedBody parsing)
-  // Pattern: "00" directly followed by actual text (uppercase, lowercase, or digit)
-  // Examples: "00Hello" -> "Hello", "006 min away" -> "6 min away", "00AHome!" -> "AHome!"
-  // We use a lookahead to ensure we're removing the prefix, not valid content
-  cleaned = cleaned.replace(/^00(?=[A-Za-z0-9])/, "");
-
-  // Also handle case with whitespace/newline between hex and text
-  cleaned = cleaned.replace(/^[0-9A-Fa-f]{2}[\s\r\n]+/, "");
-
-  // Another pass in case there are multiple hex prefixes
-  cleaned = cleaned.replace(/^00(?=[A-Za-z0-9])/, "");
-
-  // Split into lines and filter out lines that are just hex bytes
-  const lines = cleaned.split(/[\r\n]+/);
-  const filteredLines = lines.filter((line) => {
-    const trimmed = line.trim();
-    if (trimmed.length === 0) return false;
-    // Remove lines that are just 2-4 hex characters
-    if (/^[0-9A-Fa-f]{2,4}$/.test(trimmed)) return false;
-    return true;
-  });
-
-  cleaned = filteredLines
-    .join("\n")
-    // Remove iMessage internal attribute names
-    .replace(/__kIM\w+/g, "")
-    .replace(/kIMMessagePart\w*/g, "")
-    .replace(/AttributeName/g, "")
-    // Remove control characters
-    .replace(/[\x00-\x08\x0B-\x1F\x7F]/g, "")
-    // Remove leading single-character garbage
-    .replace(/^[^a-zA-Z0-9\s]{1,3}/, "")
-    .trim();
-
-  // If the text is just a single character that looks like garbage, return empty
-  if (cleaned.length === 1 && !/[a-zA-Z0-9]/.test(cleaned)) {
-    return "";
-  }
-
-  return cleaned;
-}
-
-/**
  * Check if a MIME type is a displayable image
  */
 function isDisplayableImage(mimeType: string | null): boolean {
@@ -348,8 +297,8 @@ export function ConversationViewModal({
               msg.body_plain ||
               ("body" in msg ? (msg as { body?: string }).body : "") ||
               "";
-            // Sanitize to remove any iMessage internal attributes that leaked through
-            const msgText = sanitizeMessageText(rawText);
+
+            const msgText = rawText;
             const msgTime = new Date(msg.sent_at || msg.received_at || 0);
 
             // Get sender info for group chats
@@ -417,7 +366,7 @@ export function ConversationViewModal({
                     </div>
                   )}
                   {/* Show placeholder for attachments still loading */}
-                  {msg.has_attachments &&
+                  {!!msg.has_attachments &&
                     displayableAttachments.length === 0 &&
                     attachmentsLoading && (
                       <div
@@ -427,7 +376,7 @@ export function ConversationViewModal({
                       </div>
                     )}
                   {/* Show placeholder for unsupported attachments */}
-                  {msg.has_attachments &&
+                  {!!msg.has_attachments &&
                     displayableAttachments.length === 0 &&
                     !attachmentsLoading &&
                     messageAttachments.length === 0 && (

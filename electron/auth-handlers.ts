@@ -30,11 +30,11 @@ import { registerSharedAuthHandlers } from "./handlers/sharedAuthHandlers";
 export const initializeDatabase = async (): Promise<void> => {
   try {
     await databaseService.initialize();
-    await logService.info("Database initialized", "AuthHandlers");
+    await logService.debug("Database initialized", "AuthHandlers");
 
     // Initialize audit service with dependencies
     auditService.initialize(databaseService, supabaseService);
-    await logService.info("Audit service initialized", "AuthHandlers");
+    await logService.debug("Audit service initialized", "AuthHandlers");
   } catch (error) {
     await logService.error("Failed to initialize database", "AuthHandlers", {
       error: error instanceof Error ? error.message : "Unknown error",

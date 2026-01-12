@@ -322,7 +322,7 @@ export function registerSystemHandlers(): void {
       try {
         await initializeDatabase();
         initializationComplete = true;
-        logService.info("Database initialized successfully", "SystemHandlers");
+        logService.debug("Database initialized successfully", "SystemHandlers");
         return { success: true };
       } catch (error) {
         const errorMessage =

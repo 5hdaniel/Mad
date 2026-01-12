@@ -24,6 +24,7 @@ export function MacOSMessagesImportSettings({
   const { isMacOS } = usePlatform();
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState<{
+    phase: "deleting" | "importing" | "attachments";
     current: number;
     total: number;
     percent: number;
@@ -45,7 +46,7 @@ export function MacOSMessagesImportSettings({
     return cleanup;
   }, [isMacOS]);
 
-  const handleImport = useCallback(async () => {
+  const handleImport = useCallback(async (forceReimport = false) => {
     if (!userId || isImporting) return;
 
     setIsImporting(true);
@@ -53,7 +54,13 @@ export function MacOSMessagesImportSettings({
     setLastResult(null);
 
     try {
-      const result = await window.api.messages.importMacOSMessages(userId);
+      // Type assertion: window.d.ts has the correct signature but TS doesn't pick it up
+      // See BACKLOG-199 for investigation
+      const importFn = window.api.messages.importMacOSMessages as (
+        userId: string,
+        forceReimport?: boolean
+      ) => Promise<{ success: boolean; messagesImported: number; error?: string }>;
+      const result = await importFn(userId, forceReimport);
       setLastResult({
         success: result.success,
         messagesImported: result.messagesImported,
@@ -107,19 +114,47 @@ export function MacOSMessagesImportSettings({
       {isImporting && importProgress && (
         <div className="mb-3">
           <div className="flex justify-between text-xs text-gray-600 mb-1">
-            <span>Importing messages...</span>
+            <span>
+              {importProgress.phase === "deleting"
+                ? "Clearing existing messages..."
+                : importProgress.phase === "attachments"
+                ? "Processing attachments..."
+                : "Importing messages..."}
+            </span>
             <span>{importProgress.percent}%</span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-2">
             <div
-              className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+              className={`h-2 rounded-full transition-all duration-300 ${
+                importProgress.phase === "deleting"
+                  ? "bg-orange-500"
+                  : importProgress.phase === "attachments"
+                  ? "bg-green-500"
+                  : "bg-blue-500"
+              }`}
               style={{ width: `${importProgress.percent}%` }}
             />
           </div>
           <p className="text-xs text-gray-500 mt-1">
             {importProgress.current.toLocaleString()} /{" "}
-            {importProgress.total.toLocaleString()} messages
+            {importProgress.total.toLocaleString()}{" "}
+            {importProgress.phase === "deleting"
+              ? "deleted"
+              : importProgress.phase === "attachments"
+              ? "attachments"
+              : "messages"}
           </p>
+        </div>
+      )}
+      {/* Show "preparing" state when importing but no progress yet */}
+      {isImporting && !importProgress && (
+        <div className="mb-3">
+          <div className="flex justify-between text-xs text-gray-600 mb-1">
+            <span>Preparing...</span>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-2">
+            <div className="bg-gray-400 h-2 rounded-full w-full animate-pulse" />
+          </div>
         </div>
       )}
 
@@ -144,13 +179,23 @@ export function MacOSMessagesImportSettings({
         </div>
       )}
 
-      <button
-        onClick={handleImport}
-        disabled={isImporting}
-        className="w-full px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        {isImporting ? "Importing..." : "Import Messages"}
-      </button>
+      <div className="flex gap-2">
+        <button
+          onClick={() => handleImport(false)}
+          disabled={isImporting}
+          className="flex-1 px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isImporting ? "Importing..." : "Import Messages"}
+        </button>
+        <button
+          onClick={() => handleImport(true)}
+          disabled={isImporting}
+          className="px-3 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm font-medium rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          title="Delete all existing messages and re-import from scratch"
+        >
+          Force Re-import
+        </button>
+      </div>
     </div>
   );
 }

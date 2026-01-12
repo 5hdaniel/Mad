@@ -24,12 +24,16 @@
  * @module hooks/useAutoRefresh
  */
 
-import { useEffect, useRef, useCallback, useState } from "react";
+import { useEffect, useCallback, useState } from "react";
 import { usePlatform } from "../contexts/PlatformContext";
 
 // Module-level flag to track if onboarding import just completed
 // This is more reliable than localStorage across component remounts
 let skipNextMessagesSync = false;
+
+// Module-level flag to track if auto-refresh has been triggered this session
+// Using module-level prevents React strict mode from triggering twice
+let hasTriggeredAutoRefresh = false;
 
 /**
  * Mark that onboarding import just completed - skip the next messages sync
@@ -47,6 +51,13 @@ export function markOnboardingImportComplete(): void {
  */
 export function shouldSkipMessagesSync(): boolean {
   return skipNextMessagesSync;
+}
+
+/**
+ * Reset the auto-refresh trigger (for testing or logout)
+ */
+export function resetAutoRefreshTrigger(): void {
+  hasTriggeredAutoRefresh = false;
 }
 
 /**
@@ -145,7 +156,8 @@ export function useAutoRefresh({
 }: UseAutoRefreshOptions): UseAutoRefreshReturn {
   const { isMacOS } = usePlatform();
   const [status, setStatus] = useState<SyncStatus>(initialSyncStatus);
-  const hasTriggeredRef = useRef(false);
+  // Note: using module-level hasTriggeredAutoRefresh instead of ref to prevent
+  // React strict mode from triggering twice (each instance would have its own ref)
   const [autoSyncEnabled, setAutoSyncEnabled] = useState(true);
   const [hasLoadedPreference, setHasLoadedPreference] = useState(false);
 
@@ -490,10 +502,11 @@ export function useAutoRefresh({
     if (isOnboarding) return;
     if (!hasLoadedPreference) return;
     if (!autoSyncEnabled) return;
-    if (hasTriggeredRef.current) return;
+    // Use module-level flag to prevent React strict mode from triggering twice
+    if (hasTriggeredAutoRefresh) return;
 
     // Mark as triggered to prevent duplicate runs
-    hasTriggeredRef.current = true;
+    hasTriggeredAutoRefresh = true;
 
     // Run refresh after delay to let UI settle (2.5 seconds as per task)
     const timeoutId = setTimeout(() => {

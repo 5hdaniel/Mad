@@ -3,18 +3,17 @@
  * Handles extraction of text from macOS Messages attributed body format
  *
  * The attributedBody field in macOS Messages contains an NSAttributedString
- * serialized using NSKeyedArchiver in binary plist format.
+ * serialized using Apple's typedstream format (NOT NSKeyedArchiver/bplist).
  *
- * This module uses proper bplist parsing instead of string heuristics for
- * reliable text extraction without encoding artifacts.
+ * This module uses the imessage-parser library for proper typedstream parsing.
  *
- * @see .claude/docs/shared/imessage-attributedbody-parsing.md
+ * @see https://github.com/alexkwolfe/imessage-parser
  */
 
-// Using require for bplist-parser to access parseBuffer which isn't in types
+// Using require for imessage-parser to avoid ESM/CJS issues
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const bplistParser = require("bplist-parser") as {
-  parseBuffer: (buffer: Buffer) => Promise<unknown[]>;
+const { parseAttributedBody: parseTypedStream } = require("imessage-parser") as {
+  parseAttributedBody: (buffer: Buffer, options?: { cleanOutput?: boolean }) => { text: string };
 };
 import {
   MAX_MESSAGE_TEXT_LENGTH,
@@ -34,111 +33,8 @@ export interface Message {
 }
 
 /**
- * NSKeyedArchiver structure types
- */
-interface NSKeyedArchiverRoot {
-  $archiver?: string;
-  $version?: number;
-  $top?: { root?: { UID: number } };
-  $objects?: unknown[];
-}
-
-interface UIDReference {
-  UID: number;
-}
-
-/**
- * Check if a value is a UID reference
- */
-function isUID(value: unknown): value is UIDReference {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "UID" in value &&
-    typeof (value as UIDReference).UID === "number"
-  );
-}
-
-/**
- * Resolve a UID reference to the actual object in $objects array
- */
-function resolveUID(objects: unknown[], uid: UIDReference | unknown): unknown {
-  if (isUID(uid)) {
-    return objects[uid.UID];
-  }
-  return uid;
-}
-
-/**
- * Extract text from NSKeyedArchiver structure
- * Navigates the $objects array to find the actual string content
- */
-function extractTextFromNSKeyedArchiver(parsed: NSKeyedArchiverRoot): string | null {
-  const objects = parsed.$objects;
-  if (!objects || !Array.isArray(objects)) {
-    return null;
-  }
-
-  // Strategy 1: Find string directly in objects (common for simple messages)
-  // The actual message text is usually the longest non-metadata string
-  const candidates: string[] = [];
-
-  for (const obj of objects) {
-    if (typeof obj === "string") {
-      // Skip metadata strings
-      if (
-        obj.startsWith("NS") ||
-        obj.startsWith("$") ||
-        obj.includes("__kIM") ||
-        obj.includes("kIMMessagePart") ||
-        obj.includes("AttributeName") ||
-        obj === "NSAttributedString" ||
-        obj === "NSMutableAttributedString" ||
-        obj === "NSDictionary" ||
-        obj === "NSArray" ||
-        obj === "NSMutableDictionary"
-      ) {
-        continue;
-      }
-      candidates.push(obj);
-    }
-  }
-
-  // Strategy 2: Look for NS.string key in dictionary objects
-  for (const obj of objects) {
-    if (typeof obj === "object" && obj !== null && !Array.isArray(obj)) {
-      const dictObj = obj as Record<string, unknown>;
-
-      // Check for NS.string (NSString storage)
-      if ("NS.string" in dictObj) {
-        const nsString = resolveUID(objects, dictObj["NS.string"]);
-        if (typeof nsString === "string") {
-          candidates.push(nsString);
-        }
-      }
-
-      // Check for NS.bytes (sometimes text is stored as data)
-      if ("NS.bytes" in dictObj && Buffer.isBuffer(dictObj["NS.bytes"])) {
-        const bytesText = (dictObj["NS.bytes"] as Buffer).toString("utf8");
-        if (bytesText && bytesText.length > 0) {
-          candidates.push(bytesText);
-        }
-      }
-    }
-  }
-
-  if (candidates.length === 0) {
-    return null;
-  }
-
-  // Return the longest candidate (usually the actual message)
-  candidates.sort((a, b) => b.length - a.length);
-  return candidates[0];
-}
-
-/**
- * Extract text from macOS Messages attributedBody blob (NSKeyedArchiver format)
- * Uses proper bplist parsing for reliable extraction.
+ * Extract text from macOS Messages attributedBody blob (typedstream format)
+ * Uses imessage-parser library for proper typedstream parsing.
  *
  * @param attributedBodyBuffer - The attributedBody buffer from Messages database
  * @returns Extracted text or fallback message
@@ -151,48 +47,39 @@ export async function extractTextFromAttributedBody(
   }
 
   try {
-    // Method 1: Parse as binary plist (NSKeyedArchiver format)
-    try {
-      const parsed = await bplistParser.parseBuffer(attributedBodyBuffer);
+    // Use imessage-parser library for proper typedstream parsing
+    const result = parseTypedStream(attributedBodyBuffer, { cleanOutput: true });
 
-      if (parsed && parsed.length > 0) {
-        const root = parsed[0] as NSKeyedArchiverRoot;
-
-        // Verify it's an NSKeyedArchiver
-        if (root.$archiver === "NSKeyedArchiver" && root.$objects) {
-          const extractedText = extractTextFromNSKeyedArchiver(root);
-
-          if (extractedText && extractedText.length >= MIN_MESSAGE_TEXT_LENGTH) {
-            const cleaned = cleanExtractedText(extractedText);
-            if (cleaned.length >= MIN_MESSAGE_TEXT_LENGTH) {
-              return cleaned;
-            }
-          }
-        }
+    if (result && result.text && result.text.length >= MIN_MESSAGE_TEXT_LENGTH) {
+      // Clean any remaining artifacts
+      const cleaned = cleanExtractedText(result.text);
+      if (cleaned.length >= MIN_MESSAGE_TEXT_LENGTH && cleaned.length < MAX_MESSAGE_TEXT_LENGTH) {
+        return cleaned;
       }
-    } catch (bplistError) {
-      // bplist parsing failed, fall back to heuristic method
-      logService.debug("bplist parse failed, using fallback", "MessageParser", {
-        error: (bplistError as Error).message,
-      });
-    }
-
-    // Method 2: Fallback to heuristic extraction for non-standard formats
-    const extractedText = extractUsingHeuristics(attributedBodyBuffer);
-
-    if (
-      extractedText &&
-      extractedText.length >= MIN_MESSAGE_TEXT_LENGTH &&
-      extractedText.length < MAX_MESSAGE_TEXT_LENGTH
-    ) {
-      return cleanExtractedText(extractedText);
     }
 
     return FALLBACK_MESSAGES.UNABLE_TO_EXTRACT;
   } catch (e) {
-    logService.error("Error parsing attributedBody:", "MessageParser", {
+    logService.debug("typedstream parse failed", "MessageParser", {
       error: (e as Error).message,
     });
+
+    // Fallback to heuristic extraction for non-standard formats
+    try {
+      const extractedText = extractUsingHeuristics(attributedBodyBuffer);
+      if (
+        extractedText &&
+        extractedText.length >= MIN_MESSAGE_TEXT_LENGTH &&
+        extractedText.length < MAX_MESSAGE_TEXT_LENGTH
+      ) {
+        return cleanExtractedText(extractedText);
+      }
+    } catch (fallbackError) {
+      logService.error("Error parsing attributedBody:", "MessageParser", {
+        error: (fallbackError as Error).message,
+      });
+    }
+
     return FALLBACK_MESSAGES.PARSING_ERROR;
   }
 }
@@ -257,7 +144,12 @@ function extractUsingHeuristics(buffer: Buffer): string | null {
  * @returns Cleaned text
  */
 export function cleanExtractedText(text: string): string {
-  let cleaned = text
+  if (!text) return "";
+
+  let cleaned = text;
+
+  // Remove null bytes and control characters FIRST
+  cleaned = cleaned
     .replace(REGEX_PATTERNS.NULL_BYTES, "") // Remove null bytes
     .replace(REGEX_PATTERNS.CONTROL_CHARS, "") // Remove control chars
     .trim();
@@ -266,25 +158,56 @@ export function cleanExtractedText(text: string): string {
   cleaned = cleaned.replace(/__kIM\w+/g, "").trim();
   cleaned = cleaned.replace(/kIMMessagePart\w*/g, "").trim();
 
-  return cleaned;
+  // AGGRESSIVE: Remove "00" anywhere it appears on its own line or at start
+  // This handles various encoding artifacts from typedstream parsing
+  cleaned = cleaned
+    .replace(/^00\n/gm, "") // "00" on its own line (multiline)
+    .replace(/^00\r\n/gm, "") // "00" with Windows line endings
+    .replace(/^00\s+/gm, "") // "00" followed by whitespace at line start
+    .replace(/^00$/gm, "") // "00" as entire line
+    .trim();
+
+  // Split into lines and filter empty ones
+  const lines = cleaned.split(/[\r\n]+/);
+  const filteredLines = lines
+    .map((line) => line.trim())
+    .filter((line) => {
+      if (line.length === 0) return false;
+      // Remove lines that are just "00" or other short hex values
+      if (/^[0-9A-Fa-f]{2,4}$/.test(line)) return false;
+      return true;
+    });
+
+  return filteredLines.join("\n").trim();
 }
 
 /**
  * Get message text from a message object
  * Handles both plain text and attributed body formats
+ * Applies cleaning to handle UTF-16 encoding issues and artifacts
  *
  * @param message - Message object from database
  * @returns Message text or fallback message
  */
 export async function getMessageText(message: Message): Promise<string> {
-  // Plain text is preferred
+  // Plain text is preferred, but still clean it for encoding issues
   if (message.text) {
-    return message.text;
+    // Apply cleaning to handle potential UTF-16 encoding or null byte issues
+    const cleaned = cleanExtractedText(message.text);
+    if (cleaned.length >= MIN_MESSAGE_TEXT_LENGTH) {
+      return cleaned;
+    }
+    // If cleaning resulted in empty/short text, try attributedBody
   }
 
   // Try to extract from attributed body
   if (message.attributedBody) {
     return await extractTextFromAttributedBody(message.attributedBody);
+  }
+
+  // If we had text but it was cleaned to nothing, return original
+  if (message.text) {
+    return message.text;
   }
 
   // Fallback based on message type

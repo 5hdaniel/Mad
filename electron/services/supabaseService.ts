@@ -112,7 +112,7 @@ class SupabaseService {
     });
 
     this.initialized = true;
-    logService.info("[Supabase] Initialized successfully", "Supabase");
+    logService.debug("[Supabase] Initialized successfully", "Supabase");
   }
 
   /**
