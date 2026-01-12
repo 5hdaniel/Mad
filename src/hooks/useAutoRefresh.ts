@@ -39,9 +39,6 @@ let hasTriggeredAutoRefresh = false;
  * Mark that onboarding import just completed - skip the next messages sync
  */
 export function markOnboardingImportComplete(): void {
-  console.log(
-    "[useAutoRefresh] Marking onboarding import complete - will skip next messages sync"
-  );
   skipNextMessagesSync = true;
 }
 
@@ -412,8 +409,6 @@ export function useAutoRefresh({
    */
   const runAutoRefresh = useCallback(
     async (uid: string, emailConnected: boolean): Promise<void> => {
-      console.log("[useAutoRefresh] Starting auto-refresh for user:", uid);
-
       // Build sync tasks based on platform and connections
       const syncTasks: Array<{ name: string; task: Promise<void> }> = [];
 
@@ -429,16 +424,12 @@ export function useAutoRefresh({
       // Messages sync (macOS only)
       // Skip if we just imported during onboarding
       if (isMacOS && hasPermissions && !skipNextMessagesSync) {
-        console.log("[useAutoRefresh] Adding messages sync to parallel tasks");
         syncTasks.push({
           name: "messages",
           task: syncMessages(uid),
         });
       } else if (skipNextMessagesSync) {
         // Clear the flag so future syncs work normally
-        console.log(
-          "[useAutoRefresh] Skipping messages sync - just did onboarding import"
-        );
         skipNextMessagesSync = false;
       }
 
@@ -452,14 +443,8 @@ export function useAutoRefresh({
       }
 
       if (syncTasks.length === 0) {
-        console.log("[useAutoRefresh] No sync tasks to run");
         return;
       }
-
-      console.log(
-        `[useAutoRefresh] Running ${syncTasks.length} sync tasks in parallel:`,
-        syncTasks.map((t) => t.name)
-      );
 
       // Run all syncs in parallel with Promise.allSettled
       // This ensures one failure doesn't block others
@@ -475,12 +460,8 @@ export function useAutoRefresh({
             `[useAutoRefresh] ${taskName} sync rejected:`,
             result.reason
           );
-        } else {
-          console.log(`[useAutoRefresh] ${taskName} sync completed`);
         }
       });
-
-      console.log("[useAutoRefresh] Auto-refresh complete");
     },
     [isMacOS, hasPermissions, syncEmails, syncMessages, syncContacts]
   );
@@ -510,7 +491,6 @@ export function useAutoRefresh({
 
     // Run refresh after delay to let UI settle (2.5 seconds as per task)
     const timeoutId = setTimeout(() => {
-      console.log("[useAutoRefresh] Auto-triggering refresh after delay");
       runAutoRefresh(userId, hasEmailConnected);
     }, AUTO_REFRESH_DELAY_MS);
 

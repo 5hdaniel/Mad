@@ -117,17 +117,14 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
     setExportFormat(newFormat);
     try {
       // Update only the export format preference
-      const result = await window.api.preferences.update(userId, {
+      await window.api.preferences.update(userId, {
         export: {
           defaultFormat: newFormat,
         },
       });
-      if (!result.success) {
-        console.debug("Could not save export format preference");
-      }
-    } catch (error) {
       // Silently handle - preference will still be applied locally for this session
-      console.debug("Could not save export format preference");
+    } catch {
+      // Silently handle - preference will still be applied locally for this session
     }
   };
 
@@ -141,8 +138,6 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
       });
       if (!result.success) {
         console.error("[Settings] Failed to save scan lookback:", result);
-      } else {
-        console.log("[Settings] Saved scan lookback:", months);
       }
     } catch (error) {
       console.error("[Settings] Error saving scan lookback:", error);
@@ -153,16 +148,15 @@ function Settings({ onClose, userId }: SettingsComponentProps) {
     const newValue = !autoSyncOnLogin;
     setAutoSyncOnLogin(newValue);
     try {
-      const result = await window.api.preferences.update(userId, {
+      // Update auto-sync preference
+      await window.api.preferences.update(userId, {
         sync: {
           autoSyncOnLogin: newValue,
         },
       });
-      if (!result.success) {
-        console.debug("Could not save auto-sync preference");
-      }
-    } catch (error) {
-      console.debug("Could not save auto-sync preference");
+      // Silently handle - preference will still be applied locally for this session
+    } catch {
+      // Silently handle - preference will still be applied locally for this session
     }
   };
 
