@@ -23,6 +23,16 @@ import { createTimestampedFilename } from "../utils/fileUtils";
 import { getMessageText } from "../utils/messageParser";
 import { MAC_EPOCH } from "../constants";
 
+// Import handler types
+import type {
+  ConversationRow,
+  MessageRow,
+  ParticipantRow,
+  ChatInfoRow,
+  ContactInfoData,
+  ProcessedConversation,
+} from "../types/handlerTypes";
+
 // Track registration to prevent duplicate handlers
 let handlersRegistered = false;
 
@@ -49,10 +59,10 @@ export function registerConversationHandlers(mainWindow: BrowserWindow): void {
       );
 
       const db = new sqlite3.Database(messagesDbPath, sqlite3.OPEN_READONLY);
-      const dbAll = promisify(db.all.bind(db)) as (
+      const dbAll = promisify(db.all.bind(db)) as <T>(
         sql: string,
-        params?: any
-      ) => Promise<any[]>;
+        params?: unknown
+      ) => Promise<T[]>;
       const dbClose = promisify(db.close.bind(db));
 
       let db2: sqlite3.Database | null = null;
@@ -64,7 +74,7 @@ export function registerConversationHandlers(mainWindow: BrowserWindow): void {
 
         // Get all chats with their latest message
         // Filter to only show chats with at least 1 message
-        const conversations = (await dbAll(`
+        const conversations = await dbAll<ConversationRow>(`
           SELECT
             chat.ROWID as chat_id,
             chat.chat_identifier,
@@ -80,31 +90,31 @@ export function registerConversationHandlers(mainWindow: BrowserWindow): void {
           GROUP BY chat.ROWID
           HAVING message_count > 0 AND last_message_date IS NOT NULL
           ORDER BY last_message_date DESC
-        `)) as any[];
+        `);
 
         // Close first database connection - we're done with it
         await dbClose();
 
         // Re-open database to query group chat participants
         db2 = new sqlite3.Database(messagesDbPath, sqlite3.OPEN_READONLY);
-        const dbAll2 = promisify(db2.all.bind(db2)) as (
+        const dbAll2 = promisify(db2.all.bind(db2)) as <T>(
           sql: string,
-          params?: any
-        ) => Promise<any[]>;
+          params?: unknown
+        ) => Promise<T[]>;
         dbClose2 = promisify(db2.close.bind(db2));
 
         // Map conversations and deduplicate by contact NAME
         // This ensures that if a contact has multiple phone numbers or emails,
         // they appear as ONE contact with all their info
-        const conversationMap = new Map<string, any>();
+        const conversationMap = new Map<string, ProcessedConversation>();
 
         // Process conversations - track direct chats and group chats separately
         for (const conv of conversations) {
           const rawContactId = conv.contact_id || conv.chat_identifier;
           const displayName = resolveContactName(
-            conv.contact_id,
+            conv.contact_id || "",
             conv.chat_identifier,
-            conv.display_name,
+            conv.display_name ?? undefined,
             contactMap
           );
 
@@ -120,7 +130,7 @@ export function registerConversationHandlers(mainWindow: BrowserWindow): void {
 
             try {
               // Get all participants in this group chat
-              const participants = (await dbAll2(
+              const participants = await dbAll2<ParticipantRow>(
                 `
                 SELECT DISTINCT handle.id as contact_id
                 FROM chat_handle_join
@@ -128,7 +138,7 @@ export function registerConversationHandlers(mainWindow: BrowserWindow): void {
                 WHERE chat_handle_join.chat_id = ?
               `,
                 [conv.chat_id]
-              )) as any[];
+              );
 
               // Add this group chat to each participant's statistics
               for (const participant of participants) {
@@ -143,7 +153,7 @@ export function registerConversationHandlers(mainWindow: BrowserWindow): void {
                 // Get or create contact entry
                 if (!conversationMap.has(normalizedKey)) {
                   // Create new contact entry for this participant
-                  let contactInfo: any = null;
+                  let contactInfo: ContactInfoData | null = null;
                   let phones: string[] = [];
                   let emails: string[] = [];
 
@@ -153,7 +163,7 @@ export function registerConversationHandlers(mainWindow: BrowserWindow): void {
                   ) {
                     const emailLower = participant.contact_id.toLowerCase();
                     for (const info of Object.values(phoneToContactInfo)) {
-                      const contactInfoTyped = info as any;
+                      const contactInfoTyped = info as ContactInfoData;
                       if (
                         contactInfoTyped.emails &&
                         contactInfoTyped.emails.some(
@@ -202,13 +212,15 @@ export function registerConversationHandlers(mainWindow: BrowserWindow): void {
 
                 // Add group chat stats to this participant
                 const existing = conversationMap.get(normalizedKey);
-                existing.groupChatCount += 1;
-                existing.groupMessageCount += conv.message_count;
-                existing.messageCount += conv.message_count;
+                if (existing) {
+                  existing.groupChatCount += 1;
+                  existing.groupMessageCount += conv.message_count;
+                  existing.messageCount += conv.message_count;
 
-                // Update last message date if this group chat is more recent
-                if (conv.last_message_date > existing.lastMessageDate) {
-                  existing.lastMessageDate = conv.last_message_date;
+                  // Update last message date if this group chat is more recent
+                  if (conv.last_message_date > existing.lastMessageDate) {
+                    existing.lastMessageDate = conv.last_message_date;
+                  }
                 }
               }
             } catch (err) {
@@ -223,7 +235,7 @@ export function registerConversationHandlers(mainWindow: BrowserWindow): void {
           }
 
           // Get full contact info (all phones and emails)
-          let contactInfo: any = null;
+          let contactInfo: ContactInfoData | null = null;
           let phones: string[] = [];
           let emails: string[] = [];
 
@@ -232,7 +244,7 @@ export function registerConversationHandlers(mainWindow: BrowserWindow): void {
             const emailLower = rawContactId.toLowerCase();
             // Try to find this email in phoneToContactInfo
             for (const info of Object.values(phoneToContactInfo)) {
-              const contactInfoTyped = info as any;
+              const contactInfoTyped = info as ContactInfoData;
               if (
                 contactInfoTyped.emails &&
                 contactInfoTyped.emails.some(
@@ -297,7 +309,7 @@ export function registerConversationHandlers(mainWindow: BrowserWindow): void {
 
           // If we already have this contact, merge the data
           if (conversationMap.has(normalizedKey)) {
-            const existing = conversationMap.get(normalizedKey);
+            const existing = conversationMap.get(normalizedKey)!;
 
             // Merge phones (unique)
             const allPhones = [...new Set([...existing.phones, ...phones])];
@@ -383,14 +395,14 @@ export function registerConversationHandlers(mainWindow: BrowserWindow): void {
         );
 
         const db = new sqlite3.Database(messagesDbPath, sqlite3.OPEN_READONLY);
-        const dbAll = promisify(db.all.bind(db)) as (
+        const dbAll = promisify(db.all.bind(db)) as <T>(
           sql: string,
-          params?: any
-        ) => Promise<any[]>;
+          params?: unknown
+        ) => Promise<T[]>;
         const dbClose = promisify(db.close.bind(db));
 
         try {
-          const messages = (await dbAll(
+          const messages = await dbAll<MessageRow>(
             `
           SELECT
             message.ROWID as id,
@@ -405,7 +417,7 @@ export function registerConversationHandlers(mainWindow: BrowserWindow): void {
           ORDER BY message.date ASC
         `,
             [chatId]
-          )) as any[];
+          );
 
           await dbClose();
 
@@ -489,10 +501,10 @@ export function registerConversationHandlers(mainWindow: BrowserWindow): void {
         );
 
         const db = new sqlite3.Database(messagesDbPath, sqlite3.OPEN_READONLY);
-        const dbAll = promisify(db.all.bind(db)) as (
+        const dbAll = promisify(db.all.bind(db)) as <T>(
           sql: string,
-          params?: any
-        ) => Promise<any[]>;
+          params?: unknown
+        ) => Promise<T[]>;
         const dbClose = promisify(db.close.bind(db));
 
         // Load contact names for resolving names in export
@@ -504,7 +516,7 @@ export function registerConversationHandlers(mainWindow: BrowserWindow): void {
         try {
           for (const chatId of conversationIds) {
             // Get chat info
-            const chatInfo = (await dbAll(
+            const chatInfo = await dbAll<ChatInfoRow>(
               `
             SELECT
               chat.chat_identifier,
@@ -517,15 +529,15 @@ export function registerConversationHandlers(mainWindow: BrowserWindow): void {
             LIMIT 1
           `,
               [chatId]
-            )) as any[];
+            );
 
             if (chatInfo.length === 0) continue;
 
             // Resolve contact name using the same logic as conversation list
             const chatName = resolveContactName(
-              chatInfo[0].contact_id,
+              chatInfo[0].contact_id || "",
               chatInfo[0].chat_identifier,
-              chatInfo[0].display_name,
+              chatInfo[0].display_name ?? undefined,
               contactMap
             );
 
@@ -534,7 +546,7 @@ export function registerConversationHandlers(mainWindow: BrowserWindow): void {
 
             // Get messages with attachment info
             // Note: Some messages have text in 'attributedBody' blob field instead of 'text'
-            const messages = (await dbAll(
+            const messages = await dbAll<MessageRow>(
               `
             SELECT
               message.ROWID as id,
@@ -551,7 +563,7 @@ export function registerConversationHandlers(mainWindow: BrowserWindow): void {
             ORDER BY message.date ASC
           `,
               [chatId]
-            )) as any[];
+            );
 
             // Format messages as text
             let exportContent = `Conversation with: ${chatName}\n`;

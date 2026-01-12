@@ -23,3 +23,6 @@ export * from "./iosContacts";
 
 // Re-export backup types
 export * from "./backup";
+
+// Re-export handler types
+export * from "./handlerTypes";
