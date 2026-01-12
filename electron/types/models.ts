@@ -459,6 +459,12 @@ export interface Transaction {
   message_count: number;
   attachment_count: number;
 
+  // Separate communication counts by type
+  /** Count of email communications linked to this transaction */
+  email_count?: number;
+  /** Count of text/iMessage communications linked to this transaction */
+  text_count?: number;
+
   // Export Tracking
   export_status: ExportStatus;
   export_count: number;

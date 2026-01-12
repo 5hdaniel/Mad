@@ -114,7 +114,9 @@ export async function getTransactions(
   filters?: TransactionFilters,
 ): Promise<Transaction[]> {
   let sql = `SELECT t.*,
-             (SELECT COUNT(*) FROM communications c WHERE c.transaction_id = t.id) as total_communications_count
+             (SELECT COUNT(*) FROM communications c WHERE c.transaction_id = t.id) as total_communications_count,
+             (SELECT COUNT(*) FROM communications c WHERE c.transaction_id = t.id AND c.communication_type = 'email') as email_count,
+             (SELECT COUNT(*) FROM communications c WHERE c.transaction_id = t.id AND c.communication_type IN ('text', 'imessage')) as text_count
              FROM transactions t WHERE 1=1`;
   const params: unknown[] = [];
 

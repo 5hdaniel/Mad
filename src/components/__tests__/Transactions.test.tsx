@@ -38,6 +38,8 @@ describe("Transactions", () => {
       sale_price: 450000,
       closing_date: "2024-03-15",
       total_communications_count: 25,
+      email_count: 25,
+      text_count: 0,
       extraction_confidence: 85,
     },
     {
@@ -49,6 +51,8 @@ describe("Transactions", () => {
       sale_price: 325000,
       closing_date: "2024-01-20",
       total_communications_count: 18,
+      email_count: 18,
+      text_count: 0,
       extraction_confidence: 92,
     },
     {
@@ -60,6 +64,8 @@ describe("Transactions", () => {
       sale_price: 550000,
       closing_date: null,
       total_communications_count: 12,
+      email_count: 12,
+      text_count: 0,
       extraction_confidence: 78,
     },
   ];
