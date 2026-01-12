@@ -185,8 +185,8 @@ describe("MessageThreadCard", () => {
     });
   });
 
-  describe("messages container", () => {
-    it("should render messages container with testid", () => {
+  describe("view button and preview", () => {
+    it("should show View button to open modal", () => {
       const messages = [createMockMessage()];
 
       render(
@@ -197,13 +197,12 @@ describe("MessageThreadCard", () => {
         />
       );
 
-      expect(screen.getByTestId("thread-messages")).toBeInTheDocument();
+      expect(screen.getByTestId("toggle-thread-button")).toHaveTextContent("View");
     });
 
-    it("should render all messages", () => {
+    it("should show preview text of last message", () => {
       const messages = [
-        createMockMessage({ id: "msg-1", body_text: "First message" }),
-        createMockMessage({ id: "msg-2", body_text: "Second message" }),
+        createMockMessage({ id: "msg-1", body_text: "This is a preview message" }),
       ];
 
       render(
@@ -214,12 +213,14 @@ describe("MessageThreadCard", () => {
         />
       );
 
-      expect(screen.getByText("First message")).toBeInTheDocument();
-      expect(screen.getByText("Second message")).toBeInTheDocument();
+      expect(screen.getByTestId("thread-preview")).toHaveTextContent("This is a preview message");
     });
 
-    it("should have scrollable container", () => {
-      const messages = [createMockMessage()];
+    it("should truncate long preview text", () => {
+      const longText = "A".repeat(100);
+      const messages = [
+        createMockMessage({ id: "msg-1", body_text: longText }),
+      ];
 
       render(
         <MessageThreadCard
@@ -229,8 +230,10 @@ describe("MessageThreadCard", () => {
         />
       );
 
-      const messagesContainer = screen.getByTestId("thread-messages");
-      expect(messagesContainer).toHaveClass("overflow-y-auto");
+      const preview = screen.getByTestId("thread-preview");
+      // Should be truncated to 60 chars + "..."
+      expect(preview.textContent?.length).toBeLessThan(70);
+      expect(preview.textContent).toContain("...");
     });
   });
 });
@@ -268,8 +271,9 @@ describe("groupMessagesByThread", () => {
     const threads = groupMessagesByThread(messages);
 
     expect(threads.size).toBe(2);
-    expect(threads.has("msg-solo-1")).toBe(true);
-    expect(threads.has("msg-solo-2")).toBe(true);
+    // Fallback key format is "msg-{id}"
+    expect(threads.has("msg-msg-solo-1")).toBe(true);
+    expect(threads.has("msg-msg-solo-2")).toBe(true);
   });
 
   it("should sort messages within thread chronologically", () => {

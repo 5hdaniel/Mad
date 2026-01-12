@@ -90,4 +90,10 @@ export interface OnboardingContext {
    * Some steps may be blocked until database setup is complete.
    */
   isDatabaseInitialized: boolean;
+
+  /**
+   * The current user's ID.
+   * null if not logged in yet.
+   */
+  userId: string | null;
 }

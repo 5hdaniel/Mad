@@ -96,7 +96,7 @@ class GoogleAuthService {
     );
 
     this.initialized = true;
-    logService.info("[GoogleAuth] Initialized successfully", "GoogleAuth");
+    logService.debug("[GoogleAuth] Initialized successfully", "GoogleAuth");
   }
 
   /**
@@ -293,7 +293,7 @@ class GoogleAuthService {
     if (this.server) {
       this.server.close();
       this.server = null;
-      logService.info("[GoogleAuth] Local callback server stopped", "GoogleAuth");
+      logService.debug("[GoogleAuth] Local callback server stopped", "GoogleAuth");
     }
   }
 
@@ -312,7 +312,7 @@ class GoogleAuthService {
     ];
 
     try {
-      logService.info("[GoogleAuth] Starting login flow with minimal scopes", "GoogleAuth");
+      logService.debug("[GoogleAuth] Starting login flow with minimal scopes", "GoogleAuth");
 
       // Start local server to catch redirect
       const codePromise = this.startLocalServer();
@@ -324,7 +324,7 @@ class GoogleAuthService {
         prompt: "select_account", // Show account picker, only consent if needed
       });
 
-      logService.info("[GoogleAuth] Auth URL generated, local server started", "GoogleAuth");
+      logService.debug("[GoogleAuth] Auth URL generated, local server started", "GoogleAuth");
 
       return {
         authUrl,
@@ -347,12 +347,12 @@ class GoogleAuthService {
     const client = this._ensureClient();
 
     try {
-      logService.info("[GoogleAuth] Exchanging code for tokens", "GoogleAuth");
+      logService.debug("[GoogleAuth] Exchanging code for tokens", "GoogleAuth");
 
       const { tokens } = await client.getToken(code);
       client.setCredentials(tokens);
 
-      logService.info("[GoogleAuth] Tokens obtained successfully", "GoogleAuth");
+      logService.debug("[GoogleAuth] Tokens obtained successfully", "GoogleAuth");
 
       // Get user info
       const userInfo = await this.getUserInfo(tokens.access_token!);
@@ -391,7 +391,7 @@ class GoogleAuthService {
     ];
 
     try {
-      logService.info("[GoogleAuth] Starting mailbox connection flow", "GoogleAuth");
+      logService.debug("[GoogleAuth] Starting mailbox connection flow", "GoogleAuth");
 
       // Start local server to catch redirect
       const codePromise = this.startLocalServer();
@@ -444,7 +444,7 @@ class GoogleAuthService {
 
       const { data } = await oauth2.userinfo.get();
 
-      logService.info("[GoogleAuth] User info retrieved:", "GoogleAuth", { email: data.email });
+      logService.debug("[GoogleAuth] User info retrieved:", "GoogleAuth", { email: data.email });
 
       return {
         id: data.id!,

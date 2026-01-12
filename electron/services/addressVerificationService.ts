@@ -80,7 +80,7 @@ class AddressVerificationService {
       return false;
     }
 
-    logService.info("[AddressVerification] Initialized with API key", "AddressVerification");
+    logService.debug("[AddressVerification] Initialized with API key", "AddressVerification");
     return true;
   }
 
@@ -115,7 +115,7 @@ class AddressVerificationService {
         params.sessiontoken = sessionToken;
       }
 
-      logService.info("[AddressVerification] Fetching suggestions for:", "AddressVerification", { input });
+      logService.debug("[AddressVerification] Fetching suggestions for:", "AddressVerification", { input });
 
       const response = await axios.get(url, { params });
 
@@ -142,7 +142,7 @@ class AddressVerificationService {
         }),
       );
 
-      logService.info(
+      logService.debug(
         `[AddressVerification] Found ${suggestions.length} suggestions`,
         "AddressVerification",
       );
@@ -176,7 +176,7 @@ class AddressVerificationService {
         fields: "address_components,formatted_address,geometry",
       };
 
-      logService.info("[AddressVerification] Fetching details for place:", "AddressVerification", { placeId });
+      logService.debug("[AddressVerification] Fetching details for place:", "AddressVerification", { placeId });
 
       const response = await axios.get(url, { params });
 
@@ -278,7 +278,7 @@ class AddressVerificationService {
         key: this.apiKey,
       };
 
-      logService.info("[AddressVerification] Geocoding address:", "AddressVerification", { address });
+      logService.debug("[AddressVerification] Geocoding address:", "AddressVerification", { address });
 
       const response = await axios.get(url, { params });
 

@@ -187,7 +187,7 @@ class OutlookFetchService {
       this.accessToken = tokenRecord.access_token || "";
       this.refreshToken = tokenRecord.refresh_token || null;
 
-      logService.info("Initialized successfully", "OutlookFetch");
+      logService.debug("Initialized successfully", "OutlookFetch");
       return true;
     } catch (error) {
       logService.error("Initialization failed", "OutlookFetch", { error });

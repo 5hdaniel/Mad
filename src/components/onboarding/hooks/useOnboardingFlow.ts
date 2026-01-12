@@ -49,6 +49,8 @@ export interface OnboardingAppState {
   isNewUser: boolean;
   /** Whether database is initialized */
   isDatabaseInitialized: boolean;
+  /** Current user ID */
+  userId: string | null;
 }
 
 /**
@@ -167,6 +169,7 @@ export function useOnboardingFlow(
       authProvider: appState.authProvider,
       isNewUser: appState.isNewUser,
       isDatabaseInitialized: appState.isDatabaseInitialized,
+      userId: appState.userId,
     }),
     [platform, appState]
   );
@@ -220,10 +223,13 @@ export function useOnboardingFlow(
 
   // Navigation: Go to next step
   const goToNext = useCallback(() => {
+    console.log("[useOnboardingFlow] goToNext called, currentIndex:", currentIndex, "steps.length:", steps.length);
     if (currentIndex < steps.length - 1) {
+      console.log("[useOnboardingFlow] Advancing to step", currentIndex + 1);
       setCurrentIndex(currentIndex + 1);
     } else {
       // Flow complete
+      console.log("[useOnboardingFlow] Flow complete, calling onComplete");
       onComplete?.();
     }
   }, [currentIndex, steps.length, onComplete]);
@@ -268,6 +274,7 @@ export function useOnboardingFlow(
           break;
 
         case "PERMISSION_GRANTED":
+          console.log("[useOnboardingFlow] PERMISSION_GRANTED received, calling goToNext");
           goToNext();
           break;
 

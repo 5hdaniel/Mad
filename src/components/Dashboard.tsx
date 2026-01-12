@@ -1,13 +1,16 @@
-import React, { useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import Joyride from "react-joyride";
 import { useTour } from "../hooks/useTour";
 import { usePendingTransactionCount } from "../hooks/usePendingTransactionCount";
-import { AIStatusCard } from "./dashboard/AIStatusCard";
+import { SyncStatusIndicator } from "./dashboard/index";
+import StartNewAuditModal from "./StartNewAuditModal";
 import {
   getDashboardTourSteps,
   JOYRIDE_STYLES,
   JOYRIDE_LOCALE,
 } from "../config/tourSteps";
+import type { SyncStatus } from "../hooks/useAutoRefresh";
+import type { Transaction } from "../types";
 
 interface DashboardActionProps {
   onAuditNew: () => void;
@@ -18,6 +21,14 @@ interface DashboardActionProps {
   showSetupPrompt?: boolean;
   onContinueSetup?: () => void;
   onDismissSetupPrompt?: () => void;
+  // Sync status props (optional - only shown when syncing)
+  syncStatus?: SyncStatus;
+  isAnySyncing?: boolean;
+  currentSyncMessage?: string | null;
+  /** Callback to trigger a manual sync refresh */
+  onTriggerRefresh?: () => void;
+  /** Callback when user selects a pending transaction to review */
+  onSelectPendingTransaction?: (transaction: Transaction) => void;
 }
 
 /**
@@ -34,7 +45,15 @@ function Dashboard({
   showSetupPrompt,
   onContinueSetup,
   onDismissSetupPrompt,
+  syncStatus,
+  isAnySyncing = false,
+  currentSyncMessage = null,
+  onTriggerRefresh,
+  onSelectPendingTransaction,
 }: DashboardActionProps) {
+  // State for the Start New Audit modal
+  const [showStartNewAuditModal, setShowStartNewAuditModal] = useState(false);
+
   // Initialize the onboarding tour for first-time users
   const { runTour, handleJoyrideCallback } = useTour(
     true,
@@ -50,6 +69,42 @@ function Dashboard({
     onViewTransactions();
   }, [onViewTransactions]);
 
+  // Handle "Start New Audit" click - show the redesigned modal
+  const handleStartNewAuditClick = useCallback(() => {
+    setShowStartNewAuditModal(true);
+  }, []);
+
+  // Handle selecting a pending transaction from the modal
+  const handleSelectPendingTransaction = useCallback(
+    (transaction: Transaction) => {
+      setShowStartNewAuditModal(false);
+      // If parent provides a handler, use it; otherwise navigate to transactions
+      if (onSelectPendingTransaction) {
+        onSelectPendingTransaction(transaction);
+      } else {
+        onViewTransactions();
+      }
+    },
+    [onSelectPendingTransaction, onViewTransactions]
+  );
+
+  // Handle "View Active Transactions" from the modal
+  const handleViewActiveTransactions = useCallback(() => {
+    setShowStartNewAuditModal(false);
+    onViewTransactions();
+  }, [onViewTransactions]);
+
+  // Handle "Add Manually" from the modal
+  const handleCreateManually = useCallback(() => {
+    setShowStartNewAuditModal(false);
+    onAuditNew();
+  }, [onAuditNew]);
+
+  // Handle closing the Start New Audit modal
+  const handleCloseStartNewAuditModal = useCallback(() => {
+    setShowStartNewAuditModal(false);
+  }, []);
+
   // Track last reported tour state to prevent infinite loops
   const lastReportedTourStateRef = useRef<boolean | null>(null);
 
@@ -63,7 +118,7 @@ function Dashboard({
   }, [runTour, onTourStateChange]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-8">
+    <div className="h-full bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-8">
       {/* Onboarding Tour */}
       <Joyride
         steps={getDashboardTourSteps()}
@@ -139,14 +194,18 @@ function Dashboard({
           </div>
         )}
 
-        {/* AI Detection Status Card */}
-        <div className="mb-8" data-tour="ai-detection-status">
-          <AIStatusCard
-            pendingCount={pendingCount}
-            onViewPending={handleViewPending}
-            isLoading={isPendingLoading}
-          />
-        </div>
+        {/* Unified Sync Status - shows progress during sync, completion after */}
+        {syncStatus && (
+          <div data-tour="ai-detection-status">
+            <SyncStatusIndicator
+              status={syncStatus}
+              isAnySyncing={isAnySyncing}
+              currentMessage={currentSyncMessage}
+              pendingCount={pendingCount}
+              onViewPending={handleViewPending}
+            />
+          </div>
+        )}
 
         {/* Header */}
         <div className="text-center mb-12">
@@ -162,8 +221,12 @@ function Dashboard({
         <div className="grid md:grid-cols-2 gap-8">
           {/* Start New Audit Card */}
           <button
-            onClick={onAuditNew}
-            className="group relative bg-white rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 p-8 text-left border-2 border-transparent hover:border-blue-500 transform hover:scale-105"
+            onClick={handleStartNewAuditClick}
+            className={`group relative bg-white rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 p-8 text-left border-2 transform hover:scale-105 ${
+              pendingCount > 0
+                ? "border-indigo-500 ring-2 ring-indigo-300 ring-offset-2 hover:border-indigo-600"
+                : "border-transparent hover:border-blue-500"
+            }`}
             data-tour="new-audit-card"
           >
             <div className="absolute top-6 right-6">
@@ -185,9 +248,16 @@ function Dashboard({
             </div>
 
             <div className="pr-24">
-              <h2 className="text-2xl font-bold text-gray-900 mb-3">
-                Start New Audit
-              </h2>
+              <div className="flex items-center gap-2 mb-3">
+                <h2 className="text-2xl font-bold text-gray-900">
+                  Start New Audit
+                </h2>
+                {pendingCount > 0 && (
+                  <span className="inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-sm font-semibold bg-indigo-100 text-indigo-800 animate-pulse">
+                    {pendingCount} new
+                  </span>
+                )}
+              </div>
             </div>
 
             <div className="mt-6 flex items-center gap-2 text-blue-600 font-semibold group-hover:gap-4 transition-all">
@@ -352,6 +422,18 @@ function Dashboard({
         </div>
 
       </div>
+
+      {/* Start New Audit Modal */}
+      {showStartNewAuditModal && (
+        <StartNewAuditModal
+          onSelectPendingTransaction={handleSelectPendingTransaction}
+          onViewActiveTransactions={handleViewActiveTransactions}
+          onCreateManually={handleCreateManually}
+          onClose={handleCloseStartNewAuditModal}
+          onSync={onTriggerRefresh}
+          isSyncing={isAnySyncing}
+        />
+      )}
     </div>
   );
 }

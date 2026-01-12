@@ -144,7 +144,7 @@ async function getContactNames(): Promise<ContactNamesResult> {
               },
             };
           } else {
-            logService.warn(
+            logService.debug(
               `[ContactsService] Database ${dbPath} has insufficient records (${recordCount[0].count})`,
               "ContactsService",
             );

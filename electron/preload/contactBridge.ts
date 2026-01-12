@@ -85,6 +85,34 @@ export const contactBridge = {
    */
   remove: (contactId: string) =>
     ipcRenderer.invoke("contacts:remove", contactId),
+
+  /**
+   * Look up contact names by phone numbers (batch)
+   * @param phones - Array of phone numbers to look up
+   * @returns Map of phone -> contact name
+   */
+  getNamesByPhones: (phones: string[]): Promise<{ success: boolean; names: Record<string, string>; error?: string }> =>
+    ipcRenderer.invoke("contacts:get-names-by-phones", phones),
+
+  /**
+   * Listen for import progress updates
+   * @param callback - Called with progress updates during contact import
+   * @returns Cleanup function to remove listener
+   */
+  onImportProgress: (
+    callback: (progress: { current: number; total: number; percent: number }) => void
+  ): (() => void) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      progress: { current: number; total: number; percent: number }
+    ) => {
+      callback(progress);
+    };
+    ipcRenderer.on("contacts:import-progress", handler);
+    return () => {
+      ipcRenderer.removeListener("contacts:import-progress", handler);
+    };
+  },
 };
 
 /**

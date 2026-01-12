@@ -78,7 +78,7 @@ function AuditTransactionModal({
               {isEditing ? "Edit Transaction" : "Audit New Transaction"}
             </h2>
             <p className="text-indigo-100 text-sm">
-              {step === 1 && (isEditing ? "Step 1: Review Property Address" : "Step 1: Verify Property Address")}
+              {step === 1 && "Step 1: Transaction Details"}
               {step === 2 && "Step 2: Assign Client & Agents"}
               {step === 3 && "Step 3: Assign Professional Services"}
             </p>
@@ -144,6 +144,12 @@ function AuditTransactionModal({
               onAddressChange={handleAddressChange}
               onTransactionTypeChange={(type) =>
                 setAddressData({ ...addressData, transaction_type: type })
+              }
+              onStartDateChange={(date) =>
+                setAddressData({ ...addressData, started_at: date })
+              }
+              onEndDateChange={(date) =>
+                setAddressData({ ...addressData, closed_at: date })
               }
               showAutocomplete={showAddressAutocomplete}
               suggestions={addressSuggestions}

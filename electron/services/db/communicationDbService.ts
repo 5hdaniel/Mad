@@ -474,6 +474,8 @@ export async function createCommunicationReference(
  * messages table when message_id is set. Falls back to legacy content columns
  * for records without message_id.
  *
+ * TASK-992: Added direction field from messages table for proper bubble display.
+ *
  * @param transactionId - The transaction ID
  * @returns Communications with content from messages table when available
  */
@@ -493,7 +495,9 @@ export async function getCommunicationsWithMessages(
       c.linked_at,
       c.created_at,
       -- Use message content when available, fall back to legacy columns
+      COALESCE(m.channel, c.communication_type) as channel,
       COALESCE(m.channel, c.communication_type) as communication_type,
+      COALESCE(m.body_text, c.body_plain) as body_text,
       COALESCE(m.body_text, c.body_plain) as body_plain,
       COALESCE(m.body_html, c.body) as body,
       COALESCE(m.subject, c.subject) as subject,
@@ -506,6 +510,12 @@ export async function getCommunicationsWithMessages(
       COALESCE(m.received_at, c.received_at) as received_at,
       COALESCE(m.has_attachments, c.has_attachments) as has_attachments,
       COALESCE(m.thread_id, c.email_thread_id) as email_thread_id,
+      -- Thread ID for grouping messages into conversations
+      m.thread_id as thread_id,
+      -- Participants JSON for group chat detection and sender identification
+      m.participants as participants,
+      -- TASK-992: Direction from messages table for bubble display
+      m.direction as direction,
       -- Legacy columns preserved for backward compatibility
       c.source,
       c.cc,

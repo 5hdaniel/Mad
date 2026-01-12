@@ -140,6 +140,19 @@ export interface ConversationSummary {
   lastMessageDate: Date;
 }
 
+/**
+ * Message attachment info for display (TASK-1012)
+ */
+export interface MessageAttachmentInfo {
+  id: string;
+  message_id: string;
+  filename: string;
+  mime_type: string | null;
+  file_size_bytes: number | null;
+  /** Base64-encoded file content for inline display */
+  data: string | null;
+}
+
 // ============================================
 // IPC CHANNEL DEFINITIONS
 // ============================================
@@ -353,9 +366,12 @@ export interface IpcChannels {
   "system:check-all-permissions": {
     request: void;
     response: {
-      fullDiskAccess: boolean;
-      contactsAccess: boolean;
       allGranted: boolean;
+      permissions: {
+        fullDiskAccess?: { hasPermission: boolean; error?: string };
+        contacts?: { hasPermission: boolean; error?: string };
+      };
+      errors: Array<{ hasPermission: boolean; error?: string }>;
     };
   };
   "system:check-google-connection": {
@@ -702,9 +718,12 @@ export interface WindowApi {
     checkFullDiskAccess: () => Promise<{ hasAccess: boolean }>;
     checkContactsPermission: () => Promise<{ hasPermission: boolean }>;
     checkAllPermissions: () => Promise<{
-      fullDiskAccess: boolean;
-      contactsAccess: boolean;
       allGranted: boolean;
+      permissions: {
+        fullDiskAccess?: { hasPermission: boolean; error?: string };
+        contacts?: { hasPermission: boolean; error?: string };
+      };
+      errors: Array<{ hasPermission: boolean; error?: string }>;
     }>;
     checkGoogleConnection: (
       userId: string,
@@ -916,6 +935,10 @@ export interface WindowApi {
       userId: string,
       contacts: NewContact[],
     ) => Promise<{ success: boolean; imported?: number; error?: string }>;
+    /** Listen for import progress updates */
+    onImportProgress: (
+      callback: (progress: { current: number; total: number; percent: number }) => void
+    ) => () => void;
   };
 
   // Transaction methods
@@ -1093,6 +1116,24 @@ export interface WindowApi {
       canceled?: boolean;
       error?: string;
     }>;
+    /** Import messages from macOS Messages app into the app database (macOS only) */
+    importMacOSMessages: (userId: string) => Promise<{
+      success: boolean;
+      messagesImported: number;
+      messagesSkipped: number;
+      attachmentsImported: number;
+      attachmentsSkipped: number;
+      duration: number;
+      error?: string;
+    }>;
+    /** Get count of messages available for import from macOS Messages */
+    getImportCount: () => Promise<{ success: boolean; count?: number; error?: string }>;
+    /** Listen for import progress updates */
+    onImportProgress: (callback: (progress: { phase: "deleting" | "importing" | "attachments"; current: number; total: number; percent: number }) => void) => () => void;
+    /** Get attachments for a message with base64 data (TASK-1012) */
+    getMessageAttachments: (messageId: string) => Promise<MessageAttachmentInfo[]>;
+    /** Get attachments for multiple messages at once (TASK-1012) */
+    getMessageAttachmentsBatch: (messageIds: string[]) => Promise<Record<string, MessageAttachmentInfo[]>>;
   };
 
   // Outlook integration (migrated from window.electron)

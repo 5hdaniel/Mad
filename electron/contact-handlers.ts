@@ -3,10 +3,10 @@
 // This file contains contact handlers to be registered in main.js
 // ============================================
 
-import { ipcMain } from "electron";
+import { ipcMain, BrowserWindow } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import { randomUUID } from "crypto";
-import databaseService from "./services/databaseService";
+import databaseService, { TransactionWithRoles as DbTransactionWithRoles } from "./services/databaseService";
 import { getContactNames } from "./services/contactsService";
 import auditService from "./services/auditService";
 import logService from "./services/logService";
@@ -21,24 +21,38 @@ import {
   validateString,
   sanitizeObject,
 } from "./utils/validation";
+import { normalizePhoneNumber } from "./utils/phoneNormalization";
+
+// Import handler types
+import type {
+  AvailableContact,
+  ImportableContact,
+  ExistingDbContactRecord,
+  NewContactData,
+} from "./types/handlerTypes";
 
 // Type definitions
 interface ContactResponse {
   success: boolean;
   error?: string;
   contact?: Contact;
-  contacts?: Contact[];
+  contacts?: Contact[] | AvailableContact[];
   contactsStatus?: unknown;
   canDelete?: boolean;
-  transactions?: Transaction[] | any[]; // Can be Transaction[] or TransactionWithRoles[]
+  transactions?: Transaction[] | DbTransactionWithRoles[];
   count?: number;
   transactionCount?: number;
 }
 
+/** Reference to mainWindow for emitting progress events */
+let _mainWindow: BrowserWindow | null = null;
+
 /**
  * Register all contact-related IPC handlers
+ * @param mainWindow - The main browser window for emitting progress events
  */
-export function registerContactHandlers(): void {
+export function registerContactHandlers(mainWindow: BrowserWindow): void {
+  _mainWindow = mainWindow;
   // Get all imported contacts for a user (local database only)
   ipcMain.handle(
     "contacts:get-all",
@@ -123,11 +137,133 @@ export function registerContactHandlers(): void {
           importedContacts.map((c) => c.email?.toLowerCase()).filter(Boolean),
         );
 
+        // Build a set of normalized phones from imported contacts
+        const importedPhones = new Set<string>();
+        for (const ic of importedContacts) {
+          if (ic.phone) {
+            const normalized = normalizePhoneNumber(ic.phone);
+            if (normalized && normalized !== "+") {
+              importedPhones.add(normalized);
+            }
+          }
+        }
+
         // Convert Contacts app data to contact objects
-        const availableContacts: any[] = [];
-        const seenContacts = new Set<string>();
+        const availableContacts: AvailableContact[] = [];
+
+        // Deduplication sets for name, email, and phone
+        const seenNames = new Set<string>();
+        const seenEmails = new Set<string>();
+        const seenPhones = new Set<string>();
+
+        /**
+         * Check if a contact is a duplicate based on name, email, or phone.
+         * Returns true if any identifier matches an already-seen contact.
+         */
+        function isDuplicate(contact: {
+          name?: string | null;
+          display_name?: string | null;
+          email?: string | null;
+          emails?: string[];
+          phone?: string | null;
+          phones?: string[];
+        }): boolean {
+          // Check email duplicates
+          const email = contact.email?.toLowerCase();
+          if (email && seenEmails.has(email)) return true;
+
+          // Check all emails if available
+          if (contact.emails) {
+            for (const e of contact.emails) {
+              if (e && seenEmails.has(e.toLowerCase())) return true;
+            }
+          }
+
+          // Check phone duplicates (normalized)
+          const phone = contact.phone;
+          if (phone) {
+            const normalizedPhone = normalizePhoneNumber(phone);
+            if (
+              normalizedPhone &&
+              normalizedPhone !== "+" &&
+              seenPhones.has(normalizedPhone)
+            )
+              return true;
+          }
+
+          // Check all phones if available
+          if (contact.phones) {
+            for (const p of contact.phones) {
+              if (p) {
+                const normalizedPhone = normalizePhoneNumber(p);
+                if (
+                  normalizedPhone &&
+                  normalizedPhone !== "+" &&
+                  seenPhones.has(normalizedPhone)
+                )
+                  return true;
+              }
+            }
+          }
+
+          // Check name duplicates (fallback)
+          const nameLower = (
+            contact.name || contact.display_name
+          )?.toLowerCase();
+          if (nameLower && seenNames.has(nameLower)) return true;
+
+          return false;
+        }
+
+        /**
+         * Mark a contact's identifiers as seen for deduplication.
+         */
+        function markAsSeen(contact: {
+          name?: string | null;
+          display_name?: string | null;
+          email?: string | null;
+          emails?: string[];
+          phone?: string | null;
+          phones?: string[];
+        }): void {
+          // Add name
+          const nameLower = (
+            contact.name || contact.display_name
+          )?.toLowerCase();
+          if (nameLower) seenNames.add(nameLower);
+
+          // Add email
+          const email = contact.email?.toLowerCase();
+          if (email) seenEmails.add(email);
+
+          // Add all emails if available
+          if (contact.emails) {
+            for (const e of contact.emails) {
+              if (e) seenEmails.add(e.toLowerCase());
+            }
+          }
+
+          // Add phone (normalized)
+          if (contact.phone) {
+            const normalizedPhone = normalizePhoneNumber(contact.phone);
+            if (normalizedPhone && normalizedPhone !== "+")
+              seenPhones.add(normalizedPhone);
+          }
+
+          // Add all phones if available
+          if (contact.phones) {
+            for (const p of contact.phones) {
+              if (p) {
+                const normalizedPhone = normalizePhoneNumber(p);
+                if (normalizedPhone && normalizedPhone !== "+")
+                  seenPhones.add(normalizedPhone);
+              }
+            }
+          }
+        }
 
         // STEP 1: Get unimported contacts from database (iPhone synced contacts)
+        // These take precedence because they have real DB IDs
         const unimportedDbContacts =
           await databaseService.getUnimportedContactsByUserId(validatedUserId);
 
@@ -137,21 +273,23 @@ export function registerContactHandlers(): void {
         );
 
         for (const dbContact of unimportedDbContacts) {
-          const nameLower = dbContact.name?.toLowerCase() || dbContact.display_name?.toLowerCase();
-
-          if (nameLower && !seenContacts.has(nameLower)) {
-            seenContacts.add(nameLower);
-
-            availableContacts.push({
-              id: dbContact.id, // Use actual DB ID so we can mark as imported
-              name: dbContact.name || dbContact.display_name,
-              phone: dbContact.phone || null,
-              email: dbContact.email || null,
-              company: dbContact.company || null,
-              source: dbContact.source || "contacts_app",
-              isFromDatabase: true, // Flag to distinguish from macOS Contacts app
-            });
+          // Skip if this is a duplicate (by email, phone, or name)
+          if (isDuplicate(dbContact)) {
+            continue;
           }
+
+          // Mark this contact's identifiers as seen
+          markAsSeen(dbContact);
+
+          availableContacts.push({
+            id: dbContact.id, // Use actual DB ID so we can mark as imported
+            name: dbContact.name || dbContact.display_name,
+            phone: dbContact.phone || null,
+            email: dbContact.email || null,
+            company: dbContact.company || null,
+            source: dbContact.source || "contacts_app",
+            isFromDatabase: true, // Flag to distinguish from macOS Contacts app
+          });
         }
 
         // STEP 2: Add contacts from macOS Contacts app (if not already in list)
@@ -159,8 +297,6 @@ export function registerContactHandlers(): void {
           for (const [_phone, contactInfo] of Object.entries(
             phoneToContactInfo,
           )) {
-            // Use the contact name as unique key to avoid duplicates
-            // (same contact may have multiple phone numbers)
             const nameLower = contactInfo.name?.toLowerCase();
             const primaryEmail = contactInfo.emails?.[0]?.toLowerCase();
 
@@ -172,12 +308,39 @@ export function registerContactHandlers(): void {
               continue;
             }
 
-            // Skip if already added from database
-            if (seenContacts.has(nameLower)) {
+            // Check if already imported by phone
+            if (contactInfo.phones) {
+              let phoneAlreadyImported = false;
+              for (const phone of contactInfo.phones) {
+                const normalized = normalizePhoneNumber(phone);
+                if (
+                  normalized &&
+                  normalized !== "+" &&
+                  importedPhones.has(normalized)
+                ) {
+                  phoneAlreadyImported = true;
+                  break;
+                }
+              }
+              if (phoneAlreadyImported) continue;
+            }
+
+            // Create a temp object for deduplication check
+            const macOsContact = {
+              name: contactInfo.name,
+              email: contactInfo.emails?.[0] || null,
+              emails: contactInfo.emails,
+              phone: contactInfo.phones?.[0] || null,
+              phones: contactInfo.phones,
+            };
+
+            // Skip if already added from iPhone-synced contacts (by email, phone, or name)
+            if (isDuplicate(macOsContact)) {
               continue;
             }
 
-            seenContacts.add(contactInfo.name);
+            // Mark this contact's identifiers as seen
+            markAsSeen(macOsContact);
 
             availableContacts.push({
               id: `contacts-app-${randomUUID()}`, // Unique ID for UI (names aren't unique)
@@ -203,7 +366,9 @@ export function registerContactHandlers(): void {
           contactsStatus: status, // Include loading status
         };
       } catch (error) {
-        logService.error("[Main] Get available contacts failed:", "Contacts", { error });
+        logService.error("[Main] Get available contacts failed:", "Contacts", {
+          error,
+        });
         if (error instanceof ValidationError) {
           return {
             success: false,
@@ -227,11 +392,10 @@ export function registerContactHandlers(): void {
       contactsToImport: unknown[],
     ): Promise<ContactResponse> => {
       try {
-        logService.info(
-          "[Main] Importing contacts",
-          "Contacts",
-          { userId, count: contactsToImport.length },
-        );
+        logService.info("[Main] Importing contacts", "Contacts", {
+          userId,
+          count: contactsToImport.length,
+        });
 
         // Validate inputs
         const validatedUserId = validateUserId(userId); // Validated, will throw if invalid
@@ -254,33 +418,32 @@ export function registerContactHandlers(): void {
           );
         }
 
-        if (contactsToImport.length > 1000) {
+        if (contactsToImport.length > 5000) {
           throw new ValidationError(
-            "Cannot import more than 1000 contacts at once",
+            "Cannot import more than 5000 contacts at once",
             "contactsToImport",
           );
         }
 
         const importedContacts: Contact[] = [];
+        const total = contactsToImport.length;
+
+        // Separate contacts into two groups
+        const existingDbContacts: ExistingDbContactRecord[] = [];
+        const newContactsToCreate: NewContactData[] = [];
 
         for (const contact of contactsToImport) {
-          // Validate each contact's data (basic validation)
-          const sanitizedContact = sanitizeObject(contact) as any;
+          const sanitizedContact = sanitizeObject(contact) as ImportableContact;
           const validatedData = validateContactData(sanitizedContact, false);
 
-          // Check if this is a contact already in the database (from iPhone sync)
-          // If so, just mark it as imported instead of creating a new record
-          if (sanitizedContact.isFromDatabase && sanitizedContact.id && !sanitizedContact.id.startsWith("contacts-app-")) {
-            await databaseService.markContactAsImported(sanitizedContact.id);
-            // Fetch the updated contact to return
-            const updatedContact = await databaseService.getContactById(sanitizedContact.id);
-            if (updatedContact) {
-              importedContacts.push(updatedContact);
-            }
-            logService.info(`[Main] Marked existing contact as imported: ${sanitizedContact.id}`, "Contacts");
+          if (
+            sanitizedContact.isFromDatabase &&
+            sanitizedContact.id &&
+            !sanitizedContact.id.startsWith("contacts-app-")
+          ) {
+            existingDbContacts.push({ id: sanitizedContact.id, contact: sanitizedContact });
           } else {
-            // Create new contact from macOS Contacts app
-            const importedContact = await databaseService.createContact({
+            newContactsToCreate.push({
               user_id: validatedUserId,
               display_name: validatedData.name || "Unknown",
               email: validatedData.email ?? undefined,
@@ -289,8 +452,58 @@ export function registerContactHandlers(): void {
               title: validatedData.title ?? undefined,
               source: sanitizedContact.source || "contacts_app",
               is_imported: true,
+              allPhones: sanitizedContact.allPhones || [],
+              allEmails: sanitizedContact.allEmails || [],
             });
-            importedContacts.push(importedContact);
+          }
+        }
+
+        let processed = 0;
+
+        // Mark existing DB contacts as imported
+        for (const { id } of existingDbContacts) {
+          await databaseService.markContactAsImported(id);
+          const updatedContact = await databaseService.getContactById(id);
+          if (updatedContact) {
+            importedContacts.push(updatedContact);
+          }
+          processed++;
+          if (_mainWindow && !_mainWindow.isDestroyed()) {
+            _mainWindow.webContents.send("contacts:import-progress", {
+              current: processed,
+              total,
+              percent: Math.round((processed / total) * 100),
+            });
+          }
+        }
+
+        // Batch create new contacts (much faster with transaction)
+        if (newContactsToCreate.length > 0) {
+          logService.info(
+            `[Main] Batch importing ${newContactsToCreate.length} new contacts...`,
+            "Contacts"
+          );
+
+          const createdIds = databaseService.createContactsBatch(
+            newContactsToCreate,
+            (current, _batchTotal) => {
+              const overallCurrent = existingDbContacts.length + current;
+              if (_mainWindow && !_mainWindow.isDestroyed()) {
+                _mainWindow.webContents.send("contacts:import-progress", {
+                  current: overallCurrent,
+                  total,
+                  percent: Math.round((overallCurrent / total) * 100),
+                });
+              }
+            }
+          );
+
+          // Fetch created contacts
+          for (const id of createdIds) {
+            const contact = await databaseService.getContactById(id);
+            if (contact) {
+              importedContacts.push(contact);
+            }
           }
         }
 
@@ -304,7 +517,9 @@ export function registerContactHandlers(): void {
           contacts: importedContacts,
         };
       } catch (error) {
-        logService.error("[Main] Import contacts failed:", "Contacts", { error });
+        logService.error("[Main] Import contacts failed:", "Contacts", {
+          error,
+        });
         if (error instanceof ValidationError) {
           return {
             success: false,
@@ -365,7 +580,9 @@ export function registerContactHandlers(): void {
           contacts: importedContacts,
         };
       } catch (error) {
-        logService.error("[Main] Get sorted contacts failed:", "Contacts", { error });
+        logService.error("[Main] Get sorted contacts failed:", "Contacts", {
+          error,
+        });
         if (error instanceof ValidationError) {
           return {
             success: false,
@@ -531,7 +748,11 @@ export function registerContactHandlers(): void {
       contactId: string,
     ): Promise<ContactResponse> => {
       try {
-        logService.info("[Main] Checking if contact can be deleted", "Contacts", { contactId });
+        logService.info(
+          "[Main] Checking if contact can be deleted",
+          "Contacts",
+          { contactId },
+        );
 
         // Validate input
         const validatedContactId = validateContactId(contactId); // Validated, will throw if invalid
@@ -552,7 +773,11 @@ export function registerContactHandlers(): void {
           count: transactions.length,
         };
       } catch (error) {
-        logService.error("[Main] Check can delete contact failed:", "Contacts", { contactId, error });
+        logService.error(
+          "[Main] Check can delete contact failed:",
+          "Contacts",
+          { contactId, error },
+        );
         if (error instanceof ValidationError) {
           return {
             success: false,
@@ -650,7 +875,11 @@ export function registerContactHandlers(): void {
       contactId: string,
     ): Promise<ContactResponse> => {
       try {
-        logService.info("[Main] Removing contact from local database", "Contacts", { contactId });
+        logService.info(
+          "[Main] Removing contact from local database",
+          "Contacts",
+          { contactId },
+        );
 
         // Validate input
         const validatedContactId = validateContactId(contactId); // Validated, will throw if invalid
@@ -680,7 +909,10 @@ export function registerContactHandlers(): void {
           success: true,
         };
       } catch (error) {
-        logService.error("[Main] Remove contact failed:", "Contacts", { contactId, error });
+        logService.error("[Main] Remove contact failed:", "Contacts", {
+          contactId,
+          error,
+        });
         if (error instanceof ValidationError) {
           return {
             success: false,
@@ -689,6 +921,40 @@ export function registerContactHandlers(): void {
         }
         return {
           success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // Look up contact names by phone numbers (batch)
+  ipcMain.handle(
+    "contacts:get-names-by-phones",
+    async (
+      _event: IpcMainInvokeEvent,
+      phones: string[],
+    ): Promise<{ success: boolean; names: Record<string, string>; error?: string }> => {
+      try {
+        if (!Array.isArray(phones)) {
+          return { success: false, names: {}, error: "phones must be an array" };
+        }
+
+        const namesMap = await databaseService.getContactNamesByPhones(phones);
+
+        // Convert Map to plain object for IPC
+        const names: Record<string, string> = {};
+        namesMap.forEach((name, phone) => {
+          names[phone] = name;
+        });
+
+        return { success: true, names };
+      } catch (error) {
+        logService.error("Get contact names by phones failed", "Contacts", {
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        return {
+          success: false,
+          names: {},
           error: error instanceof Error ? error.message : "Unknown error",
         };
       }

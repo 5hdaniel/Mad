@@ -9,6 +9,10 @@ import type { Communication } from "../types";
 export interface MessageBubbleProps {
   /** The message to display */
   message: Communication;
+  /** Sender name to display above inbound messages (for group chats) */
+  senderName?: string;
+  /** Whether to show sender name (hide if same as previous message) */
+  showSender?: boolean;
 }
 
 /**
@@ -21,11 +25,12 @@ function formatMessageTime(timestamp: string | Date | undefined): string {
   return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
+
 /**
  * MessageBubble component for displaying individual messages.
  * Uses chat-style bubble UI with inbound/outbound distinction.
  */
-export function MessageBubble({ message }: MessageBubbleProps): React.ReactElement {
+export function MessageBubble({ message, senderName, showSender = true }: MessageBubbleProps): React.ReactElement {
   const isOutbound = message.direction === "outbound";
 
   // Use body_text as primary, body_plain as fallback (per SR Engineer guidance)
@@ -36,9 +41,13 @@ export function MessageBubble({ message }: MessageBubbleProps): React.ReactEleme
     ? message.sent_at || message.received_at
     : message.received_at || message.sent_at;
 
+  // Build the timestamp line with optional sender name
+  const timestampDisplay = timestamp ? formatMessageTime(timestamp) : "";
+  const senderDisplay = !isOutbound && senderName && showSender ? senderName : null;
+
   return (
     <div
-      className={`flex ${isOutbound ? "justify-end" : "justify-start"}`}
+      className={`flex flex-col ${isOutbound ? "items-end" : "items-start"}`}
       data-testid="message-bubble"
       data-direction={message.direction}
     >
@@ -50,14 +59,20 @@ export function MessageBubble({ message }: MessageBubbleProps): React.ReactEleme
         }`}
       >
         <p className="text-sm whitespace-pre-wrap break-words">{messageText}</p>
-        {timestamp && (
+        {(timestampDisplay || senderDisplay) && (
           <p
             className={`text-xs mt-1 ${
               isOutbound ? "text-blue-100" : "text-gray-500"
             }`}
             data-testid="message-timestamp"
           >
-            {formatMessageTime(timestamp)}
+            {senderDisplay && (
+              <span data-testid="message-sender" className="font-medium">
+                {senderDisplay}
+                {timestampDisplay && " • "}
+              </span>
+            )}
+            {timestampDisplay}
           </p>
         )}
       </div>

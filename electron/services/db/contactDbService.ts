@@ -6,7 +6,7 @@
 import crypto from "crypto";
 import type { Contact, NewContact, ContactFilters } from "../../types";
 import { DatabaseError } from "../../types";
-import { dbGet, dbAll, dbRun } from "./core/dbConnection";
+import { dbGet, dbAll, dbRun, dbTransaction } from "./core/dbConnection";
 import logService from "../logService";
 import { validateFields } from "../../utils/sqlFieldWhitelist";
 
@@ -28,7 +28,20 @@ interface TransactionWithRoles {
 }
 
 /**
+ * Normalize phone to E.164 format
+ */
+function normalizeToE164(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`;
+  if (phone.startsWith('+')) return phone;
+  return `+${digits}`;
+}
+
+/**
  * Create a new contact
+ * Also stores phones and emails in their respective child tables if provided.
+ * Supports both single phone/email and arrays (allPhones/allEmails) for complete data storage.
  */
 export async function createContact(contactData: NewContact): Promise<Contact> {
   const id = crypto.randomUUID();
@@ -53,11 +66,190 @@ export async function createContact(contactData: NewContact): Promise<Contact> {
   ];
 
   dbRun(sql, params);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const extendedData = contactData as any;
+
+  // Store ALL phones in contact_phones table
+  // Use allPhones array if available, otherwise fall back to single phone
+  const allPhones: string[] = extendedData.allPhones || [];
+  const singlePhone = extendedData.phone;
+
+  // If no allPhones but we have a single phone, use that
+  if (allPhones.length === 0 && singlePhone) {
+    allPhones.push(singlePhone);
+  }
+
+  // Track stored phones to avoid duplicates
+  const storedPhones = new Set<string>();
+  let isFirstPhone = true;
+
+  for (const phone of allPhones) {
+    if (!phone) continue;
+
+    const phoneE164 = normalizeToE164(phone);
+    const normalizedKey = phoneE164.replace(/\D/g, '').slice(-10);
+
+    // Skip if we've already stored this normalized phone
+    if (storedPhones.has(normalizedKey)) continue;
+    storedPhones.add(normalizedKey);
+
+    const phoneId = crypto.randomUUID();
+    const phoneSql = `
+      INSERT OR IGNORE INTO contact_phones (
+        id, contact_id, phone_e164, phone_display, is_primary, source, created_at
+      ) VALUES (?, ?, ?, ?, ?, 'import', CURRENT_TIMESTAMP)
+    `;
+    dbRun(phoneSql, [phoneId, id, phoneE164, phone, isFirstPhone ? 1 : 0]);
+    isFirstPhone = false;
+  }
+
+  if (storedPhones.size > 0) {
+    logService.info(`[Contacts] Stored ${storedPhones.size} phone(s) for contact ${id}`, "Contacts");
+  }
+
+  // Store ALL emails in contact_emails table
+  // Use allEmails array if available, otherwise fall back to single email
+  const allEmails: string[] = extendedData.allEmails || [];
+  const singleEmail = extendedData.email;
+
+  // If no allEmails but we have a single email, use that
+  if (allEmails.length === 0 && singleEmail) {
+    allEmails.push(singleEmail);
+  }
+
+  // Track stored emails to avoid duplicates
+  const storedEmails = new Set<string>();
+  let isFirstEmail = true;
+
+  for (const email of allEmails) {
+    if (!email) continue;
+
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // Skip if we've already stored this email
+    if (storedEmails.has(normalizedEmail)) continue;
+    storedEmails.add(normalizedEmail);
+
+    const emailId = crypto.randomUUID();
+    const emailSql = `
+      INSERT OR IGNORE INTO contact_emails (
+        id, contact_id, email, is_primary, source, created_at
+      ) VALUES (?, ?, ?, ?, 'import', CURRENT_TIMESTAMP)
+    `;
+    dbRun(emailSql, [emailId, id, normalizedEmail, isFirstEmail ? 1 : 0]);
+    isFirstEmail = false;
+  }
+
+  if (storedEmails.size > 0) {
+    logService.info(`[Contacts] Stored ${storedEmails.size} email(s) for contact ${id}`, "Contacts");
+  }
+
   const contact = await getContactById(id);
   if (!contact) {
     throw new DatabaseError("Failed to create contact");
   }
   return contact;
+}
+
+/**
+ * Batch create contacts with transaction for performance
+ * Used for bulk import operations (1000+ contacts)
+ */
+export function createContactsBatch(
+  contacts: Array<{
+    user_id: string;
+    display_name: string;
+    email?: string;
+    phone?: string;
+    company?: string;
+    title?: string;
+    source?: string;
+    is_imported?: boolean;
+    allPhones?: string[];
+    allEmails?: string[];
+  }>,
+  onProgress?: (current: number, total: number) => void
+): string[] {
+  const createdIds: string[] = [];
+  const total = contacts.length;
+
+  // Wrap entire operation in a transaction for 10-100x speedup
+  dbTransaction(() => {
+    for (let i = 0; i < contacts.length; i++) {
+      const contactData = contacts[i];
+      const id = crypto.randomUUID();
+      createdIds.push(id);
+
+      // Insert contact
+      dbRun(
+        `INSERT INTO contacts (id, user_id, display_name, company, title, source, is_imported)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [
+          id,
+          contactData.user_id,
+          contactData.display_name || "Unknown",
+          contactData.company || null,
+          contactData.title || null,
+          contactData.source || "contacts_app",
+          contactData.is_imported !== undefined ? (contactData.is_imported ? 1 : 0) : 1,
+        ]
+      );
+
+      // Store phones
+      const allPhones = contactData.allPhones || [];
+      if (allPhones.length === 0 && contactData.phone) {
+        allPhones.push(contactData.phone);
+      }
+      const storedPhones = new Set<string>();
+      let isFirstPhone = true;
+      for (const phone of allPhones) {
+        if (!phone) continue;
+        const phoneE164 = normalizeToE164(phone);
+        const normalizedKey = phoneE164.replace(/\D/g, '').slice(-10);
+        if (storedPhones.has(normalizedKey)) continue;
+        storedPhones.add(normalizedKey);
+        dbRun(
+          `INSERT OR IGNORE INTO contact_phones (id, contact_id, phone_e164, phone_display, is_primary, source, created_at)
+           VALUES (?, ?, ?, ?, ?, 'import', CURRENT_TIMESTAMP)`,
+          [crypto.randomUUID(), id, phoneE164, phone, isFirstPhone ? 1 : 0]
+        );
+        isFirstPhone = false;
+      }
+
+      // Store emails
+      const allEmails = contactData.allEmails || [];
+      if (allEmails.length === 0 && contactData.email) {
+        allEmails.push(contactData.email);
+      }
+      const storedEmails = new Set<string>();
+      let isFirstEmail = true;
+      for (const email of allEmails) {
+        if (!email) continue;
+        const normalizedEmail = email.toLowerCase().trim();
+        if (storedEmails.has(normalizedEmail)) continue;
+        storedEmails.add(normalizedEmail);
+        dbRun(
+          `INSERT OR IGNORE INTO contact_emails (id, contact_id, email, is_primary, source, created_at)
+           VALUES (?, ?, ?, ?, 'import', CURRENT_TIMESTAMP)`,
+          [crypto.randomUUID(), id, normalizedEmail, isFirstEmail ? 1 : 0]
+        );
+        isFirstEmail = false;
+      }
+
+      // Report progress every 50 contacts
+      if (onProgress && (i + 1) % 50 === 0) {
+        onProgress(i + 1, total);
+      }
+    }
+  });
+
+  // Final progress update
+  if (onProgress) {
+    onProgress(total, total);
+  }
+
+  return createdIds;
 }
 
 /**
@@ -236,6 +428,93 @@ export async function searchContacts(
   `;
   const searchPattern = `%${query}%`;
   return dbAll<Contact>(sql, [userId, searchPattern, searchPattern]);
+}
+
+/**
+ * Look up contact by phone number.
+ * Normalizes the phone number and searches across all contact phones.
+ * Returns the contact with display_name if found.
+ */
+export async function getContactByPhone(
+  phone: string
+): Promise<{ id: string; display_name: string; phone: string } | null> {
+  // Normalize phone to last 10 digits for matching
+  const digits = phone.replace(/\D/g, '');
+  const normalized = digits.length >= 10 ? digits.slice(-10) : digits;
+
+  if (!normalized || normalized.length < 7) {
+    return null;
+  }
+
+  const sql = `
+    SELECT
+      c.id,
+      c.display_name,
+      cp.phone_e164 as phone
+    FROM contacts c
+    JOIN contact_phones cp ON c.id = cp.contact_id
+    WHERE REPLACE(REPLACE(REPLACE(REPLACE(cp.phone_e164, '+', ''), '-', ''), ' ', ''), '(', '') LIKE ?
+    LIMIT 1
+  `;
+
+  // Match on last 10 digits
+  const pattern = `%${normalized}`;
+  const result = dbGet<{ id: string; display_name: string; phone: string }>(sql, [pattern]);
+  return result || null;
+}
+
+/**
+ * Batch lookup contacts by multiple phone numbers.
+ * Returns a map of normalized phone -> contact name.
+ */
+export async function getContactNamesByPhones(
+  phones: string[]
+): Promise<Map<string, string>> {
+  const result = new Map<string, string>();
+
+  if (phones.length === 0) return result;
+
+  // Normalize all phones
+  const normalizedPhones = phones.map(p => {
+    const digits = p.replace(/\D/g, '');
+    return digits.length >= 10 ? digits.slice(-10) : digits;
+  }).filter(p => p.length >= 7);
+
+  if (normalizedPhones.length === 0) return result;
+
+  // Build query with multiple OR conditions
+  const conditions = normalizedPhones.map(() =>
+    "REPLACE(REPLACE(REPLACE(REPLACE(cp.phone_e164, '+', ''), '-', ''), ' ', ''), '(', '') LIKE ?"
+  ).join(' OR ');
+
+  const sql = `
+    SELECT
+      c.display_name,
+      cp.phone_e164 as phone
+    FROM contacts c
+    JOIN contact_phones cp ON c.id = cp.contact_id
+    WHERE ${conditions}
+  `;
+
+  const params = normalizedPhones.map(p => `%${p}`);
+  const rows = dbAll<{ display_name: string; phone: string }>(sql, params);
+
+  // Map results back to original phone format
+  for (const row of rows) {
+    const rowDigits = row.phone.replace(/\D/g, '');
+    const rowNormalized = rowDigits.slice(-10);
+
+    // Find matching input phone
+    for (let i = 0; i < phones.length; i++) {
+      if (normalizedPhones[i] === rowNormalized) {
+        result.set(phones[i], row.display_name);
+      }
+    }
+    // Also store by normalized form
+    result.set(rowNormalized, row.display_name);
+  }
+
+  return result;
 }
 
 /**

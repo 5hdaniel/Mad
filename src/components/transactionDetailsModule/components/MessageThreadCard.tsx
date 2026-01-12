@@ -1,23 +1,30 @@
 /**
  * MessageThreadCard Component
- * Container for a conversation thread, displaying a header with contact info
- * and a scrollable list of messages.
+ * Container for a conversation thread, displaying a header with contact info.
+ * Clicking "View" opens the conversation in a phone-style popup modal.
  */
-import React from "react";
-import type { Communication } from "../types";
-import { MessageBubble } from "./MessageBubble";
+import React, { useState } from "react";
+import type { Communication, Message } from "../types";
+import { ConversationViewModal } from "./modals";
+
+/**
+ * Union type for messages - can be from messages table or communications table
+ */
+export type MessageLike = Message | Communication;
 
 export interface MessageThreadCardProps {
   /** Unique identifier for the thread */
   threadId: string;
   /** Messages in this thread, sorted chronologically */
-  messages: Communication[];
+  messages: MessageLike[];
   /** Contact name if available */
   contactName?: string;
   /** Phone number or identifier for the thread */
   phoneNumber: string;
   /** Callback when unlink button is clicked */
   onUnlink?: (threadId: string) => void;
+  /** Map of phone number -> contact name for resolving senders */
+  contactNames?: Record<string, string>;
 }
 
 /**
@@ -33,8 +40,41 @@ function getAvatarInitial(contactName?: string, phoneNumber?: string): string {
 }
 
 /**
+ * Extract sender phone from a message's participants.
+ */
+function getSenderPhone(msg: MessageLike): string | null {
+  if (msg.direction === "outbound") return null; // Outbound = user sent it
+
+  try {
+    if (msg.participants) {
+      const parsed = typeof msg.participants === 'string'
+        ? JSON.parse(msg.participants)
+        : msg.participants;
+      if (parsed.from) return parsed.from;
+    }
+  } catch {
+    // Fall through
+  }
+
+  // Fallback to sender field if available
+  if ("sender" in msg && msg.sender) {
+    return msg.sender;
+  }
+
+  return null;
+}
+
+/**
+ * Normalize phone for lookup (last 10 digits)
+ */
+function normalizePhoneForLookup(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  return digits.length >= 10 ? digits.slice(-10) : digits;
+}
+
+/**
  * MessageThreadCard component for displaying a conversation thread.
- * Shows a header with contact info and a scrollable message list.
+ * Shows a header with contact info. Clicking "View" opens a popup modal.
  */
 export function MessageThreadCard({
   threadId,
@@ -42,86 +82,174 @@ export function MessageThreadCard({
   contactName,
   phoneNumber,
   onUnlink,
+  contactNames = {},
 }: MessageThreadCardProps): React.ReactElement {
+  const [showModal, setShowModal] = useState(false);
   const avatarInitial = getAvatarInitial(contactName, phoneNumber);
 
+  // Get preview of last message
+  const lastMessage = messages[messages.length - 1];
+  const previewText = lastMessage
+    ? (lastMessage.body_text || lastMessage.body_plain || lastMessage.body || "")?.slice(0, 60)
+    : "";
+
   return (
-    <div
-      className="bg-white rounded-lg border border-gray-200 mb-4 overflow-hidden"
-      data-testid="message-thread-card"
-      data-thread-id={threadId}
-    >
-      {/* Thread Header */}
-      <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center gap-3">
-        <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-teal-600 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0">
-          {avatarInitial}
-        </div>
-        <div className="min-w-0 flex-1">
-          <h4 className="font-semibold text-gray-900 truncate" data-testid="thread-contact-name">
-            {contactName || phoneNumber}
-          </h4>
-          {contactName && phoneNumber && (
-            <p className="text-sm text-gray-500 truncate" data-testid="thread-phone-number">
-              {phoneNumber}
-            </p>
-          )}
-        </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <span className="inline-block px-2 py-0.5 bg-green-100 text-green-700 text-xs font-medium rounded-full">
-            {messages.length} {messages.length === 1 ? "message" : "messages"}
-          </span>
-          {onUnlink && (
+    <>
+      <div
+        className="bg-white rounded-lg border border-gray-200 mb-4 overflow-hidden"
+        data-testid="message-thread-card"
+        data-thread-id={threadId}
+      >
+        {/* Thread Header */}
+        <div className="bg-gray-50 px-4 py-3 flex items-center gap-3">
+          <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-teal-600 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0">
+            {avatarInitial}
+          </div>
+          <div className="min-w-0 flex-1">
+            <h4 className="font-semibold text-gray-900 truncate" data-testid="thread-contact-name">
+              {contactName || phoneNumber}
+            </h4>
+            {contactName && phoneNumber && (
+              <p className="text-sm text-gray-500 truncate" data-testid="thread-phone-number">
+                {phoneNumber}
+              </p>
+            )}
+            {/* Preview of last message */}
+            {previewText && (
+              <p className="text-sm text-gray-400 truncate mt-1" data-testid="thread-preview">
+                {previewText}{previewText.length >= 60 ? "..." : ""}
+              </p>
+            )}
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <span className="inline-block px-2 py-0.5 bg-green-100 text-green-700 text-xs font-medium rounded-full">
+              {messages.length} {messages.length === 1 ? "message" : "messages"}
+            </span>
             <button
-              onClick={() => onUnlink(threadId)}
-              className="text-gray-400 hover:text-red-600 hover:bg-red-50 rounded p-1 transition-all"
-              title="Remove from transaction"
-              data-testid="unlink-thread-button"
+              onClick={() => setShowModal(true)}
+              className="px-3 py-1 text-xs font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-all"
+              data-testid="toggle-thread-button"
             >
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
-                />
-              </svg>
+              View
             </button>
-          )}
+            {onUnlink && (
+              <button
+                onClick={() => onUnlink(threadId)}
+                className="text-gray-400 hover:text-red-600 hover:bg-red-50 rounded p-1 transition-all"
+                title="Remove from transaction"
+                data-testid="unlink-thread-button"
+              >
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
+                  />
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Messages */}
-      <div
-        className="p-4 space-y-3 max-h-96 overflow-y-auto"
-        data-testid="thread-messages"
-      >
-        {messages.map((msg) => (
-          <MessageBubble key={msg.id} message={msg} />
-        ))}
-      </div>
-    </div>
+      {/* Conversation Popup Modal */}
+      {showModal && (
+        <ConversationViewModal
+          messages={messages}
+          contactName={contactName}
+          phoneNumber={phoneNumber}
+          contactNames={contactNames}
+          onClose={() => setShowModal(false)}
+        />
+      )}
+    </>
   );
 }
 
 /**
- * Utility function to group messages by thread_id.
- * Messages without a thread_id are grouped by their own id.
+ * Generate a key for grouping messages into chats.
+ * Uses thread_id (from macOS chat_id) first, as this is the actual conversation ID.
+ * Falls back to participant-based grouping only if thread_id is not available.
+ */
+function getThreadKey(msg: MessageLike): string {
+  // FIRST: Use thread_id if available - this is the actual iMessage chat ID
+  // Format is "macos-chat-{chat_id}" from the import
+  if (msg.thread_id) {
+    return msg.thread_id;
+  }
+
+  // FALLBACK: Compute from participants if no thread_id
+  try {
+    if (msg.participants) {
+      const parsed = typeof msg.participants === 'string'
+        ? JSON.parse(msg.participants)
+        : msg.participants;
+
+      // Collect all participants
+      const allParticipants = new Set<string>();
+
+      if (parsed.from) {
+        allParticipants.add(normalizeParticipant(parsed.from));
+      }
+      if (parsed.to) {
+        const toList = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
+        toList.forEach((p: string) => allParticipants.add(normalizeParticipant(p)));
+      }
+
+      // Remove "me" - we only care about external participants for grouping
+      allParticipants.delete('me');
+
+      // Sort and join to create a consistent key
+      if (allParticipants.size > 0) {
+        return `participants-${Array.from(allParticipants).sort().join('|')}`;
+      }
+    }
+  } catch {
+    // Fall through to default
+  }
+
+  // Last resort: use message id (each message is its own "thread")
+  return `msg-${msg.id}`;
+}
+
+/**
+ * Normalize a participant identifier (phone/email) for consistent grouping.
+ */
+function normalizeParticipant(participant: string): string {
+  if (!participant) return '';
+
+  // If it looks like a phone number, normalize to digits only
+  const digits = participant.replace(/\D/g, '');
+  if (digits.length >= 10) {
+    // Use last 10 digits to normalize +1 prefix variations
+    return digits.slice(-10);
+  }
+
+  // Otherwise return lowercase trimmed version
+  return participant.toLowerCase().trim();
+}
+
+/**
+ * Utility function to group messages by conversation/chat.
+ * Uses thread_id (actual iMessage chat ID) when available,
+ * falls back to participant-based grouping otherwise.
  */
 export function groupMessagesByThread(
-  messages: Communication[]
-): Map<string, Communication[]> {
-  const threads = new Map<string, Communication[]>();
+  messages: MessageLike[]
+): Map<string, MessageLike[]> {
+  const threads = new Map<string, MessageLike[]>();
 
   messages.forEach((msg) => {
-    const threadId = msg.thread_id || msg.id;
-    const thread = threads.get(threadId) || [];
+    const threadKey = getThreadKey(msg);
+    const thread = threads.get(threadKey) || [];
     thread.push(msg);
-    threads.set(threadId, thread);
+    threads.set(threadKey, thread);
   });
 
   // Sort messages within each thread chronologically
@@ -143,12 +271,12 @@ export function groupMessagesByThread(
  * Utility function to extract phone number from thread messages.
  * Looks at participants to find the external phone number.
  */
-export function extractPhoneFromThread(messages: Communication[]): string {
+export function extractPhoneFromThread(messages: MessageLike[]): string {
   for (const msg of messages) {
     // Try to parse participants JSON
     if (msg.participants) {
       try {
-        const participants = JSON.parse(msg.participants);
+        const participants = JSON.parse(msg.participants as string);
         // For inbound messages, "from" is the external phone
         // For outbound messages, "to" contains the external phone
         if (msg.direction === "inbound" && participants.from) {
@@ -162,8 +290,8 @@ export function extractPhoneFromThread(messages: Communication[]): string {
       }
     }
 
-    // Fallback to legacy sender field
-    if (msg.sender) {
+    // Fallback to legacy sender field (only on Communication type)
+    if ("sender" in msg && msg.sender) {
       return msg.sender;
     }
   }
@@ -175,8 +303,8 @@ export function extractPhoneFromThread(messages: Communication[]): string {
  * Sort threads by most recent message (newest first).
  */
 export function sortThreadsByRecent(
-  threads: Map<string, Communication[]>
-): [string, Communication[]][] {
+  threads: Map<string, MessageLike[]>
+): [string, MessageLike[]][] {
   return Array.from(threads.entries()).sort(([, msgsA], [, msgsB]) => {
     const lastA = msgsA[msgsA.length - 1];
     const lastB = msgsB[msgsB.length - 1];

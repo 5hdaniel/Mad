@@ -3,13 +3,14 @@
  * Messages tab content showing text messages linked to a transaction.
  * Displays messages grouped by thread in conversation-style format.
  */
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import type { Communication } from "../types";
 import {
   MessageThreadCard,
   groupMessagesByThread,
   extractPhoneFromThread,
   sortThreadsByRecent,
+  type MessageLike,
 } from "./MessageThreadCard";
 import { AttachMessagesModal, UnlinkMessageModal } from "./modals";
 
@@ -38,6 +39,41 @@ interface TransactionMessagesTabProps {
  * Messages tab content component.
  * Shows loading state, empty state, or message threads.
  */
+/**
+ * Extract all unique phone numbers from messages for contact lookup.
+ */
+function extractAllPhones(messages: MessageLike[]): string[] {
+  const phones = new Set<string>();
+
+  for (const msg of messages) {
+    try {
+      if (msg.participants) {
+        const parsed = typeof msg.participants === 'string'
+          ? JSON.parse(msg.participants)
+          : msg.participants;
+
+        if (parsed.from) phones.add(parsed.from);
+        if (parsed.to) {
+          const toList = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
+          toList.forEach((p: string) => phones.add(p));
+        }
+      }
+    } catch {
+      // Skip invalid JSON
+    }
+
+    // Also check sender field
+    if ("sender" in msg && msg.sender) {
+      phones.add(msg.sender);
+    }
+  }
+
+  // Remove "me" placeholder
+  phones.delete("me");
+
+  return Array.from(phones);
+}
+
 export function TransactionMessagesTab({
   messages,
   loading,
@@ -56,6 +92,46 @@ export function TransactionMessagesTab({
     messageCount: number;
   } | null>(null);
   const [isUnlinking, setIsUnlinking] = useState(false);
+  const [contactNames, setContactNames] = useState<Record<string, string>>({});
+
+  // Look up contact names for all phone numbers in messages
+  useEffect(() => {
+    const lookupContactNames = async () => {
+      if (messages.length === 0) return;
+
+      const phones = extractAllPhones(messages);
+      if (phones.length === 0) return;
+
+      console.log("[Messages] Looking up contact names for phones:", phones);
+
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const result = await (window.api.contacts as any).getNamesByPhones(phones);
+        console.log("[Messages] Contact lookup result:", result);
+
+        if (result.success && result.names) {
+          // Build a lookup map with both original and normalized phone keys
+          const namesWithNormalized: Record<string, string> = {};
+          Object.entries(result.names as Record<string, string>).forEach(([phone, name]) => {
+            namesWithNormalized[phone] = name;
+            // Also add normalized version (last 10 digits)
+            const normalized = phone.replace(/\D/g, '').slice(-10);
+            if (normalized.length >= 7) {
+              namesWithNormalized[normalized] = name;
+            }
+          });
+          console.log("[Messages] Contact names map:", namesWithNormalized);
+          setContactNames(namesWithNormalized);
+        } else if (Object.keys(result.names || {}).length === 0) {
+          console.log("[Messages] No matching contacts found for these phone numbers");
+        }
+      } catch (err) {
+        console.error("Failed to look up contact names:", err);
+      }
+    };
+
+    lookupContactNames();
+  }, [messages]);
 
   // Handle attach button click
   const handleAttachClick = useCallback(() => {
@@ -297,16 +373,24 @@ export function TransactionMessagesTab({
 
       {/* Thread list */}
       <div className="space-y-4" data-testid="message-thread-list">
-        {sortedThreads.map(([threadId, threadMessages]) => (
-          <MessageThreadCard
-            key={threadId}
-            threadId={threadId}
-            messages={threadMessages}
-            phoneNumber={extractPhoneFromThread(threadMessages)}
-            onUnlink={userId && transactionId ? handleUnlinkClick : undefined}
-            // contactName could be looked up from contact service in future
-          />
-        ))}
+        {sortedThreads.map(([threadId, threadMessages]) => {
+          const phoneNumber = extractPhoneFromThread(threadMessages);
+          // Look up contact name for thread header
+          const normalized = phoneNumber.replace(/\D/g, '').slice(-10);
+          const contactName = contactNames[phoneNumber] || contactNames[normalized];
+
+          return (
+            <MessageThreadCard
+              key={threadId}
+              threadId={threadId}
+              messages={threadMessages}
+              phoneNumber={phoneNumber}
+              contactName={contactName}
+              contactNames={contactNames}
+              onUnlink={userId && transactionId ? handleUnlinkClick : undefined}
+            />
+          );
+        })}
       </div>
 
       {/* Modals */}

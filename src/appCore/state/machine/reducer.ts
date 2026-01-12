@@ -371,13 +371,32 @@ export function appStateReducer(
     // ============================================
 
     case "ONBOARDING_STEP_COMPLETE": {
+      console.log("[Reducer] ONBOARDING_STEP_COMPLETE received:", action.step, "current state:", state.status);
       if (state.status !== "onboarding") {
+        console.log("[Reducer] Not in onboarding state, returning unchanged");
         return state;
       }
 
-      const completedSteps = state.completedSteps.includes(action.step)
+      // When completing a step, ensure all preceding steps are also marked complete
+      // This handles the case where the UI navigates through steps without explicitly completing each one
+      let completedSteps = state.completedSteps.includes(action.step)
         ? state.completedSteps
         : [...state.completedSteps, action.step];
+
+      // If completing permissions on macOS, mark all preceding steps as complete
+      // (you can't get to permissions without going through phone-type, secure-storage, email-connect)
+      if (action.step === "permissions") {
+        const precedingSteps: OnboardingStep[] = ["phone-type", "email-connect"];
+        if (state.platform.isMacOS) {
+          precedingSteps.push("secure-storage");
+        }
+        for (const step of precedingSteps) {
+          if (!completedSteps.includes(step)) {
+            completedSteps = [...completedSteps, step];
+          }
+        }
+      }
+      console.log("[Reducer] completedSteps after adding:", completedSteps);
 
       // Determine user data state based on completed steps
       const userData: UserData = {
@@ -385,7 +404,7 @@ export function appStateReducer(
           ? (state.platform.hasIPhone ? "iphone" : "android")
           : null,
         hasCompletedEmailOnboarding: completedSteps.includes("email-connect"),
-        hasEmailConnected: false, // This would be set by actual email connection
+        hasEmailConnected: state.hasEmailConnected ?? false,
         needsDriverSetup:
           state.platform.isWindows &&
           state.platform.hasIPhone &&
@@ -399,9 +418,11 @@ export function appStateReducer(
         state.platform,
         userData
       );
+      console.log("[Reducer] nextStep from getNextOnboardingStep:", nextStep, "platform:", state.platform, "userData:", userData);
 
       if (!nextStep) {
         // All onboarding complete - transition to ready
+        console.log("[Reducer] No next step - transitioning to READY");
         return {
           status: "ready",
           user: state.user,
@@ -409,6 +430,7 @@ export function appStateReducer(
           userData,
         };
       }
+      console.log("[Reducer] More steps to go, staying in onboarding with step:", nextStep);
 
       // Continue to next step
       return {

@@ -12,26 +12,45 @@ export type Platform = "macos" | "windows" | "linux";
 
 /**
  * Gets the current platform from Electron's process.platform.
- * Falls back to 'windows' if platform cannot be determined.
+ * Falls back to navigator.platform and navigator.userAgent if Electron API
+ * is not yet available (race condition during app initialization).
+ * Defaults to 'windows' if platform cannot be determined.
  */
 export function getPlatform(): Platform {
-  // In Electron, we can access process.platform via preload
-  const platform = window.api?.system?.platform || "unknown";
+  // Try Electron API first (most reliable when available)
+  const electronPlatform = window.api?.system?.platform;
 
-  switch (platform) {
-    case "darwin":
-      return "macos";
-    case "win32":
-      return "windows";
-    case "linux":
-      return "linux";
-    default:
-      console.warn(
-        `[Platform] Unknown platform detected: "${platform}". Defaulting to Windows. ` +
-          `This may cause unexpected behavior. Please report this issue.`,
-      );
-      return "windows"; // Default to Windows for safety
+  if (electronPlatform) {
+    switch (electronPlatform) {
+      case "darwin":
+        return "macos";
+      case "win32":
+        return "windows";
+      case "linux":
+        return "linux";
+    }
   }
+
+  // Fallback to navigator.platform (works before window.api is populated)
+  const navPlatform = navigator.platform?.toLowerCase() || "";
+
+  if (navPlatform.includes("mac")) return "macos";
+  if (navPlatform.includes("win")) return "windows";
+  if (navPlatform.includes("linux")) return "linux";
+
+  // Fallback to userAgent as last resort
+  const userAgent = navigator.userAgent?.toLowerCase() || "";
+
+  if (userAgent.includes("mac")) return "macos";
+  if (userAgent.includes("win")) return "windows";
+  if (userAgent.includes("linux")) return "linux";
+
+  // Last resort default - log warning for debugging
+  console.warn(
+    `[Platform] Could not detect platform. electronPlatform=${electronPlatform}, ` +
+      `navPlatform=${navPlatform}. Defaulting to Windows.`,
+  );
+  return "windows";
 }
 
 /**

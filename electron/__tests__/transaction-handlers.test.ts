@@ -530,9 +530,11 @@ describe("Transaction Handlers", () => {
 
   describe("transactions:assign-contact", () => {
     it("should assign contact to transaction successfully", async () => {
-      mockTransactionService.assignContactToTransaction.mockResolvedValue(
-        undefined,
-      );
+      // TASK-1031: assignContactToTransaction now returns AssignContactResult
+      mockTransactionService.assignContactToTransaction.mockResolvedValue({
+        success: true,
+        autoLink: { emailsLinked: 0, messagesLinked: 0, alreadyLinked: 0, errors: 0 },
+      });
 
       const handler = registeredHandlers.get("transactions:assign-contact");
       const result = await handler(

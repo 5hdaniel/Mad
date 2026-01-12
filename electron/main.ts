@@ -39,6 +39,7 @@ import { LLMConfigService } from "./services/llm/llmConfigService";
 import {
   registerPermissionHandlers,
   registerConversationHandlers,
+  registerMessageImportHandlers,
   registerOutlookHandlers,
   registerUpdaterHandlers,
 } from "./handlers";
@@ -188,7 +189,7 @@ app.whenReady().then(async () => {
   // Register existing handler modules
   registerAuthHandlers(mainWindow!);
   registerTransactionHandlers(mainWindow!);
-  registerContactHandlers();
+  registerContactHandlers(mainWindow!);
   registerAddressHandlers();
   registerFeedbackHandlers();
   registerSystemHandlers();
@@ -205,6 +206,7 @@ app.whenReady().then(async () => {
   // Register extracted handlers from handlers/ directory
   registerPermissionHandlers();
   registerConversationHandlers(mainWindow!);
+  registerMessageImportHandlers(mainWindow!);
   registerOutlookHandlers(mainWindow!);
   registerUpdaterHandlers(mainWindow!);
 });

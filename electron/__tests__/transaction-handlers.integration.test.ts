@@ -416,9 +416,11 @@ describe("Transaction Handlers Integration Tests", () => {
     };
 
     it("should assign multiple contacts with different roles", async () => {
-      mockTransactionService.assignContactToTransaction.mockResolvedValue(
-        undefined,
-      );
+      // TASK-1031: assignContactToTransaction now returns AssignContactResult
+      mockTransactionService.assignContactToTransaction.mockResolvedValue({
+        success: true,
+        autoLink: { emailsLinked: 0, messagesLinked: 0, alreadyLinked: 0, errors: 0 },
+      });
       mockTransactionService.getTransactionWithContacts.mockResolvedValue({
         ...mockTransaction,
         contacts: [
@@ -481,9 +483,11 @@ describe("Transaction Handlers Integration Tests", () => {
       mockTransactionService.removeContactFromTransaction.mockResolvedValue(
         undefined,
       );
-      mockTransactionService.assignContactToTransaction.mockResolvedValue(
-        undefined,
-      );
+      // TASK-1031: assignContactToTransaction now returns AssignContactResult
+      mockTransactionService.assignContactToTransaction.mockResolvedValue({
+        success: true,
+        autoLink: { emailsLinked: 0, messagesLinked: 0, alreadyLinked: 0, errors: 0 },
+      });
 
       const removeHandler = registeredHandlers.get(
         "transactions:remove-contact",

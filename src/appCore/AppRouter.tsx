@@ -150,6 +150,10 @@ export function AppRouter({ app }: AppRouterProps) {
         showSetupPrompt={!hasEmailConnected && !showSetupPromptDismissed}
         onContinueSetup={goToEmailOnboarding}
         onDismissSetupPrompt={handleDismissSetupPrompt}
+        syncStatus={app.syncStatus}
+        isAnySyncing={app.isAnySyncing}
+        currentSyncMessage={app.currentSyncMessage}
+        onTriggerRefresh={app.triggerRefresh}
       />
     );
   }

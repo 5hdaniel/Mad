@@ -133,7 +133,7 @@ class DatabaseService implements IDatabaseService {
 
       await this.runMigrations();
 
-      await logService.info("Database initialized successfully with encryption", "DatabaseService");
+      await logService.debug("Database initialized successfully with encryption", "DatabaseService");
       return true;
     } catch (error) {
       await logService.error("Failed to initialize database", "DatabaseService", {
@@ -682,6 +682,13 @@ class DatabaseService implements IDatabaseService {
     return contactDb.createContact(contactData);
   }
 
+  createContactsBatch(
+    contacts: Parameters<typeof contactDb.createContactsBatch>[0],
+    onProgress?: (current: number, total: number) => void
+  ): string[] {
+    return contactDb.createContactsBatch(contacts, onProgress);
+  }
+
   async getContactById(contactId: string): Promise<Contact | null> {
     return contactDb.getContactById(contactId);
   }
@@ -720,6 +727,14 @@ class DatabaseService implements IDatabaseService {
 
   async deleteContact(contactId: string): Promise<void> {
     return contactDb.deleteContact(contactId);
+  }
+
+  async getContactByPhone(phone: string): Promise<{ id: string; display_name: string; phone: string } | null> {
+    return contactDb.getContactByPhone(phone);
+  }
+
+  async getContactNamesByPhones(phones: string[]): Promise<Map<string, string>> {
+    return contactDb.getContactNamesByPhones(phones);
   }
 
   async removeContact(contactId: string): Promise<void> {
@@ -810,7 +825,8 @@ class DatabaseService implements IDatabaseService {
   }
 
   async getCommunicationsByTransaction(transactionId: string): Promise<Communication[]> {
-    return communicationDb.getCommunicationsByTransaction(transactionId);
+    // TASK-992: Use getCommunicationsWithMessages to include direction from messages table
+    return communicationDb.getCommunicationsWithMessages(transactionId);
   }
 
   async updateCommunication(communicationId: string, updates: Partial<Communication>): Promise<void> {
@@ -956,6 +972,208 @@ class DatabaseService implements IDatabaseService {
     `;
     const result = db.prepare(sql).get(userId) as { count: number } | undefined;
     return result?.count ?? 0;
+  }
+
+  // ============================================
+  // MESSAGES TABLE OPERATIONS (Direct queries for text messages)
+  // ============================================
+
+  /**
+   * Get unlinked text messages (SMS/iMessage) from the messages table
+   * These are messages not yet attached to any transaction
+   * Limited to 1000 most recent messages to prevent UI freeze
+   */
+  async getUnlinkedTextMessages(userId: string, limit = 1000): Promise<Message[]> {
+    const db = this._ensureDb();
+    const sql = `
+      SELECT * FROM messages
+      WHERE user_id = ?
+        AND transaction_id IS NULL
+        AND channel IN ('sms', 'imessage')
+      ORDER BY sent_at DESC
+      LIMIT ?
+    `;
+    return db.prepare(sql).all(userId, limit) as Message[];
+  }
+
+  /**
+   * Get unlinked emails from the messages table
+   * These are emails not yet attached to any transaction
+   */
+  async getUnlinkedEmails(userId: string, limit = 500): Promise<Message[]> {
+    const db = this._ensureDb();
+    const sql = `
+      SELECT * FROM messages
+      WHERE user_id = ?
+        AND transaction_id IS NULL
+        AND channel = 'email'
+      ORDER BY sent_at DESC
+      LIMIT ?
+    `;
+    return db.prepare(sql).all(userId, limit) as Message[];
+  }
+
+  /**
+   * Get distinct contacts (phone numbers) with unlinked message counts
+   * Used for contact-first message browsing
+   */
+  async getMessageContacts(userId: string): Promise<{ contact: string; messageCount: number; lastMessageAt: string }[]> {
+    const db = this._ensureDb();
+    // Extract phone number from participants JSON and group by it
+    // This query handles the JSON structure where participants.from or participants.to contains the phone
+    const sql = `
+      SELECT
+        COALESCE(
+          CASE
+            WHEN direction = 'inbound' THEN json_extract(participants, '$.from')
+            ELSE json_extract(participants, '$.to[0]')
+          END,
+          thread_id
+        ) as contact,
+        COUNT(*) as messageCount,
+        MAX(sent_at) as lastMessageAt
+      FROM messages
+      WHERE user_id = ?
+        AND transaction_id IS NULL
+        AND channel IN ('sms', 'imessage')
+        AND participants IS NOT NULL
+      GROUP BY contact
+      HAVING contact IS NOT NULL AND contact != 'me' AND contact != ''
+      ORDER BY lastMessageAt DESC
+    `;
+    return db.prepare(sql).all(userId) as { contact: string; messageCount: number; lastMessageAt: string }[];
+  }
+
+  /**
+   * Get unlinked messages for a specific contact (phone number)
+   * Used after user selects a contact in the contact-first UI
+   *
+   * Strategy: First find all thread_ids where the contact appears, then fetch
+   * ALL messages from those threads. This ensures group chats are fully captured
+   * even when individual messages have different handles.
+   */
+  async getMessagesByContact(userId: string, contact: string): Promise<Message[]> {
+    const db = this._ensureDb();
+
+    // Step 1: Find all thread_ids where the contact appears in any message
+    const threadIdsSql = `
+      SELECT DISTINCT thread_id FROM messages
+      WHERE user_id = ?
+        AND transaction_id IS NULL
+        AND channel IN ('sms', 'imessage')
+        AND thread_id IS NOT NULL
+        AND (
+          json_extract(participants, '$.from') = ?
+          OR json_extract(participants, '$.to[0]') = ?
+        )
+    `;
+    const threadRows = db.prepare(threadIdsSql).all(userId, contact, contact) as { thread_id: string }[];
+    const threadIds = threadRows.map(r => r.thread_id);
+
+    if (threadIds.length === 0) {
+      // Fallback: return messages directly matching the contact (for cases without thread_id)
+      const fallbackSql = `
+        SELECT * FROM messages
+        WHERE user_id = ?
+          AND transaction_id IS NULL
+          AND channel IN ('sms', 'imessage')
+          AND (
+            json_extract(participants, '$.from') = ?
+            OR json_extract(participants, '$.to[0]') = ?
+          )
+        ORDER BY sent_at DESC
+      `;
+      return db.prepare(fallbackSql).all(userId, contact, contact) as Message[];
+    }
+
+    // Step 2: Fetch ALL messages from those threads (not just messages where contact appears)
+    // This captures all messages in group chats where the contact is a participant
+    const placeholders = threadIds.map(() => '?').join(', ');
+    const messagesSql = `
+      SELECT * FROM messages
+      WHERE user_id = ?
+        AND transaction_id IS NULL
+        AND channel IN ('sms', 'imessage')
+        AND thread_id IN (${placeholders})
+      ORDER BY sent_at DESC
+    `;
+    return db.prepare(messagesSql).all(userId, ...threadIds) as Message[];
+  }
+
+  /**
+   * Update a message in the messages table
+   */
+  async updateMessage(messageId: string, updates: Partial<Message>): Promise<void> {
+    const db = this._ensureDb();
+    const allowedFields = [
+      "transaction_id",
+      "transaction_link_confidence",
+      "transaction_link_source",
+      "is_transaction_related",
+      "classification_confidence",
+      "classification_method",
+      "classified_at",
+      "is_false_positive",
+      "false_positive_reason",
+      "stage_hint",
+      "stage_hint_source",
+      "stage_hint_confidence",
+      "llm_analysis",
+    ];
+
+    const entries = Object.entries(updates).filter(([key]) =>
+      allowedFields.includes(key)
+    );
+
+    if (entries.length === 0) return;
+
+    const setClause = entries.map(([key]) => `${key} = ?`).join(", ");
+    const values = entries.map(([, value]) => value);
+    values.push(messageId);
+
+    db.prepare(`UPDATE messages SET ${setClause} WHERE id = ?`).run(...values);
+  }
+
+  /**
+   * Link a message to a transaction
+   */
+  async linkMessageToTransaction(messageId: string, transactionId: string): Promise<void> {
+    const db = this._ensureDb();
+    db.prepare(`UPDATE messages SET transaction_id = ? WHERE id = ?`).run(
+      transactionId,
+      messageId
+    );
+  }
+
+  /**
+   * Unlink a message from a transaction
+   */
+  async unlinkMessageFromTransaction(messageId: string): Promise<void> {
+    const db = this._ensureDb();
+    db.prepare(`UPDATE messages SET transaction_id = NULL WHERE id = ?`).run(messageId);
+  }
+
+  /**
+   * Get messages linked to a transaction
+   */
+  async getMessagesByTransaction(transactionId: string): Promise<Message[]> {
+    const db = this._ensureDb();
+    const sql = `
+      SELECT * FROM messages
+      WHERE transaction_id = ?
+      ORDER BY sent_at DESC
+    `;
+    return db.prepare(sql).all(transactionId) as Message[];
+  }
+
+  /**
+   * Get a single message by ID
+   */
+  async getMessageById(messageId: string): Promise<Message | null> {
+    const db = this._ensureDb();
+    const sql = `SELECT * FROM messages WHERE id = ?`;
+    const result = db.prepare(sql).get(messageId) as Message | undefined;
+    return result || null;
   }
 
   // ============================================

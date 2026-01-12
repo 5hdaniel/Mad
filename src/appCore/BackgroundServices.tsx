@@ -8,6 +8,7 @@
 import React from "react";
 import UpdateNotification from "../components/UpdateNotification";
 import SystemHealthMonitor from "../components/SystemHealthMonitor";
+import { useMacOSMessagesImport } from "../hooks/useMacOSMessagesImport";
 import type { AppStateMachine } from "./state/types";
 
 // OAuthProvider type to match SystemHealthMonitor expectations
@@ -27,7 +28,26 @@ export function BackgroundServices({ app }: BackgroundServicesProps) {
     hasEmailConnected,
     isTourActive,
     needsTermsAcceptance,
+    isDatabaseInitialized,
   } = app;
+
+  // Determine if we're in onboarding flow
+  const isOnboarding = currentStep !== "dashboard";
+
+  // macOS Messages auto-import on startup
+  // Runs in background when:
+  // - Platform is macOS
+  // - User is authenticated
+  // - Full Disk Access granted
+  // - Database initialized
+  // - Not in onboarding
+  useMacOSMessagesImport({
+    userId: currentUser?.id ?? null,
+    hasPermissions,
+    isDatabaseInitialized,
+    isOnboarding,
+  });
+
   return (
     <>
       {/* Update Notification */}

@@ -5,6 +5,42 @@
 
 import { ipcRenderer } from "electron";
 
+/**
+ * Progress event from macOS message import
+ */
+export interface ImportProgress {
+  phase: "deleting" | "importing" | "attachments";
+  current: number;
+  total: number;
+  percent: number;
+}
+
+/**
+ * Result of macOS message import
+ */
+export interface MacOSImportResult {
+  success: boolean;
+  messagesImported: number;
+  messagesSkipped: number;
+  attachmentsImported: number;
+  attachmentsSkipped: number;
+  duration: number;
+  error?: string;
+}
+
+/**
+ * Attachment info for display (TASK-1012)
+ */
+export interface MessageAttachmentInfo {
+  id: string;
+  message_id: string;
+  filename: string;
+  mime_type: string | null;
+  file_size_bytes: number | null;
+  /** Base64-encoded file content for inline display */
+  data: string | null;
+}
+
 export const messageBridge = {
   /**
    * Gets iMessage conversations from Messages database
@@ -26,4 +62,52 @@ export const messageBridge = {
    */
   exportConversations: (conversationIds: string[]) =>
     ipcRenderer.invoke("export-conversations", conversationIds),
+
+  /**
+   * Import messages from macOS Messages app into the app database
+   * This enables linking messages to transactions on macOS
+   * @param userId - User ID to associate messages with
+   * @param forceReimport - If true, delete existing messages and re-import all
+   * @returns Import result with counts
+   */
+  importMacOSMessages: (userId: string, forceReimport = false): Promise<MacOSImportResult> =>
+    ipcRenderer.invoke("messages:import-macos", userId, forceReimport),
+
+  /**
+   * Get count of messages available for import from macOS Messages
+   * @returns Count of available messages
+   */
+  getImportCount: (): Promise<{ success: boolean; count?: number; error?: string }> =>
+    ipcRenderer.invoke("messages:get-import-count"),
+
+  /**
+   * Listen for import progress updates
+   * @param callback - Called with progress updates during import
+   * @returns Cleanup function to remove listener
+   */
+  onImportProgress: (callback: (progress: ImportProgress) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, progress: ImportProgress) => {
+      callback(progress);
+    };
+    ipcRenderer.on("messages:import-progress", handler);
+    return () => {
+      ipcRenderer.removeListener("messages:import-progress", handler);
+    };
+  },
+
+  /**
+   * Get attachments for a message with base64 data (TASK-1012)
+   * @param messageId - Message ID to get attachments for
+   * @returns Array of attachments with base64 data
+   */
+  getMessageAttachments: (messageId: string): Promise<MessageAttachmentInfo[]> =>
+    ipcRenderer.invoke("messages:get-attachments", messageId),
+
+  /**
+   * Get attachments for multiple messages at once (TASK-1012)
+   * @param messageIds - Array of message IDs
+   * @returns Map of message ID to attachments
+   */
+  getMessageAttachmentsBatch: (messageIds: string[]): Promise<Record<string, MessageAttachmentInfo[]>> =>
+    ipcRenderer.invoke("messages:get-attachments-batch", messageIds),
 };

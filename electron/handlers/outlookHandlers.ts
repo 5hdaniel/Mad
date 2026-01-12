@@ -22,6 +22,18 @@ import { macTimestampToDate } from "../utils/dateUtils";
 import { sanitizeFilename } from "../utils/fileUtils";
 import { getMessageText } from "../utils/messageParser";
 
+// Import handler types
+import type {
+  MessageRow,
+  ChatInfoRow,
+  ChatIdQueryRow,
+  GroupChatData,
+  ExportContact,
+  ExportProgressCallback,
+  ContactExportResult,
+} from "../types/handlerTypes";
+import { getNumericChatId } from "../types/handlerTypes";
+
 // Track registration to prevent duplicate handlers
 let handlersRegistered = false;
 
@@ -199,7 +211,7 @@ export function registerOutlookHandlers(mainWindow: BrowserWindow): void {
   // Export emails for multiple contacts
   ipcMain.handle(
     "outlook-export-emails",
-    async (event: IpcMainInvokeEvent, contacts: any[]) => {
+    async (event: IpcMainInvokeEvent, contacts: ExportContact[]) => {
       try {
         if (!outlookService || !outlookService.isAuthenticated()) {
           return {
@@ -246,16 +258,16 @@ export function registerOutlookHandlers(mainWindow: BrowserWindow): void {
           "Library/Messages/chat.db"
         );
         const db = new sqlite3.Database(messagesDbPath, sqlite3.OPEN_READONLY);
-        const dbAll = promisify(db.all.bind(db)) as (
+        const dbAll = promisify(db.all.bind(db)) as <T>(
           sql: string,
-          params?: any
-        ) => Promise<any[]>;
+          params?: unknown
+        ) => Promise<T[]>;
         const dbClose = promisify(db.close.bind(db));
 
         // Load contact names for resolving names in export
         const { contactMap } = await getContactNames();
 
-        const results: any[] = [];
+        const results: ContactExportResult[] = [];
 
         // Export BOTH text messages AND emails for each contact
         for (let i = 0; i < contacts.length; i++) {
@@ -280,10 +292,12 @@ export function registerOutlookHandlers(mainWindow: BrowserWindow): void {
           const errors: string[] = [];
 
           // 1. Export text messages (if chatId exists or if we have phone/email identifiers)
+          const hasPhones = contact.phones && contact.phones.length > 0;
+          const hasEmails = contact.emails && contact.emails.length > 0;
           if (
             contact.chatId ||
-            contact.phones?.length > 0 ||
-            contact.emails?.length > 0
+            hasPhones ||
+            hasEmails
           ) {
             try {
               mainWindow?.webContents.send("export-progress", {
@@ -294,21 +308,16 @@ export function registerOutlookHandlers(mainWindow: BrowserWindow): void {
                 contactName: contact.name,
               });
 
-              let messages: any[] = [];
+              let messages: MessageRow[] = [];
               const allChatIds = new Set<number>();
 
               // Strategy: Fetch messages from ALL chats involving this contact
               // This includes both their primary 1:1 chat AND any group chats they're in
 
               // Step 1: If they have a primary chatId, add it
-              if (
-                contact.chatId &&
-                !(
-                  typeof contact.chatId === "string" &&
-                  contact.chatId.startsWith("group-contact-")
-                )
-              ) {
-                allChatIds.add(contact.chatId);
+              const numericChatId = getNumericChatId(contact);
+              if (numericChatId !== null) {
+                allChatIds.add(numericChatId);
               }
 
               // Step 2: Find ALL chats where their phone numbers or emails appear
@@ -320,7 +329,7 @@ export function registerOutlookHandlers(mainWindow: BrowserWindow): void {
 
               if (identifiers.length > 0) {
                 const placeholders = identifiers.map(() => "?").join(",");
-                const chatIds = (await dbAll(
+                const chatIds = await dbAll<ChatIdQueryRow>(
                   `
                 SELECT DISTINCT chat.ROWID as chat_id, chat.display_name, chat.chat_identifier
                 FROM chat
@@ -329,9 +338,9 @@ export function registerOutlookHandlers(mainWindow: BrowserWindow): void {
                 WHERE handle.id IN (${placeholders})
               `,
                   identifiers
-                )) as any[];
+                );
 
-                chatIds.forEach((c: any) => {
+                chatIds.forEach((c: ChatIdQueryRow) => {
                   allChatIds.add(c.chat_id);
                 });
               }
@@ -341,7 +350,7 @@ export function registerOutlookHandlers(mainWindow: BrowserWindow): void {
                 const chatIdArray = Array.from(allChatIds);
                 const chatIdPlaceholders = chatIdArray.map(() => "?").join(",");
 
-                messages = (await dbAll(
+                messages = await dbAll<MessageRow>(
                   `
                 SELECT
                   message.ROWID as id,
@@ -359,16 +368,16 @@ export function registerOutlookHandlers(mainWindow: BrowserWindow): void {
                 ORDER BY message.date ASC
               `,
                   chatIdArray
-                )) as any[];
+                );
               }
 
               textMessageCount = messages.length;
 
               if (messages.length > 0) {
                 // Group messages by chat_id
-                const messagesByChatId: Record<string, any[]> = {};
+                const messagesByChatId: Record<string, MessageRow[]> = {};
                 for (const msg of messages) {
-                  const chatId = msg.chat_id || "unknown";
+                  const chatId = String(msg.chat_id || "unknown");
                   if (!messagesByChatId[chatId]) {
                     messagesByChatId[chatId] = [];
                   }
@@ -376,7 +385,7 @@ export function registerOutlookHandlers(mainWindow: BrowserWindow): void {
                 }
 
                 // Get chat info for each chat_id
-                const chatInfoMap: Record<string, any> = {};
+                const chatInfoMap: Record<string, ChatInfoRow> = {};
                 const chatIds = Object.keys(messagesByChatId).filter(
                   (id) => id !== "unknown"
                 );
@@ -389,18 +398,18 @@ export function registerOutlookHandlers(mainWindow: BrowserWindow): void {
                   FROM chat
                   WHERE chat.ROWID IN (${chatIds.map(() => "?").join(",")})
                 `;
-                  const chatInfoResults = (await dbAll(
+                  const chatInfoResults = await dbAll<ChatInfoRow>(
                     chatInfoQuery,
                     chatIds
-                  )) as any[];
-                  chatInfoResults.forEach((info: any) => {
+                  );
+                  chatInfoResults.forEach((info: ChatInfoRow) => {
                     chatInfoMap[info.chat_id] = info;
                   });
                 }
 
                 // Separate group chats from 1:1 chats
-                const groupChats: Record<string, any> = {};
-                const oneOnOneMessages: any[] = [];
+                const groupChats: Record<string, GroupChatData> = {};
+                const oneOnOneMessages: MessageRow[] = [];
 
                 for (const [chatId, chatMessages] of Object.entries(
                   messagesByChatId
@@ -543,7 +552,7 @@ export function registerOutlookHandlers(mainWindow: BrowserWindow): void {
                   contact.name,
                   email,
                   exportPath,
-                  (progress: any) => {
+                  ((progress: Record<string, unknown>) => {
                     // Forward progress to renderer
                     mainWindow?.webContents.send("export-progress", {
                       ...progress,
@@ -551,7 +560,7 @@ export function registerOutlookHandlers(mainWindow: BrowserWindow): void {
                       current: i + 1,
                       total: contacts.length,
                     });
-                  }
+                  }) as ExportProgressCallback
                 );
 
                 if (result.success) {

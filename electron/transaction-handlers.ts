@@ -8,7 +8,7 @@ import type { IpcMainInvokeEvent } from "electron";
 import transactionService from "./services/transactionService";
 import auditService from "./services/auditService";
 import logService from "./services/logService";
-import { autoLinkTextsToTransaction } from "./services/messageMatchingService";
+import { autoLinkAllToTransaction } from "./services/messageMatchingService";
 import type {
   Transaction,
   NewTransaction,
@@ -510,6 +510,8 @@ export const registerTransactionHandlers = (
           false,
         );
 
+        // TASK-1031: createAuditedTransaction now auto-links communications
+        // for all assigned contacts internally
         const transaction = await transactionService.createAuditedTransaction(
           validatedUserId as string,
           validatedData as any,
@@ -643,7 +645,9 @@ export const registerTransactionHandlers = (
         const validatedNotes =
           notes && typeof notes === "string" ? notes.trim() : null;
 
-        await transactionService.assignContactToTransaction(
+        // TASK-1031: assignContactToTransaction now auto-links communications
+        // for the newly added contact
+        const result = await transactionService.assignContactToTransaction(
           validatedTransactionId as string,
           validatedContactId as string,
           role.trim(),
@@ -652,8 +656,23 @@ export const registerTransactionHandlers = (
           validatedNotes ?? undefined,
         );
 
+        // Log auto-link results if any communications were linked
+        if (result.autoLink) {
+          const { emailsLinked, messagesLinked } = result.autoLink;
+          if (emailsLinked > 0 || messagesLinked > 0) {
+            logService.info("Auto-linked communications for new contact", "Transactions", {
+              transactionId: validatedTransactionId,
+              contactId: validatedContactId,
+              emailsLinked,
+              messagesLinked,
+            });
+          }
+        }
+
         return {
           success: true,
+          // TASK-1031: Return auto-link results so UI can notify user
+          autoLink: result.autoLink,
         };
       } catch (error) {
         logService.error(
@@ -1169,6 +1188,25 @@ export const registerTransactionHandlers = (
           validatedIds.push(validatedId);
         }
 
+        // TASK-984: Validate that manual transactions cannot be set to pending/rejected
+        // These statuses are only meaningful for AI-detected transactions
+        if (status === "pending" || status === "rejected") {
+          const manualTransactionIds: string[] = [];
+          for (const transactionId of validatedIds) {
+            const tx = await transactionService.getTransactionDetails(transactionId);
+            if (tx?.detection_source === "manual") {
+              manualTransactionIds.push(transactionId);
+            }
+          }
+
+          if (manualTransactionIds.length > 0) {
+            throw new ValidationError(
+              `Cannot set manual transactions to "${status}". Manual transactions can only be "active" or "closed".`,
+              "status",
+            );
+          }
+        }
+
         // Update each transaction
         let updatedCount = 0;
         const errors: string[] = [];
@@ -1268,6 +1306,114 @@ export const registerTransactionHandlers = (
             error: `Validation error: ${error.message}`,
           };
         }
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // Get unlinked emails (not attached to any transaction)
+  ipcMain.handle(
+    "transactions:get-unlinked-emails",
+    async (
+      event: IpcMainInvokeEvent,
+      userId: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        logService.info("Getting unlinked emails", "Transactions", { userId });
+
+        const validatedUserId = validateUserId(userId);
+        if (!validatedUserId) {
+          throw new ValidationError("User ID validation failed", "userId");
+        }
+
+        const emails = await transactionService.getUnlinkedEmails(validatedUserId);
+
+        return {
+          success: true,
+          emails,
+        };
+      } catch (error) {
+        logService.error("Get unlinked emails failed", "Transactions", {
+          userId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // Get message contacts for contact-first browsing
+  ipcMain.handle(
+    "transactions:get-message-contacts",
+    async (
+      event: IpcMainInvokeEvent,
+      userId: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        logService.info("Getting message contacts", "Transactions", { userId });
+
+        const validatedUserId = validateUserId(userId);
+        if (!validatedUserId) {
+          throw new ValidationError("User ID validation failed", "userId");
+        }
+
+        const contacts = await transactionService.getMessageContacts(validatedUserId);
+
+        return {
+          success: true,
+          contacts,
+        };
+      } catch (error) {
+        logService.error("Get message contacts failed", "Transactions", {
+          userId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
+  // Get messages for a specific contact
+  ipcMain.handle(
+    "transactions:get-messages-by-contact",
+    async (
+      event: IpcMainInvokeEvent,
+      userId: string,
+      contact: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        logService.info("Getting messages by contact", "Transactions", { userId, contact });
+
+        const validatedUserId = validateUserId(userId);
+        if (!validatedUserId) {
+          throw new ValidationError("User ID validation failed", "userId");
+        }
+
+        if (!contact || typeof contact !== "string") {
+          throw new ValidationError("Contact is required", "contact");
+        }
+
+        const messages = await transactionService.getMessagesByContact(validatedUserId, contact);
+
+        return {
+          success: true,
+          messages,
+        };
+      } catch (error) {
+        logService.error("Get messages by contact failed", "Transactions", {
+          userId,
+          contact,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
         return {
           success: false,
           error: error instanceof Error ? error.message : "Unknown error",
@@ -1500,7 +1646,7 @@ export const registerTransactionHandlers = (
       transactionId: string,
     ): Promise<TransactionResponse> => {
       try {
-        logService.info("Auto-linking texts to transaction", "Transactions", {
+        logService.info("Auto-linking communications to transaction", "Transactions", {
           transactionId,
         });
 
@@ -1513,9 +1659,9 @@ export const registerTransactionHandlers = (
           );
         }
 
-        const result = await autoLinkTextsToTransaction(validatedTransactionId);
+        const result = await autoLinkAllToTransaction(validatedTransactionId);
 
-        logService.info("Auto-link texts complete", "Transactions", {
+        logService.info("Auto-link communications complete", "Transactions", {
           transactionId: validatedTransactionId,
           linked: result.linked,
           skipped: result.skipped,
@@ -1529,7 +1675,7 @@ export const registerTransactionHandlers = (
           errors: result.errors.length > 0 ? result.errors : undefined,
         };
       } catch (error) {
-        logService.error("Auto-link texts failed", "Transactions", {
+        logService.error("Auto-link communications failed", "Transactions", {
           transactionId,
           error: error instanceof Error ? error.message : "Unknown error",
         });

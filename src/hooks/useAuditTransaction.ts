@@ -19,6 +19,8 @@ export interface AddressData {
   property_zip: string;
   property_coordinates: Coordinates | null;
   transaction_type: string;
+  started_at: string;  // ISO8601 date string (required)
+  closed_at?: string;  // ISO8601 date string (optional, null = ongoing)
 }
 
 export interface Coordinates {
@@ -37,6 +39,10 @@ export interface AddressSuggestion {
 
 export interface ContactAssignment {
   contactId: string;
+  contactName?: string;  // TASK-1030: Added for edit mode pre-population
+  contactEmail?: string;
+  contactPhone?: string;
+  contactCompany?: string;
   isPrimary: boolean;
   notes: string;
 }
@@ -98,6 +104,16 @@ export interface UseAuditTransactionReturn {
   handlePreviousStep: () => void;
 }
 
+/**
+ * Get default start date (one year ago from today)
+ * Common transaction timeframe for real estate
+ */
+function getDefaultStartDate(): string {
+  const date = new Date();
+  date.setFullYear(date.getFullYear() - 1);
+  return date.toISOString().split("T")[0]; // YYYY-MM-DD format
+}
+
 const initialAddressData: AddressData = {
   property_address: "",
   property_street: "",
@@ -106,6 +122,8 @@ const initialAddressData: AddressData = {
   property_zip: "",
   property_coordinates: null,
   transaction_type: "purchase",
+  started_at: getDefaultStartDate(),
+  closed_at: undefined,
 };
 
 export function useAuditTransaction({
@@ -174,13 +192,65 @@ export function useAuditTransaction({
         property_zip: editTransaction.property_zip || "",
         property_coordinates: coordinates,
         transaction_type: editTransaction.transaction_type || "purchase",
+        started_at: editTransaction.started_at
+          ? (typeof editTransaction.started_at === "string"
+              ? editTransaction.started_at.split("T")[0]
+              : editTransaction.started_at.toISOString().split("T")[0])
+          : getDefaultStartDate(),
+        closed_at: editTransaction.closed_at
+          ? (typeof editTransaction.closed_at === "string"
+              ? editTransaction.closed_at.split("T")[0]
+              : editTransaction.closed_at.toISOString().split("T")[0])
+          : undefined,
       };
 
       setAddressData(prefillData);
       setOriginalAddressData(prefillData);
 
-      // Parse and set suggested contacts if present
-      if (editTransaction.suggested_contacts) {
+      // TASK-1030: Load contacts from contact_assignments (junction table) first,
+      // fall back to suggested_contacts JSON if not available.
+      // contact_assignments is populated by getTransactionDetails() and contains
+      // actual assigned contacts from the database.
+      // suggested_contacts is a legacy JSON field populated during auto-detection.
+      const extendedTransaction = editTransaction as Transaction & {
+        contact_assignments?: Array<{
+          id: string;
+          contact_id: string;
+          contact_name?: string;
+          contact_email?: string;
+          contact_phone?: string;
+          contact_company?: string;
+          role?: string;
+          specific_role?: string;
+          is_primary?: number;
+          notes?: string;
+        }>;
+      };
+
+      if (extendedTransaction.contact_assignments && extendedTransaction.contact_assignments.length > 0) {
+        // Use actual contact assignments from junction table
+        const assignments: ContactAssignments = {};
+        extendedTransaction.contact_assignments.forEach((ca) => {
+          // Use role field first, fall back to specific_role (TASK-995 fix)
+          const role = ca.role || ca.specific_role;
+          if (role && ca.contact_id) {
+            if (!assignments[role]) {
+              assignments[role] = [];
+            }
+            assignments[role].push({
+              contactId: ca.contact_id,
+              contactName: ca.contact_name || "",
+              contactEmail: ca.contact_email,
+              contactPhone: ca.contact_phone,
+              contactCompany: ca.contact_company,
+              isPrimary: ca.is_primary === 1,
+              notes: ca.notes || "",
+            });
+          }
+        });
+        setContactAssignments(assignments);
+      } else if (editTransaction.suggested_contacts) {
+        // Fall back to suggested_contacts JSON for legacy data
         try {
           const suggestedContacts = JSON.parse(editTransaction.suggested_contacts);
           const assignments: ContactAssignments = {};
@@ -367,6 +437,18 @@ export function useAuditTransaction({
         corrected: addressData.property_zip,
       };
     }
+    if (addressData.started_at !== originalAddressData.started_at) {
+      changes.started_at = {
+        original: originalAddressData.started_at,
+        corrected: addressData.started_at,
+      };
+    }
+    if ((addressData.closed_at || "") !== (originalAddressData.closed_at || "")) {
+      changes.closed_at = {
+        original: originalAddressData.closed_at || "",
+        corrected: addressData.closed_at || "",
+      };
+    }
 
     return Object.keys(changes).length > 0 ? changes : null;
   }, [addressData, originalAddressData]);
@@ -407,6 +489,8 @@ export function useAuditTransaction({
           transaction_type: addressData.transaction_type as Transaction["transaction_type"],
           detection_status: "confirmed" as const,
           reviewed_at: new Date().toISOString(),
+          started_at: addressData.started_at,
+          closed_at: addressData.closed_at || null,
         };
 
         const updateResult = await window.api.transactions.update(
@@ -469,6 +553,15 @@ export function useAuditTransaction({
     if (step === 1) {
       if (!addressData.property_address.trim()) {
         setError("Property address is required");
+        return;
+      }
+      if (!addressData.started_at) {
+        setError("Transaction start date is required");
+        return;
+      }
+      // Validate end date is after start date if provided
+      if (addressData.closed_at && addressData.started_at > addressData.closed_at) {
+        setError("End date must be after start date");
         return;
       }
       setError(null);

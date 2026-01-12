@@ -27,6 +27,12 @@ import {
   useKeychainHandlers,
 } from "./flows";
 import { useOptionalMachineState } from "./machine/hooks/useOptionalMachineState";
+import { useAutoRefresh } from "../../hooks/useAutoRefresh";
+import {
+  constructStateProps,
+  constructModalTransitions,
+  constructHandlers,
+} from "./returnHelpers";
 import type { AppStateMachine, PendingEmailTokens } from "./types";
 
 export function useAppStateMachine(): AppStateMachine {
@@ -108,6 +114,7 @@ export function useAppStateMachine(): AppStateMachine {
     isWindows,
     onSetShowMoveAppPrompt: modal.setShowMoveAppPrompt,
     onSetCurrentStep: (step) => nav.setCurrentStep(step),
+    stateMachineDispatch: machineState?.dispatch,
   });
 
   // ============================================
@@ -221,6 +228,18 @@ export function useAppStateMachine(): AppStateMachine {
   });
 
   // ============================================
+  // AUTO-REFRESH (TASK-1003)
+  // ============================================
+  const autoSync = useAutoRefresh({
+    userId: currentUser?.id ?? null,
+    hasEmailConnected: emailOnboardingApi.hasEmailConnected,
+    isDatabaseInitialized: secureStorage.isDatabaseInitialized,
+    hasPermissions: permissions.hasPermissions,
+    isOnDashboard: nav.currentStep === "dashboard",
+    isOnboarding: nav.currentStep !== "dashboard",
+  });
+
+  // ============================================
   // NETWORK HANDLERS
   // ============================================
   const handleRetryConnection = useCallback(async () => {
@@ -244,174 +263,58 @@ export function useAppStateMachine(): AppStateMachine {
   }, [modal]);
 
   // ============================================
+  // CONTEXT STATE OBJECT (for helper functions)
+  // ============================================
+  const contextState = {
+    isAuthenticated,
+    isAuthLoading,
+    currentUser,
+    sessionToken,
+    authProvider,
+    subscription,
+    needsTermsAcceptance,
+    isOnline,
+    isChecking,
+    connectionError,
+    isMacOS,
+    isWindows,
+  };
+
+  // ============================================
   // RETURN STATE MACHINE
   // ============================================
   return useMemo<AppStateMachine>(
     () => ({
-      // Navigation state
-      currentStep: nav.currentStep,
-
-      // Auth state
-      isAuthenticated,
-      isAuthLoading,
-      currentUser,
-      sessionToken,
-      authProvider,
-      subscription,
-      needsTermsAcceptance,
-
-      // Network state
-      isOnline,
-      isChecking,
-      connectionError,
-
-      // Platform state
-      isMacOS,
-      isWindows,
-
-      // Permissions state
-      hasPermissions: permissions.hasPermissions,
-
-      // Secure storage state
-      hasSecureStorageSetup: secureStorage.hasSecureStorageSetup,
-      isCheckingSecureStorage: secureStorage.isCheckingSecureStorage,
-      isDatabaseInitialized: secureStorage.isDatabaseInitialized,
-      isInitializingDatabase: secureStorage.isInitializingDatabase,
-      skipKeychainExplanation: secureStorage.skipKeychainExplanation,
-
-      // Email onboarding state
-      hasCompletedEmailOnboarding:
-        emailOnboardingApi.hasCompletedEmailOnboarding,
-      hasEmailConnected: emailOnboardingApi.hasEmailConnected,
-      isCheckingEmailOnboarding: emailOnboardingApi.isCheckingEmailOnboarding,
-
-      // Phone type state
-      hasSelectedPhoneType: phoneTypeApi.hasSelectedPhoneType,
-      selectedPhoneType: phoneTypeApi.selectedPhoneType,
-      isLoadingPhoneType: phoneTypeApi.isLoadingPhoneType,
-      needsDriverSetup: phoneTypeApi.needsDriverSetup,
-
-      // New user flow state
-      isNewUserFlow: auth.isNewUserFlow,
-
-      // Pending data
-      pendingOAuthData: auth.pendingOAuthData,
-      pendingOnboardingData: auth.pendingOnboardingData,
-      pendingEmailTokens,
-
-      // Export state
-      exportResult: exportFlow.exportResult,
-      conversations: exportFlow.conversations,
-      selectedConversationIds: exportFlow.selectedConversationIds,
-      outlookConnected: exportFlow.outlookConnected,
-
-      // Modal state (grouped)
-      modalState: modal.modalState,
-
-      // UI state
-      showSetupPromptDismissed: nav.showSetupPromptDismissed,
-      isTourActive: nav.isTourActive,
-      appPath: permissions.appPath,
-
-      // Semantic modal transitions
-      openProfile: modal.openProfile,
-      closeProfile: modal.closeProfile,
-      openSettings: modal.openSettings,
-      closeSettings: modal.closeSettings,
-      openTransactions: modal.openTransactions,
-      closeTransactions: modal.closeTransactions,
-      openContacts: modal.openContacts,
-      closeContacts: modal.closeContacts,
-      openAuditTransaction: modal.openAuditTransaction,
-      closeAuditTransaction: modal.closeAuditTransaction,
-      toggleVersion: modal.toggleVersion,
-      closeVersion: modal.closeVersion,
-      openTermsModal: modal.openTermsModal,
-      closeTermsModal: modal.closeTermsModal,
-      openMoveAppPrompt: modal.openMoveAppPrompt,
-      closeMoveAppPrompt: modal.closeMoveAppPrompt,
-      openIPhoneSync: modal.openIPhoneSync,
-      closeIPhoneSync: modal.closeIPhoneSync,
-
-      // Navigation transitions
-      goToStep: nav.goToStep,
-      goToEmailOnboarding: nav.goToEmailOnboarding,
-
-      // Auth handlers
-      handleLoginSuccess: auth.handleLoginSuccess,
-      handleLoginPending: auth.handleLoginPending,
-      handleLogout: auth.handleLogout,
-
-      // Terms handlers
-      handleAcceptTerms: auth.handleAcceptTerms,
-      handleDeclineTerms: auth.handleDeclineTerms,
-
-      // Phone type handlers
-      handleSelectIPhone: phoneHandlers.handleSelectIPhone,
-      handleSelectAndroid: phoneHandlers.handleSelectAndroid,
-      handleAndroidGoBack: phoneHandlers.handleAndroidGoBack,
-      handleAndroidContinueWithEmail:
-        phoneHandlers.handleAndroidContinueWithEmail,
-      handlePhoneTypeChange: phoneHandlers.handlePhoneTypeChange,
-      handleAppleDriverSetupComplete:
-        phoneHandlers.handleAppleDriverSetupComplete,
-      handleAppleDriverSetupSkip: phoneHandlers.handleAppleDriverSetupSkip,
-
-      // Email onboarding handlers
-      handleEmailOnboardingComplete: emailHandlers.handleEmailOnboardingComplete,
-      handleEmailOnboardingSkip: emailHandlers.handleEmailOnboardingSkip,
-      handleEmailOnboardingBack: emailHandlers.handleEmailOnboardingBack,
-      handleStartGoogleEmailConnect: emailHandlers.handleStartGoogleEmailConnect,
-      handleStartMicrosoftEmailConnect:
-        emailHandlers.handleStartMicrosoftEmailConnect,
-
-      // Keychain handlers
-      handleKeychainExplanationContinue:
-        keychainHandlers.handleKeychainExplanationContinue,
-      handleKeychainBack: keychainHandlers.handleKeychainBack,
-
-      // Permission handlers
-      handlePermissionsGranted: permissions.handlePermissionsGranted,
-      checkPermissions: permissions.checkPermissions,
-
-      // Export handlers
-      handleExportComplete: exportFlow.handleExportComplete,
-      handleOutlookExport: exportFlow.handleOutlookExport,
-      handleOutlookCancel: exportFlow.handleOutlookCancel,
-      handleStartOver: exportFlow.handleStartOver,
-      setExportResult: exportFlow.setExportResult,
-
-      // Microsoft handlers
-      handleMicrosoftLogin: exportFlow.handleMicrosoftLogin,
-      handleMicrosoftSkip: exportFlow.handleMicrosoftSkip,
-      handleConnectOutlook: exportFlow.handleConnectOutlook,
-
-      // Network handlers
-      handleRetryConnection,
-
-      // UI handlers
-      handleDismissSetupPrompt: nav.handleDismissSetupPrompt,
-      setIsTourActive: nav.setIsTourActive,
-      handleDismissMovePrompt,
-      handleNotNowMovePrompt,
-
-      // Utility
-      getPageTitle: nav.getPageTitle,
+      ...constructStateProps(
+        contextState,
+        nav,
+        permissions,
+        secureStorage,
+        emailOnboardingApi,
+        phoneTypeApi,
+        auth,
+        pendingEmailTokens,
+        exportFlow,
+        modal,
+        autoSync,
+      ),
+      ...constructModalTransitions(modal),
+      ...constructHandlers(
+        nav,
+        auth,
+        permissions,
+        phoneHandlers,
+        emailHandlers,
+        keychainHandlers,
+        exportFlow,
+        handleRetryConnection,
+        handleDismissMovePrompt,
+        handleNotNowMovePrompt,
+      ),
     }),
     [
+      contextState,
       nav,
-      isAuthenticated,
-      isAuthLoading,
-      currentUser,
-      sessionToken,
-      authProvider,
-      subscription,
-      needsTermsAcceptance,
-      isOnline,
-      isChecking,
-      connectionError,
-      isMacOS,
-      isWindows,
       permissions,
       secureStorage,
       emailOnboardingApi,
@@ -420,6 +323,7 @@ export function useAppStateMachine(): AppStateMachine {
       pendingEmailTokens,
       exportFlow,
       modal,
+      autoSync,
       phoneHandlers,
       emailHandlers,
       keychainHandlers,

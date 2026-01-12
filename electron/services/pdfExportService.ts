@@ -3,6 +3,73 @@ import path from "path";
 import fs from "fs/promises";
 import { Transaction, Communication } from "../types/models";
 import logService from "./logService";
+import { dbAll } from "./db/core/dbConnection";
+
+/**
+ * Look up contact names for phone numbers
+ */
+function getContactNamesByPhones(phones: string[]): Record<string, string> {
+  if (phones.length === 0) return {};
+
+  try {
+    // Normalize phones to last 10 digits for matching
+    const normalizedPhones = phones.map(p => p.replace(/\D/g, '').slice(-10));
+
+    // Query contact_phones to find names
+    const placeholders = normalizedPhones.map(() => '?').join(',');
+    const sql = `
+      SELECT
+        cp.phone_e164,
+        cp.phone_display,
+        c.display_name
+      FROM contact_phones cp
+      JOIN contacts c ON cp.contact_id = c.id
+      WHERE SUBSTR(REPLACE(cp.phone_e164, '+', ''), -10) IN (${placeholders})
+         OR SUBSTR(REPLACE(cp.phone_display, '-', ''), -10) IN (${placeholders})
+    `;
+
+    const results = dbAll<{ phone_e164: string; phone_display: string; display_name: string }>(
+      sql,
+      [...normalizedPhones, ...normalizedPhones]
+    );
+
+    const nameMap: Record<string, string> = {};
+    for (const row of results) {
+      // Map both original and normalized forms
+      const e164Normalized = row.phone_e164.replace(/\D/g, '').slice(-10);
+      const displayNormalized = row.phone_display.replace(/\D/g, '').slice(-10);
+      nameMap[e164Normalized] = row.display_name;
+      nameMap[displayNormalized] = row.display_name;
+      nameMap[row.phone_e164] = row.display_name;
+      nameMap[row.phone_display] = row.display_name;
+    }
+
+    return nameMap;
+  } catch (error) {
+    logService.warn("[PDF Export] Failed to look up contact names", "PDFExport", { error });
+    return {};
+  }
+}
+
+/**
+ * Format phone number or resolve to contact name
+ */
+function formatSenderName(sender: string | null | undefined, nameMap: Record<string, string>): string {
+  if (!sender) return "Unknown";
+
+  // Check if it's a phone number (starts with + or contains mostly digits)
+  const isPhone = sender.startsWith('+') || /^\d{10,}$/.test(sender.replace(/\D/g, ''));
+
+  if (isPhone) {
+    const normalized = sender.replace(/\D/g, '').slice(-10);
+    const name = nameMap[normalized] || nameMap[sender];
+    if (name) {
+      return `${name} (${sender})`;
+    }
+  }
+
+  return sender;
+}
 
 /**
  * PDF Export Service
@@ -279,6 +346,89 @@ class PDFExportService {
       color: #2c5282;
     }
 
+    .view-full-link {
+      color: #667eea;
+      text-decoration: none;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .view-full-link:hover {
+      text-decoration: underline;
+    }
+
+    .appendix {
+      margin-top: 60px;
+      page-break-before: always;
+    }
+
+    .appendix h2 {
+      font-size: 24px;
+      color: #1a202c;
+      margin-bottom: 24px;
+      padding-bottom: 12px;
+      border-bottom: 4px solid #667eea;
+    }
+
+    .appendix-item {
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 24px;
+      background: white;
+      page-break-inside: avoid;
+    }
+
+    .appendix-item .header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 12px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    .appendix-item .msg-id {
+      font-size: 11px;
+      color: #a0aec0;
+      background: #f7fafc;
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+
+    .appendix-item .subject-line {
+      font-size: 16px;
+      font-weight: 600;
+      color: #2d3748;
+      margin-bottom: 8px;
+    }
+
+    .appendix-item .meta-info {
+      font-size: 13px;
+      color: #4a5568;
+      margin-bottom: 4px;
+    }
+
+    .appendix-item .message-body {
+      margin-top: 16px;
+      padding: 16px;
+      background: #f7fafc;
+      border-radius: 6px;
+      font-size: 13px;
+      line-height: 1.6;
+      color: #2d3748;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+
+    .back-to-top {
+      color: #667eea;
+      text-decoration: none;
+      font-size: 12px;
+      display: inline-block;
+      margin-top: 12px;
+    }
+
     @media print {
       body {
         padding: 20px;
@@ -335,30 +485,7 @@ class PDFExportService {
   </div>
 
   <!-- Communications -->
-  <div class="section">
-    <h3>Related Communications (${communications.length})</h3>
-    <div class="communications">
-      ${communications
-        .sort((a, b) => {
-          const dateA = new Date(a.sent_at as string).getTime();
-          const dateB = new Date(b.sent_at as string).getTime();
-          return dateB - dateA;
-        })
-        .map(
-          (comm) => `
-        <div class="communication">
-          <div class="subject">${comm.subject || "(No Subject)"}</div>
-          <div class="from">From: ${comm.sender || "Unknown"}</div>
-          ${comm.recipients ? `<div class="from">To: ${comm.recipients}</div>` : ""}
-          <div class="meta">
-            <span>${formatDateTime(comm.sent_at as string)}</span>
-          </div>
-        </div>
-      `,
-        )
-        .join("")}
-    </div>
-  </div>
+  ${this._generateCommunicationsHTML(communications, formatDateTime)}
 
   <!-- Footer -->
   <div class="footer">
@@ -368,6 +495,346 @@ class PDFExportService {
 </body>
 </html>
     `;
+  }
+
+  /**
+   * Generate communications HTML with hyperlinks to full content appendix
+   * Groups text messages by thread/conversation like the UI does
+   * @private
+   */
+  private _generateCommunicationsHTML(
+    communications: Communication[],
+    formatDateTime: (dateString: string | Date) => string
+  ): string {
+    // Split communications by type
+    const emails = communications.filter(c =>
+      c.communication_type === 'email' ||
+      (!c.communication_type && c.subject && c.subject.length > 0)
+    );
+    const texts = communications.filter(c =>
+      c.communication_type === 'sms' ||
+      c.communication_type === 'imessage' ||
+      c.communication_type === 'text' ||
+      (!c.communication_type && (!c.subject || c.subject.length === 0))
+    );
+
+    // Look up contact names for text message phone numbers
+    const textPhones = texts
+      .map(t => t.sender)
+      .filter((s): s is string => !!s && (s.startsWith('+') || /^\d{7,}$/.test(s.replace(/\D/g, ''))));
+    const phoneNameMap = getContactNamesByPhones(textPhones);
+
+    // Helper to escape HTML
+    const escapeHtml = (str: string | null | undefined): string => {
+      if (!str) return '';
+      return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    };
+
+    // Helper to truncate preview text
+    const truncatePreview = (text: string | null | undefined, maxLen = 80): string => {
+      if (!text) return '(No content)';
+      const cleaned = text.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
+      if (cleaned.length <= maxLen) return escapeHtml(cleaned);
+      return escapeHtml(cleaned.substring(0, maxLen)) + '...';
+    };
+
+    // Helper to normalize phone for matching
+    const normalizePhone = (phone: string): string => {
+      return phone.replace(/\D/g, '').slice(-10);
+    };
+
+    // Helper to get thread key (matches UI logic)
+    const getThreadKey = (msg: Communication): string => {
+      // Use thread_id if available
+      if (msg.thread_id) return msg.thread_id;
+
+      // Fallback: compute from participants
+      try {
+        if (msg.participants) {
+          const parsed = typeof msg.participants === 'string'
+            ? JSON.parse(msg.participants)
+            : msg.participants;
+
+          const allParticipants = new Set<string>();
+          if (parsed.from) allParticipants.add(normalizePhone(parsed.from));
+          if (parsed.to) {
+            const toList = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
+            toList.forEach((p: string) => allParticipants.add(normalizePhone(p)));
+          }
+
+          if (allParticipants.size > 0) {
+            return 'participants-' + Array.from(allParticipants).sort().join('-');
+          }
+        }
+      } catch {
+        // Fall through
+      }
+
+      // Last resort: use message id
+      return 'msg-' + msg.id;
+    };
+
+    // Helper to extract phone/contact name from thread
+    const getThreadContact = (msgs: Communication[]): { phone: string; name: string | null } => {
+      for (const msg of msgs) {
+        try {
+          if (msg.participants) {
+            const parsed = typeof msg.participants === 'string'
+              ? JSON.parse(msg.participants)
+              : msg.participants;
+
+            let phone: string | null = null;
+            if (msg.direction === 'inbound' && parsed.from) {
+              phone = parsed.from;
+            } else if (msg.direction === 'outbound' && parsed.to?.length > 0) {
+              phone = Array.isArray(parsed.to) ? parsed.to[0] : parsed.to;
+            }
+
+            if (phone) {
+              const normalized = normalizePhone(phone);
+              const name = phoneNameMap[normalized] || phoneNameMap[phone] || null;
+              return { phone, name };
+            }
+          }
+        } catch {
+          // Continue
+        }
+
+        // Fallback to sender
+        if (msg.sender) {
+          const normalized = normalizePhone(msg.sender);
+          const name = phoneNameMap[normalized] || phoneNameMap[msg.sender] || null;
+          return { phone: msg.sender, name };
+        }
+      }
+      return { phone: 'Unknown', name: null };
+    };
+
+    // Group text messages by thread
+    const textThreads = new Map<string, Communication[]>();
+    texts.forEach(msg => {
+      const key = getThreadKey(msg);
+      const thread = textThreads.get(key) || [];
+      thread.push(msg);
+      textThreads.set(key, thread);
+    });
+
+    // Sort messages within each thread chronologically
+    textThreads.forEach((msgs, key) => {
+      textThreads.set(key, msgs.sort((a, b) => {
+        const dateA = new Date(a.sent_at || a.received_at || 0).getTime();
+        const dateB = new Date(b.sent_at || b.received_at || 0).getTime();
+        return dateA - dateB;
+      }));
+    });
+
+    // Convert to array and sort threads by most recent message
+    const sortedThreads = Array.from(textThreads.entries()).sort((a, b) => {
+      const lastA = a[1][a[1].length - 1];
+      const lastB = b[1][b[1].length - 1];
+      const dateA = new Date(lastA.sent_at || lastA.received_at || 0).getTime();
+      const dateB = new Date(lastB.sent_at || lastB.received_at || 0).getTime();
+      return dateB - dateA; // Most recent first
+    });
+
+    // Sort emails by date (most recent first)
+    const sortedEmails = [...emails].sort((a, b) =>
+      new Date(b.sent_at as string).getTime() - new Date(a.sent_at as string).getTime()
+    );
+
+    // Check if there's any content for appendix
+    const emailsWithContent = sortedEmails.filter(c => c.body_text || c.body_plain || c.body_html);
+    const threadsWithContent = sortedThreads.filter(([_, msgs]) =>
+      msgs.some(m => m.body_text || m.body_plain)
+    );
+    const hasAppendix = emailsWithContent.length > 0 || threadsWithContent.length > 0;
+
+    let html = '';
+
+    // Email Threads Section
+    if (sortedEmails.length > 0) {
+      html += '<div class="section">';
+      html += '<h3>Email Threads (' + sortedEmails.length + ')</h3>';
+      html += '<div class="communications">';
+
+      sortedEmails.forEach((comm, idx) => {
+        const hasContent = comm.body_text || comm.body_plain || comm.body_html;
+        const anchorId = 'email-' + idx;
+        html += '<div class="communication">';
+        html += '<div class="subject">' + (escapeHtml(comm.subject) || '(No Subject)') + '</div>';
+        html += '<div class="from">From: ' + (escapeHtml(comm.sender) || 'Unknown') + '</div>';
+        html += '<div class="meta">';
+        html += '<span>' + formatDateTime(comm.sent_at as string) + '</span>';
+        if (hasContent) {
+          html += '<a href="#' + anchorId + '" class="view-full-link">View Full &rarr;</a>';
+        }
+        html += '</div></div>';
+      });
+
+      html += '</div></div>';
+    }
+
+    // Text Threads Section (grouped by conversation)
+    if (sortedThreads.length > 0) {
+      html += '<div class="section">';
+      html += '<h3>Text Conversations (' + sortedThreads.length + ')</h3>';
+      html += '<div class="communications">';
+
+      sortedThreads.forEach(([threadId, msgs], idx) => {
+        const contact = getThreadContact(msgs);
+        const displayName = contact.name
+          ? contact.name + ' (' + contact.phone + ')'
+          : contact.phone;
+        const lastMsg = msgs[msgs.length - 1];
+        const preview = truncatePreview(lastMsg.body_text || lastMsg.body_plain);
+        const hasContent = msgs.some(m => m.body_text || m.body_plain);
+        const anchorId = 'thread-' + idx;
+        const isGroupChat = this._isGroupChat(msgs);
+
+        html += '<div class="communication">';
+        html += '<div class="subject">' + escapeHtml(displayName);
+        if (isGroupChat) {
+          html += ' <span style="font-size: 11px; color: #718096; font-weight: normal;">(Group Chat)</span>';
+        }
+        html += '</div>';
+        html += '<div style="font-size: 13px; color: #4a5568; margin: 8px 0;">' + preview + '</div>';
+        html += '<div class="meta">';
+        html += '<span>' + msgs.length + ' message' + (msgs.length === 1 ? '' : 's');
+        html += ' &middot; ' + formatDateTime(lastMsg.sent_at as string) + '</span>';
+        if (hasContent) {
+          html += '<a href="#' + anchorId + '" class="view-full-link">View Full &rarr;</a>';
+        }
+        html += '</div></div>';
+      });
+
+      html += '</div></div>';
+    }
+
+    // If no communications at all
+    if (sortedEmails.length === 0 && sortedThreads.length === 0) {
+      html += '<div class="section">';
+      html += '<h3>Related Communications (0)</h3>';
+      html += '<div class="communications">';
+      html += '<p style="color: #718096; font-style: italic;">No communications linked to this transaction.</p>';
+      html += '</div></div>';
+    }
+
+    // Appendix: Full Messages
+    if (hasAppendix) {
+      html += '<div class="appendix">';
+      html += '<a name="appendix"></a>';
+      html += '<h2>Full Messages</h2>';
+
+      // Email appendix items
+      emailsWithContent.forEach((comm, idx) => {
+        const body = comm.body_text || comm.body_plain ||
+          (comm.body_html ? comm.body_html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() : '');
+
+        html += '<div class="appendix-item">';
+        html += '<a name="email-' + idx + '"></a>';
+        html += '<div class="header-row">';
+        html += '<div>';
+        html += '<div class="subject-line">' + (escapeHtml(comm.subject) || '(No Subject)') + '</div>';
+        html += '<div class="meta-info">From: ' + (escapeHtml(comm.sender) || 'Unknown') + '</div>';
+        html += '<div class="meta-info">' + formatDateTime(comm.sent_at as string) + '</div>';
+        html += '</div>';
+        html += '<span class="msg-id">Email #' + (idx + 1) + '</span>';
+        html += '</div>';
+        html += '<div class="message-body">' + escapeHtml(body) + '</div>';
+        html += '<a href="#appendix" class="back-to-top">&larr; Back to Messages</a>';
+        html += '</div>';
+      });
+
+      // Text thread appendix items (show all messages in thread)
+      threadsWithContent.forEach(([threadId, msgs], threadIdx) => {
+        const contact = getThreadContact(msgs);
+        const displayName = contact.name
+          ? contact.name + ' (' + contact.phone + ')'
+          : contact.phone;
+        const isGroupChat = this._isGroupChat(msgs);
+
+        html += '<div class="appendix-item">';
+        html += '<a name="thread-' + threadIdx + '"></a>';
+        html += '<div class="header-row">';
+        html += '<div>';
+        html += '<div class="subject-line">Conversation with ' + escapeHtml(displayName);
+        if (isGroupChat) {
+          html += ' (Group Chat)';
+        }
+        html += '</div>';
+        html += '<div class="meta-info">' + msgs.length + ' message' + (msgs.length === 1 ? '' : 's') + '</div>';
+        html += '</div>';
+        html += '<span class="msg-id">Thread #' + (threadIdx + 1) + '</span>';
+        html += '</div>';
+
+        // Show each message in the thread
+        html += '<div class="message-body">';
+        msgs.forEach((msg, msgIdx) => {
+          const isOutbound = msg.direction === 'outbound';
+          let senderLabel = 'You';
+          if (!isOutbound) {
+            // For group chats, try to show individual sender
+            if (isGroupChat && msg.sender) {
+              const senderNormalized = normalizePhone(msg.sender);
+              senderLabel = phoneNameMap[senderNormalized] || phoneNameMap[msg.sender] || msg.sender;
+            } else {
+              senderLabel = contact.name || contact.phone;
+            }
+          }
+          const body = msg.body_text || msg.body_plain || '';
+          const time = formatDateTime(msg.sent_at as string);
+
+          if (msgIdx > 0) html += '<hr style="border: none; border-top: 1px solid #e2e8f0; margin: 12px 0;">';
+          html += '<div style="margin-bottom: 8px;">';
+          html += '<strong>' + escapeHtml(senderLabel) + '</strong>';
+          html += ' <span style="color: #718096; font-size: 11px;">' + time + '</span>';
+          html += '</div>';
+          html += '<div>' + escapeHtml(body) + '</div>';
+        });
+        html += '</div>';
+
+        html += '<a href="#appendix" class="back-to-top">&larr; Back to Messages</a>';
+        html += '</div>';
+      });
+
+      html += '</div>';
+    }
+
+    return html;
+  }
+
+  /**
+   * Check if a thread is a group chat (has multiple unique participants)
+   * @private
+   */
+  private _isGroupChat(msgs: Communication[]): boolean {
+    const participants = new Set<string>();
+
+    for (const msg of msgs) {
+      try {
+        if (msg.participants) {
+          const parsed = typeof msg.participants === 'string'
+            ? JSON.parse(msg.participants)
+            : msg.participants;
+
+          if (parsed.from) participants.add(parsed.from.replace(/\D/g, '').slice(-10));
+          if (parsed.to) {
+            const toList = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
+            toList.forEach((p: string) => participants.add(p.replace(/\D/g, '').slice(-10)));
+          }
+        }
+      } catch {
+        // Continue
+      }
+    }
+
+    // More than 2 unique participants means group chat
+    return participants.size > 2;
   }
 
   /**

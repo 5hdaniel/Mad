@@ -6,6 +6,7 @@ import type {
   NewCommunication,
   OAuthProvider,
   Contact,
+  Message,
 } from "../types";
 
 import gmailFetchService from "./gmailFetchService";
@@ -14,6 +15,9 @@ import transactionExtractorService from "./transactionExtractorService";
 import databaseService from "./databaseService";
 import logService from "./logService";
 import supabaseService from "./supabaseService";
+import { getContactNames } from "./contactsService";
+import { createCommunicationReference } from "./messageMatchingService";
+import { autoLinkCommunicationsForContact, AutoLinkResult } from "./autoLinkService";
 
 // Hybrid extraction imports
 import { HybridExtractorService } from "./extraction/hybridExtractorService";
@@ -156,6 +160,15 @@ interface ReanalysisResult {
 }
 
 /**
+ * Result of assigning a contact to a transaction
+ * TASK-1031: Now includes auto-link results
+ */
+interface AssignContactResult {
+  success: boolean;
+  autoLink?: AutoLinkResult;
+}
+
+/**
  * Transaction Service
  * Orchestrates the entire transaction extraction workflow
  * Fetches emails → Analyzes → Extracts data → Saves to database
@@ -234,8 +247,9 @@ class TransactionService {
     let lookbackMonths = 9; // Default 9 months
     try {
       const preferences = await supabaseService.getPreferences(userId);
-      if (preferences?.scan?.lookbackMonths) {
-        lookbackMonths = preferences.scan.lookbackMonths;
+      const savedLookback = preferences?.scan?.lookbackMonths;
+      if (typeof savedLookback === "number" && savedLookback > 0) {
+        lookbackMonths = savedLookback;
       }
     } catch {
       // Use default if preferences unavailable
@@ -1133,6 +1147,7 @@ class TransactionService {
   /**
    * Create audited transaction with contact assignments
    * Used for the "Audit New Transaction" feature
+   * TASK-1031: Now auto-links communications for each assigned contact
    */
   async createAuditedTransaction(
     userId: string,
@@ -1172,7 +1187,7 @@ class TransactionService {
       } as NewTransaction);
       const transactionId = transaction.id;
 
-      // Assign all contacts
+      // Assign all contacts (skip auto-link during bulk assignment)
       if (contact_assignments && contact_assignments.length > 0) {
         for (const assignment of contact_assignments) {
           await databaseService.assignContactToTransaction(transactionId, {
@@ -1183,6 +1198,36 @@ class TransactionService {
             is_primary: assignment.is_primary,
             notes: assignment.notes,
           });
+        }
+
+        // TASK-1031: Auto-link communications for all assigned contacts
+        // Run after all contacts are assigned to avoid duplicate queries
+        let totalEmailsLinked = 0;
+        let totalMessagesLinked = 0;
+
+        for (const assignment of contact_assignments) {
+          try {
+            const autoLinkResult = await autoLinkCommunicationsForContact({
+              contactId: assignment.contact_id,
+              transactionId,
+            });
+            totalEmailsLinked += autoLinkResult.emailsLinked;
+            totalMessagesLinked += autoLinkResult.messagesLinked;
+          } catch (error) {
+            // Log but don't fail transaction creation if auto-link fails
+            await logService.warn(
+              `Auto-link failed for contact ${assignment.contact_id}: ${error instanceof Error ? error.message : "Unknown"}`,
+              "TransactionService.createAuditedTransaction",
+            );
+          }
+        }
+
+        if (totalEmailsLinked > 0 || totalMessagesLinked > 0) {
+          await logService.info(
+            `Auto-linked ${totalEmailsLinked} emails and ${totalMessagesLinked} messages for new transaction`,
+            "TransactionService.createAuditedTransaction",
+            { transactionId, contactCount: contact_assignments.length },
+          );
         }
       }
 
@@ -1226,6 +1271,17 @@ class TransactionService {
 
   /**
    * Assign contact to transaction role
+   * TASK-1031: Now auto-links existing communications (emails and texts)
+   * from the contact to the transaction.
+   *
+   * @param transactionId - Transaction ID
+   * @param contactId - Contact ID to assign
+   * @param role - Role in the transaction
+   * @param roleCategory - Role category
+   * @param isPrimary - Whether this is the primary contact for this role
+   * @param notes - Optional notes
+   * @param skipAutoLink - If true, skip auto-linking (for bulk operations)
+   * @returns Assignment result including auto-link counts
    */
   async assignContactToTransaction(
     transactionId: string,
@@ -1234,8 +1290,10 @@ class TransactionService {
     roleCategory: string,
     isPrimary: boolean = false,
     notes: string | null = null,
-  ): Promise<any> {
-    return await databaseService.assignContactToTransaction(transactionId, {
+    skipAutoLink: boolean = false,
+  ): Promise<AssignContactResult> {
+    // 1. Save the contact assignment (existing behavior)
+    await databaseService.assignContactToTransaction(transactionId, {
       contact_id: contactId,
       role: role,
       role_category: roleCategory,
@@ -1243,6 +1301,33 @@ class TransactionService {
       is_primary: isPrimary ? 1 : 0,
       notes: notes || undefined,
     });
+
+    // 2. Auto-link communications for this contact (TASK-1031)
+    // Skip for bulk operations to avoid performance issues
+    if (skipAutoLink) {
+      return { success: true };
+    }
+
+    try {
+      const autoLinkResult = await autoLinkCommunicationsForContact({
+        contactId,
+        transactionId,
+      });
+
+      return {
+        success: true,
+        autoLink: autoLinkResult,
+      };
+    } catch (error) {
+      // Log but don't fail the assignment if auto-link fails
+      await logService.warn(
+        `Auto-link failed after contact assignment: ${error instanceof Error ? error.message : "Unknown"}`,
+        "TransactionService.assignContactToTransaction",
+        { transactionId, contactId },
+      );
+
+      return { success: true };
+    }
   }
 
   /**
@@ -1399,27 +1484,11 @@ class TransactionService {
 
   /**
    * Get unlinked messages for a user (messages not attached to any transaction)
-   * Filters to only SMS/iMessage channels
+   * Queries the messages table directly for SMS/iMessage channels
    */
-  async getUnlinkedMessages(userId: string): Promise<Communication[]> {
-    // Get all messages for the user
-    const allMessages = await databaseService.getCommunications({
-      user_id: userId,
-    });
-
-    // Filter to unlinked SMS/iMessage only
-    const messages = allMessages.filter(
-      (msg) =>
-        !msg.transaction_id &&
-        (msg.channel === "sms" || msg.channel === "imessage"),
-    );
-
-    // Sort by most recent first
-    messages.sort((a, b) => {
-      const dateA = new Date(a.sent_at || a.received_at || 0).getTime();
-      const dateB = new Date(b.sent_at || b.received_at || 0).getTime();
-      return dateB - dateA;
-    });
+  async getUnlinkedMessages(userId: string): Promise<Message[]> {
+    // Query messages table directly - much cleaner than filtering communications
+    const messages = await databaseService.getUnlinkedTextMessages(userId);
 
     await logService.info(
       "Retrieved unlinked messages",
@@ -1434,8 +1503,89 @@ class TransactionService {
   }
 
   /**
+   * Get unlinked emails for a user
+   */
+  async getUnlinkedEmails(userId: string): Promise<Message[]> {
+    const emails = await databaseService.getUnlinkedEmails(userId);
+
+    await logService.info(
+      "Retrieved unlinked emails",
+      "TransactionService.getUnlinkedEmails",
+      {
+        userId,
+        count: emails.length,
+      },
+    );
+
+    return emails;
+  }
+
+  /**
+   * Get distinct contacts with unlinked message counts
+   * Returns a list of phone numbers/contacts with their message counts
+   */
+  async getMessageContacts(userId: string): Promise<{ contact: string; contactName: string | null; messageCount: number; lastMessageAt: string }[]> {
+    const contacts = await databaseService.getMessageContacts(userId);
+
+    // Resolve contact names from the macOS Contacts database
+    let contactNameMap: Record<string, string> = {};
+    try {
+      const { contactMap } = await getContactNames();
+      contactNameMap = contactMap;
+    } catch (err) {
+      await logService.warn(
+        "Failed to load contact names, will use phone numbers only",
+        "TransactionService.getMessageContacts",
+        { error: err instanceof Error ? err.message : String(err) },
+      );
+    }
+
+    // Enrich contacts with names
+    const enrichedContacts = contacts.map((c) => {
+      // Try to find name by phone number (normalized and raw)
+      const name = contactNameMap[c.contact] || contactNameMap[c.contact.replace(/\D/g, '')] || null;
+      return {
+        ...c,
+        contactName: name,
+      };
+    });
+
+    await logService.info(
+      "Retrieved message contacts",
+      "TransactionService.getMessageContacts",
+      {
+        userId,
+        contactCount: contacts.length,
+        withNames: enrichedContacts.filter(c => c.contactName).length,
+      },
+    );
+
+    return enrichedContacts;
+  }
+
+  /**
+   * Get unlinked messages for a specific contact
+   * Used after user selects a contact from the contact list
+   */
+  async getMessagesByContact(userId: string, contact: string): Promise<Message[]> {
+    const messages = await databaseService.getMessagesByContact(userId, contact);
+
+    await logService.info(
+      "Retrieved messages for contact",
+      "TransactionService.getMessagesByContact",
+      {
+        userId,
+        contact,
+        count: messages.length,
+      },
+    );
+
+    return messages;
+  }
+
+  /**
    * Link messages to a transaction
-   * Sets transaction_id on the specified messages
+   * Sets transaction_id on the specified messages in the messages table
    */
   async linkMessages(messageIds: string[], transactionId: string): Promise<void> {
     // Verify transaction exists
@@ -1444,15 +1594,29 @@ class TransactionService {
       throw new Error("Transaction not found");
     }
 
-    // Update each message
+    let linkedCount = 0;
+
+    // Update each message and create communication reference
     for (const messageId of messageIds) {
-      await databaseService.updateCommunication(messageId, {
-        transaction_id: transactionId,
-      });
+      // Update messages table
+      await databaseService.linkMessageToTransaction(messageId, transactionId);
+
+      // Create communication reference so it shows in getDetails
+      const refId = await createCommunicationReference(
+        messageId,
+        transactionId,
+        transaction.user_id,
+        "manual", // Manual link from UI
+        1.0 // Full confidence for manual links
+      );
+
+      if (refId) {
+        linkedCount++;
+      }
     }
 
     // Update transaction message count
-    const newCount = (transaction.message_count || 0) + messageIds.length;
+    const newCount = (transaction.message_count || 0) + linkedCount;
     await databaseService.updateTransaction(transactionId, {
       message_count: newCount,
     });
@@ -1463,7 +1627,7 @@ class TransactionService {
       {
         messageIds,
         transactionId,
-        linkedCount: messageIds.length,
+        linkedCount,
       },
     );
   }
@@ -1477,16 +1641,14 @@ class TransactionService {
     const transactionCounts = new Map<string, number>();
 
     for (const messageId of messageIds) {
-      const message = await databaseService.getCommunicationById(messageId);
+      const message = await databaseService.getMessageById(messageId);
       if (message?.transaction_id) {
         const count = transactionCounts.get(message.transaction_id) || 0;
         transactionCounts.set(message.transaction_id, count + 1);
       }
 
-      // Remove the transaction link
-      await databaseService.updateCommunication(messageId, {
-        transaction_id: undefined,
-      });
+      // Remove the transaction link from messages table
+      await databaseService.unlinkMessageFromTransaction(messageId);
     }
 
     // Update transaction message counts

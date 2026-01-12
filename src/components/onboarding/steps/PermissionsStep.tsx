@@ -4,14 +4,18 @@
  * This step guides macOS users through granting Full Disk Access permission,
  * which is required to read the Messages database.
  *
+ * After permission is granted, automatically imports messages from macOS
+ * Messages app before continuing to the next onboarding step.
+ *
  * @module onboarding/steps/PermissionsStep
  */
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import type {
   OnboardingStep,
   OnboardingStepContentProps,
 } from "../types";
+import { markOnboardingImportComplete } from "../../../hooks/useAutoRefresh";
 
 /**
  * Shield icon with lock - represents security/permissions
@@ -173,24 +177,151 @@ function InstructionStep({
  * 4. Add the application
  * 5. Restart the app
  */
-function PermissionsStepContent({ onAction }: OnboardingStepContentProps) {
+function PermissionsStepContent({ context, onAction }: OnboardingStepContentProps) {
   const [currentInstructionStep, setCurrentInstructionStep] = useState(0);
   const [isChecking, setIsChecking] = useState(false);
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
+
+  // Messages import state
+  const [isImportingMessages, setIsImportingMessages] = useState(false);
+  const [messagesProgress, setMessagesProgress] = useState<{
+    current: number;
+    total: number;
+    percent: number;
+  } | null>(null);
+  const [messagesResult, setMessagesResult] = useState<{
+    success: boolean;
+    messagesImported: number;
+    error?: string;
+  } | null>(null);
+
+  // Contacts import state
+  const [isImportingContacts, setIsImportingContacts] = useState(false);
+  const [contactsProgress, setContactsProgress] = useState<{
+    current: number;
+    total: number;
+    percent: number;
+  } | null>(null);
+  const [contactsResult, setContactsResult] = useState<{
+    success: boolean;
+    contactsImported: number;
+    error?: string;
+  } | null>(null);
+
+  const hasStartedImportRef = useRef(false);
+
+  // Subscribe to import progress updates for both messages and contacts
+  useEffect(() => {
+    const cleanupMessages = window.api.messages.onImportProgress((progress) => {
+      setMessagesProgress(progress);
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const cleanupContacts = (window.api.contacts as any).onImportProgress?.((progress: { current: number; total: number; percent: number }) => {
+      setContactsProgress(progress);
+    });
+    return () => {
+      cleanupMessages();
+      cleanupContacts?.();
+    };
+  }, []);
+
+  // Trigger import after permissions are granted
+  const triggerImport = useCallback(async () => {
+    if (hasStartedImportRef.current) {
+      return;
+    }
+
+    // Get user ID from context - if not available, skip import and continue
+    const userId = context.userId;
+    if (!userId) {
+      // No user yet, just continue to next step
+      onAction({ type: "PERMISSION_GRANTED" });
+      return;
+    }
+
+    // Check if import has already been done for this user (persists across navigation)
+    const importKey = `onboarding_import_done_${userId}`;
+    if (localStorage.getItem(importKey)) {
+      onAction({ type: "PERMISSION_GRANTED" });
+      return;
+    }
+
+    hasStartedImportRef.current = true;
+
+    // Mark that we're doing the onboarding import - prevents duplicate imports on dashboard
+    markOnboardingImportComplete();
+
+    // Start both imports in parallel
+    setIsImportingMessages(true);
+    setIsImportingContacts(true);
+    setMessagesProgress(null);
+    setContactsProgress(null);
+    setMessagesResult(null);
+    setContactsResult(null);
+
+    // Import messages
+    const messagesPromise = window.api.messages.importMacOSMessages(userId)
+      .then((result) => {
+        setMessagesResult({
+          success: result.success,
+          messagesImported: result.messagesImported,
+          error: result.error,
+        });
+      })
+      .catch((error) => {
+        console.error("Error importing messages:", error);
+        setMessagesResult({ success: false, messagesImported: 0, error: String(error) });
+      })
+      .finally(() => setIsImportingMessages(false));
+
+    // Import contacts (get available, then import all)
+    const contactsPromise = (async () => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const availableResult = await (window.api.contacts as any).getAvailable(userId);
+        if (!availableResult.success || !availableResult.contacts?.length) {
+          setContactsResult({ success: availableResult.success !== false, contactsImported: 0, error: availableResult.error });
+          return;
+        }
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const importResult = await (window.api.contacts as any).import(userId, availableResult.contacts);
+        setContactsResult({
+          success: importResult.success,
+          contactsImported: importResult.contacts?.length || 0,
+          error: importResult.error,
+        });
+      } catch (error) {
+        console.error("[PermissionsStep] Error importing contacts:", error);
+        setContactsResult({ success: false, contactsImported: 0, error: String(error) });
+      } finally {
+        setIsImportingContacts(false);
+      }
+    })();
+
+    // Don't wait for imports - let them continue in background
+    // User will see progress on the dashboard via SyncStatusIndicator
+
+    // Brief delay to show "setting up" message, then transition
+    setTimeout(() => {
+      onAction({ type: "PERMISSION_GRANTED" });
+    }, 500);
+  }, [onAction]);
 
   // Auto-check permissions on mount and periodically after user starts the flow
   const checkPermissions = useCallback(async () => {
     try {
       const result = await window.api.system.checkPermissions();
       if (result.hasPermission) {
-        onAction({ type: "PERMISSION_GRANTED" });
+        // Permissions granted - trigger import first, then continue
+        triggerImport();
       }
       return result.hasPermission;
     } catch (error) {
       console.error("Error checking permissions:", error);
       return false;
     }
-  }, [onAction]);
+  }, [triggerImport]);
 
   // Initial permission check
   useEffect(() => {
@@ -318,6 +449,50 @@ function PermissionsStepContent({ onAction }: OnboardingStepContentProps) {
         >
           Grant Permission
         </button>
+      </div>
+    );
+  }
+
+  // Check if we're importing - show simple "Setting up" view
+  // Progress will be shown on the dashboard via SyncStatusIndicator
+  const isImporting = isImportingMessages || isImportingContacts;
+
+  if (isImporting) {
+    return (
+      <div className="max-w-2xl mx-auto">
+        <div className="text-center mb-5">
+          <div className="inline-flex items-center justify-center w-12 h-12 bg-primary/10 rounded-full mb-3">
+            <svg
+              className="w-6 h-6 text-primary animate-spin"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              />
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              />
+            </svg>
+          </div>
+          <h1 className="text-xl font-bold text-gray-900 mb-2">
+            Setting Up Your Account
+          </h1>
+          <p className="text-sm text-gray-600">
+            Please wait while we prepare your dashboard...
+          </p>
+        </div>
+
+        <p className="text-center text-xs text-gray-500 mt-6">
+          All data is stored locally on your device.
+        </p>
       </div>
     );
   }
@@ -458,7 +633,7 @@ function PermissionsStepContent({ onAction }: OnboardingStepContentProps) {
       />
 
       {/* Final: All steps complete */}
-      {completedSteps.has(5) && (
+      {completedSteps.has(5) && !isImportingMessages && !isImportingContacts && !messagesResult && !contactsResult && (
         <div className="bg-green-50 border-2 border-green-300 rounded-lg p-4 text-center">
           <div className="inline-flex items-center justify-center w-12 h-12 bg-green-500 rounded-full mb-3">
             <CheckIcon className="w-6 h-6 text-white" />
@@ -500,8 +675,12 @@ const permissionsStep: OnboardingStep = {
     platforms: ["macos"],
     navigation: {
       showBack: true,
+      hideContinue: false,
     },
-    canProceed: (context) => context.permissionsGranted,
+    // Disable Continue button - step auto-proceeds after import completes
+    canProceed: () => false,
+    // Step is never "complete" via button - it auto-proceeds via PERMISSION_GRANTED action
+    isStepComplete: () => false,
     // Only show if permissions not yet granted (returning users with FDA skip this)
     shouldShow: (context) => !context.permissionsGranted,
   },

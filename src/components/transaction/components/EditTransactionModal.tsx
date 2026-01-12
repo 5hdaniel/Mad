@@ -108,7 +108,9 @@ export function EditTransactionModal({
         // Group assignments by role
         const grouped: ContactAssignmentMap = {};
         txn.contact_assignments.forEach((assignment: ContactAssignment) => {
-          const role = assignment.specific_role || assignment.role;
+          // Use role (normalized constant like "buyer_agent") as primary key for grouping
+          // since AUDIT_WORKFLOW_STEPS uses constant format, not display names
+          const role = assignment.role || assignment.specific_role;
           if (!role) return;
           if (!grouped[role]) {
             grouped[role] = [];
@@ -138,6 +140,7 @@ export function EditTransactionModal({
   };
 
   // Handle adding contact to a role
+  // Uses functional update to handle rapid consecutive calls (e.g., multi-select)
   const handleAssignContact = (
     role: string,
     contact: {
@@ -150,20 +153,19 @@ export function EditTransactionModal({
       notes?: string;
     }
   ) => {
-    setContactAssignments({
-      ...contactAssignments,
-      [role]: [...(contactAssignments[role] || []), contact],
-    });
+    setContactAssignments((prev) => ({
+      ...prev,
+      [role]: [...(prev[role] || []), contact],
+    }));
   };
 
   // Handle removing contact from a role
+  // Uses functional update for consistency with handleAssignContact
   const handleRemoveContact = (role: string, contactId: string) => {
-    setContactAssignments({
-      ...contactAssignments,
-      [role]: (contactAssignments[role] || []).filter(
-        (c) => c.contactId !== contactId
-      ),
-    });
+    setContactAssignments((prev) => ({
+      ...prev,
+      [role]: (prev[role] || []).filter((c) => c.contactId !== contactId),
+    }));
   };
 
   const handleSave = async () => {
@@ -218,7 +220,8 @@ export function EditTransactionModal({
 
       // Collect remove operations for contacts no longer assigned
       for (const existing of currentAssignments) {
-        const role = existing.specific_role || existing.role;
+        // Use role (normalized constant) for consistent lookup
+        const role = existing.role || existing.specific_role;
         if (!role) continue;
         const stillAssigned = (contactAssignments[role] || []).some(
           (c) => c.contactId === existing.contact_id
@@ -238,7 +241,7 @@ export function EditTransactionModal({
           const isExisting = currentAssignments.some(
             (existing: ContactAssignment) =>
               existing.contact_id === contact.contactId &&
-              (existing.specific_role || existing.role) === role
+              (existing.role || existing.specific_role) === role
           );
 
           if (!isExisting) {

@@ -59,6 +59,7 @@ if (typeof window !== 'undefined') {
       exportEnhanced: jest.fn(),
       bulkDelete: jest.fn(),
       bulkUpdateStatus: jest.fn(),
+      batchUpdateContacts: jest.fn(),
     },
     contacts: {
       getAll: jest.fn(),
@@ -142,6 +143,10 @@ if (typeof window !== 'undefined') {
       getConversations: jest.fn(),
       getMessages: jest.fn(),
       exportConversations: jest.fn(),
+      // macOS Messages import (TASK-987)
+      importMacOSMessages: jest.fn(),
+      getImportCount: jest.fn(),
+      onImportProgress: jest.fn(() => jest.fn()),
     },
     // Outlook integration - migrated from window.electron
     outlook: {

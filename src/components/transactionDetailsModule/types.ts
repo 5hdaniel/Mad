@@ -2,7 +2,7 @@
  * TransactionDetails Module Types
  * Shared type definitions for the transaction details feature
  */
-import type { Transaction, Communication, Contact } from "@/types";
+import type { Transaction, Communication, Contact, Message } from "@/types";
 
 /**
  * Interface for AI-suggested contact assignment
@@ -63,6 +63,11 @@ export type TransactionTab = "details" | "contacts" | "messages" | "attachments"
  * Communication type for local use
  */
 export type { Communication };
+
+/**
+ * Message type for local use
+ */
+export type { Message };
 
 /**
  * Re-export Transaction type

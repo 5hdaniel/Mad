@@ -2,9 +2,9 @@
 
 This index tracks all backlog items with their current status and metadata.
 
-**Last Updated:** 2026-01-05 (BACKLOG-165 duplicate contacts added)
-**Total Items:** 154
-**Pending:** 88 | **In Progress:** 0 | **Completed:** 59 | **Partial:** 0 | **Obsolete:** 1 | **Deferred:** 2
+**Last Updated:** 2026-01-11 (BACKLOG-202, 203, 204 added; SPRINT-032 created)
+**Total Items:** 184
+**Pending:** 102 | **In Progress:** 0 | **Completed:** 75 | **Partial:** 0 | **Obsolete:** 1 | **Deferred:** 2
 
 ---
 
@@ -29,10 +29,10 @@ This index tracks all backlog items with their current status and metadata.
 ## Quick Filters
 
 ### By Priority
-- **Critical:** BACKLOG-030 (done), 032 (done), 035 (done), 038 (done), 039 (done), 044 (done), 045 (done), 058 (done), 059 (done), 072 (done), 073 (done), 074 (done), 107 (done), 108 (done), 117 (done), 132 (done), 139 (done - database init gate), 142 (done - state coordination overhaul)
-- **High:** BACKLOG-008, 009, 013, 016, 018, 020, 021, 023, 026, 031, 033, 037, 056, 060 (done), 061 (done), 062 (done), 063 (done), 067, 075 (done), 076 (done), 084 (done), 085 (done), 088, 090 (done), 091 (done), 098, 099, 103 (done), 105 (done), 109 (done), 110 (done), **111**, 118 (done), 121 (done), 126 (done), 130 (done), 133 (done), 136 (done), 137 (done - automatic token tracking), 140 (done), 148 (done), **156** (auto-refresh on app load), **157** (fix auth handler test)
-- **Medium:** Multiple (see full index), 014 (done), 050 (done), 054 (done), 065 (done), 077 (done), 078 (done), 079 (done), 081, 086, 087, 089, 092, 093, 094, 095, 096, 097, 100, 101, 102, 104 (done), **112**, **113**, **114**, **115**, **116**, 122 (done), 124 (done), 127 (done), 128 (done), 129 (done), **131**, 135 (done), 138 (done), 149 (done), 152 (done), **158** (decompose AuditTransactionModal), **159** (delete PermissionsScreen)
-- **Low/Deferred:** BACKLOG-001, 003, 004, 010, 017, 069 (deferred), 070 (deferred), 071, 092, **119**, **123**, **125**, **150** (reduce useAppStateMachine), **151** (reduce AppModals.tsx), **155** (dashboard scroll), **160** (column naming)
+- **Critical:** BACKLOG-030 (done), 032 (done), 035 (done), 038 (done), 039 (done), 044 (done), 045 (done), 058 (done), 059 (done), 072 (done), 073 (done), 074 (done), 107 (done), 108 (done), 117 (done), 132 (done), 139 (done - database init gate), 142 (done - state coordination overhaul), **191** (service layer tests - 0% coverage), **202** (fix test regressions - contact-handlers/databaseService)
+- **High:** BACKLOG-008, 009, 013, 016, 018, 020, 021, 023, 026, 031, 033, 037, 056, 060 (done), 061 (done), 062 (done), 063 (done), 067, 075 (done), 076 (done), 084 (done), 085 (done), 088, 090 (done), 091 (done), 098, 099, 103 (done), 105 (done), 109 (done), 110 (done), **111**, 118 (done), 121 (done), 126 (done), 130 (done), 133 (done), 136 (done), 137 (done - automatic token tracking), 140 (done), 148 (done), 156 (done - auto-refresh on app load), **157** (fix auth handler test), **203** (macOS messages tests)
+- **Medium:** Multiple (see full index), 014 (done), 050 (done), 054 (done), 065 (done), 077 (done), 078 (done), 079 (done), 081, 086, 087, 089, 092, 093, 094, 095, 096, 097, 100, 101, 102, 104 (done), **112**, **113**, **114**, **115**, **116**, 122 (done), 124 (done), 127 (done), 128 (done), 129 (done), **131**, 135 (done), 138 (done), 149 (done), 152 (done), **158** (decompose AuditTransactionModal), **159** (delete PermissionsScreen), 169 (done - Show in Folder), 181 (done - T&C streamline), **204** (window.api abstraction)
+- **Low/Deferred:** BACKLOG-001, 003, 004, 010, 017, 069 (deferred), 070 (deferred), 071, 092, **119**, **123**, **125**, 150 (done - reduce useAppStateMachine), **151** (reduce AppModals.tsx), 155 (done - dashboard scroll), **160** (column naming)
 
 ### By Sprint Assignment
 - **SPRINT-001 (Onboarding Refactor):** Completed
@@ -59,7 +59,11 @@ This index tracks all backlog items with their current status and metadata.
 - **SPRINT-016 (Component Refactoring):** DEPRECATED - Task IDs collided with SPRINT-017/18/19; scope moved to SPRINT-023
 - **SPRINT-023 (Architecture Debt Reduction):** Completed - BACKLOG-149 (done), 148 (done), 152 (done), 140 (done) (5 tasks: TASK-960 to TASK-964, PRs #314-317)
 - **SPRINT-024 (Quality & Coverage):** PLANNED - BACKLOG-157, 159, 112, 113, 158 (5 tasks: TASK-970 to TASK-974)
+- **SPRINT-031 (Codebase Health):** PLANNED - BACKLOG-191, 115 (partial), 192 (partial) (6 tasks: TASK-1017 to TASK-1022)
+- **SPRINT-032 (Bug Fixes & Stability):** PLANNED - BACKLOG-202, 157, 203, 204 (partial) (5 tasks: TASK-1023 to TASK-1027)
 - **SPRINT-025 (Communications Architecture):** COMPLETE - TASK-975 to TASK-977 (3 tasks completed: communications refactor, export folders, auto-link texts; TASK-978 deferred). **Incidents:** 14.2M token exploration loop (BACKLOG-161), PR merged without review, file overlap caused merge conflicts.
+- **SPRINT-027 (Messages & Contacts Polish):** COMPLETE - 6 tasks (TASK-990 to TASK-995) + 9 unplanned fixes. PRs #354-362. Messages feature fully functional with thread grouping, auto-linking, manual attach/unlink, bubble direction, and contact fixes.
+- **SPRINT-028 (Stability & UX Polish):** COMPLETE - 6 tasks (TASK-1003 to TASK-1009) + 7 unplanned fixes. PRs #364-369. npm audit fix, dashboard scroll, Show in Folder, state machine reduce, T&C streamline, auto-refresh.
 - **Unassigned:** All others
 
 ### State Coordination Overhaul Project - COMPLETE
@@ -236,16 +240,51 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-143 | Prevent Duplicate Contact Imports | enhancement | Medium | Pending | - | - | ~40K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-143.md](BACKLOG-143.md) |
 | BACKLOG-148 | Split databaseService.ts into Domain Services | refactor | High | Completed | SPRINT-023 | - | ~60K | - | - | - | - | - | - | - | - | - | - | - | - | - | TASK-961, PR #315 | [BACKLOG-148.md](BACKLOG-148.md) |
 | BACKLOG-149 | Delete Deprecated EmailOnboardingScreen.tsx | refactor | Medium | Completed | SPRINT-023 | - | ~15K | - | - | - | - | - | - | - | - | - | - | - | - | - | TASK-960, PR #314 | [BACKLOG-149.md](BACKLOG-149.md) |
-| BACKLOG-150 | Reduce useAppStateMachine.ts Return Object | refactor | Low | Pending | - | - | ~10K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-150.md](BACKLOG-150.md) |
+| BACKLOG-150 | Reduce useAppStateMachine.ts Return Object | refactor | Low | Completed | SPRINT-028 | - | ~10K | - | - | - | - | - | - | - | - | - | - | - | - | - | TASK-1006, PR #367 | [BACKLOG-150.md](BACKLOG-150.md) |
 | BACKLOG-151 | Reduce AppModals.tsx Below 150-Line Trigger | refactor | Low | Pending | - | - | ~5K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-151.md](BACKLOG-151.md) |
 | BACKLOG-152 | Split TransactionDetails.tsx into Tab Components | refactor | Medium | Completed | SPRINT-023 | - | ~25K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-152.md](BACKLOG-152.md) |
-| BACKLOG-155 | Dashboard Unnecessary Vertical Scroll | ui | Low | Pending | - | - | ~10K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-155.md](BACKLOG-155.md) |
-| BACKLOG-156 | Auto-Refresh Data Sources on App Load | service/enhancement | High | Pending | - | - | ~40K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-156.md](BACKLOG-156.md) |
+| BACKLOG-155 | Dashboard Unnecessary Vertical Scroll | ui | Low | Completed | SPRINT-028 | - | ~10K | - | - | - | - | - | - | - | - | - | - | - | - | - | TASK-1004, PR #365 | [BACKLOG-155.md](BACKLOG-155.md) |
+| BACKLOG-156 | Auto-Refresh Data Sources on App Load | service/enhancement | High | Completed | SPRINT-028 | - | ~40K | - | - | - | - | - | - | - | - | - | - | - | - | - | TASK-1003, PR #369 | [BACKLOG-156.md](BACKLOG-156.md) |
 | BACKLOG-157 | Fix Failing Auth Handler Integration Test | test | High | Pending | SPRINT-024 | - | ~15K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-157.md](BACKLOG-157.md) |
 | BACKLOG-158 | Decompose AuditTransactionModal Component | refactor | Medium | Pending | SPRINT-024 | - | ~60K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-158.md](BACKLOG-158.md) |
 | BACKLOG-159 | Delete Deprecated PermissionsScreen.tsx | refactor | Medium | Pending | SPRINT-024 | - | ~10K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-159.md](BACKLOG-159.md) |
 | BACKLOG-160 | Consolidate last_exported_at/on Column Naming | tech-debt | Low | Pending | - | - | ~5K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | BACKLOG-165 | Duplicate Contacts in Import Contacts Page | ui | Medium | Pending | - | - | ~20K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-165.md](BACKLOG-165.md) |
+| BACKLOG-166 | Platform Detection Returns "unknown" in Renderer | fix | Medium | Pending | - | - | ~15K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-166.md](BACKLOG-166.md) |
+| BACKLOG-167 | Restrict Status Options for Manual Transactions | enhancement | Low | Pending | - | - | ~15K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-167.md](BACKLOG-167.md) |
+| BACKLOG-168 | Transaction Bulk Edit Multi-Select Modal | ui | Medium | Pending | - | - | ~20K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-168.md](BACKLOG-168.md) |
+| BACKLOG-169 | Show in Folder Button for Exports | ui | Medium | Completed | SPRINT-028 | - | ~15K | - | - | - | - | - | - | - | - | - | - | - | - | - | TASK-1008, PR #366 | [BACKLOG-169.md](BACKLOG-169.md) |
+| BACKLOG-170 | Messages Not Loading in Attach Modal | fix | Critical | Needs Feature | - | - | ~5K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-170.md](BACKLOG-170.md) |
+| BACKLOG-171 | Contacts Not Pre-Populated When Editing Transaction | fix | High | Pending | - | - | ~25K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-171.md](BACKLOG-171.md) |
+| BACKLOG-172 | macOS Messages Import | feature | High | Pending | - | - | ~25K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-172.md](BACKLOG-172.md) |
+| BACKLOG-173 | Contact-First AttachMessagesModal Interface | ui/perf | High | Completed | - | - | ~40K | - | - | - | - | - | - | - | - | - | - | - | - | - | TASK-989, PR #353 | [BACKLOG-173.md](BACKLOG-173.md) |
+| BACKLOG-174 | Redesign "Start New Audit" Flow | ui | High | Pending | SPRINT-029 | - | ~30K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-174.md](BACKLOG-174.md) |
+| BACKLOG-178 | Auto-Linked Messages Display in Transaction Details | fix | High | Completed | SPRINT-027 | - | ~20K | - | - | - | - | - | - | - | - | - | - | - | - | - | TASK-990, PR #358 | - |
+| BACKLOG-179 | Manual Thread Attach/Unlink in Messages Tab | ui | High | Completed | SPRINT-027 | - | ~30K | - | - | - | - | - | - | - | - | - | - | - | - | - | TASK-991, PR #359 | - |
+| BACKLOG-180 | Message Bubble Direction Fix | fix | Medium | Completed | SPRINT-027 | - | ~10K | - | - | - | - | - | - | - | - | - | - | - | - | - | TASK-992, PR #356 | - |
+| BACKLOG-181 | Streamline Terms and Conditions Onboarding Step | ui | Medium | Completed | SPRINT-028 | - | ~15K | - | - | - | - | - | - | - | - | - | - | - | - | - | TASK-1009, PR #368 | [BACKLOG-181.md](BACKLOG-181.md) |
+| BACKLOG-182 | getCurrentUser() Returns False After Login | fix | High | Completed | SPRINT-027 | - | ~8K | - | - | - | - | - | - | - | - | - | - | - | - | - | direct commit | [BACKLOG-182.md](BACKLOG-182.md) |
+| BACKLOG-183 | Mixed UI During Import - Instructions With Progress | fix | Medium | Completed | SPRINT-027 | - | ~5K | - | - | - | - | - | - | - | - | - | - | - | - | - | direct commit | [BACKLOG-183.md](BACKLOG-183.md) |
+| BACKLOG-184 | Contacts Import Failing (1000 Limit) | fix | High | Completed | SPRINT-027 | - | ~2K | - | - | - | - | - | - | - | - | - | - | - | - | - | direct commit | [BACKLOG-184.md](BACKLOG-184.md) |
+| BACKLOG-185 | Import Stuck at 100% on Progress Bar | fix | Medium | Completed | SPRINT-027 | - | ~3K | - | - | - | - | - | - | - | - | - | - | - | - | - | direct commit | [BACKLOG-185.md](BACKLOG-185.md) |
+| BACKLOG-186 | Continue Button Not Working After Import | fix | Critical | Completed | SPRINT-027 | - | ~5K | - | - | - | - | - | - | - | - | - | - | - | - | - | direct commit | [BACKLOG-186.md](BACKLOG-186.md) |
+| BACKLOG-187 | Display Attachments (Images/GIFs) in Text Messages | feature | Medium | Pending | SPRINT-029 | - | ~50K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-187.md](BACKLOG-187.md) |
+| BACKLOG-188 | Scan Lookback Period Setting Not Persisting | fix | Medium | Pending | SPRINT-030 | - | ~15K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-188.md](BACKLOG-188.md) |
+| BACKLOG-189 | Configurable Attachment Size Limit | enhancement | Low | Pending | - | - | ~15K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-189.md](BACKLOG-189.md) |
+| BACKLOG-190 | Transaction Date Range for Message Linking | fix | Critical | Pending | SPRINT-030 | - | ~20K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-190.md](BACKLOG-190.md) |
+| BACKLOG-191 | Add Test Coverage for Core Service Layer | test | Critical | Pending | SPRINT-031 | - | ~115K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-191.md](BACKLOG-191.md) |
+| BACKLOG-192 | Clean Up Console Statements (186 Remaining) | refactor | Medium | Pending | SPRINT-031 | - | ~30K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-192.md](BACKLOG-192.md) |
+| BACKLOG-193 | Refactor databaseService.ts (1,223 Lines) | refactor | High | Pending | - | - | ~80K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-193.md](BACKLOG-193.md) |
+| BACKLOG-194 | Add Test Coverage for Contexts | test | Medium | Pending | - | - | ~40K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-194.md](BACKLOG-194.md) |
+| BACKLOG-195 | Add Test Coverage for Large Hooks | test | Medium | Pending | - | - | ~50K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-195.md](BACKLOG-195.md) |
+| BACKLOG-196 | Implement or Remove Settings.tsx TODOs | ui | Low | Pending | - | - | ~20K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-196.md](BACKLOG-196.md) |
+| BACKLOG-197 | Enable Stricter TypeScript Rules | config | Low | Pending | - | - | ~25K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-197.md](BACKLOG-197.md) |
+| BACKLOG-198 | Decompose Large Component Files | refactor | Low | Pending | - | - | ~60K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-198.md](BACKLOG-198.md) |
+| BACKLOG-200 | Contacts import fails with email validation error | service | Medium | Pending | - | - | ~25K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-200.md](BACKLOG-200.md) |
+| BACKLOG-201 | "00" prefix appearing before iMessage text | ui | Medium | Completed | - | - | ~5K | - | ~180K | - | - | - | - | - | - | - | - | - | ~180K | ~3h | +3500% | [BACKLOG-201.md](BACKLOG-201.md) |
+| BACKLOG-202 | Fix Test Regressions (contact-handlers/databaseService) | test/fix | Critical | Pending | SPRINT-032 | - | ~20K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-202.md](BACKLOG-202.md) |
+| BACKLOG-203 | Add Comprehensive Tests for macOSMessagesImportService | test | High | Pending | SPRINT-032 | - | ~40K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-203.md](BACKLOG-203.md) |
+| BACKLOG-204 | Abstract window.api Calls into Service Layer | refactor | Medium | Pending | SPRINT-032 | - | ~80K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-204.md](BACKLOG-204.md) |
 
 ---
 
@@ -287,6 +326,12 @@ This index tracks all backlog items with their current status and metadata.
 | SPRINT-020 | State Coordination Foundation | Completed | BACKLOG-142 Phase 1 (7 tasks: TASK-927 to TASK-933, PRs #287-294) - State machine types, reducer, context, orchestrator |
 | SPRINT-021 | State Coordination Migration | Completed | BACKLOG-142 Phase 2 (PRs #296-309) - Hook migration to state machine, feature flag enabled |
 | SPRINT-022 | State Coordination Cleanup | Completed | BACKLOG-142 Phase 3 (7 tasks: TASK-949-957) - Legacy code removed, architecture documented |
+| SPRINT-027 | Messages & Contacts Polish | Completed | 6 tasks (TASK-990 to TASK-995) + 9 unplanned fixes. PRs #354-362. Thread grouping, auto-linking, manual attach/unlink, bubble direction, contact SAVE/LOAD bugs |
+| SPRINT-028 | Stability & UX Polish | Completed | 6 tasks (TASK-1003 to TASK-1009) + 7 unplanned fixes. PRs #364-369. npm audit, dashboard scroll, Show in Folder, state machine, T&C, auto-refresh |
+| SPRINT-029 | UX Improvements | Planned | TASK-1011, TASK-1012 (Start New Audit redesign, Message attachments) |
+| SPRINT-030 | Message & Transaction UX | Planned | TASK-1013-1016 (Date range filter, group chat names, lookback period, attachments) |
+| SPRINT-031 | Codebase Health | Planned | 6 tasks (TASK-1017-1022): Service layer tests, any type cleanup, console cleanup |
+| SPRINT-032 | Bug Fixes & Stability | Planned | 5 tasks (TASK-1023-1027): Test regressions, auth handler, macOS messages tests, window.api audit |
 
 ---
 
@@ -528,6 +573,98 @@ This index tracks all backlog items with their current status and metadata.
   - Marked BACKLOG-152 as Completed (SPRINT-023)
   - Sprint focus: test coverage (29% → 45%+), component decomposition
   - Total estimated: ~215K tokens
+- 2026-01-05: **Retroactive Documentation for PR #353 (Contact-First AttachMessagesModal)**
+  - Created BACKLOG-173: Contact-First AttachMessagesModal Interface (Completed, ~40K tokens)
+  - Created TASK-989: Retroactive task file for the feature work
+  - Related items already documented:
+    - BACKLOG-170: Messages Not Loading in Attach Modal (investigation that led to this)
+    - BACKLOG-172: macOS Messages Import (future feature discovered during investigation)
+    - TASK-985, TASK-986: Related investigation/feature tasks
+  - Key changes in PR #353:
+    - Fixed UI freeze when loading 579k+ messages (added LIMIT to query)
+    - Implemented contact-first interface (two-view: contacts list -> thread selection)
+    - Added new database methods: getMessageContacts(), getMessagesByContact(), getUnlinkedEmails()
+    - Added contact name resolution from macOS Contacts database
+    - Enhanced thread cards to show participants and date ranges
+    - Updated terminology from "messages" to "chats"
+  - Also added BACKLOG-168 to BACKLOG-172 to Full Index (were missing)
+- 2026-01-05: **SPRINT-027 (Messages & Contacts Polish) Created**
+  - Based on feature/contact-first-attach-messages branch (PR #353)
+  - Created 3 tasks: TASK-990, TASK-991, TASK-992
+  - Added BACKLOG-178, BACKLOG-179, BACKLOG-180 to Full Index
+  - Sprint deliverables:
+    - TASK-990: Fix auto-linked messages not appearing in Messages tab
+    - TASK-991: Complete manual thread attach/unlink functionality
+    - TASK-992: Fix message bubble direction (outgoing on right, incoming on left)
+  - Total estimated: ~60K tokens (+ ~30K SR review overhead)
+- 2026-01-09: **SPRINT-027 (Messages & Contacts Polish) COMPLETE**
+  - All 6 planned tasks completed: TASK-990 to TASK-995
+  - PRs merged: #354 (thread grouping), #355 (contacts SAVE), #356 (bubble direction), #357 (contacts LOAD), #358 (auto-linked messages), #359 (manual threads)
+  - Additional polish PRs: #360 (contact names), #361 (attached messages display), #362 (thread grouping final)
+  - Unplanned fixes completed (9 items):
+    - Fixed permissions step bug (type mismatch for checkAllPermissions)
+    - Fixed duplicate import bug (added singleton guard)
+    - Implemented dual progress bars for contacts/messages import
+    - Fixed text messages appearing in Related Emails section
+    - Made message threads collapsed by default with View/Hide toggle
+    - Fixed contact import to store ALL phones and emails (not just first)
+  - feature/contact-first-attach-messages merged to develop (PR #353)
+  - Total actual: ~249K tokens (vs ~177K estimated, +41% variance from unplanned work)
+  - BACKLOG-178, 179, 180 marked complete
+  - Added BACKLOG-181: Streamline Terms and Conditions Onboarding Step
+- 2026-01-09: **Retroactive Documentation - Permissions Step Bugs (SPRINT-027)**
+  - Created BACKLOG-182: getCurrentUser() Returns False After Login (High, Completed)
+    - Root cause: Session-only OAuth design, getCurrentUser() looks for file-based session
+    - Fix: Pass userId through onboarding context from app.currentUser.id
+  - Created BACKLOG-183: Mixed UI During Import - Instructions With Progress (Medium, Completed)
+    - Root cause: No early return when import view should show
+    - Fix: Dedicated import view with early return pattern
+  - Created BACKLOG-184: Contacts Import Failing (1000 Limit) (High, Completed)
+    - Root cause: Hardcoded limit of 1000 contacts
+    - Fix: Increased limit from 1000 to 5000
+  - Created BACKLOG-185: Import Stuck at 100% on Progress Bar (Medium, Completed)
+    - Root cause: Promise.all waiting for both messages AND contacts
+    - Fix: Only wait for messages; contacts continue in background
+  - Created BACKLOG-186: Continue Button Not Working After Import (Critical, Completed)
+    - Root cause: goToStep("dashboard") is no-op when state machine enabled
+    - Fix: Added stateMachineDispatch to usePermissionsFlow, dispatch ONBOARDING_STEP_COMPLETE
+  - All 5 fixes committed directly to fix/messages-display-issues branch during SPRINT-027
+- 2026-01-10: **SPRINT-028 (Stability & UX Polish) COMPLETE**
+  - 6 planned tasks completed (TASK-1003 to TASK-1009):
+    - TASK-1005: npm audit fix (PR #364)
+    - TASK-1004: Dashboard scroll fix (PR #365, BACKLOG-155)
+    - TASK-1008: Show in Folder button (PR #366, BACKLOG-169)
+    - TASK-1006: State machine reduce (PR #367, BACKLOG-150)
+    - TASK-1009: T&C streamline (PR #368, BACKLOG-181)
+    - TASK-1003: Auto-refresh on load (PR #369, BACKLOG-156)
+  - 7 unplanned fixes committed directly to develop:
+    - Message parser fix (truncated text extraction)
+    - Auto-refresh once per session (not every dashboard visit)
+    - Settings reorder (coming soon items to bottom)
+    - Sync status priority fix (show progress-based status first)
+    - Sync status UI (show all 3 types with progress bars)
+    - Compact sync status UI (horizontal layout)
+    - Clickable export file path
+  - Backlog items marked complete: BACKLOG-150, 155, 156, 169, 181
+  - Total estimated: ~140K tokens (planned) + ~29K (unplanned) = ~169K tokens
+- 2026-01-10: **SPRINT-029 (UX Improvements) Ready**
+  - 2 tasks planned: TASK-1011 (Start New Audit redesign), TASK-1012 (Message attachments)
+  - Backlog items: BACKLOG-174, BACKLOG-187
+  - Total estimated: ~106K tokens
+- 2026-01-10: **Codebase Health Review - New Backlog Items Created**
+  - Created 8 new backlog items (BACKLOG-191 to BACKLOG-198) from SR Engineer codebase health review
+  - **Critical:** BACKLOG-191 (Service layer test coverage - 0% on 781 lines)
+  - **High:** BACKLOG-193 (databaseService.ts refactor - 1,223 lines)
+  - **Medium:** BACKLOG-192 (Console cleanup), BACKLOG-194 (Context tests), BACKLOG-195 (Hook tests)
+  - **Low:** BACKLOG-196 (Settings TODOs), BACKLOG-197 (Stricter TS rules), BACKLOG-198 (Component decomposition)
+  - Pre-existing BACKLOG-115 (any types) also identified for partial completion
+- 2026-01-10: **SPRINT-031 (Codebase Health) Created**
+  - 6 tasks planned: TASK-1017 to TASK-1022
+  - Focus: Service layer tests (4 tasks), any type cleanup (1 task), console cleanup (1 task)
+  - Backlog items: BACKLOG-191 (Critical), BACKLOG-115 (partial), BACKLOG-192 (partial)
+  - Total estimated: ~220K tokens (including SR review overhead + buffer)
+  - Phase 1: Sequential service tests (establish mock pattern)
+  - Phase 2: Parallel cleanup tasks (no file conflicts)
 
 ---
 
@@ -620,6 +757,7 @@ Categories with reliable data (2+ complete tasks): `test`, `service` (9 tasks).
 12. **Documentation tasks with iteration can spiral** - SPRINT-015 TASK-914/915 consumed ~100x estimated tokens due to iteration cycles and CI debugging. Self-reported metrics captured only final successful run. Docs category needs 5x buffer for iteration.
 13. **Pattern reference dramatically accelerates service tasks** - SPRINT-015 TASK-917 referenced TASK-909 pattern, completing at -40% variance. Well-specified task files with code examples reduce variance.
 14. **Sequential execution for shared files is mandatory** - SPRINT-015 Phase 3 (TASK-917/918/919) completed efficiently by strict sequential order. No merge conflicts despite all three touching fetch services.
+15. **SQLite integer booleans cause React rendering bugs** - BACKLOG-201: `msg.has_attachments` returns 0/1 from SQLite, not boolean. In JSX, `{0 && <Component/>}` renders "0" as text (React renders numbers but not false/null/undefined). Fix: Always use `!!field` or `Boolean(field)` for SQLite integer fields in JSX conditionals. Investigation took ~3h for a 2-line fix - browser DevTools "Inspect Element" was the breakthrough (revealed "00" as orphan text nodes).
 
 ### PM Estimation Guidelines (Update as patterns emerge)
 

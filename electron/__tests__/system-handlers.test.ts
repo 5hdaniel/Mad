@@ -11,6 +11,7 @@ import type { IpcMainInvokeEvent } from "electron";
 // Mock electron module
 const mockIpcHandle = jest.fn();
 const mockShellOpenExternal = jest.fn();
+const mockShellShowItemInFolder = jest.fn();
 
 // Mock os module to simulate macOS for health check tests
 jest.mock("os", () => ({
@@ -27,6 +28,7 @@ jest.mock("electron", () => ({
   },
   shell: {
     openExternal: mockShellOpenExternal,
+    showItemInFolder: mockShellShowItemInFolder,
   },
 }));
 
@@ -913,6 +915,66 @@ describe("System Handlers", () => {
 
         expect(result.success).toBe(false);
         expect(result.error).toContain("Shell error");
+      });
+    });
+
+    describe("system:show-in-folder", () => {
+      beforeEach(() => {
+        mockShellShowItemInFolder.mockReset();
+      });
+
+      it("should show file in folder successfully", async () => {
+        mockShellShowItemInFolder.mockReturnValue(undefined);
+
+        const handler = registeredHandlers.get("system:show-in-folder");
+        const result = await handler(
+          mockEvent,
+          "/Users/test/Documents/export.pdf",
+        );
+
+        expect(result.success).toBe(true);
+        expect(mockShellShowItemInFolder).toHaveBeenCalledWith(
+          "/Users/test/Documents/export.pdf",
+        );
+      });
+
+      it("should handle empty file path", async () => {
+        const handler = registeredHandlers.get("system:show-in-folder");
+        const result = await handler(mockEvent, "");
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain("Validation error");
+        expect(mockShellShowItemInFolder).not.toHaveBeenCalled();
+      });
+
+      it("should handle Windows-style paths", async () => {
+        mockShellShowItemInFolder.mockReturnValue(undefined);
+
+        const handler = registeredHandlers.get("system:show-in-folder");
+        const result = await handler(
+          mockEvent,
+          "C:\\Users\\test\\Documents\\export.pdf",
+        );
+
+        expect(result.success).toBe(true);
+        expect(mockShellShowItemInFolder).toHaveBeenCalledWith(
+          "C:\\Users\\test\\Documents\\export.pdf",
+        );
+      });
+
+      it("should handle paths with spaces", async () => {
+        mockShellShowItemInFolder.mockReturnValue(undefined);
+
+        const handler = registeredHandlers.get("system:show-in-folder");
+        const result = await handler(
+          mockEvent,
+          "/Users/test/My Documents/export file.pdf",
+        );
+
+        expect(result.success).toBe(true);
+        expect(mockShellShowItemInFolder).toHaveBeenCalledWith(
+          "/Users/test/My Documents/export file.pdf",
+        );
       });
     });
   });

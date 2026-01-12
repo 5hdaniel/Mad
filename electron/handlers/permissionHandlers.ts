@@ -175,15 +175,19 @@ export function registerPermissionHandlers(): void {
 
   // Check permissions for Messages database
   ipcMain.handle("check-permissions", async () => {
-    try {
-      const messagesDbPath = path.join(
-        process.env.HOME!,
-        "Library/Messages/chat.db"
-      );
+    const messagesDbPath = path.join(
+      process.env.HOME!,
+      "Library/Messages/chat.db"
+    );
 
+    logService.info("Checking permissions for Messages database", "PermissionHandlers", { path: messagesDbPath });
+
+    try {
       await fs.access(messagesDbPath, fs.constants.R_OK);
+      logService.info("Permission check PASSED - Messages database accessible", "PermissionHandlers");
       return { hasPermission: true };
     } catch (error) {
+      logService.warn("Permission check FAILED", "PermissionHandlers", { error: (error as Error).message });
       return { hasPermission: false, error: (error as Error).message };
     }
   });

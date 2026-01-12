@@ -419,6 +419,9 @@ function TransactionList({
           isDeleting={isBulkDeleting}
           isExporting={isBulkExporting}
           isUpdating={isBulkUpdating}
+          selectedTransactions={filteredTransactions.filter((t) =>
+            selectedIds.has(t.id)
+          )}
         />
       )}
 

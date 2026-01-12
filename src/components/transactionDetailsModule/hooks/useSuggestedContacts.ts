@@ -72,6 +72,7 @@ export function useSuggestedContacts(
         setProcessingContactId(suggestion.contact_id);
 
         // Assign the contact to the transaction
+        // Note: Backend auto-links text messages after assignment
         await window.api.transactions.assignContact(
           transaction.id,
           suggestion.contact_id,
@@ -219,6 +220,8 @@ export function useSuggestedContacts(
             });
           }
         }
+
+        // Note: Backend auto-links text messages after each assignment
 
         // Clear all suggestions
         await updateSuggestedContacts([]);

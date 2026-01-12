@@ -229,6 +229,41 @@ interface ElectronAPI {
  * Main API namespace (preferred for new code)
  * Exposed via contextBridge in preload.js
  */
+/**
+ * Progress event from macOS message import
+ */
+interface MacOSImportProgress {
+  current: number;
+  total: number;
+  percent: number;
+}
+
+/**
+ * Result of macOS message import
+ */
+interface MacOSImportResult {
+  success: boolean;
+  messagesImported: number;
+  messagesSkipped: number;
+  attachmentsImported: number;
+  attachmentsSkipped: number;
+  duration: number;
+  error?: string;
+}
+
+/**
+ * Attachment info for display (TASK-1012)
+ */
+interface MessageAttachmentInfo {
+  id: string;
+  message_id: string;
+  filename: string;
+  mime_type: string | null;
+  file_size_bytes: number | null;
+  /** Base64-encoded file content for inline display */
+  data: string | null;
+}
+
 interface MainAPI {
   // Messages API (iMessage/SMS - migrated from window.electron)
   messages: {
@@ -237,6 +272,16 @@ interface MainAPI {
     exportConversations: (
       conversationIds: string[],
     ) => Promise<{ success: boolean; exportPath?: string }>;
+    /** Import messages from macOS Messages app into the app database (macOS only) */
+    importMacOSMessages: (userId: string, forceReimport?: boolean) => Promise<MacOSImportResult>;
+    /** Get count of messages available for import from macOS Messages */
+    getImportCount: () => Promise<{ success: boolean; count?: number; error?: string }>;
+    /** Listen for import progress updates */
+    onImportProgress: (callback: (progress: MacOSImportProgress) => void) => () => void;
+    /** Get attachments for a message with base64 data (TASK-1012) */
+    getMessageAttachments: (messageId: string) => Promise<MessageAttachmentInfo[]>;
+    /** Get attachments for multiple messages at once (TASK-1012) */
+    getMessageAttachmentsBatch: (messageIds: string[]) => Promise<Record<string, MessageAttachmentInfo[]>>;
   };
 
   // Outlook integration (migrated from window.electron)
@@ -466,13 +511,24 @@ interface MainAPI {
     setupFullDiskAccess: () => Promise<void>;
     checkFullDiskAccess: () => Promise<{ granted: boolean }>;
     checkContactsPermission: () => Promise<{ granted: boolean }>;
-    checkAllPermissions: () => Promise<Record<string, boolean>>;
+    checkAllPermissions: () => Promise<{
+      allGranted: boolean;
+      permissions: {
+        fullDiskAccess?: { hasPermission: boolean; error?: string };
+        contacts?: { hasPermission: boolean; error?: string };
+      };
+      errors: Array<{ hasPermission: boolean; error?: string }>;
+    }>;
     contactSupport: (
       errorDetails?: string,
     ) => Promise<{ success: boolean; error?: string }>;
     getDiagnostics: () => Promise<{
       success: boolean;
       diagnostics?: string;
+      error?: string;
+    }>;
+    showInFolder: (filePath: string) => Promise<{
+      success: boolean;
       error?: string;
     }>;
   };

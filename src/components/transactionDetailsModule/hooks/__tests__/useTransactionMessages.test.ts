@@ -207,6 +207,172 @@ describe("useTransactionMessages", () => {
       expect(result.current.messages).toEqual([]);
       expect(result.current.error).toBeNull();
     });
+
+    it("should return messages with communication_type='sms' (legacy field)", async () => {
+      // Auto-linked messages use communication_type instead of channel
+      const autoLinkedMessages: Partial<Communication>[] = [
+        {
+          id: "auto-1",
+          user_id: "user-456",
+          communication_type: "sms",
+          body_text: "Auto-linked SMS message",
+          sent_at: "2024-01-20T10:00:00Z",
+          has_attachments: false,
+          is_false_positive: false,
+        },
+        {
+          id: "auto-2",
+          user_id: "user-456",
+          communication_type: "email",
+          subject: "Auto-linked email (should be filtered out)",
+          body_text: "Email content",
+          sent_at: "2024-01-20T11:00:00Z",
+          has_attachments: false,
+          is_false_positive: false,
+        },
+      ];
+
+      window.api.transactions.getDetails.mockResolvedValue({
+        success: true,
+        transaction: {
+          ...mockTransaction,
+          communications: autoLinkedMessages,
+          contact_assignments: [],
+        },
+      });
+
+      const { result } = renderHook(() => useTransactionMessages(mockTransaction));
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      // Should only return the SMS message, not the email
+      expect(result.current.messages).toHaveLength(1);
+      expect(result.current.messages[0].id).toBe("auto-1");
+      expect(result.current.messages[0].communication_type).toBe("sms");
+    });
+
+    it("should return messages with communication_type='imessage' (legacy field)", async () => {
+      const autoLinkedMessages: Partial<Communication>[] = [
+        {
+          id: "auto-imessage",
+          user_id: "user-456",
+          communication_type: "imessage",
+          body_text: "Auto-linked iMessage",
+          sent_at: "2024-01-20T10:00:00Z",
+          has_attachments: false,
+          is_false_positive: false,
+        },
+      ];
+
+      window.api.transactions.getDetails.mockResolvedValue({
+        success: true,
+        transaction: {
+          ...mockTransaction,
+          communications: autoLinkedMessages,
+          contact_assignments: [],
+        },
+      });
+
+      const { result } = renderHook(() => useTransactionMessages(mockTransaction));
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      expect(result.current.messages).toHaveLength(1);
+      expect(result.current.messages[0].id).toBe("auto-imessage");
+      expect(result.current.messages[0].communication_type).toBe("imessage");
+    });
+
+    it("should return messages with both channel and communication_type fields (mixed data)", async () => {
+      // Scenario: mix of manually attached (channel) and auto-linked (communication_type) messages
+      const mixedMessages: Partial<Communication>[] = [
+        {
+          id: "manual-sms",
+          user_id: "user-456",
+          channel: "sms",
+          body_text: "Manually attached SMS",
+          sent_at: "2024-01-20T10:00:00Z",
+          has_attachments: false,
+          is_false_positive: false,
+        },
+        {
+          id: "auto-sms",
+          user_id: "user-456",
+          communication_type: "sms",
+          body_text: "Auto-linked SMS",
+          sent_at: "2024-01-20T11:00:00Z",
+          has_attachments: false,
+          is_false_positive: false,
+        },
+        {
+          id: "manual-imessage",
+          user_id: "user-456",
+          channel: "imessage",
+          body_text: "Manually attached iMessage",
+          sent_at: "2024-01-20T12:00:00Z",
+          has_attachments: false,
+          is_false_positive: false,
+        },
+        {
+          id: "auto-imessage",
+          user_id: "user-456",
+          communication_type: "imessage",
+          body_text: "Auto-linked iMessage",
+          sent_at: "2024-01-20T13:00:00Z",
+          has_attachments: false,
+          is_false_positive: false,
+        },
+        {
+          id: "email-manual",
+          user_id: "user-456",
+          channel: "email",
+          subject: "Manual email (should be filtered)",
+          body_text: "Email content",
+          sent_at: "2024-01-20T14:00:00Z",
+          has_attachments: false,
+          is_false_positive: false,
+        },
+        {
+          id: "email-auto",
+          user_id: "user-456",
+          communication_type: "email",
+          subject: "Auto email (should be filtered)",
+          body_text: "Email content",
+          sent_at: "2024-01-20T15:00:00Z",
+          has_attachments: false,
+          is_false_positive: false,
+        },
+      ];
+
+      window.api.transactions.getDetails.mockResolvedValue({
+        success: true,
+        transaction: {
+          ...mockTransaction,
+          communications: mixedMessages,
+          contact_assignments: [],
+        },
+      });
+
+      const { result } = renderHook(() => useTransactionMessages(mockTransaction));
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      // Should return 4 messages (2 SMS + 2 iMessage), excluding both email types
+      expect(result.current.messages).toHaveLength(4);
+
+      const messageIds = result.current.messages.map((m) => m.id);
+      expect(messageIds).toContain("manual-sms");
+      expect(messageIds).toContain("auto-sms");
+      expect(messageIds).toContain("manual-imessage");
+      expect(messageIds).toContain("auto-imessage");
+      expect(messageIds).not.toContain("email-manual");
+      expect(messageIds).not.toContain("email-auto");
+    });
   });
 
   describe("error handling", () => {

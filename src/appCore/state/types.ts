@@ -8,6 +8,7 @@
 import type { Conversation } from "../../hooks/useConversations";
 import type { Subscription } from "../../../electron/types/models";
 import type { PendingOAuthData } from "../../components/Login";
+import type { SyncStatus } from "../../hooks/useAutoRefresh";
 
 // Application navigation steps
 export type AppStep =
@@ -173,6 +174,12 @@ export interface AppStateMachine {
   showSetupPromptDismissed: boolean;
   isTourActive: boolean;
   appPath: string;
+
+  // Sync status (for dashboard indicator)
+  syncStatus?: SyncStatus;
+  isAnySyncing: boolean;
+  currentSyncMessage: string | null;
+  triggerRefresh: () => Promise<void>;
 
   // ============================================
   // SEMANTIC MODAL TRANSITIONS
