@@ -40,15 +40,28 @@ function ContactSelectModal({
   onRefreshContacts,
 }: ContactSelectModalProps) {
   const [searchQuery, setSearchQuery] = React.useState("");
-  const [selectedIds, setSelectedIds] = React.useState<string[]>(initialSelectedIds);
   const [showImportModal, setShowImportModal] = useState(false);
+
+  // Create a set of valid contact IDs for O(1) lookup
+  const validContactIds = React.useMemo(
+    () => new Set(contacts.map((c) => c.id)),
+    [contacts]
+  );
+
+  // Filter initialSelectedIds to only include valid contact IDs
+  const validInitialIds = React.useMemo(
+    () => initialSelectedIds.filter((id) => validContactIds.has(id)),
+    [initialSelectedIds, validContactIds]
+  );
+
+  const [selectedIds, setSelectedIds] = React.useState<string[]>(validInitialIds);
 
   // Sync selectedIds when initialSelectedIds prop changes (e.g., modal reopened with different selections)
   // Use join() to create a stable string key - avoids infinite loop from default [] creating new reference each render
   // NOTE: We intentionally use initialIdsKey (stable string) instead of initialSelectedIds (unstable array reference)
-  const initialIdsKey = initialSelectedIds.join(',');
+  const initialIdsKey = validInitialIds.join(',');
   React.useEffect(() => {
-    setSelectedIds(initialSelectedIds);
+    setSelectedIds(validInitialIds);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- using stable string key intentionally
   }, [initialIdsKey]);
 
