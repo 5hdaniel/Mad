@@ -59,6 +59,7 @@ if (typeof window !== 'undefined') {
       exportEnhanced: jest.fn(),
       bulkDelete: jest.fn(),
       bulkUpdateStatus: jest.fn(),
+      batchUpdateContacts: jest.fn(),
     },
     contacts: {
       getAll: jest.fn(),
