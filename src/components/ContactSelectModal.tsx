@@ -45,10 +45,12 @@ function ContactSelectModal({
 
   // Sync selectedIds when initialSelectedIds prop changes (e.g., modal reopened with different selections)
   // Use join() to create a stable string key - avoids infinite loop from default [] creating new reference each render
+  // NOTE: We intentionally use initialIdsKey (stable string) instead of initialSelectedIds (unstable array reference)
   const initialIdsKey = initialSelectedIds.join(',');
   React.useEffect(() => {
     setSelectedIds(initialSelectedIds);
-  }, [initialIdsKey, initialSelectedIds]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- using stable string key intentionally
+  }, [initialIdsKey]);
 
   const availableContacts = contacts.filter((c) => !excludeIds.includes(c.id));
 
