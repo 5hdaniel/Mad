@@ -34,7 +34,9 @@ export function MessageBubble({ message, senderName, showSender = true }: Messag
   const isOutbound = message.direction === "outbound";
 
   // Use body_text as primary, body_plain as fallback (per SR Engineer guidance)
-  const messageText = message.body_text || message.body_plain || message.body || "";
+  // Clean Unicode replacement characters (U+FFFD) that indicate encoding failures
+  const rawText = message.body_text || message.body_plain || message.body || "";
+  const messageText = rawText.replace(/\uFFFD/g, "").trim();
 
   // Get timestamp - prefer sent_at for outbound, received_at for inbound
   const timestamp = isOutbound
