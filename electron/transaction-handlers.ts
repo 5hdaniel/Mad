@@ -510,28 +510,12 @@ export const registerTransactionHandlers = (
           false,
         );
 
+        // TASK-1031: createAuditedTransaction now auto-links communications
+        // for all assigned contacts internally
         const transaction = await transactionService.createAuditedTransaction(
           validatedUserId as string,
           validatedData as any,
         );
-
-        // Auto-link text messages from assigned contacts
-        if (transaction?.id) {
-          try {
-            const linkResult = await autoLinkAllToTransaction(transaction.id);
-            logService.info("Auto-linked communications after transaction creation", "Transactions", {
-              transactionId: transaction.id,
-              linked: linkResult.linked,
-              skipped: linkResult.skipped,
-            });
-          } catch (linkError) {
-            // Non-blocking - log but don't fail transaction creation
-            logService.warn("Auto-link communications failed after transaction creation", "Transactions", {
-              transactionId: transaction.id,
-              error: linkError instanceof Error ? linkError.message : "Unknown error",
-            });
-          }
-        }
 
         return {
           success: true,
@@ -661,7 +645,9 @@ export const registerTransactionHandlers = (
         const validatedNotes =
           notes && typeof notes === "string" ? notes.trim() : null;
 
-        await transactionService.assignContactToTransaction(
+        // TASK-1031: assignContactToTransaction now auto-links communications
+        // for the newly added contact
+        const result = await transactionService.assignContactToTransaction(
           validatedTransactionId as string,
           validatedContactId as string,
           role.trim(),
@@ -670,24 +656,23 @@ export const registerTransactionHandlers = (
           validatedNotes ?? undefined,
         );
 
-        // Auto-link text messages from the assigned contact
-        try {
-          const linkResult = await autoLinkAllToTransaction(validatedTransactionId as string);
-          logService.info("Auto-linked communications after contact assignment", "Transactions", {
-            transactionId: validatedTransactionId,
-            contactId: validatedContactId,
-            linked: linkResult.linked,
-          });
-        } catch (linkError) {
-          // Non-blocking - log but don't fail assignment
-          logService.warn("Auto-link communications failed after contact assignment", "Transactions", {
-            transactionId: validatedTransactionId,
-            error: linkError instanceof Error ? linkError.message : "Unknown error",
-          });
+        // Log auto-link results if any communications were linked
+        if (result.autoLink) {
+          const { emailsLinked, messagesLinked } = result.autoLink;
+          if (emailsLinked > 0 || messagesLinked > 0) {
+            logService.info("Auto-linked communications for new contact", "Transactions", {
+              transactionId: validatedTransactionId,
+              contactId: validatedContactId,
+              emailsLinked,
+              messagesLinked,
+            });
+          }
         }
 
         return {
           success: true,
+          // TASK-1031: Return auto-link results so UI can notify user
+          autoLink: result.autoLink,
         };
       } catch (error) {
         logService.error(

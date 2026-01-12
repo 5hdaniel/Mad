@@ -17,6 +17,7 @@ import logService from "./logService";
 import supabaseService from "./supabaseService";
 import { getContactNames } from "./contactsService";
 import { createCommunicationReference } from "./messageMatchingService";
+import { autoLinkCommunicationsForContact, AutoLinkResult } from "./autoLinkService";
 
 // Hybrid extraction imports
 import { HybridExtractorService } from "./extraction/hybridExtractorService";
@@ -156,6 +157,15 @@ interface ReanalysisResult {
   emailsFound: number;
   realEstateEmailsFound: number;
   analyzed: AnalyzedEmail[];
+}
+
+/**
+ * Result of assigning a contact to a transaction
+ * TASK-1031: Now includes auto-link results
+ */
+interface AssignContactResult {
+  success: boolean;
+  autoLink?: AutoLinkResult;
 }
 
 /**
@@ -1137,6 +1147,7 @@ class TransactionService {
   /**
    * Create audited transaction with contact assignments
    * Used for the "Audit New Transaction" feature
+   * TASK-1031: Now auto-links communications for each assigned contact
    */
   async createAuditedTransaction(
     userId: string,
@@ -1176,7 +1187,7 @@ class TransactionService {
       } as NewTransaction);
       const transactionId = transaction.id;
 
-      // Assign all contacts
+      // Assign all contacts (skip auto-link during bulk assignment)
       if (contact_assignments && contact_assignments.length > 0) {
         for (const assignment of contact_assignments) {
           await databaseService.assignContactToTransaction(transactionId, {
@@ -1187,6 +1198,36 @@ class TransactionService {
             is_primary: assignment.is_primary,
             notes: assignment.notes,
           });
+        }
+
+        // TASK-1031: Auto-link communications for all assigned contacts
+        // Run after all contacts are assigned to avoid duplicate queries
+        let totalEmailsLinked = 0;
+        let totalMessagesLinked = 0;
+
+        for (const assignment of contact_assignments) {
+          try {
+            const autoLinkResult = await autoLinkCommunicationsForContact({
+              contactId: assignment.contact_id,
+              transactionId,
+            });
+            totalEmailsLinked += autoLinkResult.emailsLinked;
+            totalMessagesLinked += autoLinkResult.messagesLinked;
+          } catch (error) {
+            // Log but don't fail transaction creation if auto-link fails
+            await logService.warn(
+              `Auto-link failed for contact ${assignment.contact_id}: ${error instanceof Error ? error.message : "Unknown"}`,
+              "TransactionService.createAuditedTransaction",
+            );
+          }
+        }
+
+        if (totalEmailsLinked > 0 || totalMessagesLinked > 0) {
+          await logService.info(
+            `Auto-linked ${totalEmailsLinked} emails and ${totalMessagesLinked} messages for new transaction`,
+            "TransactionService.createAuditedTransaction",
+            { transactionId, contactCount: contact_assignments.length },
+          );
         }
       }
 
@@ -1230,6 +1271,17 @@ class TransactionService {
 
   /**
    * Assign contact to transaction role
+   * TASK-1031: Now auto-links existing communications (emails and texts)
+   * from the contact to the transaction.
+   *
+   * @param transactionId - Transaction ID
+   * @param contactId - Contact ID to assign
+   * @param role - Role in the transaction
+   * @param roleCategory - Role category
+   * @param isPrimary - Whether this is the primary contact for this role
+   * @param notes - Optional notes
+   * @param skipAutoLink - If true, skip auto-linking (for bulk operations)
+   * @returns Assignment result including auto-link counts
    */
   async assignContactToTransaction(
     transactionId: string,
@@ -1238,8 +1290,10 @@ class TransactionService {
     roleCategory: string,
     isPrimary: boolean = false,
     notes: string | null = null,
-  ): Promise<any> {
-    return await databaseService.assignContactToTransaction(transactionId, {
+    skipAutoLink: boolean = false,
+  ): Promise<AssignContactResult> {
+    // 1. Save the contact assignment (existing behavior)
+    await databaseService.assignContactToTransaction(transactionId, {
       contact_id: contactId,
       role: role,
       role_category: roleCategory,
@@ -1247,6 +1301,33 @@ class TransactionService {
       is_primary: isPrimary ? 1 : 0,
       notes: notes || undefined,
     });
+
+    // 2. Auto-link communications for this contact (TASK-1031)
+    // Skip for bulk operations to avoid performance issues
+    if (skipAutoLink) {
+      return { success: true };
+    }
+
+    try {
+      const autoLinkResult = await autoLinkCommunicationsForContact({
+        contactId,
+        transactionId,
+      });
+
+      return {
+        success: true,
+        autoLink: autoLinkResult,
+      };
+    } catch (error) {
+      // Log but don't fail the assignment if auto-link fails
+      await logService.warn(
+        `Auto-link failed after contact assignment: ${error instanceof Error ? error.message : "Unknown"}`,
+        "TransactionService.assignContactToTransaction",
+        { transactionId, contactId },
+      );
+
+      return { success: true };
+    }
   }
 
   /**

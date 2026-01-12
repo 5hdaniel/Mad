@@ -22,6 +22,16 @@ jest.mock("../outlookFetchService");
 jest.mock("../transactionExtractorService");
 jest.mock("../logService");
 
+// TASK-1031: Mock autoLinkService
+jest.mock("../autoLinkService", () => ({
+  autoLinkCommunicationsForContact: jest.fn().mockResolvedValue({
+    emailsLinked: 0,
+    messagesLinked: 0,
+    alreadyLinked: 0,
+    errors: 0,
+  }),
+}));
+
 // Mock hybrid extraction services
 jest.mock("../extraction/extractionStrategyService", () => ({
   ExtractionStrategyService: jest.fn().mockImplementation(() => ({
@@ -406,7 +416,9 @@ describe("TransactionService - Additional Coverage", () => {
           notes: "Primary buyer",
         },
       );
-      expect(result).toEqual(mockAssignment);
+      // TASK-1031: Now returns AssignContactResult with success and autoLink
+      expect(result.success).toBe(true);
+      expect(result.autoLink).toBeDefined();
     });
 
     it("should handle null notes", async () => {
@@ -414,7 +426,7 @@ describe("TransactionService - Additional Coverage", () => {
         databaseService.assignContactToTransaction as jest.Mock
       ).mockResolvedValue({});
 
-      await transactionService.assignContactToTransaction(
+      const result = await transactionService.assignContactToTransaction(
         mockTransactionId,
         mockContactId,
         "seller",
@@ -429,6 +441,27 @@ describe("TransactionService - Additional Coverage", () => {
           notes: undefined,
         }),
       );
+      // TASK-1031: Result should still indicate success
+      expect(result.success).toBe(true);
+    });
+
+    it("should skip auto-link when skipAutoLink is true", async () => {
+      (
+        databaseService.assignContactToTransaction as jest.Mock
+      ).mockResolvedValue({});
+
+      const result = await transactionService.assignContactToTransaction(
+        mockTransactionId,
+        mockContactId,
+        "seller",
+        "client",
+        false,
+        null,
+        true, // skipAutoLink = true
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.autoLink).toBeUndefined();
     });
   });
 
