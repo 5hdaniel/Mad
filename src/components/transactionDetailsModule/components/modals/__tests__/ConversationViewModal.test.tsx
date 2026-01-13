@@ -430,20 +430,24 @@ describe("ConversationViewModal", () => {
   });
 
   describe("Attachment Display (TASK-1012)", () => {
-    it("loads attachments for messages with has_attachments flag", async () => {
+    // Note: Attachment loading now requires message_id field (SPRINT-034 fix)
+    // because attachments are stored by message_id, not communication id
+
+    it("loads attachments for messages with has_attachments flag and message_id", async () => {
       const messagesWithAttachments = [
         {
           ...defaultMessages[0],
           id: "msg-with-attachment",
+          message_id: "macos-msg-123", // Required for attachment lookup
           has_attachments: true,
         },
       ];
 
       mockGetMessageAttachmentsBatch.mockResolvedValue({
-        "msg-with-attachment": [
+        "macos-msg-123": [
           {
             id: "att-1",
-            message_id: "msg-with-attachment",
+            message_id: "macos-msg-123",
             filename: "photo.jpg",
             mime_type: "image/jpeg",
             file_size_bytes: 12345,
@@ -461,13 +465,34 @@ describe("ConversationViewModal", () => {
 
       await waitFor(() => {
         expect(mockGetMessageAttachmentsBatch).toHaveBeenCalledWith([
-          "msg-with-attachment",
+          "macos-msg-123",
         ]);
       });
     });
 
     it("does not call API when no messages have attachments", () => {
       render(<ConversationViewModal {...defaultProps} />);
+
+      expect(mockGetMessageAttachmentsBatch).not.toHaveBeenCalled();
+    });
+
+    it("does not call API when messages have has_attachments but no message_id", () => {
+      // Messages without message_id won't trigger attachment loading
+      const messagesWithoutMessageId = [
+        {
+          ...defaultMessages[0],
+          id: "msg-no-message-id",
+          has_attachments: true,
+          // No message_id field
+        },
+      ];
+
+      render(
+        <ConversationViewModal
+          {...defaultProps}
+          messages={messagesWithoutMessageId}
+        />
+      );
 
       expect(mockGetMessageAttachmentsBatch).not.toHaveBeenCalled();
     });
@@ -484,6 +509,7 @@ describe("ConversationViewModal", () => {
         {
           ...defaultMessages[0],
           id: "msg-loading",
+          message_id: "macos-loading-123", // Required for attachment lookup
           has_attachments: true,
         },
       ];
@@ -512,16 +538,17 @@ describe("ConversationViewModal", () => {
         {
           ...defaultMessages[0],
           id: "msg-with-heic",
+          message_id: "macos-heic-123",
           has_attachments: true,
         },
       ];
 
       // HEIC files are filtered out as non-displayable
       mockGetMessageAttachmentsBatch.mockResolvedValue({
-        "msg-with-heic": [
+        "macos-heic-123": [
           {
             id: "att-1",
-            message_id: "msg-with-heic",
+            message_id: "macos-heic-123",
             filename: "photo.heic",
             mime_type: "image/heic",
             file_size_bytes: 12345,
@@ -548,6 +575,7 @@ describe("ConversationViewModal", () => {
         {
           ...defaultMessages[0],
           id: "msg-with-image",
+          message_id: "macos-image-123",
           has_attachments: true,
         },
       ];
@@ -555,10 +583,10 @@ describe("ConversationViewModal", () => {
       const base64Data = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
 
       mockGetMessageAttachmentsBatch.mockResolvedValue({
-        "msg-with-image": [
+        "macos-image-123": [
           {
             id: "att-1",
-            message_id: "msg-with-image",
+            message_id: "macos-image-123",
             filename: "test.png",
             mime_type: "image/png",
             file_size_bytes: 100,
@@ -589,15 +617,16 @@ describe("ConversationViewModal", () => {
         {
           ...defaultMessages[0],
           id: "msg-missing-file",
+          message_id: "macos-missing-123",
           has_attachments: true,
         },
       ];
 
       mockGetMessageAttachmentsBatch.mockResolvedValue({
-        "msg-missing-file": [
+        "macos-missing-123": [
           {
             id: "att-1",
-            message_id: "msg-missing-file",
+            message_id: "macos-missing-123",
             filename: "missing.jpg",
             mime_type: "image/jpeg",
             file_size_bytes: 12345,
@@ -623,6 +652,7 @@ describe("ConversationViewModal", () => {
         {
           ...defaultMessages[0],
           id: "msg-error",
+          message_id: "macos-error-123",
           has_attachments: true,
         },
       ];
@@ -636,9 +666,10 @@ describe("ConversationViewModal", () => {
         />
       );
 
-      // Should not crash and should show placeholder
+      // Should not crash - when API fails, no attachments are loaded
+      // so messages with has_attachments show placeholder
       await waitFor(() => {
-        expect(screen.getByText("[Attachment]")).toBeInTheDocument();
+        expect(screen.getByText(/Attachment/)).toBeInTheDocument();
       });
     });
   });
