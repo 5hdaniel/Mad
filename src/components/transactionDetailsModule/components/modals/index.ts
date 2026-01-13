@@ -9,3 +9,4 @@ export { RejectReasonModal } from "./RejectReasonModal";
 export { AttachMessagesModal } from "./AttachMessagesModal";
 export { UnlinkMessageModal } from "./UnlinkMessageModal";
 export { ConversationViewModal } from "./ConversationViewModal";
+export { EditContactsModal } from "./EditContactsModal";
