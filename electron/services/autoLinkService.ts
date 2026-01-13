@@ -8,7 +8,7 @@
  * @see TASK-1031
  */
 
-import { dbAll, dbGet } from "./db/core/dbConnection";
+import { dbAll, dbGet, dbRun } from "./db/core/dbConnection";
 import logService from "./logService";
 import {
   normalizePhone,
@@ -181,7 +181,17 @@ function getDefaultDateRange(): { start: Date; end: Date } {
 }
 
 /**
- * Find unlinked emails matching the given email addresses
+ * Find unlinked emails matching the given email addresses.
+ *
+ * IMPORTANT: Emails are stored in the `communications` table (not `messages`).
+ * The `messages` table is used for iMessages/SMS only.
+ *
+ * This function finds communications that:
+ * 1. Belong to this user
+ * 2. Are emails (communication_type = 'email')
+ * 3. Are NOT already linked to this transaction
+ * 4. Match the contact's email addresses (sender or recipients)
+ * 5. Fall within the date range
  */
 async function findEmailsByContactEmails(
   userId: string,
@@ -195,12 +205,12 @@ async function findEmailsByContactEmails(
   }
 
   // Build email patterns for LIKE matching
-  // Match emails in sender or recipients fields
+  // Match emails in sender or recipients fields of the communications table
   const emailConditions = emails
-    .map(() => "(LOWER(m.sender) LIKE ? OR LOWER(m.recipients) LIKE ?)")
+    .map(() => "(LOWER(c.sender) LIKE ? OR LOWER(c.recipients) LIKE ?)")
     .join(" OR ");
 
-  const params: (string | number)[] = [userId, transactionId, transactionId];
+  const params: (string | number)[] = [userId, transactionId];
 
   // Add email patterns
   for (const email of emails) {
@@ -212,24 +222,21 @@ async function findEmailsByContactEmails(
   params.push(dateRange.end.toISOString());
   params.push(limit);
 
+  // Query the communications table for unlinked emails
+  // Emails are stored in communications table with communication_type='email'
   const sql = `
-    SELECT m.id
-    FROM messages m
-    WHERE m.user_id = ?
-      AND m.channel = 'email'
-      AND m.duplicate_of IS NULL
+    SELECT c.id
+    FROM communications c
+    WHERE c.user_id = ?
+      AND c.communication_type = 'email'
       AND (
-        m.transaction_id IS NULL
-        OR m.transaction_id != ?
-      )
-      AND m.id NOT IN (
-        SELECT message_id FROM communications
-        WHERE transaction_id = ? AND message_id IS NOT NULL
+        c.transaction_id IS NULL
+        OR c.transaction_id != ?
       )
       AND (${emailConditions})
-      AND m.sent_at >= ?
-      AND m.sent_at <= ?
-    ORDER BY m.sent_at DESC
+      AND c.sent_at >= ?
+      AND c.sent_at <= ?
+    ORDER BY c.sent_at DESC
     LIMIT ?
   `;
 
@@ -293,6 +300,58 @@ async function findMessagesByContactPhones(
 
   const results = dbAll<{ id: string }>(sql, params);
   return results.map((r) => r.id);
+}
+
+/**
+ * Link an existing communication record to a transaction.
+ *
+ * For emails that are already in the communications table,
+ * we update their transaction_id directly instead of creating
+ * a new reference.
+ *
+ * @param communicationId - The communication record ID
+ * @param transactionId - The transaction to link to
+ * @param linkSource - How the link was created
+ * @param linkConfidence - Confidence score
+ * @returns true if linked, false if already linked to this transaction
+ */
+async function linkExistingCommunication(
+  communicationId: string,
+  transactionId: string,
+  linkSource: "auto" | "manual" | "scan" = "auto",
+  linkConfidence: number = 0.85
+): Promise<boolean> {
+  // Check if already linked to this transaction
+  const checkSql = `
+    SELECT transaction_id FROM communications WHERE id = ?
+  `;
+  const existing = dbGet<{ transaction_id: string | null }>(checkSql, [communicationId]);
+
+  if (!existing) {
+    await logService.warn(
+      `Communication ${communicationId} not found when trying to link`,
+      "AutoLinkService"
+    );
+    return false;
+  }
+
+  if (existing.transaction_id === transactionId) {
+    // Already linked to this transaction
+    return false;
+  }
+
+  // Update the communication to link it to the transaction
+  const updateSql = `
+    UPDATE communications
+    SET transaction_id = ?,
+        link_source = ?,
+        link_confidence = ?,
+        linked_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `;
+  dbRun(updateSql, [transactionId, linkSource, linkConfidence, communicationId]);
+
+  return true;
 }
 
 // ============================================
@@ -394,7 +453,7 @@ export async function autoLinkCommunicationsForContact(
       }
     );
 
-    // 4. Find matching emails
+    // 4. Find matching emails (from communications table)
     const emailIds = await findEmailsByContactEmails(
       userId,
       contactInfo.emails,
@@ -403,7 +462,13 @@ export async function autoLinkCommunicationsForContact(
       limit
     );
 
-    // 5. Find matching text messages
+    await logService.debug(
+      `Found ${emailIds.length} matching emails for contact ${contactId}`,
+      "AutoLinkService",
+      { emailIds, contactEmails: contactInfo.emails }
+    );
+
+    // 5. Find matching text messages (from messages table)
     const messageIds = await findMessagesByContactPhones(
       userId,
       contactInfo.phoneNumbers,
@@ -412,18 +477,25 @@ export async function autoLinkCommunicationsForContact(
       limit
     );
 
+    await logService.debug(
+      `Found ${messageIds.length} matching messages for contact ${contactId}`,
+      "AutoLinkService",
+      { messageIds, contactPhones: contactInfo.phoneNumbers }
+    );
+
     // 6. Link emails to transaction
-    for (const emailId of emailIds) {
+    // Emails are already in the communications table, so we update
+    // their transaction_id directly using linkExistingCommunication
+    for (const communicationId of emailIds) {
       try {
-        const refId = await createCommunicationReference(
-          emailId,
+        const linked = await linkExistingCommunication(
+          communicationId,
           transactionId,
-          userId,
           "auto",
           0.85 // Email matching confidence
         );
 
-        if (refId) {
+        if (linked) {
           result.emailsLinked++;
         } else {
           result.alreadyLinked++;
@@ -431,7 +503,7 @@ export async function autoLinkCommunicationsForContact(
       } catch (error) {
         result.errors++;
         await logService.warn(
-          `Failed to link email ${emailId}: ${error instanceof Error ? error.message : "Unknown"}`,
+          `Failed to link email ${communicationId}: ${error instanceof Error ? error.message : "Unknown"}`,
           "AutoLinkService"
         );
       }

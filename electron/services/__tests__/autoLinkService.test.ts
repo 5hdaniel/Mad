@@ -10,11 +10,12 @@ import {
 // Mock dependencies
 const mockDbAll = jest.fn();
 const mockDbGet = jest.fn();
+const mockDbRun = jest.fn();
 
 jest.mock("../db/core/dbConnection", () => ({
   dbAll: (...args: unknown[]) => mockDbAll(...args),
   dbGet: (...args: unknown[]) => mockDbGet(...args),
-  dbRun: jest.fn(),
+  dbRun: (...args: unknown[]) => mockDbRun(...args),
 }));
 
 jest.mock("../logService", () => {
@@ -54,6 +55,8 @@ describe("autoLinkService", () => {
     const mockUserId = "user-789";
 
     // Helper to set up standard mocks
+    // Note: Since TASK-1037 fix, emails are queried from 'communications' table
+    // and text messages from 'messages' table
     const setupMocks = (options: {
       contactExists?: boolean;
       emails?: string[];
@@ -61,6 +64,7 @@ describe("autoLinkService", () => {
       transactionExists?: boolean;
       foundEmailIds?: string[];
       foundMessageIds?: string[];
+      emailAlreadyLinked?: Set<string>;
     }) => {
       const {
         contactExists = true,
@@ -69,9 +73,10 @@ describe("autoLinkService", () => {
         transactionExists = true,
         foundEmailIds = [],
         foundMessageIds = [],
+        emailAlreadyLinked = new Set<string>(),
       } = options;
 
-      mockDbGet.mockImplementation((sql: string) => {
+      mockDbGet.mockImplementation((sql: string, params?: unknown[]) => {
         if (sql.includes("FROM contacts")) {
           return contactExists ? { id: mockContactId } : null;
         }
@@ -86,6 +91,14 @@ describe("autoLinkService", () => {
               }
             : null;
         }
+        // For linkExistingCommunication - check if already linked
+        if (sql.includes("transaction_id FROM communications WHERE id")) {
+          const commId = params?.[0] as string;
+          if (emailAlreadyLinked.has(commId)) {
+            return { transaction_id: mockTransactionId };
+          }
+          return { transaction_id: null };
+        }
         return null;
       });
 
@@ -96,9 +109,11 @@ describe("autoLinkService", () => {
         if (sql.includes("FROM contact_phones")) {
           return phones.map((phone) => ({ phone_e164: phone }));
         }
-        if (sql.includes("FROM messages") && sql.includes("channel = 'email'")) {
+        // Emails are now queried from communications table
+        if (sql.includes("FROM communications") && sql.includes("communication_type = 'email'")) {
           return foundEmailIds.map((id) => ({ id }));
         }
+        // Text messages from messages table
         if (sql.includes("FROM messages") && sql.includes("sms")) {
           return foundMessageIds.map((id) => ({ id }));
         }
@@ -164,6 +179,8 @@ describe("autoLinkService", () => {
     });
 
     it("should link emails matching contact email addresses", async () => {
+      // With the TASK-1037 fix, emails come from the communications table
+      // and are linked using UPDATE (dbRun) instead of createCommunicationReference
       setupMocks({
         contactExists: true,
         emails: ["john@example.com"],
@@ -173,10 +190,6 @@ describe("autoLinkService", () => {
         foundMessageIds: [],
       });
 
-      mockCreateCommunicationReference
-        .mockResolvedValueOnce("ref-1")
-        .mockResolvedValueOnce("ref-2");
-
       const result = await autoLinkCommunicationsForContact({
         contactId: mockContactId,
         transactionId: mockTransactionId,
@@ -184,7 +197,10 @@ describe("autoLinkService", () => {
 
       expect(result.emailsLinked).toBe(2);
       expect(result.messagesLinked).toBe(0);
-      expect(mockCreateCommunicationReference).toHaveBeenCalledTimes(2);
+      // Emails use linkExistingCommunication (dbRun for UPDATE)
+      expect(mockDbRun).toHaveBeenCalledTimes(2);
+      // createCommunicationReference is NOT used for emails anymore
+      expect(mockCreateCommunicationReference).toHaveBeenCalledTimes(0);
     });
 
     it("should link text messages matching contact phone numbers", async () => {
@@ -213,6 +229,7 @@ describe("autoLinkService", () => {
     });
 
     it("should count already-linked communications", async () => {
+      // email-2 is already linked to this transaction
       setupMocks({
         contactExists: true,
         emails: ["john@example.com"],
@@ -220,12 +237,8 @@ describe("autoLinkService", () => {
         transactionExists: true,
         foundEmailIds: ["email-1", "email-2"],
         foundMessageIds: [],
+        emailAlreadyLinked: new Set(["email-2"]),
       });
-
-      // First email links successfully, second is already linked
-      mockCreateCommunicationReference
-        .mockResolvedValueOnce("ref-1")
-        .mockResolvedValueOnce(null); // Already linked
 
       const result = await autoLinkCommunicationsForContact({
         contactId: mockContactId,
@@ -234,6 +247,8 @@ describe("autoLinkService", () => {
 
       expect(result.emailsLinked).toBe(1);
       expect(result.alreadyLinked).toBe(1);
+      // Only one dbRun call because email-2 is already linked
+      expect(mockDbRun).toHaveBeenCalledTimes(1);
     });
 
     it("should count errors during linking", async () => {
@@ -247,9 +262,11 @@ describe("autoLinkService", () => {
       });
 
       // First succeeds, second fails
-      mockCreateCommunicationReference
-        .mockResolvedValueOnce("ref-1")
-        .mockRejectedValueOnce(new Error("Database error"));
+      mockDbRun
+        .mockImplementationOnce(() => {}) // First email succeeds
+        .mockImplementationOnce(() => {
+          throw new Error("Database error");
+        });
 
       const result = await autoLinkCommunicationsForContact({
         contactId: mockContactId,
@@ -270,8 +287,8 @@ describe("autoLinkService", () => {
         foundMessageIds: ["msg-1", "msg-2"],
       });
 
+      // Messages still use createCommunicationReference
       mockCreateCommunicationReference
-        .mockResolvedValueOnce("ref-email")
         .mockResolvedValueOnce("ref-msg-1")
         .mockResolvedValueOnce("ref-msg-2");
 
@@ -282,10 +299,12 @@ describe("autoLinkService", () => {
 
       expect(result.emailsLinked).toBe(1);
       expect(result.messagesLinked).toBe(2);
-      expect(mockCreateCommunicationReference).toHaveBeenCalledTimes(3);
+      // Emails use dbRun (1 call), messages use createCommunicationReference (2 calls)
+      expect(mockDbRun).toHaveBeenCalledTimes(1);
+      expect(mockCreateCommunicationReference).toHaveBeenCalledTimes(2);
     });
 
-    it("should call createCommunicationReference with correct parameters", async () => {
+    it("should update communication with correct transaction_id for emails", async () => {
       setupMocks({
         contactExists: true,
         emails: ["john@example.com"],
@@ -295,20 +314,20 @@ describe("autoLinkService", () => {
         foundMessageIds: [],
       });
 
-      mockCreateCommunicationReference.mockResolvedValueOnce("ref-1");
-
       await autoLinkCommunicationsForContact({
         contactId: mockContactId,
         transactionId: mockTransactionId,
       });
 
-      // Verify the call parameters
-      expect(mockCreateCommunicationReference).toHaveBeenCalledWith(
-        "email-1",
-        mockTransactionId,
-        mockUserId,
-        "auto",
-        0.85 // Email confidence
+      // Verify dbRun was called to UPDATE the communication with correct params
+      expect(mockDbRun).toHaveBeenCalledWith(
+        expect.stringContaining("UPDATE communications"),
+        expect.arrayContaining([
+          mockTransactionId,
+          "auto",
+          0.85, // Email confidence
+          "email-1",
+        ])
       );
     });
 
