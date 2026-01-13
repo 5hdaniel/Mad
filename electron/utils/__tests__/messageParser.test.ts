@@ -2,6 +2,7 @@
  * Unit tests for Message Parser Utilities
  *
  * Tests cover:
+ * - Binary plist (bplist00) format detection and parsing (TASK-1035)
  * - Text extraction from attributedBody (typedstream format)
  * - Multi-encoding support (UTF-8, UTF-16 LE/BE, Latin-1)
  * - Replacement character (U+FFFD) handling
@@ -13,11 +14,243 @@ import {
   cleanExtractedText,
   getMessageText,
   Message,
+  isBinaryPlist,
+  extractTextFromBinaryPlist,
 } from "../messageParser";
 import { FALLBACK_MESSAGES } from "../../constants";
 import { REPLACEMENT_CHAR } from "../encodingUtils";
 
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const simplePlist = require("simple-plist") as {
+  bplistCreator: (obj: unknown) => Buffer;
+  parse: (data: Buffer | string) => unknown;
+};
+
 describe("messageParser", () => {
+  /**
+   * TASK-1035: Binary plist (bplist00) format tests
+   * These tests verify the fix for iMessage corruption where binary plist
+   * data was being misinterpreted as text (showing "bplist00" garbage).
+   */
+  describe("isBinaryPlist", () => {
+    it("should detect buffer starting with bplist00 magic bytes", () => {
+      const bplistBuffer = Buffer.from("bplist00" + "\x00".repeat(20));
+      expect(isBinaryPlist(bplistBuffer)).toBe(true);
+    });
+
+    it("should return false for non-bplist buffer", () => {
+      const normalBuffer = Buffer.from("streamtyped" + "\x00".repeat(20));
+      expect(isBinaryPlist(normalBuffer)).toBe(false);
+    });
+
+    it("should return false for empty buffer", () => {
+      const emptyBuffer = Buffer.from("");
+      expect(isBinaryPlist(emptyBuffer)).toBe(false);
+    });
+
+    it("should return false for buffer smaller than magic bytes", () => {
+      const smallBuffer = Buffer.from("bplist");
+      expect(isBinaryPlist(smallBuffer)).toBe(false);
+    });
+
+    it("should return false for buffer with bplist00 not at start", () => {
+      const buffer = Buffer.from("some prefix bplist00 data");
+      expect(isBinaryPlist(buffer)).toBe(false);
+    });
+  });
+
+  describe("extractTextFromBinaryPlist", () => {
+    it("should extract text from NSKeyedArchiver plist with string in $objects", () => {
+      // Create a mock NSKeyedArchiver structure
+      const nsKeyedArchiverData = {
+        $archiver: "NSKeyedArchiver",
+        $version: 100000,
+        $objects: [
+          "$null",
+          "Hello, this is the actual message text!",
+          { "$class": { CF$UID: 3 } },
+          { "$classname": "NSMutableAttributedString" },
+        ],
+        $top: { root: { CF$UID: 2 } },
+      };
+
+      const bplistBuffer = simplePlist.bplistCreator(nsKeyedArchiverData);
+      const result = extractTextFromBinaryPlist(bplistBuffer);
+
+      expect(result).toBe("Hello, this is the actual message text!");
+    });
+
+    it("should return longest non-metadata string from $objects", () => {
+      const nsKeyedArchiverData = {
+        $archiver: "NSKeyedArchiver",
+        $objects: [
+          "$null",
+          "short",
+          "This is a longer message that should be selected",
+          "__kIMMessagePartAttributeName",
+        ],
+      };
+
+      const bplistBuffer = simplePlist.bplistCreator(nsKeyedArchiverData);
+      const result = extractTextFromBinaryPlist(bplistBuffer);
+
+      expect(result).toBe("This is a longer message that should be selected");
+    });
+
+    it("should skip metadata strings like $null and NS prefixed", () => {
+      const nsKeyedArchiverData = {
+        $archiver: "NSKeyedArchiver",
+        $objects: [
+          "$null",
+          "NSMutableAttributedString",
+          "NSAttributedString",
+          "Actual user message",
+        ],
+      };
+
+      const bplistBuffer = simplePlist.bplistCreator(nsKeyedArchiverData);
+      const result = extractTextFromBinaryPlist(bplistBuffer);
+
+      expect(result).toBe("Actual user message");
+    });
+
+    it("should extract text from NS.string property", () => {
+      const nsKeyedArchiverData = {
+        $archiver: "NSKeyedArchiver",
+        $objects: [
+          "$null",
+          { "NS.string": "Message from NS.string property" },
+        ],
+      };
+
+      const bplistBuffer = simplePlist.bplistCreator(nsKeyedArchiverData);
+      const result = extractTextFromBinaryPlist(bplistBuffer);
+
+      expect(result).toBe("Message from NS.string property");
+    });
+
+    it("should return null for non-NSKeyedArchiver plist", () => {
+      const regularPlist = {
+        someKey: "someValue",
+        anotherKey: 123,
+      };
+
+      const bplistBuffer = simplePlist.bplistCreator(regularPlist);
+      const result = extractTextFromBinaryPlist(bplistBuffer);
+
+      expect(result).toBeNull();
+    });
+
+    it("should return null for plist without $objects", () => {
+      const incompletePlist = {
+        $archiver: "NSKeyedArchiver",
+        $version: 100000,
+        // Missing $objects
+      };
+
+      const bplistBuffer = simplePlist.bplistCreator(incompletePlist);
+      const result = extractTextFromBinaryPlist(bplistBuffer);
+
+      expect(result).toBeNull();
+    });
+
+    it("should return null if no valid string candidates found", () => {
+      const noStringsPlist = {
+        $archiver: "NSKeyedArchiver",
+        $objects: ["$null", "NSMutableAttributedString"],
+      };
+
+      const bplistBuffer = simplePlist.bplistCreator(noStringsPlist);
+      const result = extractTextFromBinaryPlist(bplistBuffer);
+
+      expect(result).toBeNull();
+    });
+
+    it("should handle unicode text correctly", () => {
+      const nsKeyedArchiverData = {
+        $archiver: "NSKeyedArchiver",
+        $objects: [
+          "$null",
+          "Hello! \u{1F44B} Let's meet at caf\u00e9 \u2014 it'll be fun!",
+        ],
+      };
+
+      const bplistBuffer = simplePlist.bplistCreator(nsKeyedArchiverData);
+      const result = extractTextFromBinaryPlist(bplistBuffer);
+
+      expect(result).toBe("Hello! \u{1F44B} Let's meet at caf\u00e9 \u2014 it'll be fun!");
+    });
+
+    it("should handle CJK characters", () => {
+      const nsKeyedArchiverData = {
+        $archiver: "NSKeyedArchiver",
+        $objects: [
+          "$null",
+          "\u4f60\u597d \u3053\u3093\u306b\u3061\u306f \uc548\ub155\ud558\uc138\uc694",
+        ],
+      };
+
+      const bplistBuffer = simplePlist.bplistCreator(nsKeyedArchiverData);
+      const result = extractTextFromBinaryPlist(bplistBuffer);
+
+      expect(result).toBe("\u4f60\u597d \u3053\u3093\u306b\u3061\u306f \uc548\ub155\ud558\uc138\uc694");
+    });
+
+    it("should handle invalid buffer gracefully", () => {
+      const invalidBuffer = Buffer.from("not a valid plist at all");
+      const result = extractTextFromBinaryPlist(invalidBuffer);
+
+      // Should return null without throwing
+      expect(result).toBeNull();
+    });
+  });
+
+  describe("extractTextFromAttributedBody - binary plist integration", () => {
+    it("should extract text from binary plist buffer", async () => {
+      const nsKeyedArchiverData = {
+        $archiver: "NSKeyedArchiver",
+        $objects: [
+          "$null",
+          "This is a message stored in binary plist format",
+        ],
+      };
+
+      const bplistBuffer = simplePlist.bplistCreator(nsKeyedArchiverData);
+      const result = await extractTextFromAttributedBody(bplistBuffer);
+
+      expect(result).toBe("This is a message stored in binary plist format");
+    });
+
+    it("should prefer binary plist parsing over typedstream for bplist00 buffers", async () => {
+      // Even if the plist contains "streamtyped" text, it should use bplist parsing
+      const nsKeyedArchiverData = {
+        $archiver: "NSKeyedArchiver",
+        $objects: [
+          "$null",
+          "streamtyped is just text here, not a marker",
+        ],
+      };
+
+      const bplistBuffer = simplePlist.bplistCreator(nsKeyedArchiverData);
+      const result = await extractTextFromAttributedBody(bplistBuffer);
+
+      expect(result).toBe("streamtyped is just text here, not a marker");
+    });
+
+    it("should fall back to heuristics if binary plist has no extractable text", async () => {
+      const noStringsPlist = {
+        $archiver: "NSKeyedArchiver",
+        $objects: ["$null"],
+      };
+
+      const bplistBuffer = simplePlist.bplistCreator(noStringsPlist);
+      const result = await extractTextFromAttributedBody(bplistBuffer);
+
+      // Should return a fallback message, not crash
+      expect(typeof result).toBe("string");
+    });
+  });
+
   describe("extractTextFromAttributedBody", () => {
     it("should return fallback for null input", async () => {
       expect(await extractTextFromAttributedBody(null)).toBe(
