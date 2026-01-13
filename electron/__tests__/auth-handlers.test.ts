@@ -72,6 +72,7 @@ jest.mock("../services/databaseService", () => ({
     deleteSession: jest.fn(),
     acceptTerms: jest.fn(),
     hasCompletedEmailOnboarding: jest.fn(),
+    completeEmailOnboarding: jest.fn().mockResolvedValue(undefined),
     getOAuthToken: jest.fn(),
   },
 }));
@@ -160,6 +161,7 @@ jest.mock("../services/logService", () => ({
     info: jest.fn().mockResolvedValue(undefined),
     error: jest.fn().mockResolvedValue(undefined),
     warn: jest.fn().mockResolvedValue(undefined),
+    debug: jest.fn().mockResolvedValue(undefined),
   },
 }));
 
@@ -243,7 +245,7 @@ describe("Auth Handlers", () => {
         mockDatabaseService,
         mockSupabaseService,
       );
-      expect(mockLogService.info).toHaveBeenCalledWith(
+      expect(mockLogService.debug).toHaveBeenCalledWith(
         "Database initialized",
         "AuthHandlers",
       );
@@ -592,6 +594,11 @@ describe("Auth Handlers", () => {
     beforeEach(() => {
       mockDatabaseService.hasCompletedEmailOnboarding.mockReset();
       mockDatabaseService.getOAuthToken.mockReset();
+      // Add completeEmailOnboarding mock for auto-correction tests
+      (mockDatabaseService as jest.Mocked<typeof databaseService> & {
+        completeEmailOnboarding: jest.Mock;
+      }).completeEmailOnboarding =
+        jest.fn().mockResolvedValue(undefined);
     });
 
     it("should return completed=true when onboarding done and mailbox token exists", async () => {
@@ -617,22 +624,23 @@ describe("Auth Handlers", () => {
       expect(result.success).toBe(true);
       expect(result.completed).toBe(false);
       expect(mockLogService.info).toHaveBeenCalledWith(
-        "Email onboarding was completed but no mailbox token found",
+        "Email onboarding flag is true but no valid mailbox token found",
         "AuthHandlers",
         expect.any(Object),
       );
     });
 
-    it("should return completed=false when onboarding not done", async () => {
+    it("should return completed=false when onboarding not done and no token", async () => {
       mockDatabaseService.hasCompletedEmailOnboarding.mockResolvedValue(false);
+      mockDatabaseService.getOAuthToken.mockResolvedValue(null);
 
       const handler = registeredHandlers.get("auth:check-email-onboarding");
       const result = await handler(mockEvent, TEST_USER_ID);
 
       expect(result.success).toBe(true);
       expect(result.completed).toBe(false);
-      // Should not check for tokens if onboarding not completed
-      expect(mockDatabaseService.getOAuthToken).not.toHaveBeenCalled();
+      // Now we always check for tokens first (TASK-1039 fix)
+      expect(mockDatabaseService.getOAuthToken).toHaveBeenCalled();
     });
 
     it("should handle invalid user ID", async () => {
@@ -651,6 +659,53 @@ describe("Auth Handlers", () => {
       await handler(mockEvent, TEST_USER_ID);
 
       // Should check for both providers
+      expect(mockDatabaseService.getOAuthToken).toHaveBeenCalledWith(
+        TEST_USER_ID,
+        "google",
+        "mailbox",
+      );
+      expect(mockDatabaseService.getOAuthToken).toHaveBeenCalledWith(
+        TEST_USER_ID,
+        "microsoft",
+        "mailbox",
+      );
+    });
+
+    // TASK-1039: Token-first logic and auto-correction tests
+    it("should return completed=true and auto-correct flag when token exists but flag is false (TASK-1039)", async () => {
+      // This is the bug scenario: user has token but flag wasn't set
+      mockDatabaseService.hasCompletedEmailOnboarding.mockResolvedValue(false);
+      mockDatabaseService.getOAuthToken.mockResolvedValue({
+        access_token: "test-token",
+      });
+
+      const handler = registeredHandlers.get("auth:check-email-onboarding");
+      const result = await handler(mockEvent, TEST_USER_ID);
+
+      expect(result.success).toBe(true);
+      // Should return completed=true because token exists (token is source of truth)
+      expect(result.completed).toBe(true);
+      // Should auto-correct the flag
+      expect(
+        (mockDatabaseService as jest.Mocked<typeof databaseService> & {
+          completeEmailOnboarding: jest.Mock;
+        }).completeEmailOnboarding,
+      ).toHaveBeenCalledWith(TEST_USER_ID);
+      expect(mockLogService.info).toHaveBeenCalledWith(
+        "Auto-correcting inconsistent email onboarding state: token exists but flag was false",
+        "AuthHandlers",
+        expect.any(Object),
+      );
+    });
+
+    it("should check tokens before checking flag (TASK-1039)", async () => {
+      mockDatabaseService.hasCompletedEmailOnboarding.mockResolvedValue(false);
+      mockDatabaseService.getOAuthToken.mockResolvedValue(null);
+
+      const handler = registeredHandlers.get("auth:check-email-onboarding");
+      await handler(mockEvent, TEST_USER_ID);
+
+      // Tokens are checked first, regardless of flag status
       expect(mockDatabaseService.getOAuthToken).toHaveBeenCalledWith(
         TEST_USER_ID,
         "google",

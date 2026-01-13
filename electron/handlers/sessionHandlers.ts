@@ -274,6 +274,13 @@ async function handleCompleteEmailOnboarding(
 
 /**
  * Check email onboarding status
+ *
+ * IMPORTANT: This checks for a valid mailbox token FIRST, regardless of the
+ * email_onboarding_completed flag. This fixes a state mismatch bug (TASK-1039)
+ * where users could have a valid token but the flag not set (race condition,
+ * error, or interrupted flow), causing confusing UI states.
+ *
+ * If a token exists but the flag is false, we auto-correct the flag.
  */
 async function handleCheckEmailOnboarding(
   _event: IpcMainInvokeEvent,
@@ -282,33 +289,46 @@ async function handleCheckEmailOnboarding(
   try {
     const validatedUserId = validateUserId(userId)!;
 
+    // Check for valid mailbox token FIRST, regardless of flag
+    // This is the source of truth for whether email is actually connected
+    const googleToken = await databaseService.getOAuthToken(
+      validatedUserId,
+      "google",
+      "mailbox"
+    );
+    const microsoftToken = await databaseService.getOAuthToken(
+      validatedUserId,
+      "microsoft",
+      "mailbox"
+    );
+    const hasValidMailboxToken = !!(googleToken || microsoftToken);
+
+    // Check the flag for comparison/logging
     const onboardingCompleted =
       await databaseService.hasCompletedEmailOnboarding(validatedUserId);
 
-    let hasValidMailboxToken = false;
-    if (onboardingCompleted) {
-      const googleToken = await databaseService.getOAuthToken(
-        validatedUserId,
-        "google",
-        "mailbox"
+    // Auto-correct inconsistent state: token exists but flag is false
+    if (hasValidMailboxToken && !onboardingCompleted) {
+      await logService.info(
+        "Auto-correcting inconsistent email onboarding state: token exists but flag was false",
+        "AuthHandlers",
+        { userId: validatedUserId.substring(0, 8) + "..." }
       );
-      const microsoftToken = await databaseService.getOAuthToken(
-        validatedUserId,
-        "microsoft",
-        "mailbox"
-      );
-      hasValidMailboxToken = !!(googleToken || microsoftToken);
-
-      if (!hasValidMailboxToken) {
-        await logService.info(
-          "Email onboarding was completed but no mailbox token found",
-          "AuthHandlers",
-          { userId: validatedUserId.substring(0, 8) + "..." }
-        );
-      }
+      await databaseService.completeEmailOnboarding(validatedUserId);
     }
 
-    const completed = onboardingCompleted && hasValidMailboxToken;
+    // Also handle the reverse: flag is true but no token
+    if (onboardingCompleted && !hasValidMailboxToken) {
+      await logService.info(
+        "Email onboarding flag is true but no valid mailbox token found",
+        "AuthHandlers",
+        { userId: validatedUserId.substring(0, 8) + "..." }
+      );
+    }
+
+    // The completed status is based on having a valid token
+    // (token is the source of truth, not the flag)
+    const completed = hasValidMailboxToken;
 
     await logService.info("Email onboarding check", "AuthHandlers", {
       userId: validatedUserId.substring(0, 8) + "...",
