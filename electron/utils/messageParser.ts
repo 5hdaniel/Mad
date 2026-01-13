@@ -3,12 +3,21 @@
  * Handles extraction of text from macOS Messages attributed body format
  *
  * The attributedBody field in macOS Messages contains an NSAttributedString
- * serialized using Apple's typedstream format (NOT NSKeyedArchiver/bplist).
+ * serialized in one of two formats:
  *
- * This module uses the imessage-parser library for proper typedstream parsing,
- * with multi-encoding fallback support to handle various text encodings
- * (UTF-8, UTF-16 LE/BE, Latin-1) that may appear in typedstream data.
+ * 1. **Binary plist (bplist00)** - NSKeyedArchiver format, parsed with simple-plist
+ *    - Starts with "bplist00" magic bytes
+ *    - Contains $archiver, $objects, $top keys
+ *    - String content stored in $objects array
  *
+ * 2. **Typedstream format** - Legacy Apple format, parsed with imessage-parser
+ *    - Starts with "streamtyped" or other markers
+ *    - Contains NSString markers and inline text
+ *
+ * TASK-1035: Added binary plist support to fix corruption where bplist data
+ * was being misinterpreted as text (showing "bplist00" garbage characters).
+ *
+ * @see https://fatbobman.com/en/posts/deep-dive-into-imessage/
  * @see https://github.com/alexkwolfe/imessage-parser
  */
 
@@ -17,6 +26,12 @@
 const { parseAttributedBody: parseTypedStream } = require("imessage-parser") as {
   parseAttributedBody: (buffer: Buffer, options?: { cleanOutput?: boolean }) => { text: string };
 };
+
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const simplePlist = require("simple-plist") as {
+  parse: (data: Buffer | string) => unknown;
+};
+
 import {
   MAX_MESSAGE_TEXT_LENGTH,
   MIN_MESSAGE_TEXT_LENGTH,
@@ -31,6 +46,122 @@ import {
 } from "./encodingUtils";
 
 /**
+ * Magic bytes for binary plist format
+ * Binary plists start with "bplist00" (8 bytes)
+ */
+const BPLIST_MAGIC = Buffer.from("bplist00");
+
+/**
+ * Check if a buffer is a binary plist (bplist00 format)
+ * @param buffer - Buffer to check
+ * @returns True if buffer starts with bplist00 magic bytes
+ */
+export function isBinaryPlist(buffer: Buffer): boolean {
+  if (buffer.length < BPLIST_MAGIC.length) {
+    return false;
+  }
+  return buffer.subarray(0, BPLIST_MAGIC.length).equals(BPLIST_MAGIC);
+}
+
+/**
+ * NSKeyedArchiver plist structure (simplified)
+ * The actual structure is complex, but we extract text from $objects
+ */
+interface NSKeyedArchiverPlist {
+  $archiver?: string;
+  $objects?: unknown[];
+  $top?: { root?: { CF$UID?: number } | number };
+  $version?: number;
+}
+
+/**
+ * Extract text from binary plist containing NSAttributedString
+ *
+ * NSKeyedArchiver stores objects in $objects array with references.
+ * The string content is typically stored as:
+ * - Direct string values in $objects
+ * - Objects with NS.string or NSString keys
+ *
+ * @param buffer - Binary plist buffer
+ * @returns Extracted text or null if parsing fails
+ */
+export function extractTextFromBinaryPlist(buffer: Buffer): string | null {
+  try {
+    const parsed = simplePlist.parse(buffer) as NSKeyedArchiverPlist;
+
+    // Verify this is an NSKeyedArchiver plist
+    if (parsed.$archiver !== "NSKeyedArchiver" || !parsed.$objects) {
+      logService.debug("Not an NSKeyedArchiver plist or missing $objects", "MessageParser");
+      return null;
+    }
+
+    const objects = parsed.$objects;
+
+    // Strategy 1: Find the longest string in $objects
+    // NSAttributedString stores the text content as a string in the objects array
+    const stringCandidates: string[] = [];
+
+    for (const obj of objects) {
+      // Direct string value
+      if (typeof obj === "string" && obj.length > 0) {
+        // Skip metadata strings
+        if (!isNSKeyedArchiverMetadata(obj)) {
+          stringCandidates.push(obj);
+        }
+      }
+
+      // Object with NS.string property (NSMutableString)
+      if (obj && typeof obj === "object" && "NS.string" in obj) {
+        const nsString = (obj as { "NS.string": unknown })["NS.string"];
+        if (typeof nsString === "string" && nsString.length > 0) {
+          stringCandidates.push(nsString);
+        }
+      }
+
+      // Object with NSString property
+      if (obj && typeof obj === "object" && "NSString" in obj) {
+        const nsString = (obj as { NSString: unknown }).NSString;
+        if (typeof nsString === "string" && nsString.length > 0) {
+          stringCandidates.push(nsString);
+        }
+      }
+    }
+
+    if (stringCandidates.length === 0) {
+      logService.debug("No string candidates found in binary plist", "MessageParser");
+      return null;
+    }
+
+    // Return the longest non-metadata string (likely the message content)
+    stringCandidates.sort((a, b) => b.length - a.length);
+    const result = stringCandidates[0];
+
+    logService.debug(`Extracted text from binary plist: ${result.length} chars`, "MessageParser");
+    return result;
+  } catch (error) {
+    logService.debug("Binary plist parsing failed", "MessageParser", {
+      error: (error as Error).message,
+    });
+    return null;
+  }
+}
+
+/**
+ * Check if a string is NSKeyedArchiver metadata (not actual content)
+ */
+function isNSKeyedArchiverMetadata(text: string): boolean {
+  return (
+    text === "$null" ||
+    text.startsWith("NS") ||
+    text.startsWith("__kIM") ||
+    text.includes("AttributeName") ||
+    text.includes("MessagePart") ||
+    text.includes("$class") ||
+    /^[A-Z]{2,}\.[a-z]+$/.test(text) // e.g., "NS.string", "NS.data"
+  );
+}
+
+/**
  * Message object interface
  */
 export interface Message {
@@ -40,9 +171,14 @@ export interface Message {
 }
 
 /**
- * Extract text from macOS Messages attributedBody blob (typedstream format)
- * Uses imessage-parser library for proper typedstream parsing, with
- * multi-encoding fallback to handle UTF-16 and other encodings.
+ * Extract text from macOS Messages attributedBody blob
+ *
+ * Supports two formats:
+ * 1. Binary plist (bplist00) - NSKeyedArchiver format, parsed with simple-plist
+ * 2. Typedstream format - Legacy Apple format, parsed with imessage-parser
+ *
+ * TASK-1035: Added binary plist detection and parsing to fix corruption where
+ * bplist data was being misinterpreted as text (showing "bplist00" garbage).
  *
  * IMPORTANT: This function NEVER strips U+FFFD replacement characters as that
  * would cause data loss. Instead, it attempts multiple encodings to properly
@@ -58,6 +194,25 @@ export async function extractTextFromAttributedBody(
     return FALLBACK_MESSAGES.REACTION_OR_SYSTEM;
   }
 
+  // TASK-1035: Check for binary plist format FIRST
+  // Binary plists start with "bplist00" and require different parsing
+  if (isBinaryPlist(attributedBodyBuffer)) {
+    logService.debug("Detected binary plist format, using simple-plist parser", "MessageParser");
+
+    const bplistResult = extractTextFromBinaryPlist(attributedBodyBuffer);
+    if (bplistResult && bplistResult.length >= MIN_MESSAGE_TEXT_LENGTH) {
+      const cleaned = cleanExtractedText(bplistResult);
+      if (cleaned.length >= MIN_MESSAGE_TEXT_LENGTH && cleaned.length < MAX_MESSAGE_TEXT_LENGTH) {
+        return cleaned;
+      }
+    }
+
+    // Binary plist parsing failed - try heuristic extraction as fallback
+    logService.debug("Binary plist text extraction failed, trying heuristic fallback", "MessageParser");
+    return await tryFallbackExtraction(attributedBodyBuffer);
+  }
+
+  // Not binary plist - use typedstream parser (imessage-parser)
   try {
     // Use imessage-parser library for proper typedstream parsing
     const result = parseTypedStream(attributedBodyBuffer, { cleanOutput: true });
