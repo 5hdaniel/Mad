@@ -912,5 +912,85 @@ describe("AuditTransactionModal", () => {
       // Modal should render without errors
       expect(screen.getByText(/edit transaction/i)).toBeInTheDocument();
     });
+
+    // TASK-1038: When editTransaction doesn't have contact_assignments,
+    // the hook should fetch them via getDetails() API call
+    it("should fetch contact_assignments via getDetails when not included in editTransaction", async () => {
+      // Transaction WITHOUT contact_assignments (typical from getAll())
+      const txnWithoutContactAssignments = {
+        ...mockEditTransaction,
+        // No contact_assignments field - simulates data from transactions.getAll()
+      };
+
+      // Mock getDetails to return contact_assignments
+      window.api.transactions.getDetails.mockResolvedValue({
+        success: true,
+        transaction: {
+          ...mockEditTransaction,
+          contact_assignments: [
+            {
+              id: "assign-1",
+              contact_id: "contact-1",
+              contact_name: "John Fetched",
+              contact_email: "john@example.com",
+              role: "client",
+              specific_role: "client",
+              is_primary: 1,
+            },
+          ],
+        },
+      });
+
+      renderWithProvider(
+        <AuditTransactionModal
+          userId={mockUserId}
+          provider={mockProvider}
+          onClose={mockOnClose}
+          onSuccess={mockOnSuccess}
+          editTransaction={txnWithoutContactAssignments}
+        />,
+      );
+
+      // Modal should render without errors
+      expect(screen.getByText(/edit transaction/i)).toBeInTheDocument();
+
+      // Should call getDetails to fetch full transaction data
+      await waitFor(() => {
+        expect(window.api.transactions.getDetails).toHaveBeenCalledWith(
+          mockEditTransaction.id,
+        );
+      });
+    });
+
+    it("should handle getDetails API failure gracefully in edit mode", async () => {
+      // Transaction WITHOUT contact_assignments
+      const txnWithoutContactAssignments = {
+        ...mockEditTransaction,
+      };
+
+      // Mock getDetails to fail
+      window.api.transactions.getDetails.mockResolvedValue({
+        success: false,
+        error: "Failed to fetch transaction details",
+      });
+
+      renderWithProvider(
+        <AuditTransactionModal
+          userId={mockUserId}
+          provider={mockProvider}
+          onClose={mockOnClose}
+          onSuccess={mockOnSuccess}
+          editTransaction={txnWithoutContactAssignments}
+        />,
+      );
+
+      // Modal should still render without errors (graceful degradation)
+      expect(screen.getByText(/edit transaction/i)).toBeInTheDocument();
+
+      // Should have attempted to call getDetails
+      await waitFor(() => {
+        expect(window.api.transactions.getDetails).toHaveBeenCalled();
+      });
+    });
   });
 });

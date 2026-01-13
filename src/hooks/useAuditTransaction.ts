@@ -172,65 +172,67 @@ export function useAuditTransaction({
 
   /**
    * Pre-fill form when editing an existing transaction
+   * TASK-1038: Fetch full transaction details (including contact_assignments)
+   * since the transaction passed from parent may not have them populated.
    */
   useEffect(() => {
-    if (editTransaction) {
+    if (!editTransaction) return;
+
+    // Helper function to populate form data from transaction
+    const populateFormData = (txn: Transaction) => {
       let coordinates: Coordinates | null = null;
-      if (editTransaction.property_coordinates) {
+      if (txn.property_coordinates) {
         try {
-          coordinates = JSON.parse(editTransaction.property_coordinates);
+          coordinates = JSON.parse(txn.property_coordinates);
         } catch {
           // Invalid JSON, leave as null
         }
       }
 
       const prefillData: AddressData = {
-        property_address: editTransaction.property_address || "",
-        property_street: editTransaction.property_street || "",
-        property_city: editTransaction.property_city || "",
-        property_state: editTransaction.property_state || "",
-        property_zip: editTransaction.property_zip || "",
+        property_address: txn.property_address || "",
+        property_street: txn.property_street || "",
+        property_city: txn.property_city || "",
+        property_state: txn.property_state || "",
+        property_zip: txn.property_zip || "",
         property_coordinates: coordinates,
-        transaction_type: editTransaction.transaction_type || "purchase",
-        started_at: editTransaction.started_at
-          ? (typeof editTransaction.started_at === "string"
-              ? editTransaction.started_at.split("T")[0]
-              : editTransaction.started_at.toISOString().split("T")[0])
+        transaction_type: txn.transaction_type || "purchase",
+        started_at: txn.started_at
+          ? (typeof txn.started_at === "string"
+              ? txn.started_at.split("T")[0]
+              : txn.started_at.toISOString().split("T")[0])
           : getDefaultStartDate(),
-        closed_at: editTransaction.closed_at
-          ? (typeof editTransaction.closed_at === "string"
-              ? editTransaction.closed_at.split("T")[0]
-              : editTransaction.closed_at.toISOString().split("T")[0])
+        closed_at: txn.closed_at
+          ? (typeof txn.closed_at === "string"
+              ? txn.closed_at.split("T")[0]
+              : txn.closed_at.toISOString().split("T")[0])
           : undefined,
       };
 
       setAddressData(prefillData);
       setOriginalAddressData(prefillData);
+    };
 
-      // TASK-1030: Load contacts from contact_assignments (junction table) first,
-      // fall back to suggested_contacts JSON if not available.
-      // contact_assignments is populated by getTransactionDetails() and contains
-      // actual assigned contacts from the database.
-      // suggested_contacts is a legacy JSON field populated during auto-detection.
-      const extendedTransaction = editTransaction as Transaction & {
-        contact_assignments?: Array<{
-          id: string;
-          contact_id: string;
-          contact_name?: string;
-          contact_email?: string;
-          contact_phone?: string;
-          contact_company?: string;
-          role?: string;
-          specific_role?: string;
-          is_primary?: number;
-          notes?: string;
-        }>;
-      };
-
-      if (extendedTransaction.contact_assignments && extendedTransaction.contact_assignments.length > 0) {
+    // Helper function to populate contact assignments from transaction data
+    const populateContactAssignments = (
+      contactAssignmentsData: Array<{
+        id: string;
+        contact_id: string;
+        contact_name?: string;
+        contact_email?: string;
+        contact_phone?: string;
+        contact_company?: string;
+        role?: string;
+        specific_role?: string;
+        is_primary?: number;
+        notes?: string;
+      }> | undefined,
+      suggestedContactsJson: string | undefined
+    ) => {
+      if (contactAssignmentsData && contactAssignmentsData.length > 0) {
         // Use actual contact assignments from junction table
         const assignments: ContactAssignments = {};
-        extendedTransaction.contact_assignments.forEach((ca) => {
+        contactAssignmentsData.forEach((ca) => {
           // Use role field first, fall back to specific_role (TASK-995 fix)
           const role = ca.role || ca.specific_role;
           if (role && ca.contact_id) {
@@ -249,10 +251,10 @@ export function useAuditTransaction({
           }
         });
         setContactAssignments(assignments);
-      } else if (editTransaction.suggested_contacts) {
+      } else if (suggestedContactsJson) {
         // Fall back to suggested_contacts JSON for legacy data
         try {
-          const suggestedContacts = JSON.parse(editTransaction.suggested_contacts);
+          const suggestedContacts = JSON.parse(suggestedContactsJson);
           const assignments: ContactAssignments = {};
           if (Array.isArray(suggestedContacts)) {
             suggestedContacts.forEach((sc: { role?: string; contact_id?: string; is_primary?: boolean; notes?: string }) => {
@@ -273,7 +275,85 @@ export function useAuditTransaction({
           // Invalid JSON, leave assignments empty
         }
       }
-    }
+    };
+
+    // Immediately populate form data from the passed transaction
+    populateFormData(editTransaction);
+
+    // TASK-1038: Fetch full transaction details to get contact_assignments
+    // The transaction passed from parent (e.g., Transactions.tsx) typically
+    // comes from getAll() which doesn't include contact_assignments.
+    // We need to call getDetails() to get the full data including contacts.
+    const fetchFullDetails = async () => {
+      try {
+        const result = await window.api.transactions.getDetails(editTransaction.id);
+        if (result.success && result.transaction) {
+          const fullTransaction = result.transaction as Transaction & {
+            contact_assignments?: Array<{
+              id: string;
+              contact_id: string;
+              contact_name?: string;
+              contact_email?: string;
+              contact_phone?: string;
+              contact_company?: string;
+              role?: string;
+              specific_role?: string;
+              is_primary?: number;
+              notes?: string;
+            }>;
+          };
+
+          // Populate contact assignments from the fetched data
+          populateContactAssignments(
+            fullTransaction.contact_assignments,
+            fullTransaction.suggested_contacts
+          );
+        } else {
+          // API call failed - fall back to data from passed transaction
+          const extendedTransaction = editTransaction as Transaction & {
+            contact_assignments?: Array<{
+              id: string;
+              contact_id: string;
+              contact_name?: string;
+              contact_email?: string;
+              contact_phone?: string;
+              contact_company?: string;
+              role?: string;
+              specific_role?: string;
+              is_primary?: number;
+              notes?: string;
+            }>;
+          };
+          populateContactAssignments(
+            extendedTransaction.contact_assignments,
+            editTransaction.suggested_contacts
+          );
+        }
+      } catch (err) {
+        console.error("[useAuditTransaction] Failed to fetch transaction details:", err);
+        // On error, fall back to data from passed transaction
+        const extendedTransaction = editTransaction as Transaction & {
+          contact_assignments?: Array<{
+            id: string;
+            contact_id: string;
+            contact_name?: string;
+            contact_email?: string;
+            contact_phone?: string;
+            contact_company?: string;
+            role?: string;
+            specific_role?: string;
+            is_primary?: number;
+            notes?: string;
+          }>;
+        };
+        populateContactAssignments(
+          extendedTransaction.contact_assignments,
+          editTransaction.suggested_contacts
+        );
+      }
+    };
+
+    fetchFullDetails();
   }, [editTransaction]);
 
   /**
