@@ -37,6 +37,7 @@ import {
   UnlinkEmailModal,
   EmailViewModal,
   RejectReasonModal,
+  EditContactsModal,
 } from "./transactionDetailsModule";
 
 interface TransactionDetailsComponentProps {
@@ -142,6 +143,7 @@ function TransactionDetails({
   const [showRejectReasonModal, setShowRejectReasonModal] = useState<boolean>(false);
   const [rejectReason, setRejectReason] = useState<string>("");
   const [showEditModal, setShowEditModal] = useState<boolean>(false);
+  const [showEditContactsModal, setShowEditContactsModal] = useState<boolean>(false);
 
   // Check if transaction was rejected
   const isRejected = transaction.detection_status === "rejected";
@@ -319,6 +321,7 @@ function TransactionDetails({
               onAcceptSuggestion={handleAcceptSuggestionWithCallbacks}
               onRejectSuggestion={handleRejectSuggestionWithCallbacks}
               onAcceptAll={handleAcceptAllWithCallbacks}
+              onEditContacts={() => setShowEditContactsModal(true)}
             />
           )}
 
@@ -420,6 +423,19 @@ function TransactionDetails({
             onTransactionUpdated?.();
           }}
           editTransaction={transaction}
+        />
+      )}
+
+      {/* Edit Contacts Modal - Direct access to contact assignment */}
+      {showEditContactsModal && (
+        <EditContactsModal
+          transaction={transaction}
+          onClose={() => setShowEditContactsModal(false)}
+          onSave={() => {
+            loadDetails();
+            onTransactionUpdated?.();
+            showSuccess("Contacts updated successfully");
+          }}
         />
       )}
 
