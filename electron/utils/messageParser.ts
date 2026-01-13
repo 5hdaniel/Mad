@@ -27,6 +27,17 @@ const { parseAttributedBody: parseTypedStream } = require("imessage-parser") as 
   parseAttributedBody: (buffer: Buffer, options?: { cleanOutput?: boolean }) => { text: string };
 };
 
+/**
+ * Preamble bytes that appear after NSString marker in typedstream format.
+ * There are two variants:
+ * - REGULAR (0x94): Used for immutable NSString in simple messages
+ * - MUTABLE (0x95): Used for NSMutableString in rich messages (links, calendars, etc.)
+ *
+ * The imessage-parser library only handles REGULAR, causing rich messages to fail.
+ */
+const NSSTRING_PREAMBLE_REGULAR = Buffer.from([0x01, 0x94, 0x84, 0x01, 0x2b]);
+const NSSTRING_PREAMBLE_MUTABLE = Buffer.from([0x01, 0x95, 0x84, 0x01, 0x2b]);
+
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const simplePlist = require("simple-plist") as {
   parse: (data: Buffer | string) => unknown;
@@ -162,6 +173,80 @@ function isNSKeyedArchiverMetadata(text: string): boolean {
 }
 
 /**
+ * Custom typedstream parser that handles both regular and mutable NSString preambles.
+ *
+ * The imessage-parser library only recognizes the REGULAR preamble (0x94),
+ * but rich messages (links, calendar events, etc.) use MUTABLE preamble (0x95).
+ * This causes the library to misread the length byte and return garbage.
+ *
+ * This function properly handles both cases.
+ *
+ * @param buffer - Typedstream buffer to parse
+ * @returns Extracted text or null if parsing fails
+ */
+export function extractTextFromTypedstream(buffer: Buffer): string | null {
+  const results: string[] = [];
+  let offset = 0;
+  const nsStringMarker = Buffer.from("NSString");
+
+  while (offset < buffer.length) {
+    const idx = buffer.indexOf(nsStringMarker, offset);
+    if (idx === -1) break;
+
+    let pos = idx + 8; // After "NSString"
+
+    // Check for preambles (both regular and mutable)
+    if (pos + 5 <= buffer.length) {
+      const nextBytes = buffer.subarray(pos, pos + 5);
+      if (
+        nextBytes.equals(NSSTRING_PREAMBLE_REGULAR) ||
+        nextBytes.equals(NSSTRING_PREAMBLE_MUTABLE)
+      ) {
+        pos += 5; // Skip preamble
+      }
+    }
+
+    if (pos >= buffer.length) break;
+
+    // Read length
+    const lengthByte = buffer[pos++];
+    let length: number;
+
+    if (lengthByte === 0x81) {
+      // Extended length (2 bytes little-endian)
+      if (pos + 2 > buffer.length) break;
+      length = buffer[pos] | (buffer[pos + 1] << 8);
+      pos += 2;
+    } else {
+      length = lengthByte;
+    }
+
+    // Validate length
+    if (length > 0 && length <= buffer.length - pos && length < 10000) {
+      const text = buffer.subarray(pos, pos + length).toString("utf8");
+      // Filter out metadata strings
+      if (
+        text.length > 2 &&
+        !text.includes("__kIM") &&
+        !text.includes("NSData") &&
+        !text.includes("NSDictionary") &&
+        !text.startsWith("NS.")
+      ) {
+        results.push(text);
+      }
+    }
+
+    offset = idx + 1;
+  }
+
+  if (results.length === 0) return null;
+
+  // Return longest result (likely the actual message content)
+  results.sort((a, b) => b.length - a.length);
+  return results[0];
+}
+
+/**
  * Message object interface
  */
 export interface Message {
@@ -212,9 +297,20 @@ export async function extractTextFromAttributedBody(
     return await tryFallbackExtraction(attributedBodyBuffer);
   }
 
-  // Not binary plist - use typedstream parser (imessage-parser)
+  // Not binary plist - use typedstream parser
+  // TRY OUR CUSTOM PARSER FIRST - it handles both regular and mutable NSString preambles
+  // The imessage-parser library only handles regular preamble (0x94), failing on rich messages
+  const customResult = extractTextFromTypedstream(attributedBodyBuffer);
+  if (customResult && customResult.length >= MIN_MESSAGE_TEXT_LENGTH) {
+    const cleaned = cleanExtractedText(customResult);
+    if (cleaned.length >= MIN_MESSAGE_TEXT_LENGTH && cleaned.length < MAX_MESSAGE_TEXT_LENGTH) {
+      logService.debug(`Custom typedstream parser succeeded: ${cleaned.length} chars`, "MessageParser");
+      return cleaned;
+    }
+  }
+
+  // Fall back to imessage-parser library for edge cases
   try {
-    // Use imessage-parser library for proper typedstream parsing
     const result = parseTypedStream(attributedBodyBuffer, { cleanOutput: true });
 
     if (result && result.text && result.text.length >= MIN_MESSAGE_TEXT_LENGTH) {

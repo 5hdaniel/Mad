@@ -315,6 +315,19 @@ This ensures contacts are always fetched from the database junction table, regar
 
 ---
 
+## User Verification
+
+| Test | Result | Date |
+|------|--------|------|
+| Contacts pre-populate when editing | **PASS** | 2025-01-12 |
+| Saving contact changes persists | **FAIL** | 2025-01-12 |
+
+**Verified by:** User during SPRINT-034 testing session
+
+**Issue Found:** Contacts DO pre-populate correctly, but when adding another contact and saving, the changes don't persist. See BACKLOG-222.
+
+---
+
 ## Notes
 
 - This is the THIRD attempt to fix this issue - thorough investigation needed

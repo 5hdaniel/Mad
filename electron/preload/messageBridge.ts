@@ -110,4 +110,15 @@ export const messageBridge = {
    */
   getMessageAttachmentsBatch: (messageIds: string[]): Promise<Record<string, MessageAttachmentInfo[]>> =>
     ipcRenderer.invoke("messages:get-attachments-batch", messageIds),
+
+  /**
+   * Repair attachment message_id mappings without full re-import.
+   * @returns Stats on repaired/orphaned attachments
+   */
+  repairAttachments: (): Promise<{
+    total: number;
+    repaired: number;
+    orphaned: number;
+    alreadyCorrect: number;
+  }> => ipcRenderer.invoke("messages:repair-attachments"),
 };

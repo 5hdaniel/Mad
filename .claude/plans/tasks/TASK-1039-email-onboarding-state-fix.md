@@ -269,6 +269,18 @@ The `handleCheckEmailOnboarding` function in `sessionHandlers.ts` only checked f
 
 ---
 
+## User Verification
+
+| Test | Result | Date |
+|------|--------|------|
+| Email status shows accurate state | **PASS** | 2025-01-12 |
+
+**Verified by:** User during SPRINT-034 testing session
+
+**Enhancement Request:** Add similar status indicator for text messages (iMessage import status). See BACKLOG-223.
+
+---
+
 ## Notes
 
 - This is a state synchronization bug, not a feature issue

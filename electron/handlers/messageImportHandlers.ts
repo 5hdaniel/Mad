@@ -224,6 +224,23 @@ export function registerMessageImportHandlers(mainWindow: BrowserWindow): void {
   );
 
   /**
+   * Repair attachment message_id mappings without full re-import.
+   * IPC: messages:repair-attachments
+   */
+  ipcMain.handle(
+    "messages:repair-attachments",
+    async (): Promise<{
+      total: number;
+      repaired: number;
+      orphaned: number;
+      alreadyCorrect: number;
+    }> => {
+      logService.info("Repairing attachment mappings via IPC", "MessageImportHandlers");
+      return macOSMessagesImportService.repairAttachmentMessageIds();
+    }
+  );
+
+  /**
    * Reset import lock (for debugging stuck state)
    * IPC: messages:reset-import-lock
    */

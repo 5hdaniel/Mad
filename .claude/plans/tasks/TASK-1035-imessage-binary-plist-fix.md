@@ -269,6 +269,20 @@ describe('messageParser', () => {
 
 ---
 
+## User Verification
+
+| Test | Result | Date |
+|------|--------|------|
+| Rich iMessage text displays correctly | **PASS** | 2025-01-12 |
+| Links in messages show as text (not garbage) | **PASS** | 2025-01-12 |
+| Calendar invites display readable text | **PASS** | 2025-01-12 |
+
+**Verified by:** User during SPRINT-034 testing session
+
+**Additional fix during testing:** Added custom `extractTextFromTypedstream()` function to handle NSMutableString preamble (`01 95 84 01 2b`) in addition to regular NSString preamble (`01 94 84 01 2b`). The imessage-parser library only handled the regular preamble.
+
+---
+
 ## Notes
 
 - This is the CORRECT fix for the encoding issue - TASK-1028 addressed wrong problem

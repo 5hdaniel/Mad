@@ -1134,6 +1134,13 @@ export interface WindowApi {
     getMessageAttachments: (messageId: string) => Promise<MessageAttachmentInfo[]>;
     /** Get attachments for multiple messages at once (TASK-1012) */
     getMessageAttachmentsBatch: (messageIds: string[]) => Promise<Record<string, MessageAttachmentInfo[]>>;
+    /** Repair attachment message_id mappings without full re-import */
+    repairAttachments: () => Promise<{
+      total: number;
+      repaired: number;
+      orphaned: number;
+      alreadyCorrect: number;
+    }>;
   };
 
   // Outlook integration (migrated from window.electron)

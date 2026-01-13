@@ -40,6 +40,79 @@ function getAvatarInitial(contactName?: string, phoneNumber?: string): string {
 }
 
 /**
+ * Get all unique participants from a thread (excluding "me").
+ * Returns an array of phone numbers/identifiers.
+ */
+function getThreadParticipants(messages: MessageLike[]): string[] {
+  const participants = new Set<string>();
+
+  for (const msg of messages) {
+    try {
+      if (msg.participants) {
+        const parsed =
+          typeof msg.participants === "string"
+            ? JSON.parse(msg.participants)
+            : msg.participants;
+
+        if (parsed.from && parsed.from !== "me") {
+          participants.add(parsed.from);
+        }
+        if (parsed.to) {
+          const toList = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
+          toList.forEach((p: string) => {
+            if (p && p !== "me") participants.add(p);
+          });
+        }
+      }
+    } catch {
+      // Fall through - if no participants JSON, this message won't contribute
+    }
+  }
+
+  return Array.from(participants);
+}
+
+/**
+ * Check if a thread is a group chat (more than one external participant).
+ */
+function isGroupChat(messages: MessageLike[]): boolean {
+  const participants = getThreadParticipants(messages);
+  return participants.length > 1;
+}
+
+/**
+ * Format participant names for display.
+ * Uses contactNames map to resolve phone numbers to names.
+ */
+function formatParticipantNames(
+  participants: string[],
+  contactNames: Record<string, string>,
+  maxShow: number = 3
+): string {
+  const normalizePhone = (phone: string): string => {
+    const digits = phone.replace(/\D/g, "");
+    return digits.length >= 10 ? digits.slice(-10) : digits;
+  };
+
+  const names = participants.map((p) => {
+    // Try direct lookup first
+    if (contactNames[p]) return contactNames[p];
+    // Try normalized phone lookup
+    const normalized = normalizePhone(p);
+    for (const [phone, name] of Object.entries(contactNames)) {
+      if (normalizePhone(phone) === normalized) return name;
+    }
+    // Fall back to phone number
+    return p;
+  });
+
+  if (names.length <= maxShow) {
+    return names.join(", ");
+  }
+  return `${names.slice(0, maxShow).join(", ")} +${names.length - maxShow} more`;
+}
+
+/**
  * Extract sender phone from a message's participants.
  */
 function getSenderPhone(msg: MessageLike): string | null {
@@ -85,6 +158,10 @@ export function MessageThreadCard({
   contactNames = {},
 }: MessageThreadCardProps): React.ReactElement {
   const [showModal, setShowModal] = useState(false);
+
+  // Detect group chat
+  const participants = getThreadParticipants(messages);
+  const isGroup = isGroupChat(messages);
   const avatarInitial = getAvatarInitial(contactName, phoneNumber);
 
   // Get preview of last message
@@ -92,6 +169,21 @@ export function MessageThreadCard({
   const previewText = lastMessage
     ? (lastMessage.body_text || lastMessage.body_plain || lastMessage.body || "")?.slice(0, 60)
     : "";
+
+  // Get date range for group chats
+  const getDateRange = (): string => {
+    if (messages.length === 0) return "";
+    const first = messages[0];
+    const last = messages[messages.length - 1];
+    const firstDate = new Date(first.sent_at || first.received_at || 0);
+    const lastDate = new Date(last.sent_at || last.received_at || 0);
+    const formatDate = (d: Date) =>
+      d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    if (firstDate.toDateString() === lastDate.toDateString()) {
+      return formatDate(firstDate);
+    }
+    return `${formatDate(firstDate)} - ${formatDate(lastDate)}`;
+  };
 
   return (
     <>
@@ -102,29 +194,99 @@ export function MessageThreadCard({
       >
         {/* Thread Header */}
         <div className="bg-gray-50 px-4 py-3 flex items-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-teal-600 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0">
-            {avatarInitial}
-          </div>
+          {/* Avatar - Purple for group, Green for 1:1 */}
+          {isGroup ? (
+            <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 bg-purple-100">
+              <svg
+                className="w-5 h-5 text-purple-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                />
+              </svg>
+            </div>
+          ) : (
+            <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-teal-600 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0">
+              {avatarInitial}
+            </div>
+          )}
+
           <div className="min-w-0 flex-1">
-            <h4 className="font-semibold text-gray-900 truncate" data-testid="thread-contact-name">
-              {contactName || phoneNumber}
-            </h4>
-            {contactName && phoneNumber && (
-              <p className="text-sm text-gray-500 truncate" data-testid="thread-phone-number">
-                {phoneNumber}
-              </p>
-            )}
-            {/* Preview of last message */}
-            {previewText && (
-              <p className="text-sm text-gray-400 truncate mt-1" data-testid="thread-preview">
-                {previewText}{previewText.length >= 60 ? "..." : ""}
-              </p>
+            {isGroup ? (
+              <>
+                {/* Group chat header */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4
+                    className="font-semibold text-gray-900"
+                    data-testid="thread-contact-name"
+                  >
+                    Group Chat
+                  </h4>
+                  <span className="inline-block px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded-full">
+                    {participants.length} people
+                  </span>
+                </div>
+                {/* Participant names */}
+                <p
+                  className="text-xs text-gray-500 mt-1"
+                  data-testid="thread-participants"
+                >
+                  Also includes:{" "}
+                  {formatParticipantNames(participants, contactNames)}
+                </p>
+                {/* Date range and message count */}
+                <div className="flex items-center gap-3 mt-1">
+                  <span className="text-xs text-gray-500">{getDateRange()}</span>
+                  <span className="text-xs text-gray-400">•</span>
+                  <span className="text-xs text-gray-500">
+                    {messages.length} messages
+                  </span>
+                </div>
+              </>
+            ) : (
+              <>
+                {/* 1:1 chat header */}
+                <h4
+                  className="font-semibold text-gray-900 truncate"
+                  data-testid="thread-contact-name"
+                >
+                  {contactName || phoneNumber}
+                </h4>
+                {contactName && phoneNumber && (
+                  <p
+                    className="text-sm text-gray-500 truncate"
+                    data-testid="thread-phone-number"
+                  >
+                    {phoneNumber}
+                  </p>
+                )}
+                {/* Preview of last message */}
+                {previewText && (
+                  <p
+                    className="text-sm text-gray-400 truncate mt-1"
+                    data-testid="thread-preview"
+                  >
+                    {previewText}
+                    {previewText.length >= 60 ? "..." : ""}
+                  </p>
+                )}
+              </>
             )}
           </div>
+
           <div className="flex items-center gap-2 flex-shrink-0">
-            <span className="inline-block px-2 py-0.5 bg-green-100 text-green-700 text-xs font-medium rounded-full">
-              {messages.length} {messages.length === 1 ? "message" : "messages"}
-            </span>
+            {/* Message count badge - only for 1:1 chats (group chats show inline) */}
+            {!isGroup && (
+              <span className="inline-block px-2 py-0.5 bg-green-100 text-green-700 text-xs font-medium rounded-full">
+                {messages.length} {messages.length === 1 ? "message" : "messages"}
+              </span>
+            )}
             <button
               onClick={() => setShowModal(true)}
               className="px-3 py-1 text-xs font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-all"
