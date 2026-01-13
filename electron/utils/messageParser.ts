@@ -579,8 +579,24 @@ export function cleanExtractedText(text: string): string {
  * @returns Message text or fallback message
  */
 export async function getMessageText(message: Message): Promise<string> {
-  // Plain text is preferred, but still clean it for encoding issues
-  if (message.text) {
+  // Check if text looks like corrupted binary data
+  // Binary garbage often contains bplist markers or high concentration of CJK/unusual characters
+  const looksLikeBinaryGarbage = (text: string): boolean => {
+    if (!text || text.length < 10) return false;
+    // Check for bplist signature (may appear as garbled text)
+    if (text.includes("bplist") || text.includes("streamtyped")) return true;
+    // Check for high concentration of rare Unicode (CJK, symbols, control chars)
+    // Normal text rarely has >30% chars outside basic Latin + common punctuation
+    const unusualChars = text.split("").filter(c => {
+      const code = c.charCodeAt(0);
+      // Outside ASCII printable (32-126) and common extended (é, ñ, etc. 128-255)
+      return code > 255 || (code < 32 && code !== 10 && code !== 13);
+    }).length;
+    return unusualChars / text.length > 0.3;
+  };
+
+  // Plain text is preferred, but check for binary garbage first
+  if (message.text && !looksLikeBinaryGarbage(message.text)) {
     // Apply cleaning to handle potential UTF-16 encoding or null byte issues
     const cleaned = cleanExtractedText(message.text);
     if (cleaned.length >= MIN_MESSAGE_TEXT_LENGTH) {
@@ -589,7 +605,7 @@ export async function getMessageText(message: Message): Promise<string> {
     // If cleaning resulted in empty/short text, try attributedBody
   }
 
-  // Try to extract from attributed body
+  // Try to extract from attributed body (preferred if text was garbage)
   if (message.attributedBody) {
     return await extractTextFromAttributedBody(message.attributedBody);
   }
