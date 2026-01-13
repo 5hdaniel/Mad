@@ -9,6 +9,7 @@ import { DatabaseError } from "../../types";
 import { dbGet, dbAll, dbRun, dbTransaction } from "./core/dbConnection";
 import logService from "../logService";
 import { validateFields } from "../../utils/sqlFieldWhitelist";
+import { getContactNames } from "../contactsService";
 
 // Contact with activity metadata
 interface ContactWithActivity extends Contact {
@@ -512,6 +513,40 @@ export async function getContactNamesByPhones(
     }
     // Also store by normalized form
     result.set(rowNormalized, row.display_name);
+  }
+
+  // Fallback: Check macOS Contacts for any unresolved phones
+  const unresolvedPhones = phones.filter(p => !result.has(p));
+  if (unresolvedPhones.length > 0) {
+    try {
+      const macOSContacts = await getContactNames();
+      const contactMap = macOSContacts.contactMap;
+
+      for (const phone of unresolvedPhones) {
+        // Try direct lookup
+        if (contactMap[phone]) {
+          result.set(phone, contactMap[phone]);
+          continue;
+        }
+
+        // Try normalized lookup (last 10 digits)
+        const digits = phone.replace(/\D/g, '');
+        const normalized = digits.length >= 10 ? digits.slice(-10) : digits;
+
+        // Search contactMap for matching phone
+        for (const [key, name] of Object.entries(contactMap)) {
+          const keyDigits = key.replace(/\D/g, '');
+          const keyNormalized = keyDigits.length >= 10 ? keyDigits.slice(-10) : keyDigits;
+          if (keyNormalized === normalized && keyNormalized.length >= 7) {
+            result.set(phone, name);
+            result.set(normalized, name);
+            break;
+          }
+        }
+      }
+    } catch (err) {
+      logService.warn("Failed to load macOS Contacts for fallback lookup", "Contacts", { err });
+    }
   }
 
   return result;

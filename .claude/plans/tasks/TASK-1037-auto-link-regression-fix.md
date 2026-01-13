@@ -281,6 +281,19 @@ The query was silently returning zero results because it was looking for non-exi
 
 ---
 
+## User Verification
+
+| Test | Result | Date |
+|------|--------|------|
+| Auto-link implementation | **PASS** | 2025-01-12 |
+| Unlink/remove communications UI | **FAIL** | 2025-01-12 |
+
+**Verified by:** User during SPRINT-034 testing session
+
+**Issue Found:** When trying to remove/unlink a communication from a transaction, nothing happens in the UI. Backend logs show the operation succeeds, but UI doesn't refresh. See BACKLOG-220.
+
+---
+
 ## Notes
 
 - This may be the same root cause as TASK-1038 (contacts pre-population)

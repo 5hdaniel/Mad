@@ -318,6 +318,21 @@ describe('ContactAssignmentForm', () => {
 
 ---
 
+## User Verification
+
+| Test | Result | Date |
+|------|--------|------|
+| New "Edit Contacts" button works | **PASS** | 2025-01-12 |
+| Old edit buttons (Step 2/3) work | **FAIL** | 2025-01-12 |
+
+**Verified by:** User during SPRINT-034 testing session
+
+**Action Required:** Remove "Edit Transaction Step 2: Assign Client & Agents" and "Edit Transaction Step 3: Assign Professional Services" buttons. Keep only "Edit Transaction Step 1: Transaction Details".
+
+**Future Enhancement:** Apply same pattern (separate Edit button) to Step 1 Transaction Details. See BACKLOG-224.
+
+---
+
 ## Notes
 
 - Depends on TASK-1038 (contacts pre-population) - that bug must be fixed first

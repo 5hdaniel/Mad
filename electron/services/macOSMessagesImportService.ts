@@ -854,7 +854,7 @@ class MacOSMessagesImportService {
     const attachmentsDir = path.join(app.getPath("userData"), ATTACHMENTS_DIR);
     await fs.promises.mkdir(attachmentsDir, { recursive: true });
 
-    // Load existing attachment hashes for deduplication
+    // Load existing attachment hashes for deduplication (file content)
     const existingHashes = new Set<string>();
     const existingHashRows = db
       .prepare(`SELECT storage_path FROM attachments WHERE storage_path IS NOT NULL`)
@@ -864,6 +864,16 @@ class MacOSMessagesImportService {
     for (const row of existingHashRows) {
       const filename = path.basename(row.storage_path, path.extname(row.storage_path));
       existingHashes.add(filename);
+    }
+
+    // Load existing attachment records for deduplication (message_id + filename)
+    const existingAttachmentRecords = new Set<string>();
+    const existingAttachRows = db
+      .prepare(`SELECT message_id, filename FROM attachments WHERE message_id IS NOT NULL`)
+      .all() as { message_id: string; filename: string }[];
+
+    for (const row of existingAttachRows) {
+      existingAttachmentRecords.add(`${row.message_id}:${row.filename}`);
     }
 
     logService.info(
@@ -971,13 +981,22 @@ class MacOSMessagesImportService {
         // Generate content hash for deduplication (async)
         const contentHash = await generateContentHash(sourcePath);
 
+        // Check if attachment record already exists for this message + filename
+        const attachmentKey = `${internalMessageId}:${filename}`;
+        if (existingAttachmentRecords.has(attachmentKey)) {
+          // Attachment record already exists, skip
+          skipped++;
+          processed++;
+          continue;
+        }
+
         // Skip if we already have this content
         if (existingHashes.has(contentHash)) {
           // File already exists - just link to existing file
           const ext = path.extname(filename!);
           const existingPath = path.join(attachmentsDir, `${contentHash}${ext}`);
 
-          // Still create a new attachment record linking to existing file
+          // Create attachment record linking to existing file
           const attachmentId = crypto.randomUUID();
           insertAttachmentStmt.run(
             attachmentId,
@@ -987,6 +1006,7 @@ class MacOSMessagesImportService {
             attachment.total_bytes,
             existingPath
           );
+          existingAttachmentRecords.add(attachmentKey);
           stored++;
           processed++;
           continue;
@@ -1008,6 +1028,7 @@ class MacOSMessagesImportService {
           destPath
         );
 
+        existingAttachmentRecords.add(attachmentKey);
         stored++;
         processed++;
         existingHashes.add(contentHash);
@@ -1256,6 +1277,19 @@ class MacOSMessagesImportService {
     }
 
     const db = databaseService.getRawDatabase();
+
+    // Debug: Log total attachments in DB and sample message_ids
+    const totalCount = db.prepare(`SELECT COUNT(*) as count FROM attachments`).get() as { count: number };
+    const sampleIds = db.prepare(`SELECT DISTINCT message_id FROM attachments LIMIT 5`).all() as { message_id: string }[];
+    logService.info(
+      `[Attachments Debug] Total: ${totalCount.count}, Querying: ${messageIds.length} IDs, Sample DB message_ids: ${sampleIds.map(r => r.message_id).join(', ')}`,
+      MacOSMessagesImportService.SERVICE_NAME
+    );
+    logService.info(
+      `[Attachments Debug] Queried IDs: ${messageIds.join(', ')}`,
+      MacOSMessagesImportService.SERVICE_NAME
+    );
+
     const placeholders = messageIds.map(() => "?").join(", ");
     const rows = db
       .prepare(
@@ -1266,6 +1300,11 @@ class MacOSMessagesImportService {
       `
       )
       .all(...messageIds) as MessageAttachment[];
+
+    logService.info(
+      `[Attachments Debug] Found ${rows.length} attachments matching query`,
+      MacOSMessagesImportService.SERVICE_NAME
+    );
 
     // Group by message_id
     const result = new Map<string, MessageAttachment[]>();
@@ -1295,6 +1334,151 @@ class MacOSMessagesImportService {
       );
       return null;
     }
+  }
+
+  /**
+   * Repair attachment message_id mappings without full re-import.
+   * Looks up correct message IDs via external_id (iMessage GUID) from macOS Messages DB.
+   * @returns Stats on repaired/orphaned attachments
+   */
+  async repairAttachmentMessageIds(): Promise<{
+    total: number;
+    repaired: number;
+    orphaned: number;
+    alreadyCorrect: number;
+  }> {
+    const db = databaseService.getRawDatabase();
+    const stats = { total: 0, repaired: 0, orphaned: 0, alreadyCorrect: 0 };
+
+    // Get all attachments with their storage paths
+    const attachments = db
+      .prepare(`SELECT id, message_id, storage_path FROM attachments`)
+      .all() as { id: string; message_id: string; storage_path: string | null }[];
+
+    stats.total = attachments.length;
+
+    if (attachments.length === 0) {
+      logService.info(
+        `[Repair] No attachments to repair`,
+        MacOSMessagesImportService.SERVICE_NAME
+      );
+      return stats;
+    }
+
+    // Build message external_id -> internal id map
+    const messageMap = new Map<string, string>();
+    const messageRows = db
+      .prepare(`SELECT id, external_id FROM messages WHERE external_id IS NOT NULL`)
+      .all() as { id: string; external_id: string }[];
+    for (const row of messageRows) {
+      messageMap.set(row.external_id, row.id);
+    }
+
+    logService.info(
+      `[Repair] Checking ${attachments.length} attachments against ${messageMap.size} messages`,
+      MacOSMessagesImportService.SERVICE_NAME
+    );
+
+    // Query macOS Messages DB to get attachment -> message_guid mapping
+    const messagesDbPath = path.join(process.env.HOME!, "Library/Messages/chat.db");
+    if (!fs.existsSync(messagesDbPath)) {
+      logService.error(
+        `[Repair] Cannot access macOS Messages database`,
+        MacOSMessagesImportService.SERVICE_NAME
+      );
+      return stats;
+    }
+
+    try {
+      // Open macOS Messages database using sqlite3 (same as import)
+      const macDb = new sqlite3.Database(messagesDbPath, sqlite3.OPEN_READONLY);
+      const dbAll = promisify(macDb.all.bind(macDb)) as <T>(sql: string) => Promise<T[]>;
+
+      // Build attachment filename -> message_guid map from macOS Messages DB
+      const macAttachments = await dbAll<{ filename: string; message_guid: string }>(`
+        SELECT
+          attachment.filename,
+          message.guid as message_guid
+        FROM attachment
+        JOIN message_attachment_join ON attachment.ROWID = message_attachment_join.attachment_id
+        JOIN message ON message.ROWID = message_attachment_join.message_id
+        WHERE attachment.filename IS NOT NULL AND message.guid IS NOT NULL
+      `);
+
+      // Map by basename for matching (our storage uses content hash, but original filename is in the path)
+      const filenameToGuid = new Map<string, string>();
+      for (const att of macAttachments) {
+        // Extract just the filename from the full path
+        const basename = path.basename(att.filename);
+        filenameToGuid.set(basename, att.message_guid);
+      }
+
+      logService.info(
+        `[Repair] Found ${filenameToGuid.size} attachment mappings in macOS Messages DB`,
+        MacOSMessagesImportService.SERVICE_NAME
+      );
+
+      // Close macOS database
+      await promisify(macDb.close.bind(macDb))();
+
+      // Prepare update statement
+      const updateStmt = db.prepare(`UPDATE attachments SET message_id = ? WHERE id = ?`);
+
+      // Check each attachment
+      for (const att of attachments) {
+        // First check if current message_id is valid
+        const currentMsgExists = db
+          .prepare(`SELECT 1 FROM messages WHERE id = ?`)
+          .get(att.message_id);
+
+        if (currentMsgExists) {
+          stats.alreadyCorrect++;
+          continue;
+        }
+
+        // Current message_id is invalid - try to find correct one
+        // Extract original filename from storage path (stored files keep original name in metadata)
+        // Our storage uses hash as filename, so we need to look at the attachment record's original filename
+        const originalFilename = db
+          .prepare(`SELECT filename FROM attachments WHERE id = ?`)
+          .get(att.id) as { filename: string } | undefined;
+
+        if (!originalFilename?.filename) {
+          stats.orphaned++;
+          continue;
+        }
+
+        // Look up the message GUID for this attachment
+        const messageGuid = filenameToGuid.get(originalFilename.filename);
+        if (!messageGuid) {
+          stats.orphaned++;
+          continue;
+        }
+
+        // Look up our internal message ID
+        const internalId = messageMap.get(messageGuid);
+        if (!internalId) {
+          stats.orphaned++;
+          continue;
+        }
+
+        // Update the attachment's message_id
+        updateStmt.run(internalId, att.id);
+        stats.repaired++;
+      }
+
+      logService.info(
+        `[Repair] Complete: ${stats.repaired} repaired, ${stats.alreadyCorrect} already correct, ${stats.orphaned} orphaned`,
+        MacOSMessagesImportService.SERVICE_NAME
+      );
+    } catch (error) {
+      logService.error(
+        `[Repair] Error: ${error instanceof Error ? error.message : "Unknown"}`,
+        MacOSMessagesImportService.SERVICE_NAME
+      );
+    }
+
+    return stats;
   }
 }
 

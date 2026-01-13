@@ -2,9 +2,9 @@
 
 This index tracks all backlog items with their current status and metadata.
 
-**Last Updated:** 2026-01-11 (BACKLOG-202, 203, 204 added; SPRINT-032 created)
-**Total Items:** 184
-**Pending:** 102 | **In Progress:** 0 | **Completed:** 75 | **Partial:** 0 | **Obsolete:** 1 | **Deferred:** 2
+**Last Updated:** 2026-01-12 (BACKLOG-222-224 added - contact save, text status, edit pattern)
+**Total Items:** 195
+**Pending:** 113 | **In Progress:** 0 | **Completed:** 75 | **Partial:** 0 | **Obsolete:** 1 | **Deferred:** 2
 
 ---
 
@@ -30,9 +30,9 @@ This index tracks all backlog items with their current status and metadata.
 
 ### By Priority
 - **Critical:** BACKLOG-030 (done), 032 (done), 035 (done), 038 (done), 039 (done), 044 (done), 045 (done), 058 (done), 059 (done), 072 (done), 073 (done), 074 (done), 107 (done), 108 (done), 117 (done), 132 (done), 139 (done - database init gate), 142 (done - state coordination overhaul), **191** (service layer tests - 0% coverage), **202** (fix test regressions - contact-handlers/databaseService)
-- **High:** BACKLOG-008, 009, 013, 016, 018, 020, 021, 023, 026, 031, 033, 037, 056, 060 (done), 061 (done), 062 (done), 063 (done), 067, 075 (done), 076 (done), 084 (done), 085 (done), 088, 090 (done), 091 (done), 098, 099, 103 (done), 105 (done), 109 (done), 110 (done), **111**, 118 (done), 121 (done), 126 (done), 130 (done), 133 (done), 136 (done), 137 (done - automatic token tracking), 140 (done), 148 (done), 156 (done - auto-refresh on app load), **157** (fix auth handler test), **203** (macOS messages tests)
-- **Medium:** Multiple (see full index), 014 (done), 050 (done), 054 (done), 065 (done), 077 (done), 078 (done), 079 (done), 081, 086, 087, 089, 092, 093, 094, 095, 096, 097, 100, 101, 102, 104 (done), **112**, **113**, **114**, **115**, **116**, 122 (done), 124 (done), 127 (done), 128 (done), 129 (done), **131**, 135 (done), 138 (done), 149 (done), 152 (done), **158** (decompose AuditTransactionModal), **159** (delete PermissionsScreen), 169 (done - Show in Folder), 181 (done - T&C streamline), **204** (window.api abstraction)
-- **Low/Deferred:** BACKLOG-001, 003, 004, 010, 017, 069 (deferred), 070 (deferred), 071, 092, **119**, **123**, **125**, 150 (done - reduce useAppStateMachine), **151** (reduce AppModals.tsx), 155 (done - dashboard scroll), **160** (column naming)
+- **High:** BACKLOG-008, 009, 013, 016, 018, 020, 021, 023, 026, 031, 033, 037, 056, 060 (done), 061 (done), 062 (done), 063 (done), 067, 075 (done), 076 (done), 084 (done), 085 (done), 088, 090 (done), 091 (done), 098, 099, 103 (done), 105 (done), 109 (done), 110 (done), **111**, 118 (done), 121 (done), 126 (done), 130 (done), 133 (done), 136 (done), 137 (done - automatic token tracking), 140 (done), 148 (done), 156 (done - auto-refresh on app load), **157** (fix auth handler test), **203** (macOS messages tests), **214** (auto-link regression), **215** (group chat encoding), **216** (contacts pre-pop regression), **217** (edit contacts UX), **218** (group chat display), **220** (unlink UI refresh), **221** (attachments stale ID), **222** (contact save issue)
+- **Medium:** Multiple (see full index), 014 (done), 050 (done), 054 (done), 065 (done), 077 (done), 078 (done), 079 (done), 081, 086, 087, 089, 092, 093, 094, 095, 096, 097, 100, 101, 102, 104 (done), **112**, **113**, **114**, **115**, **116**, 122 (done), 124 (done), 127 (done), 128 (done), 129 (done), **131**, 135 (done), 138 (done), 149 (done), 152 (done), **158** (decompose AuditTransactionModal), **159** (delete PermissionsScreen), 169 (done - Show in Folder), 181 (done - T&C streamline), **204** (window.api abstraction), **223** (text message status)
+- **Low/Deferred:** BACKLOG-001, 003, 004, 010, 017, 069 (deferred), 070 (deferred), 071, 092, **119**, **123**, **125**, 150 (done - reduce useAppStateMachine), **151** (reduce AppModals.tsx), 155 (done - dashboard scroll), **160** (column naming), **219** (debug logging audit), **224** (edit details pattern)
 
 ### By Sprint Assignment
 - **SPRINT-001 (Onboarding Refactor):** Completed
@@ -285,6 +285,17 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-202 | Fix Test Regressions (contact-handlers/databaseService) | test/fix | Critical | Pending | SPRINT-032 | - | ~20K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-202.md](BACKLOG-202.md) |
 | BACKLOG-203 | Add Comprehensive Tests for macOSMessagesImportService | test | High | Pending | SPRINT-032 | - | ~40K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-203.md](BACKLOG-203.md) |
 | BACKLOG-204 | Abstract window.api Calls into Service Layer | refactor | Medium | Pending | SPRINT-032 | - | ~80K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-204.md](BACKLOG-204.md) |
+| BACKLOG-214 | Auto-Link Communications Not Working (TASK-1031 Regression) | bug/regression | High | Pending | - | - | ~30K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-214.md](BACKLOG-214.md) |
+| BACKLOG-215 | Encoding Corruption in Group Chats | bug/data-integrity | High | Pending | - | - | ~50K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-215.md](BACKLOG-215.md) |
+| BACKLOG-216 | Edit Contacts Still Not Pre-Populating (TASK-1030 Regression) | bug/regression | High | Pending | - | - | ~25K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-216.md](BACKLOG-216.md) |
+| BACKLOG-217 | UX Improvement - Edit Contacts Button Flow | enhancement/ux | High | Pending | - | - | ~40K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-217.md](BACKLOG-217.md) |
+| BACKLOG-218 | Group Chat Display in Transaction Details (Placeholder) | enhancement/ux | High | Pending | - | - | ~30K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-218.md](BACKLOG-218.md) |
+| BACKLOG-219 | Audit Debug/Logging Calls Across Repository | tech-debt/quality | Low | Pending | - | - | ~20K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-219.md](BACKLOG-219.md) |
+| BACKLOG-220 | Unlink Communications UI Not Refreshing | bug/ui | High | Pending | - | - | ~25K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-220.md](BACKLOG-220.md) |
+| BACKLOG-221 | iMessage Attachments Not Displaying (Stale message_id) | bug/data-integrity | High | Pending | - | - | ~40K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-221.md](BACKLOG-221.md) |
+| BACKLOG-222 | Contact Changes Not Saving When Editing Transaction | bug/data-persistence | High | Pending | - | - | ~30K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-222.md](BACKLOG-222.md) |
+| BACKLOG-223 | Add Text Message Status Indicator (Like Email Status) | enhancement/ux | Medium | Pending | - | - | ~25K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-223.md](BACKLOG-223.md) |
+| BACKLOG-224 | Apply Edit Contacts Pattern to Transaction Details | enhancement/ux | Low | Pending | - | - | ~20K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-224.md](BACKLOG-224.md) |
 
 ---
 

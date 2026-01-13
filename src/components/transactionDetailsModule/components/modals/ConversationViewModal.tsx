@@ -3,7 +3,7 @@
  * Phone-style popup modal for viewing a full conversation thread.
  * Supports inline display of image/GIF attachments (TASK-1012).
  */
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import type { MessageLike } from "../MessageThreadCard";
 
 /**
@@ -154,6 +154,7 @@ export function ConversationViewModal({
     Record<string, MessageAttachmentInfo[]>
   >({});
   const [attachmentsLoading, setAttachmentsLoading] = useState(false);
+  const loadedAttachmentsKeyRef = useRef<string>("");
 
   // Sort messages chronologically
   const sortedMessages = [...messages].sort((a, b) => {
@@ -221,33 +222,46 @@ export function ConversationViewModal({
   };
 
   // Load attachments for messages that have them (TASK-1012)
-  const loadAttachments = useCallback(async () => {
-    // Get message IDs that have attachments
-    const messageIdsWithAttachments = messages
-      .filter((msg) => msg.has_attachments)
-      .map((msg) => msg.id);
-
-    if (messageIdsWithAttachments.length === 0) return;
-
-    setAttachmentsLoading(true);
-    try {
-      // Check if API is available (may not be on all platforms)
-      if (window.api?.messages?.getMessageAttachmentsBatch) {
-        const result = await window.api.messages.getMessageAttachmentsBatch(
-          messageIdsWithAttachments
-        );
-        setAttachmentsMap(result);
-      }
-    } catch (error) {
-      console.error("Failed to load attachments:", error);
-    } finally {
-      setAttachmentsLoading(false);
-    }
-  }, [messages]);
+  // Create stable key from message IDs to prevent re-fetching
+  const attachmentsKey = messages
+    .filter((msg) => msg.has_attachments && msg.message_id)
+    .map((msg) => msg.message_id)
+    .sort()
+    .join(",");
 
   useEffect(() => {
+    // Skip if we've already loaded for this key
+    if (attachmentsKey === loadedAttachmentsKeyRef.current || !attachmentsKey) {
+      return;
+    }
+
+    const messageIdsWithAttachments = attachmentsKey.split(",");
+    loadedAttachmentsKeyRef.current = attachmentsKey;
+
+    const loadAttachments = async () => {
+      setAttachmentsLoading(true);
+      try {
+        // Check if API is available (may not be on all platforms)
+        if (window.api?.messages?.getMessageAttachmentsBatch) {
+          console.log("[Attachments] Fetching for message_ids:", messageIdsWithAttachments);
+          const result = await window.api.messages.getMessageAttachmentsBatch(
+            messageIdsWithAttachments
+          );
+          console.log("[Attachments] Result:", Object.keys(result).length, "messages with attachments");
+          for (const [msgId, atts] of Object.entries(result)) {
+            console.log(`[Attachments] ${msgId}: ${(atts as unknown[]).length} attachments`);
+          }
+          setAttachmentsMap(result);
+        }
+      } catch (error) {
+        console.error("Failed to load attachments:", error);
+      } finally {
+        setAttachmentsLoading(false);
+      }
+    };
+
     loadAttachments();
-  }, [loadAttachments]);
+  }, [attachmentsKey]);
 
   return (
     <div
@@ -328,7 +342,8 @@ export function ConversationViewModal({
             }
 
             // Get attachments for this message (TASK-1012)
-            const messageAttachments = attachmentsMap[msg.id] || [];
+            // Use message_id to look up attachments (attachments table uses message_id, not communication id)
+            const messageAttachments = msg.message_id ? (attachmentsMap[msg.message_id] || []) : [];
             const displayableAttachments = messageAttachments.filter((att) =>
               isDisplayableImage(att.mime_type)
             );
@@ -382,8 +397,9 @@ export function ConversationViewModal({
                     messageAttachments.length === 0 && (
                       <div
                         className={`text-xs italic mb-1 ${isOutbound ? "text-green-100" : "text-gray-400"}`}
+                        title={`message_id: ${msg.message_id || 'null'}, id: ${msg.id}`}
                       >
-                        [Attachment]
+                        [Attachment{!msg.message_id ? " - missing message_id" : ""}]
                       </div>
                     )}
                   <p className="text-sm whitespace-pre-wrap break-words">

@@ -628,6 +628,7 @@ export function useAuditTransaction({
 
   /**
    * Proceed to next step
+   * In edit mode, saves directly from step 1 (no contact steps)
    */
   const handleNextStep = useCallback((): void => {
     if (step === 1) {
@@ -645,7 +646,13 @@ export function useAuditTransaction({
         return;
       }
       setError(null);
-      setStep(2);
+      // In edit mode, save directly without going to contact steps
+      // (use Edit Contacts button for contact changes)
+      if (isEditing) {
+        handleCreateTransaction();
+      } else {
+        setStep(2);
+      }
     } else if (step === 2) {
       if (
         !contactAssignments[SPECIFIC_ROLES.CLIENT] ||
@@ -659,7 +666,7 @@ export function useAuditTransaction({
     } else if (step === 3) {
       handleCreateTransaction();
     }
-  }, [step, addressData.property_address, contactAssignments, handleCreateTransaction]);
+  }, [step, addressData.property_address, contactAssignments, handleCreateTransaction, isEditing]);
 
   /**
    * Go back to previous step
