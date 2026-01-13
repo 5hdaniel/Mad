@@ -203,7 +203,50 @@ describe("TransactionMessagesTab", () => {
       expect(screen.getByText("Text Messages (3)")).toBeInTheDocument();
     });
 
-    it("should render thread cards with preview text", () => {
+    it("should render thread cards with preview text for 1:1 chats", () => {
+      // 1:1 chat messages - single external participant per thread
+      const singleParticipantMessages: Partial<Communication>[] = [
+        {
+          id: "msg-1",
+          user_id: "user-456",
+          channel: "sms",
+          body_text: "Single chat message 1",
+          sent_at: "2024-01-16T11:00:00Z",
+          direction: "inbound",
+          thread_id: "thread-single",
+          participants: JSON.stringify({ from: "+14155550100", to: ["me"] }),
+          has_attachments: false,
+          is_false_positive: false,
+        },
+        {
+          id: "msg-2",
+          user_id: "user-456",
+          channel: "sms",
+          body_text: "Single chat message 2",
+          sent_at: "2024-01-17T12:00:00Z",
+          direction: "outbound",
+          thread_id: "thread-single",
+          participants: JSON.stringify({ from: "me", to: ["+14155550100"] }),
+          has_attachments: false,
+          is_false_positive: false,
+        },
+      ];
+
+      render(
+        <TransactionMessagesTab
+          messages={singleParticipantMessages as Communication[]}
+          loading={false}
+          error={null}
+        />
+      );
+
+      // 1:1 chat should show preview text
+      const preview = screen.getByTestId("thread-preview");
+      expect(preview).toBeInTheDocument();
+      expect(preview).toHaveTextContent("Single chat message 2");
+    });
+
+    it("should render group chats without preview (different display)", () => {
       render(
         <TransactionMessagesTab
           messages={mockMessages as Communication[]}
@@ -212,11 +255,15 @@ describe("TransactionMessagesTab", () => {
         />
       );
 
-      // Thread cards should show preview text (last message in each thread)
-      // Thread 1's last message is "Can we schedule a showing tomorrow?"
-      // Thread 2's message is "Thanks for the update!"
-      const previews = screen.getAllByTestId("thread-preview");
-      expect(previews.length).toBe(2);
+      // Mock data uses phone numbers for both from/to, making threads appear as group chats
+      // (the real iMessage import uses "me" for the user's side)
+      // Group chats display participant count and date range instead of preview text
+      const threadCards = screen.getAllByTestId("message-thread-card");
+      expect(threadCards.length).toBe(2);
+
+      // Group chat threads show "X people" badge instead of preview
+      const participantBadges = screen.queryAllByText(/\d+ people/);
+      expect(participantBadges.length).toBeGreaterThanOrEqual(1);
     });
 
     it("should group messages into threads", () => {
