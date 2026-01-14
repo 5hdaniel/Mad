@@ -1177,6 +1177,170 @@ class DatabaseService implements IDatabaseService {
   }
 
   // ============================================
+  // DIAGNOSTIC OPERATIONS (for debugging data issues)
+  // ============================================
+
+  /**
+   * Diagnostic: Find messages with NULL thread_id
+   * These messages use fallback grouping which can cause incorrect merging
+   */
+  async diagnosticGetMessagesWithNullThreadId(userId: string): Promise<{
+    count: number;
+    samples: Array<{ id: string; body_text: string; participants: string; sent_at: string }>;
+  }> {
+    const db = this._ensureDb();
+
+    const countResult = db.prepare(`
+      SELECT COUNT(*) as count FROM messages
+      WHERE user_id = ? AND thread_id IS NULL AND channel IN ('sms', 'imessage')
+    `).get(userId) as { count: number };
+
+    const samples = db.prepare(`
+      SELECT id, body_text, participants, sent_at FROM messages
+      WHERE user_id = ? AND thread_id IS NULL AND channel IN ('sms', 'imessage')
+      ORDER BY sent_at DESC LIMIT 10
+    `).all(userId) as Array<{ id: string; body_text: string; participants: string; sent_at: string }>;
+
+    return { count: countResult.count, samples };
+  }
+
+  /**
+   * Diagnostic: Find messages with potential garbage text
+   * Looks for binary signatures in body_text
+   */
+  async diagnosticGetMessagesWithGarbageText(userId: string): Promise<{
+    count: number;
+    samples: Array<{ id: string; body_text: string; thread_id: string | null; sent_at: string }>;
+  }> {
+    const db = this._ensureDb();
+
+    // DETERMINISTIC: Check for exact fallback messages (no heuristics)
+    // These are the only values the parser returns when it cannot parse
+    const countResult = db.prepare(`
+      SELECT COUNT(*) as count FROM messages
+      WHERE user_id = ? AND channel IN ('sms', 'imessage')
+      AND body_text IN (
+        '[Unable to parse message]',
+        '[Message text - parsing error]',
+        '[Message text - unable to extract from rich format]'
+      )
+    `).get(userId) as { count: number };
+
+    const samples = db.prepare(`
+      SELECT id, body_text, thread_id, sent_at FROM messages
+      WHERE user_id = ? AND channel IN ('sms', 'imessage')
+      AND body_text IN (
+        '[Unable to parse message]',
+        '[Message text - parsing error]',
+        '[Message text - unable to extract from rich format]'
+      )
+      ORDER BY sent_at DESC LIMIT 10
+    `).all(userId) as Array<{ id: string; body_text: string; thread_id: string | null; sent_at: string }>;
+
+    return { count: countResult.count, samples };
+  }
+
+  /**
+   * Diagnostic: Complete message health report
+   * Shows total counts and breakdown of parsing issues
+   */
+  async diagnosticMessageHealthReport(userId: string): Promise<{
+    total: number;
+    withThreadId: number;
+    withNullThreadId: number;
+    withGarbageText: number;
+    withEmptyText: number;
+    healthy: number;
+    healthPercentage: number;
+  }> {
+    const db = this._ensureDb();
+
+    // Total messages
+    const totalResult = db.prepare(`
+      SELECT COUNT(*) as count FROM messages
+      WHERE user_id = ? AND channel IN ('sms', 'imessage')
+    `).get(userId) as { count: number };
+
+    // With thread_id
+    const withThreadIdResult = db.prepare(`
+      SELECT COUNT(*) as count FROM messages
+      WHERE user_id = ? AND channel IN ('sms', 'imessage') AND thread_id IS NOT NULL
+    `).get(userId) as { count: number };
+
+    // With NULL thread_id
+    const withNullThreadIdResult = db.prepare(`
+      SELECT COUNT(*) as count FROM messages
+      WHERE user_id = ? AND channel IN ('sms', 'imessage') AND thread_id IS NULL
+    `).get(userId) as { count: number };
+
+    // DETERMINISTIC: Count messages that failed to parse (exact fallback messages)
+    // No heuristics - only count messages where parser returned a known fallback
+    const withGarbageResult = db.prepare(`
+      SELECT COUNT(*) as count FROM messages
+      WHERE user_id = ? AND channel IN ('sms', 'imessage')
+      AND body_text IN (
+        '[Unable to parse message]',
+        '[Message text - parsing error]',
+        '[Message text - unable to extract from rich format]'
+      )
+    `).get(userId) as { count: number };
+
+    // With empty or very short text
+    const withEmptyResult = db.prepare(`
+      SELECT COUNT(*) as count FROM messages
+      WHERE user_id = ? AND channel IN ('sms', 'imessage')
+      AND (body_text IS NULL OR LENGTH(body_text) < 1)
+    `).get(userId) as { count: number };
+
+    // Calculate healthy (has thread_id, no garbage, has text)
+    const healthy = totalResult.count - withNullThreadIdResult.count - withGarbageResult.count - withEmptyResult.count;
+    const healthPercentage = totalResult.count > 0
+      ? Math.round((healthy / totalResult.count) * 100 * 10) / 10
+      : 100;
+
+    return {
+      total: totalResult.count,
+      withThreadId: withThreadIdResult.count,
+      withNullThreadId: withNullThreadIdResult.count,
+      withGarbageText: withGarbageResult.count,
+      withEmptyText: withEmptyResult.count,
+      healthy: Math.max(0, healthy),
+      healthPercentage,
+    };
+  }
+
+  /**
+   * Diagnostic: Get thread_id distribution for a contact
+   * Shows which chats a contact appears in
+   */
+  async diagnosticGetThreadsForContact(userId: string, phoneDigits: string): Promise<{
+    threads: Array<{ thread_id: string | null; message_count: number; participants_sample: string }>;
+  }> {
+    const db = this._ensureDb();
+
+    const threads = db.prepare(`
+      SELECT
+        thread_id,
+        COUNT(*) as message_count,
+        (SELECT participants FROM messages m2
+         WHERE m2.thread_id = messages.thread_id
+         AND m2.user_id = ? LIMIT 1) as participants_sample
+      FROM messages
+      WHERE user_id = ?
+        AND channel IN ('sms', 'imessage')
+        AND participants_flat LIKE ?
+      GROUP BY thread_id
+      ORDER BY message_count DESC
+    `).all(userId, userId, `%${phoneDigits}%`) as Array<{
+      thread_id: string | null;
+      message_count: number;
+      participants_sample: string;
+    }>;
+
+    return { threads };
+  }
+
+  // ============================================
   // UTILITY OPERATIONS
   // ============================================
 
