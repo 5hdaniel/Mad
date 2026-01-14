@@ -6,6 +6,17 @@
  * - Multi-encoding fallback for text decoding
  * - Replacement character detection
  * - Various encoding scenarios
+ *
+ * DEPRECATION NOTE (TASK-1049):
+ * The following functions are deprecated as of the deterministic parsing refactor:
+ * - containsReplacementChars: Still useful for debugging but not used in main parsing flow
+ * - tryMultipleEncodings: Removed from main parsing flow; deterministic format detection is now used
+ *
+ * These tests are retained to ensure backward compatibility and for potential debugging use cases.
+ * The main message parsing now uses:
+ * - detectAttributedBodyFormat() for format detection
+ * - extractTextFromBinaryPlist() for bplist format
+ * - extractTextFromTypedstream() for typedstream format
  */
 
 import {
@@ -328,6 +339,71 @@ describe("encodingUtils", () => {
 
       expect(result.text).toBe(largeText);
       expect(duration).toBeLessThan(1000); // Should complete in under 1 second
+    });
+  });
+
+  /**
+   * TASK-1051: Deprecation documentation tests
+   *
+   * These tests document the deprecated status of certain functions
+   * and verify they still work for backward compatibility.
+   */
+  describe("Deprecated Functions (TASK-1049)", () => {
+    describe("containsReplacementChars - deprecated but functional", () => {
+      it("still detects replacement characters for debugging purposes", () => {
+        // This function is deprecated for main parsing but useful for debugging
+        expect(containsReplacementChars("Hello\uFFFDWorld")).toBe(true);
+        expect(containsReplacementChars("Hello World")).toBe(false);
+      });
+
+      it("documents deprecation in favor of deterministic parsing", () => {
+        // TASK-1049: The new approach uses format detection instead of
+        // heuristic encoding detection. containsReplacementChars was used
+        // to detect when encoding fallback was needed, but now we:
+        // 1. Detect format via magic bytes (bplist00, streamtyped)
+        // 2. Use format-specific parsers
+        // 3. Return deterministic fallback for unknown formats
+        expect(true).toBe(true); // Documentation test
+      });
+    });
+
+    describe("tryMultipleEncodings - deprecated but functional", () => {
+      it("still performs multi-encoding fallback for edge cases", () => {
+        // This function is deprecated for main parsing but may be useful
+        // for debugging or future edge case handling
+        const utf8Buffer = Buffer.from("Hello World");
+        const result = tryMultipleEncodings(utf8Buffer);
+        expect(result.text).toBe("Hello World");
+        expect(result.encoding).toBe("utf8");
+      });
+
+      it("documents deprecation in favor of deterministic format parsing", () => {
+        // TASK-1049: The new approach doesn't try multiple encodings.
+        // Instead, it:
+        // 1. Identifies the format (bplist or typedstream)
+        // 2. Uses the appropriate parser which handles encoding internally
+        // 3. Returns a clear fallback for unparseable content
+        //
+        // This is more reliable than heuristic encoding detection which
+        // could produce garbage text (e.g., Chinese characters in English).
+        expect(true).toBe(true); // Documentation test
+      });
+    });
+
+    describe("New recommended approach (TASK-1049)", () => {
+      it("should use detectAttributedBodyFormat for format detection", () => {
+        // Import and use the new deterministic approach
+        // This test documents the recommended pattern
+        const { detectAttributedBodyFormat } = require("../messageParser");
+
+        const bplistBuffer = Buffer.from("bplist00" + "\x00".repeat(20));
+        const typedstreamBuffer = Buffer.from("streamtyped" + "\x00".repeat(20));
+        const unknownBuffer = Buffer.from("random data");
+
+        expect(detectAttributedBodyFormat(bplistBuffer)).toBe("bplist");
+        expect(detectAttributedBodyFormat(typedstreamBuffer)).toBe("typedstream");
+        expect(detectAttributedBodyFormat(unknownBuffer)).toBe("unknown");
+      });
     });
   });
 });
