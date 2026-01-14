@@ -75,6 +75,73 @@ export function isBinaryPlist(buffer: Buffer): boolean {
 }
 
 /**
+ * Typedstream marker for detecting legacy Apple typedstream format
+ * Typedstream buffers contain "streamtyped" marker, typically within first 50 bytes
+ * (there may be 1-4 preamble bytes before the marker)
+ */
+const TYPEDSTREAM_MARKER = Buffer.from("streamtyped");
+
+/**
+ * Check if a buffer is in typedstream format
+ *
+ * Typedstream is a legacy Apple serialization format used for NSAttributedString.
+ * The marker "streamtyped" appears within the first ~50 bytes, potentially
+ * preceded by preamble bytes.
+ *
+ * @param buffer - Buffer to check
+ * @returns True if buffer contains streamtyped marker in first 50 bytes
+ */
+export function isTypedstream(buffer: Buffer): boolean {
+  if (buffer.length < TYPEDSTREAM_MARKER.length) {
+    return false;
+  }
+
+  // Check for "streamtyped" marker anywhere in first 50 bytes
+  // (there may be preamble bytes before it)
+  const searchWindow = buffer.subarray(0, Math.min(50, buffer.length));
+  return searchWindow.includes(TYPEDSTREAM_MARKER);
+}
+
+/**
+ * Possible formats for attributedBody data
+ */
+export type AttributedBodyFormat = "bplist" | "typedstream" | "unknown";
+
+/**
+ * Detect the format of an attributedBody buffer using magic bytes
+ *
+ * This function provides deterministic format detection before parsing:
+ * - Binary plist (bplist00): NSKeyedArchiver format, starts with "bplist00"
+ * - Typedstream: Legacy Apple format, contains "streamtyped" marker
+ * - Unknown: Format not recognized, may need heuristic parsing
+ *
+ * TASK-1046: Foundation for deterministic message parsing refactor
+ *
+ * @param buffer - Buffer to detect format for (can be null/undefined)
+ * @returns Detected format: 'bplist', 'typedstream', or 'unknown'
+ */
+export function detectAttributedBodyFormat(
+  buffer: Buffer | null | undefined
+): AttributedBodyFormat {
+  if (!buffer || buffer.length === 0) {
+    return "unknown";
+  }
+
+  if (isBinaryPlist(buffer)) {
+    logService.debug("Detected binary plist format (bplist00 magic bytes)", "MessageParser");
+    return "bplist";
+  }
+
+  if (isTypedstream(buffer)) {
+    logService.debug("Detected typedstream format (streamtyped marker)", "MessageParser");
+    return "typedstream";
+  }
+
+  logService.debug("Unknown attributedBody format", "MessageParser");
+  return "unknown";
+}
+
+/**
  * NSKeyedArchiver plist structure (simplified)
  * The actual structure is complex, but we extract text from $objects
  */
