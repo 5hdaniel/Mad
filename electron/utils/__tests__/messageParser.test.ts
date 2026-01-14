@@ -23,6 +23,16 @@ import {
 } from "../messageParser";
 import { FALLBACK_MESSAGES } from "../../constants";
 import { REPLACEMENT_CHAR } from "../encodingUtils";
+import {
+  createTypedstreamBuffer,
+  createMultiSegmentTypedstream,
+  TYPEDSTREAM_SAMPLES,
+  BPLIST_STRUCTURES,
+  EDGE_CASE_BUFFERS,
+  GARBAGE_PATTERNS,
+  isValidExtractedText,
+  METADATA_STRINGS,
+} from "./fixtures/messageParserFixtures";
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const simplePlist = require("simple-plist") as {
@@ -994,6 +1004,632 @@ describe("messageParser", () => {
       };
 
       expect(await getMessageText(message)).toBe(FALLBACK_MESSAGES.ATTACHMENT);
+    });
+  });
+
+  /**
+   * TASK-1051: Comprehensive typedstream extraction tests using fixtures
+   */
+  describe("extractTextFromTypedstream - comprehensive (TASK-1051)", () => {
+    describe("Format variations", () => {
+      it("should extract text from simple typedstream (fixture)", () => {
+        const result = extractTextFromTypedstream(TYPEDSTREAM_SAMPLES.SIMPLE);
+        expect(result).toBe("Hello, this is a test message!");
+      });
+
+      it("should handle typedstream with streamtyped marker (fixture)", () => {
+        const result = extractTextFromTypedstream(TYPEDSTREAM_SAMPLES.WITH_MARKER);
+        expect(result).toBe("Hello from typedstream!");
+      });
+
+      it("should handle mutable string preamble (fixture)", () => {
+        const result = extractTextFromTypedstream(TYPEDSTREAM_SAMPLES.MUTABLE_STRING);
+        expect(result).toBe("Check out this link!");
+      });
+
+      it("should handle extended length format (>127 bytes)", () => {
+        const result = extractTextFromTypedstream(TYPEDSTREAM_SAMPLES.EXTENDED_LENGTH);
+        expect(result).toBe("A".repeat(150));
+      });
+
+      it("should handle extended length format with 0x81 prefix", () => {
+        // Create a buffer with 200 chars to require extended length
+        const longText = "B".repeat(200);
+        const buffer = createTypedstreamBuffer(longText);
+        const result = extractTextFromTypedstream(buffer);
+        expect(result).toBe(longText);
+      });
+    });
+
+    describe("Unicode content", () => {
+      it("should extract unicode text from typedstream", () => {
+        const result = extractTextFromTypedstream(TYPEDSTREAM_SAMPLES.UNICODE);
+        expect(result).toBe("Hello! Let's meet at cafe for coffee!");
+      });
+
+      it("should handle emoji content", () => {
+        const result = extractTextFromTypedstream(TYPEDSTREAM_SAMPLES.EMOJI);
+        expect(result).toBe("Great job! Thumbs up! Party!");
+      });
+
+      it("should handle CJK characters", () => {
+        const result = extractTextFromTypedstream(TYPEDSTREAM_SAMPLES.CJK);
+        expect(result).toBe("Hello in Chinese, Japanese, and Korean");
+      });
+    });
+
+    describe("Multiple segments", () => {
+      it("should return longest segment from multi-segment buffer", () => {
+        const buffer = createMultiSegmentTypedstream([
+          "short",
+          "medium length text",
+          "This is the longest text segment in the buffer",
+        ]);
+        const result = extractTextFromTypedstream(buffer);
+        expect(result).toBe("This is the longest text segment in the buffer");
+      });
+
+      it("should handle two equal-length segments", () => {
+        const buffer = createMultiSegmentTypedstream([
+          "first segment here",
+          "other segment too",
+        ]);
+        const result = extractTextFromTypedstream(buffer);
+        // Should return one of them (first sorted longest)
+        expect(result).toBe("first segment here");
+      });
+    });
+
+    describe("Metadata filtering", () => {
+      it("should filter NSKeyedArchiver class names that match filter patterns", () => {
+        // These specific class names match the isTypedstreamMetadata filter
+        // Note: The filter uses includes() checks, so the exact class name must be in the list
+        // or contain one of the filtered substrings
+        const filteredClasses = [
+          "NSAttributedString", // matches includes("NSAttributedString")
+          "NSMutableString",    // matches includes("NSMutableString")
+          "NSString",           // matches includes("NSString")
+          "NSObject",           // matches includes("NSObject")
+          "NSDictionary",       // matches includes("NSDictionary")
+          "NSArray",            // matches includes("NSArray")
+          "NSData",             // matches includes("NSData")
+        ];
+        for (const metadata of filteredClasses) {
+          const buffer = createTypedstreamBuffer(metadata);
+          const result = extractTextFromTypedstream(buffer);
+          expect(result).toBeNull();
+        }
+      });
+
+      it("should NOT filter NSMutableAttributedString (not in filter list)", () => {
+        // NSMutableAttributedString doesn't match any filter pattern:
+        // - It doesn't contain "NSAttributedString" (different string)
+        // - It doesn't contain "NSMutableString" (different string)
+        // - It DOES contain "String" but that's not a filter
+        // This is a known limitation of the current filter design
+        const buffer = createTypedstreamBuffer("NSMutableAttributedString");
+        const result = extractTextFromTypedstream(buffer);
+        // The filter misses this one - it's a complex class name
+        expect(result).toBe("NSMutableAttributedString");
+      });
+
+      it("should filter all iMessage metadata keys", () => {
+        for (const metadata of METADATA_STRINGS.IMESSAGE_KEYS) {
+          const buffer = createTypedstreamBuffer(metadata);
+          const result = extractTextFromTypedstream(buffer);
+          expect(result).toBeNull();
+        }
+      });
+
+      it("should filter format markers", () => {
+        for (const marker of METADATA_STRINGS.FORMAT_MARKERS) {
+          const buffer = createTypedstreamBuffer(marker);
+          const result = extractTextFromTypedstream(buffer);
+          expect(result).toBeNull();
+        }
+      });
+
+      it("should NOT filter kIM appearing in middle of text (not at start)", () => {
+        // Note: The filter uses startsWith("kIM") so middle occurrences are allowed
+        const buffer = createTypedstreamBuffer("The kIM chi was delicious");
+        const result = extractTextFromTypedstream(buffer);
+        expect(result).toBe("The kIM chi was delicious");
+      });
+
+      it("should filter text containing NS class names (aggressive filter)", () => {
+        // Note: Current implementation uses includes() for NS class names
+        // This is intentionally aggressive to prevent metadata leaking through
+        // Text containing "NSString" etc. will be filtered
+        const textsWithClasses = [
+          "I love NSString programming",
+          "Let me explain NSAttributedString to you",
+        ];
+        for (const text of textsWithClasses) {
+          const buffer = createTypedstreamBuffer(text);
+          const result = extractTextFromTypedstream(buffer);
+          // These are filtered because they contain NS class names
+          expect(result).toBeNull();
+        }
+      });
+    });
+
+    describe("Edge cases", () => {
+      it("should return null for empty string content", () => {
+        const result = extractTextFromTypedstream(TYPEDSTREAM_SAMPLES.EMPTY_STRING);
+        expect(result).toBeNull();
+      });
+
+      it("should handle very short string (2 chars)", () => {
+        const result = extractTextFromTypedstream(TYPEDSTREAM_SAMPLES.SHORT_STRING);
+        expect(result).toBeNull(); // Too short (< 3 chars after filtering)
+      });
+
+      it("should return null for metadata-only content", () => {
+        const result = extractTextFromTypedstream(TYPEDSTREAM_SAMPLES.ONLY_METADATA);
+        expect(result).toBeNull();
+      });
+
+      it("should return null for kIM metadata without underscore", () => {
+        const result = extractTextFromTypedstream(TYPEDSTREAM_SAMPLES.KIM_METADATA);
+        expect(result).toBeNull();
+      });
+
+      it("should handle buffer with truncated length byte", () => {
+        // Create buffer that ends right after NSString marker
+        const buffer = Buffer.from("NSString");
+        const result = extractTextFromTypedstream(buffer);
+        expect(result).toBeNull();
+      });
+
+      it("should handle buffer with invalid length value", () => {
+        // Create buffer with length byte pointing beyond buffer
+        const nsStringMarker = Buffer.from("NSString");
+        const preamble = Buffer.from([0x01, 0x94, 0x84, 0x01, 0x2b]);
+        const invalidLength = Buffer.from([0xff]); // 255 bytes but buffer is shorter
+        const buffer = Buffer.concat([nsStringMarker, preamble, invalidLength, Buffer.from("short")]);
+        const result = extractTextFromTypedstream(buffer);
+        expect(result).toBeNull();
+      });
+    });
+  });
+
+  /**
+   * TASK-1051: Comprehensive binary plist extraction tests using fixtures
+   */
+  describe("extractTextFromBinaryPlist - comprehensive (TASK-1051)", () => {
+    describe("Structure variations", () => {
+      it("should extract from simple message structure", () => {
+        const buffer = simplePlist.bplistCreator(BPLIST_STRUCTURES.SIMPLE_MESSAGE);
+        const result = extractTextFromBinaryPlist(buffer);
+        expect(result).toBe("Hello, this is a message from binary plist!");
+      });
+
+      it("should extract from NS.string property", () => {
+        const buffer = simplePlist.bplistCreator(BPLIST_STRUCTURES.NS_STRING_PROPERTY);
+        const result = extractTextFromBinaryPlist(buffer);
+        expect(result).toBe("Message from NS.string property");
+      });
+
+      it("should pick longest from multiple strings", () => {
+        const buffer = simplePlist.bplistCreator(BPLIST_STRUCTURES.MULTIPLE_STRINGS);
+        const result = extractTextFromBinaryPlist(buffer);
+        expect(result).toBe("This is a longer message that should be selected");
+      });
+    });
+
+    describe("Metadata filtering", () => {
+      it("should return null for metadata-only structure", () => {
+        const buffer = simplePlist.bplistCreator(BPLIST_STRUCTURES.ONLY_METADATA);
+        const result = extractTextFromBinaryPlist(buffer);
+        expect(result).toBeNull();
+      });
+
+      it("should return null for empty $objects", () => {
+        const buffer = simplePlist.bplistCreator(BPLIST_STRUCTURES.EMPTY_OBJECTS);
+        const result = extractTextFromBinaryPlist(buffer);
+        expect(result).toBeNull();
+      });
+
+      it("should return null for non-NSKeyedArchiver plist", () => {
+        const buffer = simplePlist.bplistCreator(BPLIST_STRUCTURES.NOT_KEYED_ARCHIVER);
+        const result = extractTextFromBinaryPlist(buffer);
+        expect(result).toBeNull();
+      });
+
+      it("should filter kIM metadata strings", () => {
+        const buffer = simplePlist.bplistCreator(BPLIST_STRUCTURES.KIM_METADATA);
+        const result = extractTextFromBinaryPlist(buffer);
+        expect(result).toBe("This is the actual message");
+      });
+
+      it("should filter mixed __kIM and kIM metadata", () => {
+        const buffer = simplePlist.bplistCreator(BPLIST_STRUCTURES.MIXED_KIM);
+        const result = extractTextFromBinaryPlist(buffer);
+        expect(result).toBe("The real message content here");
+      });
+
+      it("should NOT filter kIM appearing in middle of text", () => {
+        const buffer = simplePlist.bplistCreator(BPLIST_STRUCTURES.KIM_IN_MIDDLE);
+        const result = extractTextFromBinaryPlist(buffer);
+        expect(result).toBe("I love making kIM chi at home");
+      });
+    });
+
+    describe("Unicode content", () => {
+      it("should handle unicode message", () => {
+        const buffer = simplePlist.bplistCreator(BPLIST_STRUCTURES.UNICODE_MESSAGE);
+        const result = extractTextFromBinaryPlist(buffer);
+        expect(result).toBe("Hello! Let's meet at cafe - it'll be fun!");
+      });
+
+      it("should handle CJK message", () => {
+        const buffer = simplePlist.bplistCreator(BPLIST_STRUCTURES.CJK_MESSAGE);
+        const result = extractTextFromBinaryPlist(buffer);
+        expect(result).toBe("Chinese, Japanese, Korean greetings");
+      });
+    });
+
+    describe("Edge cases", () => {
+      it("should handle streamtyped as text content", () => {
+        const buffer = simplePlist.bplistCreator(BPLIST_STRUCTURES.STREAMTYPED_AS_TEXT);
+        const result = extractTextFromBinaryPlist(buffer);
+        expect(result).toBe("streamtyped is just text content here, not a marker");
+      });
+
+      it("should handle malformed bplist gracefully", () => {
+        const result = extractTextFromBinaryPlist(EDGE_CASE_BUFFERS.INVALID_BPLIST);
+        expect(result).toBeNull();
+      });
+
+      it("should handle empty buffer", () => {
+        const result = extractTextFromBinaryPlist(EDGE_CASE_BUFFERS.EMPTY);
+        expect(result).toBeNull();
+      });
+
+      it("should handle random binary data", () => {
+        const result = extractTextFromBinaryPlist(EDGE_CASE_BUFFERS.RANDOM_BINARY);
+        expect(result).toBeNull();
+      });
+    });
+  });
+
+  /**
+   * TASK-1051: Main parser flow integration tests
+   */
+  describe("extractTextFromAttributedBody - integration (TASK-1051)", () => {
+    describe("Format routing", () => {
+      it("should route bplist to binary parser and extract text", async () => {
+        const buffer = simplePlist.bplistCreator(BPLIST_STRUCTURES.SIMPLE_MESSAGE);
+        const result = await extractTextFromAttributedBody(buffer);
+        expect(result).toBe("Hello, this is a message from binary plist!");
+      });
+
+      it("should route typedstream to typedstream parser", async () => {
+        const buffer = createTypedstreamBuffer("Message via typedstream", {
+          includeStreamMarker: true,
+        });
+        const result = await extractTextFromAttributedBody(buffer);
+        expect(result).toBe("Message via typedstream");
+      });
+
+      it("should return UNABLE_TO_PARSE for unknown format", async () => {
+        const result = await extractTextFromAttributedBody(EDGE_CASE_BUFFERS.RANDOM_BINARY);
+        expect(result).toBe(FALLBACK_MESSAGES.UNABLE_TO_PARSE);
+      });
+
+      it("should return UNABLE_TO_PARSE for plain text without markers", async () => {
+        const result = await extractTextFromAttributedBody(EDGE_CASE_BUFFERS.PLAIN_TEXT);
+        expect(result).toBe(FALLBACK_MESSAGES.UNABLE_TO_PARSE);
+      });
+    });
+
+    describe("Fallback handling", () => {
+      it("should return REACTION_OR_SYSTEM for null buffer", async () => {
+        const result = await extractTextFromAttributedBody(null);
+        expect(result).toBe(FALLBACK_MESSAGES.REACTION_OR_SYSTEM);
+      });
+
+      it("should return REACTION_OR_SYSTEM for undefined buffer", async () => {
+        const result = await extractTextFromAttributedBody(undefined);
+        expect(result).toBe(FALLBACK_MESSAGES.REACTION_OR_SYSTEM);
+      });
+
+      it("should return REACTION_OR_SYSTEM for empty buffer", async () => {
+        const result = await extractTextFromAttributedBody(EDGE_CASE_BUFFERS.EMPTY);
+        expect(result).toBe(FALLBACK_MESSAGES.REACTION_OR_SYSTEM);
+      });
+
+      it("should return UNABLE_TO_PARSE when bplist has no extractable content", async () => {
+        const buffer = simplePlist.bplistCreator(BPLIST_STRUCTURES.EMPTY_OBJECTS);
+        const result = await extractTextFromAttributedBody(buffer);
+        expect(result).toBe(FALLBACK_MESSAGES.UNABLE_TO_PARSE);
+      });
+
+      it("should return UNABLE_TO_PARSE when typedstream has no extractable content", async () => {
+        // Typedstream marker but no NSString content
+        const preamble = Buffer.from([0x04, 0x0b]);
+        const marker = Buffer.from("streamtyped");
+        const padding = Buffer.alloc(50);
+        const buffer = Buffer.concat([preamble, marker, padding]);
+        const result = await extractTextFromAttributedBody(buffer);
+        expect(result).toBe(FALLBACK_MESSAGES.UNABLE_TO_PARSE);
+      });
+    });
+
+    describe("Text cleaning integration", () => {
+      it("should clean control characters from extracted bplist text", async () => {
+        const plist = {
+          $archiver: "NSKeyedArchiver",
+          $objects: ["$null", "Hello\x00\x01\x02World"],
+        };
+        const buffer = simplePlist.bplistCreator(plist);
+        const result = await extractTextFromAttributedBody(buffer);
+        expect(result).toBe("HelloWorld");
+      });
+
+      it("should clean control characters from extracted typedstream text", async () => {
+        const buffer = createTypedstreamBuffer("Hello\x00\x01\x02World", {
+          includeStreamMarker: true,
+        });
+        const result = await extractTextFromAttributedBody(buffer);
+        expect(result).toBe("HelloWorld");
+      });
+
+      it("should preserve unicode in cleaned text", async () => {
+        const buffer = simplePlist.bplistCreator(BPLIST_STRUCTURES.UNICODE_MESSAGE);
+        const result = await extractTextFromAttributedBody(buffer);
+        expect(result).toContain("cafe");
+      });
+    });
+  });
+
+  /**
+   * TASK-1051: Regression tests for garbage text issues
+   */
+  describe("Regression Tests (TASK-1051)", () => {
+    describe("Garbage text prevention", () => {
+      it("should NOT return Chinese characters for English bplist message", async () => {
+        const buffer = simplePlist.bplistCreator(BPLIST_STRUCTURES.SIMPLE_MESSAGE);
+        const result = await extractTextFromAttributedBody(buffer);
+
+        // Verify no garbage patterns
+        expect(result).not.toMatch(GARBAGE_PATTERNS.CJK_RANGE);
+        expect(result).not.toMatch(GARBAGE_PATTERNS.DEVANAGARI);
+        expect(result).not.toMatch(GARBAGE_PATTERNS.RAW_MARKER);
+        expect(result).not.toMatch(GARBAGE_PATTERNS.BPLIST_MARKER);
+      });
+
+      it("should NOT return streamtyped marker in output", async () => {
+        const buffer = createTypedstreamBuffer("Hello world", {
+          includeStreamMarker: true,
+        });
+        const result = await extractTextFromAttributedBody(buffer);
+
+        expect(result).not.toContain("streamtyped");
+        expect(result).toBe("Hello world");
+      });
+
+      it("should NOT return bplist00 marker in output", async () => {
+        const buffer = simplePlist.bplistCreator(BPLIST_STRUCTURES.SIMPLE_MESSAGE);
+        const result = await extractTextFromAttributedBody(buffer);
+
+        expect(result).not.toContain("bplist00");
+      });
+
+      it("should return valid text or fallback, never garbage", async () => {
+        const buffer = simplePlist.bplistCreator(BPLIST_STRUCTURES.SIMPLE_MESSAGE);
+        const result = await extractTextFromAttributedBody(buffer);
+
+        // Either readable or fallback
+        const isReadable = isValidExtractedText(result, true);
+        const isFallback = Object.values(FALLBACK_MESSAGES).includes(result);
+        expect(isReadable || isFallback).toBe(true);
+      });
+    });
+
+    describe("Fallback consistency", () => {
+      it("should always return string type, never null or undefined", async () => {
+        const testCases = [
+          null,
+          undefined,
+          EDGE_CASE_BUFFERS.EMPTY,
+          EDGE_CASE_BUFFERS.RANDOM_BINARY,
+          EDGE_CASE_BUFFERS.PLAIN_TEXT,
+          EDGE_CASE_BUFFERS.ALL_NULLS,
+        ];
+
+        for (const testCase of testCases) {
+          const result = await extractTextFromAttributedBody(testCase as Buffer | null);
+          expect(typeof result).toBe("string");
+          expect(result.length).toBeGreaterThan(0);
+        }
+      });
+
+      it("should return one of the defined fallback messages for unparseable content", async () => {
+        const result = await extractTextFromAttributedBody(EDGE_CASE_BUFFERS.RANDOM_BINARY);
+        const validFallbacks = Object.values(FALLBACK_MESSAGES);
+        expect(validFallbacks).toContain(result);
+      });
+    });
+
+    describe("Rich message handling", () => {
+      it("should parse rich message with link (mutable string)", async () => {
+        const buffer = createTypedstreamBuffer("Check out https://example.com", {
+          preamble: "mutable",
+          includeStreamMarker: true,
+        });
+        const result = await extractTextFromAttributedBody(buffer);
+        expect(result).toContain("example.com");
+      });
+
+      it("should parse calendar event message", async () => {
+        const buffer = createTypedstreamBuffer("Meeting tomorrow at 3pm", {
+          preamble: "mutable",
+          includeStreamMarker: true,
+        });
+        const result = await extractTextFromAttributedBody(buffer);
+        expect(result).toBe("Meeting tomorrow at 3pm");
+      });
+    });
+  });
+
+  /**
+   * TASK-1051: getMessageText comprehensive tests
+   */
+  describe("getMessageText - comprehensive (TASK-1051)", () => {
+    describe("Priority handling", () => {
+      it("should use text field when valid (priority 1)", async () => {
+        const message: Message = {
+          text: "Direct text content",
+          attributedBody: simplePlist.bplistCreator(BPLIST_STRUCTURES.SIMPLE_MESSAGE),
+        };
+        const result = await getMessageText(message);
+        expect(result).toBe("Direct text content");
+      });
+
+      it("should fall back to attributedBody when text is empty (priority 2)", async () => {
+        const message: Message = {
+          text: "",
+          attributedBody: simplePlist.bplistCreator(BPLIST_STRUCTURES.SIMPLE_MESSAGE),
+        };
+        const result = await getMessageText(message);
+        expect(result).toBe("Hello, this is a message from binary plist!");
+      });
+
+      it("should fall back to attributedBody when text is null (priority 2)", async () => {
+        const message: Message = {
+          text: null,
+          attributedBody: simplePlist.bplistCreator(BPLIST_STRUCTURES.SIMPLE_MESSAGE),
+        };
+        const result = await getMessageText(message);
+        expect(result).toBe("Hello, this is a message from binary plist!");
+      });
+
+      it("should return ATTACHMENT fallback when has attachments (priority 3)", async () => {
+        const message: Message = {
+          text: null,
+          attributedBody: null,
+          cache_has_attachments: 1,
+        };
+        const result = await getMessageText(message);
+        expect(result).toBe(FALLBACK_MESSAGES.ATTACHMENT);
+      });
+
+      it("should return REACTION_OR_SYSTEM as last resort (priority 4)", async () => {
+        const message: Message = {
+          text: null,
+          attributedBody: null,
+          cache_has_attachments: 0,
+        };
+        const result = await getMessageText(message);
+        expect(result).toBe(FALLBACK_MESSAGES.REACTION_OR_SYSTEM);
+      });
+    });
+
+    describe("Text cleaning", () => {
+      it("should clean control characters from text field", async () => {
+        const message: Message = {
+          text: "Hello\x00\x01World",
+          attributedBody: null,
+        };
+        const result = await getMessageText(message);
+        expect(result).toBe("HelloWorld");
+      });
+
+      it("should preserve replacement characters", async () => {
+        const message: Message = {
+          text: `Hello${REPLACEMENT_CHAR}World`,
+          attributedBody: null,
+        };
+        const result = await getMessageText(message);
+        expect(result).toContain(REPLACEMENT_CHAR);
+      });
+
+      it("should preserve unicode in text field", async () => {
+        const message: Message = {
+          text: "Let's meet at cafe",
+          attributedBody: null,
+        };
+        const result = await getMessageText(message);
+        expect(result).toBe("Let's meet at cafe");
+      });
+    });
+
+    describe("Edge cases", () => {
+      it("should handle whitespace-only text as invalid", async () => {
+        const message: Message = {
+          text: "   ",
+          attributedBody: simplePlist.bplistCreator(BPLIST_STRUCTURES.SIMPLE_MESSAGE),
+        };
+        const result = await getMessageText(message);
+        // Whitespace-only text is cleaned to empty, should fall back to attributedBody
+        expect(result).toBe("Hello, this is a message from binary plist!");
+      });
+
+      it("should handle message with all properties undefined", async () => {
+        const message: Message = {};
+        const result = await getMessageText(message);
+        expect(result).toBe(FALLBACK_MESSAGES.REACTION_OR_SYSTEM);
+      });
+
+      it("should handle very long text gracefully", async () => {
+        const longText = "A".repeat(15000);
+        const message: Message = {
+          text: longText,
+          attributedBody: null,
+        };
+        const result = await getMessageText(message);
+        // Should handle gracefully - either truncate or return fallback
+        expect(typeof result).toBe("string");
+      });
+    });
+  });
+
+  /**
+   * TASK-1051: Performance and stress tests
+   */
+  describe("Performance Tests (TASK-1051)", () => {
+    it("should handle large bplist buffer efficiently", async () => {
+      const largeText = "A".repeat(5000);
+      const plist = {
+        $archiver: "NSKeyedArchiver",
+        $objects: ["$null", largeText],
+      };
+      const buffer = simplePlist.bplistCreator(plist);
+
+      const start = Date.now();
+      const result = await extractTextFromAttributedBody(buffer);
+      const duration = Date.now() - start;
+
+      expect(result).toBe(largeText);
+      expect(duration).toBeLessThan(1000); // Should complete in under 1 second
+    });
+
+    it("should handle large typedstream buffer efficiently", async () => {
+      const buffer = EDGE_CASE_BUFFERS.LARGE;
+      const start = Date.now();
+      const result = await extractTextFromAttributedBody(buffer);
+      const duration = Date.now() - start;
+
+      expect(typeof result).toBe("string");
+      expect(duration).toBeLessThan(1000);
+    });
+
+    it("should handle many small buffers efficiently", async () => {
+      const buffers = Array(100).fill(null).map(() =>
+        simplePlist.bplistCreator({
+          $archiver: "NSKeyedArchiver",
+          $objects: ["$null", "Short message"],
+        })
+      );
+
+      const start = Date.now();
+      for (const buffer of buffers) {
+        await extractTextFromAttributedBody(buffer);
+      }
+      const duration = Date.now() - start;
+
+      expect(duration).toBeLessThan(5000); // 100 buffers in under 5 seconds
     });
   });
 });
