@@ -16,6 +16,9 @@ import {
   Message,
   isBinaryPlist,
   extractTextFromBinaryPlist,
+  isTypedstream,
+  detectAttributedBodyFormat,
+  AttributedBodyFormat,
 } from "../messageParser";
 import { FALLBACK_MESSAGES } from "../../constants";
 import { REPLACEMENT_CHAR } from "../encodingUtils";
@@ -56,6 +59,130 @@ describe("messageParser", () => {
     it("should return false for buffer with bplist00 not at start", () => {
       const buffer = Buffer.from("some prefix bplist00 data");
       expect(isBinaryPlist(buffer)).toBe(false);
+    });
+  });
+
+  /**
+   * TASK-1046: Typedstream format detection tests
+   * These tests verify detection of the legacy Apple typedstream serialization format
+   */
+  describe("isTypedstream", () => {
+    it("should detect buffer starting with streamtyped marker", () => {
+      const buffer = Buffer.from("streamtyped" + "\x00".repeat(20));
+      expect(isTypedstream(buffer)).toBe(true);
+    });
+
+    it("should detect streamtyped marker with preamble bytes", () => {
+      // Typedstream format often has 1-4 preamble bytes before the marker
+      const preamble = Buffer.from([0x04, 0x0b]);
+      const marker = Buffer.from("streamtyped");
+      const data = Buffer.from("\x00".repeat(20));
+      const buffer = Buffer.concat([preamble, marker, data]);
+      expect(isTypedstream(buffer)).toBe(true);
+    });
+
+    it("should return false for bplist buffer", () => {
+      const bplistBuffer = Buffer.from("bplist00" + "\x00".repeat(20));
+      expect(isTypedstream(bplistBuffer)).toBe(false);
+    });
+
+    it("should return false for empty buffer", () => {
+      const emptyBuffer = Buffer.from("");
+      expect(isTypedstream(emptyBuffer)).toBe(false);
+    });
+
+    it("should return false for buffer smaller than marker", () => {
+      const smallBuffer = Buffer.from("stream");
+      expect(isTypedstream(smallBuffer)).toBe(false);
+    });
+
+    it("should return false for buffer with streamtyped beyond 50 bytes", () => {
+      // Marker should be within first 50 bytes
+      const padding = "x".repeat(60);
+      const buffer = Buffer.from(padding + "streamtyped");
+      expect(isTypedstream(buffer)).toBe(false);
+    });
+
+    it("should return false for plain text buffer", () => {
+      const buffer = Buffer.from("Hello, this is just plain text!");
+      expect(isTypedstream(buffer)).toBe(false);
+    });
+
+    it("should detect streamtyped at position 39 (within 50 byte window)", () => {
+      // Position 39 + 11 bytes marker = 50 bytes total, exactly at boundary
+      const padding = "x".repeat(39);
+      const buffer = Buffer.from(padding + "streamtyped");
+      expect(isTypedstream(buffer)).toBe(true);
+    });
+  });
+
+  /**
+   * TASK-1046: Combined format detection tests
+   * Tests the detectAttributedBodyFormat function that identifies format using magic bytes
+   */
+  describe("detectAttributedBodyFormat", () => {
+    it("should return 'bplist' for binary plist buffer", () => {
+      const bplistBuffer = Buffer.from("bplist00" + "\x00".repeat(20));
+      expect(detectAttributedBodyFormat(bplistBuffer)).toBe("bplist");
+    });
+
+    it("should return 'typedstream' for typedstream buffer", () => {
+      const typedstreamBuffer = Buffer.from("streamtyped" + "\x00".repeat(20));
+      expect(detectAttributedBodyFormat(typedstreamBuffer)).toBe("typedstream");
+    });
+
+    it("should return 'unknown' for plain text buffer", () => {
+      const plainText = Buffer.from("Hello, this is plain text");
+      expect(detectAttributedBodyFormat(plainText)).toBe("unknown");
+    });
+
+    it("should return 'unknown' for null buffer", () => {
+      expect(detectAttributedBodyFormat(null)).toBe("unknown");
+    });
+
+    it("should return 'unknown' for undefined buffer", () => {
+      expect(detectAttributedBodyFormat(undefined)).toBe("unknown");
+    });
+
+    it("should return 'unknown' for empty buffer", () => {
+      const emptyBuffer = Buffer.from("");
+      expect(detectAttributedBodyFormat(emptyBuffer)).toBe("unknown");
+    });
+
+    it("should return 'unknown' for short buffer (not matching any format)", () => {
+      const shortBuffer = Buffer.from("abc");
+      expect(detectAttributedBodyFormat(shortBuffer)).toBe("unknown");
+    });
+
+    it("should prioritize bplist over typedstream when both markers present", () => {
+      // If bplist marker is at start, should detect as bplist even if streamtyped appears later
+      const nsKeyedArchiverData = {
+        $archiver: "NSKeyedArchiver",
+        $objects: ["$null", "streamtyped is just text content here"],
+      };
+      const bplistBuffer = simplePlist.bplistCreator(nsKeyedArchiverData);
+      expect(detectAttributedBodyFormat(bplistBuffer)).toBe("bplist");
+    });
+
+    it("should detect typedstream with preamble bytes", () => {
+      const preamble = Buffer.from([0x04, 0x0b]);
+      const marker = Buffer.from("streamtyped");
+      const data = Buffer.from("\x00".repeat(20));
+      const buffer = Buffer.concat([preamble, marker, data]);
+      expect(detectAttributedBodyFormat(buffer)).toBe("typedstream");
+    });
+
+    it("should return correct type for type checking", () => {
+      const result: AttributedBodyFormat = detectAttributedBodyFormat(
+        Buffer.from("bplist00")
+      );
+      // TypeScript should accept this assignment
+      expect(["bplist", "typedstream", "unknown"]).toContain(result);
+    });
+
+    it("should return 'unknown' for random binary data", () => {
+      const randomBuffer = Buffer.from([0xff, 0xfe, 0x00, 0x01, 0x02, 0x03]);
+      expect(detectAttributedBodyFormat(randomBuffer)).toBe("unknown");
     });
   });
 
