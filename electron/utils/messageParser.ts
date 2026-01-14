@@ -50,11 +50,8 @@ import {
   FALLBACK_MESSAGES,
 } from "../constants";
 import logService from "../services/logService";
-import {
-  containsReplacementChars,
-  tryMultipleEncodings,
-  REPLACEMENT_CHAR,
-} from "./encodingUtils";
+// Note: containsReplacementChars and tryMultipleEncodings are now deprecated
+// TASK-1049: Removed heuristic encoding fallbacks - we now use deterministic parsing
 
 /**
  * Magic bytes for binary plist format
@@ -335,166 +332,89 @@ export interface Message {
 /**
  * Extract text from macOS Messages attributedBody blob
  *
- * Supports two formats:
- * 1. Binary plist (bplist00) - NSKeyedArchiver format, parsed with simple-plist
- * 2. Typedstream format - Legacy Apple format, parsed with imessage-parser
+ * Uses DETERMINISTIC format detection based on magic bytes:
+ * 1. "bplist00" -> Binary plist (NSKeyedArchiver)
+ * 2. "streamtyped" -> Typedstream (legacy Apple format)
+ * 3. Neither -> Unknown format (return placeholder)
  *
- * TASK-1035: Added binary plist detection and parsing to fix corruption where
- * bplist data was being misinterpreted as text (showing "bplist00" garbage).
+ * NEVER guesses encoding or uses heuristics.
  *
- * IMPORTANT: This function NEVER strips U+FFFD replacement characters as that
- * would cause data loss. Instead, it attempts multiple encodings to properly
- * decode the text.
+ * TASK-1049: Refactored to use deterministic format detection and remove
+ * all heuristic fallbacks. Unknown formats now return a clear placeholder
+ * instead of attempting to extract garbage.
  *
  * @param attributedBodyBuffer - The attributedBody buffer from Messages database
- * @returns Extracted text or fallback message
+ * @returns Extracted text or clear fallback message
  */
 export async function extractTextFromAttributedBody(
   attributedBodyBuffer: Buffer | null | undefined
 ): Promise<string> {
-  if (!attributedBodyBuffer) {
+  if (!attributedBodyBuffer || attributedBodyBuffer.length === 0) {
     return FALLBACK_MESSAGES.REACTION_OR_SYSTEM;
   }
 
-  // TASK-1035: Check for binary plist format FIRST
-  // Binary plists start with "bplist00" and require different parsing
-  if (isBinaryPlist(attributedBodyBuffer)) {
-    logService.debug("Detected binary plist format, using simple-plist parser", "MessageParser");
+  // DETERMINISTIC: Detect format from magic bytes
+  const format = detectAttributedBodyFormat(attributedBodyBuffer);
 
-    const bplistResult = extractTextFromBinaryPlist(attributedBodyBuffer);
-    if (bplistResult && bplistResult.length >= MIN_MESSAGE_TEXT_LENGTH) {
-      const cleaned = cleanExtractedText(bplistResult);
-      if (cleaned.length >= MIN_MESSAGE_TEXT_LENGTH && cleaned.length < MAX_MESSAGE_TEXT_LENGTH) {
-        return cleaned;
+  logService.debug(`Detected attributedBody format: ${format}`, "MessageParser", {
+    bufferLength: attributedBodyBuffer.length,
+  });
+
+  switch (format) {
+    case "bplist": {
+      const result = extractTextFromBinaryPlist(attributedBodyBuffer);
+      if (result && result.length >= MIN_MESSAGE_TEXT_LENGTH) {
+        const cleaned = cleanExtractedText(result);
+        if (cleaned.length >= MIN_MESSAGE_TEXT_LENGTH && cleaned.length < MAX_MESSAGE_TEXT_LENGTH) {
+          return cleaned;
+        }
       }
+      // Binary plist parse failed
+      logService.debug("Binary plist extraction returned no content", "MessageParser");
+      return FALLBACK_MESSAGES.UNABLE_TO_PARSE;
     }
 
-    // Binary plist parsing failed - try heuristic extraction as fallback
-    logService.debug("Binary plist text extraction failed, trying heuristic fallback", "MessageParser");
-    return await tryFallbackExtraction(attributedBodyBuffer);
-  }
+    case "typedstream": {
+      // Try our custom parser first - handles both regular and mutable NSString preambles
+      const customResult = extractTextFromTypedstream(attributedBodyBuffer);
+      if (customResult && customResult.length >= MIN_MESSAGE_TEXT_LENGTH) {
+        const cleaned = cleanExtractedText(customResult);
+        if (cleaned.length >= MIN_MESSAGE_TEXT_LENGTH && cleaned.length < MAX_MESSAGE_TEXT_LENGTH) {
+          logService.debug(`Custom typedstream parser succeeded: ${cleaned.length} chars`, "MessageParser");
+          return cleaned;
+        }
+      }
 
-  // Not binary plist - use typedstream parser
-  // TRY OUR CUSTOM PARSER FIRST - it handles both regular and mutable NSString preambles
-  // The imessage-parser library only handles regular preamble (0x94), failing on rich messages
-  const customResult = extractTextFromTypedstream(attributedBodyBuffer);
-  if (customResult && customResult.length >= MIN_MESSAGE_TEXT_LENGTH) {
-    const cleaned = cleanExtractedText(customResult);
-    if (cleaned.length >= MIN_MESSAGE_TEXT_LENGTH && cleaned.length < MAX_MESSAGE_TEXT_LENGTH) {
-      logService.debug(`Custom typedstream parser succeeded: ${cleaned.length} chars`, "MessageParser");
-      return cleaned;
-    }
-  }
-
-  // Fall back to imessage-parser library for edge cases
-  try {
-    const result = parseTypedStream(attributedBodyBuffer, { cleanOutput: true });
-
-    if (result && result.text && result.text.length >= MIN_MESSAGE_TEXT_LENGTH) {
-      // Check if the result contains replacement characters (U+FFFD)
-      // This indicates encoding issues that we need to handle
-      if (containsReplacementChars(result.text)) {
-        logService.debug("imessage-parser result contains replacement chars, trying multi-encoding", "MessageParser");
-
-        // Try multi-encoding fallback on the raw buffer
-        const multiEncodingResult = tryMultiEncodingExtraction(attributedBodyBuffer);
-        if (multiEncodingResult && !containsReplacementChars(multiEncodingResult)) {
-          const cleaned = cleanExtractedText(multiEncodingResult);
+      // Fall back to imessage-parser library for edge cases
+      try {
+        const result = parseTypedStream(attributedBodyBuffer, { cleanOutput: true });
+        if (result && result.text && result.text.length >= MIN_MESSAGE_TEXT_LENGTH) {
+          const cleaned = cleanExtractedText(result.text);
           if (cleaned.length >= MIN_MESSAGE_TEXT_LENGTH && cleaned.length < MAX_MESSAGE_TEXT_LENGTH) {
             return cleaned;
           }
         }
-
-        // If multi-encoding didn't help, still use the original result
-        // but log a warning. We NEVER strip replacement chars as that loses data.
-        logService.warn("Could not resolve encoding issues, preserving original text with replacement chars", "MessageParser", {
-          bufferLength: attributedBodyBuffer.length,
-          replacementCharCount: countReplacementCharsInText(result.text),
+      } catch (e) {
+        logService.debug("imessage-parser failed", "MessageParser", {
+          error: (e as Error).message,
         });
       }
 
-      // Clean any remaining artifacts (but NOT replacement characters)
-      const cleaned = cleanExtractedText(result.text);
-      if (cleaned.length >= MIN_MESSAGE_TEXT_LENGTH && cleaned.length < MAX_MESSAGE_TEXT_LENGTH) {
-        return cleaned;
-      }
+      // Typedstream parse failed
+      logService.debug("Typedstream extraction returned no content", "MessageParser");
+      return FALLBACK_MESSAGES.UNABLE_TO_PARSE;
     }
 
-    // If imessage-parser returned nothing useful, try our heuristic extraction
-    return await tryFallbackExtraction(attributedBodyBuffer);
-  } catch (e) {
-    logService.debug("typedstream parse failed", "MessageParser", {
-      error: (e as Error).message,
-    });
-
-    // Fallback to heuristic extraction for non-standard formats
-    return await tryFallbackExtraction(attributedBodyBuffer);
-  }
-}
-
-/**
- * Count replacement characters in text (helper for logging)
- */
-function countReplacementCharsInText(text: string): number {
-  let count = 0;
-  for (const char of text) {
-    if (char === REPLACEMENT_CHAR) count++;
-  }
-  return count;
-}
-
-/**
- * Try extracting text using multiple encodings
- * This is used when imessage-parser produces text with U+FFFD characters
- */
-function tryMultiEncodingExtraction(buffer: Buffer): string | null {
-  // Try decoding the buffer with multiple encodings
-  const { text, encoding, hasReplacementChars } = tryMultipleEncodings(buffer, "MessageParser");
-
-  if (!hasReplacementChars && text.length > 0) {
-    logService.debug(`Multi-encoding extraction succeeded with ${encoding}`, "MessageParser");
-
-    // Look for the actual message content in the decoded text
-    // The typedstream format has metadata - we need to extract just the message
-    const extracted = extractMessageFromDecodedText(text);
-    return extracted;
-  }
-
-  // Also try the heuristic approach with different encodings
-  const heuristicResult = extractUsingHeuristicsMultiEncoding(buffer);
-  if (heuristicResult && !containsReplacementChars(heuristicResult)) {
-    return heuristicResult;
-  }
-
-  return null;
-}
-
-/**
- * Extract actual message content from decoded typedstream text
- * The typedstream contains metadata - we want just the user's message
- */
-function extractMessageFromDecodedText(text: string): string | null {
-  // Look for readable text sequences, excluding metadata
-  const readablePattern = /[\x20-\x7E\u00A0-\uFFFF]{3,}/g;
-  const candidates: string[] = [];
-  let match;
-
-  while ((match = readablePattern.exec(text)) !== null) {
-    const segment = match[0];
-
-    // Skip metadata strings
-    if (isTypedstreamMetadata(segment)) {
-      continue;
+    case "unknown":
+    default: {
+      // Unknown format - do NOT guess, do NOT try encodings
+      logService.warn("Unknown attributedBody format", "MessageParser", {
+        bufferLength: attributedBodyBuffer.length,
+        hexPreview: attributedBodyBuffer.subarray(0, 20).toString("hex"),
+      });
+      return FALLBACK_MESSAGES.UNABLE_TO_PARSE;
     }
-
-    candidates.push(segment);
   }
-
-  if (candidates.length === 0) return null;
-
-  // Return the longest non-metadata segment
-  candidates.sort((a, b) => b.length - a.length);
-  return candidates[0];
 }
 
 /**
@@ -543,177 +463,6 @@ function isTypedstreamMetadata(text: string): boolean {
     // Hex-like strings (often metadata)
     /^[0-9A-Fa-f]{2,4}$/.test(text.trim())
   );
-}
-
-/**
- * Fallback extraction when imessage-parser fails
- */
-async function tryFallbackExtraction(buffer: Buffer): Promise<string> {
-  try {
-    // First try multi-encoding heuristics
-    const heuristicResult = extractUsingHeuristicsMultiEncoding(buffer);
-    if (
-      heuristicResult &&
-      heuristicResult.length >= MIN_MESSAGE_TEXT_LENGTH &&
-      heuristicResult.length < MAX_MESSAGE_TEXT_LENGTH
-    ) {
-      return cleanExtractedText(heuristicResult);
-    }
-
-    // Fall back to legacy UTF-8 only heuristics
-    const legacyResult = extractUsingHeuristics(buffer);
-    if (
-      legacyResult &&
-      legacyResult.length >= MIN_MESSAGE_TEXT_LENGTH &&
-      legacyResult.length < MAX_MESSAGE_TEXT_LENGTH
-    ) {
-      return cleanExtractedText(legacyResult);
-    }
-  } catch (fallbackError) {
-    logService.error("Error parsing attributedBody:", "MessageParser", {
-      error: (fallbackError as Error).message,
-    });
-  }
-
-  return FALLBACK_MESSAGES.PARSING_ERROR;
-}
-
-/**
- * Enhanced heuristic extraction that tries multiple encodings
- * Used when the standard parser fails
- */
-function extractUsingHeuristicsMultiEncoding(buffer: Buffer): string | null {
-  // Try UTF-8 first (most common)
-  let result = extractWithEncoding(buffer, "utf8");
-  if (result && !containsReplacementChars(result)) {
-    return result;
-  }
-
-  // Try UTF-16 LE (common on macOS)
-  result = extractWithEncoding(buffer, "utf16le");
-  if (result && !containsReplacementChars(result)) {
-    return result;
-  }
-
-  // Try Latin-1 as final fallback
-  result = extractWithEncoding(buffer, "latin1");
-  if (result && !containsReplacementChars(result)) {
-    return result;
-  }
-
-  // Return the UTF-8 result even if it has replacement chars
-  // (better than nothing, and we don't strip them)
-  return extractWithEncoding(buffer, "utf8");
-}
-
-/**
- * Extract text using a specific encoding
- */
-function extractWithEncoding(buffer: Buffer, encoding: BufferEncoding): string | null {
-  try {
-    const bodyText = buffer.toString(encoding);
-
-    // Look for text after NSString marker
-    const nsStringIndex = bodyText.indexOf("NSString");
-    if (nsStringIndex === -1) {
-      // No NSString marker - try to find any readable content
-      const readablePattern = /[\x20-\x7E\u00A0-\uFFFF]{5,}/g;
-      const matches: string[] = [];
-      let match;
-
-      while ((match = readablePattern.exec(bodyText)) !== null) {
-        const text = match[0];
-        if (!isTypedstreamMetadata(text)) {
-          matches.push(text);
-        }
-      }
-
-      if (matches.length > 0) {
-        matches.sort((a, b) => b.length - a.length);
-        return matches[0];
-      }
-
-      return null;
-    }
-
-    const afterNSString = bodyText.substring(nsStringIndex + 8);
-
-    // Find readable text sequences
-    const readablePattern = /[\x20-\x7E\u00A0-\uFFFF]{3,}/g;
-    const allMatches: string[] = [];
-
-    let match;
-    while ((match = readablePattern.exec(afterNSString)) !== null) {
-      const text = match[0];
-      if (!isTypedstreamMetadata(text)) {
-        allMatches.push(text);
-      }
-    }
-
-    if (allMatches.length === 0) {
-      return null;
-    }
-
-    // Sort by length and return longest
-    allMatches.sort((a, b) => b.length - a.length);
-    return allMatches[0];
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Fallback heuristic extraction for non-standard formats
- * Used when bplist parsing fails
- */
-function extractUsingHeuristics(buffer: Buffer): string | null {
-  const bodyText = buffer.toString("utf8");
-
-  // Look for text after NSString marker
-  const nsStringIndex = bodyText.indexOf("NSString");
-  if (nsStringIndex === -1) {
-    return null;
-  }
-
-  const afterNSString = bodyText.substring(nsStringIndex + 8);
-
-  // Find readable text sequences
-  const readablePattern = /[\x20-\x7E\u00A0-\uFFFF]{3,}/g;
-  const allMatches: string[] = [];
-  let match;
-
-  while ((match = readablePattern.exec(afterNSString)) !== null) {
-    const text = match[0];
-    // Skip metadata strings
-    if (
-      text.includes("NSAttributedString") ||
-      text.includes("NSMutableString") ||
-      text.includes("NSObject") ||
-      text.includes("NSDictionary") ||
-      text.includes("NSArray") ||
-      text.includes("$class") ||
-      text.includes("$objects") ||
-      text.includes("$archiver") ||
-      text.includes("$version") ||
-      text.includes("$top") ||
-      text.startsWith("NS.") ||
-      text.includes("__kIM") ||
-      text.includes("kIMMessagePart") ||
-      text.includes("AttributeName") ||
-      /^[0-9A-Fa-f]{2,4}$/.test(text.trim())
-    ) {
-      continue;
-    }
-    allMatches.push(text);
-  }
-
-  if (allMatches.length === 0) {
-    return null;
-  }
-
-  // Sort by length and return longest
-  allMatches.sort((a, b) => b.length - a.length);
-  return allMatches[0];
 }
 
 /**
@@ -768,47 +517,32 @@ export function cleanExtractedText(text: string): string {
 
 /**
  * Get message text from a message object
- * Handles both plain text and attributed body formats
- * Applies cleaning to handle UTF-16 encoding issues and artifacts
+ *
+ * Priority:
+ * 1. Use message.text if present and valid after cleaning
+ * 2. Parse attributedBody using deterministic format detection
+ * 3. Return attachment fallback if applicable
+ * 4. Return reaction/system fallback
+ *
+ * TASK-1049: Removed looksLikeBinaryGarbage heuristic. If message.text
+ * contains garbage, it will fail the MIN_MESSAGE_TEXT_LENGTH check after
+ * cleaning, and we'll fall back to attributedBody parsing.
  *
  * @param message - Message object from database
  * @returns Message text or fallback message
  */
 export async function getMessageText(message: Message): Promise<string> {
-  // Check if text looks like corrupted binary data
-  // Binary garbage often contains bplist markers or high concentration of CJK/unusual characters
-  const looksLikeBinaryGarbage = (text: string): boolean => {
-    if (!text || text.length < 10) return false;
-    // Check for bplist signature (may appear as garbled text)
-    if (text.includes("bplist") || text.includes("streamtyped")) return true;
-    // Check for high concentration of rare Unicode (CJK, symbols, control chars)
-    // Normal text rarely has >30% chars outside basic Latin + common punctuation
-    const unusualChars = text.split("").filter(c => {
-      const code = c.charCodeAt(0);
-      // Outside ASCII printable (32-126) and common extended (é, ñ, etc. 128-255)
-      return code > 255 || (code < 32 && code !== 10 && code !== 13);
-    }).length;
-    return unusualChars / text.length > 0.3;
-  };
-
-  // Plain text is preferred, but check for binary garbage first
-  if (message.text && !looksLikeBinaryGarbage(message.text)) {
-    // Apply cleaning to handle potential UTF-16 encoding or null byte issues
+  // If text field exists and is not empty, use it
+  if (message.text && message.text.length >= MIN_MESSAGE_TEXT_LENGTH) {
     const cleaned = cleanExtractedText(message.text);
     if (cleaned.length >= MIN_MESSAGE_TEXT_LENGTH) {
       return cleaned;
     }
-    // If cleaning resulted in empty/short text, try attributedBody
   }
 
-  // Try to extract from attributed body (preferred if text was garbage)
+  // Try to extract from attributed body
   if (message.attributedBody) {
     return await extractTextFromAttributedBody(message.attributedBody);
-  }
-
-  // If we had text but it was cleaned to nothing, return original
-  if (message.text) {
-    return message.text;
   }
 
   // Fallback based on message type
