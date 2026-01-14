@@ -523,11 +523,29 @@ class MacOSMessagesImportService {
 
         const duration = Date.now() - startTime;
 
+        // TASK-1050: Enhanced summary logging with thread_id validation stats
         logService.info(
-          `Import complete: ${messageResult.stored} messages imported, ${messageResult.skipped} skipped, ${attachmentResult.stored} attachments imported, ${attachmentResult.skipped} skipped`,
+          "Import summary",
           MacOSMessagesImportService.SERVICE_NAME,
-          { duration }
+          {
+            totalMessages: messageResult.stored + messageResult.skipped,
+            imported: messageResult.stored,
+            skipped: messageResult.skipped,
+            nullThreadIdCount: messageResult.nullThreadIdCount,
+            attachmentsImported: attachmentResult.stored,
+            attachmentsSkipped: attachmentResult.skipped,
+            duration,
+          }
         );
+
+        // Log warning if significant NULL thread_id count
+        if (messageResult.nullThreadIdCount > 0) {
+          const percentNull = ((messageResult.nullThreadIdCount / (messageResult.stored + messageResult.skipped)) * 100).toFixed(2);
+          logService.warn(
+            `Import found ${messageResult.nullThreadIdCount} messages with NULL thread_id (${percentNull}% of total)`,
+            MacOSMessagesImportService.SERVICE_NAME
+          );
+        }
 
         // Send final 100% progress to update UI
         onProgress?.({
@@ -581,16 +599,17 @@ class MacOSMessagesImportService {
     messages: RawMacMessage[],
     chatMembersMap: Map<number, string[]>,
     onProgress?: ImportProgressCallback
-  ): Promise<{ stored: number; skipped: number; messageIdMap: Map<string, string> }> {
+  ): Promise<{ stored: number; skipped: number; nullThreadIdCount: number; messageIdMap: Map<string, string> }> {
     // Map of macOS message GUID -> internal message ID (TASK-1012)
     const messageIdMap = new Map<string, string>();
 
     if (messages.length === 0) {
-      return { stored: 0, skipped: 0, messageIdMap };
+      return { stored: 0, skipped: 0, nullThreadIdCount: 0, messageIdMap };
     }
 
     let stored = 0;
     let skipped = 0;
+    let nullThreadIdCount = 0;
 
     // Get database instance
     const db = databaseService.getRawDatabase();
@@ -705,6 +724,21 @@ class MacOSMessagesImportService {
 
           // Build thread ID from chat
           const threadId = msg.chat_id ? `macos-chat-${msg.chat_id}` : null;
+
+          // TASK-1050: Track messages with NULL thread_id for debugging
+          if (!threadId) {
+            nullThreadIdCount++;
+            logService.warn(
+              "Message has NULL chat_id, will have NULL thread_id",
+              MacOSMessagesImportService.SERVICE_NAME,
+              {
+                messageGuid: msg.guid,
+                handleId: msg.handle_id,
+                sentAt: macTimestampToDate(msg.date).toISOString(),
+                // Don't log text content for privacy
+              }
+            );
+          }
 
           // Convert Mac timestamp to ISO date
           const sentAt = macTimestampToDate(msg.date);
@@ -826,7 +860,7 @@ class MacOSMessagesImportService {
     // Stop progress bar
     msgProgressBar.stop();
 
-    return { stored, skipped, messageIdMap };
+    return { stored, skipped, nullThreadIdCount, messageIdMap };
   }
 
   /**
