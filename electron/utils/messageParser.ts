@@ -225,13 +225,28 @@ export function extractTextFromBinaryPlist(buffer: Buffer): string | null {
 }
 
 /**
- * Check if a string is NSKeyedArchiver metadata (not actual content)
+ * Check if a string is NSKeyedArchiver metadata (should be filtered from results)
+ *
+ * NSKeyedArchiver format contains many internal metadata strings that should
+ * not be returned as message content. This function identifies these patterns:
+ *
+ * - $null: Null placeholder
+ * - NS*: Cocoa class names (NSString, NSArray, NSMutableString, etc.)
+ * - __kIM*: iMessage internal keys with double underscore prefix
+ * - kIM*: iMessage internal keys without underscore prefix (TASK-1047)
+ * - AttributeName/MessagePart: Formatting attributes
+ * - $class: Class reference marker
+ * - XX.yyyy patterns: Property accessors (NS.string, NS.data, etc.)
+ *
+ * @param text - String to check
+ * @returns True if the string is metadata and should be filtered
  */
 function isNSKeyedArchiverMetadata(text: string): boolean {
   return (
     text === "$null" ||
     text.startsWith("NS") ||
     text.startsWith("__kIM") ||
+    text.startsWith("kIM") || // TASK-1047: iMessage keys without underscore prefix
     text.includes("AttributeName") ||
     text.includes("MessagePart") ||
     text.includes("$class") ||

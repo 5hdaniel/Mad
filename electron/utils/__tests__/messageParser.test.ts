@@ -241,6 +241,60 @@ describe("messageParser", () => {
       expect(result).toBe("Actual user message");
     });
 
+    /**
+     * TASK-1047: Test for kIM pattern (without underscore prefix)
+     * iMessage metadata can use both __kIM and kIM prefixes
+     */
+    it("should skip kIM prefixed metadata strings (without underscore)", () => {
+      const nsKeyedArchiverData = {
+        $archiver: "NSKeyedArchiver",
+        $objects: [
+          "$null",
+          "kIMMessagePartAttributeName", // Without underscore prefix
+          "kIMFileTransferGUID",
+          "kIMDataDetectedData",
+          "This is the actual message",
+        ],
+      };
+
+      const bplistBuffer = simplePlist.bplistCreator(nsKeyedArchiverData);
+      const result = extractTextFromBinaryPlist(bplistBuffer);
+
+      expect(result).toBe("This is the actual message");
+    });
+
+    it("should skip both __kIM and kIM prefixed metadata strings", () => {
+      const nsKeyedArchiverData = {
+        $archiver: "NSKeyedArchiver",
+        $objects: [
+          "$null",
+          "__kIMMessagePartAttributeName", // With underscore prefix
+          "kIMBalloonBundleID", // Without underscore prefix
+          "The real message content here",
+        ],
+      };
+
+      const bplistBuffer = simplePlist.bplistCreator(nsKeyedArchiverData);
+      const result = extractTextFromBinaryPlist(bplistBuffer);
+
+      expect(result).toBe("The real message content here");
+    });
+
+    it("should not filter strings that just contain kIM in the middle", () => {
+      const nsKeyedArchiverData = {
+        $archiver: "NSKeyedArchiver",
+        $objects: [
+          "$null",
+          "I love making kIM chi at home",
+        ],
+      };
+
+      const bplistBuffer = simplePlist.bplistCreator(nsKeyedArchiverData);
+      const result = extractTextFromBinaryPlist(bplistBuffer);
+
+      expect(result).toBe("I love making kIM chi at home");
+    });
+
     it("should extract text from NS.string property", () => {
       const nsKeyedArchiverData = {
         $archiver: "NSKeyedArchiver",
