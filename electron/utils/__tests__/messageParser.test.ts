@@ -489,6 +489,92 @@ describe("messageParser", () => {
     });
   });
 
+  /**
+   * TASK-1049: Deterministic format routing tests
+   * Tests verify that extractTextFromAttributedBody uses format detection
+   * to route parsing and returns UNABLE_TO_PARSE for unknown formats.
+   */
+  describe("extractTextFromAttributedBody - deterministic routing (TASK-1049)", () => {
+    it("should route bplist format to binary plist parser", async () => {
+      const nsKeyedArchiverData = {
+        $archiver: "NSKeyedArchiver",
+        $objects: ["$null", "Message from bplist"],
+      };
+      const bplistBuffer = simplePlist.bplistCreator(nsKeyedArchiverData);
+
+      const result = await extractTextFromAttributedBody(bplistBuffer);
+
+      expect(result).toBe("Message from bplist");
+    });
+
+    it("should route typedstream format to typedstream parser", async () => {
+      // Create a proper typedstream buffer with streamtyped marker and NSString
+      const streamtyped = Buffer.from("streamtyped");
+      const nsStringMarker = Buffer.from("NSString");
+      const preamble = Buffer.from([0x01, 0x94, 0x84, 0x01, 0x2b]);
+      const text = "Message from typedstream";
+      const textBuffer = Buffer.from(text, "utf8");
+      const lengthByte = Buffer.from([textBuffer.length]);
+      const buffer = Buffer.concat([
+        Buffer.from([0x04, 0x0b]), // preamble
+        streamtyped,
+        Buffer.alloc(10), // padding
+        nsStringMarker,
+        preamble,
+        lengthByte,
+        textBuffer,
+      ]);
+
+      const result = await extractTextFromAttributedBody(buffer);
+
+      expect(result).toBe("Message from typedstream");
+    });
+
+    it("should return UNABLE_TO_PARSE for unknown format", async () => {
+      // Buffer without bplist00 or streamtyped markers
+      const unknownBuffer = Buffer.from([0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0x01, 0x02, 0x03]);
+
+      const result = await extractTextFromAttributedBody(unknownBuffer);
+
+      expect(result).toBe(FALLBACK_MESSAGES.UNABLE_TO_PARSE);
+    });
+
+    it("should return UNABLE_TO_PARSE when bplist parser returns null", async () => {
+      // Valid bplist structure but no extractable text
+      const noTextPlist = {
+        $archiver: "NSKeyedArchiver",
+        $objects: ["$null"], // Only metadata, no actual text
+      };
+      const bplistBuffer = simplePlist.bplistCreator(noTextPlist);
+
+      const result = await extractTextFromAttributedBody(bplistBuffer);
+
+      expect(result).toBe(FALLBACK_MESSAGES.UNABLE_TO_PARSE);
+    });
+
+    it("should return UNABLE_TO_PARSE when typedstream parser returns null", async () => {
+      // Buffer with streamtyped marker but no extractable NSString content
+      const preamble = Buffer.from([0x04, 0x0b]);
+      const marker = Buffer.from("streamtyped");
+      const data = Buffer.from("\x00".repeat(50)); // No NSString marker
+      const buffer = Buffer.concat([preamble, marker, data]);
+
+      const result = await extractTextFromAttributedBody(buffer);
+
+      expect(result).toBe(FALLBACK_MESSAGES.UNABLE_TO_PARSE);
+    });
+
+    it("should return REACTION_OR_SYSTEM for null input", async () => {
+      const result = await extractTextFromAttributedBody(null);
+      expect(result).toBe(FALLBACK_MESSAGES.REACTION_OR_SYSTEM);
+    });
+
+    it("should return REACTION_OR_SYSTEM for empty buffer", async () => {
+      const result = await extractTextFromAttributedBody(Buffer.from(""));
+      expect(result).toBe(FALLBACK_MESSAGES.REACTION_OR_SYSTEM);
+    });
+  });
+
   describe("extractTextFromAttributedBody - binary plist integration", () => {
     it("should extract text from binary plist buffer", async () => {
       const nsKeyedArchiverData = {
@@ -521,7 +607,8 @@ describe("messageParser", () => {
       expect(result).toBe("streamtyped is just text here, not a marker");
     });
 
-    it("should fall back to heuristics if binary plist has no extractable text", async () => {
+    it("should return UNABLE_TO_PARSE if binary plist has no extractable text", async () => {
+      // TASK-1049: No heuristic fallbacks, return deterministic fallback
       const noStringsPlist = {
         $archiver: "NSKeyedArchiver",
         $objects: ["$null"],
@@ -530,8 +617,8 @@ describe("messageParser", () => {
       const bplistBuffer = simplePlist.bplistCreator(noStringsPlist);
       const result = await extractTextFromAttributedBody(bplistBuffer);
 
-      // Should return a fallback message, not crash
-      expect(typeof result).toBe("string");
+      // Should return UNABLE_TO_PARSE fallback (deterministic)
+      expect(result).toBe(FALLBACK_MESSAGES.UNABLE_TO_PARSE);
     });
   });
 
@@ -578,16 +665,14 @@ describe("messageParser", () => {
       expect(typeof result).toBe("string");
     });
 
-    it("should return unable to extract for unrecognized format", async () => {
+    it("should return UNABLE_TO_PARSE for unrecognized format", async () => {
+      // TASK-1049: Deterministic parsing returns clear fallback for unknown formats
       const buffer = Buffer.from("random binary data without markers");
 
       const result = await extractTextFromAttributedBody(buffer);
 
-      // Should return one of the fallback messages
-      expect([
-        FALLBACK_MESSAGES.UNABLE_TO_EXTRACT,
-        FALLBACK_MESSAGES.REACTION_OR_SYSTEM,
-      ]).toContain(result);
+      // Should return UNABLE_TO_PARSE fallback (deterministic)
+      expect(result).toBe(FALLBACK_MESSAGES.UNABLE_TO_PARSE);
     });
 
     it("should handle very long text gracefully", async () => {
