@@ -19,6 +19,7 @@ import {
   isTypedstream,
   detectAttributedBodyFormat,
   AttributedBodyFormat,
+  extractTextFromTypedstream,
 } from "../messageParser";
 import { FALLBACK_MESSAGES } from "../../constants";
 import { REPLACEMENT_CHAR } from "../encodingUtils";
@@ -383,6 +384,108 @@ describe("messageParser", () => {
 
       // Should return null without throwing
       expect(result).toBeNull();
+    });
+  });
+
+  /**
+   * TASK-1048: Typedstream extraction and metadata filtering tests
+   * Tests verify that extractTextFromTypedstream uses consistent metadata filtering
+   */
+  describe("extractTextFromTypedstream", () => {
+    /**
+     * Helper to create a mock typedstream buffer
+     * Format: NSString marker + preamble + length + text
+     */
+    function createTypedstreamBuffer(text: string): Buffer {
+      const nsStringMarker = Buffer.from("NSString");
+      const preamble = Buffer.from([0x01, 0x94, 0x84, 0x01, 0x2b]); // Regular preamble
+      const textBuffer = Buffer.from(text, "utf8");
+      const lengthByte = Buffer.from([textBuffer.length]);
+      return Buffer.concat([nsStringMarker, preamble, lengthByte, textBuffer]);
+    }
+
+    it("should extract text from simple typedstream buffer", () => {
+      const buffer = createTypedstreamBuffer("Hello, this is a test message!");
+      const result = extractTextFromTypedstream(buffer);
+      expect(result).toBe("Hello, this is a test message!");
+    });
+
+    it("should return longest text when multiple segments present", () => {
+      // Create buffer with multiple NSString segments
+      const segment1 = createTypedstreamBuffer("short");
+      const segment2 = createTypedstreamBuffer("This is a much longer message segment");
+      const combined = Buffer.concat([segment1, segment2]);
+
+      const result = extractTextFromTypedstream(combined);
+      expect(result).toBe("This is a much longer message segment");
+    });
+
+    it("should filter out __kIM prefixed metadata", () => {
+      const buffer = createTypedstreamBuffer("__kIMMessagePartAttributeName");
+      const result = extractTextFromTypedstream(buffer);
+      expect(result).toBeNull();
+    });
+
+    it("should filter out kIM prefixed metadata (without underscore)", () => {
+      // TASK-1048: kIM pattern should be filtered for consistency with TASK-1047
+      const buffer = createTypedstreamBuffer("kIMFileTransferGUID");
+      const result = extractTextFromTypedstream(buffer);
+      expect(result).toBeNull();
+    });
+
+    it("should filter out NSData metadata", () => {
+      const buffer = createTypedstreamBuffer("NSData");
+      const result = extractTextFromTypedstream(buffer);
+      expect(result).toBeNull();
+    });
+
+    it("should filter out NSDictionary metadata", () => {
+      const buffer = createTypedstreamBuffer("NSDictionary");
+      const result = extractTextFromTypedstream(buffer);
+      expect(result).toBeNull();
+    });
+
+    it("should filter out NS. prefixed metadata", () => {
+      const buffer = createTypedstreamBuffer("NS.string");
+      const result = extractTextFromTypedstream(buffer);
+      expect(result).toBeNull();
+    });
+
+    it("should filter out streamtyped marker", () => {
+      const buffer = createTypedstreamBuffer("streamtyped");
+      const result = extractTextFromTypedstream(buffer);
+      expect(result).toBeNull();
+    });
+
+    it("should not filter strings that just contain kIM in the middle", () => {
+      // Same false positive prevention as TASK-1047
+      const buffer = createTypedstreamBuffer("I love making kIM chi at home");
+      const result = extractTextFromTypedstream(buffer);
+      expect(result).toBe("I love making kIM chi at home");
+    });
+
+    it("should return null for empty buffer", () => {
+      const buffer = Buffer.from("");
+      const result = extractTextFromTypedstream(buffer);
+      expect(result).toBeNull();
+    });
+
+    it("should return null for buffer without NSString marker", () => {
+      const buffer = Buffer.from("random data without markers");
+      const result = extractTextFromTypedstream(buffer);
+      expect(result).toBeNull();
+    });
+
+    it("should handle mutable preamble (0x95)", () => {
+      const nsStringMarker = Buffer.from("NSString");
+      const mutablePreamble = Buffer.from([0x01, 0x95, 0x84, 0x01, 0x2b]); // Mutable preamble
+      const text = "Message with mutable string";
+      const textBuffer = Buffer.from(text, "utf8");
+      const lengthByte = Buffer.from([textBuffer.length]);
+      const buffer = Buffer.concat([nsStringMarker, mutablePreamble, lengthByte, textBuffer]);
+
+      const result = extractTextFromTypedstream(buffer);
+      expect(result).toBe("Message with mutable string");
     });
   });
 
