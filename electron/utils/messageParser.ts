@@ -306,14 +306,9 @@ export function extractTextFromTypedstream(buffer: Buffer): string | null {
     // Validate length
     if (length > 0 && length <= buffer.length - pos && length < 10000) {
       const text = buffer.subarray(pos, pos + length).toString("utf8");
-      // Filter out metadata strings
-      if (
-        text.length > 2 &&
-        !text.includes("__kIM") &&
-        !text.includes("NSData") &&
-        !text.includes("NSDictionary") &&
-        !text.startsWith("NS.")
-      ) {
+      // Filter out metadata strings using consistent helper function
+      // TASK-1048: Use isTypedstreamMetadata for consistent filtering
+      if (text.length > 2 && !isTypedstreamMetadata(text)) {
         results.push(text);
       }
     }
@@ -503,26 +498,49 @@ function extractMessageFromDecodedText(text: string): string | null {
 }
 
 /**
- * Check if a string segment is typedstream metadata
+ * Check if a string segment is typedstream metadata (should be filtered from results)
+ *
+ * Typedstream format contains internal metadata strings that should not be
+ * returned as message content. This function identifies these patterns:
+ *
+ * - Cocoa class names: NSAttributedString, NSMutableString, NSObject, etc.
+ * - Property accessors: NS.* patterns
+ * - Archive markers: $class, $objects, $archiver, $version, $top
+ * - iMessage keys: __kIM*, kIM* prefixes (TASK-1048: added kIM for consistency)
+ * - Attribute markers: AttributeName patterns
+ * - Format markers: streamtyped
+ * - Hex-like strings: short hex sequences often appearing as metadata
+ *
+ * TASK-1048: Consolidated from inline checks for consistency
+ *
+ * @param text - String to check
+ * @returns True if the string is metadata and should be filtered
  */
 function isTypedstreamMetadata(text: string): boolean {
   return (
+    // Cocoa class names
     text.includes("NSAttributedString") ||
     text.includes("NSMutableString") ||
     text.includes("NSObject") ||
     text.includes("NSDictionary") ||
     text.includes("NSArray") ||
     text.includes("NSString") ||
+    text.includes("NSData") || // TASK-1048: Added from inline checks
+    // Property accessors
+    text.startsWith("NS.") ||
+    // Archive markers
     text.includes("$class") ||
     text.includes("$objects") ||
     text.includes("$archiver") ||
     text.includes("$version") ||
     text.includes("$top") ||
-    text.startsWith("NS.") ||
+    // iMessage internal keys
     text.includes("__kIM") ||
-    text.includes("kIMMessagePart") ||
+    text.startsWith("kIM") || // TASK-1048: Added for consistency with TASK-1047
     text.includes("AttributeName") ||
+    // Format markers
     text.includes("streamtyped") ||
+    // Hex-like strings (often metadata)
     /^[0-9A-Fa-f]{2,4}$/.test(text.trim())
   );
 }
