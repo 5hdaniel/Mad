@@ -21,7 +21,18 @@ Use the Task tool to spawn the engineer agent instead.
 
 ## Goal
 
-Eliminate the remaining garbage text (Chinese/Japanese-like characters) that appears in message display when binary plist data is misinterpreted. The `looksLikeBinaryGarbage` function needs to catch all cases of binary data being displayed as text.
+Eliminate the remaining garbage text (Chinese/Japanese-like characters) that appears in message display when binary plist data is misinterpreted.
+
+**IMPORTANT (SR Engineer Note):** The `looksLikeBinaryGarbage` function was **removed in TASK-1049** in favor of deterministic format detection. The current architecture uses:
+- `detectAttributedBodyFormat()` - magic byte detection
+- `extractTextFromBinaryPlist()` - for bplist00 format
+- `extractTextFromTypedstream()` - for typedstream format
+
+The garbage text issue now likely occurs because:
+1. The `text` field already contains garbage (not `attributedBody`)
+2. Or the buffer detection is failing for certain edge cases
+
+Engineer should investigate the actual data flow before implementing.
 
 ## Non-Goals
 
@@ -68,70 +79,49 @@ This contains:
 - Binary plist metadata keys (`__kIM*`)
 - UTF-16 misinterpreted bytes appearing as CJK characters
 
-### Proposed Detection Improvements
+### Investigation Strategy (Updated by SR Engineer)
+
+Since `looksLikeBinaryGarbage` was removed, the engineer should:
+
+1. **Trace the garbage data source:**
+   - Is garbage in `message.text` field or `attributedBody`?
+   - Run diagnostic: `window.api.system.diagnosticGarbageText(userId)`
+   - Check specific message IDs from test data
+
+2. **If garbage is in `text` field:**
+   - The issue is at data import/storage time, not parsing time
+   - May need to add garbage detection at import step
+   - Consider adding `looksLikeBinaryGarbage()` back as a pre-filter
+
+3. **If garbage is in `attributedBody` but not being detected:**
+   - Check if buffer encoding is wrong (UTF-16 vs raw bytes)
+   - Verify `detectAttributedBodyFormat()` handles all cases
+
+**Proposed approach (if garbage is in text field):**
 
 ```typescript
-// electron/utils/messageParser.ts
+// Add to electron/utils/messageParser.ts (or new garbage detection module)
 
 /**
- * Enhanced binary garbage detection
+ * Check if text appears to be binary garbage (UTF-16 misinterpreted bytes)
+ * Used as a pre-filter before storing/displaying text
  */
 export function looksLikeBinaryGarbage(text: string): boolean {
-  if (!text || text.length === 0) return false;
+  if (!text || text.length < 5) return false;
 
-  // 1. Check for literal binary markers
-  if (text.includes("bplist") || text.includes("streamtyped")) {
+  // 1. UTF-16 interpreted "streamtyped" produces specific Oriya characters
+  // "st" as UTF-16 LE = 0x7473 = ଄ (Oriya digit 4)
+  // "re" as UTF-16 LE = 0x6572 = 敲 (CJK character)
+  // From test data: "଄瑳敲浡祴数..."
+  const oriyaPattern = /[\u0B00-\u0B7F]/; // Oriya Unicode block
+  const cjkMixedPattern = /[\u0B00-\u0B7F].*[\u4E00-\u9FFF]/; // Oriya + CJK together
+
+  if (oriyaPattern.test(text) && cjkMixedPattern.test(text)) {
     return true;
   }
 
-  // 2. Check for UTF-16 interpreted binary patterns
-  // "streamtyped" as UTF-16 produces specific characters
-  const utf16StreamMarkers = [
-    "\u7473", // 'st' as UTF-16
-    "\u6572", // 're' as UTF-16
-    "\u6D61", // 'am' as UTF-16
-  ];
-  if (utf16StreamMarkers.every((marker) => text.includes(marker))) {
-    return true;
-  }
-
-  // 3. Check for metadata string patterns (even when garbled)
-  const metadataPatterns = [
-    /_?_?k?IM/i, // __kIM metadata keys
-    /NSString/,
-    /NSMutable/,
-    /AttributeName/,
-  ];
-  if (metadataPatterns.some((pattern) => pattern.test(text))) {
-    return true;
-  }
-
-  // 4. Check for high density of unusual characters
-  // Binary data as UTF-8 often has many characters > 0x7F
-  let unusualCount = 0;
-  for (let i = 0; i < text.length; i++) {
-    const code = text.charCodeAt(i);
-    // Count: control chars, private use area, surrogates, unusual blocks
-    if (
-      code < 0x20 ||                    // Control characters
-      (code >= 0x80 && code < 0xA0) ||  // Latin-1 control
-      (code >= 0x0900 && code < 0x0980) || // Devanagari (common in garbage)
-      (code >= 0xE000 && code < 0xF900) || // Private use area
-      (code >= 0xD800 && code < 0xE000)    // Surrogates
-    ) {
-      unusualCount++;
-    }
-  }
-
-  // Lower threshold: 15% unusual is suspicious
-  if (unusualCount / text.length > 0.15) {
-    return true;
-  }
-
-  // 5. Check for binary-like byte sequences at start
-  // Many binary formats start with specific magic bytes
-  const firstFewChars = text.slice(0, 20);
-  if (/[\x00-\x08\x0E-\x1F]/.test(firstFewChars)) {
+  // 2. Check for metadata strings that leaked through
+  if (/__kIM|NSString|NSMutable|AttributeName/.test(text)) {
     return true;
   }
 
@@ -339,6 +329,39 @@ Verification:
 
 **Suggestion for similar tasks:**
 <What should PM estimate differently next time?>
+
+---
+
+## SR Engineer Review Notes (Pre-Implementation)
+
+**Review Date:** 2026-01-15 | **Status:** APPROVED WITH NOTES
+
+### Branch Information
+- **Branch From:** develop
+- **Branch Into:** develop
+- **Suggested Branch Name:** `fix/task-1071-garbage-text-detection`
+
+### Execution Classification
+- **Parallel Safe:** YES (with TASK-1070)
+- **Depends On:** None
+- **Blocks:** TASK-1072 (user verification)
+
+### Shared File Analysis
+- Files modified: `electron/utils/messageParser.ts`, `electron/utils/__tests__/messageParser.test.ts`
+- Conflicts with: None - completely isolated from TASK-1070
+
+### Technical Considerations
+- **CRITICAL:** Task description references `looksLikeBinaryGarbage` which was REMOVED in TASK-1049
+- Current architecture uses deterministic format detection (`detectAttributedBodyFormat()`)
+- Engineer MUST investigate data flow first before implementing
+- Garbage pattern from test data: `଄瑳敲浡祴数...` (Oriya + CJK mix)
+- Test data available at `.claude/plans/test-data/message-parsing-test-data.md`
+
+### SR Risk Assessment
+- **Risk Level:** MEDIUM
+- False positive risk: legitimate CJK text could be filtered
+- Requires investigation step before implementation
+- False positive test cases are MANDATORY
 
 ---
 

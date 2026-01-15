@@ -220,6 +220,28 @@ Date: _______________
 
 ---
 
+## SR Engineer Review Notes (Pre-Implementation)
+
+**Review Date:** 2026-01-15 | **Status:** APPROVED
+
+### Execution Classification
+- **Parallel Safe:** NO - must wait for TASK-1071
+- **Depends On:** TASK-1071 (garbage text fix)
+- **Blocks:** None
+
+### Technical Considerations
+- This is a USER verification task, not an engineer task
+- No code changes expected unless user reports issues
+- Test data reference: `.claude/plans/test-data/message-parsing-test-data.md`
+- Affected chats to verify: macos-chat-2004, macos-chat-2742, etc.
+
+### SR Risk Assessment
+- **Risk Level:** LOW
+- Verification only, no code changes expected
+- May discover new issues requiring backlog items
+
+---
+
 ## Follow-up Actions (PM-Owned)
 
 **Based on user verification:**

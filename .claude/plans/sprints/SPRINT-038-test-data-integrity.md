@@ -97,7 +97,7 @@ Before starting sprint work, engineers must:
 |------|-------------|-------------|------------|
 | TASK-1071 | Complete binary plist garbage text detection/handling | ~50K | - |
 
-**Note:** TASK-1070 and TASK-1071 touch different files and could run in parallel if SR Engineer approves.
+**SR Engineer Approved:** TASK-1070 and TASK-1071 CAN run in parallel - they touch completely different files (services vs utils layer).
 
 **Integration checkpoint:** No garbage text in diagnostic output. CI must pass.
 
