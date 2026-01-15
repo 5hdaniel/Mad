@@ -5,10 +5,39 @@
 /**
  * Unit tests for iOSMessagesParser
  * Tests iOS backup sms.db parsing functionality
+ *
+ * IMPORTANT: This test requires the REAL better-sqlite3-multiple-ciphers module,
+ * not the mock in tests/__mocks__/. The global mock returns empty arrays from all
+ * queries, which would cause all conversation/message tests to fail.
+ *
+ * We override the moduleNameMapper by using jest.mock with the actual module path.
  */
 
-import { jest } from "@jest/globals";
-import Database from "better-sqlite3-multiple-ciphers";
+import {
+  jest,
+  describe,
+  beforeAll,
+  afterAll,
+  beforeEach,
+  afterEach,
+  it,
+  expect,
+} from "@jest/globals";
+
+// Force Jest to use the real better-sqlite3-multiple-ciphers module
+// This must be done before any imports that depend on it.
+// We load it directly from node_modules to bypass moduleNameMapper.
+const actualModulePath = require.resolve("better-sqlite3-multiple-ciphers", {
+  paths: [require("path").join(__dirname, "../../../node_modules")],
+});
+
+jest.mock("better-sqlite3-multiple-ciphers", () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require(actualModulePath);
+});
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const Database = require(actualModulePath);
 import path from "path";
 import fs from "fs";
 import os from "os";
