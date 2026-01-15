@@ -2,9 +2,9 @@
 
 This index tracks all backlog items with their current status and metadata.
 
-**Last Updated:** 2026-01-12 (BACKLOG-222-224 added - contact save, text status, edit pattern)
-**Total Items:** 195
-**Pending:** 113 | **In Progress:** 0 | **Completed:** 75 | **Partial:** 0 | **Obsolete:** 1 | **Deferred:** 2
+**Last Updated:** 2026-01-15 (Codebase Audit Findings consolidated - 54 new items from 7 SR Engineer audits)
+**Total Items:** 265
+**Pending:** 148 | **In Progress:** 0 | **Completed:** 105 | **Partial:** 0 | **Obsolete:** 1 | **Deferred:** 2 | **Blocked:** 1
 
 ---
 
@@ -29,10 +29,35 @@ This index tracks all backlog items with their current status and metadata.
 ## Quick Filters
 
 ### By Priority
-- **Critical:** BACKLOG-030 (done), 032 (done), 035 (done), 038 (done), 039 (done), 044 (done), 045 (done), 058 (done), 059 (done), 072 (done), 073 (done), 074 (done), 107 (done), 108 (done), 117 (done), 132 (done), 139 (done - database init gate), 142 (done - state coordination overhaul), **191** (service layer tests - 0% coverage), **202** (fix test regressions - contact-handlers/databaseService)
-- **High:** BACKLOG-008, 009, 013, 016, 018, 020, 021, 023, 026, 031, 033, 037, 056, 060 (done), 061 (done), 062 (done), 063 (done), 067, 075 (done), 076 (done), 084 (done), 085 (done), 088, 090 (done), 091 (done), 098, 099, 103 (done), 105 (done), 109 (done), 110 (done), **111**, 118 (done), 121 (done), 126 (done), 130 (done), 133 (done), 136 (done), 137 (done - automatic token tracking), 140 (done), 148 (done), 156 (done - auto-refresh on app load), **157** (fix auth handler test), **203** (macOS messages tests), **214** (auto-link regression), **215** (group chat encoding), **216** (contacts pre-pop regression), **217** (edit contacts UX), **218** (group chat display), **220** (unlink UI refresh), **221** (attachments stale ID), **222** (contact save issue)
-- **Medium:** Multiple (see full index), 014 (done), 050 (done), 054 (done), 065 (done), 077 (done), 078 (done), 079 (done), 081, 086, 087, 089, 092, 093, 094, 095, 096, 097, 100, 101, 102, 104 (done), **112**, **113**, **114**, **115**, **116**, 122 (done), 124 (done), 127 (done), 128 (done), 129 (done), **131**, 135 (done), 138 (done), 149 (done), 152 (done), **158** (decompose AuditTransactionModal), **159** (delete PermissionsScreen), 169 (done - Show in Folder), 181 (done - T&C streamline), **204** (window.api abstraction), **223** (text message status)
-- **Low/Deferred:** BACKLOG-001, 003, 004, 010, 017, 069 (deferred), 070 (deferred), 071, 092, **119**, **123**, **125**, 150 (done - reduce useAppStateMachine), **151** (reduce AppModals.tsx), 155 (done - dashboard scroll), **160** (column naming), **219** (debug logging audit), **224** (edit details pattern)
+
+#### Critical (Audit Findings - Address First)
+- **Security:** **232** (webSecurity disabled in OAuth), **235** (jsdiff DoS), **236** (PII masking in LLM)
+- **Reliability:** **233** (unhandled rejection handlers), **234** (sync orchestrator race condition)
+- **Architecture:** **237** (Transactions.tsx 19 useState), **238** (oversized flow hooks), **239** (direct db access)
+- **Operations:** **240** (migration rollback), **241** (startup health checks)
+- **Existing:** BACKLOG-030 (done), 032 (done), 035 (done), 038 (done), 039 (done), 044 (done), 045 (done), 058 (done), 059 (done), 072 (done), 073 (done), 074 (done), 107 (done), 108 (done), 117 (done), 132 (done), 139 (done), 142 (done), 209 (done), 212 (done), 213 (done), **191** (service tests), 202 (done), **229** (binary plist)
+
+#### High (Audit Findings)
+- **Reliability:** **242** (AbortController), **243** (IPC error handling), **244** (session cleanup), **245** (db connection), **246** (error boundaries)
+- **Security:** **247** (preload sandbox), **248** (env var exposure), **249** (CSP tightening)
+- **Architecture:** **250** (service dependencies), **251** (IPC handler patterns), **252** (LLM decoupling), **253** (module-level state)
+- **Code Quality:** **254** (any/unknown types), **255** (large components), **256** (TODO/FIXME), **257** (useAutoRefresh state)
+- **Performance:** **258** (N+1 query), **259** (event listener leak), **260** (virtual scrolling)
+- **Operations:** **261** (logging unification), **262** (pre-deploy validation), **263** (auto-updater metrics)
+- **Documentation:** **264** (LLM service API), **265** (algorithm docs)
+- **Existing:** BACKLOG-008, 009, 013, 016, 018, 020, 021, 023, 026, 031, 033, 037, 056, 060 (done), 061 (done), 062 (done), 063 (done), 067, 075 (done), 076 (done), 084 (done), 085 (done), 088, 090 (done), 091 (done), 098, 099, 103 (done), 105 (done), 109 (done), 110 (done), **111**, 118 (done), 121 (done), 126 (done), 130 (done), 133 (done), 136 (done), 137 (done), 140 (done), 148 (done), 156 (done), **157**, **203**, 206 (done), 207 (done), 210 (done), 211 (done), 214 (done), 215 (done), 216 (done), 217 (done), **218** (BLOCKED), **220**, **221**, **222**, **228**
+
+#### Medium (Audit Findings)
+- **Code Quality:** **266** (duplicate utils), **267** (error handling patterns), **268** (relative imports)
+- **Performance:** **269** (memoization), **270** (array operations), **271** (db indexes), **272** (JSON serialization)
+- **Reliability:** **273** (test coverage), **274** (app termination cleanup)
+- **Operations:** **275** (renderer logging), **276** (error recovery), **277** (CI secrets)
+- **Documentation:** **278** (JSDoc coverage), **279** (IPC docs), **280** (migration docs), **281** (doc standards), **282** (error docs), **283** (config docs)
+- **Existing:** Multiple (see full index), 014 (done), 050 (done), 054 (done), 065 (done), 077 (done), 078 (done), 079 (done), 081, 086, 087, 089, 092, 093, 094, 095, 096, 097, 100, 101, 102, 104 (done), **112**, **113**, **114**, **115**, **116**, 122 (done), 124 (done), 127 (done), 128 (done), 129 (done), **131**, 135 (done), 138 (done), 149 (done), 152 (done), **158**, **159**, 169 (done), 181 (done), **204**, 208 (done), **223**, **227**, 230 (done), **231**
+
+#### Low (Audit Findings)
+- **Architecture:** **284** (dependency injection), **285** (data abstraction layer)
+- **Existing:** BACKLOG-001, 003, 004, 010, 017, 069 (deferred), 070 (deferred), 071, 092, **119**, **123**, **125**, 150 (done), **151**, 155 (done), **160**, **205**, **219**, **224**, **225**, **226**
 
 ### By Sprint Assignment
 - **SPRINT-001 (Onboarding Refactor):** Completed
@@ -64,6 +89,11 @@ This index tracks all backlog items with their current status and metadata.
 - **SPRINT-025 (Communications Architecture):** COMPLETE - TASK-975 to TASK-977 (3 tasks completed: communications refactor, export folders, auto-link texts; TASK-978 deferred). **Incidents:** 14.2M token exploration loop (BACKLOG-161), PR merged without review, file overlap caused merge conflicts.
 - **SPRINT-027 (Messages & Contacts Polish):** COMPLETE - 6 tasks (TASK-990 to TASK-995) + 9 unplanned fixes. PRs #354-362. Messages feature fully functional with thread grouping, auto-linking, manual attach/unlink, bubble direction, and contact fixes.
 - **SPRINT-028 (Stability & UX Polish):** COMPLETE - 6 tasks (TASK-1003 to TASK-1009) + 7 unplanned fixes. PRs #364-369. npm audit fix, dashboard scroll, Show in Folder, state machine reduce, T&C streamline, auto-refresh.
+- **SPRINT-033 (iMessage Stability & UX):** COMPLETE - 5 tasks (TASK-1028 to TASK-1032). PRs #400-408. iMessage encoding fix, UI freeze fix, contacts pre-pop fix, auto-link comms, separate email/text counts.
+- **SPRINT-034 (Stability Fixes):** COMPLETE - 6 of 7 tasks (TASK-1035 to TASK-1040). PRs #413-418. Binary plist parsing, settings scroll, auto-link regression, contacts pre-pop regression, email state mismatch, edit contacts modal. TASK-1041 blocked pending requirements.
+- **SPRINT-035 (Contact & Communication Fixes):** PLANNING - 4 tasks (TASK-1042 to TASK-1045). Contact save fix, unlink UI refresh, attachments stale ID, email banner UX.
+- **SPRINT-036 (Deterministic Message Parsing):** COMPLETE - 6 of 7 tasks (TASK-1046 to TASK-1051). PRs #420-426. Deterministic format detection, binary plist refactor, typedstream refactor, parser integration, thread ID validation, message parsing test suite. TASK-1052 (user verification) pending.
+- **SPRINT-037 (Test Coverage):** COMPLETE - 3 tasks (TASK-1053 to TASK-1055). PRs #428-429. Fixed databaseService native module mocking, added critical path tests, configured CI coverage thresholds. **Note:** 20 tests still failing in iosMessagesParser.test.ts (BACKLOG-231).
 - **Unassigned:** All others
 
 ### State Coordination Overhaul Project - COMPLETE
@@ -282,20 +312,127 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-198 | Decompose Large Component Files | refactor | Low | Pending | - | - | ~60K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-198.md](BACKLOG-198.md) |
 | BACKLOG-200 | Contacts import fails with email validation error | service | Medium | Pending | - | - | ~25K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-200.md](BACKLOG-200.md) |
 | BACKLOG-201 | "00" prefix appearing before iMessage text | ui | Medium | Completed | - | - | ~5K | - | ~180K | - | - | - | - | - | - | - | - | - | ~180K | ~3h | +3500% | [BACKLOG-201.md](BACKLOG-201.md) |
-| BACKLOG-202 | Fix Test Regressions (contact-handlers/databaseService) | test/fix | Critical | Pending | SPRINT-032 | - | ~20K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-202.md](BACKLOG-202.md) |
+| BACKLOG-202 | Fix Test Regressions (contact-handlers/databaseService) | test/fix | Critical | Completed | SPRINT-037 | - | ~20K | - | - | - | - | - | - | - | - | - | - | - | - | TASK-1053, PR #428 | [BACKLOG-202.md](BACKLOG-202.md) |
 | BACKLOG-203 | Add Comprehensive Tests for macOSMessagesImportService | test | High | Pending | SPRINT-032 | - | ~40K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-203.md](BACKLOG-203.md) |
 | BACKLOG-204 | Abstract window.api Calls into Service Layer | refactor | Medium | Pending | SPRINT-032 | - | ~80K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-204.md](BACKLOG-204.md) |
-| BACKLOG-214 | Auto-Link Communications Not Working (TASK-1031 Regression) | bug/regression | High | Pending | - | - | ~30K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-214.md](BACKLOG-214.md) |
-| BACKLOG-215 | Encoding Corruption in Group Chats | bug/data-integrity | High | Pending | - | - | ~50K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-215.md](BACKLOG-215.md) |
-| BACKLOG-216 | Edit Contacts Still Not Pre-Populating (TASK-1030 Regression) | bug/regression | High | Pending | - | - | ~25K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-216.md](BACKLOG-216.md) |
-| BACKLOG-217 | UX Improvement - Edit Contacts Button Flow | enhancement/ux | High | Pending | - | - | ~40K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-217.md](BACKLOG-217.md) |
-| BACKLOG-218 | Group Chat Display in Transaction Details (Placeholder) | enhancement/ux | High | Pending | - | - | ~30K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-218.md](BACKLOG-218.md) |
+| BACKLOG-205 | Fix Flaky useAutoRefresh Timer Tests | test | Low | Pending | - | - | ~15K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-205.md](BACKLOG-205.md) |
+| BACKLOG-206 | UI Freezing During iMessage Sync/Import | enhancement/perf | High | Completed | SPRINT-033 | - | ~30K | - | - | - | - | - | - | - | - | - | - | - | - | TASK-1029 | [BACKLOG-206.md](BACKLOG-206.md) |
+| BACKLOG-207 | Auto-Link Communications When Contact Added | enhancement | High | Completed | SPRINT-033 | - | ~40K | - | - | - | - | - | - | - | - | - | - | - | - | TASK-1031 | [BACKLOG-207.md](BACKLOG-207.md) |
+| BACKLOG-208 | Separate Email/Text Counts on Transaction Cards | ui | Medium | Completed | SPRINT-033 | - | ~20K | - | - | - | - | - | - | - | - | - | - | - | - | TASK-1032 | [BACKLOG-208.md](BACKLOG-208.md) |
+| BACKLOG-209 | Fix iMessage Text Encoding Corruption (Data Loss) | service/fix | Critical | Completed | SPRINT-033 | - | ~60K | - | - | - | - | - | - | - | - | - | - | - | - | TASK-1028 | [BACKLOG-209.md](BACKLOG-209.md) |
+| BACKLOG-210 | Contacts Not Pre-Populating in Edit Transaction | bug | High | Completed | SPRINT-033 | - | ~20K | - | - | - | - | - | - | - | - | - | - | - | - | TASK-1030 | [BACKLOG-210.md](BACKLOG-210.md) |
+| BACKLOG-211 | Email Onboarding State Mismatch | bug/ux | High | Completed | SPRINT-034 | - | ~35K | - | ~184K | - | - | - | - | - | - | - | - | - | ~184K | TASK-1039, PR #417 | [BACKLOG-211.md](BACKLOG-211.md) |
+| BACKLOG-212 | Settings Popup Not Scrollable | bug/ui | Critical | Completed | SPRINT-034 | - | ~40K | - | ~219K | - | - | - | - | - | - | - | - | - | ~219K | TASK-1036, PR #414 | [BACKLOG-212.md](BACKLOG-212.md) |
+| BACKLOG-213 | Recurring Check Permissions Screen Bug | bug/stability | Critical | Completed | - | - | ~15K | - | - | - | - | - | - | - | - | - | - | - | - | TASK-1033, PR #409 | [BACKLOG-213.md](BACKLOG-213.md) |
+| BACKLOG-214 | Auto-Link Communications Not Working (TASK-1031 Regression) | bug/regression | High | Completed | SPRINT-034 | - | ~30K | - | ~463K | - | - | - | - | - | - | - | - | - | ~463K | TASK-1037, PR #415 | [BACKLOG-214.md](BACKLOG-214.md) |
+| BACKLOG-215 | Encoding Corruption in Group Chats (Binary Plist Fix) | bug/data-integrity | High | Completed | SPRINT-034 | - | ~50K | - | ~432K | - | - | - | - | - | - | - | - | - | ~432K | TASK-1035, PR #413 | [BACKLOG-215.md](BACKLOG-215.md) |
+| BACKLOG-216 | Edit Contacts Still Not Pre-Populating (TASK-1030 Regression) | bug/regression | High | Completed | SPRINT-034 | - | ~25K | - | ~386K | - | - | - | - | - | - | - | - | - | ~386K | TASK-1038, PR #416 | [BACKLOG-216.md](BACKLOG-216.md) |
+| BACKLOG-217 | UX Improvement - Edit Contacts Button Flow | enhancement/ux | High | Completed | SPRINT-034 | - | ~40K | - | ~156K | - | - | - | - | - | - | - | - | - | ~156K | TASK-1040, PR #418 | [BACKLOG-217.md](BACKLOG-217.md) |
+| BACKLOG-218 | Group Chat Display in Transaction Details (Placeholder) | enhancement/ux | High | Blocked | - | - | ~30K | - | - | - | - | - | - | - | - | - | - | - | - | - | Pending user requirements | [BACKLOG-218.md](BACKLOG-218.md) |
 | BACKLOG-219 | Audit Debug/Logging Calls Across Repository | tech-debt/quality | Low | Pending | - | - | ~20K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-219.md](BACKLOG-219.md) |
 | BACKLOG-220 | Unlink Communications UI Not Refreshing | bug/ui | High | Pending | - | - | ~25K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-220.md](BACKLOG-220.md) |
 | BACKLOG-221 | iMessage Attachments Not Displaying (Stale message_id) | bug/data-integrity | High | Pending | - | - | ~40K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-221.md](BACKLOG-221.md) |
 | BACKLOG-222 | Contact Changes Not Saving When Editing Transaction | bug/data-persistence | High | Pending | - | - | ~30K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-222.md](BACKLOG-222.md) |
 | BACKLOG-223 | Add Text Message Status Indicator (Like Email Status) | enhancement/ux | Medium | Pending | - | - | ~25K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-223.md](BACKLOG-223.md) |
 | BACKLOG-224 | Apply Edit Contacts Pattern to Transaction Details | enhancement/ux | Low | Pending | - | - | ~20K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-224.md](BACKLOG-224.md) |
+| BACKLOG-225 | Video Attachment Support for iMessage Import | enhancement | Low | Pending | - | - | ~40K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-225.md](BACKLOG-225.md) |
+| BACKLOG-226 | URL Preview Formatting in Messages | enhancement/ui | Low | Pending | - | - | ~35K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-226.md](BACKLOG-226.md) |
+| BACKLOG-227 | Show iMessage Attachments in Attachments Tab | enhancement/ui | Medium | Pending | - | - | ~30K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-227.md](BACKLOG-227.md) |
+| BACKLOG-228 | UI Freeze When Viewing Messages to Attach | bug/perf | High | Pending | - | - | ~25K | - | - | - | - | - | - | - | - | - | - | - | - | - | Related to BACKLOG-173 regression | [BACKLOG-228.md](BACKLOG-228.md) |
+| BACKLOG-229 | Binary Plist Text Still Showing as Garbage (CRITICAL) | bug/data-integrity | Critical | Pending | - | - | ~40K | - | - | - | - | - | - | - | - | - | - | - | - | - | TASK-1035 incomplete | [BACKLOG-229.md](BACKLOG-229.md) |
+| BACKLOG-230 | NULL thread_id Investigation and Fix | data-integrity | Medium | Completed | - | - | ~20K | - | - | - | - | - | - | - | - | - | - | - | - | - | Analysis complete; macOS orphans, not parser issue | [BACKLOG-230-null-thread-id-investigation.md](BACKLOG-230-null-thread-id-investigation.md) |
+| BACKLOG-231 | Fix Failing iosMessagesParser Tests (20 tests) | test | Medium | Pending | - | - | ~30K | - | - | - | - | - | - | - | - | - | - | - | - | - | Mock database setup issues | [BACKLOG-231.md](BACKLOG-231.md) |
+
+<!-- ============================================== -->
+<!-- CODEBASE AUDIT FINDINGS (2026-01-15)           -->
+<!-- Source: 7 SR Engineer Audits                    -->
+<!-- ============================================== -->
+
+<!-- CRITICAL PRIORITY - Security & Reliability -->
+| BACKLOG-232 | Fix Disabled webSecurity in OAuth Popup Windows | security | Critical | Pending | - | - | ~40K | - | - | - | - | - | - | - | - | - | - | - | - | - | googleAuthHandlers.ts, microsoftAuthHandlers.ts | - |
+| BACKLOG-233 | Add Global Unhandled Rejection Handlers | reliability | Critical | Pending | - | - | ~25K | - | - | - | - | - | - | - | - | - | - | - | - | - | main.ts, main.tsx missing process.on handlers | - |
+| BACKLOG-234 | Fix Race Condition in Sync Orchestrator | reliability | Critical | Pending | - | - | ~50K | - | - | - | - | - | - | - | - | - | - | - | - | - | Concurrent sync state conflicts | - |
+| BACKLOG-235 | Patch jsdiff DoS Vulnerability | security | Critical | Pending | - | - | ~10K | - | - | - | - | - | - | - | - | - | - | - | - | - | npm audit vulnerability | - |
+| BACKLOG-236 | Fix Incomplete PII Masking in LLM Pipeline | security | Critical | Pending | - | - | ~45K | - | - | - | - | - | - | - | - | - | - | - | - | - | Content sent to LLM may expose PII | - |
+
+<!-- CRITICAL PRIORITY - Architecture & Code Quality -->
+| BACKLOG-237 | Reduce Transactions.tsx State Complexity (19 useState) | code-quality | Critical | Pending | - | - | ~80K | - | - | - | - | - | - | - | - | - | - | - | - | - | Extract to custom hooks/context | - |
+| BACKLOG-238 | Break Down Oversized Flow Hooks | architecture | Critical | Pending | - | - | ~100K | - | - | - | - | - | - | - | - | - | - | - | - | - | useEmailHandlers 382 lines, useAuthFlow 233 lines | - |
+| BACKLOG-239 | Reduce Direct Database Access Pattern | architecture | Critical | Pending | - | - | ~120K | - | - | - | - | - | - | - | - | - | - | - | - | - | 45 instances of const db = pattern | - |
+
+<!-- CRITICAL PRIORITY - Operations -->
+| BACKLOG-240 | Implement Database Migration Rollback Strategy | operations | Critical | Pending | - | - | ~60K | - | - | - | - | - | - | - | - | - | - | - | - | - | No rollback procedures exist | - |
+| BACKLOG-241 | Add Startup Health Checks | operations | Critical | Pending | - | - | ~35K | - | - | - | - | - | - | - | - | - | - | - | - | - | No pre-flight validation on app start | - |
+
+<!-- HIGH PRIORITY - Reliability -->
+| BACKLOG-242 | Add AbortController Support for Long Operations | reliability | High | Pending | - | - | ~50K | - | - | - | - | - | - | - | - | - | - | - | - | - | No cancellation support for sync/fetch | - |
+| BACKLOG-243 | Fix Fire-and-Forget IPC Event Handlers | reliability | High | Pending | - | - | ~60K | - | - | - | - | - | - | - | - | - | - | - | - | - | IPC handlers lack error handling | - |
+| BACKLOG-244 | Guarantee Session Cleanup Before State Transitions | reliability | High | Pending | - | - | ~40K | - | - | - | - | - | - | - | - | - | - | - | - | - | Session state leaks possible | - |
+| BACKLOG-245 | Validate Database Connection State | reliability | High | Pending | - | - | ~30K | - | - | - | - | - | - | - | - | - | - | - | - | - | No connection validation before queries | - |
+| BACKLOG-246 | Add Component-Level Error Boundaries | reliability | High | Pending | - | - | ~45K | - | - | - | - | - | - | - | - | - | - | - | - | - | Missing granular error boundaries | - |
+
+<!-- HIGH PRIORITY - Security -->
+| BACKLOG-247 | Re-enable Sandbox for Preload Script | security | High | Pending | - | - | ~40K | - | - | - | - | - | - | - | - | - | - | - | - | - | sandbox: false in webPreferences | - |
+| BACKLOG-248 | Fix Environment Variable Exposure in googleAuthService | security | High | Pending | - | - | ~25K | - | - | - | - | - | - | - | - | - | - | - | - | - | Credentials may leak to renderer | - |
+| BACKLOG-249 | Tighten CSP in Development Mode | security | High | Pending | - | - | ~20K | - | - | - | - | - | - | - | - | - | - | - | - | - | CSP too permissive | - |
+
+<!-- HIGH PRIORITY - Architecture -->
+| BACKLOG-250 | Reduce Heavy Service Dependency Chains | architecture | High | Pending | - | - | ~80K | - | - | - | - | - | - | - | - | - | - | - | - | - | transactionService imports 13+ services | - |
+| BACKLOG-251 | Standardize IPC Handler Error Handling | architecture | High | Pending | - | - | ~70K | - | - | - | - | - | - | - | - | - | - | - | - | - | 165 handlers with inconsistent patterns | - |
+| BACKLOG-252 | Decouple LLM Service from Consumers | architecture | High | Pending | - | - | ~55K | - | - | - | - | - | - | - | - | - | - | - | - | - | Tight coupling to LLM implementation | - |
+| BACKLOG-253 | Remove Module-Level State Anti-Patterns | architecture | High | Pending | - | - | ~40K | - | - | - | - | - | - | - | - | - | - | - | - | - | Global state in hooks causes Strict Mode issues | - |
+
+<!-- HIGH PRIORITY - Code Quality -->
+| BACKLOG-254 | Fix Type Safety Issues with any and unsafe unknown | code-quality | High | Pending | - | - | ~50K | - | - | - | - | - | - | - | - | - | - | - | - | - | AppleDriverSetup.tsx:43 and others | - |
+| BACKLOG-255 | Modularize Large Components (700-827 lines) | code-quality | High | Pending | - | - | ~90K | - | - | - | - | - | - | - | - | - | - | - | - | - | Multiple oversized component files | - |
+| BACKLOG-256 | Address TODO/FIXME Comments (15+) | code-quality | High | Pending | - | - | ~60K | - | - | - | - | - | - | - | - | - | - | - | - | - | Incomplete features flagged | - |
+| BACKLOG-257 | Fix Module-Level Mutable State in useAutoRefresh | code-quality | High | Pending | - | - | ~25K | - | - | - | - | - | - | - | - | - | - | - | - | - | Memory leak and state sharing risk | - |
+
+<!-- HIGH PRIORITY - Performance -->
+| BACKLOG-258 | Fix N+1 Query in Transaction Details | performance | High | Pending | - | - | ~45K | - | - | - | - | - | - | - | - | - | - | - | - | - | Nested subqueries pattern | - |
+| BACKLOG-259 | Fix Memory Leak in useAutoRefresh Event Listeners | performance | High | Pending | - | - | ~30K | - | - | - | - | - | - | - | - | - | - | - | - | - | Uncleaned event listeners | - |
+| BACKLOG-260 | Implement Virtual Scrolling for Large Lists | performance | High | Pending | - | - | ~60K | - | - | - | - | - | - | - | - | - | - | - | - | - | Transaction/message lists need virtualization | - |
+
+<!-- HIGH PRIORITY - Operations -->
+| BACKLOG-261 | Unify Logging Architecture | operations | High | Pending | - | - | ~70K | - | - | - | - | - | - | - | - | - | - | - | - | - | 280 structured vs 87 console.log | - |
+| BACKLOG-262 | Add Pre-Deployment Validation | operations | High | Pending | - | - | ~40K | - | - | - | - | - | - | - | - | - | - | - | - | - | No validation before deploy | - |
+| BACKLOG-263 | Add Auto-Updater Metrics and Failure Tracking | operations | High | Pending | - | - | ~35K | - | - | - | - | - | - | - | - | - | - | - | - | - | Silent update failures possible | - |
+
+<!-- HIGH PRIORITY - Documentation -->
+| BACKLOG-264 | Document LLM Service API | docs | High | Pending | - | - | ~40K | - | - | - | - | - | - | - | - | - | - | - | - | - | Complex retry/batch logic undocumented | - |
+| BACKLOG-265 | Document Complex Algorithms | docs | High | Pending | - | - | ~50K | - | - | - | - | - | - | - | - | - | - | - | - | - | messageMatchingService, autoLinkService | - |
+
+<!-- MEDIUM PRIORITY - Code Quality -->
+| BACKLOG-266 | Consolidate Duplicate Utility Functions | code-quality | Medium | Pending | - | - | ~35K | - | - | - | - | - | - | - | - | - | - | - | - | - | formatCurrency, formatDate duplicates | - |
+| BACKLOG-267 | Standardize Error Handling Patterns | code-quality | Medium | Pending | - | - | ~50K | - | - | - | - | - | - | - | - | - | - | - | - | - | Inconsistent error handling across codebase | - |
+| BACKLOG-268 | Convert Relative Imports to Path Aliases | code-quality | Medium | Pending | - | - | ~80K | - | - | - | - | - | - | - | - | - | - | - | - | - | 332+ relative import paths | - |
+
+<!-- MEDIUM PRIORITY - Performance -->
+| BACKLOG-269 | Add Memoization to Transaction Components | performance | Medium | Pending | - | - | ~40K | - | - | - | - | - | - | - | - | - | - | - | - | - | Missing useMemo/useCallback | - |
+| BACKLOG-270 | Optimize Conversation Filtering Array Operations | performance | Medium | Pending | - | - | ~30K | - | - | - | - | - | - | - | - | - | - | - | - | - | Inefficient array operations | - |
+| BACKLOG-271 | Add Indexes for Database LIKE Queries | performance | Medium | Pending | - | - | ~25K | - | - | - | - | - | - | - | - | - | - | - | - | - | Unindexed columns in search queries | - |
+| BACKLOG-272 | Fix Synchronous JSON Serialization in Hot Paths | performance | Medium | Pending | - | - | ~35K | - | - | - | - | - | - | - | - | - | - | - | - | - | Blocking serialization | - |
+
+<!-- MEDIUM PRIORITY - Reliability -->
+| BACKLOG-273 | Improve Test Coverage (24% baseline) | reliability | Medium | Pending | - | - | ~100K | - | - | - | - | - | - | - | - | - | - | - | - | - | 21 skipped tests, many uncovered paths | - |
+| BACKLOG-274 | Ensure Cleanup on App Termination | reliability | Medium | Pending | - | - | ~40K | - | - | - | - | - | - | - | - | - | - | - | - | - | Insufficient cleanup handlers | - |
+
+<!-- MEDIUM PRIORITY - Operations -->
+| BACKLOG-275 | Add Structured Logging to Renderer Process | operations | Medium | Pending | - | - | ~45K | - | - | - | - | - | - | - | - | - | - | - | - | - | LogService not used in renderer | - |
+| BACKLOG-276 | Implement Error Recovery & Rollback Strategy | operations | Medium | Pending | - | - | ~60K | - | - | - | - | - | - | - | - | - | - | - | - | - | No graceful error recovery | - |
+| BACKLOG-277 | Secure CI Logs from Secret Exposure | operations | Medium | Pending | - | - | ~20K | - | - | - | - | - | - | - | - | - | - | - | - | - | Potential credential leaks in CI | - |
+
+<!-- MEDIUM PRIORITY - Documentation -->
+| BACKLOG-278 | Improve JSDoc Coverage | docs | Medium | Pending | - | - | ~80K | - | - | - | - | - | - | - | - | - | - | - | - | - | ~2400 comments for 246 files (~10/file) | - |
+| BACKLOG-279 | Document IPC Handlers Consistently | docs | Medium | Pending | - | - | ~50K | - | - | - | - | - | - | - | - | - | - | - | - | - | Handler documentation inconsistent | - |
+| BACKLOG-280 | Document Migration & Version History | docs | Medium | Pending | - | - | ~35K | - | - | - | - | - | - | - | - | - | - | - | - | - | No migration documentation | - |
+| BACKLOG-281 | Create Documentation Standards | docs | Medium | Pending | - | - | ~25K | - | - | - | - | - | - | - | - | - | - | - | - | - | No consistent doc patterns | - |
+| BACKLOG-282 | Document Error Handling Patterns | docs | Medium | Pending | - | - | ~30K | - | - | - | - | - | - | - | - | - | - | - | - | - | Error patterns undocumented | - |
+| BACKLOG-283 | Document Configuration/Environment Setup | docs | Medium | Pending | - | - | ~25K | - | - | - | - | - | - | - | - | - | - | - | - | - | Setup documentation gaps | - |
+
+<!-- LOW PRIORITY - Architecture -->
+| BACKLOG-284 | Implement Dependency Injection for Services | architecture | Low | Pending | - | - | ~120K | - | - | - | - | - | - | - | - | - | - | - | - | - | Manual service instantiation | - |
+| BACKLOG-285 | Add Data Abstraction Layer for Components | architecture | Low | Pending | - | - | ~100K | - | - | - | - | - | - | - | - | - | - | - | - | - | Direct data access in components | - |
 
 ---
 
@@ -343,6 +480,11 @@ This index tracks all backlog items with their current status and metadata.
 | SPRINT-030 | Message & Transaction UX | Planned | TASK-1013-1016 (Date range filter, group chat names, lookback period, attachments) |
 | SPRINT-031 | Codebase Health | Planned | 6 tasks (TASK-1017-1022): Service layer tests, any type cleanup, console cleanup |
 | SPRINT-032 | Bug Fixes & Stability | Planned | 5 tasks (TASK-1023-1027): Test regressions, auth handler, macOS messages tests, window.api audit |
+| SPRINT-033 | iMessage Stability & UX | Completed | 5 tasks (TASK-1028-1032): iMessage encoding fix, UI freeze, contacts pre-pop, auto-link, email/text counts |
+| SPRINT-034 | Stability Fixes | Completed | 6 of 7 tasks (TASK-1035-1040): Binary plist, settings scroll, regressions, email state, edit contacts. TASK-1041 blocked |
+| SPRINT-035 | Contact & Communication Fixes | Planning | 4 tasks (TASK-1042-1045): Contact save, unlink refresh, attachments stale ID, email banner |
+| SPRINT-036 | Deterministic Message Parsing | Completed | 6 of 7 tasks (TASK-1046-1051): Format detection, parser refactors, thread ID, test suite. TASK-1052 pending |
+| SPRINT-037 | Test Coverage | Completed | 3 tasks (TASK-1053-1055): databaseService mocking fix (PR #428), critical path tests (PR #429), CI coverage thresholds (PR #429). 20 iosMessagesParser tests still failing (BACKLOG-231) |
 
 ---
 
@@ -676,6 +818,53 @@ This index tracks all backlog items with their current status and metadata.
   - Total estimated: ~220K tokens (including SR review overhead + buffer)
   - Phase 1: Sequential service tests (establish mock pattern)
   - Phase 2: Parallel cleanup tasks (no file conflicts)
+- 2026-01-14: **Comprehensive Backlog Index Update**
+  - Added BACKLOG-227 through BACKLOG-230 (new items from SPRINT-035/036 testing):
+    - BACKLOG-227: Show iMessage attachments in Attachments tab (Medium)
+    - BACKLOG-228: UI freeze when viewing messages to attach (High) - BACKLOG-173 regression
+    - BACKLOG-229: Binary plist garbage text still appearing (CRITICAL) - TASK-1035 incomplete
+    - BACKLOG-230: NULL thread_id investigation (Medium, Complete) - macOS orphaned messages
+  - Added missing items BACKLOG-205 through BACKLOG-213 to Full Index:
+    - BACKLOG-205: Flaky useAutoRefresh timer tests (Low)
+    - BACKLOG-206-210: SPRINT-033 items (now marked Completed)
+    - BACKLOG-211-213: SPRINT-034 items (now marked Completed)
+  - Added missing items BACKLOG-225 and BACKLOG-226 to Full Index:
+    - BACKLOG-225: Video attachment support (Low)
+    - BACKLOG-226: URL preview formatting (Low)
+  - Updated status for SPRINT-033 completions: BACKLOG-206, 207, 208, 209, 210
+  - Updated status for SPRINT-034 completions: BACKLOG-211, 212, 213, 214, 215, 216, 217
+  - Marked BACKLOG-218 as Blocked (pending user requirements)
+  - Marked BACKLOG-230 as Completed (analysis complete, macOS data issue)
+  - Added SPRINT-033, 034, 035, 036 to Sprint History
+  - Total items: 210 (from 195), Completed: 103 (from 75)
+- 2026-01-14: **Identified Potential Duplicates/Consolidations**
+  - BACKLOG-228 (UI freeze attach messages) may be regression of BACKLOG-173 (contact-first interface)
+  - BACKLOG-229 (garbage text) is follow-up to SPRINT-036 work
+  - BACKLOG-206 (UI freeze sync) vs BACKLOG-228 (UI freeze attach) - different features, not duplicates
+  - BACKLOG-215 (encoding corruption) and BACKLOG-229 (garbage text) - related but different root causes
+- 2026-01-15: **SPRINT-037 (Test Coverage) COMPLETE**
+  - 3 tasks completed: TASK-1053, TASK-1054, TASK-1055
+  - PRs merged: #428 (databaseService native module mocking fix), #429 (critical path tests + CI coverage thresholds)
+  - BACKLOG-202 (databaseService test mocking) marked Completed
+  - **Known Issue:** 20 tests still failing in `iosMessagesParser.test.ts` - mock database setup issues
+  - Created BACKLOG-231 to track iosMessagesParser test failures
+  - Total items: 211, Completed: 105
+- 2026-01-15: **High Priority Items for Next Sprint**
+  - **CRITICAL:** BACKLOG-229 (binary plist garbage text still appearing)
+  - **CRITICAL:** BACKLOG-191 (service layer tests - 0% coverage on 781 lines)
+  - **HIGH:** BACKLOG-228 (UI freeze when viewing messages to attach)
+  - **HIGH:** BACKLOG-220-222 (contact/communication UI bugs)
+  - **MEDIUM:** BACKLOG-231 (iosMessagesParser test failures - 20 tests)
+- 2026-01-15: **Codebase Audit Findings Consolidated (7 SR Engineer Audits)**
+  - Added 54 new backlog items (BACKLOG-232 through BACKLOG-285)
+  - **Audit Categories:** Code Quality, Architecture, Reliability, Security, Operations, Performance, Documentation
+  - **Critical (10 items):** Security vulnerabilities (webSecurity, jsdiff DoS, PII masking), reliability gaps (unhandled rejections, race conditions), architecture debt (state complexity, oversized hooks, direct db access), operations gaps (migration rollback, startup health)
+  - **High (24 items):** AbortController support, IPC error handling, session cleanup, error boundaries, preload sandbox, service decoupling, type safety, component modularization, N+1 queries, memory leaks, logging unification, API documentation
+  - **Medium (18 items):** Utility consolidation, error patterns, path aliases, memoization, test coverage, structured logging, JSDoc coverage
+  - **Low (2 items):** Dependency injection, data abstraction layer
+  - **Total Estimated Tokens:** ~2.6M tokens for all audit remediation work
+  - **Sprint Planning Note:** Security/Critical items should be prioritized in upcoming sprints
+  - Total items: 265, Pending: 148
 
 ---
 
