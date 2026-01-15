@@ -20,6 +20,7 @@ import {
   detectAttributedBodyFormat,
   AttributedBodyFormat,
   extractTextFromTypedstream,
+  looksLikeBinaryGarbage,
 } from "../messageParser";
 import { FALLBACK_MESSAGES } from "../../constants";
 import { REPLACEMENT_CHAR } from "../encodingUtils";
@@ -41,6 +42,98 @@ const simplePlist = require("simple-plist") as {
 };
 
 describe("messageParser", () => {
+  /**
+   * TASK-1071: Binary garbage detection tests
+   * These tests verify detection of UTF-16 misinterpreted binary data
+   * in the message text field.
+   */
+  describe("looksLikeBinaryGarbage", () => {
+    // Sample garbage from test-data/message-parsing-test-data.md
+    // Pattern: UTF-16 LE interpreted "streamtyped" produces Oriya + CJK mix
+    const SAMPLE_GARBAGE = "\\u0B04\\u7473\\u6572\\u6D61\\u7479\\u6564\\u8184\\u03E8\\u01C4\\u8440\\u84C4\\u4E43\\u534D\\u7475\\u6261\\u656C\\u7441\\u7274\\u6269\\u7475\\u6564\\u7453\\u6972\\u676E";
+
+    it("should detect garbage with Oriya + CJK characters mixed", () => {
+      // Real garbage pattern: Oriya characters mixed with CJK
+      // This is the signature pattern of UTF-16 interpreted binary
+      const garbage = "\u0B04\u7473\u6572\u6D61\u7479\u6564"; // Oriya start + CJK
+      expect(looksLikeBinaryGarbage(garbage)).toBe(true);
+    });
+
+    it("should detect garbage starting with Oriya character", () => {
+      // When "streamtyped" is read as UTF-16 LE, first bytes produce Oriya
+      const garbageStart = "\u0B04some other text here";
+      expect(looksLikeBinaryGarbage(garbageStart)).toBe(true);
+    });
+
+    it("should detect iMessage metadata strings in text", () => {
+      expect(looksLikeBinaryGarbage("__kIMBaseWritingDirectionAttributeName")).toBe(true);
+      expect(looksLikeBinaryGarbage("kIMMessagePartAttributeName")).toBe(true);
+      expect(looksLikeBinaryGarbage("NSMutableAttributedString")).toBe(true);
+      expect(looksLikeBinaryGarbage("NSAttributedString")).toBe(true);
+    });
+
+    it("should detect text with high concentration of private use characters", () => {
+      // Binary data often produces private use area characters
+      const privateUseHeavy = "Hello\uE000\uE001\uE002\uE003\uE004World";
+      expect(looksLikeBinaryGarbage(privateUseHeavy)).toBe(true);
+    });
+
+    it("should NOT flag legitimate Chinese text", () => {
+      const chinese = "\u4F60\u597D\uFF0C\u4E16\u754C\uFF01"; // "Hello, World!" in Chinese
+      expect(looksLikeBinaryGarbage(chinese)).toBe(false);
+    });
+
+    it("should NOT flag legitimate Japanese text", () => {
+      const japanese = "\u3053\u3093\u306B\u3061\u306F\u4E16\u754C"; // "Hello world" in Japanese
+      expect(looksLikeBinaryGarbage(japanese)).toBe(false);
+    });
+
+    it("should NOT flag legitimate Korean text", () => {
+      const korean = "\uC548\uB155\uD558\uC138\uC694"; // "Hello" in Korean
+      expect(looksLikeBinaryGarbage(korean)).toBe(false);
+    });
+
+    it("should NOT flag legitimate English text", () => {
+      expect(looksLikeBinaryGarbage("Hello, World!")).toBe(false);
+      expect(looksLikeBinaryGarbage("This is a normal message.")).toBe(false);
+    });
+
+    it("should NOT flag text with emojis", () => {
+      const emojiText = "Hello \u{1F44B} World \u{1F389}";
+      expect(looksLikeBinaryGarbage(emojiText)).toBe(false);
+    });
+
+    it("should NOT flag short text", () => {
+      expect(looksLikeBinaryGarbage("Hi")).toBe(false);
+      expect(looksLikeBinaryGarbage("OK")).toBe(false);
+      expect(looksLikeBinaryGarbage("")).toBe(false);
+      expect(looksLikeBinaryGarbage("ab")).toBe(false);
+    });
+
+    it("should NOT flag null or undefined", () => {
+      expect(looksLikeBinaryGarbage(null as unknown as string)).toBe(false);
+      expect(looksLikeBinaryGarbage(undefined as unknown as string)).toBe(false);
+    });
+
+    it("should NOT flag text with kIM in the middle (like kimchi)", () => {
+      expect(looksLikeBinaryGarbage("I love making kIM chi at home")).toBe(false);
+      expect(looksLikeBinaryGarbage("The kIM family visited")).toBe(false);
+    });
+
+    it("should NOT flag legitimate mixed-language text", () => {
+      // English + Chinese mixed intentionally
+      const mixed = "Meeting at 3pm \u4E0B\u5348\u4E09\u70B9";
+      expect(looksLikeBinaryGarbage(mixed)).toBe(false);
+    });
+
+    it("should detect the exact garbage pattern from test data", () => {
+      // From message-parsing-test-data.md: "\\u0B04\\u7473\\u6572\\u6D61\\u7479\\u6564..."
+      // This is the UTF-16 LE interpretation of "streamtyped..."
+      const realGarbage = "\u0B04\u7473\u6572\u6D61\u7479\u6564\u8184\u03E8";
+      expect(looksLikeBinaryGarbage(realGarbage)).toBe(true);
+    });
+  });
+
   /**
    * TASK-1035: Binary plist (bplist00) format tests
    * These tests verify the fix for iMessage corruption where binary plist
@@ -1523,6 +1616,86 @@ describe("messageParser", () => {
         };
         const result = await getMessageText(message);
         expect(result).toBe(FALLBACK_MESSAGES.REACTION_OR_SYSTEM);
+      });
+    });
+
+    /**
+     * TASK-1071: Garbage text fallback tests
+     * When text field contains binary garbage, should fall back to attributedBody
+     */
+    describe("Garbage text handling (TASK-1071)", () => {
+      it("should fall back to attributedBody when text contains Oriya+CJK garbage", async () => {
+        // Garbage pattern from test data - UTF-16 interpreted binary
+        const garbage = "\u0B04\u7473\u6572\u6D61\u7479\u6564\u8184";
+        const message: Message = {
+          text: garbage,
+          attributedBody: simplePlist.bplistCreator(BPLIST_STRUCTURES.SIMPLE_MESSAGE),
+        };
+        const result = await getMessageText(message);
+        // Should use attributedBody, not the garbage text
+        expect(result).toBe("Hello, this is a message from binary plist!");
+      });
+
+      it("should fall back to attributedBody when text contains iMessage metadata", async () => {
+        const message: Message = {
+          text: "__kIMBaseWritingDirectionAttributeName",
+          attributedBody: simplePlist.bplistCreator(BPLIST_STRUCTURES.SIMPLE_MESSAGE),
+        };
+        const result = await getMessageText(message);
+        expect(result).toBe("Hello, this is a message from binary plist!");
+      });
+
+      it("should fall back to attributedBody when text is NSAttributedString metadata", async () => {
+        const message: Message = {
+          text: "NSMutableAttributedString",
+          attributedBody: simplePlist.bplistCreator(BPLIST_STRUCTURES.SIMPLE_MESSAGE),
+        };
+        const result = await getMessageText(message);
+        expect(result).toBe("Hello, this is a message from binary plist!");
+      });
+
+      it("should return fallback when garbage text AND no attributedBody", async () => {
+        const garbage = "\u0B04\u7473\u6572\u6D61\u7479\u6564\u8184";
+        const message: Message = {
+          text: garbage,
+          attributedBody: null,
+          cache_has_attachments: 1,
+        };
+        const result = await getMessageText(message);
+        // Should return attachment fallback since no valid text source
+        expect(result).toBe(FALLBACK_MESSAGES.ATTACHMENT);
+      });
+
+      it("should NOT reject legitimate CJK text", async () => {
+        const chinese = "\u4F60\u597D\uFF0C\u4E16\u754C\uFF01"; // "Hello, World!" in Chinese
+        const message: Message = {
+          text: chinese,
+          attributedBody: simplePlist.bplistCreator(BPLIST_STRUCTURES.SIMPLE_MESSAGE),
+        };
+        const result = await getMessageText(message);
+        // Should use the Chinese text, not fall back to attributedBody
+        expect(result).toBe(chinese);
+      });
+
+      it("should NOT reject legitimate mixed-language text", async () => {
+        const mixed = "Meeting at 3pm \u4E0B\u5348\u4E09\u70B9";
+        const message: Message = {
+          text: mixed,
+          attributedBody: simplePlist.bplistCreator(BPLIST_STRUCTURES.SIMPLE_MESSAGE),
+        };
+        const result = await getMessageText(message);
+        expect(result).toBe(mixed);
+      });
+
+      it("should handle garbage text starting with Oriya", async () => {
+        // Even without CJK, Oriya at start is strong indicator
+        const garbage = "\u0B04streamtyped content here";
+        const message: Message = {
+          text: garbage,
+          attributedBody: simplePlist.bplistCreator(BPLIST_STRUCTURES.SIMPLE_MESSAGE),
+        };
+        const result = await getMessageText(message);
+        expect(result).toBe("Hello, this is a message from binary plist!");
       });
     });
 
