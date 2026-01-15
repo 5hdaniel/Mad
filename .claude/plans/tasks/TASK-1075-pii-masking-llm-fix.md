@@ -374,3 +374,75 @@ SR Engineer Agent ID: <agent_id from Task tool output>
 | ID | Title | Relationship |
 |----|-------|-------------|
 | BACKLOG-236 | Incomplete PII Masking in LLM Pipeline | Source backlog item |
+
+---
+
+## SR Engineer Pre-Implementation Review
+
+**Review Date:** 2026-01-15 | **Status:** APPROVED WITH NOTES
+
+### Branch Information (SR Engineer decides)
+- **Branch From:** develop
+- **Branch Into:** develop
+- **Suggested Branch Name:** fix/TASK-1075-pii-masking-enhancement
+
+### Execution Classification
+- **Parallel Safe:** No - Phase 2
+- **Depends On:** TASK-1073, TASK-1074, TASK-1076 (all Phase 1 tasks)
+- **Blocks:** None
+
+### Shared File Analysis
+- Files modified: `contentSanitizer.ts`, potentially other LLM tools
+- Conflicts with: None
+
+### Technical Considerations
+
+**Current State (verified via code review):**
+
+The `contentSanitizer.ts` ALREADY EXISTS and has comprehensive patterns:
+- Email addresses (with partial masking preserving structure)
+- Phone numbers (with last 4 digits preserved)
+- SSN (fully masked)
+- Credit card numbers (last 4 preserved)
+- Bank account numbers (last 4 preserved)
+- IP addresses (fully masked)
+
+The sanitizer is ALREADY USED in LLM tools:
+- `analyzeMessageTool.ts` - sanitizes body and subject before LLM call
+- `clusterTransactionsTool.ts` - uses sanitizer
+- `extractContactRolesTool.ts` - uses sanitizer
+
+**What Needs Verification/Enhancement:**
+
+1. **Address masking**: The task mentions addresses should be masked, but `contentSanitizer.ts` has `PRESERVE_PATTERNS` that intentionally KEEP property addresses for real estate context. This is a DESIGN DECISION that should be reviewed:
+   - Current: Property addresses are preserved (correct for real estate LLM analysis)
+   - Task says: Addresses should be masked
+   - **RECOMMENDATION:** Keep current behavior - property addresses are needed for LLM context
+
+2. **Bank account pattern concern**: Pattern `\b\d{8,17}\b` is very broad and may over-match:
+   - Could match transaction IDs, reference numbers, etc.
+   - Consider adding context awareness or making pattern more specific
+
+3. **Integration verification**: Ensure ALL LLM API calls go through sanitization:
+   - Check `baseLLMService.ts` for direct calls
+   - Check `llmService.ts` entry point
+   - Verify no bypass paths exist
+
+4. **Logging audit**: Verify no PII logging:
+   - Check that `MaskedItem.original` is not logged in production
+   - Review LLM service logging for potential PII exposure
+
+### Testing Requirements
+- Existing tests in `__tests__/contentSanitizer.test.ts` are comprehensive
+- Add integration tests to verify masking before actual LLM API calls
+- Add test for combined PII (email in address, phone in signature)
+
+### Complexity Assessment
+**Estimated Tokens:** ~50K may be HIGH if scope is verification + minor fixes
+- If just verification: ~30K
+- If major refactoring needed: ~50K appropriate
+**Confidence:** Medium - scope depends on what gaps are found
+
+### Risk Notes
+- Do NOT change `PRESERVE_PATTERNS` without PM approval - property addresses are intentionally preserved
+- Bank account pattern may need refinement to reduce false positives

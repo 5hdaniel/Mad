@@ -352,3 +352,54 @@ SR Engineer Agent ID: <agent_id from Task tool output>
 | ID | Title | Relationship |
 |----|-------|-------------|
 | BACKLOG-232 | Disabled webSecurity in OAuth Windows | Source backlog item |
+
+---
+
+## SR Engineer Pre-Implementation Review
+
+**Review Date:** 2026-01-15 | **Status:** APPROVED
+
+### Branch Information (SR Engineer decides)
+- **Branch From:** develop
+- **Branch Into:** develop
+- **Suggested Branch Name:** fix/TASK-1073-websecurity-oauth-fix
+
+### Execution Classification
+- **Parallel Safe:** Yes
+- **Depends On:** None
+- **Blocks:** TASK-1075 (Phase 2 starts after Phase 1)
+
+### Shared File Analysis
+- Files modified: `googleAuthHandlers.ts`, `microsoftAuthHandlers.ts`
+- Conflicts with: None
+
+### Technical Considerations
+
+**Scope Clarification:**
+The task correctly identifies the issue. Code review reveals:
+
+1. **googleAuthHandlers.ts** - 4 BrowserWindow instances with:
+   - `webSecurity: false` (line 135, 635, 869)
+   - `allowRunningInsecureContent: true` (line 136, 636, 870)
+
+2. **microsoftAuthHandlers.ts** - 3 BrowserWindow instances with:
+   - `webSecurity: false` (line 123, 558, 772)
+   - `allowRunningInsecureContent: true` (line 124, 559, 773)
+
+**CRITICAL FINDING:** The task description mentions only `webSecurity: false` but the code also has `allowRunningInsecureContent: true`. **Both settings should be removed.**
+
+**Risk Assessment:**
+- CSP header stripping is present (lines 143-162 in google, 133-152 in microsoft). This is acceptable for OAuth flows as OAuth providers require specific headers.
+- OAuth should work without webSecurity disabled because:
+  - Token exchange uses navigation interception, not fetch
+  - The callback URL is intercepted before rendering
+  - CSP stripping handles provider-specific requirements
+
+**Testing Guidance:**
+- Test with actual Google/Microsoft accounts
+- Verify no CORS errors in DevTools
+- Confirm token exchange completes
+
+### Complexity Assessment
+**Estimated Tokens:** ~30K is appropriate
+**Confidence:** High - straightforward removal of settings

@@ -349,3 +349,70 @@ SR Engineer Agent ID: <agent_id from Task tool output>
 | ID | Title | Relationship |
 |----|-------|-------------|
 | BACKLOG-233 | Missing Unhandled Rejection Handlers | Source backlog item |
+
+---
+
+## SR Engineer Pre-Implementation Review
+
+**Review Date:** 2026-01-15 | **Status:** APPROVED
+
+### Branch Information (SR Engineer decides)
+- **Branch From:** develop
+- **Branch Into:** develop
+- **Suggested Branch Name:** fix/TASK-1076-unhandled-rejection-handlers
+
+### Execution Classification
+- **Parallel Safe:** Yes
+- **Depends On:** None
+- **Blocks:** TASK-1075 (Phase 2 starts after Phase 1)
+
+### Shared File Analysis
+- Files modified: `electron/main.ts`
+- Conflicts with: None
+
+### Technical Considerations
+
+**Current State (verified via grep):**
+- No existing `uncaughtException` handler in main.ts
+- No existing `unhandledRejection` handler in main.ts
+- Clean implementation path confirmed
+
+**Implementation Guidance:**
+
+1. **Handler Placement:**
+   - Add handlers at the VERY TOP of main.ts, before any imports if possible
+   - Or immediately after essential imports but before any async operations
+   - Current file starts with imports at line 1 - handlers should go after imports but before any other code
+
+2. **Handler Design:**
+   ```typescript
+   // Add after imports, before any other code
+   process.on('uncaughtException', (error: Error) => {
+     console.error('[FATAL] Uncaught Exception:', error);
+     // Use electron-log which is already imported
+     log.error('[FATAL] Uncaught Exception:', error);
+   });
+
+   process.on('unhandledRejection', (reason: unknown) => {
+     console.error('[ERROR] Unhandled Rejection:', reason);
+     log.error('[ERROR] Unhandled Rejection:', reason);
+   });
+   ```
+
+3. **Leverage Existing Infrastructure:**
+   - `electron-log` is already imported as `log`
+   - Use it for file-based logging in addition to console
+
+4. **Do NOT:**
+   - Call `process.exit()` - let Electron handle graceful shutdown
+   - Show dialog at startup (dialog may not be ready)
+   - Add auto-restart logic
+
+### Testing Guidance
+- Unit tests should verify handlers are registered
+- Can mock `process.on` to test registration
+- Integration test: trigger unhandled rejection, verify logging
+
+### Complexity Assessment
+**Estimated Tokens:** ~15K is appropriate
+**Confidence:** High - straightforward implementation
