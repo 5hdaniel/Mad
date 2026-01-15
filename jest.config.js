@@ -32,6 +32,9 @@ module.exports = {
     '^electron$': '<rootDir>/tests/__mocks__/electron.js',
     '^electron-log$': '<rootDir>/tests/__mocks__/electron-log.js',
     '^electron-updater$': '<rootDir>/tests/__mocks__/electron-updater.js',
+    // Native database modules - must be mocked to avoid binding errors
+    '^better-sqlite3-multiple-ciphers$': '<rootDir>/tests/__mocks__/better-sqlite3-multiple-ciphers.js',
+    '^sqlite3$': '<rootDir>/tests/__mocks__/sqlite3.js',
   },
 
   // Coverage configuration
