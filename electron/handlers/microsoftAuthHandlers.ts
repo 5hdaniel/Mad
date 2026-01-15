@@ -120,8 +120,7 @@ export async function handleMicrosoftLogin(
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
-        webSecurity: false,
-        allowRunningInsecureContent: true,
+        // webSecurity defaults to true - do not disable
       },
       autoHideMenuBar: true,
       title: "Sign in with Microsoft",
@@ -555,8 +554,7 @@ export async function handleMicrosoftConnectMailbox(
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
-        webSecurity: false,
-        allowRunningInsecureContent: true,
+        // webSecurity defaults to true - do not disable
       },
       autoHideMenuBar: true,
       title: "Connect Microsoft Mailbox",
@@ -771,8 +769,7 @@ export async function handleMicrosoftConnectMailboxPending(
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
-        webSecurity: false,
-        allowRunningInsecureContent: true,
+        // webSecurity defaults to true - do not disable
       },
       autoHideMenuBar: true,
       title: "Connect Microsoft Mailbox",

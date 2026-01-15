@@ -125,15 +125,14 @@ export async function handleGoogleLogin(
       "AuthHandlers"
     );
 
-    // Create a popup window for auth with webSecurity disabled to allow Google's scripts
+    // Create a popup window for auth
     const authWindow = new BrowserWindow({
       width: 500,
       height: 700,
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
-        webSecurity: false,
-        allowRunningInsecureContent: true,
+        // webSecurity defaults to true - do not disable
       },
       autoHideMenuBar: true,
       title: "Sign in with Google",
@@ -632,8 +631,7 @@ export async function handleGoogleConnectMailbox(
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
-        webSecurity: false,
-        allowRunningInsecureContent: true,
+        // webSecurity defaults to true - do not disable
       },
       autoHideMenuBar: true,
       title: "Connect to Gmail",
@@ -867,8 +865,7 @@ export async function handleGoogleConnectMailboxPending(
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
-        webSecurity: false,
-        allowRunningInsecureContent: true,
+        // webSecurity defaults to true - do not disable
       },
       autoHideMenuBar: true,
       title: "Connect to Gmail",
