@@ -1145,4 +1145,111 @@ export function registerSystemHandlers(): void {
       }
     },
   );
+
+  // ============================================
+  // DATA DIAGNOSTIC HANDLERS
+  // ============================================
+
+  ipcMain.handle(
+    "diagnostic:message-health-report",
+    async (_event: IpcMainInvokeEvent, userId: string) => {
+      try {
+        validateUserId(userId);
+        return await databaseService.diagnosticMessageHealthReport(userId);
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        logService.error("diagnostic:message-health-report failed", "SystemHandlers", {
+          error: errorMessage,
+        });
+        throw error;
+      }
+    },
+  );
+
+  ipcMain.handle(
+    "diagnostic:messages-null-thread-id",
+    async (_event: IpcMainInvokeEvent, userId: string) => {
+      try {
+        validateUserId(userId);
+        return await databaseService.diagnosticGetMessagesWithNullThreadId(userId);
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        logService.error("diagnostic:messages-null-thread-id failed", "SystemHandlers", {
+          error: errorMessage,
+        });
+        throw error;
+      }
+    },
+  );
+
+  ipcMain.handle(
+    "diagnostic:messages-garbage-text",
+    async (_event: IpcMainInvokeEvent, userId: string) => {
+      try {
+        validateUserId(userId);
+        return await databaseService.diagnosticGetMessagesWithGarbageText(userId);
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        logService.error("diagnostic:messages-garbage-text failed", "SystemHandlers", {
+          error: errorMessage,
+        });
+        throw error;
+      }
+    },
+  );
+
+  ipcMain.handle(
+    "diagnostic:threads-for-contact",
+    async (_event: IpcMainInvokeEvent, userId: string, phoneDigits: string) => {
+      try {
+        validateUserId(userId);
+        validateString(phoneDigits, "phoneDigits");
+        return await databaseService.diagnosticGetThreadsForContact(userId, phoneDigits);
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        logService.error("diagnostic:threads-for-contact failed", "SystemHandlers", {
+          error: errorMessage,
+        });
+        throw error;
+      }
+    },
+  );
+
+  ipcMain.handle(
+    "diagnostic:null-thread-id-analysis",
+    async (_event: IpcMainInvokeEvent, userId: string) => {
+      try {
+        validateUserId(userId);
+        return await databaseService.diagnosticNullThreadIdAnalysis(userId);
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        logService.error("diagnostic:null-thread-id-analysis failed", "SystemHandlers", {
+          error: errorMessage,
+        });
+        throw error;
+      }
+    },
+  );
+
+  ipcMain.handle(
+    "diagnostic:unknown-recipient-messages",
+    async (_event: IpcMainInvokeEvent, userId: string) => {
+      try {
+        validateUserId(userId);
+        return await databaseService.diagnosticUnknownRecipientMessages(userId);
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        logService.error("diagnostic:unknown-recipient-messages failed", "SystemHandlers", {
+          error: errorMessage,
+        });
+        throw error;
+      }
+    },
+  );
 }

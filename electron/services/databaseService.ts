@@ -1205,6 +1205,25 @@ class DatabaseService implements IDatabaseService {
   }
 
   /**
+   * Diagnostic: Get recent messages with unknown recipient
+   * Returns external_id (macOS ROWID) for cross-referencing
+   */
+  async diagnosticUnknownRecipientMessages(userId: string): Promise<{
+    samples: Array<{ external_id: string; body_text: string; participants: string; sent_at: string }>;
+  }> {
+    const db = this._ensureDb();
+
+    const samples = db.prepare(`
+      SELECT external_id, body_text, participants, sent_at FROM messages
+      WHERE user_id = ? AND thread_id IS NULL AND channel IN ('sms', 'imessage')
+      AND participants LIKE '%"unknown"%'
+      ORDER BY sent_at DESC LIMIT 10
+    `).all(userId) as Array<{ external_id: string; body_text: string; participants: string; sent_at: string }>;
+
+    return { samples };
+  }
+
+  /**
    * Diagnostic: Find messages with potential garbage text
    * Looks for binary signatures in body_text
    */
@@ -1338,6 +1357,81 @@ class DatabaseService implements IDatabaseService {
     }>;
 
     return { threads };
+  }
+
+  /**
+   * Diagnostic: Detailed analysis of NULL thread_id messages
+   * Groups by sender, channel, and month to identify patterns
+   */
+  async diagnosticNullThreadIdAnalysis(userId: string): Promise<{
+    total: number;
+    byChannel: Array<{ channel: string; count: number }>;
+    bySender: Array<{ sender: string; count: number; sampleText: string }>;
+    byMonth: Array<{ month: string; count: number }>;
+    unknownRecipient: number;
+  }> {
+    const db = this._ensureDb();
+
+    // Total NULL thread_id count
+    const totalResult = db.prepare(`
+      SELECT COUNT(*) as count FROM messages
+      WHERE user_id = ? AND thread_id IS NULL AND channel IN ('sms', 'imessage')
+    `).get(userId) as { count: number };
+
+    // Breakdown by channel
+    const byChannel = db.prepare(`
+      SELECT channel, COUNT(*) as count FROM messages
+      WHERE user_id = ? AND thread_id IS NULL AND channel IN ('sms', 'imessage')
+      GROUP BY channel ORDER BY count DESC
+    `).all(userId) as Array<{ channel: string; count: number }>;
+
+    // Top 20 senders with counts
+    const bySender = db.prepare(`
+      SELECT
+        CASE
+          WHEN participants LIKE '%"from":"me"%' THEN
+            json_extract(participants, '$.to[0]')
+          ELSE
+            json_extract(participants, '$.from')
+        END as sender,
+        COUNT(*) as count,
+        (SELECT body_text FROM messages m2
+         WHERE m2.user_id = ? AND m2.thread_id IS NULL
+         AND m2.participants = messages.participants
+         LIMIT 1) as sampleText
+      FROM messages
+      WHERE user_id = ? AND thread_id IS NULL AND channel IN ('sms', 'imessage')
+      GROUP BY sender
+      ORDER BY count DESC
+      LIMIT 20
+    `).all(userId, userId) as Array<{ sender: string; count: number; sampleText: string }>;
+
+    // Distribution by month
+    const byMonth = db.prepare(`
+      SELECT
+        strftime('%Y-%m', sent_at) as month,
+        COUNT(*) as count
+      FROM messages
+      WHERE user_id = ? AND thread_id IS NULL AND channel IN ('sms', 'imessage')
+      GROUP BY month
+      ORDER BY month DESC
+      LIMIT 12
+    `).all(userId) as Array<{ month: string; count: number }>;
+
+    // Count with unknown recipient
+    const unknownResult = db.prepare(`
+      SELECT COUNT(*) as count FROM messages
+      WHERE user_id = ? AND thread_id IS NULL AND channel IN ('sms', 'imessage')
+      AND participants LIKE '%"unknown"%'
+    `).get(userId) as { count: number };
+
+    return {
+      total: totalResult.count,
+      byChannel,
+      bySender,
+      byMonth,
+      unknownRecipient: unknownResult.count,
+    };
   }
 
   // ============================================
