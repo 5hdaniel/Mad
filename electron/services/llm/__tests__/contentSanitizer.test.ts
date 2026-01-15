@@ -95,6 +95,136 @@ describe('ContentSanitizer', () => {
     });
   });
 
+  describe('bank account masking (TASK-1075)', () => {
+    it('should mask bank account numbers with context keyword "account"', () => {
+      // Use a 12-digit account number that won't conflict with phone pattern
+      const result = sanitizer.sanitize('Please wire to account 123456789012');
+      expect(result.sanitizedContent).toContain('[ACCOUNT:****9012]');
+      expect(result.maskedItems.some((i) => i.type === 'bank_account')).toBe(true);
+    });
+
+    it('should mask bank account with various keyword formats', () => {
+      // Use realistic formats that match the pattern
+      const formats = [
+        'Account: 12345678', // 8 digits
+        'acct #12345678901', // 11 digits
+        'Account Number: 12345678901234', // 14 digits
+        'account no 1234567890123', // 13 digits
+        'routing: 123456789', // 9 digits (standard routing number)
+        'ABA: 123456789', // 9 digits (ABA routing number)
+      ];
+
+      for (const format of formats) {
+        const result = sanitizer.sanitize(format);
+        expect(result.maskedItems.some((i) => i.type === 'bank_account')).toBe(true);
+      }
+    });
+
+    it('should NOT mask standalone numbers that could be IDs', () => {
+      // Without context keywords, should not mask
+      const result = sanitizer.sanitize('Transaction ID: 123456789012');
+      expect(result.maskedItems.some((i) => i.type === 'bank_account')).toBe(false);
+    });
+
+    it('should NOT mask timestamps', () => {
+      const result = sanitizer.sanitize('Created at: 1704067200000');
+      expect(result.maskedItems.some((i) => i.type === 'bank_account')).toBe(false);
+    });
+
+    it('should preserve last 4 digits of bank account', () => {
+      // Use a 14-digit account number
+      const result = sanitizer.sanitize('Account: 12345678901234');
+      expect(result.sanitizedContent).toContain('[ACCOUNT:****1234]');
+    });
+  });
+
+  describe('combined PII scenarios (TASK-1075)', () => {
+    it('should mask email in signature block', () => {
+      const content = `
+        Best regards,
+        John Smith
+        john.smith@company.com
+        555-123-4567
+      `;
+      const result = sanitizer.sanitize(content);
+      expect(result.sanitizedContent).toContain('[EMAIL:');
+      expect(result.sanitizedContent).toContain('[PHONE:');
+      expect(result.maskedItems.filter((i) => i.type === 'email')).toHaveLength(1);
+      expect(result.maskedItems.filter((i) => i.type === 'phone')).toHaveLength(1);
+    });
+
+    it('should mask phone in address context', () => {
+      const content = 'Property at 123 Main Street. Contact owner at 555-987-6543.';
+      const result = sanitizer.sanitize(content);
+      // Preserve property address
+      expect(result.sanitizedContent).toContain('123 Main Street');
+      // Mask phone
+      expect(result.sanitizedContent).toContain('[PHONE:');
+    });
+
+    it('should mask multiple PII types in single email body', () => {
+      const content = `
+        Dear Client,
+
+        Please wire the closing funds to account 123456789012345.
+        Our routing number is routing: 123456789.
+
+        Contact: John Doe
+        Email: john@escrow.com
+        Phone: (555) 111-2222
+
+        SSN for tax purposes: 123-45-6789
+
+        Property: 456 Oak Avenue - $500,000 listing
+      `;
+      const result = sanitizer.sanitize(content);
+
+      // Should mask bank accounts (with context) - account (15 digits) and routing (9 digits)
+      expect(result.maskedItems.filter((i) => i.type === 'bank_account').length).toBeGreaterThanOrEqual(2);
+      // Should mask email
+      expect(result.maskedItems.filter((i) => i.type === 'email')).toHaveLength(1);
+      // Should mask phone
+      expect(result.maskedItems.filter((i) => i.type === 'phone')).toHaveLength(1);
+      // Should mask SSN
+      expect(result.maskedItems.filter((i) => i.type === 'ssn')).toHaveLength(1);
+      // Should preserve property address and price
+      expect(result.sanitizedContent).toContain('456 Oak Avenue');
+      expect(result.sanitizedContent).toContain('$500,000');
+    });
+
+    it('should handle real estate email with all PII types', () => {
+      const content = `
+        RE: 789 Sunset Drive - Closing Documents
+
+        Please find attached the closing documents for your review.
+
+        Wire Instructions:
+        Bank: First National
+        Account: 98765432101234
+        Routing: 123456789
+
+        Buyer: Jane Buyer (jane.buyer@email.com)
+        SSN: 987-65-4321
+        Phone: 555-444-3333
+
+        Closing Amount: $750,000
+        MLS #24681357
+      `;
+      const result = sanitizer.sanitize(content);
+
+      // Verify PII is masked
+      expect(result.sanitizedContent).toContain('[EMAIL:');
+      expect(result.sanitizedContent).toContain('[PHONE:');
+      expect(result.sanitizedContent).toContain('[SSN:');
+      expect(result.sanitizedContent).toContain('[ACCOUNT:');
+
+      // Verify real estate data is preserved
+      expect(result.sanitizedContent).toContain('789 Sunset Drive');
+      expect(result.sanitizedContent).toContain('$750,000');
+      expect(result.sanitizedContent).toContain('MLS #24681357');
+    });
+  });
+
   describe('preservation', () => {
     it('should preserve property addresses', () => {
       const content = 'Property at 123 Main Street is listed at $450,000';
