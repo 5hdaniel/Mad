@@ -1,6 +1,6 @@
 /**
- * Unit tests for Google Auth Service Token Refresh
- * Tests automatic token refresh functionality
+ * Unit tests for Google Auth Service
+ * Tests OAuth authentication flows, token refresh, and authentication methods
  *
  * NOTE: Session-only OAuth - tokens stored directly in encrypted database,
  * no separate tokenEncryptionService encryption needed
@@ -8,10 +8,22 @@
 
 import googleAuthService from "../googleAuthService";
 import databaseService from "../databaseService";
+import { google } from "googleapis";
 
 // Mock dependencies
 jest.mock("../databaseService");
 jest.mock("googleapis");
+jest.mock("../logService", () => ({
+  __esModule: true,
+  default: {
+    info: jest.fn(),
+    debug: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+  },
+}));
+
+const mockGoogle = google as jest.Mocked<typeof google>;
 
 const mockDatabaseService = databaseService as jest.Mocked<
   typeof databaseService
@@ -282,5 +294,83 @@ describe("GoogleAuthService - Direct Code Resolution", () => {
       expect(stopSpy).toHaveBeenCalled();
       stopSpy.mockRestore();
     });
+  });
+});
+
+describe("GoogleAuthService - isAuthenticated", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("should return false when no access token provided", async () => {
+    const result = await googleAuthService.isAuthenticated("");
+    expect(result).toBe(false);
+  });
+
+  it("should return true when getUserInfo succeeds", async () => {
+    jest.spyOn(googleAuthService, "getUserInfo").mockResolvedValue({
+      id: "123",
+      email: "test@example.com",
+      verified_email: true,
+      name: "Test User",
+    });
+
+    const result = await googleAuthService.isAuthenticated("valid-token");
+    expect(result).toBe(true);
+  });
+
+  it("should return false when getUserInfo fails", async () => {
+    jest
+      .spyOn(googleAuthService, "getUserInfo")
+      .mockRejectedValue(new Error("Invalid token"));
+
+    const result = await googleAuthService.isAuthenticated("invalid-token");
+    expect(result).toBe(false);
+  });
+});
+
+describe("GoogleAuthService - stopLocalServer", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("should be callable multiple times without error", () => {
+    // Calling stop when no server is running should not throw
+    expect(() => {
+      googleAuthService.stopLocalServer();
+      googleAuthService.stopLocalServer();
+    }).not.toThrow();
+  });
+});
+
+describe("GoogleAuthService - resolveCodeDirectly edge cases", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("should not throw when called without active resolver", () => {
+    // Make sure server is stopped
+    googleAuthService.stopLocalServer();
+
+    // Should not throw even if no resolver is set
+    expect(() => {
+      googleAuthService.resolveCodeDirectly("test-code");
+    }).not.toThrow();
+  });
+});
+
+describe("GoogleAuthService - rejectCodeDirectly edge cases", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("should not throw when called without active rejecter", () => {
+    // Make sure server is stopped
+    googleAuthService.stopLocalServer();
+
+    // Should not throw even if no rejecter is set
+    expect(() => {
+      googleAuthService.rejectCodeDirectly("test-error");
+    }).not.toThrow();
   });
 });
