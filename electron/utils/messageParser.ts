@@ -330,6 +330,66 @@ export interface Message {
 }
 
 /**
+ * Check if text appears to be binary garbage (UTF-16 misinterpreted bytes)
+ *
+ * When binary data (like typedstream) is stored as UTF-16 and then read as UTF-8,
+ * it produces specific garbage patterns:
+ * - "streamtyped" as UTF-16 LE produces Oriya and CJK characters
+ * - iMessage metadata keys may leak through partially encoded
+ *
+ * TASK-1071: Re-added garbage detection for message.text field.
+ * The attributedBody parsing uses deterministic format detection (TASK-1049),
+ * but the text field may already contain garbage from incorrect storage.
+ *
+ * @param text - Text to check for garbage patterns
+ * @returns True if text appears to be binary garbage
+ */
+export function looksLikeBinaryGarbage(text: string): boolean {
+  if (!text || text.length < 5) return false;
+
+  // Pattern 1: UTF-16 interpreted "streamtyped" produces Oriya script characters
+  // "st" as UTF-16 LE = 0x7473 = specific code points
+  // From test data: garbage starts with Oriya characters mixed with CJK
+  // Oriya Unicode block: U+0B00-U+0B7F
+  const hasOriyaChars = /[\u0B00-\u0B7F]/.test(text);
+
+  // Pattern 2: CJK characters mixed with Oriya (very specific garbage pattern)
+  // This combination is extremely rare in legitimate text
+  const hasCJKChars = /[\u4E00-\u9FFF]/.test(text);
+
+  if (hasOriyaChars && hasCJKChars) {
+    // Oriya + CJK together is almost certainly garbage
+    // Legitimate mixed scripts would be very unusual
+    return true;
+  }
+
+  // Pattern 3: iMessage metadata strings that leaked through
+  // These should never appear in display text
+  if (/__kIM\w+AttributeName/.test(text)) return true;
+  if (/kIMMessagePart\w*AttributeName/.test(text)) return true;
+  if (/NSMutableAttributedString|NSAttributedString/.test(text)) return true;
+
+  // Pattern 4: High concentration of unusual Unicode ranges in short text
+  // Binary data interpreted as UTF-16 often produces characters in
+  // rarely-used Unicode ranges (private use, surrogates, specials)
+  const unusualRanges = /[\uE000-\uF8FF]|[\uFFF0-\uFFFF]/g; // Private use + specials
+  const unusualMatches = text.match(unusualRanges);
+  if (unusualMatches && unusualMatches.length > text.length * 0.1) {
+    // More than 10% unusual characters suggests garbage
+    return true;
+  }
+
+  // Pattern 5: Oriya at the start of text (very strong indicator)
+  // Legitimate Oriya text is extremely rare in this context
+  // "streamtyped" as UTF-16 LE starts with Oriya character
+  if (/^[\u0B00-\u0B7F]/.test(text)) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * Extract text from macOS Messages attributedBody blob
  *
  * Uses DETERMINISTIC format detection based on magic bytes:
@@ -519,24 +579,35 @@ export function cleanExtractedText(text: string): string {
  * Get message text from a message object
  *
  * Priority:
- * 1. Use message.text if present and valid after cleaning
+ * 1. Use message.text if present, valid after cleaning, and NOT garbage
  * 2. Parse attributedBody using deterministic format detection
  * 3. Return attachment fallback if applicable
  * 4. Return reaction/system fallback
  *
- * TASK-1049: Removed looksLikeBinaryGarbage heuristic. If message.text
- * contains garbage, it will fail the MIN_MESSAGE_TEXT_LENGTH check after
- * cleaning, and we'll fall back to attributedBody parsing.
+ * TASK-1071: Re-added looksLikeBinaryGarbage check for message.text field.
+ * If the text field contains binary garbage (UTF-16 misinterpreted bytes),
+ * we fall back to attributedBody parsing which uses deterministic format
+ * detection (TASK-1049).
  *
  * @param message - Message object from database
  * @returns Message text or fallback message
  */
 export async function getMessageText(message: Message): Promise<string> {
-  // If text field exists and is not empty, use it
+  // If text field exists and is not empty, check if it's valid
   if (message.text && message.text.length >= MIN_MESSAGE_TEXT_LENGTH) {
-    const cleaned = cleanExtractedText(message.text);
-    if (cleaned.length >= MIN_MESSAGE_TEXT_LENGTH) {
-      return cleaned;
+    // TASK-1071: Check for binary garbage before using text field
+    // This catches cases where binary data was incorrectly stored as text
+    if (!looksLikeBinaryGarbage(message.text)) {
+      const cleaned = cleanExtractedText(message.text);
+      if (cleaned.length >= MIN_MESSAGE_TEXT_LENGTH) {
+        return cleaned;
+      }
+    } else {
+      // Text field contains garbage, log and fall through to attributedBody
+      logService.debug("Text field contains binary garbage, falling back to attributedBody", "MessageParser", {
+        textLength: message.text.length,
+        textPreview: message.text.substring(0, 50),
+      });
     }
   }
 
