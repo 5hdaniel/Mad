@@ -1545,4 +1545,128 @@ describe("Auth Handlers", () => {
       );
     });
   });
+
+  describe("OAuth Popup Window Security Configuration", () => {
+    const { BrowserWindow } = require("electron");
+
+    beforeEach(() => {
+      jest.clearAllMocks();
+      // Track BrowserWindow constructor calls
+      BrowserWindow.mockClear();
+    });
+
+    it("should create Google login popup without webSecurity: false", async () => {
+      mockGoogleAuthService.authenticateForLogin.mockResolvedValue({
+        authUrl: "https://accounts.google.com/oauth",
+        codePromise: new Promise<string>(() => {}),
+        scopes: ["email", "profile"],
+      });
+
+      const handler = registeredHandlers.get("auth:google:login");
+      await handler(mockEvent);
+
+      // Verify BrowserWindow was called
+      expect(BrowserWindow).toHaveBeenCalled();
+
+      // Get the configuration passed to BrowserWindow
+      const callArgs = BrowserWindow.mock.calls[0][0];
+
+      // Verify webSecurity is NOT set to false
+      expect(callArgs.webPreferences?.webSecurity).not.toBe(false);
+      // Verify allowRunningInsecureContent is NOT set to true
+      expect(callArgs.webPreferences?.allowRunningInsecureContent).not.toBe(
+        true,
+      );
+      // Verify other security settings are correct
+      expect(callArgs.webPreferences?.nodeIntegration).toBe(false);
+      expect(callArgs.webPreferences?.contextIsolation).toBe(true);
+    });
+
+    it("should create Microsoft login popup without webSecurity: false", async () => {
+      mockMicrosoftAuthService.authenticateForLogin.mockResolvedValue({
+        authUrl: "https://login.microsoftonline.com/oauth",
+        codePromise: new Promise<string>(() => {}),
+        codeVerifier: "verifier-123",
+        scopes: ["User.Read"],
+      });
+
+      const handler = registeredHandlers.get("auth:microsoft:login");
+      await handler(mockEvent);
+
+      // Verify BrowserWindow was called
+      expect(BrowserWindow).toHaveBeenCalled();
+
+      // Get the configuration passed to BrowserWindow
+      const callArgs = BrowserWindow.mock.calls[0][0];
+
+      // Verify webSecurity is NOT set to false
+      expect(callArgs.webPreferences?.webSecurity).not.toBe(false);
+      // Verify allowRunningInsecureContent is NOT set to true
+      expect(callArgs.webPreferences?.allowRunningInsecureContent).not.toBe(
+        true,
+      );
+      // Verify other security settings are correct
+      expect(callArgs.webPreferences?.nodeIntegration).toBe(false);
+      expect(callArgs.webPreferences?.contextIsolation).toBe(true);
+    });
+
+    it("should create Google mailbox popup without webSecurity: false", async () => {
+      mockDatabaseService.getUserById.mockResolvedValue({
+        id: TEST_USER_ID,
+        email: "test@example.com",
+      });
+
+      mockGoogleAuthService.authenticateForMailbox.mockResolvedValue({
+        authUrl: "https://accounts.google.com/oauth/mailbox",
+        codePromise: new Promise<string>(() => {}),
+        scopes: ["gmail.readonly"],
+      });
+
+      const handler = registeredHandlers.get("auth:google:connect-mailbox");
+      await handler(mockEvent, TEST_USER_ID);
+
+      // Verify BrowserWindow was called
+      expect(BrowserWindow).toHaveBeenCalled();
+
+      // Get the configuration passed to BrowserWindow
+      const callArgs = BrowserWindow.mock.calls[0][0];
+
+      // Verify webSecurity is NOT set to false
+      expect(callArgs.webPreferences?.webSecurity).not.toBe(false);
+      // Verify allowRunningInsecureContent is NOT set to true
+      expect(callArgs.webPreferences?.allowRunningInsecureContent).not.toBe(
+        true,
+      );
+    });
+
+    it("should create Microsoft mailbox popup without webSecurity: false", async () => {
+      mockDatabaseService.getUserById.mockResolvedValue({
+        id: TEST_USER_ID,
+        email: "test@example.com",
+      });
+
+      mockMicrosoftAuthService.authenticateForMailbox.mockResolvedValue({
+        authUrl: "https://login.microsoftonline.com/oauth/mailbox",
+        codePromise: new Promise<string>(() => {}),
+        codeVerifier: "verifier-456",
+        scopes: ["Mail.Read"],
+      });
+
+      const handler = registeredHandlers.get("auth:microsoft:connect-mailbox");
+      await handler(mockEvent, TEST_USER_ID);
+
+      // Verify BrowserWindow was called
+      expect(BrowserWindow).toHaveBeenCalled();
+
+      // Get the configuration passed to BrowserWindow
+      const callArgs = BrowserWindow.mock.calls[0][0];
+
+      // Verify webSecurity is NOT set to false
+      expect(callArgs.webPreferences?.webSecurity).not.toBe(false);
+      // Verify allowRunningInsecureContent is NOT set to true
+      expect(callArgs.webPreferences?.allowRunningInsecureContent).not.toBe(
+        true,
+      );
+    });
+  });
 });
