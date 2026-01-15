@@ -47,6 +47,21 @@ import {
 // Configure logging for auto-updater
 log.transports.file.level = "info";
 
+// Global error handlers - must be registered early, before any async operations
+// These catch uncaught exceptions and unhandled promise rejections to prevent silent crashes
+process.on("uncaughtException", (error: Error) => {
+  console.error("[FATAL] Uncaught Exception:", error);
+  log.error("[FATAL] Uncaught Exception:", error);
+  // Do NOT call process.exit() - let Electron handle graceful shutdown
+  // Do NOT show dialog here - it may not be ready at startup
+});
+
+process.on("unhandledRejection", (reason: unknown) => {
+  console.error("[ERROR] Unhandled Rejection:", reason);
+  log.error("[ERROR] Unhandled Rejection:", reason);
+  // Log but do not crash - unhandled rejections are often recoverable
+});
+
 let mainWindow: BrowserWindow | null = null;
 
 /**
