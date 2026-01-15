@@ -69,7 +69,19 @@ export class ClusterTransactionsTool {
       }
 
       // Use LLM for complex clustering
-      const messages = this.buildPrompt(input);
+      // TASK-1075: Sanitize input before building prompt to mask PII
+      const sanitizedInput: ClusterTransactionsInput = {
+        ...input,
+        analyzedMessages: input.analyzedMessages.map((msg) => ({
+          ...msg,
+          subject: this.sanitizer.sanitize(msg.subject).sanitizedContent,
+          sender: this.sanitizer.sanitize(msg.sender).sanitizedContent,
+          recipients: msg.recipients.map(
+            (r) => this.sanitizer.sanitize(r).sanitizedContent
+          ),
+        })),
+      };
+      const messages = this.buildPrompt(sanitizedInput);
 
       const response = await this.llmService.completeWithRetry(messages, {
         ...config,
