@@ -435,6 +435,10 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-284 | Implement Dependency Injection for Services | architecture | Low | Pending | - | - | ~120K | - | - | - | - | - | - | - | - | - | - | - | - | - | Manual service instantiation | - |
 | BACKLOG-285 | Add Data Abstraction Layer for Components | architecture | Low | Pending | - | - | ~100K | - | - | - | - | - | - | - | - | - | - | - | - | - | Direct data access in components | - |
 
+<!-- MEDIUM PRIORITY - UI/UX Architecture -->
+| BACKLOG-289 | Unified Notification System | ui-ux | Medium | Pending | - | - | ~50K | - | - | - | - | - | - | - | - | - | - | - | - | - | Consistent toast/alert API across app | - |
+| BACKLOG-290 | Reusable Sync Progress Component | ui-ux | Medium | Pending | - | - | ~40K | - | - | - | - | - | - | - | - | - | - | - | - | - | Shared progress UI for all sync operations | - |
+
 <!-- LOW PRIORITY - UI/UX -->
 | BACKLOG-286 | Unify Chat Card and Group Chat Card Components | ui-ux | Low | Pending | - | - | ~40K | - | - | - | - | - | - | - | - | - | - | - | - | - | Inconsistent designs, separate components | - |
 | BACKLOG-288 | Simplify Dashboard Button Labels | ui-ux | Low | Pending | - | - | ~10K | - | - | - | - | - | - | - | - | - | - | - | - | - | Rename buttons, move arrow to heading | - |
