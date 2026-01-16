@@ -7,7 +7,7 @@ Security, Authentication
 **CRITICAL**
 
 ## Status
-Pending
+Completed (PR #437 merged 2026-01-16)
 
 ## Description
 
