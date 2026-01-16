@@ -31,7 +31,7 @@ This index tracks all backlog items with their current status and metadata.
 ### By Priority
 
 #### Critical (Audit Findings - Address First)
-- **Security:** **232** (webSecurity disabled in OAuth), **235** (jsdiff DoS), **236** (PII masking in LLM)
+- **Security:** **232** (webSecurity disabled in OAuth), **235** (jsdiff DoS), **236** (PII masking in LLM), **287** (dashboard visible after logout)
 - **Reliability:** **233** (unhandled rejection handlers), **234** (sync orchestrator race condition)
 - **Architecture:** **237** (Transactions.tsx 19 useState), **238** (oversized flow hooks), **239** (direct db access)
 - **Operations:** **240** (migration rollback), **241** (startup health checks)
@@ -353,7 +353,8 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-233 | Add Global Unhandled Rejection Handlers | reliability | Critical | Pending | - | - | ~25K | - | - | - | - | - | - | - | - | - | - | - | - | - | main.ts, main.tsx missing process.on handlers | - |
 | BACKLOG-234 | Fix Race Condition in Sync Orchestrator | reliability | Critical | Pending | - | - | ~50K | - | - | - | - | - | - | - | - | - | - | - | - | - | Concurrent sync state conflicts | - |
 | BACKLOG-235 | Patch jsdiff DoS Vulnerability | security | Critical | Pending | - | - | ~10K | - | - | - | - | - | - | - | - | - | - | - | - | - | npm audit vulnerability | - |
-| BACKLOG-236 | Fix Incomplete PII Masking in LLM Pipeline | security | Critical | Pending | - | - | ~45K | - | - | - | - | - | - | - | - | - | - | - | - | - | Content sent to LLM may expose PII | - |
+| BACKLOG-236 | Fix Incomplete PII Masking in LLM Pipeline | security | Critical | Completed | - | - | ~45K | - | - | - | - | - | - | - | - | - | - | - | - | - | Content sent to LLM may expose PII | PR #436 |
+| BACKLOG-287 | Dashboard Visible After Logout | security | **CRITICAL** | Pending | - | - | ~30K | - | - | - | - | - | - | - | - | - | - | - | - | - | Auth state not cleared on logout | - |
 
 <!-- CRITICAL PRIORITY - Architecture & Code Quality -->
 | BACKLOG-237 | Reduce Transactions.tsx State Complexity (19 useState) | code-quality | Critical | Pending | - | - | ~80K | - | - | - | - | - | - | - | - | - | - | - | - | - | Extract to custom hooks/context | - |
@@ -433,6 +434,10 @@ This index tracks all backlog items with their current status and metadata.
 <!-- LOW PRIORITY - Architecture -->
 | BACKLOG-284 | Implement Dependency Injection for Services | architecture | Low | Pending | - | - | ~120K | - | - | - | - | - | - | - | - | - | - | - | - | - | Manual service instantiation | - |
 | BACKLOG-285 | Add Data Abstraction Layer for Components | architecture | Low | Pending | - | - | ~100K | - | - | - | - | - | - | - | - | - | - | - | - | - | Direct data access in components | - |
+
+<!-- LOW PRIORITY - UI/UX -->
+| BACKLOG-286 | Unify Chat Card and Group Chat Card Components | ui-ux | Low | Pending | - | - | ~40K | - | - | - | - | - | - | - | - | - | - | - | - | - | Inconsistent designs, separate components | - |
+| BACKLOG-288 | Simplify Dashboard Button Labels | ui-ux | Low | Pending | - | - | ~10K | - | - | - | - | - | - | - | - | - | - | - | - | - | Rename buttons, move arrow to heading | - |
 
 ---
 
