@@ -157,12 +157,17 @@ export function useAuthFlow({
 
   const handleLogout = useCallback(async (): Promise<void> => {
     await logout();
+    // Dispatch LOGOUT to state machine to transition to "unauthenticated"
+    // This ensures the UI reflects the logged-out state (redirects to login screen)
+    if (stateMachineDispatch) {
+      stateMachineDispatch({ type: "LOGOUT" });
+    }
     onCloseProfile();
     setIsNewUserFlow(false);
     onSetHasSelectedPhoneType(false);
     onSetSelectedPhoneType(null);
     onSetCurrentStep("login");
-  }, [logout, onCloseProfile, onSetHasSelectedPhoneType, onSetSelectedPhoneType, onSetCurrentStep]);
+  }, [logout, stateMachineDispatch, onCloseProfile, onSetHasSelectedPhoneType, onSetSelectedPhoneType, onSetCurrentStep]);
 
   const handleAcceptTerms = useCallback(async (): Promise<void> => {
     try {
