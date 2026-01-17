@@ -44,6 +44,8 @@
   "exclude": [
     "node_modules",
     "electron/**/*.test.ts",
-    "electron/**/*.test.js"
+    "electron/**/*.test.js",
+    "electron/preload.ts",
+    "electron/preload/**/*"
   ]
 }
