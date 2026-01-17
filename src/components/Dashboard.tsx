@@ -222,17 +222,17 @@ function Dashboard({
           {/* Start New Audit Card */}
           <button
             onClick={handleStartNewAuditClick}
-            className={`group relative bg-white rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 p-8 text-left border-2 transform hover:scale-105 ${
+            className={`group bg-white rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 p-6 text-left border-2 transform hover:scale-105 ${
               pendingCount > 0
                 ? "border-indigo-500 ring-2 ring-indigo-300 ring-offset-2 hover:border-indigo-600"
                 : "border-transparent hover:border-blue-500"
             }`}
             data-tour="new-audit-card"
           >
-            <div className="absolute top-6 right-6">
-              <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all">
                 <svg
-                  className="w-8 h-8 text-white"
+                  className="w-7 h-7 text-white"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -245,45 +245,42 @@ function Dashboard({
                   />
                 </svg>
               </div>
-            </div>
-
-            <div className="pr-24">
-              <div className="flex items-center gap-2 mb-3">
-                <h2 className="text-2xl font-bold text-gray-900">
+              <div className="flex-1">
+                <h2 className="text-xl font-bold text-gray-900">
                   New Audit
                 </h2>
-                {pendingCount > 0 && (
-                  <span className="inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-sm font-semibold bg-indigo-100 text-indigo-800 animate-pulse">
-                    {pendingCount} new
-                  </span>
-                )}
-                <svg
-                  className="w-5 h-5 text-blue-600 group-hover:translate-x-1 transition-transform"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 5l7 7-7 7"
-                  />
-                </svg>
               </div>
+              {pendingCount > 0 && (
+                <span className="inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-sm font-semibold bg-indigo-100 text-indigo-800 animate-pulse">
+                  {pendingCount} new
+                </span>
+              )}
+              <svg
+                className="w-5 h-5 text-blue-600 group-hover:translate-x-1 transition-transform"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 5l7 7-7 7"
+                />
+              </svg>
             </div>
           </button>
 
           {/* Browse Transactions Card */}
           <button
             onClick={onViewTransactions}
-            className="group relative bg-white rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 p-8 text-left border-2 border-transparent hover:border-green-500 transform hover:scale-105"
+            className="group bg-white rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 p-6 text-left border-2 border-transparent hover:border-green-500 transform hover:scale-105"
             data-tour="transactions-card"
           >
-            <div className="absolute top-6 right-6">
-              <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-teal-600 rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 bg-gradient-to-br from-green-500 to-teal-600 rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all">
                 <svg
-                  className="w-8 h-8 text-white"
+                  className="w-7 h-7 text-white"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -296,27 +293,24 @@ function Dashboard({
                   />
                 </svg>
               </div>
-            </div>
-
-            <div className="pr-24">
-              <div className="flex items-center gap-2 mb-3">
-                <h2 className="text-2xl font-bold text-gray-900">
+              <div className="flex-1">
+                <h2 className="text-xl font-bold text-gray-900">
                   All Audits
                 </h2>
-                <svg
-                  className="w-5 h-5 text-green-600 group-hover:translate-x-1 transition-transform"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 5l7 7-7 7"
-                  />
-                </svg>
               </div>
+              <svg
+                className="w-5 h-5 text-green-600 group-hover:translate-x-1 transition-transform"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 5l7 7-7 7"
+                />
+              </svg>
             </div>
           </button>
         </div>
