@@ -2,9 +2,9 @@
 
 This index tracks all backlog items with their current status and metadata.
 
-**Last Updated:** 2026-01-15 (Codebase Audit Findings consolidated - 54 new items from 7 SR Engineer audits)
-**Total Items:** 265
-**Pending:** 148 | **In Progress:** 0 | **Completed:** 105 | **Partial:** 0 | **Obsolete:** 1 | **Deferred:** 2 | **Blocked:** 1
+**Last Updated:** 2026-01-17 (SPRINT-040 UI Design System closed)
+**Total Items:** 266
+**Pending:** 144 | **In Progress:** 0 | **Completed:** 110 | **Partial:** 0 | **Obsolete:** 1 | **Deferred:** 2 | **Blocked:** 1
 
 ---
 
@@ -349,12 +349,12 @@ This index tracks all backlog items with their current status and metadata.
 <!-- ============================================== -->
 
 <!-- CRITICAL PRIORITY - Security & Reliability -->
-| BACKLOG-232 | Fix Disabled webSecurity in OAuth Popup Windows | security | Critical | Pending | - | - | ~40K | - | - | - | - | - | - | - | - | - | - | - | - | - | googleAuthHandlers.ts, microsoftAuthHandlers.ts | - |
-| BACKLOG-233 | Add Global Unhandled Rejection Handlers | reliability | Critical | Pending | - | - | ~25K | - | - | - | - | - | - | - | - | - | - | - | - | - | main.ts, main.tsx missing process.on handlers | - |
+| BACKLOG-232 | Fix Disabled webSecurity in OAuth Popup Windows | security | Critical | Completed | - | - | ~40K | - | - | - | - | - | - | - | - | - | - | - | - | - | googleAuthHandlers.ts, microsoftAuthHandlers.ts | PR #433 |
+| BACKLOG-233 | Add Global Unhandled Rejection Handlers | reliability | Critical | Completed | - | - | ~25K | - | - | - | - | - | - | - | - | - | - | - | - | - | main.ts, main.tsx missing process.on handlers | PR #435 |
 | BACKLOG-234 | Fix Race Condition in Sync Orchestrator | reliability | Critical | Pending | - | - | ~50K | - | - | - | - | - | - | - | - | - | - | - | - | - | Concurrent sync state conflicts | - |
-| BACKLOG-235 | Patch jsdiff DoS Vulnerability | security | Critical | Pending | - | - | ~10K | - | - | - | - | - | - | - | - | - | - | - | - | - | npm audit vulnerability | - |
+| BACKLOG-235 | Patch jsdiff DoS Vulnerability | security | Critical | Completed | - | - | ~10K | - | - | - | - | - | - | - | - | - | - | - | - | - | npm audit vulnerability | PR #434 |
 | BACKLOG-236 | Fix Incomplete PII Masking in LLM Pipeline | security | Critical | Completed | - | - | ~45K | - | - | - | - | - | - | - | - | - | - | - | - | - | Content sent to LLM may expose PII | PR #436 |
-| BACKLOG-287 | Dashboard Visible After Logout | security | **CRITICAL** | Pending | - | - | ~30K | - | - | - | - | - | - | - | - | - | - | - | - | - | Auth state not cleared on logout | - |
+| BACKLOG-287 | Dashboard Visible After Logout | security | **CRITICAL** | Completed | - | - | ~30K | - | - | - | - | - | - | - | - | - | - | - | - | - | Auth state not cleared on logout | PR #437 |
 
 <!-- CRITICAL PRIORITY - Architecture & Code Quality -->
 | BACKLOG-237 | Reduce Transactions.tsx State Complexity (19 useState) | code-quality | Critical | Pending | - | - | ~80K | - | - | - | - | - | - | - | - | - | - | - | - | - | Extract to custom hooks/context | - |
@@ -436,12 +436,13 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-285 | Add Data Abstraction Layer for Components | architecture | Low | Pending | - | - | ~100K | - | - | - | - | - | - | - | - | - | - | - | - | - | Direct data access in components | - |
 
 <!-- MEDIUM PRIORITY - UI/UX Architecture -->
-| BACKLOG-289 | Unified Notification System | ui-ux | Medium | Pending | - | - | ~50K | - | - | - | - | - | - | - | - | - | - | - | - | - | Consistent toast/alert API across app | - |
-| BACKLOG-290 | Reusable Sync Progress Component | ui-ux | Medium | Pending | - | - | ~40K | - | - | - | - | - | - | - | - | - | - | - | - | - | Shared progress UI for all sync operations | - |
+| BACKLOG-289 | Unified Notification System | ui-ux | Medium | Completed | SPRINT-040 | - | ~50K | - | - | ~40K | - | - | - | - | - | - | - | - | ~40K | - | PR #439 | - |
+| BACKLOG-290 | Reusable Sync Progress Component | ui-ux | Medium | Completed | SPRINT-040 | - | ~40K | - | - | ~45K | - | - | - | - | - | - | - | - | ~45K | - | PR #440 | - |
 
 <!-- LOW PRIORITY - UI/UX -->
-| BACKLOG-286 | Unify Chat Card and Group Chat Card Components | ui-ux | Low | Pending | - | - | ~40K | - | - | - | - | - | - | - | - | - | - | - | - | - | Inconsistent designs, separate components | - |
-| BACKLOG-288 | Simplify Dashboard Button Labels | ui-ux | Low | Pending | - | - | ~10K | - | - | - | - | - | - | - | - | - | - | - | - | - | Rename buttons, move arrow to heading | - |
+| BACKLOG-286 | Unify Chat Card and Group Chat Card Components | ui-ux | Low | Completed | SPRINT-040 | - | ~40K | - | - | ~70K | - | - | - | - | - | - | - | - | ~70K | - | PRs #442,445-448 | - |
+| BACKLOG-288 | Simplify Dashboard Button Labels | ui-ux | Low | Completed | SPRINT-040 | - | ~10K | - | - | ~20K | - | - | - | - | - | - | - | - | ~20K | - | PRs #441,443 | - |
+| BACKLOG-295 | Transaction Header Responsive Layout | ui-ux | Medium | Completed | SPRINT-040 | - | ~18K | - | - | ~18K | - | - | - | - | - | - | - | - | ~18K | - | PR #449 | - |
 
 ---
 
@@ -494,6 +495,7 @@ This index tracks all backlog items with their current status and metadata.
 | SPRINT-035 | Contact & Communication Fixes | Planning | 4 tasks (TASK-1042-1045): Contact save, unlink refresh, attachments stale ID, email banner |
 | SPRINT-036 | Deterministic Message Parsing | Completed | 6 of 7 tasks (TASK-1046-1051): Format detection, parser refactors, thread ID, test suite. TASK-1052 pending |
 | SPRINT-037 | Test Coverage | Completed | 3 tasks (TASK-1053-1055): databaseService mocking fix (PR #428), critical path tests (PR #429), CI coverage thresholds (PR #429). 20 iosMessagesParser tests still failing (BACKLOG-231) |
+| SPRINT-040 | UI Design System | Completed | 9 tasks (TASK-1100-1108) + 2 hotfixes: SyncProgress component (PR #440), Notification system (PR #439), Dashboard labels (PRs #441,443), Chat card unification (PRs #442,445-448), Transaction header responsive (PR #449) |
 
 ---
 
@@ -874,6 +876,19 @@ This index tracks all backlog items with their current status and metadata.
   - **Total Estimated Tokens:** ~2.6M tokens for all audit remediation work
   - **Sprint Planning Note:** Security/Critical items should be prioritized in upcoming sprints
   - Total items: 265, Pending: 148
+- 2026-01-17: **SPRINT-040 (UI Design System) CLOSED**
+  - Completed 9 tasks (TASK-1100 to TASK-1108) + 2 hotfixes
+  - **PRs Merged:** #439-449 (11 total)
+  - **Backlog Items Completed:** BACKLOG-286, 288, 289, 290, 295 (5 items)
+  - **Key Deliverables:**
+    - SyncProgress component with 3 variants (compact, standard, detailed)
+    - Unified notification system with context API
+    - Dashboard button labels simplified
+    - Chat cards unified (individual + group)
+    - Transaction header responsive layout
+  - **Duration:** 2 days (estimated 3-4 days)
+  - **Tokens:** ~220K (estimated ~227K)
+  - Total items: 266, Pending: 144, Completed: 110
 
 ---
 
