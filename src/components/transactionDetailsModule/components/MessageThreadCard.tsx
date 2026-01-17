@@ -228,9 +228,6 @@ export function MessageThreadCard({
                   >
                     Group Chat
                   </h4>
-                  <span className="inline-block px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded-full">
-                    {participants.length} people
-                  </span>
                   <span
                     className="inline-block px-2 py-0.5 bg-gray-100 text-gray-600 text-xs font-medium rounded-full"
                     data-testid="group-message-count-badge"
@@ -238,13 +235,6 @@ export function MessageThreadCard({
                     {messages.length} {messages.length === 1 ? "message" : "messages"}
                   </span>
                 </div>
-                {/* Participant names */}
-                <p
-                  className="text-xs text-gray-500 mt-1"
-                  data-testid="thread-participants"
-                >
-                  {formatParticipantNames(participants, contactNames)}
-                </p>
                 {/* Date range */}
                 <p className="text-xs text-gray-400 mt-1">{getDateRange()}</p>
                 {/* Preview text */}
@@ -257,6 +247,14 @@ export function MessageThreadCard({
                     {previewText.length >= 60 ? "..." : ""}
                   </p>
                 )}
+                {/* Participant names - at bottom with hover tooltip */}
+                <p
+                  className="text-xs text-gray-500 mt-1 truncate cursor-default"
+                  data-testid="thread-participants"
+                  title={formatParticipantNames(participants, contactNames, 999)}
+                >
+                  {formatParticipantNames(participants, contactNames)}
+                </p>
               </>
             ) : (
               <>
@@ -275,14 +273,6 @@ export function MessageThreadCard({
                     {messages.length} {messages.length === 1 ? "message" : "messages"}
                   </span>
                 </div>
-                {contactName && phoneNumber && (
-                  <p
-                    className="text-sm text-gray-500 truncate"
-                    data-testid="thread-phone-number"
-                  >
-                    {phoneNumber}
-                  </p>
-                )}
                 {/* Date range - consistent with group chat layout */}
                 <p className="text-xs text-gray-400 mt-1">{getDateRange()}</p>
                 {/* Preview of last message */}
