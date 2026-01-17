@@ -320,7 +320,7 @@ describe("MessageThreadCard", () => {
       ...overrides,
     } as Communication);
 
-    it("should render message count badge for group chat", () => {
+    it("should NOT render message count badge for group chat", () => {
       const messages = [
         createGroupMessage({ id: "msg-1" }),
         createGroupMessage({ id: "msg-2" }),
@@ -335,25 +335,8 @@ describe("MessageThreadCard", () => {
         />
       );
 
-      // Should have the gray message count badge
-      const badge = screen.getByTestId("group-message-count-badge");
-      expect(badge).toBeInTheDocument();
-      expect(badge).toHaveTextContent("3 messages");
-    });
-
-    it("should render singular message for group chat with one message", () => {
-      const messages = [createGroupMessage({ id: "msg-1" })];
-
-      render(
-        <MessageThreadCard
-          threadId="group-thread-1"
-          messages={messages}
-          phoneNumber="+14155550100"
-        />
-      );
-
-      const badge = screen.getByTestId("group-message-count-badge");
-      expect(badge).toHaveTextContent("1 message");
+      // Message count badge should NOT exist for group chats
+      expect(screen.queryByTestId("group-message-count-badge")).not.toBeInTheDocument();
     });
 
     it("should render preview text for group chat", () => {
@@ -402,7 +385,7 @@ describe("MessageThreadCard", () => {
       expect(screen.queryByText("3 people")).not.toBeInTheDocument();
     });
 
-    it("should display participant names at bottom with hover tooltip", () => {
+    it("should display participant names inline with Group Chat label and hover tooltip", () => {
       const messages = [createGroupMessage({ id: "msg-1" })];
 
       render(
@@ -417,6 +400,11 @@ describe("MessageThreadCard", () => {
       expect(participants).toBeInTheDocument();
       // Should have title attribute for tooltip with full participant list
       expect(participants).toHaveAttribute("title");
+      // Should be in the same container as the Group Chat label
+      const contactName = screen.getByTestId("thread-contact-name");
+      expect(contactName.parentElement).toBe(participants.parentElement);
+      // Group Chat label should include colon for inline format
+      expect(contactName).toHaveTextContent("Group Chat:");
     });
   });
 

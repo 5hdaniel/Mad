@@ -220,19 +220,20 @@ export function MessageThreadCard({
           <div className="min-w-0 flex-1">
             {isGroup ? (
               <>
-                {/* Group chat header */}
-                <div className="flex items-center gap-2 flex-wrap">
+                {/* Group chat header with inline participants */}
+                <div className="flex items-baseline gap-1 min-w-0 flex-1">
                   <h4
-                    className="font-semibold text-gray-900"
+                    className="font-semibold text-gray-900 flex-shrink-0"
                     data-testid="thread-contact-name"
                   >
-                    Group Chat
+                    Group Chat:
                   </h4>
                   <span
-                    className="inline-block px-2 py-0.5 bg-gray-100 text-gray-600 text-xs font-medium rounded-full"
-                    data-testid="group-message-count-badge"
+                    className="text-xs text-gray-500 truncate"
+                    data-testid="thread-participants"
+                    title={formatParticipantNames(participants, contactNames, 999)}
                   >
-                    {messages.length} {messages.length === 1 ? "message" : "messages"}
+                    {formatParticipantNames(participants, contactNames)}
                   </span>
                 </div>
                 {/* Date range */}
@@ -247,14 +248,6 @@ export function MessageThreadCard({
                     {previewText.length >= 60 ? "..." : ""}
                   </p>
                 )}
-                {/* Participant names - at bottom with hover tooltip */}
-                <p
-                  className="text-xs text-gray-500 mt-1 truncate cursor-default"
-                  data-testid="thread-participants"
-                  title={formatParticipantNames(participants, contactNames, 999)}
-                >
-                  {formatParticipantNames(participants, contactNames)}
-                </p>
               </>
             ) : (
               <>
