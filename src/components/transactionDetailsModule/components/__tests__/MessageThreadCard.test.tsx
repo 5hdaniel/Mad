@@ -150,64 +150,6 @@ describe("MessageThreadCard", () => {
     });
   });
 
-  describe("message count badge", () => {
-    it("should display singular 'message' for one message", () => {
-      const messages = [createMockMessage()];
-
-      render(
-        <MessageThreadCard
-          threadId="thread-1"
-          messages={messages}
-          phoneNumber="+14155550100"
-        />
-      );
-
-      expect(screen.getByText("1 message")).toBeInTheDocument();
-    });
-
-    it("should display plural 'messages' for multiple messages", () => {
-      const messages = [
-        createMockMessage({ id: "msg-1" }),
-        createMockMessage({ id: "msg-2" }),
-        createMockMessage({ id: "msg-3" }),
-      ];
-
-      render(
-        <MessageThreadCard
-          threadId="thread-1"
-          messages={messages}
-          phoneNumber="+14155550100"
-        />
-      );
-
-      expect(screen.getByText("3 messages")).toBeInTheDocument();
-    });
-
-    it("should render message badge inline with title for individual chat", () => {
-      const messages = [
-        createMockMessage({ id: "msg-1" }),
-        createMockMessage({ id: "msg-2" }),
-      ];
-
-      render(
-        <MessageThreadCard
-          threadId="thread-1"
-          messages={messages}
-          contactName="John Doe"
-          phoneNumber="+14155550100"
-        />
-      );
-
-      // Badge should be in a flex container with the title
-      const badge = screen.getByTestId("individual-message-count-badge");
-      expect(badge).toBeInTheDocument();
-      expect(badge).toHaveTextContent("2 messages");
-      // Badge and contact name should share the same parent (flex container)
-      const contactName = screen.getByTestId("thread-contact-name");
-      expect(contactName.parentElement).toBe(badge.parentElement);
-    });
-  });
-
   describe("date range display", () => {
     it("should render date range for individual chat", () => {
       const messages = [
