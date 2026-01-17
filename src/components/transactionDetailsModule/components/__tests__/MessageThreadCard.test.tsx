@@ -93,7 +93,7 @@ describe("MessageThreadCard", () => {
       );
     });
 
-    it("should display phone number below contact name when both provided", () => {
+    it("should display contact name without phone number in card (phone hidden for cleaner layout)", () => {
       const messages = [createMockMessage()];
 
       render(
@@ -108,9 +108,8 @@ describe("MessageThreadCard", () => {
       expect(screen.getByTestId("thread-contact-name")).toHaveTextContent(
         "Jane Smith"
       );
-      expect(screen.getByTestId("thread-phone-number")).toHaveTextContent(
-        "+14155550200"
-      );
+      // Phone number is intentionally not displayed in the card layout
+      expect(screen.queryByTestId("thread-phone-number")).not.toBeInTheDocument();
     });
   });
 
@@ -388,7 +387,7 @@ describe("MessageThreadCard", () => {
       expect(participants.textContent).not.toContain("Also includes:");
     });
 
-    it("should display people badge for group chat", () => {
+    it("should not display people badge for group chat (removed for cleaner layout)", () => {
       const messages = [createGroupMessage({ id: "msg-1" })];
 
       render(
@@ -399,8 +398,25 @@ describe("MessageThreadCard", () => {
         />
       );
 
-      // Should have purple people badge - 3 people (from + 2 to)
-      expect(screen.getByText("3 people")).toBeInTheDocument();
+      // People badge intentionally removed - participant list at bottom shows who's in the chat
+      expect(screen.queryByText("3 people")).not.toBeInTheDocument();
+    });
+
+    it("should display participant names at bottom with hover tooltip", () => {
+      const messages = [createGroupMessage({ id: "msg-1" })];
+
+      render(
+        <MessageThreadCard
+          threadId="group-thread-1"
+          messages={messages}
+          phoneNumber="+14155550100"
+        />
+      );
+
+      const participants = screen.getByTestId("thread-participants");
+      expect(participants).toBeInTheDocument();
+      // Should have title attribute for tooltip with full participant list
+      expect(participants).toHaveAttribute("title");
     });
   });
 
