@@ -260,13 +260,21 @@ export function MessageThreadCard({
               </>
             ) : (
               <>
-                {/* 1:1 chat header */}
-                <h4
-                  className="font-semibold text-gray-900 truncate"
-                  data-testid="thread-contact-name"
-                >
-                  {contactName || phoneNumber}
-                </h4>
+                {/* 1:1 chat header - badge inline with title (matching group chat layout) */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4
+                    className="font-semibold text-gray-900 truncate"
+                    data-testid="thread-contact-name"
+                  >
+                    {contactName || phoneNumber}
+                  </h4>
+                  <span
+                    className="inline-block px-2 py-0.5 bg-green-100 text-green-700 text-xs font-medium rounded-full"
+                    data-testid="individual-message-count-badge"
+                  >
+                    {messages.length} {messages.length === 1 ? "message" : "messages"}
+                  </span>
+                </div>
                 {contactName && phoneNumber && (
                   <p
                     className="text-sm text-gray-500 truncate"
@@ -275,6 +283,8 @@ export function MessageThreadCard({
                     {phoneNumber}
                   </p>
                 )}
+                {/* Date range - consistent with group chat layout */}
+                <p className="text-xs text-gray-400 mt-1">{getDateRange()}</p>
                 {/* Preview of last message */}
                 {previewText && (
                   <p
@@ -290,12 +300,6 @@ export function MessageThreadCard({
           </div>
 
           <div className="flex items-center gap-2 flex-shrink-0">
-            {/* Message count badge - only for 1:1 chats (group chats show inline) */}
-            {!isGroup && (
-              <span className="inline-block px-2 py-0.5 bg-green-100 text-green-700 text-xs font-medium rounded-full">
-                {messages.length} {messages.length === 1 ? "message" : "messages"}
-              </span>
-            )}
             <button
               onClick={() => setShowModal(true)}
               className="px-3 py-1 text-xs font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-all"

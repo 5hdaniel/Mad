@@ -183,6 +183,72 @@ describe("MessageThreadCard", () => {
 
       expect(screen.getByText("3 messages")).toBeInTheDocument();
     });
+
+    it("should render message badge inline with title for individual chat", () => {
+      const messages = [
+        createMockMessage({ id: "msg-1" }),
+        createMockMessage({ id: "msg-2" }),
+      ];
+
+      render(
+        <MessageThreadCard
+          threadId="thread-1"
+          messages={messages}
+          contactName="John Doe"
+          phoneNumber="+14155550100"
+        />
+      );
+
+      // Badge should be in a flex container with the title
+      const badge = screen.getByTestId("individual-message-count-badge");
+      expect(badge).toBeInTheDocument();
+      expect(badge).toHaveTextContent("2 messages");
+      // Badge and contact name should share the same parent (flex container)
+      const contactName = screen.getByTestId("thread-contact-name");
+      expect(contactName.parentElement).toBe(badge.parentElement);
+    });
+  });
+
+  describe("date range display", () => {
+    it("should render date range for individual chat", () => {
+      const messages = [
+        createMockMessage({ id: "msg-1", sent_at: "2024-01-15T10:00:00Z" }),
+        createMockMessage({ id: "msg-2", sent_at: "2024-01-17T10:00:00Z" }),
+      ];
+
+      const { container } = render(
+        <MessageThreadCard
+          threadId="thread-1"
+          messages={messages}
+          contactName="Jane Doe"
+          phoneNumber="+14155550100"
+        />
+      );
+
+      // Should show date range like "Jan 15 - Jan 17"
+      expect(container.textContent).toMatch(/Jan\s+15\s*-\s*Jan\s+17/);
+    });
+
+    it("should render single date when all messages on same day", () => {
+      const messages = [
+        createMockMessage({ id: "msg-1", sent_at: "2024-01-15T10:00:00Z" }),
+        createMockMessage({ id: "msg-2", sent_at: "2024-01-15T14:00:00Z" }),
+      ];
+
+      const { container } = render(
+        <MessageThreadCard
+          threadId="thread-1"
+          messages={messages}
+          phoneNumber="+14155550100"
+        />
+      );
+
+      // Should show single date like "Jan 15" (not a range)
+      expect(container.textContent).toMatch(/Jan\s+15/);
+      // Should NOT contain a dash for date range
+      const dateRangePattern = /Jan\s+15\s*-/;
+      expect(container.textContent).not.toMatch(dateRangePattern);
+    });
   });
 
   describe("view button and preview", () => {
