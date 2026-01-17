@@ -51,11 +51,13 @@ User requested a design sprint focused on UI consistency and component architect
 | TASK-1101 | BACKLOG-289 | Unified Notification System | ~40K | 1 | HIGH |
 | TASK-1102 | BACKLOG-288 | Simplify Dashboard Button Labels | ~15K | 2 | MEDIUM |
 | TASK-1103 | BACKLOG-286 | Unify Chat/Group Chat Cards | ~35K | 2 | LOW |
+| TASK-1104 | N/A | Chat Card Layout Consistency | ~20K | 2 | MEDIUM |
+| TASK-1105 | N/A | Chat Card Layout Refinements | ~15K | 2 | MEDIUM |
 
-**Total Estimated (implementation):** ~135K tokens
-**SR Review Overhead:** +25K (4 tasks, ~6K each)
-**Buffer (10%):** ~16K
-**Grand Total:** ~176K tokens
+**Total Estimated (implementation):** ~170K tokens
+**SR Review Overhead:** +36K (6 tasks, ~6K each)
+**Buffer (10%):** ~21K
+**Grand Total:** ~227K tokens
 
 ---
 
@@ -93,11 +95,17 @@ Phase 2 (Sequential after Phase 1 merges)
 +-- TASK-1102: Simplify Dashboard Button Labels (MEDIUM)
     |
     +-- TASK-1103: Unify Chat/Group Chat Cards (LOW)
+        |
+        +-- TASK-1104: Chat Card Layout Consistency (MEDIUM)
+            |
+            +-- TASK-1105: Chat Card Layout Refinements (MEDIUM)
 ```
 
 **Why sequential:**
 - TASK-1102 is quick (~15K) - merges first to reduce conflict window
 - TASK-1103 may use notification system from TASK-1101 for unlink feedback
+- TASK-1104 modifies same file as TASK-1103 (MessageThreadCard.tsx) - must run after
+- TASK-1105 modifies same file as TASK-1104 (MessageThreadCard.tsx) - must run after
 - Ensures foundation components are available before UI polish tasks
 
 ---
@@ -114,11 +122,15 @@ graph TD
     subgraph Phase2[Phase 2: UI Polish - Sequential]
         TASK1102[TASK-1102: Dashboard Labels<br/>MEDIUM ~15K]
         TASK1103[TASK-1103: Unify Chat Cards<br/>LOW ~35K]
+        TASK1104[TASK-1104: Chat Card Layout<br/>MEDIUM ~20K]
+        TASK1105[TASK-1105: Chat Card Refinements<br/>MEDIUM ~15K]
     end
 
     TASK1100 --> TASK1102
     TASK1101 --> TASK1102
     TASK1102 --> TASK1103
+    TASK1103 --> TASK1104
+    TASK1104 --> TASK1105
 ```
 
 ### YAML Edges
@@ -150,6 +162,18 @@ dependency_graph:
       title: "Unify Chat/Group Chat Cards"
       priority: low
       est_tokens: 35K
+    - id: TASK-1104
+      type: task
+      phase: 2
+      title: "Chat Card Layout Consistency"
+      priority: medium
+      est_tokens: 20K
+    - id: TASK-1105
+      type: task
+      phase: 2
+      title: "Chat Card Layout Refinements"
+      priority: medium
+      est_tokens: 15K
 
   edges:
     - from: TASK-1100
@@ -164,6 +188,14 @@ dependency_graph:
       to: TASK-1103
       type: depends_on
       reason: "Sequential within Phase 2"
+    - from: TASK-1103
+      to: TASK-1104
+      type: depends_on
+      reason: "Both modify MessageThreadCard.tsx"
+    - from: TASK-1104
+      to: TASK-1105
+      type: depends_on
+      reason: "Both modify MessageThreadCard.tsx"
 ```
 
 ---
@@ -194,7 +226,7 @@ Sprint plan is **APPROVED** with minor technical notes. Phase 1 parallel executi
 | `src/hooks/useNotification.ts` (NEW) | 1101 | Low | CONFIRMED | New file - no collision with useToast.ts |
 | `src/App.tsx` | 1101 | **Low** | VERIFIED | Only 35 lines - wrapping AppShell with provider |
 | `src/components/Dashboard.tsx` | 1102 | Low | CONFIRMED | Text changes + arrow relocation only |
-| `src/components/transactionDetailsModule/components/MessageThreadCard.tsx` | 1103 | Medium | CONFIRMED | Style unification, no API changes |
+| `src/components/transactionDetailsModule/components/MessageThreadCard.tsx` | 1103, 1104, 1105 | Medium | CONFIRMED | Style unification (1103), layout consistency (1104), refinements (1105) - sequential |
 
 ### Parallel/Sequential Verification
 
@@ -272,6 +304,21 @@ Before starting sprint work, engineers must:
 - **Manual Testing:** Visual review of both chat types
 - **Regression:** View/Unlink functionality preserved
 
+### TASK-1104 (Chat Card Layout Consistency)
+- **Goal:** Consistent layout between individual and group chat cards
+- **Unit Tests:** Individual chat shows date range
+- **Unit Tests:** Individual chat message badge is inline with title
+- **Integration Tests:** Cards display correctly in transaction details view
+- **Manual Testing:** Visual comparison of both card types side by side
+- **Regression:** All existing card functionality preserved
+
+### TASK-1105 (Chat Card Layout Refinements)
+- **Goal:** Remove redundant info, restructure layout for better hierarchy
+- **Unit Tests:** Update tests that assert phone number or "X people" pill
+- **Integration Tests:** Cards display correctly in transaction details view
+- **Manual Testing:** Visual review of simplified layout
+- **Regression:** View/Unlink functionality preserved
+
 ### CI Requirements
 - All PRs must pass: `npm test`, `npm run type-check`, `npm run lint`
 - No regressions in existing test coverage
@@ -287,6 +334,8 @@ Before starting sprint work, engineers must:
 | TASK-1101 | 1 | PENDING | - | - (est 40K) | - | - |
 | TASK-1102 | 2 | PENDING | - | - (est 15K) | - | - |
 | TASK-1103 | 2 | PENDING | - | - (est 35K) | - | - |
+| TASK-1104 | 2 | PENDING | - | - (est 20K) | - | - |
+| TASK-1105 | 2 | PENDING | - | - (est 15K) | - | - |
 
 ---
 
@@ -315,7 +364,9 @@ Before starting sprint work, engineers must:
 2. **Notification System:** Unified `notify.success/error/warning/info` API available everywhere
 3. **Dashboard Labels:** Cleaner labels ("New Audit", "All Audits", "Contacts")
 4. **Chat Cards:** Single `ThreadCard` component for individual and group chats
-5. **Quality:** All tests passing, no flakiness, no coverage regression
+5. **Chat Card Layout:** Consistent layout (badge position, date range) for both card types
+6. **Chat Card Refinements:** Simplified layout (no phone, no people pill, restructured hierarchy)
+7. **Quality:** All tests passing, no flakiness, no coverage regression
 
 ---
 
@@ -331,6 +382,8 @@ Before starting sprint work, engineers must:
 - [ ] Manual testing of notification system
 - [ ] Manual testing of Dashboard navigation
 - [ ] Manual testing of chat cards in transaction details
+- [ ] Visual comparison of individual vs group chat cards for layout consistency
+- [ ] Visual verification of refined layout (no phone, no people pill)
 
 ---
 
@@ -338,7 +391,8 @@ Before starting sprint work, engineers must:
 
 | Task | Source | Root Cause | Added Date | Est. Tokens | Actual Tokens |
 |------|--------|------------|------------|-------------|---------------|
-| - | - | - | - | - | - |
+| TASK-1104 | Testing | Layout inconsistency discovered - badge position and date range differences | 2026-01-17 | ~20K | - |
+| TASK-1105 | Testing | Layout refinements discovered - redundant phone/people info, suboptimal hierarchy | 2026-01-17 | ~15K | - |
 
 ---
 
