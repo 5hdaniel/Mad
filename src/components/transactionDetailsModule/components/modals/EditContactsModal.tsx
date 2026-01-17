@@ -186,6 +186,8 @@ export function EditContactsModal({
           operations.push({
             action: "remove",
             contactId: existing.contact_id,
+            role: role,
+            specificRole: role,
           });
         }
       }
