@@ -167,6 +167,16 @@ export function NotificationProvider({
     [notify, dismiss, dismissAll]
   );
 
+  // Expose notify to window for dev tools debugging
+  useEffect(() => {
+    // Always expose in dev - use window.notify in console
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).__notify = notify;
+    console.log(
+      "🔔 Notifications available in console: __notify.success('msg'), __notify.error('msg'), __notify.warning('msg'), __notify.info('msg')"
+    );
+  }, [notify]);
+
   return (
     <NotificationContext.Provider value={contextValue}>
       {children}

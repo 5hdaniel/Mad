@@ -25,7 +25,7 @@ export function NotificationContainer({
 
   return (
     <div
-      className="fixed bottom-4 right-4 z-[100] flex flex-col gap-2 max-w-md"
+      className="fixed top-16 right-4 z-[100] flex flex-col gap-2 max-w-md"
       role="region"
       aria-live="polite"
       aria-label="Notifications"
