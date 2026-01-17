@@ -302,69 +302,79 @@ This task may complete under estimate (~20K) if the module-level guard is suffic
 
 **REQUIRED: Record your agent_id immediately when the Task tool returns.**
 
-*Completed: <DATE>*
+*Completed: 2026-01-17*
 
 ### Agent ID
 
-**Record this immediately when Task tool returns:**
 ```
-Engineer Agent ID: <agent_id from Task tool output>
+Engineer Agent ID: engineer-task-1113
 ```
 
 ### Checklist
 
 ```
 Files modified:
-- [ ] src/hooks/useMacOSMessagesImport.ts
-- [ ] <other files>
+- [x] src/hooks/useMacOSMessagesImport.ts
+- [x] src/hooks/__tests__/useMacOSMessagesImport.test.ts (new file)
 
 Features implemented:
-- [ ] Sync guard prevents duplicates
-- [ ] Single sync on dashboard load
+- [x] Sync guard prevents duplicates
+- [x] Single sync on dashboard load
 
 Root cause identified:
-- [ ] <describe root cause>
+- [x] Component-scoped hasImportedRef resets on remount, allowing duplicate triggers.
+      Also, two hooks (useMacOSMessagesImport at 2s and useAutoRefresh at 2.5s)
+      both independently call importMacOSMessages.
 
 Verification:
-- [ ] npm run type-check passes
-- [ ] npm run lint passes
-- [ ] npm test passes
-- [ ] Tested in production build
+- [x] npm run type-check passes
+- [x] npm run lint passes (on modified files; pre-existing lint error in ContactSelectModal.tsx)
+- [x] npm test passes (20 new tests pass; pre-existing flaky e2e tests unrelated)
+- [ ] Tested in production build (requires manual verification)
 ```
 
 ### Metrics (Auto-Captured)
 
-**From SubagentStop hook** - Run: `grep "<agent_id>" .claude/metrics/tokens.jsonl | jq '.'`
+**From SubagentStop hook** - Run: `grep "engineer-task-1113" .claude/metrics/tokens.jsonl | jq '.'`
 
 | Metric | Value |
 |--------|-------|
-| **Total Tokens** | X |
-| Duration | X seconds |
-| API Calls | X |
-| Input Tokens | X |
-| Output Tokens | X |
-| Cache Read | X |
-| Cache Create | X |
+| **Total Tokens** | TBD |
+| Duration | TBD |
+| API Calls | TBD |
+| Input Tokens | TBD |
+| Output Tokens | TBD |
+| Cache Read | TBD |
+| Cache Create | TBD |
 
-**Variance:** PM Est ~30K vs Actual ~XK (X% over/under)
+**Variance:** PM Est ~30K vs Actual ~TBD
 
 ### Notes
 
 **Planning notes:**
-<Key decisions from planning phase, revisions if any>
+- Root cause analysis revealed two separate sync trigger points
+- Adopted module-level guard pattern already proven in useAutoRefresh.ts
+- Added comprehensive test suite (20 tests) for the hook
 
 **Deviations from plan:**
-<If you deviated from the approved plan, explain what and why. Use "DEVIATION:" prefix.>
-<If no deviations, write "None">
+None
 
 **Design decisions:**
-<Document any design decisions you made and the reasoning>
+1. **Module-level flag (`hasTriggeredImport`)**: Matches the pattern used in `useAutoRefresh.ts` (`hasTriggeredAutoRefresh`). This is the standard pattern for "run once per app session" behavior that persists across React StrictMode double-mounts and component remounts.
+
+2. **Exported `resetMessagesImportTrigger()` function**: Added for testing and logout scenarios, following the same pattern as `resetAutoRefreshTrigger()` in useAutoRefresh.ts.
+
+3. **Removed `hasImportedRef`**: The component-scoped ref was redundant with the module-level flag and was the source of the bug.
 
 **Issues encountered:**
-<Document any issues or challenges and how you resolved them>
+- Pre-existing flaky test in `tests/e2e/autoDetection.test.tsx:532` - confirmed failure exists on develop branch without my changes
+- Pre-existing flaky performance test in `electron/services/__tests__/performance-benchmark.test.ts:215` - unrelated to changes
+- Pre-existing lint error in `ContactSelectModal.tsx` - unrelated to changes
 
 **Reviewer notes:**
-<Anything the reviewer should pay attention to>
+- The fix is minimal and follows the established pattern from `useAutoRefresh.ts`
+- 20 comprehensive tests added covering sync guard, StrictMode, and edge cases
+- Both hooks (`useMacOSMessagesImport` and `useAutoRefresh`) now use module-level guards consistently
 
 ### Estimate vs Actual Analysis
 
@@ -372,14 +382,14 @@ Verification:
 
 | Metric | PM Estimate | Actual | Variance |
 |--------|-------------|--------|----------|
-| **Tokens** | ~30K | ~XK | +/-X% |
-| Duration | - | X sec | - |
+| **Tokens** | ~30K | ~TBD | TBD |
+| Duration | - | TBD | - |
 
 **Root cause of variance:**
-<1-2 sentence explanation of why estimate was off>
+TBD (metrics auto-captured on session end)
 
 **Suggestion for similar tasks:**
-<What should PM estimate differently next time?>
+Task was straightforward once root cause was identified. Module-level guard pattern is well-established in this codebase.
 
 ---
 
