@@ -425,43 +425,6 @@ describe("TransactionMessagesTab", () => {
       expect(screen.getByTestId("toggle-thread-button")).toHaveTextContent("View");
     });
 
-    it("should display message count badge", () => {
-      const messages: Partial<Communication>[] = [
-        {
-          id: "msg-1",
-          user_id: "user-456",
-          channel: "sms",
-          body_text: "Message 1",
-          sent_at: "2024-01-20T10:00:00Z",
-          direction: "outbound",
-          thread_id: "thread-1",
-          has_attachments: false,
-          is_false_positive: false,
-        },
-        {
-          id: "msg-2",
-          user_id: "user-456",
-          channel: "sms",
-          body_text: "Message 2",
-          sent_at: "2024-01-20T11:00:00Z",
-          direction: "inbound",
-          thread_id: "thread-1",
-          has_attachments: false,
-          is_false_positive: false,
-        },
-      ];
-
-      render(
-        <TransactionMessagesTab
-          messages={messages as Communication[]}
-          loading={false}
-          error={null}
-        />
-      );
-
-      // Should show message count
-      expect(screen.getByText("2 messages")).toBeInTheDocument();
-    });
   });
 
   describe("date formatting", () => {

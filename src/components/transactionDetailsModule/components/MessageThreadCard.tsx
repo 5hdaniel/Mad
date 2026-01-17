@@ -251,7 +251,7 @@ export function MessageThreadCard({
               </>
             ) : (
               <>
-                {/* 1:1 chat header - badge inline with title (matching group chat layout) */}
+                {/* 1:1 chat header */}
                 <div className="flex items-center gap-2 flex-wrap">
                   <h4
                     className="font-semibold text-gray-900 truncate"
@@ -259,12 +259,6 @@ export function MessageThreadCard({
                   >
                     {contactName || phoneNumber}
                   </h4>
-                  <span
-                    className="inline-block px-2 py-0.5 bg-green-100 text-green-700 text-xs font-medium rounded-full"
-                    data-testid="individual-message-count-badge"
-                  >
-                    {messages.length} {messages.length === 1 ? "message" : "messages"}
-                  </span>
                 </div>
                 {/* Date range - consistent with group chat layout */}
                 <p className="text-xs text-gray-400 mt-1">{getDateRange()}</p>
