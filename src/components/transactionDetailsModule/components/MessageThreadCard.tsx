@@ -188,7 +188,7 @@ export function MessageThreadCard({
   return (
     <>
       <div
-        className="bg-white rounded-lg border border-gray-200 mb-4 overflow-hidden"
+        className="bg-white rounded-lg border border-gray-200 mb-4 overflow-hidden hover:bg-gray-50 transition-colors"
         data-testid="message-thread-card"
         data-thread-id={threadId}
       >
@@ -231,23 +231,32 @@ export function MessageThreadCard({
                   <span className="inline-block px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded-full">
                     {participants.length} people
                   </span>
+                  <span
+                    className="inline-block px-2 py-0.5 bg-gray-100 text-gray-600 text-xs font-medium rounded-full"
+                    data-testid="group-message-count-badge"
+                  >
+                    {messages.length} {messages.length === 1 ? "message" : "messages"}
+                  </span>
                 </div>
                 {/* Participant names */}
                 <p
                   className="text-xs text-gray-500 mt-1"
                   data-testid="thread-participants"
                 >
-                  Also includes:{" "}
                   {formatParticipantNames(participants, contactNames)}
                 </p>
-                {/* Date range and message count */}
-                <div className="flex items-center gap-3 mt-1">
-                  <span className="text-xs text-gray-500">{getDateRange()}</span>
-                  <span className="text-xs text-gray-400">•</span>
-                  <span className="text-xs text-gray-500">
-                    {messages.length} messages
-                  </span>
-                </div>
+                {/* Date range */}
+                <p className="text-xs text-gray-400 mt-1">{getDateRange()}</p>
+                {/* Preview text */}
+                {previewText && (
+                  <p
+                    className="text-sm text-gray-400 truncate mt-1"
+                    data-testid="thread-preview"
+                  >
+                    {previewText}
+                    {previewText.length >= 60 ? "..." : ""}
+                  </p>
+                )}
               </>
             ) : (
               <>

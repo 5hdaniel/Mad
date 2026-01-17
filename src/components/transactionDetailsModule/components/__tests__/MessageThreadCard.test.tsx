@@ -236,6 +236,164 @@ describe("MessageThreadCard", () => {
       expect(preview.textContent).toContain("...");
     });
   });
+
+  describe("group chat cards", () => {
+    // Helper to create a group chat message with multiple participants
+    const createGroupMessage = (overrides: Partial<Communication> = {}): Communication => ({
+      id: "msg-1",
+      user_id: "user-123",
+      channel: "sms",
+      direction: "inbound",
+      body_text: "Group message content",
+      sent_at: "2024-01-16T14:30:00Z",
+      has_attachments: false,
+      is_false_positive: false,
+      participants: JSON.stringify({
+        from: "+14155550100",
+        to: ["+14155550101", "+14155550102"],
+      }),
+      ...overrides,
+    } as Communication);
+
+    it("should render message count badge for group chat", () => {
+      const messages = [
+        createGroupMessage({ id: "msg-1" }),
+        createGroupMessage({ id: "msg-2" }),
+        createGroupMessage({ id: "msg-3" }),
+      ];
+
+      render(
+        <MessageThreadCard
+          threadId="group-thread-1"
+          messages={messages}
+          phoneNumber="+14155550100"
+        />
+      );
+
+      // Should have the gray message count badge
+      const badge = screen.getByTestId("group-message-count-badge");
+      expect(badge).toBeInTheDocument();
+      expect(badge).toHaveTextContent("3 messages");
+    });
+
+    it("should render singular message for group chat with one message", () => {
+      const messages = [createGroupMessage({ id: "msg-1" })];
+
+      render(
+        <MessageThreadCard
+          threadId="group-thread-1"
+          messages={messages}
+          phoneNumber="+14155550100"
+        />
+      );
+
+      const badge = screen.getByTestId("group-message-count-badge");
+      expect(badge).toHaveTextContent("1 message");
+    });
+
+    it("should render preview text for group chat", () => {
+      const messages = [
+        createGroupMessage({ id: "msg-1", body_text: "Group chat preview message" }),
+      ];
+
+      render(
+        <MessageThreadCard
+          threadId="group-thread-1"
+          messages={messages}
+          phoneNumber="+14155550100"
+        />
+      );
+
+      expect(screen.getByTestId("thread-preview")).toHaveTextContent("Group chat preview message");
+    });
+
+    it("should display participant names without 'Also includes:' prefix", () => {
+      const messages = [createGroupMessage({ id: "msg-1" })];
+
+      render(
+        <MessageThreadCard
+          threadId="group-thread-1"
+          messages={messages}
+          phoneNumber="+14155550100"
+        />
+      );
+
+      const participants = screen.getByTestId("thread-participants");
+      expect(participants.textContent).not.toContain("Also includes:");
+    });
+
+    it("should display people badge for group chat", () => {
+      const messages = [createGroupMessage({ id: "msg-1" })];
+
+      render(
+        <MessageThreadCard
+          threadId="group-thread-1"
+          messages={messages}
+          phoneNumber="+14155550100"
+        />
+      );
+
+      // Should have purple people badge - 3 people (from + 2 to)
+      expect(screen.getByText("3 people")).toBeInTheDocument();
+    });
+  });
+
+  describe("unified styling", () => {
+    it("should have hover state class on card container", () => {
+      const messages = [createMockMessage()];
+
+      render(
+        <MessageThreadCard
+          threadId="thread-1"
+          messages={messages}
+          phoneNumber="+14155550100"
+        />
+      );
+
+      const card = screen.getByTestId("message-thread-card");
+      expect(card.className).toContain("hover:bg-gray-50");
+      expect(card.className).toContain("transition-colors");
+    });
+
+    it("should have consistent avatar size for individual chat", () => {
+      const messages = [createMockMessage()];
+
+      const { container } = render(
+        <MessageThreadCard
+          threadId="thread-1"
+          messages={messages}
+          contactName="John"
+          phoneNumber="+14155550100"
+        />
+      );
+
+      const avatar = container.querySelector(".w-10.h-10");
+      expect(avatar).toBeInTheDocument();
+    });
+
+    it("should have consistent avatar size for group chat", () => {
+      const messages = [
+        {
+          ...createMockMessage(),
+          participants: JSON.stringify({
+            from: "+14155550100",
+            to: ["+14155550101", "+14155550102"],
+          }),
+        },
+      ];
+
+      const { container } = render(
+        <MessageThreadCard
+          threadId="group-thread-1"
+          messages={messages}
+          phoneNumber="+14155550100"
+        />
+      );
+
+      const avatar = container.querySelector(".w-10.h-10");
+      expect(avatar).toBeInTheDocument();
+    });
+  });
 });
 
 describe("groupMessagesByThread", () => {
