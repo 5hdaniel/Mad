@@ -262,6 +262,7 @@ CREATE TABLE IF NOT EXISTS messages (
 CREATE TABLE IF NOT EXISTS attachments (
   id TEXT PRIMARY KEY,
   message_id TEXT NOT NULL,
+  external_message_id TEXT,              -- TASK-1110: macOS message GUID for stable linking
 
   -- File Info
   filename TEXT NOT NULL,
@@ -594,6 +595,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_duplicate_of ON messages(duplicate_of);
 
 -- Attachments
 CREATE INDEX IF NOT EXISTS idx_attachments_message_id ON attachments(message_id);
+CREATE INDEX IF NOT EXISTS idx_attachments_external_message_id ON attachments(external_message_id);
 CREATE INDEX IF NOT EXISTS idx_attachments_document_type ON attachments(document_type);
 
 -- Transactions
@@ -852,4 +854,4 @@ CREATE TABLE IF NOT EXISTS schema_version (
 );
 
 -- Initialize schema version if not exists
-INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 8);
+INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 9);
