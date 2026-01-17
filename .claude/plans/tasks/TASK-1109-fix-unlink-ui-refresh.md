@@ -178,6 +178,38 @@ This task's PR MUST pass:
 
 ---
 
+## SR Engineer Pre-Implementation Review
+
+**Review Date:** 2026-01-17 | **Status:** APPROVED
+
+### Branch Information (SR Engineer decides)
+- **Branch From:** develop
+- **Branch Into:** develop
+- **Suggested Branch Name:** fix/TASK-1109-unlink-ui-refresh
+
+### Execution Classification
+- **Parallel Safe:** Yes
+- **Depends On:** None
+- **Blocks:** TASK-1112 (Phase 2 starts after Phase 1)
+
+### Shared File Analysis
+- **Primary file:** `src/components/transactionDetailsModule/components/TransactionMessagesTab.tsx`
+- **Secondary file (possible):** `src/components/TransactionDetails.tsx` (parent component)
+- **Conflicts with:** None - no other Phase 1 tasks modify these files
+
+### Technical Considerations
+1. **Callback Chain:** `onMessagesChanged` flows from `TransactionDetails.tsx` -> `TransactionMessagesTab.tsx`. The parent provides `refreshMessages` from `useTransactionMessages` hook.
+2. **Root Cause Investigation:** Start by verifying `refreshMessages` actually triggers a re-fetch. Check if `useTransactionMessages` hook invalidates cache or re-queries.
+3. **Optimistic Update Option:** If callback chain is slow, consider filtering unlinked messages from local state immediately for instant UI feedback.
+4. **Risk:** Low - isolated UI state management fix.
+
+### Architecture Notes
+- This follows React best practices - child components should trigger parent callbacks, parent handles data refetch
+- If fix requires modifying `TransactionDetails.tsx`, ensure changes are minimal and don't affect other tabs
+- Verify no effect safety pattern violations (check for proper ref guards if adding new effects)
+
+---
+
 ## PM Estimate (PM-Owned)
 
 **Category:** `ui`

@@ -197,6 +197,45 @@ This task's PR MUST pass:
 
 ---
 
+## SR Engineer Pre-Implementation Review
+
+**Review Date:** 2026-01-17 | **Status:** APPROVED
+
+### Branch Information (SR Engineer decides)
+- **Branch From:** develop
+- **Branch Into:** develop
+- **Suggested Branch Name:** fix/TASK-1111-contact-save
+
+### Execution Classification
+- **Parallel Safe:** Yes
+- **Depends On:** None
+- **Blocks:** TASK-1112 (Phase 2 starts after Phase 1)
+
+### Shared File Analysis
+- **Primary file:** `src/components/transactionDetailsModule/components/modals/EditContactsModal.tsx`
+- **Secondary files (possible):** None expected - isolated modal component
+- **Conflicts with:** None - separate modal from TASK-1109's TransactionMessagesTab
+
+### Technical Considerations
+1. **State Debugging:** Use React DevTools to verify `contactAssignments` state reflects UI changes when Save is clicked.
+2. **API Verification:** Add logging to confirm `batchUpdateContacts` is called with correct operations and returns success.
+3. **Database Check:** After save, query database directly to verify changes persisted (not just API response).
+4. **Comparison Logic:** The add/remove operations comparison in `handleSave` is a likely bug location - verify it correctly identifies changes.
+5. **Risk:** Low-Medium - state management debugging.
+
+### Architecture Notes
+- `EditContactsModal` is self-contained - loads its own data via `getDetails` and saves via `batchUpdateContacts`
+- The `onSave` callback should trigger parent refresh, similar to TASK-1109's pattern
+- No shared state with other components - safe to modify independently
+
+### Debugging Checklist for Engineer
+1. Add console.log in `handleSave` to print `contactAssignments` state
+2. Add console.log to print `operations` array before API call
+3. Verify `batchUpdateContacts` is being called (check network tab or IPC logs)
+4. After save, reload page and check if contacts appear correctly
+
+---
+
 ## PM Estimate (PM-Owned)
 
 **Category:** `ui`

@@ -220,6 +220,54 @@ This task's PR MUST pass:
 
 ---
 
+## SR Engineer Pre-Implementation Review
+
+**Review Date:** 2026-01-17 | **Status:** APPROVED
+
+### Branch Information (SR Engineer decides)
+- **Branch From:** develop
+- **Branch Into:** develop
+- **Suggested Branch Name:** fix/TASK-1113-duplicate-sync
+
+### Execution Classification
+- **Parallel Safe:** Yes
+- **Depends On:** None
+- **Blocks:** TASK-1112 (Phase 2 starts after Phase 1)
+
+### Shared File Analysis
+- **Primary file:** `src/hooks/useMacOSMessagesImport.ts`
+- **Secondary file (unlikely):** `src/appCore/BackgroundServices.tsx`
+- **Conflicts with:** None - hook/appCore files not touched by other tasks
+
+### Technical Considerations
+1. **Module-Level Guard Recommended:** The existing `hasImportedRef` is component-scoped. A module-level guard persists across remounts:
+   ```typescript
+   let globalSyncStarted = false;  // Module scope
+   ```
+2. **React StrictMode:** In development, effects run twice. Verify the fix works in both dev and production builds.
+3. **Multiple Trigger Sources:** Check for other code paths that might call `triggerImport`:
+   - Login completion handler
+   - Dashboard mount effect
+   - Other hooks or components
+4. **Risk:** Low - straightforward guard implementation.
+
+### Architecture Notes
+- `useMacOSMessagesImport` is the single source of truth for macOS Messages sync
+- `BackgroundServices` consumes this hook - likely no changes needed there
+- Module-level state is acceptable for "run once per app session" patterns
+
+### Verification Steps for Engineer
+1. Add console.log at effect entry point to trace triggers
+2. Test in development mode (StrictMode double-mount)
+3. Test in production build (`npm run build && npm start`)
+4. Verify onboarding flow still works (shouldSkipMessagesSync flag)
+5. Check logs show exactly one sync per session
+
+### Token Estimate Note
+This task may complete under estimate (~20K) if the module-level guard is sufficient. The 30K estimate includes investigation time that may not be needed.
+
+---
+
 ## PM Estimate (PM-Owned)
 
 **Category:** `service`

@@ -201,6 +201,56 @@ This task's PR MUST pass:
 
 ---
 
+## SR Engineer Pre-Implementation Review
+
+**Review Date:** 2026-01-17 | **Status:** APPROVED
+
+### Branch Information (SR Engineer decides)
+- **Branch From:** develop (after Phase 1 PRs merged)
+- **Branch Into:** develop
+- **Suggested Branch Name:** fix/TASK-1112-attach-modal-freeze
+
+### Execution Classification
+- **Parallel Safe:** No - Phase 2 task
+- **Depends On:** TASK-1109, TASK-1110, TASK-1111, TASK-1113 (all Phase 1 tasks)
+- **Blocks:** None - final task in sprint
+
+### Shared File Analysis
+- **Primary file:** `src/components/transactionDetailsModule/components/modals/AttachMessagesModal.tsx`
+- **Secondary files (possible):** Backend query handlers, related hooks
+- **Conflicts with:** None - Phase 2 isolation ensures no conflicts
+
+### Technical Considerations
+1. **Profile First:** Use React DevTools Profiler and Chrome Performance tab before making changes. Identify the specific bottleneck.
+2. **BACKLOG-173 Review:** The contact-first interface was implemented in PR #353 - verify this is still working or identify regression.
+3. **Potential Causes:**
+   - `getMessageContacts` query may be slow with large datasets
+   - Initial render may be doing heavy computation
+   - State updates causing cascade re-renders
+4. **Virtualization:** If contact list is large (1000+), consider `react-window` or similar virtualization library.
+5. **Risk:** Medium-High - performance debugging is unpredictable.
+
+### Architecture Notes
+- `AttachMessagesModal` follows contact-first pattern (load contacts, then threads on selection)
+- Ensure fix doesn't reintroduce the original "load all messages at once" pattern
+- If backend query optimization is needed, that may be a separate task
+
+### Profiling Strategy for Engineer
+1. Open Chrome DevTools Performance tab before opening modal
+2. Click "Record", then open the modal
+3. Stop recording and identify:
+   - Long tasks (>50ms)
+   - Heavy scripting blocks
+   - Excessive re-renders
+4. Document findings in Implementation Summary
+
+### Phase 2 Benefits
+- Phase 1 tasks may reveal patterns useful here (e.g., TASK-1110 attachment handling)
+- Stable codebase reduces variables during performance debugging
+- More time for thorough profiling without parallel work interference
+
+---
+
 ## PM Estimate (PM-Owned)
 
 **Category:** `ui`

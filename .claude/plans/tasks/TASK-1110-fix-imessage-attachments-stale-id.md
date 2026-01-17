@@ -174,6 +174,44 @@ This task's PR MUST pass:
 
 ---
 
+## SR Engineer Pre-Implementation Review
+
+**Review Date:** 2026-01-17 | **Status:** APPROVED
+
+### Branch Information (SR Engineer decides)
+- **Branch From:** develop
+- **Branch Into:** develop
+- **Suggested Branch Name:** fix/TASK-1110-attachment-stale-id
+
+### Execution Classification
+- **Parallel Safe:** Yes
+- **Depends On:** None
+- **Blocks:** TASK-1112 (Phase 2 starts after Phase 1)
+
+### Shared File Analysis
+- **Primary file:** `electron/services/macOSMessagesImportService.ts`
+- **Secondary files (possible):** Schema/migration files, attachment query handlers
+- **Conflicts with:** None - backend service only, no overlap with UI tasks
+
+### Technical Considerations
+1. **Schema Migration:** If adding `external_message_id` column, follow existing migration patterns. Check `electron/database/` for migration examples.
+2. **Recommended Approach:** Option B (re-create attachment records) may be simpler than schema changes - update `message_id` on re-import by matching on filename or macOS attachment GUID.
+3. **Data Repair:** Consider a one-time repair function that runs on upgrade to fix existing stale references.
+4. **Testing with Real Data:** This requires testing with actual macOS Messages database - mock tests alone may not catch edge cases.
+5. **Risk:** Medium - data layer changes require careful migration handling.
+
+### Architecture Notes
+- `macOSMessagesImportService.ts` is backend-only (electron main process) - no IPC boundary concerns
+- Ensure attachment queries use the same identifier (either always `message_id` or always `external_message_id`)
+- If schema changes, verify `electron/database/schema.sql` is updated for fresh installs AND migration for existing users
+
+### Potential Gotchas
+- macOS Messages uses GUIDs that include chat identifiers - ensure stable identifier selection
+- Attachment file paths should NOT change - only the database linking
+- Test with both image and GIF attachments per acceptance criteria
+
+---
+
 ## PM Estimate (PM-Owned)
 
 **Category:** `service`
