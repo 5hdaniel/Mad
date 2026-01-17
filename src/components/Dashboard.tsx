@@ -250,31 +250,27 @@ function Dashboard({
             <div className="pr-24">
               <div className="flex items-center gap-2 mb-3">
                 <h2 className="text-2xl font-bold text-gray-900">
-                  Start New Audit
+                  New Audit
                 </h2>
                 {pendingCount > 0 && (
                   <span className="inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-sm font-semibold bg-indigo-100 text-indigo-800 animate-pulse">
                     {pendingCount} new
                   </span>
                 )}
+                <svg
+                  className="w-5 h-5 text-blue-600 group-hover:translate-x-1 transition-transform"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 5l7 7-7 7"
+                  />
+                </svg>
               </div>
-            </div>
-
-            <div className="mt-6 flex items-center gap-2 text-blue-600 font-semibold group-hover:gap-4 transition-all">
-              <span>Start Audit</span>
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 5l7 7-7 7"
-                />
-              </svg>
             </div>
           </button>
 
@@ -303,26 +299,24 @@ function Dashboard({
             </div>
 
             <div className="pr-24">
-              <h2 className="text-2xl font-bold text-gray-900 mb-3">
-                Browse Transactions
-              </h2>
-            </div>
-
-            <div className="mt-6 flex items-center gap-2 text-green-600 font-semibold group-hover:gap-4 transition-all">
-              <span>View All</span>
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 5l7 7-7 7"
-                />
-              </svg>
+              <div className="flex items-center gap-2 mb-3">
+                <h2 className="text-2xl font-bold text-gray-900">
+                  All Audits
+                </h2>
+                <svg
+                  className="w-5 h-5 text-green-600 group-hover:translate-x-1 transition-transform"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 5l7 7-7 7"
+                  />
+                </svg>
+              </div>
             </div>
           </button>
         </div>
@@ -353,7 +347,7 @@ function Dashboard({
               </div>
               <div className="flex-1">
                 <h3 className="text-lg font-bold text-gray-900 mb-1">
-                  Manage Contacts
+                  Contacts
                 </h3>
               </div>
               <svg
