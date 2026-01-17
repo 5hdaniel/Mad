@@ -261,9 +261,11 @@ describe("TransactionMessagesTab", () => {
       const threadCards = screen.getAllByTestId("message-thread-card");
       expect(threadCards.length).toBe(2);
 
-      // Group chat threads show "X people" badge instead of preview
+      // Group chats no longer show "X people" badge - participant list at bottom instead
       const participantBadges = screen.queryAllByText(/\d+ people/);
-      expect(participantBadges.length).toBeGreaterThanOrEqual(1);
+      expect(participantBadges.length).toBe(0);
+      const participantNames = screen.getAllByTestId("thread-participants");
+      expect(participantNames.length).toBeGreaterThanOrEqual(1);
     });
 
     it("should group messages into threads", () => {
