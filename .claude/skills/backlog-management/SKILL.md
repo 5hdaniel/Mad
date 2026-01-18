@@ -86,16 +86,28 @@ pending_high = [
 
 ---
 
-## Valid Values
+## Status Flow (IMPORTANT)
 
-### Status
+```
+pending → in-progress → testing → completed
+                           ↓
+                       reopened → in-progress → ...
+```
+
+**CRITICAL RULES:**
+1. Code merged = `testing` (NOT completed)
+2. Only user verification = `completed`
+3. Failed testing = `reopened` (NEVER create new task)
+
+### Status Values
 - `pending` - Not started
 - `in-progress` - Currently being worked on
-- `completed` - Done
+- `testing` - Code merged, awaiting user verification
+- `completed` - Done AND verified by user
 - `blocked` - Waiting on something
 - `deferred` - Postponed
 - `obsolete` - No longer relevant
-- `reopened` - Was completed but needs more work
+- `reopened` - Failed testing, needs more work
 
 ### Priority
 - `critical` - Must be done immediately

@@ -18,7 +18,7 @@ from pathlib import Path
 VALID_PRIORITIES = {'critical', 'high', 'medium', 'low'}
 VALID_STATUSES = {
     'pending', 'in-progress', 'in progress', 'completed', 'blocked', 'deferred',
-    'obsolete', 'reopened', 'needs feature'  # needs feature is legacy
+    'obsolete', 'reopened', 'testing', 'needs feature'  # needs feature is legacy
 }
 VALID_SPRINT_STATUSES = {'planning', 'planned', 'active', 'complete', 'completed', 'deprecated'}
 

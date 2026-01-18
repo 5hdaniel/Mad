@@ -14,15 +14,26 @@ Use this workflow when:
 ### 1. Review Available Items
 
 ```bash
-# Get pending high-priority items
-python .claude/plans/backlog/scripts/queries.py priority high --status pending -v
+# Best: Get ALL plannable items sorted by priority
+python .claude/plans/backlog/scripts/queries.py ready
 
-# Get pending critical items (do these first!)
+# Or query by specific priority:
 python .claude/plans/backlog/scripts/queries.py priority critical --status pending
+python .claude/plans/backlog/scripts/queries.py priority high --status pending
+python .claude/plans/backlog/scripts/queries.py priority medium --status pending
+python .claude/plans/backlog/scripts/queries.py priority low --status pending
 
 # Check blocked items
 python .claude/plans/backlog/scripts/queries.py status blocked -v
 ```
+
+**Priority Selection Guidelines:**
+| Priority | When to Include |
+|----------|-----------------|
+| Critical | Always - these block production readiness |
+| High | Usually - important features/fixes |
+| Medium | Often - good for filling out sprints, quick wins |
+| Low | Sometimes - bundle with related work, polish sprints |
 
 ### 2. Determine Sprint ID
 

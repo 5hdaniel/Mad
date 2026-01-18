@@ -100,6 +100,17 @@ def get_open_items() -> list[dict]:
     ]
 
 
+def get_ready_items() -> list[dict]:
+    """Get all pending items sorted by priority (for sprint planning)."""
+    priority_order = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3}
+    items = [
+        item for item in load_backlog()
+        if normalize(item.get('status', '')) == 'pending'
+        and normalize(item.get('sprint', '')) in ('', '-')
+    ]
+    return sorted(items, key=lambda x: priority_order.get(normalize(x.get('priority', '')), 99))
+
+
 def get_statistics() -> dict:
     """Get summary statistics about the backlog."""
     items = load_backlog()
@@ -183,7 +194,7 @@ Examples:
 """
     )
 
-    parser.add_argument('query_type', choices=['status', 'priority', 'category', 'sprint', 'search', 'open', 'stats'],
+    parser.add_argument('query_type', choices=['status', 'priority', 'category', 'sprint', 'search', 'open', 'ready', 'stats'],
                         help='Type of query to run')
     parser.add_argument('value', nargs='?', help='Value to query for')
     parser.add_argument('--status', help='Filter by status (for priority/category queries)')
@@ -200,6 +211,15 @@ Examples:
     if args.query_type == 'open':
         items = get_open_items()
         print_items(items, args.verbose)
+        return
+
+    # Handle ready items (for sprint planning)
+    if args.query_type == 'ready':
+        items = get_ready_items()
+        print(f"Ready for sprint planning ({len(items)} items, sorted by priority):\n")
+        for item in items:
+            priority = item.get('priority', '-')
+            print(f"[{priority.upper():8}] {item['id']}: {item['title']}")
         return
 
     # Other queries require a value

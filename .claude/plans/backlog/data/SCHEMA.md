@@ -46,11 +46,12 @@ The main backlog table. Source of truth for all items.
 **status:**
 - `pending` - Not started
 - `in-progress` - Currently being worked on
-- `completed` - Done
+- `testing` - Code merged, awaiting user verification
+- `completed` - Done AND verified by user
 - `blocked` - Waiting on something
 - `deferred` - Postponed
 - `obsolete` - No longer relevant
-- `reopened` - Was completed but needs more work
+- `reopened` - Failed testing, needs more work
 
 ---
 

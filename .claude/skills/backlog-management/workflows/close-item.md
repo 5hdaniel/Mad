@@ -3,41 +3,57 @@
 ## When to Use
 
 Use this workflow when:
-- A backlog item has been completed
-- An item is no longer relevant (obsolete)
-- An item needs to be reopened
+- A backlog item's code has been merged (→ testing)
+- User has verified the item works (→ completed)
+- User found issues during testing (→ reopened)
+- An item is no longer relevant (→ obsolete)
+
+---
+
+## IMPORTANT: Status Flow
+
+```
+pending → in-progress → testing → completed
+                           ↓
+                       reopened → in-progress → testing → ...
+```
+
+**CRITICAL RULES:**
+1. **NEVER mark "completed" until user has tested**
+2. **NEVER create a new task for failed testing** - reopen the original
+3. **Code merged = "testing"**, not "completed"
 
 ---
 
 ## Steps
 
-### 1. Verify Completion
+### 1. After PR Merged (Engineer)
 
-Before marking complete:
-- [ ] PR is merged
-- [ ] Tests pass
-- [ ] No known regressions
-- [ ] User has validated (if applicable)
-
-### 2. Update CSV Status
-
-Edit `.claude/plans/backlog/data/backlog.csv`:
-
-**For completed items:**
+When code is merged, move to "testing" status:
 ```csv
-# Change status column from 'pending' to 'completed'
-# Add actual_tokens and variance if tracked
+BACKLOG-XXX,Title,category,priority,testing,SPRINT-XXX,~30K,-,-,[BACKLOG-XXX.md]
+```
+
+This signals: "Ready for user verification"
+
+### 2. After User Testing
+
+**If user confirms it works:**
+```csv
 BACKLOG-XXX,Title,category,priority,completed,SPRINT-XXX,~30K,28K,-7%,[BACKLOG-XXX.md]
 ```
 
-**For obsolete items:**
+**If user finds issues (DO NOT create new task!):**
 ```csv
-BACKLOG-XXX,Title,category,priority,obsolete,-,-,-,-,[BACKLOG-XXX.md]
+BACKLOG-XXX,Title,category,priority,reopened,SPRINT-XXX,~30K,-,-,[BACKLOG-XXX.md]
 ```
 
-**For reopened items:**
+Then work on the SAME item again until it passes testing.
+
+### 3. For Obsolete Items
+
 ```csv
-BACKLOG-XXX,Title,category,priority,reopened,-,-,-,-,[BACKLOG-XXX.md]
+BACKLOG-XXX,Title,category,priority,obsolete,-,-,-,-,[BACKLOG-XXX.md]
 ```
 
 ### 3. Update Detail File (Optional)

@@ -40,17 +40,26 @@ backlog/
 
 ---
 
-## Status Legend
+## Status Flow
+
+```
+pending → in-progress → testing → completed
+                           ↓
+                       reopened → in-progress → ...
+```
+
+**CRITICAL:** Code merged = `testing`. Only mark `completed` after user verifies.
 
 | Status | Description |
 |--------|-------------|
 | `pending` | Not started, in backlog |
 | `in-progress` | Currently being worked on |
-| `completed` | Done and merged |
+| `testing` | Code merged, awaiting user verification |
+| `completed` | Done AND verified by user |
 | `blocked` | Waiting on external dependency |
 | `deferred` | Postponed to future sprint |
 | `obsolete` | No longer relevant |
-| `reopened` | Was completed but needs more work |
+| `reopened` | Failed user testing, needs more work |
 
 ---
 
