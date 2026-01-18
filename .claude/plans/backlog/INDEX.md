@@ -2,9 +2,9 @@
 
 This index tracks all backlog items with their current status and metadata.
 
-**Last Updated:** 2026-01-17 (Added BACKLOG-298 video attachments, BACKLOG-299 group chat bug)
-**Total Items:** 269
-**Pending:** 147 | **In Progress:** 0 | **Completed:** 110 | **Partial:** 0 | **Obsolete:** 1 | **Deferred:** 2 | **Blocked:** 1
+**Last Updated:** 2026-01-18 (Added BACKLOG-303 dotenv centralization)
+**Total Items:** 270
+**Pending:** 148 | **In Progress:** 0 | **Completed:** 110 | **Partial:** 0 | **Obsolete:** 1 | **Deferred:** 2 | **Blocked:** 1
 
 ---
 
@@ -57,6 +57,7 @@ This index tracks all backlog items with their current status and metadata.
 
 #### Low (Audit Findings)
 - **Architecture:** **284** (dependency injection), **285** (data abstraction layer)
+- **Code Quality:** **303** (dotenv centralization in supabaseService)
 - **Existing:** BACKLOG-001, 003, 004, 010, 017, 069 (deferred), 070 (deferred), 071, 092, **119**, **123**, **125**, 150 (done), **151**, 155 (done), **160**, **205**, **219**, **224**, **225**, **226**
 
 ### By Sprint Assignment
@@ -447,6 +448,7 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-297 | Startup Error Handling - User-Friendly Failure Screen | ux/error-handling | Medium | Pending | - | - | ~50K | - | - | - | - | - | - | - | - | - | - | - | - | - | Timeout + error screen on init failure | [BACKLOG-297.md](BACKLOG-297.md) |
 | BACKLOG-298 | Video Attachment Support in ConversationViewModal | ui-ux | Medium | Pending | - | - | ~35K | - | - | - | - | - | - | - | - | - | - | - | - | - | Videos filtered out, only images displayed | [BACKLOG-298.md](BACKLOG-298.md) |
 | BACKLOG-299 | 1:1 Chat Incorrectly Shown as Group Chat | bug/data-quality | Medium | Pending | - | - | ~25K | - | - | - | - | - | - | - | - | - | - | - | - | - | "unknown" participant triggers isGroupChat() | [BACKLOG-299.md](BACKLOG-299.md) |
+| BACKLOG-303 | Centralize dotenv.config() in supabaseService.ts | security/code-quality | Low | Pending | - | - | ~3K | - | - | - | - | - | - | - | - | - | - | - | - | - | Consistency with TASK-1118 pattern | [BACKLOG-303.md](BACKLOG-303.md) |
 
 ---
 
