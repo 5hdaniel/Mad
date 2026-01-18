@@ -711,7 +711,8 @@ describe("TransactionMessagesTab", () => {
       fireEvent.click(screen.getByTestId("unlink-confirm-button"));
 
       await waitFor(() => {
-        expect(mockUnlinkMessages).toHaveBeenCalledWith(["msg-1", "msg-2"]);
+        // TASK-1116: unlinkMessages now requires transactionId for thread-based unlinking
+        expect(mockUnlinkMessages).toHaveBeenCalledWith(["msg-1", "msg-2"], "txn-123");
       });
 
       await waitFor(() => {
