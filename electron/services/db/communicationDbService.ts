@@ -234,6 +234,15 @@ export async function deleteCommunication(communicationId: string): Promise<void
 }
 
 /**
+ * Delete communication by message_id
+ * Used when unlinking messages from a transaction - removes the communications table reference
+ */
+export async function deleteCommunicationByMessageId(messageId: string): Promise<void> {
+  const sql = "DELETE FROM communications WHERE message_id = ?";
+  dbRun(sql, [messageId]);
+}
+
+/**
  * Link communication to transaction
  */
 export async function linkCommunicationToTransaction(
