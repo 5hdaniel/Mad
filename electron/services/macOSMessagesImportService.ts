@@ -919,11 +919,11 @@ class MacOSMessagesImportService {
     const attachProgressBar = createProgressBar("Attachments");
     attachProgressBar.start(attachments.length, 0);
 
-    // Prepare insert statement
+    // Prepare insert statement (TASK-1110: include external_message_id for stable linking)
     const insertAttachmentStmt = db.prepare(`
       INSERT OR IGNORE INTO attachments (
-        id, message_id, filename, mime_type, file_size_bytes, storage_path, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        id, message_id, external_message_id, filename, mime_type, file_size_bytes, storage_path, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     `);
 
     // Also need to query existing message IDs from DB for messages imported in previous runs
@@ -1031,10 +1031,12 @@ class MacOSMessagesImportService {
           const existingPath = path.join(attachmentsDir, `${contentHash}${ext}`);
 
           // Create attachment record linking to existing file
+          // TASK-1110: Include external_message_id (macOS message GUID) for stable linking
           const attachmentId = crypto.randomUUID();
           insertAttachmentStmt.run(
             attachmentId,
             internalMessageId,
+            attachment.message_guid, // external_message_id for stable linking
             filename,
             attachment.mime_type || getMimeTypeFromFilename(filename!),
             attachment.total_bytes,
@@ -1052,10 +1054,12 @@ class MacOSMessagesImportService {
         await fs.promises.copyFile(sourcePath, destPath);
 
         // Insert attachment record
+        // TASK-1110: Include external_message_id (macOS message GUID) for stable linking
         const attachmentId = crypto.randomUUID();
         insertAttachmentStmt.run(
           attachmentId,
           internalMessageId,
+          attachment.message_guid, // external_message_id for stable linking
           filename,
           attachment.mime_type || getMimeTypeFromFilename(filename!),
           attachment.total_bytes,
@@ -1287,10 +1291,13 @@ class MacOSMessagesImportService {
 
   /**
    * Get attachments for a specific message (TASK-1012)
+   * TASK-1110: Query by both message_id and external_message_id for backward compatibility
    */
   getAttachmentsByMessageId(messageId: string): MessageAttachment[] {
     const db = databaseService.getRawDatabase();
-    const rows = db
+
+    // First try direct message_id lookup
+    let rows = db
       .prepare(
         `
         SELECT id, message_id, filename, mime_type, file_size_bytes, storage_path
@@ -1299,11 +1306,46 @@ class MacOSMessagesImportService {
       `
       )
       .all(messageId) as MessageAttachment[];
+
+    // If no results and this is a valid message, try external_message_id fallback
+    // TASK-1110: This handles the case where attachments have stale message_id but valid external_message_id
+    if (rows.length === 0) {
+      // Look up the message's external_id (macOS GUID)
+      const message = db
+        .prepare(`SELECT external_id FROM messages WHERE id = ?`)
+        .get(messageId) as { external_id: string } | undefined;
+
+      if (message?.external_id) {
+        rows = db
+          .prepare(
+            `
+            SELECT id, message_id, filename, mime_type, file_size_bytes, storage_path
+            FROM attachments
+            WHERE external_message_id = ?
+          `
+          )
+          .all(message.external_id) as MessageAttachment[];
+
+        // If found via external_message_id, update the message_id for future queries
+        if (rows.length > 0) {
+          logService.info(
+            `[Attachments] Found ${rows.length} attachments via external_message_id fallback, updating message_id`,
+            MacOSMessagesImportService.SERVICE_NAME
+          );
+          const updateStmt = db.prepare(`UPDATE attachments SET message_id = ? WHERE external_message_id = ?`);
+          updateStmt.run(messageId, message.external_id);
+          // Update the returned rows to reflect the corrected message_id
+          rows = rows.map(row => ({ ...row, message_id: messageId }));
+        }
+      }
+    }
+
     return rows;
   }
 
   /**
    * Get attachments for multiple messages at once (TASK-1012)
+   * TASK-1110: Query by both message_id and external_message_id for backward compatibility
    */
   getAttachmentsByMessageIds(messageIds: string[]): Map<string, MessageAttachment[]> {
     if (messageIds.length === 0) {
@@ -1311,21 +1353,18 @@ class MacOSMessagesImportService {
     }
 
     const db = databaseService.getRawDatabase();
+    const result = new Map<string, MessageAttachment[]>();
 
     // Debug: Log total attachments in DB and sample message_ids
     const totalCount = db.prepare(`SELECT COUNT(*) as count FROM attachments`).get() as { count: number };
-    const sampleIds = db.prepare(`SELECT DISTINCT message_id FROM attachments LIMIT 5`).all() as { message_id: string }[];
-    logService.info(
-      `[Attachments Debug] Total: ${totalCount.count}, Querying: ${messageIds.length} IDs, Sample DB message_ids: ${sampleIds.map(r => r.message_id).join(', ')}`,
-      MacOSMessagesImportService.SERVICE_NAME
-    );
-    logService.info(
-      `[Attachments Debug] Queried IDs: ${messageIds.join(', ')}`,
+    logService.debug(
+      `[Attachments Debug] Total: ${totalCount.count}, Querying: ${messageIds.length} IDs`,
       MacOSMessagesImportService.SERVICE_NAME
     );
 
+    // First, try direct message_id lookup
     const placeholders = messageIds.map(() => "?").join(", ");
-    const rows = db
+    const directRows = db
       .prepare(
         `
         SELECT id, message_id, filename, mime_type, file_size_bytes, storage_path
@@ -1335,18 +1374,96 @@ class MacOSMessagesImportService {
       )
       .all(...messageIds) as MessageAttachment[];
 
-    logService.info(
-      `[Attachments Debug] Found ${rows.length} attachments matching query`,
-      MacOSMessagesImportService.SERVICE_NAME
-    );
-
-    // Group by message_id
-    const result = new Map<string, MessageAttachment[]>();
-    for (const row of rows) {
+    // Group direct results by message_id
+    for (const row of directRows) {
       const existing = result.get(row.message_id) || [];
       existing.push(row);
       result.set(row.message_id, existing);
     }
+
+    // TASK-1110: For messages without direct results, try external_message_id fallback
+    const missingMessageIds = messageIds.filter(id => !result.has(id));
+
+    if (missingMessageIds.length > 0) {
+      // Look up external_ids for messages that didn't have direct matches
+      const missingPlaceholders = missingMessageIds.map(() => "?").join(", ");
+      const messageExternalIds = db
+        .prepare(
+          `SELECT id, external_id FROM messages WHERE id IN (${missingPlaceholders}) AND external_id IS NOT NULL`
+        )
+        .all(...missingMessageIds) as { id: string; external_id: string }[];
+
+      if (messageExternalIds.length > 0) {
+        // Query attachments by external_message_id
+        const externalIds = messageExternalIds.map(m => m.external_id);
+        const externalPlaceholders = externalIds.map(() => "?").join(", ");
+        const fallbackRows = db
+          .prepare(
+            `
+            SELECT id, message_id, external_message_id, filename, mime_type, file_size_bytes, storage_path
+            FROM attachments
+            WHERE external_message_id IN (${externalPlaceholders})
+          `
+          )
+          .all(...externalIds) as (MessageAttachment & { external_message_id: string })[];
+
+        // Build a map of external_id -> internal message id for updating
+        const externalToInternalMap = new Map<string, string>();
+        for (const msg of messageExternalIds) {
+          externalToInternalMap.set(msg.external_id, msg.id);
+        }
+
+        // Group fallback results and update stale message_ids
+        const attachmentsToUpdate: { attachmentId: string; newMessageId: string; externalMessageId: string }[] = [];
+
+        for (const row of fallbackRows) {
+          const internalMessageId = externalToInternalMap.get(row.external_message_id);
+          if (internalMessageId) {
+            // Update the row's message_id to the correct internal ID
+            const correctedRow: MessageAttachment = {
+              id: row.id,
+              message_id: internalMessageId,
+              filename: row.filename,
+              mime_type: row.mime_type,
+              file_size_bytes: row.file_size_bytes,
+              storage_path: row.storage_path,
+            };
+
+            const existing = result.get(internalMessageId) || [];
+            existing.push(correctedRow);
+            result.set(internalMessageId, existing);
+
+            // Track for batch update
+            attachmentsToUpdate.push({
+              attachmentId: row.id,
+              newMessageId: internalMessageId,
+              externalMessageId: row.external_message_id,
+            });
+          }
+        }
+
+        // Batch update stale message_ids for future queries
+        if (attachmentsToUpdate.length > 0) {
+          logService.info(
+            `[Attachments] Found ${attachmentsToUpdate.length} attachments via external_message_id fallback, updating message_ids`,
+            MacOSMessagesImportService.SERVICE_NAME
+          );
+          const updateStmt = db.prepare(`UPDATE attachments SET message_id = ? WHERE id = ?`);
+          const updateMany = db.transaction((updates: typeof attachmentsToUpdate) => {
+            for (const update of updates) {
+              updateStmt.run(update.newMessageId, update.attachmentId);
+            }
+          });
+          updateMany(attachmentsToUpdate);
+        }
+      }
+    }
+
+    logService.debug(
+      `[Attachments Debug] Found ${Array.from(result.values()).reduce((sum, arr) => sum + arr.length, 0)} attachments total`,
+      MacOSMessagesImportService.SERVICE_NAME
+    );
+
     return result;
   }
 

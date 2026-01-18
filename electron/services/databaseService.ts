@@ -372,6 +372,12 @@ class DatabaseService implements IDatabaseService {
       { name: 'linked_at', sql: `ALTER TABLE communications ADD COLUMN linked_at DATETIME DEFAULT CURRENT_TIMESTAMP` },
     ]);
 
+    // TASK-1110: Add external_message_id to attachments for stable message linking
+    // This allows attachments to be linked to messages even when message_id changes on re-import
+    await addMissingColumns('attachments', [
+      { name: 'external_message_id', sql: `ALTER TABLE attachments ADD COLUMN external_message_id TEXT` },
+    ]);
+
     // Populate display_name from name column if it exists
     const contactsExists = db.prepare(
       `SELECT name FROM sqlite_master WHERE type='table' AND name='contacts'`
@@ -577,6 +583,10 @@ class DatabaseService implements IDatabaseService {
     runSafe(`CREATE INDEX IF NOT EXISTS idx_communications_message_id ON communications(message_id)`);
     runSafe(`CREATE INDEX IF NOT EXISTS idx_communications_txn_msg ON communications(transaction_id, message_id)`);
     runSafe(`CREATE UNIQUE INDEX IF NOT EXISTS idx_communications_msg_txn_unique ON communications(message_id, transaction_id) WHERE message_id IS NOT NULL`);
+
+    // Migration 13 (TASK-1110): Create index for attachments.external_message_id column
+    // This supports stable attachment linking when message_id changes on re-import
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_attachments_external_message_id ON attachments(external_message_id)`);
 
     // Finalize schema version (create table if missing for backwards compatibility)
     const schemaVersionExists = db.prepare(
