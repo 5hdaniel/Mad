@@ -9,9 +9,6 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { User, SubscriptionTier, Subscription } from "../types/models";
 import type { AuditLogEntry } from "./auditService";
 import logService from "./logService";
-import * as dotenv from "dotenv";
-
-dotenv.config({ path: ".env.development" });
 
 /**
  * User data for sync operations
