@@ -230,6 +230,8 @@ export function EditTransactionModal({
           operations.push({
             action: "remove",
             contactId: existing.contact_id,
+            role: role,
+            specificRole: role,
           });
         }
       }
