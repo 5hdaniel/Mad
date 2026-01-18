@@ -163,7 +163,7 @@ export function TransactionMessagesTab({
 
   // Handle unlink confirmation
   const handleUnlinkConfirm = useCallback(async () => {
-    if (!unlinkTarget) return;
+    if (!unlinkTarget || !transactionId) return;
 
     setIsUnlinking(true);
     try {
@@ -175,8 +175,9 @@ export function TransactionMessagesTab({
       }
 
       const messageIds = threadMessages.map((m) => m.id);
+      // TASK-1116: Pass transactionId for thread-based unlinking
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await (window.api.transactions as any).unlinkMessages(messageIds) as { success: boolean; error?: string };
+      const result = await (window.api.transactions as any).unlinkMessages(messageIds, transactionId) as { success: boolean; error?: string };
 
       if (result.success) {
         onShowSuccess?.("Messages removed from transaction");
@@ -195,7 +196,7 @@ export function TransactionMessagesTab({
     } finally {
       setIsUnlinking(false);
     }
-  }, [unlinkTarget, messages, onMessagesChanged, onShowSuccess, onShowError]);
+  }, [unlinkTarget, messages, transactionId, onMessagesChanged, onShowSuccess, onShowError]);
 
   // Handle cancel unlink
   const handleUnlinkCancel = useCallback(() => {

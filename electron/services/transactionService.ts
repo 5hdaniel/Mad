@@ -1640,7 +1640,7 @@ class TransactionService {
    * is unlinked, the entire thread is unlinked from the transaction.
    * This matches user expectations where threads are displayed as units.
    */
-  async unlinkMessages(messageIds: string[]): Promise<void> {
+  async unlinkMessages(messageIds: string[], passedTransactionId?: string): Promise<void> {
     // Get transaction IDs and thread IDs for updating counts later
     const transactionCounts = new Map<string, number>();
     // Map of transactionId -> Set of threadIds to delete
@@ -1648,27 +1648,36 @@ class TransactionService {
 
     for (const messageId of messageIds) {
       const message = await databaseService.getMessageById(messageId);
-      if (message?.transaction_id) {
-        const count = transactionCounts.get(message.transaction_id) || 0;
-        transactionCounts.set(message.transaction_id, count + 1);
+
+      // TASK-1116: Use passed transactionId for thread-based linking,
+      // fall back to message.transaction_id for legacy per-message linking
+      const transactionId = passedTransactionId || message?.transaction_id;
+
+      if (transactionId) {
+        const count = transactionCounts.get(transactionId) || 0;
+        transactionCounts.set(transactionId, count + 1);
 
         // TASK-1116: Collect thread_ids for thread-level communication deletion
-        if (message.thread_id) {
-          let threads = transactionThreads.get(message.transaction_id);
+        if (message?.thread_id) {
+          let threads = transactionThreads.get(transactionId);
           if (!threads) {
             threads = new Set<string>();
-            transactionThreads.set(message.transaction_id, threads);
+            transactionThreads.set(transactionId, threads);
           }
           threads.add(message.thread_id);
         }
       }
 
-      // Remove the transaction link from messages table (still per-message)
-      await databaseService.unlinkMessageFromTransaction(messageId);
+      // Remove the transaction link from messages table (legacy per-message linking)
+      if (message?.transaction_id) {
+        await databaseService.unlinkMessageFromTransaction(messageId);
+      }
+
+      // Also delete any per-message communication records (legacy linking)
+      await databaseService.deleteCommunicationByMessageId(messageId);
     }
 
     // TASK-1116: Delete communications by thread (one record per thread)
-    // This replaces the message-by-message deleteCommunicationByMessageId approach
     for (const [transactionId, threadIds] of transactionThreads) {
       for (const threadId of threadIds) {
         await databaseService.deleteCommunicationByThread(threadId, transactionId);
@@ -1690,7 +1699,6 @@ class TransactionService {
       "Messages unlinked from transaction",
       "TransactionService.unlinkMessages",
       {
-        messageIds,
         unlinkedCount: messageIds.length,
         threadsUnlinked: Array.from(transactionThreads.values()).reduce((sum, threads) => sum + threads.size, 0),
       },
