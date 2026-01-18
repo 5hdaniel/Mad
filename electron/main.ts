@@ -123,9 +123,6 @@ function createWindow(): void {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      // Disable sandbox to allow preload script to use Node.js APIs
-      // Required for Electron 20+ where sandbox is enabled by default
-      sandbox: false,
       preload: path.join(__dirname, "preload.js"),
     },
     titleBarStyle: WINDOW_CONFIG.TITLE_BAR_STYLE as
