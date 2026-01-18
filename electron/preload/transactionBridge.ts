@@ -305,10 +305,11 @@ export const transactionBridge = {
   /**
    * Unlinks messages from a transaction (sets transaction_id to null)
    * @param messageIds - Array of message IDs to unlink
+   * @param transactionId - Transaction ID to unlink from (required for thread-based linking)
    * @returns Unlink result
    */
-  unlinkMessages: (messageIds: string[]) =>
-    ipcRenderer.invoke("transactions:unlink-messages", messageIds),
+  unlinkMessages: (messageIds: string[], transactionId?: string) =>
+    ipcRenderer.invoke("transactions:unlink-messages", messageIds, transactionId),
 
   /**
    * Auto-links text messages to a transaction based on assigned contacts

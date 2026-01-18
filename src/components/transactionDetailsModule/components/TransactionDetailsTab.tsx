@@ -150,11 +150,6 @@ function CommunicationCard({
       <p className="text-sm text-gray-600 mb-2">
         From: {communication.sender || "Unknown"}
       </p>
-      {communication.body_plain && (
-        <p className="text-sm text-gray-700 line-clamp-3">
-          {communication.body_plain.substring(0, 200)}...
-        </p>
-      )}
     </div>
   );
 }
