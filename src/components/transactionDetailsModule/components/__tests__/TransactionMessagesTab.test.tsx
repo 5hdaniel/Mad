@@ -14,6 +14,7 @@ const mockUnlinkMessages = jest.fn();
 const mockGetMessageContacts = jest.fn();
 const mockGetMessagesByContact = jest.fn();
 const mockLinkMessages = jest.fn();
+const mockGetNamesByPhones = jest.fn();
 
 beforeAll(() => {
   Object.defineProperty(window, "api", {
@@ -23,6 +24,9 @@ beforeAll(() => {
         getMessageContacts: mockGetMessageContacts,
         getMessagesByContact: mockGetMessagesByContact,
         linkMessages: mockLinkMessages,
+      },
+      contacts: {
+        getNamesByPhones: mockGetNamesByPhones,
       },
     },
     writable: true,
@@ -36,6 +40,7 @@ describe("TransactionMessagesTab", () => {
     mockGetMessageContacts.mockResolvedValue({ success: true, contacts: [] });
     mockGetMessagesByContact.mockResolvedValue({ success: true, messages: [] });
     mockLinkMessages.mockResolvedValue({ success: true });
+    mockGetNamesByPhones.mockResolvedValue({ success: true, names: {} });
   });
 
   // Mock messages for testing
@@ -763,6 +768,55 @@ describe("TransactionMessagesTab", () => {
 
       await waitFor(() => {
         expect(mockOnShowError).toHaveBeenCalledWith("Connection failed");
+      });
+    });
+
+    it("should await async onMessagesChanged callback before closing modal", async () => {
+      // Track when the callback completes
+      let callbackResolved = false;
+      const mockOnMessagesChanged = jest.fn().mockImplementation(() => {
+        return new Promise<void>((resolve) => {
+          setTimeout(() => {
+            callbackResolved = true;
+            resolve();
+          }, 50);
+        });
+      });
+      const mockOnShowSuccess = jest.fn();
+
+      render(
+        <TransactionMessagesTab
+          messages={messagesWithUserId as Communication[]}
+          loading={false}
+          error={null}
+          userId="user-456"
+          transactionId="txn-123"
+          onMessagesChanged={mockOnMessagesChanged}
+          onShowSuccess={mockOnShowSuccess}
+        />
+      );
+
+      // Open unlink modal
+      fireEvent.click(screen.getByTestId("unlink-thread-button"));
+      expect(screen.getByTestId("unlink-message-modal")).toBeInTheDocument();
+
+      // Confirm unlink
+      fireEvent.click(screen.getByTestId("unlink-confirm-button"));
+
+      // Wait for API call
+      await waitFor(() => {
+        expect(mockUnlinkMessages).toHaveBeenCalled();
+      });
+
+      // Callback should be called and awaited before modal closes
+      await waitFor(() => {
+        expect(mockOnMessagesChanged).toHaveBeenCalled();
+        expect(callbackResolved).toBe(true);
+      });
+
+      // Modal should be closed after callback completes
+      await waitFor(() => {
+        expect(screen.queryByTestId("unlink-message-modal")).not.toBeInTheDocument();
       });
     });
   });

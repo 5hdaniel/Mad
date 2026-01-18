@@ -27,8 +27,8 @@ interface TransactionMessagesTabProps {
   transactionId?: string;
   /** Property address for display */
   propertyAddress?: string;
-  /** Callback when messages are modified (attached/unlinked) */
-  onMessagesChanged?: () => void;
+  /** Callback when messages are modified (attached/unlinked). Can be async for refresh. */
+  onMessagesChanged?: () => void | Promise<void>;
   /** Toast handler for success messages */
   onShowSuccess?: (message: string) => void;
   /** Toast handler for error messages */
@@ -180,7 +180,9 @@ export function TransactionMessagesTab({
 
       if (result.success) {
         onShowSuccess?.("Messages removed from transaction");
-        onMessagesChanged?.();
+        // Await the refresh to ensure UI updates before closing modal
+        // The callback may return a Promise (async refresh function)
+        await onMessagesChanged?.();
         setUnlinkTarget(null);
       } else {
         onShowError?.(result.error || "Failed to remove messages");
