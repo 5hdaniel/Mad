@@ -30,6 +30,14 @@ export function resetMessagesImportTrigger(): void {
   hasTriggeredImport = false;
 }
 
+/**
+ * Check if messages import has been triggered this session.
+ * Used by useAutoRefresh to avoid duplicate message syncs on macOS.
+ */
+export function hasMessagesImportTriggered(): boolean {
+  return hasTriggeredImport;
+}
+
 interface UseMacOSMessagesImportOptions {
   /** User ID to associate messages with */
   userId: string | null;

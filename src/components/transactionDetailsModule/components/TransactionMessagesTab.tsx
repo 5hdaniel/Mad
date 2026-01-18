@@ -188,6 +188,7 @@ export function TransactionMessagesTab({
         onShowError?.(result.error || "Failed to remove messages");
       }
     } catch (err) {
+      console.error("Failed to unlink messages:", err);
       onShowError?.(
         err instanceof Error ? err.message : "Failed to remove messages"
       );
