@@ -2,9 +2,9 @@
 
 This index tracks all backlog items with their current status and metadata.
 
-**Last Updated:** 2026-01-17 (SPRINT-040 UI Design System closed)
-**Total Items:** 266
-**Pending:** 144 | **In Progress:** 0 | **Completed:** 110 | **Partial:** 0 | **Obsolete:** 1 | **Deferred:** 2 | **Blocked:** 1
+**Last Updated:** 2026-01-17 (Added BACKLOG-298 video attachments, BACKLOG-299 group chat bug)
+**Total Items:** 269
+**Pending:** 147 | **In Progress:** 0 | **Completed:** 110 | **Partial:** 0 | **Obsolete:** 1 | **Deferred:** 2 | **Blocked:** 1
 
 ---
 
@@ -51,7 +51,7 @@ This index tracks all backlog items with their current status and metadata.
 - **Code Quality:** **266** (duplicate utils), **267** (error handling patterns), **268** (relative imports)
 - **Performance:** **269** (memoization), **270** (array operations), **271** (db indexes), **272** (JSON serialization)
 - **Reliability:** **273** (test coverage), **274** (app termination cleanup)
-- **Operations:** **275** (renderer logging), **276** (error recovery), **277** (CI secrets)
+- **Operations:** **275** (renderer logging), **276** (error recovery), **277** (CI secrets), **297** (startup error handling)
 - **Documentation:** **278** (JSDoc coverage), **279** (IPC docs), **280** (migration docs), **281** (doc standards), **282** (error docs), **283** (config docs)
 - **Existing:** Multiple (see full index), 014 (done), 050 (done), 054 (done), 065 (done), 077 (done), 078 (done), 079 (done), 081, 086, 087, 089, 092, 093, 094, 095, 096, 097, 100, 101, 102, 104 (done), **112**, **113**, **114**, **115**, **116**, 122 (done), 124 (done), 127 (done), 128 (done), 129 (done), **131**, 135 (done), 138 (done), 149 (done), 152 (done), **158**, **159**, 169 (done), 181 (done), **204**, 208 (done), **223**, **227**, 230 (done), **231**
 
@@ -330,7 +330,7 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-217 | UX Improvement - Edit Contacts Button Flow | enhancement/ux | High | Completed | SPRINT-034 | - | ~40K | - | ~156K | - | - | - | - | - | - | - | - | - | ~156K | TASK-1040, PR #418 | [BACKLOG-217.md](BACKLOG-217.md) |
 | BACKLOG-218 | Group Chat Display in Transaction Details (Placeholder) | enhancement/ux | High | Blocked | - | - | ~30K | - | - | - | - | - | - | - | - | - | - | - | - | - | Pending user requirements | [BACKLOG-218.md](BACKLOG-218.md) |
 | BACKLOG-219 | Audit Debug/Logging Calls Across Repository | tech-debt/quality | Low | Pending | - | - | ~20K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-219.md](BACKLOG-219.md) |
-| BACKLOG-220 | Unlink Communications UI Not Refreshing | bug/ui | High | Pending | - | - | ~25K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-220.md](BACKLOG-220.md) |
+| BACKLOG-220 | Unlink Communications UI Not Refreshing | bug/ui | High | **Reopened** | SPRINT-042 | - | ~25K | - | - | - | - | - | - | - | - | - | - | - | - | - | PR #450 insufficient; requires thread-based schema | [BACKLOG-220.md](BACKLOG-220.md) |
 | BACKLOG-221 | iMessage Attachments Not Displaying (Stale message_id) | bug/data-integrity | High | Pending | - | - | ~40K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-221.md](BACKLOG-221.md) |
 | BACKLOG-222 | Contact Changes Not Saving When Editing Transaction | bug/data-persistence | High | Pending | - | - | ~30K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-222.md](BACKLOG-222.md) |
 | BACKLOG-223 | Add Text Message Status Indicator (Like Email Status) | enhancement/ux | Medium | Pending | - | - | ~25K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-223.md](BACKLOG-223.md) |
@@ -443,6 +443,10 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-286 | Unify Chat Card and Group Chat Card Components | ui-ux | Low | Completed | SPRINT-040 | - | ~40K | - | - | ~70K | - | - | - | - | - | - | - | - | ~70K | - | PRs #442,445-448 | - |
 | BACKLOG-288 | Simplify Dashboard Button Labels | ui-ux | Low | Completed | SPRINT-040 | - | ~10K | - | - | ~20K | - | - | - | - | - | - | - | - | ~20K | - | PRs #441,443 | - |
 | BACKLOG-295 | Transaction Header Responsive Layout | ui-ux | Medium | Completed | SPRINT-040 | - | ~18K | - | - | ~18K | - | - | - | - | - | - | - | - | ~18K | - | PR #449 | - |
+| BACKLOG-296 | Database Schema Alignment - Service Updates | tech-debt/data-integrity | High | In Progress | SPRINT-042 | - | ~40K | - | - | - | - | - | - | - | - | - | - | - | - | - | Thread-based communications schema | [BACKLOG-296.md](BACKLOG-296.md) |
+| BACKLOG-297 | Startup Error Handling - User-Friendly Failure Screen | ux/error-handling | Medium | Pending | - | - | ~50K | - | - | - | - | - | - | - | - | - | - | - | - | - | Timeout + error screen on init failure | [BACKLOG-297.md](BACKLOG-297.md) |
+| BACKLOG-298 | Video Attachment Support in ConversationViewModal | ui-ux | Medium | Pending | - | - | ~35K | - | - | - | - | - | - | - | - | - | - | - | - | - | Videos filtered out, only images displayed | [BACKLOG-298.md](BACKLOG-298.md) |
+| BACKLOG-299 | 1:1 Chat Incorrectly Shown as Group Chat | bug/data-quality | Medium | Pending | - | - | ~25K | - | - | - | - | - | - | - | - | - | - | - | - | - | "unknown" participant triggers isGroupChat() | [BACKLOG-299.md](BACKLOG-299.md) |
 
 ---
 
@@ -496,6 +500,8 @@ This index tracks all backlog items with their current status and metadata.
 | SPRINT-036 | Deterministic Message Parsing | Completed | 6 of 7 tasks (TASK-1046-1051): Format detection, parser refactors, thread ID, test suite. TASK-1052 pending |
 | SPRINT-037 | Test Coverage | Completed | 3 tasks (TASK-1053-1055): databaseService mocking fix (PR #428), critical path tests (PR #429), CI coverage thresholds (PR #429). 20 iosMessagesParser tests still failing (BACKLOG-231) |
 | SPRINT-040 | UI Design System | Completed | 9 tasks (TASK-1100-1108) + 2 hotfixes: SyncProgress component (PR #440), Notification system (PR #439), Dashboard labels (PRs #441,443), Chat card unification (PRs #442,445-448), Transaction header responsive (PR #449) |
+| SPRINT-041 | Bug Fixes | Completed | 5 tasks (TASK-1109-1113): Unlink UI refresh (PR #450), Duplicate sync (PR #451), Contact save (PR #452), Attachments stale ID (PR #453), UI freeze modal (PR #454). **Note:** BACKLOG-220 fix insufficient - reopened for SPRINT-042 |
+| SPRINT-042 | Database Schema Alignment | Planning | 3 tasks (TASK-1114-1116): Thread-based communications schema, service updates, unlink UI integration. Includes BACKLOG-220 (reopened), BACKLOG-296 |
 
 ---
 
@@ -889,6 +895,42 @@ This index tracks all backlog items with their current status and metadata.
   - **Duration:** 2 days (estimated 3-4 days)
   - **Tokens:** ~220K (estimated ~227K)
   - Total items: 266, Pending: 144, Completed: 110
+- 2026-01-17: **SPRINT-041 (Bug Fixes) CLOSED**
+  - Completed 5 tasks (TASK-1109 to TASK-1113)
+  - **PRs Merged:** #450-454 (5 total)
+  - **Backlog Items:** BACKLOG-220, 221, 222, 228, 293
+  - **Key Deliverables:**
+    - Unlink UI refresh (PR #450) - partial fix only
+    - Duplicate sync guard (PR #451)
+    - Contact save persistence (PR #452)
+    - Attachments stale ID fix (PR #453)
+    - UI freeze prevention (PR #454)
+  - **Issue:** BACKLOG-220 fix was insufficient - PR #450 addressed callback timing but root cause is thread-based schema architecture
+- 2026-01-17: **BACKLOG-220 REOPENED**
+  - **Reason:** PR #450 fix from SPRINT-041 was insufficient
+  - **Root Cause:** Communications table links by message_id but UI operates on threads
+  - **Required:** Thread-based schema refactor (communications.thread_id instead of message_id)
+  - **Stashed Work:** `stash@{0}: TASK-1109-thread-based-schema-refactor-deferred` (7 files, 502+/619-)
+  - **Reassigned to:** SPRINT-042 (Database Schema Alignment)
+- 2026-01-17: **SPRINT-042 (Database Schema Alignment) PLANNED**
+  - 3 tasks planned (TASK-1114 to TASK-1116)
+  - **Scope:** Thread-based schema, service updates, unlink UI integration
+  - **Backlog Items:** BACKLOG-220 (reopened), BACKLOG-296 (database schema alignment)
+  - **Reference:** Schema audit on `research/database-schema-audit` branch
+  - **Estimated Tokens:** ~55K
+  - Total items: 266, Pending: 143, Reopened: 1
+- 2026-01-17: **Added BACKLOG-298 and BACKLOG-299** (SPRINT-041 testing findings)
+  - BACKLOG-298 (Medium): Video Attachment Support in ConversationViewModal
+    - ConversationViewModal only displays image/* attachments
+    - Videos (.mov, .mp4) are filtered out by isDisplayableImage()
+    - Options: inline video player, thumbnail + click-to-open, or file icon
+    - Est. ~35K tokens
+  - BACKLOG-299 (Medium): 1:1 Chat Incorrectly Shown as Group Chat
+    - "unknown" participant value triggers isGroupChat() incorrectly
+    - Needs investigation: where does "unknown" originate?
+    - Root cause likely in message parser or phone normalization
+    - Est. ~25K tokens (includes investigation)
+  - Total items: 269, Pending: 147
 
 ---
 
