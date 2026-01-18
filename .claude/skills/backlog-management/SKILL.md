@@ -71,6 +71,7 @@ pending_high = [
 
 | Workflow | When to Use |
 |----------|-------------|
+| [Backlog Analysis](workflows/backlog-analysis.md) | Generate health report, find attention items |
 | [Add Item](workflows/add-item.md) | Creating a new backlog item |
 | [Close Item](workflows/close-item.md) | Completing or obsoleting an item |
 | [Sprint Planning](workflows/sprint-planning.md) | Planning a new sprint |
