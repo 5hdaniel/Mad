@@ -1635,24 +1635,44 @@ class TransactionService {
   /**
    * Unlink messages from a transaction (sets transaction_id to null)
    * Does NOT add to ignored communications - simply removes the link
+   *
+   * TASK-1116: Now operates at thread level. When any message in a thread
+   * is unlinked, the entire thread is unlinked from the transaction.
+   * This matches user expectations where threads are displayed as units.
    */
   async unlinkMessages(messageIds: string[]): Promise<void> {
-    // Get transaction IDs for updating counts later
+    // Get transaction IDs and thread IDs for updating counts later
     const transactionCounts = new Map<string, number>();
+    // Map of transactionId -> Set of threadIds to delete
+    const transactionThreads = new Map<string, Set<string>>();
 
     for (const messageId of messageIds) {
       const message = await databaseService.getMessageById(messageId);
       if (message?.transaction_id) {
         const count = transactionCounts.get(message.transaction_id) || 0;
         transactionCounts.set(message.transaction_id, count + 1);
+
+        // TASK-1116: Collect thread_ids for thread-level communication deletion
+        if (message.thread_id) {
+          let threads = transactionThreads.get(message.transaction_id);
+          if (!threads) {
+            threads = new Set<string>();
+            transactionThreads.set(message.transaction_id, threads);
+          }
+          threads.add(message.thread_id);
+        }
       }
 
-      // Remove the transaction link from messages table
+      // Remove the transaction link from messages table (still per-message)
       await databaseService.unlinkMessageFromTransaction(messageId);
+    }
 
-      // Also delete the communications table reference (TASK-1109 fix)
-      // The communications table is the source of truth for getDetails queries
-      await databaseService.deleteCommunicationByMessageId(messageId);
+    // TASK-1116: Delete communications by thread (one record per thread)
+    // This replaces the message-by-message deleteCommunicationByMessageId approach
+    for (const [transactionId, threadIds] of transactionThreads) {
+      for (const threadId of threadIds) {
+        await databaseService.deleteCommunicationByThread(threadId, transactionId);
+      }
     }
 
     // Update transaction message counts
@@ -1672,6 +1692,7 @@ class TransactionService {
       {
         messageIds,
         unlinkedCount: messageIds.length,
+        threadsUnlinked: Array.from(transactionThreads.values()).reduce((sum, threads) => sum + threads.size, 0),
       },
     );
   }

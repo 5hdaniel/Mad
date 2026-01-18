@@ -856,6 +856,14 @@ class DatabaseService implements IDatabaseService {
     return communicationDb.deleteCommunicationByMessageId(messageId);
   }
 
+  /**
+   * Delete communication records by thread_id for a specific transaction.
+   * TASK-1116: Used when unlinking a thread from a transaction.
+   */
+  async deleteCommunicationByThread(threadId: string, transactionId: string): Promise<void> {
+    return communicationDb.deleteCommunicationByThread(threadId, transactionId);
+  }
+
   async addIgnoredCommunication(data: NewIgnoredCommunication): Promise<IgnoredCommunication> {
     return communicationDb.addIgnoredCommunication(data);
   }
