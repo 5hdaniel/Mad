@@ -365,11 +365,16 @@ class DatabaseService implements IDatabaseService {
 
     // TASK-975: Add message_id reference column and link metadata to communications table
     // This transforms communications into a junction/reference table linking messages to transactions
+    // Also add legacy columns that may be missing from old databases to prevent index creation failures
     await addMissingColumns('communications', [
       { name: 'message_id', sql: `ALTER TABLE communications ADD COLUMN message_id TEXT REFERENCES messages(id) ON DELETE CASCADE` },
       { name: 'link_source', sql: `ALTER TABLE communications ADD COLUMN link_source TEXT CHECK (link_source IN ('auto', 'manual', 'scan'))` },
       { name: 'link_confidence', sql: `ALTER TABLE communications ADD COLUMN link_confidence REAL` },
       { name: 'linked_at', sql: `ALTER TABLE communications ADD COLUMN linked_at DATETIME DEFAULT CURRENT_TIMESTAMP` },
+      // Legacy columns - ensure they exist for index creation
+      { name: 'sent_at', sql: `ALTER TABLE communications ADD COLUMN sent_at DATETIME` },
+      { name: 'sender', sql: `ALTER TABLE communications ADD COLUMN sender TEXT` },
+      { name: 'communication_type', sql: `ALTER TABLE communications ADD COLUMN communication_type TEXT DEFAULT 'email'` },
     ]);
 
     // TASK-1110: Add external_message_id to attachments for stable message linking
