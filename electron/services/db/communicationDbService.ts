@@ -581,3 +581,93 @@ export async function getTransactionsForMessage(
   const results = dbAll<{ transaction_id: string }>(sql, [messageId]);
   return results.map(r => r.transaction_id);
 }
+
+// ============================================
+// TASK-1115: THREAD-LEVEL LINKING OPERATIONS
+// ============================================
+
+/**
+ * Create a thread-level communication link (one record per thread per transaction).
+ *
+ * TASK-1115: This replaces message-by-message linking for thread-based communications.
+ * Instead of creating one communication record per message, we create one per thread.
+ * The messages table retains individual messages; this is just the linking junction.
+ *
+ * @param threadId - The thread identifier (from messages.thread_id)
+ * @param transactionId - The transaction to link to
+ * @param userId - The user ID
+ * @param linkSource - How the link was created ('auto', 'manual', 'scan')
+ * @param linkConfidence - Confidence score (0.0 - 1.0)
+ * @returns The created communication ID
+ */
+export async function createThreadCommunicationReference(
+  threadId: string,
+  transactionId: string,
+  userId: string,
+  linkSource: 'auto' | 'manual' | 'scan' = 'auto',
+  linkConfidence: number = 0.9,
+): Promise<string> {
+  const id = crypto.randomUUID();
+
+  const sql = `
+    INSERT INTO communications (
+      id, user_id, thread_id, transaction_id,
+      link_source, link_confidence, linked_at
+    ) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+  `;
+
+  const params = [
+    id,
+    userId,
+    threadId,
+    transactionId,
+    linkSource,
+    linkConfidence,
+  ];
+
+  dbRun(sql, params);
+
+  return id;
+}
+
+/**
+ * Delete communication records by thread_id for a specific transaction.
+ *
+ * TASK-1115: Used when unlinking a thread from a transaction.
+ * Removes the junction record so the thread is no longer associated.
+ *
+ * @param threadId - The thread identifier
+ * @param transactionId - The transaction to unlink from
+ */
+export async function deleteCommunicationByThread(
+  threadId: string,
+  transactionId: string,
+): Promise<void> {
+  const sql = `
+    DELETE FROM communications
+    WHERE thread_id = ? AND transaction_id = ?
+  `;
+  dbRun(sql, [threadId, transactionId]);
+}
+
+/**
+ * Check if a thread is already linked to a transaction.
+ *
+ * TASK-1115: Used to avoid duplicate links when auto-linking.
+ *
+ * @param threadId - The thread identifier
+ * @param transactionId - The transaction ID
+ * @returns True if the thread is already linked to this transaction
+ */
+export async function isThreadLinkedToTransaction(
+  threadId: string,
+  transactionId: string,
+): Promise<boolean> {
+  const sql = `
+    SELECT id FROM communications
+    WHERE thread_id = ? AND transaction_id = ?
+    LIMIT 1
+  `;
+  const result = dbGet(sql, [threadId, transactionId]);
+  return !!result;
+}
