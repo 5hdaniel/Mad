@@ -1,0 +1,33 @@
+name: Backlog Validation
+
+# Validates backlog CSV data integrity on PRs that modify backlog files
+
+on:
+  pull_request:
+    paths:
+      - '.claude/plans/backlog/data/**'
+      - '.claude/plans/backlog/scripts/**'
+      - '.claude/plans/backlog/items/**'
+
+jobs:
+  validate:
+    name: Validate Backlog Data
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run validation
+        run: python .claude/plans/backlog/scripts/validate.py
+
+      - name: Test queries
+        run: |
+          echo "Testing query interface..."
+          python .claude/plans/backlog/scripts/queries.py stats
+          python .claude/plans/backlog/scripts/queries.py open | head -5
+          echo "Query tests passed"
