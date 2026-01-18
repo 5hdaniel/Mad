@@ -242,80 +242,100 @@ export function AttachMessagesModal({
   const [attaching, setAttaching] = useState(false);
 
   // Load contacts on mount
+  // PERF FIX (TASK-1112): Defer data load to allow loading UI to render first
+  // This prevents UI freeze by ensuring the spinner is visible before any heavy operations
   useEffect(() => {
-    async function loadContacts() {
-      setLoadingContacts(true);
-      setError(null);
-      try {
-        // Load both message contacts and all contacts in parallel
-        const [messageContactsResult, allContactsResult] = await Promise.all([
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (window.api.transactions as any).getMessageContacts(userId) as Promise<{
-            success: boolean;
-            contacts?: ContactInfo[];
-            error?: string;
-          }>,
-          // Get all contacts for name resolution
-          window.api.contacts.getAll(userId) as Promise<{
-            success: boolean;
-            contacts?: Array<{ id: string; name?: string; phone?: string }>;
-            error?: string;
-          }>,
-        ]);
+    // Ensure loading state is set synchronously before any async work
+    setLoadingContacts(true);
+    setError(null);
 
-        if (messageContactsResult.success && messageContactsResult.contacts) {
-          setContacts(messageContactsResult.contacts);
-        } else {
-          setError(messageContactsResult.error || "Failed to load contacts");
-        }
+    // Use setTimeout to defer the actual data fetch
+    // This allows the loading spinner to render before the main thread is blocked
+    const timeoutId = setTimeout(() => {
+      async function loadContacts() {
+        try {
+          // Load both message contacts and all contacts in parallel
+          const [messageContactsResult, allContactsResult] = await Promise.all([
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (window.api.transactions as any).getMessageContacts(userId) as Promise<{
+              success: boolean;
+              contacts?: ContactInfo[];
+              error?: string;
+            }>,
+            // Get all contacts for name resolution
+            window.api.contacts.getAll(userId) as Promise<{
+              success: boolean;
+              contacts?: Array<{ id: string; name?: string; phone?: string }>;
+              error?: string;
+            }>,
+          ]);
 
-        // Build phone-to-name lookup from all contacts
-        if (allContactsResult.success && allContactsResult.contacts) {
-          const phoneLookup: Array<{ phone: string; name: string }> = [];
-          for (const c of allContactsResult.contacts) {
-            if (c.name && c.phone) {
-              phoneLookup.push({ phone: c.phone, name: c.name });
-            }
+          if (messageContactsResult.success && messageContactsResult.contacts) {
+            setContacts(messageContactsResult.contacts);
+          } else {
+            setError(messageContactsResult.error || "Failed to load contacts");
           }
-          setAllContacts(phoneLookup);
+
+          // Build phone-to-name lookup from all contacts
+          if (allContactsResult.success && allContactsResult.contacts) {
+            const phoneLookup: Array<{ phone: string; name: string }> = [];
+            for (const c of allContactsResult.contacts) {
+              if (c.name && c.phone) {
+                phoneLookup.push({ phone: c.phone, name: c.name });
+              }
+            }
+            setAllContacts(phoneLookup);
+          }
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Failed to load contacts");
+        } finally {
+          setLoadingContacts(false);
         }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load contacts");
-      } finally {
-        setLoadingContacts(false);
       }
-    }
-    loadContacts();
+      loadContacts();
+    }, 0);
+
+    // Cleanup on unmount
+    return () => clearTimeout(timeoutId);
   }, [userId]);
 
   // Load threads when contact is selected
+  // PERF FIX (TASK-1112): Defer data load to allow loading UI to render first
   useEffect(() => {
     if (!selectedContact) return;
 
-    async function loadContactMessages() {
-      setLoadingThreads(true);
-      setError(null);
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const result = await (window.api.transactions as any).getMessagesByContact(userId, selectedContact) as {
-          success: boolean;
-          messages?: MessageLike[];
-          error?: string;
-        };
-        if (result.success && result.messages) {
-          const grouped = groupMessagesByThread(result.messages);
-          setThreads(grouped);
-          setView("threads");
-        } else {
-          setError(result.error || "Failed to load messages");
+    // Ensure loading state is set synchronously
+    setLoadingThreads(true);
+    setError(null);
+
+    // Use setTimeout to defer the fetch and allow loading UI to render
+    const timeoutId = setTimeout(() => {
+      async function loadContactMessages() {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const result = await (window.api.transactions as any).getMessagesByContact(userId, selectedContact) as {
+            success: boolean;
+            messages?: MessageLike[];
+            error?: string;
+          };
+          if (result.success && result.messages) {
+            const grouped = groupMessagesByThread(result.messages);
+            setThreads(grouped);
+            setView("threads");
+          } else {
+            setError(result.error || "Failed to load messages");
+          }
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Failed to load messages");
+        } finally {
+          setLoadingThreads(false);
         }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load messages");
-      } finally {
-        setLoadingThreads(false);
       }
-    }
-    loadContactMessages();
+      loadContactMessages();
+    }, 0);
+
+    // Cleanup on unmount or contact change
+    return () => clearTimeout(timeoutId);
   }, [userId, selectedContact]);
 
   // Filter contacts by search (name or phone number)
