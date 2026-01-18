@@ -584,6 +584,8 @@ function EditRoleAssignment({
           onSelect={handleContactSelected}
           onClose={() => setShowContactSelect(false)}
           propertyAddress={propertyAddress}
+          userId={userId}
+          onRefreshContacts={loadContacts}
         />
       )}
     </div>
