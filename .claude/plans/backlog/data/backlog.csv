@@ -143,9 +143,9 @@ BACKLOG-151,Reduce AppModals.tsx Below 150-Line Trigger,refactor,Low,Pending,-,~
 BACKLOG-152,Split TransactionDetails.tsx into Tab Components,refactor,Medium,Completed,SPRINT-023,~25K,-,-,[BACKLOG-152.md](BACKLOG-152.md)
 BACKLOG-155,Dashboard Unnecessary Vertical Scroll,ui,Low,Completed,SPRINT-028,~10K,-,"TASK-1004, PR #365",[BACKLOG-155.md](BACKLOG-155.md)
 BACKLOG-156,Auto-Refresh Data Sources on App Load,service/enhancement,High,Completed,SPRINT-028,~40K,-,"TASK-1003, PR #369",[BACKLOG-156.md](BACKLOG-156.md)
-BACKLOG-157,Fix Failing Auth Handler Integration Test,test,High,Pending,SPRINT-024,~15K,-,-,[BACKLOG-157.md](BACKLOG-157.md)
-BACKLOG-158,Decompose AuditTransactionModal Component,refactor,Medium,Pending,SPRINT-024,~60K,-,-,[BACKLOG-158.md](BACKLOG-158.md)
-BACKLOG-159,Delete Deprecated PermissionsScreen.tsx,refactor,Medium,Pending,SPRINT-024,~10K,-,-,[BACKLOG-159.md](BACKLOG-159.md)
+BACKLOG-157,Fix Failing Auth Handler Integration Test,test,High,obsolete,-,~15K,-,-,[BACKLOG-157.md](BACKLOG-157.md)
+BACKLOG-158,Decompose AuditTransactionModal Component,refactor,Medium,obsolete,-,~60K,-,-,[BACKLOG-158.md](BACKLOG-158.md)
+BACKLOG-159,Delete Deprecated PermissionsScreen.tsx,refactor,Medium,obsolete,-,~10K,-,-,[BACKLOG-159.md](BACKLOG-159.md)
 BACKLOG-160,Consolidate last_exported_at/on Column Naming,tech-debt,Low,Pending,-,~5K,-,-,-
 BACKLOG-165,Duplicate Contacts in Import Contacts Page,ui,Medium,Pending,-,~20K,-,-,[BACKLOG-165.md](BACKLOG-165.md)
 BACKLOG-166,"Platform Detection Returns ""unknown"" in Renderer",fix,Medium,Pending,-,~15K,-,-,[BACKLOG-166.md](BACKLOG-166.md)
@@ -156,7 +156,7 @@ BACKLOG-170,Messages Not Loading in Attach Modal,fix,Critical,Needs Feature,-,~5
 BACKLOG-171,Contacts Not Pre-Populated When Editing Transaction,fix,High,Pending,-,~25K,-,-,[BACKLOG-171.md](BACKLOG-171.md)
 BACKLOG-172,macOS Messages Import,feature,High,Pending,-,~25K,-,-,[BACKLOG-172.md](BACKLOG-172.md)
 BACKLOG-173,Contact-First AttachMessagesModal Interface,ui/perf,High,Completed,-,~40K,-,"TASK-989, PR #353",[BACKLOG-173.md](BACKLOG-173.md)
-BACKLOG-174,"Redesign ""Start New Audit"" Flow",ui,High,Pending,SPRINT-029,~30K,-,-,[BACKLOG-174.md](BACKLOG-174.md)
+BACKLOG-174,"Redesign ""Start New Audit"" Flow",ui,High,obsolete,-,~30K,-,-,[BACKLOG-174.md](BACKLOG-174.md)
 BACKLOG-178,Auto-Linked Messages Display in Transaction Details,fix,High,Completed,SPRINT-027,~20K,-,"TASK-990, PR #358",-
 BACKLOG-179,Manual Thread Attach/Unlink in Messages Tab,ui,High,Completed,SPRINT-027,~30K,-,"TASK-991, PR #359",-
 BACKLOG-180,Message Bubble Direction Fix,fix,Medium,Completed,SPRINT-027,~10K,-,"TASK-992, PR #356",-
@@ -166,12 +166,12 @@ BACKLOG-183,Mixed UI During Import - Instructions With Progress,fix,Medium,Compl
 BACKLOG-184,Contacts Import Failing (1000 Limit),fix,High,Completed,SPRINT-027,~2K,-,direct commit,[BACKLOG-184.md](BACKLOG-184.md)
 BACKLOG-185,Import Stuck at 100% on Progress Bar,fix,Medium,Completed,SPRINT-027,~3K,-,direct commit,[BACKLOG-185.md](BACKLOG-185.md)
 BACKLOG-186,Continue Button Not Working After Import,fix,Critical,Completed,SPRINT-027,~5K,-,direct commit,[BACKLOG-186.md](BACKLOG-186.md)
-BACKLOG-187,Display Attachments (Images/GIFs) in Text Messages,feature,Medium,Pending,SPRINT-029,~50K,-,-,[BACKLOG-187.md](BACKLOG-187.md)
-BACKLOG-188,Scan Lookback Period Setting Not Persisting,fix,Medium,Pending,SPRINT-030,~15K,-,-,[BACKLOG-188.md](BACKLOG-188.md)
+BACKLOG-187,Display Attachments (Images/GIFs) in Text Messages,feature,Medium,Pending,-,~50K,-,-,[BACKLOG-187.md](BACKLOG-187.md)
+BACKLOG-188,Scan Lookback Period Setting Not Persisting,fix,Medium,Pending,-,~15K,-,-,[BACKLOG-188.md](BACKLOG-188.md)
 BACKLOG-189,Configurable Attachment Size Limit,enhancement,Low,Pending,-,~15K,-,-,[BACKLOG-189.md](BACKLOG-189.md)
-BACKLOG-190,Transaction Date Range for Message Linking,fix,Critical,Pending,SPRINT-030,~20K,-,-,[BACKLOG-190.md](BACKLOG-190.md)
-BACKLOG-191,Add Test Coverage for Core Service Layer,test,Critical,Pending,SPRINT-031,~115K,-,-,[BACKLOG-191.md](BACKLOG-191.md)
-BACKLOG-192,Clean Up Console Statements (186 Remaining),refactor,Medium,Pending,SPRINT-031,~30K,-,-,[BACKLOG-192.md](BACKLOG-192.md)
+BACKLOG-190,Transaction Date Range for Message Linking,fix,Critical,Pending,-,~20K,-,-,[BACKLOG-190.md](BACKLOG-190.md)
+BACKLOG-191,Add Test Coverage for Core Service Layer,test,Critical,obsolete,-,~115K,-,-,[BACKLOG-191.md](BACKLOG-191.md)
+BACKLOG-192,Clean Up Console Statements (186 Remaining),refactor,Medium,Pending,-,~30K,-,-,[BACKLOG-192.md](BACKLOG-192.md)
 BACKLOG-193,"Refactor databaseService.ts (1,223 Lines)",refactor,High,Pending,-,~80K,-,-,[BACKLOG-193.md](BACKLOG-193.md)
 BACKLOG-194,Add Test Coverage for Contexts,test,Medium,Pending,-,~40K,-,-,[BACKLOG-194.md](BACKLOG-194.md)
 BACKLOG-195,Add Test Coverage for Large Hooks,test,Medium,Pending,-,~50K,-,-,[BACKLOG-195.md](BACKLOG-195.md)
@@ -181,8 +181,8 @@ BACKLOG-198,Decompose Large Component Files,refactor,Low,Pending,-,~60K,-,-,[BAC
 BACKLOG-200,Contacts import fails with email validation error,service,Medium,Pending,-,~25K,-,-,[BACKLOG-200.md](BACKLOG-200.md)
 BACKLOG-201,"""00"" prefix appearing before iMessage text",ui,Medium,Completed,-,~5K,~180K,+3500%,[BACKLOG-201.md](BACKLOG-201.md)
 BACKLOG-202,Fix Test Regressions (contact-handlers/databaseService),test/fix,Critical,Completed,SPRINT-037,~20K,-,[BACKLOG-202.md](BACKLOG-202.md),
-BACKLOG-203,Add Comprehensive Tests for macOSMessagesImportService,test,High,Pending,SPRINT-032,~40K,-,-,[BACKLOG-203.md](BACKLOG-203.md)
-BACKLOG-204,Abstract window.api Calls into Service Layer,refactor,Medium,Pending,SPRINT-032,~80K,-,-,[BACKLOG-204.md](BACKLOG-204.md)
+BACKLOG-203,Add Comprehensive Tests for macOSMessagesImportService,test,High,obsolete,-,~40K,-,-,[BACKLOG-203.md](BACKLOG-203.md)
+BACKLOG-204,Abstract window.api Calls into Service Layer,refactor,Medium,Pending,-,~80K,-,-,[BACKLOG-204.md](BACKLOG-204.md)
 BACKLOG-205,Fix Flaky useAutoRefresh Timer Tests,test,Low,Pending,-,~15K,-,-,[BACKLOG-205.md](BACKLOG-205.md)
 BACKLOG-206,UI Freezing During iMessage Sync/Import,enhancement/perf,High,Completed,SPRINT-033,~30K,-,[BACKLOG-206.md](BACKLOG-206.md),
 BACKLOG-207,Auto-Link Communications When Contact Added,enhancement,High,Completed,SPRINT-033,~40K,-,[BACKLOG-207.md](BACKLOG-207.md),
