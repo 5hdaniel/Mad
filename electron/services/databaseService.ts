@@ -847,6 +847,10 @@ class DatabaseService implements IDatabaseService {
     return communicationDb.deleteCommunication(communicationId);
   }
 
+  async deleteCommunicationByMessageId(messageId: string): Promise<void> {
+    return communicationDb.deleteCommunicationByMessageId(messageId);
+  }
+
   async addIgnoredCommunication(data: NewIgnoredCommunication): Promise<IgnoredCommunication> {
     return communicationDb.addIgnoredCommunication(data);
   }

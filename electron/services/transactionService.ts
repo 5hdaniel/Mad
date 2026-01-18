@@ -1649,6 +1649,10 @@ class TransactionService {
 
       // Remove the transaction link from messages table
       await databaseService.unlinkMessageFromTransaction(messageId);
+
+      // Also delete the communications table reference (TASK-1109 fix)
+      // The communications table is the source of truth for getDetails queries
+      await databaseService.deleteCommunicationByMessageId(messageId);
     }
 
     // Update transaction message counts
