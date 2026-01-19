@@ -267,7 +267,7 @@ export interface IpcChannels {
   };
   "contacts:import": {
     request: { userId: string; contactsToImport: NewContact[] };
-    response: { imported: number; skipped: number; errors: string[] };
+    response: { success: boolean; contacts?: Contact[]; error?: string };
   };
 
   // ============================================

@@ -255,6 +255,8 @@ function Contacts({ userId, onClose }: ContactsProps) {
           userId={userId}
           onClose={() => setShowImport(false)}
           onSuccess={() => {
+            // Note: importedContactIds parameter is available but not needed here
+            // since this is the main Contacts page, not a contact selection modal
             setShowImport(false);
             loadContacts();
           }}
