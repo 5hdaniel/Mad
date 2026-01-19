@@ -88,7 +88,6 @@ export function getMessageDerivedContacts(userId: string): MessageDerivedContact
       AND json_extract(participants, '$.from') != 'me'
     GROUP BY LOWER(json_extract(participants, '$.from'))
     ORDER BY last_communication_at DESC
-    LIMIT 500
   `;
 
   const results = dbAll<MessageDerivedContact>(sql, [userId]);
