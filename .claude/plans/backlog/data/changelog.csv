@@ -178,3 +178,4 @@ date,action,details,items_affected
 2026-01-18,BACKLOG-309,status,Pending,Completed,PR #474 - import auto-select
 2026-01-18,BACKLOG-207,status,Reopened,Completed,PR #475 - wire auto-link
 2026-01-18,SPRINT-045,completed,Planning,Completed,4 tasks: PRs #472-475 (~88K tokens)
+2026-01-18,BACKLOG-310,created,n/a,Pending,Remove debug console logs from NotificationContext
