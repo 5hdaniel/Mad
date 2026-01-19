@@ -199,6 +199,12 @@ export interface Contact {
   created_at: Date | string;
   updated_at: Date | string;
 
+  // Import status
+  /** Whether this contact was derived from message participants (not explicitly imported) */
+  is_message_derived?: number | boolean;
+  /** Last communication date (for message-derived contacts and activity tracking) */
+  last_communication_at?: Date | string | null;
+
   // ========== Legacy Fields (backwards compatibility) ==========
   /** @deprecated Read-only. Use display_name for all writes. */
   name?: string;
@@ -207,7 +213,7 @@ export interface Contact {
   /** @deprecated Use ContactPhone child table instead */
   phone?: string;
   /** @deprecated Derive from source field instead */
-  is_imported?: boolean;
+  is_imported?: boolean | number;
 }
 
 export interface ContactEmail {

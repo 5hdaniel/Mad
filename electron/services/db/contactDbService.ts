@@ -28,6 +28,79 @@ interface TransactionWithRoles {
   roles: string;
 }
 
+// Message-derived contact (extracted from messages table participants JSON)
+interface MessageDerivedContact {
+  id: string;
+  display_name: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  company: string | null;
+  source: string;
+  is_imported: number;
+  is_message_derived: number;
+  last_communication_at: string | null;
+}
+
+/**
+ * Get unique contacts derived from message participants (senders/recipients)
+ * These are contacts who have sent/received messages but may not be explicitly imported.
+ * Uses json_extract to parse the participants JSON field.
+ */
+export function getMessageDerivedContacts(userId: string): MessageDerivedContact[] {
+  // Get emails of imported contacts to exclude (avoid duplicates)
+  const importedEmailsSql = `
+    SELECT LOWER(email) as email
+    FROM contact_emails ce
+    JOIN contacts c ON ce.contact_id = c.id
+    WHERE c.user_id = ? AND c.is_imported = 1
+  `;
+  const importedEmailRows = dbAll<{ email: string }>(importedEmailsSql, [userId]);
+  const importedEmails = new Set(importedEmailRows.map(r => r.email).filter(Boolean));
+
+  // Extract unique senders from messages (from field in participants JSON)
+  // Only include email addresses (contain @), exclude already-imported contacts
+  const sql = `
+    SELECT
+      'msg_' || LOWER(json_extract(participants, '$.from')) as id,
+      json_extract(participants, '$.from') as display_name,
+      json_extract(participants, '$.from') as name,
+      CASE
+        WHEN json_extract(participants, '$.from') LIKE '%@%'
+        THEN LOWER(json_extract(participants, '$.from'))
+        ELSE NULL
+      END as email,
+      CASE
+        WHEN json_extract(participants, '$.from') NOT LIKE '%@%'
+        THEN json_extract(participants, '$.from')
+        ELSE NULL
+      END as phone,
+      NULL as company,
+      'messages' as source,
+      0 as is_imported,
+      1 as is_message_derived,
+      MAX(sent_at) as last_communication_at
+    FROM messages
+    WHERE user_id = ?
+      AND participants IS NOT NULL
+      AND json_extract(participants, '$.from') IS NOT NULL
+      AND json_extract(participants, '$.from') != ''
+      AND json_extract(participants, '$.from') != 'me'
+    GROUP BY LOWER(json_extract(participants, '$.from'))
+    ORDER BY last_communication_at DESC
+  `;
+
+  const results = dbAll<MessageDerivedContact>(sql, [userId]);
+
+  // Filter out contacts whose email is already imported
+  return results.filter(contact => {
+    if (contact.email) {
+      return !importedEmails.has(contact.email.toLowerCase());
+    }
+    return true;
+  });
+}
+
 /**
  * Normalize phone to E.164 format
  */
@@ -297,6 +370,7 @@ export async function getContacts(filters?: ContactFilters): Promise<Contact[]> 
 export async function getImportedContactsByUserId(
   userId: string,
 ): Promise<Contact[]> {
+  // Get explicitly imported contacts from contacts table
   const sql = `
     SELECT
       c.*,
@@ -308,12 +382,42 @@ export async function getImportedContactsByUserId(
       COALESCE(
         (SELECT phone_e164 FROM contact_phones WHERE contact_id = c.id AND is_primary = 1 LIMIT 1),
         (SELECT phone_e164 FROM contact_phones WHERE contact_id = c.id LIMIT 1)
-      ) as phone
+      ) as phone,
+      0 as is_message_derived
     FROM contacts c
     WHERE c.user_id = ? AND c.is_imported = 1
     ORDER BY c.display_name ASC
   `;
-  return dbAll<Contact>(sql, [userId]);
+  const importedContacts = dbAll<Contact>(sql, [userId]);
+
+  // Get message-derived contacts (unique senders from messages, excluding already-imported)
+  const messageDerivedContacts = getMessageDerivedContacts(userId);
+
+  // Merge both lists - imported contacts first, then message-derived
+  // Cast message-derived to Contact type (they have compatible fields)
+  const allContacts = [
+    ...importedContacts,
+    ...messageDerivedContacts.map(mc => ({
+      id: mc.id,
+      user_id: userId,
+      display_name: mc.display_name,
+      name: mc.name,
+      email: mc.email,
+      phone: mc.phone,
+      company: mc.company,
+      source: mc.source,
+      is_imported: mc.is_imported,
+      is_message_derived: mc.is_message_derived,
+      last_communication_at: mc.last_communication_at,
+    } as Contact)),
+  ];
+
+  // Sort alphabetically by display_name/name
+  return allContacts.sort((a, b) => {
+    const nameA = (a.display_name || a.name || '').toLowerCase();
+    const nameB = (b.display_name || b.name || '').toLowerCase();
+    return nameA.localeCompare(nameB);
+  });
 }
 
 /**
@@ -358,6 +462,7 @@ export async function getContactsSortedByActivity(
   userId: string,
   propertyAddress?: string,
 ): Promise<ContactWithActivity[]> {
+  // Get imported contacts with activity data
   const sql = `
     SELECT
       c.*,
@@ -375,7 +480,8 @@ export async function getContactsSortedByActivity(
         END) as address_mention_count
       `
           : "0 as address_mention_count"
-      }
+      },
+      0 as is_message_derived
     FROM contacts c
     LEFT JOIN contact_emails ce_primary ON c.id = ce_primary.contact_id AND ce_primary.is_primary = 1
     LEFT JOIN contact_phones cp_primary ON c.id = cp_primary.contact_id AND cp_primary.is_primary = 1
@@ -387,11 +493,6 @@ export async function getContactsSortedByActivity(
     )
     WHERE c.user_id = ? AND c.is_imported = 1
     GROUP BY c.id
-    ORDER BY
-      ${propertyAddress ? "address_mention_count DESC," : ""}
-      CASE WHEN last_communication_at IS NULL THEN 1 ELSE 0 END,
-      last_communication_at DESC,
-      c.display_name ASC
   `;
 
   const params = propertyAddress
@@ -404,7 +505,89 @@ export async function getContactsSortedByActivity(
     : [userId];
 
   try {
-    return dbAll<ContactWithActivity>(sql, params);
+    const importedContacts = dbAll<ContactWithActivity>(sql, params);
+
+    // Get message-derived contacts and add activity metadata
+    const messageDerivedContacts = getMessageDerivedContacts(userId);
+
+    // For message-derived contacts, calculate address_mention_count if propertyAddress is provided
+    const messageDerivedWithActivity: ContactWithActivity[] = messageDerivedContacts.map(mc => {
+      let addressMentionCount = 0;
+
+      if (propertyAddress && mc.email) {
+        // Count messages that mention the property address
+        const countSql = `
+          SELECT COUNT(*) as count
+          FROM messages
+          WHERE user_id = ?
+            AND json_extract(participants, '$.from') = ?
+            AND (subject LIKE ? OR body_text LIKE ?)
+        `;
+        const result = dbAll<{ count: number }>(countSql, [
+          userId,
+          mc.display_name, // The original sender value
+          `%${propertyAddress}%`,
+          `%${propertyAddress}%`,
+        ]);
+        addressMentionCount = result[0]?.count || 0;
+      }
+
+      // Count total messages from this sender
+      const messageCountSql = `
+        SELECT COUNT(*) as count
+        FROM messages
+        WHERE user_id = ?
+          AND LOWER(json_extract(participants, '$.from')) = ?
+      `;
+      const messageCountResult = dbAll<{ count: number }>(messageCountSql, [
+        userId,
+        mc.display_name?.toLowerCase() || '',
+      ]);
+      const communicationCount = messageCountResult[0]?.count || 0;
+
+      return {
+        id: mc.id,
+        user_id: userId,
+        display_name: mc.display_name,
+        name: mc.name,
+        email: mc.email,
+        phone: mc.phone,
+        company: mc.company,
+        source: mc.source,
+        is_imported: mc.is_imported,
+        is_message_derived: mc.is_message_derived,
+        last_communication_at: mc.last_communication_at,
+        communication_count: communicationCount,
+        address_mention_count: addressMentionCount,
+      } as ContactWithActivity;
+    });
+
+    // Merge both lists
+    const allContacts = [...importedContacts, ...messageDerivedWithActivity];
+
+    // Sort by activity (address mentions first if propertyAddress provided, then by last communication)
+    return allContacts.sort((a, b) => {
+      // Property address relevance first
+      if (propertyAddress) {
+        const mentionA = a.address_mention_count || 0;
+        const mentionB = b.address_mention_count || 0;
+        if (mentionA !== mentionB) {
+          return mentionB - mentionA; // Higher mentions first
+        }
+      }
+
+      // Then by last communication date
+      const dateA = a.last_communication_at ? new Date(a.last_communication_at).getTime() : 0;
+      const dateB = b.last_communication_at ? new Date(b.last_communication_at).getTime() : 0;
+      if (dateA !== dateB) {
+        return dateB - dateA; // More recent first
+      }
+
+      // Finally by name
+      const nameA = (a.display_name || a.name || '').toLowerCase();
+      const nameB = (b.display_name || b.name || '').toLowerCase();
+      return nameA.localeCompare(nameB);
+    });
   } catch (error) {
     logService.error("Error getting sorted contacts", "ContactDbService", {
       error: (error as Error).message,
