@@ -41,6 +41,8 @@ function ContactSelectModal({
 }: ContactSelectModalProps) {
   const [searchQuery, setSearchQuery] = React.useState("");
   const [showImportModal, setShowImportModal] = useState(false);
+  // Track IDs to auto-select after import (cleared once contacts refresh)
+  const [pendingAutoSelectIds, setPendingAutoSelectIds] = useState<string[]>([]);
 
   // Create a set of valid contact IDs for O(1) lookup
   const validContactIds = React.useMemo(
@@ -63,6 +65,26 @@ function ContactSelectModal({
   React.useEffect(() => {
     setSelectedIds(validInitialIds);
   }, [initialIdsKey]);
+
+  // Auto-select imported contacts once they appear in the contacts list
+  // This runs after import completes and contacts are refreshed
+  React.useEffect(() => {
+    if (pendingAutoSelectIds.length > 0) {
+      // Check which pending IDs are now available in the contacts list
+      const idsToSelect = pendingAutoSelectIds.filter((id) =>
+        validContactIds.has(id)
+      );
+
+      if (idsToSelect.length > 0) {
+        // Add the imported contacts to selected (using Set to avoid duplicates)
+        setSelectedIds((prev) => [...new Set([...prev, ...idsToSelect])]);
+        // Clear pending IDs that were successfully selected
+        setPendingAutoSelectIds((prev) =>
+          prev.filter((id) => !validContactIds.has(id))
+        );
+      }
+    }
+  }, [pendingAutoSelectIds, validContactIds]);
 
   const availableContacts = contacts.filter((c) => !excludeIds.includes(c.id));
 
@@ -272,9 +294,6 @@ function ContactSelectModal({
                             )}
                         </div>
                         <div className="text-sm text-gray-600 space-y-0.5">
-                          {contact.email && (
-                            <p className="truncate">{contact.email}</p>
-                          )}
                           {contact.company && (
                             <p className="truncate">{contact.company}</p>
                           )}
@@ -323,8 +342,11 @@ function ContactSelectModal({
         <ImportContactsModal
           userId={userId}
           onClose={() => setShowImportModal(false)}
-          onSuccess={() => {
+          onSuccess={(importedContactIds) => {
             setShowImportModal(false);
+            // Store imported IDs for auto-selection after refresh
+            setPendingAutoSelectIds(importedContactIds);
+            // Refresh contacts list to include newly imported contacts
             onRefreshContacts?.();
           }}
           onAddManually={() => {

@@ -4,7 +4,8 @@ import { ExtendedContact } from "../types";
 interface ImportContactsModalProps {
   userId: string;
   onClose: () => void;
-  onSuccess: () => void;
+  /** Called when import succeeds, passing the IDs of imported contacts */
+  onSuccess: (importedContactIds: string[]) => void;
   onAddManually: () => void;
 }
 
@@ -75,10 +76,15 @@ function ImportContactsModal({
       const contactsToImport = availableContacts.filter((c) =>
         selectedContacts.has(c.id),
       );
-      const result = await window.api.contacts.import(userId, contactsToImport);
+      const result = (await window.api.contacts.import(
+        userId,
+        contactsToImport
+      )) as { success: boolean; contacts?: ExtendedContact[]; error?: string };
 
       if (result.success) {
-        onSuccess();
+        // Extract IDs from imported contacts to return to caller
+        const importedIds = result.contacts?.map((c) => c.id) || [];
+        onSuccess(importedIds);
       } else {
         setError(result.error || "Failed to import contacts");
       }
