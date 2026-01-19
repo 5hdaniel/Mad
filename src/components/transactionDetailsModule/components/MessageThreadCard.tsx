@@ -40,8 +40,12 @@ function getAvatarInitial(contactName?: string, phoneNumber?: string): string {
 }
 
 /**
- * Get all unique participants from a thread (excluding "me").
+ * Get all unique participants from a thread (excluding "me" and "unknown").
  * Returns an array of phone numbers/identifiers.
+ *
+ * Note: "unknown" is filtered out because it represents an unresolved participant
+ * (e.g., a phone number that couldn't be matched to a contact). Including it would
+ * cause 1:1 conversations to be incorrectly flagged as group chats.
  */
 function getThreadParticipants(messages: MessageLike[]): string[] {
   const participants = new Set<string>();
@@ -54,13 +58,13 @@ function getThreadParticipants(messages: MessageLike[]): string[] {
             ? JSON.parse(msg.participants)
             : msg.participants;
 
-        if (parsed.from && parsed.from !== "me") {
+        if (parsed.from && parsed.from !== "me" && parsed.from !== "unknown") {
           participants.add(parsed.from);
         }
         if (parsed.to) {
           const toList = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
           toList.forEach((p: string) => {
-            if (p && p !== "me") participants.add(p);
+            if (p && p !== "me" && p !== "unknown") participants.add(p);
           });
         }
       }
