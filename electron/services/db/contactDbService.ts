@@ -40,6 +40,7 @@ interface MessageDerivedContact {
   is_imported: number;
   is_message_derived: number;
   last_communication_at: string | null;
+  communication_count: number; // BACKLOG-311: Pre-computed to avoid N+1 queries
 }
 
 /**
@@ -60,6 +61,7 @@ export function getMessageDerivedContacts(userId: string): MessageDerivedContact
 
   // Extract unique senders from messages (from field in participants JSON)
   // Only include email addresses (contain @), exclude already-imported contacts
+  // BACKLOG-311: Include COUNT(*) to avoid N+1 queries
   const sql = `
     SELECT
       'msg_' || LOWER(json_extract(participants, '$.from')) as id,
@@ -79,7 +81,8 @@ export function getMessageDerivedContacts(userId: string): MessageDerivedContact
       'messages' as source,
       0 as is_imported,
       1 as is_message_derived,
-      MAX(sent_at) as last_communication_at
+      MAX(sent_at) as last_communication_at,
+      COUNT(*) as communication_count
     FROM messages
     WHERE user_id = ?
       AND participants IS NOT NULL
@@ -508,60 +511,27 @@ export async function getContactsSortedByActivity(
   try {
     const importedContacts = dbAll<ContactWithActivity>(sql, params);
 
-    // Get message-derived contacts and add activity metadata
+    // Get message-derived contacts (already have communication_count from query)
     const messageDerivedContacts = getMessageDerivedContacts(userId);
 
-    // For message-derived contacts, calculate address_mention_count if propertyAddress is provided
-    const messageDerivedWithActivity: ContactWithActivity[] = messageDerivedContacts.map(mc => {
-      let addressMentionCount = 0;
-
-      if (propertyAddress && mc.email) {
-        // Count messages that mention the property address
-        const countSql = `
-          SELECT COUNT(*) as count
-          FROM messages
-          WHERE user_id = ?
-            AND json_extract(participants, '$.from') = ?
-            AND (subject LIKE ? OR body_text LIKE ?)
-        `;
-        const result = dbAll<{ count: number }>(countSql, [
-          userId,
-          mc.display_name, // The original sender value
-          `%${propertyAddress}%`,
-          `%${propertyAddress}%`,
-        ]);
-        addressMentionCount = result[0]?.count || 0;
-      }
-
-      // Count total messages from this sender
-      const messageCountSql = `
-        SELECT COUNT(*) as count
-        FROM messages
-        WHERE user_id = ?
-          AND LOWER(json_extract(participants, '$.from')) = ?
-      `;
-      const messageCountResult = dbAll<{ count: number }>(messageCountSql, [
-        userId,
-        mc.display_name?.toLowerCase() || '',
-      ]);
-      const communicationCount = messageCountResult[0]?.count || 0;
-
-      return {
-        id: mc.id,
-        user_id: userId,
-        display_name: mc.display_name,
-        name: mc.name,
-        email: mc.email,
-        phone: mc.phone,
-        company: mc.company,
-        source: mc.source,
-        is_imported: mc.is_imported,
-        is_message_derived: mc.is_message_derived,
-        last_communication_at: mc.last_communication_at,
-        communication_count: communicationCount,
-        address_mention_count: addressMentionCount,
-      } as ContactWithActivity;
-    });
+    // BACKLOG-311: Map message-derived contacts to ContactWithActivity
+    // No N+1 queries - communication_count is pre-computed, address_mention_count is 0
+    // (address relevance sorting only meaningful for imported contacts with full email data)
+    const messageDerivedWithActivity: ContactWithActivity[] = messageDerivedContacts.map(mc => ({
+      id: mc.id,
+      user_id: userId,
+      display_name: mc.display_name,
+      name: mc.name,
+      email: mc.email,
+      phone: mc.phone,
+      company: mc.company,
+      source: mc.source,
+      is_imported: mc.is_imported,
+      is_message_derived: mc.is_message_derived,
+      last_communication_at: mc.last_communication_at,
+      communication_count: mc.communication_count,
+      address_mention_count: 0, // Skip for message-derived, sort by communication date instead
+    } as ContactWithActivity));
 
     // Merge both lists
     const allContacts = [...importedContacts, ...messageDerivedWithActivity];
