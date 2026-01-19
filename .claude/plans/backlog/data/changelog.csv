@@ -164,3 +164,11 @@ date,action,details,items_affected
 2026-01-18,BACKLOG-304,status,Pending,Completed,PR #468 - removed unused eslint-disable
 2026-01-18,BACKLOG-305,status,Pending,Completed,PR #468 - fixed test button selector
 2026-01-18,BACKLOG-292,status,Pending,Completed,PR #438 - preload __DEV__ fix
+2026-01-18,BACKLOG-221,status,In Sprint,Completed,PR #471 - iMessage attachments fix
+2026-01-18,BACKLOG-229,status,In Sprint,Completed,Already done in TASK-1071 (PR #431)
+2026-01-18,BACKLOG-293,status,In Sprint,Completed,Already done in TASK-1113 (SPRINT-041)
+2026-01-18,BACKLOG-299,status,In Sprint,Completed,PR #470 - group chat detection fix
+2026-01-18,BACKLOG-306,created,n/a,Pending,Hide phone/email in contact modal
+2026-01-18,BACKLOG-307,created,n/a,Pending,Contact select missing message-derived contacts
+2026-01-18,BACKLOG-207,status,Completed,Reopened,Auto-link not working as expected
+2026-01-18,SPRINT-044,completed,Planning,Completed,2 tasks: PR #470 #471 (~77K tokens)
