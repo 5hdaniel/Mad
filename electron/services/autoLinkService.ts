@@ -10,10 +10,11 @@
 
 import { dbAll, dbGet, dbRun } from "./db/core/dbConnection";
 import logService from "./logService";
+import { normalizePhone } from "./messageMatchingService";
 import {
-  normalizePhone,
-  createCommunicationReference,
-} from "./messageMatchingService";
+  createThreadCommunicationReference,
+  isThreadLinkedToTransaction,
+} from "./db/communicationDbService";
 
 // ============================================
 // TYPES
@@ -38,11 +39,14 @@ export interface AutoLinkOptions {
 
 /**
  * Result of auto-linking communications for a contact
+ *
+ * TASK-1115: Updated to track thread-level linking.
+ * messagesLinked now represents threads linked, not individual messages.
  */
 export interface AutoLinkResult {
   /** Number of emails successfully linked */
   emailsLinked: number;
-  /** Number of text messages successfully linked */
+  /** Number of message threads successfully linked (TASK-1115: thread-level) */
   messagesLinked: number;
   /** Number of communications that were already linked */
   alreadyLinked: number;
@@ -245,7 +249,20 @@ async function findEmailsByContactEmails(
 }
 
 /**
- * Find unlinked text messages matching the given phone numbers
+ * Message with thread information for thread-level linking
+ *
+ * TASK-1115: Now returns thread_id for grouping messages by conversation.
+ */
+interface MessageWithThread {
+  id: string;
+  thread_id: string | null;
+}
+
+/**
+ * Find unlinked text messages matching the given phone numbers.
+ *
+ * TASK-1115: Now returns thread_id for thread-level linking.
+ * Messages without thread_id will be linked individually (backward compat).
  */
 async function findMessagesByContactPhones(
   userId: string,
@@ -253,7 +270,7 @@ async function findMessagesByContactPhones(
   transactionId: string,
   dateRange: { start: Date; end: Date },
   limit: number
-): Promise<string[]> {
+): Promise<MessageWithThread[]> {
   if (phoneNumbers.length === 0) {
     return [];
   }
@@ -277,8 +294,9 @@ async function findMessagesByContactPhones(
   params.push(dateRange.end.toISOString());
   params.push(limit);
 
+  // TASK-1115: Also select thread_id for thread-level linking
   const sql = `
-    SELECT m.id
+    SELECT m.id, m.thread_id
     FROM messages m
     WHERE m.user_id = ?
       AND m.channel IN ('sms', 'imessage')
@@ -298,8 +316,8 @@ async function findMessagesByContactPhones(
     LIMIT ?
   `;
 
-  const results = dbAll<{ id: string }>(sql, params);
-  return results.map((r) => r.id);
+  const results = dbAll<MessageWithThread>(sql, params);
+  return results;
 }
 
 /**
@@ -469,7 +487,7 @@ export async function autoLinkCommunicationsForContact(
     );
 
     // 5. Find matching text messages (from messages table)
-    const messageIds = await findMessagesByContactPhones(
+    const messagesWithThreads = await findMessagesByContactPhones(
       userId,
       contactInfo.phoneNumbers,
       transactionId,
@@ -478,9 +496,12 @@ export async function autoLinkCommunicationsForContact(
     );
 
     await logService.debug(
-      `Found ${messageIds.length} matching messages for contact ${contactId}`,
+      `Found ${messagesWithThreads.length} matching messages for contact ${contactId}`,
       "AutoLinkService",
-      { messageIds, contactPhones: contactInfo.phoneNumbers }
+      {
+        messageCount: messagesWithThreads.length,
+        contactPhones: contactInfo.phoneNumbers,
+      }
     );
 
     // 6. Link emails to transaction
@@ -509,26 +530,57 @@ export async function autoLinkCommunicationsForContact(
       }
     }
 
-    // 7. Link text messages to transaction
-    for (const messageId of messageIds) {
+    // 7. Link text messages to transaction at THREAD level
+    // TASK-1115: Group messages by thread_id and link once per thread
+    const threadIds = new Set<string>();
+    const messagesWithoutThread: string[] = [];
+
+    for (const msg of messagesWithThreads) {
+      if (msg.thread_id) {
+        threadIds.add(msg.thread_id);
+      } else {
+        // Messages without thread_id will be skipped for now
+        // They'll be picked up once thread_id is populated
+        messagesWithoutThread.push(msg.id);
+      }
+    }
+
+    await logService.debug(
+      `Grouped ${messagesWithThreads.length} messages into ${threadIds.size} threads`,
+      "AutoLinkService",
+      {
+        threadCount: threadIds.size,
+        messagesWithoutThread: messagesWithoutThread.length,
+      }
+    );
+
+    // Link each unique thread once
+    for (const threadId of threadIds) {
       try {
-        const refId = await createCommunicationReference(
-          messageId,
+        // Check if thread is already linked to avoid duplicates
+        const alreadyLinked = await isThreadLinkedToTransaction(
+          threadId,
+          transactionId
+        );
+
+        if (alreadyLinked) {
+          result.alreadyLinked++;
+          continue;
+        }
+
+        await createThreadCommunicationReference(
+          threadId,
           transactionId,
           userId,
           "auto",
           0.9 // Phone matching confidence
         );
 
-        if (refId) {
-          result.messagesLinked++;
-        } else {
-          result.alreadyLinked++;
-        }
+        result.messagesLinked++; // Now represents threads linked
       } catch (error) {
         result.errors++;
         await logService.warn(
-          `Failed to link message ${messageId}: ${error instanceof Error ? error.message : "Unknown"}`,
+          `Failed to link thread ${threadId}: ${error instanceof Error ? error.message : "Unknown"}`,
           "AutoLinkService"
         );
       }

@@ -198,7 +198,7 @@ BACKLOG-216,Edit Contacts Still Not Pre-Populating (TASK-1030 Regression),bug/re
 BACKLOG-217,UX Improvement - Edit Contacts Button Flow,enhancement/ux,High,Completed,SPRINT-034,~40K,~156K,[BACKLOG-217.md](BACKLOG-217.md),
 BACKLOG-218,Group Chat Display in Transaction Details (Placeholder),enhancement/ux,High,Blocked,-,~30K,-,Pending user requirements,[BACKLOG-218.md](BACKLOG-218.md)
 BACKLOG-219,Audit Debug/Logging Calls Across Repository,tech-debt/quality,Low,Pending,-,~20K,-,-,[BACKLOG-219.md](BACKLOG-219.md)
-BACKLOG-220,Unlink Communications UI Not Refreshing,bug/ui,High,**Reopened**,SPRINT-042,~25K,-,PR #450 insufficient; requires thread-based schema,[BACKLOG-220.md](BACKLOG-220.md)
+BACKLOG-220,Unlink Communications UI Not Refreshing,bug/ui,High,Completed,SPRINT-042,~25K,~35K,+40%,PR #462,[BACKLOG-220.md](items/BACKLOG-220.md)
 BACKLOG-221,iMessage Attachments Not Displaying (Stale message_id),bug/data-integrity,High,Pending,-,~40K,-,-,[BACKLOG-221.md](BACKLOG-221.md)
 BACKLOG-222,Contact Changes Not Saving When Editing Transaction,bug/data-persistence,High,Pending,-,~30K,-,-,[BACKLOG-222.md](BACKLOG-222.md)
 BACKLOG-223,Add Text Message Status Indicator (Like Email Status),enhancement/ux,Medium,Pending,-,~25K,-,-,[BACKLOG-223.md](BACKLOG-223.md)
@@ -226,9 +226,9 @@ BACKLOG-243,Fix Fire-and-Forget IPC Event Handlers,reliability,High,Pending,-,~6
 BACKLOG-244,Guarantee Session Cleanup Before State Transitions,reliability,High,Pending,-,~40K,-,Session state leaks possible,-
 BACKLOG-245,Validate Database Connection State,reliability,High,Pending,-,~30K,-,No connection validation before queries,-
 BACKLOG-246,Add Component-Level Error Boundaries,reliability,High,Pending,-,~45K,-,Missing granular error boundaries,-
-BACKLOG-247,Re-enable Sandbox for Preload Script,security,High,Pending,-,~40K,-,sandbox: false in webPreferences,-
-BACKLOG-248,Fix Environment Variable Exposure in googleAuthService,security,High,Pending,-,~25K,-,Credentials may leak to renderer,-
-BACKLOG-249,Tighten CSP in Development Mode,security,High,Pending,-,~20K,-,CSP too permissive,-
+BACKLOG-247,Re-enable Sandbox for Preload Script,security,High,Completed,SPRINT-043,~40K,~35K,-12%,PR #463,[BACKLOG-247.md](items/BACKLOG-247.md)
+BACKLOG-248,Fix Environment Variable Exposure in googleAuthService,security,High,Completed,SPRINT-043,~25K,~15K,-40%,PR #464,[BACKLOG-248.md](items/BACKLOG-248.md)
+BACKLOG-249,Tighten CSP in Development Mode,security,High,Completed,SPRINT-043,~20K,~10K,-50%,PR #465,[BACKLOG-249.md](items/BACKLOG-249.md)
 BACKLOG-250,Reduce Heavy Service Dependency Chains,architecture,High,Pending,-,~80K,-,transactionService imports 13+ services,-
 BACKLOG-251,Standardize IPC Handler Error Handling,architecture,High,Pending,-,~70K,-,165 handlers with inconsistent patterns,-
 BACKLOG-252,Decouple LLM Service from Consumers,architecture,High,Pending,-,~55K,-,Tight coupling to LLM implementation,-
@@ -272,10 +272,13 @@ BACKLOG-294,Extract Reusable DashboardActionCard Component,refactor,Low,Pending,
 BACKLOG-286,Unify Chat Card and Group Chat Card Components,ui-ux,Low,Completed,SPRINT-040,~40K,~70K,"PRs #442,445-448",-
 BACKLOG-288,Simplify Dashboard Button Labels,ui-ux,Low,Completed,SPRINT-040,~10K,~20K,"PRs #441,443",-
 BACKLOG-295,Transaction Header Responsive Layout,ui-ux,Medium,Completed,SPRINT-040,~18K,~18K,PR #449,-
-BACKLOG-296,Database Schema Alignment - Service Updates,tech-debt/data-integrity,High,In Progress,SPRINT-042,~40K,-,Thread-based communications schema,[BACKLOG-296.md](BACKLOG-296.md)
+BACKLOG-296,Database Schema Alignment - Service Updates,tech-debt/data-integrity,High,Completed,SPRINT-042,~40K,~35K,-12%,PR #462,[BACKLOG-296.md](items/BACKLOG-296.md)
 BACKLOG-297,Startup Error Handling - User-Friendly Failure Screen,ux/error-handling,Medium,Pending,-,~50K,-,Timeout + error screen on init failure,[BACKLOG-297.md](BACKLOG-297.md)
 BACKLOG-298,Video Attachment Support in ConversationViewModal,ui-ux,Medium,Pending,-,~35K,-,"Videos filtered out, only images displayed",[BACKLOG-298.md](BACKLOG-298.md)
 BACKLOG-299,1:1 Chat Incorrectly Shown as Group Chat,bug/data-quality,Medium,Pending,-,~25K,-,"""unknown"" participant triggers isGroupChat()",[BACKLOG-299.md](BACKLOG-299.md)
 BACKLOG-300,Display Contact Roles in User-Friendly Format,ux/polish,Low,Pending,-,~5K,-,"Format snake_case roles as ""Title Case""",[BACKLOG-300.md](BACKLOG-300.md)
 BACKLOG-301,Refactor Sync Coordination with SyncScheduler Service,tech-debt/arch,Medium,Pending,-,~65K,-,"Centralize sync triggers, remove cross-hook flags",[BACKLOG-301.md](BACKLOG-301.md)
 BACKLOG-302,Service Pattern Audit - Coordination Refactoring,tech-debt/arch,Medium,Pending,-,~10K,-,Audit findings for sync coordination patterns,[BACKLOG-302.md](BACKLOG-302.md)
+BACKLOG-303,Centralize dotenv.config() in supabaseService.ts,security,Low,Completed,-,~3K,~3K,0%,PR #466,[BACKLOG-303.md](items/BACKLOG-303.md)
+BACKLOG-304,Fix ESLint react-hooks/exhaustive-deps Rule Not Found,dx,Low,Pending,-,~3K,-,-,Lint warning cluttering output,[BACKLOG-304.md](items/BACKLOG-304.md)
+BACKLOG-305,Fix autoDetection.test.tsx Button Selector Failure,test,Medium,Pending,-,~5K,-,-,Pre-existing test failure,[BACKLOG-305.md](items/BACKLOG-305.md)

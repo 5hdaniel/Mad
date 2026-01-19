@@ -56,23 +56,52 @@ git checkout -b fix/task-XXX-description
 
 ---
 
-## Step 3: Prepare for Metrics Capture
+## Step 3: Three-Phase Metrics Tracking
 
-**IMPORTANT:** Metrics are now auto-captured via SubagentStop hook.
+**IMPORTANT:** Track metrics separately for each phase to identify inefficiencies.
 
-Your only responsibility:
-1. **Record your agent_id immediately** when the Task tool returns
-2. After completion, retrieve metrics using the grep command
+### Phase Overview
 
-```bash
-# After agent completes, find your metrics:
-grep "<your_agent_id>" .claude/metrics/tokens.jsonl | jq '.'
+| Phase | Activities | What to Track |
+|-------|------------|---------------|
+| **Planning** | Read task file, explore codebase, understand requirements, create plan | Turns, key files read |
+| **Implementation** | Write code, make edits, create/modify files | Turns, files changed |
+| **Testing** | Run tests, type-check, lint, fix issues, CI debugging | Turns, test runs, fixes |
+
+### How to Track Phases
+
+**Option A: Manual Markers (Recommended)**
+Add phase markers in your work:
+```
+[PHASE: PLANNING START]
+... planning work ...
+[PHASE: PLANNING END - X turns]
+
+[PHASE: IMPLEMENTATION START]
+... implementation work ...
+[PHASE: IMPLEMENTATION END - Y turns]
+
+[PHASE: TESTING START]
+... testing work ...
+[PHASE: TESTING END - Z turns]
 ```
 
-The hook automatically captures:
-- Total tokens (input + output + cache)
-- Duration (seconds)
-- API calls
+**Option B: Separate Agent Invocations**
+For more precise tracking, use separate agent invocations per phase:
+1. Planning agent → captures planning metrics
+2. Implementation agent → captures implementation metrics
+3. Testing agent → captures testing metrics
+
+### Auto-Captured Metrics
+
+The SubagentStop hook captures total metrics. Your responsibility:
+1. **Record your agent_id immediately** when the Task tool returns
+2. **Note phase transitions** during your work
+3. After completion, retrieve metrics:
+
+```bash
+grep "<your_agent_id>" .claude/metrics/tokens.jsonl | jq '.'
+```
 
 ---
 
@@ -110,7 +139,18 @@ Engineer Agent ID: <agent_id from Task tool output>
 ### Checklist
 [Mark all items complete]
 
-### Metrics (Auto-Captured)
+### Three-Phase Metrics
+
+Track each phase separately to identify where tokens are spent:
+
+| Phase | Turns | Key Activities | Notes |
+|-------|-------|----------------|-------|
+| **Planning** | X | Read task, explored X files, created plan | [any blockers?] |
+| **Implementation** | Y | Modified X files, wrote X lines | [deviations from plan?] |
+| **Testing** | Z | X test runs, X fixes needed | [CI issues?] |
+| **TOTAL** | X+Y+Z | | |
+
+### Total Metrics (Auto-Captured)
 
 **From SubagentStop hook** - Run: `grep "<agent_id>" .claude/metrics/tokens.jsonl | jq '.'`
 
@@ -121,6 +161,14 @@ Engineer Agent ID: <agent_id from Task tool output>
 | API Calls | X |
 
 **Variance:** PM Est ~XK vs Actual ~XK (X% over/under)
+
+### Phase Breakdown
+
+| Phase | Turns | Tokens | Notes |
+|-------|-------|--------|-------|
+| Planning | X | ~XK | |
+| Implementation | X | ~XK | |
+| Testing | X | ~XK | |
 
 ### Notes
 **Deviations from plan:** [explain any changes from approved plan]
@@ -346,29 +394,37 @@ Copy this to your task file or notes:
 ## Engineer Checklist: TASK-XXX
 
 ### Pre-Work
-- [ ] Created branch from develop
+- [ ] Created branch from develop (or worktree for parallel work)
 - [ ] Read task file
 
-### Plan-First (MANDATORY)
+### PHASE 1: PLANNING (Track: ___ turns)
+- [ ] Read and understood task requirements
+- [ ] Explored relevant codebase files
 - [ ] Invoked Plan agent with task context
-- [ ] Reviewed plan from Engineer perspective
 - [ ] Plan approved (or revised and re-approved)
+- [ ] [PHASE: PLANNING END - X turns]
 
-### Implementation
+### PHASE 2: IMPLEMENTATION (Track: ___ turns)
 - [ ] Code complete (following approved plan)
-- [ ] Tests pass locally
-- [ ] Type check passes
-- [ ] Lint passes
+- [ ] All changes align with plan
+- [ ] [PHASE: IMPLEMENTATION END - Y turns]
 
-### Metrics (Auto-Captured)
+### PHASE 3: TESTING (Track: ___ turns)
+- [ ] Tests pass locally (npm test)
+- [ ] Type check passes (npm run type-check)
+- [ ] Lint passes (npm run lint)
+- [ ] Any fixes applied
+- [ ] [PHASE: TESTING END - Z turns]
+
+### Metrics Summary
 - [ ] Agent ID recorded immediately when Task tool returned
-- [ ] Metrics retrieved: grep "<agent_id>" .claude/metrics/tokens.jsonl
+- [ ] Three-phase metrics documented (Planning/Implementation/Testing)
+- [ ] Total metrics retrieved: grep "<agent_id>" .claude/metrics/tokens.jsonl
+- [ ] Phase analysis completed (% breakdown)
 - [ ] Variance calculated (PM Est vs Actual)
-- [ ] Deviations from plan documented
-- [ ] Issues encountered documented
 
 ### PR Submission
-- [ ] Task file summary updated with agent_id and metrics
+- [ ] Task file summary updated with 3-phase metrics
 - [ ] PR created
 - [ ] CI passes
 - [ ] SR Engineer review requested
