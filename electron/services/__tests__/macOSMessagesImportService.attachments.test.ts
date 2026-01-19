@@ -415,5 +415,198 @@ describe("Attachment Utility Functions", () => {
         expect(insertParams.external_message_id).not.toBe(insertParams.message_id);
       });
     });
+
+    /**
+     * TASK-1122: Tests for re-sync attachment message_id update logic
+     *
+     * When messages are re-imported (force reimport), they get new UUIDs.
+     * Existing attachments have stale message_id references.
+     * The fix updates these stale references during attachment import.
+     */
+    describe("Re-sync attachment message_id update (TASK-1122)", () => {
+      interface ExistingAttachment {
+        id: string;
+        message_id: string;
+        external_message_id: string;
+        filename: string;
+      }
+
+      interface NewMessageMapping {
+        message_guid: string;
+        new_internal_id: string;
+      }
+
+      /**
+       * Simulates the re-sync logic for updating stale message_ids
+       */
+      function checkAndUpdateStaleMessageIds(
+        existingAttachments: ExistingAttachment[],
+        newMessageMappings: NewMessageMapping[],
+        attachmentToImport: { message_guid: string; filename: string }
+      ): { action: "skip" | "update" | "insert"; updatedId?: string; newMessageId?: string } {
+        // Build lookup maps
+        const existingByMsgId = new Map<string, ExistingAttachment>();
+        const existingByExternalId = new Map<string, ExistingAttachment>();
+
+        for (const att of existingAttachments) {
+          existingByMsgId.set(`${att.message_id}:${att.filename}`, att);
+          existingByExternalId.set(`${att.external_message_id}:${att.filename}`, att);
+        }
+
+        // Get new internal message ID for this attachment's message
+        const newMapping = newMessageMappings.find(m => m.message_guid === attachmentToImport.message_guid);
+        if (!newMapping) {
+          return { action: "skip" }; // Message not found
+        }
+        const newInternalId = newMapping.new_internal_id;
+
+        // Check if attachment already exists with correct message_id
+        const directKey = `${newInternalId}:${attachmentToImport.filename}`;
+        if (existingByMsgId.has(directKey)) {
+          return { action: "skip" }; // Already up to date
+        }
+
+        // Check if attachment exists by external_message_id (stable identifier)
+        const externalKey = `${attachmentToImport.message_guid}:${attachmentToImport.filename}`;
+        const existingByExternal = existingByExternalId.get(externalKey);
+        if (existingByExternal) {
+          if (existingByExternal.message_id !== newInternalId) {
+            // Stale message_id - needs update
+            return {
+              action: "update",
+              updatedId: existingByExternal.id,
+              newMessageId: newInternalId,
+            };
+          }
+          return { action: "skip" }; // Already correct
+        }
+
+        // New attachment
+        return { action: "insert" };
+      }
+
+      it("should skip attachment when message_id is already correct", () => {
+        const existingAttachments: ExistingAttachment[] = [
+          { id: "att1", message_id: "msg-new-1", external_message_id: "guid-111", filename: "photo.jpg" },
+        ];
+
+        const newMappings: NewMessageMapping[] = [
+          { message_guid: "guid-111", new_internal_id: "msg-new-1" },
+        ];
+
+        const result = checkAndUpdateStaleMessageIds(
+          existingAttachments,
+          newMappings,
+          { message_guid: "guid-111", filename: "photo.jpg" }
+        );
+
+        expect(result.action).toBe("skip");
+      });
+
+      it("should update attachment when message_id is stale", () => {
+        // Scenario: Message was re-imported with new UUID
+        const existingAttachments: ExistingAttachment[] = [
+          { id: "att1", message_id: "msg-old-1", external_message_id: "guid-111", filename: "photo.jpg" },
+        ];
+
+        // After re-import, same macOS GUID maps to new internal ID
+        const newMappings: NewMessageMapping[] = [
+          { message_guid: "guid-111", new_internal_id: "msg-new-1" },
+        ];
+
+        const result = checkAndUpdateStaleMessageIds(
+          existingAttachments,
+          newMappings,
+          { message_guid: "guid-111", filename: "photo.jpg" }
+        );
+
+        expect(result.action).toBe("update");
+        expect(result.updatedId).toBe("att1");
+        expect(result.newMessageId).toBe("msg-new-1");
+      });
+
+      it("should insert new attachment when no existing record found", () => {
+        const existingAttachments: ExistingAttachment[] = [
+          { id: "att1", message_id: "msg-1", external_message_id: "guid-111", filename: "photo.jpg" },
+        ];
+
+        const newMappings: NewMessageMapping[] = [
+          { message_guid: "guid-222", new_internal_id: "msg-new-2" },
+        ];
+
+        const result = checkAndUpdateStaleMessageIds(
+          existingAttachments,
+          newMappings,
+          { message_guid: "guid-222", filename: "new-image.jpg" }
+        );
+
+        expect(result.action).toBe("insert");
+      });
+
+      it("should skip when message is not in the import batch", () => {
+        const existingAttachments: ExistingAttachment[] = [];
+        const newMappings: NewMessageMapping[] = []; // Empty - message not imported
+
+        const result = checkAndUpdateStaleMessageIds(
+          existingAttachments,
+          newMappings,
+          { message_guid: "guid-orphan", filename: "orphan.jpg" }
+        );
+
+        expect(result.action).toBe("skip");
+      });
+
+      it("should handle multiple attachments for same message after re-sync", () => {
+        // Two attachments from same message, both have stale message_ids
+        const existingAttachments: ExistingAttachment[] = [
+          { id: "att1", message_id: "msg-old-1", external_message_id: "guid-111", filename: "photo1.jpg" },
+          { id: "att2", message_id: "msg-old-1", external_message_id: "guid-111", filename: "photo2.jpg" },
+        ];
+
+        const newMappings: NewMessageMapping[] = [
+          { message_guid: "guid-111", new_internal_id: "msg-new-1" },
+        ];
+
+        // First attachment
+        const result1 = checkAndUpdateStaleMessageIds(
+          existingAttachments,
+          newMappings,
+          { message_guid: "guid-111", filename: "photo1.jpg" }
+        );
+
+        expect(result1.action).toBe("update");
+        expect(result1.updatedId).toBe("att1");
+
+        // Second attachment
+        const result2 = checkAndUpdateStaleMessageIds(
+          existingAttachments,
+          newMappings,
+          { message_guid: "guid-111", filename: "photo2.jpg" }
+        );
+
+        expect(result2.action).toBe("update");
+        expect(result2.updatedId).toBe("att2");
+      });
+
+      it("should correctly identify same attachment by external_message_id + filename", () => {
+        // Same external_message_id but different filenames = different attachments
+        const existingAttachments: ExistingAttachment[] = [
+          { id: "att1", message_id: "msg-old-1", external_message_id: "guid-111", filename: "photo.jpg" },
+        ];
+
+        const newMappings: NewMessageMapping[] = [
+          { message_guid: "guid-111", new_internal_id: "msg-new-1" },
+        ];
+
+        // Different filename = new attachment
+        const result = checkAndUpdateStaleMessageIds(
+          existingAttachments,
+          newMappings,
+          { message_guid: "guid-111", filename: "different.jpg" }
+        );
+
+        expect(result.action).toBe("insert");
+      });
+    });
   });
 });

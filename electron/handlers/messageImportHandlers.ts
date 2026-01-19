@@ -107,6 +107,7 @@ export function registerMessageImportHandlers(mainWindow: BrowserWindow): void {
           messagesImported: 0,
           messagesSkipped: 0,
           attachmentsImported: 0,
+          attachmentsUpdated: 0,
           attachmentsSkipped: 0,
           duration: 0,
           error: errorMessage,
