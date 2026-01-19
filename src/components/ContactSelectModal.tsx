@@ -62,7 +62,6 @@ function ContactSelectModal({
   const initialIdsKey = validInitialIds.join(',');
   React.useEffect(() => {
     setSelectedIds(validInitialIds);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- using stable string key intentionally
   }, [initialIdsKey]);
 
   const availableContacts = contacts.filter((c) => !excludeIds.includes(c.id));
