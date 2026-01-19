@@ -282,3 +282,4 @@ BACKLOG-302,Service Pattern Audit - Coordination Refactoring,tech-debt/arch,Medi
 BACKLOG-303,Centralize dotenv.config() in supabaseService.ts,security,Low,Completed,-,~3K,~3K,0%,PR #466,[BACKLOG-303.md](items/BACKLOG-303.md)
 BACKLOG-304,Fix ESLint react-hooks/exhaustive-deps Rule Not Found,dx,Low,Completed,-,~3K,~1K,-67%,PR #468,[BACKLOG-304.md](items/BACKLOG-304.md)
 BACKLOG-305,Fix autoDetection.test.tsx Button Selector Failure,test,Medium,Completed,-,~5K,~1K,-80%,PR #468,[BACKLOG-305.md](items/BACKLOG-305.md)
+BACKLOG-292,Resolve Preload Script __DEV__ Undefined Error,build,Medium,Completed,-,~10K,~5K,-50%,PR #438,[BACKLOG-292.md](items/BACKLOG-292.md)

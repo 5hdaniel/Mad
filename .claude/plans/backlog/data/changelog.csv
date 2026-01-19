@@ -163,3 +163,4 @@ date,action,details,items_affected
 2026-01-18,BACKLOG-305,created,n/a,Pending,autoDetection test failure fix
 2026-01-18,BACKLOG-304,status,Pending,Completed,PR #468 - removed unused eslint-disable
 2026-01-18,BACKLOG-305,status,Pending,Completed,PR #468 - fixed test button selector
+2026-01-18,BACKLOG-292,status,Pending,Completed,PR #438 - preload __DEV__ fix
