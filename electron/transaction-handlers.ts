@@ -9,6 +9,7 @@ import transactionService from "./services/transactionService";
 import auditService from "./services/auditService";
 import logService from "./services/logService";
 import { autoLinkAllToTransaction } from "./services/messageMatchingService";
+import { autoLinkCommunicationsForContact } from "./services/autoLinkService";
 import type {
   Transaction,
   NewTransaction,
@@ -825,8 +826,57 @@ export const registerTransactionHandlers = (
           },
         );
 
+        // TASK-1126: Auto-link communications for each added contact
+        const autoLinkResults: Array<{
+          contactId: string;
+          emailsLinked: number;
+          messagesLinked: number;
+          alreadyLinked: number;
+          errors: number;
+        }> = [];
+
+        const addOperations = validatedOperations.filter(
+          (op) => op.action === "add"
+        );
+
+        for (const op of addOperations) {
+          try {
+            const result = await autoLinkCommunicationsForContact({
+              contactId: op.contactId,
+              transactionId: validatedTransactionId as string,
+            });
+
+            autoLinkResults.push({
+              contactId: op.contactId,
+              ...result,
+            });
+
+            logService.debug(
+              "Auto-link complete for contact",
+              "Transactions",
+              {
+                contactId: op.contactId,
+                emailsLinked: result.emailsLinked,
+                messagesLinked: result.messagesLinked,
+                alreadyLinked: result.alreadyLinked,
+              }
+            );
+          } catch (error) {
+            // Log but don't fail the entire operation
+            logService.warn(
+              `Auto-link failed for contact ${op.contactId}`,
+              "Transactions",
+              {
+                error: error instanceof Error ? error.message : "Unknown",
+              }
+            );
+          }
+        }
+
         return {
           success: true,
+          autoLinkResults:
+            autoLinkResults.length > 0 ? autoLinkResults : undefined,
         };
       } catch (error) {
         logService.error(

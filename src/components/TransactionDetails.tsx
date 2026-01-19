@@ -39,6 +39,7 @@ import {
   RejectReasonModal,
   EditContactsModal,
 } from "./transactionDetailsModule";
+import type { AutoLinkResult } from "./transactionDetailsModule/components/modals/EditContactsModal";
 
 interface TransactionDetailsComponentProps {
   transaction: Transaction;
@@ -431,10 +432,36 @@ function TransactionDetails({
         <EditContactsModal
           transaction={transaction}
           onClose={() => setShowEditContactsModal(false)}
-          onSave={() => {
+          onSave={(autoLinkResults?: AutoLinkResult[]) => {
             loadDetails();
             onTransactionUpdated?.();
-            showSuccess("Contacts updated successfully");
+            // TASK-1126: Show detailed toast with auto-link results
+            if (autoLinkResults && autoLinkResults.length > 0) {
+              const totalEmails = autoLinkResults.reduce(
+                (sum, r) => sum + r.emailsLinked,
+                0
+              );
+              const totalMessages = autoLinkResults.reduce(
+                (sum, r) => sum + r.messagesLinked,
+                0
+              );
+              if (totalEmails > 0 || totalMessages > 0) {
+                const parts: string[] = [];
+                if (totalEmails > 0) {
+                  parts.push(`${totalEmails} email${totalEmails !== 1 ? "s" : ""}`);
+                }
+                if (totalMessages > 0) {
+                  parts.push(
+                    `${totalMessages} message thread${totalMessages !== 1 ? "s" : ""}`
+                  );
+                }
+                showSuccess(`Contacts updated. Linked ${parts.join(" and ")}.`);
+              } else {
+                showSuccess("Contacts updated successfully");
+              }
+            } else {
+              showSuccess("Contacts updated successfully");
+            }
           }}
         />
       )}
