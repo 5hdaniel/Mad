@@ -8,6 +8,8 @@ import { autoUpdater } from "electron-updater";
 import log from "electron-log";
 import dotenv from "dotenv";
 
+// Load environment files: .env.development first (OAuth credentials), then .env.local for overrides
+dotenv.config({ path: path.join(__dirname, "../.env.development") });
 dotenv.config({ path: path.join(__dirname, "../.env.local") });
 
 // Import constants
