@@ -49,6 +49,7 @@ export interface MacOSImportResult {
   messagesImported: number;
   messagesSkipped: number;
   attachmentsImported: number;
+  attachmentsUpdated: number; // TASK-1122: Count of attachments with updated message_id after re-sync
   attachmentsSkipped: number;
   duration: number;
   error?: string;
@@ -225,6 +226,7 @@ class MacOSMessagesImportService {
         messagesImported: 0,
         messagesSkipped: 0,
         attachmentsImported: 0,
+        attachmentsUpdated: 0,
         attachmentsSkipped: 0,
         duration: 0,
         error: "Force reimport in progress",
@@ -269,6 +271,7 @@ class MacOSMessagesImportService {
         messagesImported: 0,
         messagesSkipped: 0,
         attachmentsImported: 0,
+        attachmentsUpdated: 0,
         attachmentsSkipped: 0,
         duration: 0,
         error: "Import already in progress",
@@ -320,6 +323,7 @@ class MacOSMessagesImportService {
         messagesImported: 0,
         messagesSkipped: 0,
         attachmentsImported: 0,
+        attachmentsUpdated: 0,
         attachmentsSkipped: 0,
         duration: Date.now() - startTime,
         error: "macOS Messages import is only available on macOS",
@@ -334,6 +338,7 @@ class MacOSMessagesImportService {
         messagesImported: 0,
         messagesSkipped: 0,
         attachmentsImported: 0,
+        attachmentsUpdated: 0,
         attachmentsSkipped: 0,
         duration: Date.now() - startTime,
         error:
@@ -438,6 +443,7 @@ class MacOSMessagesImportService {
               messagesImported: 0,
               messagesSkipped: 0,
               attachmentsImported: 0,
+              attachmentsUpdated: 0,
               attachmentsSkipped: 0,
               duration: Date.now() - startTime,
               error: "Import cancelled",
@@ -524,6 +530,7 @@ class MacOSMessagesImportService {
         const duration = Date.now() - startTime;
 
         // TASK-1050: Enhanced summary logging with thread_id validation stats
+        // TASK-1122: Include attachments updated count for re-sync scenarios
         logService.info(
           "Import summary",
           MacOSMessagesImportService.SERVICE_NAME,
@@ -533,6 +540,7 @@ class MacOSMessagesImportService {
             skipped: messageResult.skipped,
             nullThreadIdCount: messageResult.nullThreadIdCount,
             attachmentsImported: attachmentResult.stored,
+            attachmentsUpdated: attachmentResult.updated,
             attachmentsSkipped: attachmentResult.skipped,
             duration,
           }
@@ -560,6 +568,7 @@ class MacOSMessagesImportService {
           messagesImported: messageResult.stored,
           messagesSkipped: messageResult.skipped,
           attachmentsImported: attachmentResult.stored,
+          attachmentsUpdated: attachmentResult.updated,
           attachmentsSkipped: attachmentResult.skipped,
           duration,
         };
@@ -583,6 +592,7 @@ class MacOSMessagesImportService {
         messagesImported: 0,
         messagesSkipped: 0,
         attachmentsImported: 0,
+        attachmentsUpdated: 0,
         attachmentsSkipped: 0,
         duration,
         error: errorMessage,
@@ -873,13 +883,14 @@ class MacOSMessagesImportService {
     attachments: RawMacAttachment[],
     messageIdMap: Map<string, string>,
     onProgress?: ImportProgressCallback
-  ): Promise<{ stored: number; skipped: number }> {
+  ): Promise<{ stored: number; skipped: number; updated: number }> {
     if (attachments.length === 0) {
-      return { stored: 0, skipped: 0 };
+      return { stored: 0, skipped: 0, updated: 0 };
     }
 
     let stored = 0;
     let skipped = 0;
+    let updated = 0;
 
     // Get database instance
     const db = databaseService.getRawDatabase();
@@ -910,6 +921,21 @@ class MacOSMessagesImportService {
       existingAttachmentRecords.add(`${row.message_id}:${row.filename}`);
     }
 
+    // TASK-1122: Load existing attachments by external_message_id for stable deduplication
+    // This allows us to find and UPDATE attachments with stale message_ids after re-sync
+    const existingByExternalId = new Map<string, { id: string; message_id: string }>();
+    const existingExternalRows = db
+      .prepare(`SELECT id, message_id, external_message_id, filename FROM attachments WHERE external_message_id IS NOT NULL`)
+      .all() as { id: string; message_id: string; external_message_id: string; filename: string }[];
+
+    for (const row of existingExternalRows) {
+      // Key: external_message_id:filename for unique identification
+      existingByExternalId.set(`${row.external_message_id}:${row.filename}`, {
+        id: row.id,
+        message_id: row.message_id,
+      });
+    }
+
     logService.info(
       `Processing ${attachments.length} attachments, ${existingHashes.size} already stored`,
       MacOSMessagesImportService.SERVICE_NAME
@@ -924,6 +950,11 @@ class MacOSMessagesImportService {
       INSERT OR IGNORE INTO attachments (
         id, message_id, external_message_id, filename, mime_type, file_size_bytes, storage_path, created_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    `);
+
+    // TASK-1122: Prepare update statement for fixing stale message_ids
+    const updateMessageIdStmt = db.prepare(`
+      UPDATE attachments SET message_id = ? WHERE id = ?
     `);
 
     // Also need to query existing message IDs from DB for messages imported in previous runs
@@ -1018,8 +1049,33 @@ class MacOSMessagesImportService {
         // Check if attachment record already exists for this message + filename
         const attachmentKey = `${internalMessageId}:${filename}`;
         if (existingAttachmentRecords.has(attachmentKey)) {
-          // Attachment record already exists, skip
+          // Attachment record already exists with correct message_id, skip
           skipped++;
+          processed++;
+          continue;
+        }
+
+        // TASK-1122: Check if attachment exists by external_message_id (stable identifier)
+        // If so, update its message_id to the new internal ID (fixes stale references after re-sync)
+        const externalKey = `${attachment.message_guid}:${filename}`;
+        const existingByExternal = existingByExternalId.get(externalKey);
+        if (existingByExternal) {
+          // Attachment exists but may have stale message_id
+          if (existingByExternal.message_id !== internalMessageId) {
+            // Update the stale message_id to the new internal ID
+            updateMessageIdStmt.run(internalMessageId, existingByExternal.id);
+            updated++;
+            logService.debug(
+              `Updated stale attachment message_id: ${existingByExternal.id}`,
+              MacOSMessagesImportService.SERVICE_NAME,
+              { oldMessageId: existingByExternal.message_id, newMessageId: internalMessageId }
+            );
+          } else {
+            // message_id is already correct, count as skipped
+            skipped++;
+          }
+          // Update our tracking sets
+          existingAttachmentRecords.add(attachmentKey);
           processed++;
           continue;
         }
@@ -1109,11 +1165,11 @@ class MacOSMessagesImportService {
     attachProgressBar.stop();
 
     logService.info(
-      `Attachments: ${stored} imported, ${skipped} skipped`,
+      `Attachments: ${stored} imported, ${updated} updated, ${skipped} skipped`,
       MacOSMessagesImportService.SERVICE_NAME
     );
 
-    return { stored, skipped };
+    return { stored, skipped, updated };
   }
 
   /**
