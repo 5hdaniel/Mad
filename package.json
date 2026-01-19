@@ -7,9 +7,9 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "start": "npm run build:electron && npm run build:preload:dev && concurrently \"npm run dev:react\" \"npm run dev:electron\" \"npm run watch:electron\"",
+    "start": "npm run build:electron && npm run build:preload:dev && concurrently \"npm run dev:react\" \"npm run dev:electron\" \"npm run watch:electron\" \"npm run watch:preload\"",
     "predev": "node scripts/rebuild-native.js",
-    "dev": "npm run build:electron && npm run build:preload:dev && concurrently \"npm run dev:react\" \"npm run dev:electron\" \"npm run watch:electron\"",
+    "dev": "npm run build:electron && npm run build:preload:dev && concurrently \"npm run dev:react\" \"npm run dev:electron\" \"npm run watch:electron\" \"npm run watch:preload\"",
     "dev:react": "vite",
     "dev:electron": "wait-on http://localhost:5173 && electron .",
     "watch:electron": "tsc -p tsconfig.electron.json --watch",
