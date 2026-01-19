@@ -272,9 +272,6 @@ function ContactSelectModal({
                             )}
                         </div>
                         <div className="text-sm text-gray-600 space-y-0.5">
-                          {contact.email && (
-                            <p className="truncate">{contact.email}</p>
-                          )}
                           {contact.company && (
                             <p className="truncate">{contact.company}</p>
                           )}
