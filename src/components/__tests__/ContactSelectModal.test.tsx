@@ -87,7 +87,7 @@ describe("ContactSelectModal", () => {
       expect(screen.getByText("Bob Johnson")).toBeInTheDocument();
     });
 
-    it("should display contact emails", () => {
+    it("should NOT display contact emails (only name and company shown)", () => {
       render(
         <ContactSelectModal
           contacts={mockContacts}
@@ -96,8 +96,9 @@ describe("ContactSelectModal", () => {
         />
       );
 
-      expect(screen.getByText("john@example.com")).toBeInTheDocument();
-      expect(screen.getByText("jane@example.com")).toBeInTheDocument();
+      // Emails should not be displayed in the list (TASK-1127: reduce visual clutter)
+      expect(screen.queryByText("john@example.com")).not.toBeInTheDocument();
+      expect(screen.queryByText("jane@example.com")).not.toBeInTheDocument();
     });
 
     it("should display contact companies", () => {
