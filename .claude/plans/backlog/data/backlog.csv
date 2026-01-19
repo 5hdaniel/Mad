@@ -280,5 +280,5 @@ BACKLOG-300,Display Contact Roles in User-Friendly Format,ux/polish,Low,Pending,
 BACKLOG-301,Refactor Sync Coordination with SyncScheduler Service,tech-debt/arch,Medium,Pending,-,~65K,-,"Centralize sync triggers, remove cross-hook flags",[BACKLOG-301.md](BACKLOG-301.md)
 BACKLOG-302,Service Pattern Audit - Coordination Refactoring,tech-debt/arch,Medium,Pending,-,~10K,-,Audit findings for sync coordination patterns,[BACKLOG-302.md](BACKLOG-302.md)
 BACKLOG-303,Centralize dotenv.config() in supabaseService.ts,security,Low,Completed,-,~3K,~3K,0%,PR #466,[BACKLOG-303.md](items/BACKLOG-303.md)
-BACKLOG-304,Fix ESLint react-hooks/exhaustive-deps Rule Not Found,dx,Low,Pending,-,~3K,-,-,Lint warning cluttering output,[BACKLOG-304.md](items/BACKLOG-304.md)
-BACKLOG-305,Fix autoDetection.test.tsx Button Selector Failure,test,Medium,Pending,-,~5K,-,-,Pre-existing test failure,[BACKLOG-305.md](items/BACKLOG-305.md)
+BACKLOG-304,Fix ESLint react-hooks/exhaustive-deps Rule Not Found,dx,Low,Completed,-,~3K,~1K,-67%,PR #468,[BACKLOG-304.md](items/BACKLOG-304.md)
+BACKLOG-305,Fix autoDetection.test.tsx Button Selector Failure,test,Medium,Completed,-,~5K,~1K,-80%,PR #468,[BACKLOG-305.md](items/BACKLOG-305.md)
