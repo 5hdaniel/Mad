@@ -172,3 +172,4 @@ date,action,details,items_affected
 2026-01-18,BACKLOG-307,created,n/a,Pending,Contact select missing message-derived contacts
 2026-01-18,BACKLOG-207,status,Completed,Reopened,Auto-link not working as expected
 2026-01-18,SPRINT-044,completed,Planning,Completed,2 tasks: PR #470 #471 (~77K tokens)
+2026-01-18,BACKLOG-309,created,n/a,Pending,Import contact flow - auto-select and refresh issues

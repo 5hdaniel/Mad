@@ -285,3 +285,4 @@ BACKLOG-305,Fix autoDetection.test.tsx Button Selector Failure,test,Medium,Compl
 BACKLOG-292,Resolve Preload Script __DEV__ Undefined Error,build,Medium,Completed,-,~10K,~5K,-50%,PR #438,[BACKLOG-292.md](items/BACKLOG-292.md)
 BACKLOG-306,Hide Phone/Email in Contact Selection Modal,ui,Low,Pending,-,~5K,-,-,[BACKLOG-306.md](items/BACKLOG-306.md)
 BACKLOG-307,Contact Select Modal Missing Message-Derived Contacts,bug/ux,High,Pending,-,~15K,-,-,[BACKLOG-307.md](items/BACKLOG-307.md)
+BACKLOG-309,Import Contact Flow - Auto-Select and Refresh Issues,bug/ux,High,Pending,-,~20K,-,-,[BACKLOG-309.md](items/BACKLOG-309.md)
