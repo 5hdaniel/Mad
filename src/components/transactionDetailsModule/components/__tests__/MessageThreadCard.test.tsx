@@ -350,6 +350,173 @@ describe("MessageThreadCard", () => {
     });
   });
 
+  describe("unknown participant filtering (BACKLOG-299)", () => {
+    // Helper to create a message with specific participants
+    const createMessageWithParticipants = (
+      from: string,
+      to: string[],
+      overrides: Partial<Communication> = {}
+    ): Communication =>
+      ({
+        id: "msg-1",
+        user_id: "user-123",
+        channel: "sms",
+        direction: "inbound",
+        body_text: "Test message",
+        sent_at: "2024-01-16T14:30:00Z",
+        has_attachments: false,
+        is_false_positive: false,
+        participants: JSON.stringify({ from, to }),
+        ...overrides,
+      }) as Communication;
+
+    it("should display 1:1 chat (not group) when one participant is 'unknown'", () => {
+      // Scenario: 1:1 chat where "unknown" appears in participants
+      const messages = [
+        createMessageWithParticipants("+14155550100", ["me", "unknown"]),
+      ];
+
+      const { container } = render(
+        <MessageThreadCard
+          threadId="thread-1"
+          messages={messages}
+          phoneNumber="+14155550100"
+        />
+      );
+
+      // Should show 1:1 avatar (green gradient), NOT group avatar (purple)
+      expect(
+        container.querySelector(".bg-gradient-to-br.from-green-500.to-teal-600")
+      ).toBeInTheDocument();
+      expect(container.querySelector(".bg-purple-100")).not.toBeInTheDocument();
+
+      // Should NOT show "Group Chat:" label
+      expect(screen.getByTestId("thread-contact-name")).not.toHaveTextContent(
+        "Group Chat:"
+      );
+    });
+
+    it("should display 1:1 chat when 'unknown' is the from participant", () => {
+      // Scenario: from is "unknown", to has actual phone
+      const messages = [
+        createMessageWithParticipants("unknown", ["+14155550100"]),
+      ];
+
+      const { container } = render(
+        <MessageThreadCard
+          threadId="thread-1"
+          messages={messages}
+          phoneNumber="+14155550100"
+        />
+      );
+
+      // Should show 1:1 avatar (green gradient)
+      expect(
+        container.querySelector(".bg-gradient-to-br.from-green-500.to-teal-600")
+      ).toBeInTheDocument();
+    });
+
+    it("should display as group chat when 3+ known participants exist (regardless of unknown)", () => {
+      // Scenario: Actual group chat with 3 known participants + unknown
+      const messages = [
+        createMessageWithParticipants("+14155550100", [
+          "+14155550101",
+          "+14155550102",
+          "unknown",
+          "me",
+        ]),
+      ];
+
+      const { container } = render(
+        <MessageThreadCard
+          threadId="group-thread-1"
+          messages={messages}
+          phoneNumber="+14155550100"
+        />
+      );
+
+      // Should show group avatar (purple)
+      expect(container.querySelector(".bg-purple-100")).toBeInTheDocument();
+      expect(
+        container.querySelector(".bg-gradient-to-br.from-green-500.to-teal-600")
+      ).not.toBeInTheDocument();
+
+      // Should show "Group Chat:" label
+      expect(screen.getByTestId("thread-contact-name")).toHaveTextContent(
+        "Group Chat:"
+      );
+    });
+
+    it("should display 1:1 when 2 unknown + 1 known participant", () => {
+      // Edge case: multiple unknowns should all be filtered
+      const messages = [
+        createMessageWithParticipants("unknown", [
+          "+14155550100",
+          "unknown",
+          "me",
+        ]),
+      ];
+
+      const { container } = render(
+        <MessageThreadCard
+          threadId="thread-1"
+          messages={messages}
+          phoneNumber="+14155550100"
+        />
+      );
+
+      // Should show 1:1 avatar (only 1 known participant after filtering)
+      expect(
+        container.querySelector(".bg-gradient-to-br.from-green-500.to-teal-600")
+      ).toBeInTheDocument();
+    });
+
+    it("should handle all-unknown participants gracefully", () => {
+      // Edge case: all participants are unknown or me
+      const messages = [
+        createMessageWithParticipants("unknown", ["me", "unknown"]),
+      ];
+
+      const { container } = render(
+        <MessageThreadCard
+          threadId="thread-1"
+          messages={messages}
+          phoneNumber="Unknown"
+        />
+      );
+
+      // Should show 1:1 avatar (0 known participants = not a group)
+      expect(
+        container.querySelector(".bg-gradient-to-br.from-green-500.to-teal-600")
+      ).toBeInTheDocument();
+      // Should display the fallback phone number
+      expect(screen.getByTestId("thread-contact-name")).toHaveTextContent(
+        "Unknown"
+      );
+    });
+
+    it("should display 2 known participants as group chat", () => {
+      // Verify normal group detection still works (2+ known participants = group)
+      const messages = [
+        createMessageWithParticipants("+14155550100", [
+          "+14155550101",
+          "me",
+        ]),
+      ];
+
+      const { container } = render(
+        <MessageThreadCard
+          threadId="thread-1"
+          messages={messages}
+          phoneNumber="+14155550100"
+        />
+      );
+
+      // Should show group avatar (2 known external participants)
+      expect(container.querySelector(".bg-purple-100")).toBeInTheDocument();
+    });
+  });
+
   describe("unified styling", () => {
     it("should have hover state class on card container", () => {
       const messages = [createMockMessage()];
