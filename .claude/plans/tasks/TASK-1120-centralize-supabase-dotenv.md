@@ -176,13 +176,13 @@ Track each phase separately to identify where tokens are spent:
 
 **Variance:** PM Est ~3K vs Actual ~XK (X% over/under)
 
-### Phase Analysis
+### Phase Breakdown
 
-| Phase | % of Total | Expected % | Analysis |
-|-------|------------|------------|----------|
-| Planning | % | 20-30% | |
-| Implementation | % | 40-50% | |
-| Testing | % | 20-30% | |
+| Phase | Turns | Tokens | Notes |
+|-------|-------|--------|-------|
+| Planning | 2 | ~1K | Read task, checked main.ts |
+| Implementation | 1 | ~0.5K | Simple 3-line removal |
+| Testing | 4 | ~2K | Pre-existing failures found |
 
 ### Notes
 
