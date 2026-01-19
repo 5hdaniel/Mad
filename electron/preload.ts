@@ -1478,6 +1478,146 @@ contextBridge.exposeInMainWorld("api", {
       return () => ipcRenderer.removeListener("sync:storage-error", listener);
     },
   },
+
+  /**
+   * ============================================
+   * CALL LOGS METHODS (Compliance Audit)
+   * ============================================
+   * Manages phone call history for compliance audit packages
+   */
+  callLogs: {
+    /**
+     * Gets all call logs for a user
+     * @param {string} userId - User ID to get call logs for
+     * @returns {Promise<{success: boolean, callLogs?: Array, count?: number, error?: string}>} Call logs
+     */
+    getAll: (userId: string) => ipcRenderer.invoke("call-logs:get-all", userId),
+
+    /**
+     * Gets call logs with resolved contact information
+     * @param {string} userId - User ID to get call logs for
+     * @returns {Promise<{success: boolean, callLogs?: Array, count?: number, error?: string}>} Call logs with contacts
+     */
+    getWithContacts: (userId: string) =>
+      ipcRenderer.invoke("call-logs:get-with-contacts", userId),
+
+    /**
+     * Gets call logs for a specific transaction
+     * @param {string} transactionId - Transaction ID
+     * @returns {Promise<{success: boolean, callLogs?: Array, count?: number, error?: string}>} Transaction call logs
+     */
+    getByTransaction: (transactionId: string) =>
+      ipcRenderer.invoke("call-logs:get-by-transaction", transactionId),
+
+    /**
+     * Gets filtered call logs
+     * @param {Object} filters - Filter criteria (userId, direction, dateRange, etc.)
+     * @returns {Promise<{success: boolean, callLogs?: Array, count?: number, error?: string}>} Filtered call logs
+     */
+    getFiltered: (filters: {
+      user_id?: string;
+      transaction_id?: string;
+      direction?: "inbound" | "outbound" | "missed";
+      call_type?: "voice" | "video" | "voicemail";
+      outcome?: string;
+      is_transaction_related?: boolean;
+      start_date?: string;
+      end_date?: string;
+      caller_phone?: string;
+      recipient_phone?: string;
+      contact_id?: string;
+    }) => ipcRenderer.invoke("call-logs:get-filtered", filters),
+
+    /**
+     * Creates a new call log entry
+     * @param {Object} callLogData - Call log data
+     * @returns {Promise<{success: boolean, callLog?: object, error?: string}>} Created call log
+     */
+    create: (callLogData: {
+      user_id: string;
+      source: "manual" | "iphone_backup" | "android_backup" | "import";
+      call_type: "voice" | "video" | "voicemail";
+      transaction_id?: string;
+      caller_phone_e164?: string;
+      caller_phone_display?: string;
+      caller_name?: string;
+      caller_contact_id?: string;
+      recipient_phone_e164?: string;
+      recipient_phone_display?: string;
+      recipient_name?: string;
+      recipient_contact_id?: string;
+      direction?: "inbound" | "outbound" | "missed";
+      started_at?: string;
+      ended_at?: string;
+      duration_seconds?: number;
+      answered?: boolean;
+      outcome?: string;
+      notes?: string;
+      summary?: string;
+    }) => ipcRenderer.invoke("call-logs:create", callLogData),
+
+    /**
+     * Updates an existing call log entry
+     * @param {string} callLogId - Call log ID to update
+     * @param {Object} updates - Fields to update
+     * @returns {Promise<{success: boolean, callLog?: object, error?: string}>} Updated call log
+     */
+    update: (callLogId: string, updates: Record<string, unknown>) =>
+      ipcRenderer.invoke("call-logs:update", callLogId, updates),
+
+    /**
+     * Deletes a call log entry
+     * @param {string} callLogId - Call log ID to delete
+     * @returns {Promise<{success: boolean, error?: string}>} Deletion result
+     */
+    delete: (callLogId: string) =>
+      ipcRenderer.invoke("call-logs:delete", callLogId),
+
+    /**
+     * Links a call log to a transaction
+     * @param {string} callLogId - Call log ID
+     * @param {string} transactionId - Transaction ID to link to
+     * @returns {Promise<{success: boolean, callLog?: object, error?: string}>} Updated call log
+     */
+    linkToTransaction: (callLogId: string, transactionId: string) =>
+      ipcRenderer.invoke("call-logs:link-to-transaction", callLogId, transactionId),
+
+    /**
+     * Unlinks a call log from its transaction
+     * @param {string} callLogId - Call log ID to unlink
+     * @returns {Promise<{success: boolean, callLog?: object, error?: string}>} Updated call log
+     */
+    unlinkFromTransaction: (callLogId: string) =>
+      ipcRenderer.invoke("call-logs:unlink-from-transaction", callLogId),
+
+    /**
+     * Gets call log statistics for a user
+     * @param {string} userId - User ID
+     * @returns {Promise<{success: boolean, stats?: object, error?: string}>} Call log statistics
+     */
+    getStats: (userId: string) =>
+      ipcRenderer.invoke("call-logs:get-stats", userId),
+
+    /**
+     * Gets call log count for a transaction (for audit packages)
+     * @param {string} transactionId - Transaction ID
+     * @returns {Promise<{success: boolean, count?: number, error?: string}>} Call log count
+     */
+    getCountForTransaction: (transactionId: string) =>
+      ipcRenderer.invoke("call-logs:get-count-for-transaction", transactionId),
+
+    /**
+     * Bulk creates call logs (for imports)
+     * @param {Array} callLogs - Array of call log data to create
+     * @returns {Promise<{success: boolean, count?: number, error?: string}>} Bulk creation result
+     */
+    bulkCreate: (callLogs: Array<{
+      user_id: string;
+      source: "manual" | "iphone_backup" | "android_backup" | "import";
+      call_type: "voice" | "video" | "voicemail";
+      [key: string]: unknown;
+    }>) => ipcRenderer.invoke("call-logs:bulk-create", callLogs),
+  },
 });
 
 /**

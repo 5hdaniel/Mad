@@ -54,6 +54,7 @@ import {
 import { registerBackupHandlers } from "./backup-handlers";
 import { registerSyncHandlers, cleanupSyncHandlers } from "./sync-handlers";
 import { registerDriverHandlers } from "./driver-handlers";
+import { registerCallLogsHandlers } from "./call-logs-handlers";
 import OutlookService from "./outlookService";
 
 // Configure logging for auto-updater
@@ -206,6 +207,7 @@ app.whenReady().then(async () => {
   registerBackupHandlers(mainWindow!);
   registerSyncHandlers(mainWindow!);
   registerDriverHandlers();
+  registerCallLogsHandlers();
 });
 
 app.on("window-all-closed", () => {

@@ -756,3 +756,119 @@ export interface NewIgnoredCommunication {
   original_communication_id?: string;
   reason?: string;
 }
+
+// ============================================
+// CALL LOG MODELS (Compliance Audit)
+// ============================================
+
+/**
+ * Source of call log data
+ */
+export type CallLogSource = "manual" | "iphone_backup" | "android_backup" | "import";
+
+/**
+ * Direction of the call
+ */
+export type CallDirection = "inbound" | "outbound" | "missed";
+
+/**
+ * Type of call
+ */
+export type CallType = "voice" | "video" | "voicemail";
+
+/**
+ * Outcome of the call
+ */
+export type CallOutcome = "completed" | "missed" | "declined" | "voicemail" | "failed" | "cancelled";
+
+/**
+ * Call log entry for compliance tracking.
+ * Represents a single phone call with all relevant metadata.
+ */
+export interface CallLog {
+  id: string;
+  user_id: string;
+  transaction_id?: string;
+
+  // Call Identification
+  external_id?: string;
+  source: CallLogSource;
+
+  // Caller Information
+  caller_phone_e164?: string;
+  caller_phone_display?: string;
+  caller_name?: string;
+  caller_contact_id?: string;
+
+  // Recipient Information
+  recipient_phone_e164?: string;
+  recipient_phone_display?: string;
+  recipient_name?: string;
+  recipient_contact_id?: string;
+
+  // Call Details
+  direction?: CallDirection;
+  call_type: CallType;
+  started_at?: Date | string;
+  ended_at?: Date | string;
+  duration_seconds: number;
+  answered: boolean;
+
+  // Outcome & Status
+  outcome?: CallOutcome;
+  voicemail_path?: string;
+  voicemail_duration_seconds?: number;
+
+  // Classification (for compliance)
+  is_transaction_related?: boolean;
+  classification_confidence?: number;
+  classification_method?: ClassificationMethod;
+  classified_at?: Date | string;
+
+  // Notes & Context
+  notes?: string;
+  summary?: string;
+
+  // Metadata
+  metadata?: string; // JSON
+  created_at: Date | string;
+  updated_at: Date | string;
+}
+
+/**
+ * Call log with resolved contact details for UI display.
+ */
+export interface CallLogWithContacts extends CallLog {
+  caller_contact?: Contact;
+  recipient_contact?: Contact;
+}
+
+/**
+ * Data required to create a new call log entry.
+ */
+export type NewCallLog = Omit<CallLog, "id" | "created_at" | "updated_at" | "duration_seconds" | "answered"> & {
+  duration_seconds?: number;
+  answered?: boolean;
+};
+
+/**
+ * Data for updating an existing call log entry.
+ */
+export type UpdateCallLog = Partial<Omit<CallLog, "id">> & { id: string };
+
+/**
+ * Filters for querying call logs.
+ */
+export interface CallLogFilters {
+  user_id?: string;
+  transaction_id?: string;
+  direction?: CallDirection;
+  call_type?: CallType;
+  outcome?: CallOutcome;
+  is_transaction_related?: boolean;
+  start_date?: Date | string;
+  end_date?: Date | string;
+  caller_phone?: string;
+  recipient_phone?: string;
+  contact_id?: string; // Match either caller or recipient contact
+}

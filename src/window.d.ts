@@ -805,6 +805,152 @@ interface MainAPI {
     callback: (progress: { step: string; message: string }) => void,
   ) => () => void;
 
+  /**
+   * Call Logs API for compliance audit packages
+   * Manages phone call history tracking
+   */
+  callLogs: {
+    /** Get all call logs for a user */
+    getAll: (userId: string) => Promise<{
+      success: boolean;
+      callLogs?: Array<Record<string, unknown>>;
+      count?: number;
+      error?: string;
+    }>;
+
+    /** Get call logs with resolved contact information */
+    getWithContacts: (userId: string) => Promise<{
+      success: boolean;
+      callLogs?: Array<Record<string, unknown>>;
+      count?: number;
+      error?: string;
+    }>;
+
+    /** Get call logs for a specific transaction */
+    getByTransaction: (transactionId: string) => Promise<{
+      success: boolean;
+      callLogs?: Array<Record<string, unknown>>;
+      count?: number;
+      error?: string;
+    }>;
+
+    /** Get filtered call logs */
+    getFiltered: (filters: {
+      user_id?: string;
+      transaction_id?: string;
+      direction?: "inbound" | "outbound" | "missed";
+      call_type?: "voice" | "video" | "voicemail";
+      outcome?: string;
+      is_transaction_related?: boolean;
+      start_date?: string;
+      end_date?: string;
+      caller_phone?: string;
+      recipient_phone?: string;
+      contact_id?: string;
+    }) => Promise<{
+      success: boolean;
+      callLogs?: Array<Record<string, unknown>>;
+      count?: number;
+      error?: string;
+    }>;
+
+    /** Create a new call log entry */
+    create: (callLogData: {
+      user_id: string;
+      source: "manual" | "iphone_backup" | "android_backup" | "import";
+      call_type: "voice" | "video" | "voicemail";
+      transaction_id?: string;
+      caller_phone_e164?: string;
+      caller_phone_display?: string;
+      caller_name?: string;
+      caller_contact_id?: string;
+      recipient_phone_e164?: string;
+      recipient_phone_display?: string;
+      recipient_name?: string;
+      recipient_contact_id?: string;
+      direction?: "inbound" | "outbound" | "missed";
+      started_at?: string;
+      ended_at?: string;
+      duration_seconds?: number;
+      answered?: boolean;
+      outcome?: string;
+      notes?: string;
+      summary?: string;
+    }) => Promise<{
+      success: boolean;
+      callLog?: Record<string, unknown>;
+      error?: string;
+    }>;
+
+    /** Update an existing call log entry */
+    update: (
+      callLogId: string,
+      updates: Record<string, unknown>,
+    ) => Promise<{
+      success: boolean;
+      callLog?: Record<string, unknown>;
+      error?: string;
+    }>;
+
+    /** Delete a call log entry */
+    delete: (callLogId: string) => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
+
+    /** Link a call log to a transaction */
+    linkToTransaction: (
+      callLogId: string,
+      transactionId: string,
+    ) => Promise<{
+      success: boolean;
+      callLog?: Record<string, unknown>;
+      error?: string;
+    }>;
+
+    /** Unlink a call log from its transaction */
+    unlinkFromTransaction: (callLogId: string) => Promise<{
+      success: boolean;
+      callLog?: Record<string, unknown>;
+      error?: string;
+    }>;
+
+    /** Get call log statistics for a user */
+    getStats: (userId: string) => Promise<{
+      success: boolean;
+      stats?: {
+        totalCalls: number;
+        inboundCalls: number;
+        outboundCalls: number;
+        missedCalls: number;
+        totalDuration: number;
+        transactionRelatedCalls: number;
+      };
+      error?: string;
+    }>;
+
+    /** Get call log count for a transaction */
+    getCountForTransaction: (transactionId: string) => Promise<{
+      success: boolean;
+      count?: number;
+      error?: string;
+    }>;
+
+    /** Bulk create call logs (for imports) */
+    bulkCreate: (
+      callLogs: Array<{
+        user_id: string;
+        source: "manual" | "iphone_backup" | "android_backup" | "import";
+        call_type: "voice" | "video" | "voicemail";
+        [key: string]: unknown;
+      }>,
+    ) => Promise<{
+      success: boolean;
+      count?: number;
+      error?: string;
+    }>;
+  };
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [key: string]: any; // Allow other properties for backwards compatibility
 }

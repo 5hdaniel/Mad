@@ -777,6 +777,84 @@ CREATE INDEX IF NOT EXISTS idx_ignored_comms_transaction
   ON ignored_communications(transaction_id);
 
 -- ============================================
+-- CALL LOGS TABLE (Compliance Audit)
+-- ============================================
+-- Stores phone call history for compliance audit packages.
+-- Tracks inbound/outbound calls with duration and outcome.
+CREATE TABLE IF NOT EXISTS call_logs (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  transaction_id TEXT,
+
+  -- Call Identification
+  external_id TEXT,                      -- Provider ID if imported from external source
+  source TEXT DEFAULT 'manual' CHECK (source IN ('manual', 'iphone_backup', 'android_backup', 'import')),
+
+  -- Participants
+  caller_phone_e164 TEXT,                -- Caller phone in E.164 format (+14155550000)
+  caller_phone_display TEXT,             -- Display format: (415) 555-0000
+  caller_name TEXT,                      -- Resolved contact name if available
+  caller_contact_id TEXT,                -- Link to contacts table if matched
+
+  recipient_phone_e164 TEXT,             -- Recipient phone in E.164 format
+  recipient_phone_display TEXT,          -- Display format
+  recipient_name TEXT,                   -- Resolved contact name if available
+  recipient_contact_id TEXT,             -- Link to contacts table if matched
+
+  -- Call Details
+  direction TEXT CHECK (direction IN ('inbound', 'outbound', 'missed')),
+  call_type TEXT DEFAULT 'voice' CHECK (call_type IN ('voice', 'video', 'voicemail')),
+  started_at DATETIME,                   -- When the call started
+  ended_at DATETIME,                     -- When the call ended
+  duration_seconds INTEGER DEFAULT 0,    -- Call duration in seconds
+  answered INTEGER DEFAULT 0,            -- 1 = answered, 0 = not answered
+
+  -- Outcome & Status
+  outcome TEXT CHECK (outcome IN ('completed', 'missed', 'declined', 'voicemail', 'failed', 'cancelled')),
+  voicemail_path TEXT,                   -- Local path to voicemail file if available
+  voicemail_duration_seconds INTEGER,    -- Voicemail recording duration
+
+  -- Classification (for compliance)
+  is_transaction_related INTEGER,        -- 1 = yes, 0 = no, NULL = not classified
+  classification_confidence REAL,        -- 0.0 - 1.0
+  classification_method TEXT CHECK (classification_method IN ('pattern', 'llm', 'user')),
+  classified_at DATETIME,
+
+  -- Notes & Context
+  notes TEXT,                            -- User notes about the call
+  summary TEXT,                          -- AI-generated or user-provided summary
+
+  -- Metadata
+  metadata TEXT,                         -- JSON for additional data (carrier info, etc.)
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+  FOREIGN KEY (user_id) REFERENCES users_local(id) ON DELETE CASCADE,
+  FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE SET NULL,
+  FOREIGN KEY (caller_contact_id) REFERENCES contacts(id) ON DELETE SET NULL,
+  FOREIGN KEY (recipient_contact_id) REFERENCES contacts(id) ON DELETE SET NULL
+);
+
+-- Call Logs indexes for efficient queries
+CREATE INDEX IF NOT EXISTS idx_call_logs_user_id ON call_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_call_logs_transaction_id ON call_logs(transaction_id);
+CREATE INDEX IF NOT EXISTS idx_call_logs_started_at ON call_logs(started_at);
+CREATE INDEX IF NOT EXISTS idx_call_logs_direction ON call_logs(direction);
+CREATE INDEX IF NOT EXISTS idx_call_logs_caller_phone ON call_logs(caller_phone_e164);
+CREATE INDEX IF NOT EXISTS idx_call_logs_recipient_phone ON call_logs(recipient_phone_e164);
+CREATE INDEX IF NOT EXISTS idx_call_logs_caller_contact ON call_logs(caller_contact_id);
+CREATE INDEX IF NOT EXISTS idx_call_logs_recipient_contact ON call_logs(recipient_contact_id);
+CREATE INDEX IF NOT EXISTS idx_call_logs_is_transaction_related ON call_logs(is_transaction_related);
+CREATE INDEX IF NOT EXISTS idx_call_logs_source ON call_logs(source);
+
+-- Trigger to auto-update timestamp on call_logs
+CREATE TRIGGER IF NOT EXISTS update_call_logs_timestamp
+AFTER UPDATE ON call_logs
+BEGIN
+  UPDATE call_logs SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+END;
+
+-- ============================================
 -- VIEWS (Convenient queries for common operations)
 -- ============================================
 
