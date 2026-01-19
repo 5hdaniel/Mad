@@ -162,13 +162,13 @@ Track each phase separately to identify where tokens are spent:
 
 **Variance:** PM Est ~XK vs Actual ~XK (X% over/under)
 
-### Phase Analysis
+### Phase Breakdown
 
-| Phase | % of Total | Expected % | Analysis |
-|-------|------------|------------|----------|
-| Planning | X% | 20-30% | [over/under? why?] |
-| Implementation | X% | 40-50% | [over/under? why?] |
-| Testing | X% | 20-30% | [over/under? why?] |
+| Phase | Turns | Tokens | Notes |
+|-------|-------|--------|-------|
+| Planning | X | ~XK | |
+| Implementation | X | ~XK | |
+| Testing | X | ~XK | |
 
 ### Notes
 **Deviations from plan:** [explain any changes from approved plan]
