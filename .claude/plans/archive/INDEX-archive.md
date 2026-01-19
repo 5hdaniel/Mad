@@ -2,9 +2,9 @@
 
 This index tracks all backlog items with their current status and metadata.
 
-**Last Updated:** 2026-01-18 (Added BACKLOG-303 supabase dotenv, BACKLOG-304 ESLint rule, BACKLOG-305 test failure)
-**Total Items:** 272
-**Pending:** 149 | **In Progress:** 0 | **Completed:** 111 | **Partial:** 0 | **Obsolete:** 1 | **Deferred:** 2 | **Blocked:** 1
+**Last Updated:** 2026-01-17 (Backlog cleanup: counts corrected, BACKLOG-293-294 and BACKLOG-300-302 added)
+**Total Items:** 291
+**Pending:** 176 | **In Progress:** 1 | **Completed:** 97 | **Reopened:** 1 | **Obsolete:** 1 | **Deferred:** 2 | **Blocked:** 1
 
 ---
 
@@ -438,6 +438,8 @@ This index tracks all backlog items with their current status and metadata.
 <!-- MEDIUM PRIORITY - UI/UX Architecture -->
 | BACKLOG-289 | Unified Notification System | ui-ux | Medium | Completed | SPRINT-040 | - | ~50K | - | - | ~40K | - | - | - | - | - | - | - | - | ~40K | - | PR #439 | - |
 | BACKLOG-290 | Reusable Sync Progress Component | ui-ux | Medium | Completed | SPRINT-040 | - | ~40K | - | - | ~45K | - | - | - | - | - | - | - | - | ~45K | - | PR #440 | - |
+| BACKLOG-293 | Duplicate macOS Messages Sync on Dashboard Load | bug | Medium | Pending | - | - | ~20K | - | - | - | - | - | - | - | - | - | - | - | - | - | Sync triggers twice for returning users | [BACKLOG-293.md](BACKLOG-293.md) |
+| BACKLOG-294 | Extract Reusable DashboardActionCard Component | refactor | Low | Pending | - | - | ~15K | - | - | - | - | - | - | - | - | - | - | - | - | - | DRY refactor for dashboard buttons | [BACKLOG-294.md](BACKLOG-294.md) |
 
 <!-- LOW PRIORITY - UI/UX -->
 | BACKLOG-286 | Unify Chat Card and Group Chat Card Components | ui-ux | Low | Completed | SPRINT-040 | - | ~40K | - | - | ~70K | - | - | - | - | - | - | - | - | ~70K | - | PRs #442,445-448 | - |
@@ -447,9 +449,9 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-297 | Startup Error Handling - User-Friendly Failure Screen | ux/error-handling | Medium | Pending | - | - | ~50K | - | - | - | - | - | - | - | - | - | - | - | - | - | Timeout + error screen on init failure | [BACKLOG-297.md](BACKLOG-297.md) |
 | BACKLOG-298 | Video Attachment Support in ConversationViewModal | ui-ux | Medium | Pending | - | - | ~35K | - | - | - | - | - | - | - | - | - | - | - | - | - | Videos filtered out, only images displayed | [BACKLOG-298.md](BACKLOG-298.md) |
 | BACKLOG-299 | 1:1 Chat Incorrectly Shown as Group Chat | bug/data-quality | Medium | Pending | - | - | ~25K | - | - | - | - | - | - | - | - | - | - | - | - | - | "unknown" participant triggers isGroupChat() | [BACKLOG-299.md](BACKLOG-299.md) |
-| BACKLOG-303 | Centralize dotenv.config() in supabaseService.ts | security/code-quality | Low | Completed | - | - | ~3K | - | - | ~3K | - | - | - | - | - | - | - | - | ~3K | - | PR #466 | [BACKLOG-303.md](BACKLOG-303.md) |
-| BACKLOG-304 | Fix ESLint react-hooks/exhaustive-deps Rule Not Found | dx/ci | Low | Pending | - | - | ~3K | - | - | - | - | - | - | - | - | - | - | - | - | - | Lint warning cluttering output | [BACKLOG-304.md](BACKLOG-304.md) |
-| BACKLOG-305 | Fix autoDetection.test.tsx Button Selector Failure | testing/quality | Medium | Pending | - | - | ~5K | - | - | - | - | - | - | - | - | - | - | - | - | - | Pre-existing test failure | [BACKLOG-305.md](BACKLOG-305.md) |
+| BACKLOG-300 | Display Contact Roles in User-Friendly Format | ux/polish | Low | Pending | - | - | ~5K | - | - | - | - | - | - | - | - | - | - | - | - | - | Format snake_case roles as "Title Case" | [BACKLOG-300.md](BACKLOG-300.md) |
+| BACKLOG-301 | Refactor Sync Coordination with SyncScheduler Service | tech-debt/arch | Medium | Pending | - | - | ~65K | - | - | - | - | - | - | - | - | - | - | - | - | - | Centralize sync triggers, remove cross-hook flags | [BACKLOG-301.md](BACKLOG-301.md) |
+| BACKLOG-302 | Service Pattern Audit - Coordination Refactoring | tech-debt/arch | Medium | Pending | - | - | ~10K | - | - | - | - | - | - | - | - | - | - | - | - | - | Audit findings for sync coordination patterns | [BACKLOG-302.md](BACKLOG-302.md) |
 
 ---
 
@@ -934,17 +936,6 @@ This index tracks all backlog items with their current status and metadata.
     - Root cause likely in message parser or phone normalization
     - Est. ~25K tokens (includes investigation)
   - Total items: 269, Pending: 147
-- 2026-01-18: **Added BACKLOG-303, BACKLOG-304, BACKLOG-305** (SPRINT-043 and workflow improvements)
-  - BACKLOG-303 (Low, Completed): Centralize dotenv.config() in supabaseService.ts
-    - Completed in PR #466
-    - Consistency improvement following TASK-1118 pattern
-  - BACKLOG-304 (Low): Fix ESLint react-hooks/exhaustive-deps Rule Not Found
-    - Lint warning cluttering test output
-    - Discovered during TASK-1120 testing phase
-  - BACKLOG-305 (Medium): Fix autoDetection.test.tsx Button Selector Failure
-    - Pre-existing test failure
-    - Discovered during TASK-1120 testing phase (caused 57% testing overhead)
-  - Total items: 272, Pending: 149, Completed: 111
 
 ---
 
