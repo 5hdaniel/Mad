@@ -1496,10 +1496,12 @@ export const registerTransactionHandlers = (
     async (
       event: IpcMainInvokeEvent,
       messageIds: string[],
+      transactionId?: string,
     ): Promise<TransactionResponse> => {
       try {
         logService.info("Unlinking messages from transaction", "Transactions", {
           messageCount: messageIds?.length || 0,
+          transactionId,
         });
 
         // Validate message IDs
@@ -1517,7 +1519,8 @@ export const registerTransactionHandlers = (
           }
         }
 
-        await transactionService.unlinkMessages(messageIds);
+        // TASK-1116: Pass transactionId for thread-based unlinking
+        await transactionService.unlinkMessages(messageIds, transactionId);
 
         logService.info("Messages unlinked successfully", "Transactions", {
           messageCount: messageIds.length,

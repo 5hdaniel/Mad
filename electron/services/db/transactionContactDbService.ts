@@ -296,9 +296,19 @@ export async function batchUpdateContactAssignments(
   const batchOperation = db.transaction(() => {
     for (const op of operations) {
       if (op.action === "remove") {
-        const deleteSql =
-          "DELETE FROM transaction_contacts WHERE transaction_id = ? AND contact_id = ?";
-        db.prepare(deleteSql).run(transactionId, op.contactId);
+        // When role is provided, only remove the specific role assignment
+        // This allows a contact to have multiple roles in the same transaction
+        if (op.role || op.specificRole) {
+          const roleToMatch = op.role || op.specificRole;
+          const deleteSql =
+            "DELETE FROM transaction_contacts WHERE transaction_id = ? AND contact_id = ? AND (role = ? OR specific_role = ?)";
+          db.prepare(deleteSql).run(transactionId, op.contactId, roleToMatch, roleToMatch);
+        } else {
+          // Fallback: remove all assignments for this contact (legacy behavior)
+          const deleteSql =
+            "DELETE FROM transaction_contacts WHERE transaction_id = ? AND contact_id = ?";
+          db.prepare(deleteSql).run(transactionId, op.contactId);
+        }
       } else if (op.action === "add") {
         // Check if already exists
         const existingCheck =

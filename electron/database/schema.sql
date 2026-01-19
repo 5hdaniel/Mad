@@ -262,6 +262,7 @@ CREATE TABLE IF NOT EXISTS messages (
 CREATE TABLE IF NOT EXISTS attachments (
   id TEXT PRIMARY KEY,
   message_id TEXT NOT NULL,
+  external_message_id TEXT,              -- TASK-1110: macOS message GUID for stable linking
 
   -- File Info
   filename TEXT NOT NULL,
@@ -594,6 +595,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_duplicate_of ON messages(duplicate_of);
 
 -- Attachments
 CREATE INDEX IF NOT EXISTS idx_attachments_message_id ON attachments(message_id);
+CREATE INDEX IF NOT EXISTS idx_attachments_external_message_id ON attachments(external_message_id);
 CREATE INDEX IF NOT EXISTS idx_attachments_document_type ON attachments(document_type);
 
 -- Transactions
@@ -721,6 +723,11 @@ CREATE TABLE IF NOT EXISTS communications (
   link_confidence REAL,
   linked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 
+  -- TASK-1114: Thread-based linking (SPRINT-042)
+  -- Primary mechanism for grouping messages by conversation thread
+  -- Enables unlink operations to work at thread level, not message level
+  thread_id TEXT,
+
   -- Type & Source (legacy, use message_id for new records)
   communication_type TEXT DEFAULT 'email' CHECK (communication_type IN ('email', 'text', 'imessage')),
   source TEXT,
@@ -770,6 +777,9 @@ CREATE INDEX IF NOT EXISTS idx_communications_sender ON communications(sender);
 -- TASK-975: Junction table indexes for message_id lookups
 CREATE INDEX IF NOT EXISTS idx_communications_message_id ON communications(message_id);
 CREATE INDEX IF NOT EXISTS idx_communications_txn_msg ON communications(transaction_id, message_id);
+-- TASK-1114: Thread-based linking indexes (SPRINT-042)
+CREATE INDEX IF NOT EXISTS idx_communications_thread_id ON communications(thread_id);
+CREATE INDEX IF NOT EXISTS idx_communications_thread_txn ON communications(thread_id, transaction_id);
 
 -- ============================================
 -- IGNORED COMMUNICATIONS TABLE
@@ -852,4 +862,4 @@ CREATE TABLE IF NOT EXISTS schema_version (
 );
 
 -- Initialize schema version if not exists
-INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 8);
+INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 9);

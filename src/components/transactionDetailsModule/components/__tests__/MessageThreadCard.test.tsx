@@ -93,7 +93,7 @@ describe("MessageThreadCard", () => {
       );
     });
 
-    it("should display phone number below contact name when both provided", () => {
+    it("should display contact name without phone number in card (phone hidden for cleaner layout)", () => {
       const messages = [createMockMessage()];
 
       render(
@@ -108,9 +108,8 @@ describe("MessageThreadCard", () => {
       expect(screen.getByTestId("thread-contact-name")).toHaveTextContent(
         "Jane Smith"
       );
-      expect(screen.getByTestId("thread-phone-number")).toHaveTextContent(
-        "+14155550200"
-      );
+      // Phone number is intentionally not displayed in the card layout
+      expect(screen.queryByTestId("thread-phone-number")).not.toBeInTheDocument();
     });
   });
 
@@ -151,29 +150,33 @@ describe("MessageThreadCard", () => {
     });
   });
 
-  describe("message count badge", () => {
-    it("should display singular 'message' for one message", () => {
-      const messages = [createMockMessage()];
-
-      render(
-        <MessageThreadCard
-          threadId="thread-1"
-          messages={messages}
-          phoneNumber="+14155550100"
-        />
-      );
-
-      expect(screen.getByText("1 message")).toBeInTheDocument();
-    });
-
-    it("should display plural 'messages' for multiple messages", () => {
+  describe("date range display", () => {
+    it("should render date range for individual chat", () => {
       const messages = [
-        createMockMessage({ id: "msg-1" }),
-        createMockMessage({ id: "msg-2" }),
-        createMockMessage({ id: "msg-3" }),
+        createMockMessage({ id: "msg-1", sent_at: "2024-01-15T10:00:00Z" }),
+        createMockMessage({ id: "msg-2", sent_at: "2024-01-17T10:00:00Z" }),
       ];
 
-      render(
+      const { container } = render(
+        <MessageThreadCard
+          threadId="thread-1"
+          messages={messages}
+          contactName="Jane Doe"
+          phoneNumber="+14155550100"
+        />
+      );
+
+      // Should show date range like "Jan 15 - Jan 17"
+      expect(container.textContent).toMatch(/Jan\s+15\s*-\s*Jan\s+17/);
+    });
+
+    it("should render single date when all messages on same day", () => {
+      const messages = [
+        createMockMessage({ id: "msg-1", sent_at: "2024-01-15T10:00:00Z" }),
+        createMockMessage({ id: "msg-2", sent_at: "2024-01-15T14:00:00Z" }),
+      ];
+
+      const { container } = render(
         <MessageThreadCard
           threadId="thread-1"
           messages={messages}
@@ -181,7 +184,11 @@ describe("MessageThreadCard", () => {
         />
       );
 
-      expect(screen.getByText("3 messages")).toBeInTheDocument();
+      // Should show single date like "Jan 15" (not a range)
+      expect(container.textContent).toMatch(/Jan\s+15/);
+      // Should NOT contain a dash for date range
+      const dateRangePattern = /Jan\s+15\s*-/;
+      expect(container.textContent).not.toMatch(dateRangePattern);
     });
   });
 
@@ -234,6 +241,169 @@ describe("MessageThreadCard", () => {
       // Should be truncated to 60 chars + "..."
       expect(preview.textContent?.length).toBeLessThan(70);
       expect(preview.textContent).toContain("...");
+    });
+  });
+
+  describe("group chat cards", () => {
+    // Helper to create a group chat message with multiple participants
+    const createGroupMessage = (overrides: Partial<Communication> = {}): Communication => ({
+      id: "msg-1",
+      user_id: "user-123",
+      channel: "sms",
+      direction: "inbound",
+      body_text: "Group message content",
+      sent_at: "2024-01-16T14:30:00Z",
+      has_attachments: false,
+      is_false_positive: false,
+      participants: JSON.stringify({
+        from: "+14155550100",
+        to: ["+14155550101", "+14155550102"],
+      }),
+      ...overrides,
+    } as Communication);
+
+    it("should NOT render message count badge for group chat", () => {
+      const messages = [
+        createGroupMessage({ id: "msg-1" }),
+        createGroupMessage({ id: "msg-2" }),
+        createGroupMessage({ id: "msg-3" }),
+      ];
+
+      render(
+        <MessageThreadCard
+          threadId="group-thread-1"
+          messages={messages}
+          phoneNumber="+14155550100"
+        />
+      );
+
+      // Message count badge should NOT exist for group chats
+      expect(screen.queryByTestId("group-message-count-badge")).not.toBeInTheDocument();
+    });
+
+    it("should render preview text for group chat", () => {
+      const messages = [
+        createGroupMessage({ id: "msg-1", body_text: "Group chat preview message" }),
+      ];
+
+      render(
+        <MessageThreadCard
+          threadId="group-thread-1"
+          messages={messages}
+          phoneNumber="+14155550100"
+        />
+      );
+
+      expect(screen.getByTestId("thread-preview")).toHaveTextContent("Group chat preview message");
+    });
+
+    it("should display participant names without 'Also includes:' prefix", () => {
+      const messages = [createGroupMessage({ id: "msg-1" })];
+
+      render(
+        <MessageThreadCard
+          threadId="group-thread-1"
+          messages={messages}
+          phoneNumber="+14155550100"
+        />
+      );
+
+      const participants = screen.getByTestId("thread-participants");
+      expect(participants.textContent).not.toContain("Also includes:");
+    });
+
+    it("should not display people badge for group chat (removed for cleaner layout)", () => {
+      const messages = [createGroupMessage({ id: "msg-1" })];
+
+      render(
+        <MessageThreadCard
+          threadId="group-thread-1"
+          messages={messages}
+          phoneNumber="+14155550100"
+        />
+      );
+
+      // People badge intentionally removed - participant list at bottom shows who's in the chat
+      expect(screen.queryByText("3 people")).not.toBeInTheDocument();
+    });
+
+    it("should display participant names inline with Group Chat label and hover tooltip", () => {
+      const messages = [createGroupMessage({ id: "msg-1" })];
+
+      render(
+        <MessageThreadCard
+          threadId="group-thread-1"
+          messages={messages}
+          phoneNumber="+14155550100"
+        />
+      );
+
+      const participants = screen.getByTestId("thread-participants");
+      expect(participants).toBeInTheDocument();
+      // Should have title attribute for tooltip with full participant list
+      expect(participants).toHaveAttribute("title");
+      // Should be in the same container as the Group Chat label
+      const contactName = screen.getByTestId("thread-contact-name");
+      expect(contactName.parentElement).toBe(participants.parentElement);
+      // Group Chat label should include colon for inline format
+      expect(contactName).toHaveTextContent("Group Chat:");
+    });
+  });
+
+  describe("unified styling", () => {
+    it("should have hover state class on card container", () => {
+      const messages = [createMockMessage()];
+
+      render(
+        <MessageThreadCard
+          threadId="thread-1"
+          messages={messages}
+          phoneNumber="+14155550100"
+        />
+      );
+
+      const card = screen.getByTestId("message-thread-card");
+      expect(card.className).toContain("hover:bg-gray-50");
+      expect(card.className).toContain("transition-colors");
+    });
+
+    it("should have consistent avatar size for individual chat", () => {
+      const messages = [createMockMessage()];
+
+      const { container } = render(
+        <MessageThreadCard
+          threadId="thread-1"
+          messages={messages}
+          contactName="John"
+          phoneNumber="+14155550100"
+        />
+      );
+
+      const avatar = container.querySelector(".w-10.h-10");
+      expect(avatar).toBeInTheDocument();
+    });
+
+    it("should have consistent avatar size for group chat", () => {
+      const messages = [
+        {
+          ...createMockMessage(),
+          participants: JSON.stringify({
+            from: "+14155550100",
+            to: ["+14155550101", "+14155550102"],
+          }),
+        },
+      ];
+
+      const { container } = render(
+        <MessageThreadCard
+          threadId="group-thread-1"
+          messages={messages}
+          phoneNumber="+14155550100"
+        />
+      );
+
+      const avatar = container.querySelector(".w-10.h-10");
+      expect(avatar).toBeInTheDocument();
     });
   });
 });

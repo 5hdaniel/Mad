@@ -55,71 +55,89 @@ export function TransactionHeader({
     return "Transaction Details";
   };
 
+  // Close button component to avoid duplication
+  const CloseButton = ({ className = "" }: { className?: string }) => (
+    <button
+      onClick={onClose}
+      className={`text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-all ${className}`}
+    >
+      <svg
+        className="w-6 h-6"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M6 18L18 6M6 6l12 12"
+        />
+      </svg>
+    </button>
+  );
+
   return (
     <div
-      className={`flex-shrink-0 px-6 py-4 flex items-center justify-between rounded-t-xl ${getHeaderStyle()}`}
+      className={`flex-shrink-0 px-6 py-4 rounded-t-xl ${getHeaderStyle()}`}
     >
-      <div>
-        <div className="flex items-center gap-2">
-          <h3 className="text-xl font-bold text-white">{getHeaderTitle()}</h3>
-          {isPendingReview && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-white/20 text-white">
-              Pending Review
-            </span>
-          )}
-          {isRejected && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-white/20 text-white">
-              Rejected
-            </span>
-          )}
+      {/* Container: column on mobile, row on md+ */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-2">
+        {/* Top row: Title/Address + Close button (mobile only) */}
+        <div className="flex items-center justify-between md:flex-1">
+          {/* Left side: Title + Address */}
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-xl font-bold text-white">{getHeaderTitle()}</h3>
+              {isPendingReview && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-white/20 text-white">
+                  Pending Review
+                </span>
+              )}
+              {isRejected && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-white/20 text-white">
+                  Rejected
+                </span>
+              )}
+            </div>
+            <p className={`text-sm ${getHeaderTextStyle()}`}>
+              {transaction.property_address}
+            </p>
+          </div>
+
+          {/* Close button: visible on mobile in top row, hidden on md+ */}
+          <CloseButton className="md:hidden" />
         </div>
-        <p className={`text-sm ${getHeaderTextStyle()}`}>
-          {transaction.property_address}
-        </p>
-      </div>
-      <div className="flex items-center gap-2">
-        {isPendingReview ? (
-          <PendingReviewActions
-            isRejecting={isRejecting}
-            isApproving={isApproving}
-            onShowRejectReasonModal={onShowRejectReasonModal}
-            onShowEditModal={onShowEditModal}
-            onApprove={onApprove}
-          />
-        ) : isRejected ? (
-          <RejectedActions
-            isRestoring={isRestoring}
-            onRestore={onRestore}
-            onShowDeleteConfirm={onShowDeleteConfirm}
-          />
-        ) : (
-          <ActiveActions
-            isRejecting={isRejecting}
-            onShowRejectReasonModal={onShowRejectReasonModal}
-            onShowEditModal={onShowEditModal}
-            onShowExportModal={onShowExportModal}
-            onShowDeleteConfirm={onShowDeleteConfirm}
-          />
-        )}
-        {/* Close Button */}
-        <button
-          onClick={onClose}
-          className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1 transition-all"
-        >
-          <svg
-            className="w-6 h-6"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M6 18L18 6M6 6l12 12"
+
+        {/* Bottom row (mobile) / Right side (desktop): Action buttons */}
+        <div className="flex items-center gap-2 justify-end flex-wrap">
+          {isPendingReview ? (
+            <PendingReviewActions
+              isRejecting={isRejecting}
+              isApproving={isApproving}
+              onShowRejectReasonModal={onShowRejectReasonModal}
+              onShowEditModal={onShowEditModal}
+              onApprove={onApprove}
             />
-          </svg>
-        </button>
+          ) : isRejected ? (
+            <RejectedActions
+              isRestoring={isRestoring}
+              onRestore={onRestore}
+              onShowDeleteConfirm={onShowDeleteConfirm}
+            />
+          ) : (
+            <ActiveActions
+              isRejecting={isRejecting}
+              onShowRejectReasonModal={onShowRejectReasonModal}
+              onShowEditModal={onShowEditModal}
+              onShowExportModal={onShowExportModal}
+              onShowDeleteConfirm={onShowDeleteConfirm}
+            />
+          )}
+
+          {/* Close button: hidden on mobile, visible on md+ */}
+          <CloseButton className="hidden md:block" />
+        </div>
       </div>
     </div>
   );

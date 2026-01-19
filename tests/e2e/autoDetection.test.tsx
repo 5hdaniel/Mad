@@ -528,14 +528,9 @@ describe('Auto-Detection E2E Flow', () => {
       await user.clear(addressInput);
       await user.type(addressInput, '456 Updated Street, San Francisco, CA 94102');
 
-      // Click continue to proceed through steps
-      const continueButton = screen.getByRole('button', { name: /continue/i });
-      await user.click(continueButton);
-
-      // Wait for step 2
-      await waitFor(() => {
-        expect(screen.getByText(/step 2/i)).toBeInTheDocument();
-      });
+      // In edit mode, Save Changes is shown directly (no multi-step flow)
+      const saveButton = screen.getByRole('button', { name: /save changes/i });
+      await user.click(saveButton);
     });
   });
 

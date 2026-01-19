@@ -234,6 +234,15 @@ export async function deleteCommunication(communicationId: string): Promise<void
 }
 
 /**
+ * Delete communication by message_id
+ * Used when unlinking messages from a transaction - removes the communications table reference
+ */
+export async function deleteCommunicationByMessageId(messageId: string): Promise<void> {
+  const sql = "DELETE FROM communications WHERE message_id = ?";
+  dbRun(sql, [messageId]);
+}
+
+/**
  * Link communication to transaction
  */
 export async function linkCommunicationToTransaction(
@@ -476,17 +485,22 @@ export async function createCommunicationReference(
  *
  * TASK-992: Added direction field from messages table for proper bubble display.
  *
+ * TASK-1116: Updated to support thread-based linking. For records with thread_id
+ * but no message_id, returns all messages in the thread.
+ *
  * @param transactionId - The transaction ID
  * @returns Communications with content from messages table when available
  */
 export async function getCommunicationsWithMessages(
   transactionId: string,
 ): Promise<Communication[]> {
-  // For records with message_id, join to get message content
-  // For legacy records without message_id, use the legacy content columns
+  // Query 1: Records with message_id (legacy per-message linking)
+  // Query 2: Records with thread_id (new per-thread linking) - returns all messages in thread
   const sql = `
     SELECT
-      c.id,
+      -- TASK-1116: Use message ID when available for proper message lookup
+      COALESCE(m.id, c.id) as id,
+      c.id as communication_id,
       c.user_id,
       c.transaction_id,
       c.message_id,
@@ -528,7 +542,13 @@ export async function getCommunicationsWithMessages(
       c.relevance_score,
       c.is_compliance_related
     FROM communications c
-    LEFT JOIN messages m ON c.message_id = m.id
+    LEFT JOIN messages m ON (
+      -- Legacy: join by message_id
+      (c.message_id IS NOT NULL AND c.message_id = m.id)
+      OR
+      -- TASK-1116: Thread-based linking - join by thread_id
+      (c.message_id IS NULL AND c.thread_id IS NOT NULL AND c.thread_id = m.thread_id)
+    )
     WHERE c.transaction_id = ?
     ORDER BY COALESCE(m.sent_at, c.sent_at) DESC
   `;
@@ -571,4 +591,94 @@ export async function getTransactionsForMessage(
   `;
   const results = dbAll<{ transaction_id: string }>(sql, [messageId]);
   return results.map(r => r.transaction_id);
+}
+
+// ============================================
+// TASK-1115: THREAD-LEVEL LINKING OPERATIONS
+// ============================================
+
+/**
+ * Create a thread-level communication link (one record per thread per transaction).
+ *
+ * TASK-1115: This replaces message-by-message linking for thread-based communications.
+ * Instead of creating one communication record per message, we create one per thread.
+ * The messages table retains individual messages; this is just the linking junction.
+ *
+ * @param threadId - The thread identifier (from messages.thread_id)
+ * @param transactionId - The transaction to link to
+ * @param userId - The user ID
+ * @param linkSource - How the link was created ('auto', 'manual', 'scan')
+ * @param linkConfidence - Confidence score (0.0 - 1.0)
+ * @returns The created communication ID
+ */
+export async function createThreadCommunicationReference(
+  threadId: string,
+  transactionId: string,
+  userId: string,
+  linkSource: 'auto' | 'manual' | 'scan' = 'auto',
+  linkConfidence: number = 0.9,
+): Promise<string> {
+  const id = crypto.randomUUID();
+
+  const sql = `
+    INSERT INTO communications (
+      id, user_id, thread_id, transaction_id,
+      link_source, link_confidence, linked_at
+    ) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+  `;
+
+  const params = [
+    id,
+    userId,
+    threadId,
+    transactionId,
+    linkSource,
+    linkConfidence,
+  ];
+
+  dbRun(sql, params);
+
+  return id;
+}
+
+/**
+ * Delete communication records by thread_id for a specific transaction.
+ *
+ * TASK-1115: Used when unlinking a thread from a transaction.
+ * Removes the junction record so the thread is no longer associated.
+ *
+ * @param threadId - The thread identifier
+ * @param transactionId - The transaction to unlink from
+ */
+export async function deleteCommunicationByThread(
+  threadId: string,
+  transactionId: string,
+): Promise<void> {
+  const sql = `
+    DELETE FROM communications
+    WHERE thread_id = ? AND transaction_id = ?
+  `;
+  dbRun(sql, [threadId, transactionId]);
+}
+
+/**
+ * Check if a thread is already linked to a transaction.
+ *
+ * TASK-1115: Used to avoid duplicate links when auto-linking.
+ *
+ * @param threadId - The thread identifier
+ * @param transactionId - The transaction ID
+ * @returns True if the thread is already linked to this transaction
+ */
+export async function isThreadLinkedToTransaction(
+  threadId: string,
+  transactionId: string,
+): Promise<boolean> {
+  const sql = `
+    SELECT id FROM communications
+    WHERE thread_id = ? AND transaction_id = ?
+    LIMIT 1
+  `;
+  const result = dbGet(sql, [threadId, transactionId]);
+  return !!result;
 }

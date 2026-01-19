@@ -1,0 +1,38 @@
+sprint_id,name,status,items_completed
+SPRINT-001,Onboarding Refactor,Completed,TASK-101 to TASK-116
+SPRINT-002,Tech Debt,Completed,"BACKLOG-058, 059, 060 + 3 bonus fixes"
+SPRINT-003,Process & Data Integrity,Completed,"BACKLOG-072, 038, 039, 035 (4 tasks, 53 turns, ~210K tokens)"
+SPRINT-004,AI MVP Foundation,Completed,"BACKLOG-073, 074 (14 tasks, TASK-301 to TASK-314)"
+SPRINT-005,AI MVP Core,Completed,"BACKLOG-075, 076 (10 tasks, TASK-315 to TASK-324)"
+SPRINT-006,AI MVP Polish,Completed,"BACKLOG-077, 078, 079 (14 tasks, TASK-401 to TASK-414)"
+SPRINT-007,LLM Cost Optimization,Completed,"BACKLOG-084, 085 (12 tasks, TASK-501 to TASK-512) - 97% cost reduction"
+SPRINT-008,TransactionList Refactoring,Completed,"TASK-513 to TASK-521 (9 tasks, 26 turns, ~146K tokens, ~2hrs)"
+SPRINT-009,Codebase Standards Remediation,Completed,TASK-600 to TASK-620 (20 tasks) - Security + Architecture + Types
+SPRINT-010,Core Polish & Text Messages,Completed,"BACKLOG-103, 054, 105, 104, 050 (7 tasks: TASK-700 to TASK-706) - PRs #245-255"
+SPRINT-011,Testing Infrastructure & Demo,Completed,"BACKLOG-108, 014 (5 tasks: TASK-800 to TASK-804) - PRs #256-260"
+SPRINT-012,Process & Documentation Improvements,Completed,"BACKLOG-126, 124, 127, 128, 129, 130 (6 tasks: TASK-805 to TASK-810, PR #262)"
+SPRINT-013,Architecture Cleanup,Completed,"BACKLOG-107, 109, 110 (3 tasks: TASK-901 to TASK-903, PRs #263-265, 12 turns, ~56K tokens)"
+SPRINT-014,Feature/Performance,Completed,"BACKLOG-032, 090, 091 Phase 1 (9 tasks: TASK-904 to TASK-912, PRs #266-274)"
+SPRINT-015,Infrastructure Stabilization,Completed,"BACKLOG-132, 133, 135, 121, 091 Phase 2 (7 tasks: TASK-913 to TASK-919, PRs #275-281 + hotfix #278)"
+SPRINT-017,Metrics Workflow Test,Completed,"TASK-921 (1 task, PR #283) - Validated auto-captured metrics, found PR template gap"
+SPRINT-018,Token Accounting,Completed,"TASK-922, TASK-923 (2 tasks, PRs #284-285) - Added billable_tokens to metrics"
+SPRINT-019,Database Gate,Completed,"BACKLOG-139, TASK-924 (1 task, PR #286 + 2 hotfixes) - Database init gate + backend fix, ~889K billable tokens"
+SPRINT-020,State Coordination Foundation,Completed,"BACKLOG-142 Phase 1 (7 tasks: TASK-927 to TASK-933, PRs #287-294) - State machine types, reducer, context, orchestrator"
+SPRINT-021,State Coordination Migration,Completed,"BACKLOG-142 Phase 2 (PRs #296-309) - Hook migration to state machine, feature flag enabled"
+SPRINT-022,State Coordination Cleanup,Completed,"BACKLOG-142 Phase 3 (7 tasks: TASK-949-957) - Legacy code removed, architecture documented"
+SPRINT-024,Quality and Coverage,deprecated,Never executed - items returned to backlog
+SPRINT-027,Messages & Contacts Polish,Completed,"6 tasks (TASK-990 to TASK-995) + 9 unplanned fixes. PRs #354-362. Thread grouping, auto-linking, manual attach/unlink, bubble direction, contact SAVE/LOAD bugs"
+SPRINT-028,Stability & UX Polish,Completed,"6 tasks (TASK-1003 to TASK-1009) + 7 unplanned fixes. PRs #364-369. npm audit, dashboard scroll, Show in Folder, state machine, T&C, auto-refresh"
+SPRINT-029,UX Improvements,deprecated,Never executed - items returned to backlog
+SPRINT-030,Message & Transaction UX,deprecated,Never executed - items returned to backlog
+SPRINT-031,Codebase Health,deprecated,Never executed - items returned to backlog
+SPRINT-032,Bug Fixes & Stability,deprecated,Never executed - items returned to backlog
+SPRINT-033,iMessage Stability & UX,Completed,"5 tasks (TASK-1028-1032): iMessage encoding fix, UI freeze, contacts pre-pop, auto-link, email/text counts"
+SPRINT-034,Stability Fixes,Completed,"6 of 7 tasks (TASK-1035-1040): Binary plist, settings scroll, regressions, email state, edit contacts. TASK-1041 blocked"
+SPRINT-035,Contact & Communication Fixes,deprecated,Never executed - items returned to backlog
+SPRINT-036,Deterministic Message Parsing,Completed,"6 of 7 tasks (TASK-1046-1051): Format detection, parser refactors, thread ID, test suite. TASK-1052 pending"
+SPRINT-037,Test Coverage,Completed,"3 tasks (TASK-1053-1055): databaseService mocking fix (PR #428), critical path tests (PR #429), CI coverage thresholds (PR #429). 20 iosMessagesParser tests still failing (BACKLOG-231)"
+SPRINT-040,UI Design System,Completed,"9 tasks (TASK-1100-1108) + 2 hotfixes: SyncProgress component (PR #440), Notification system (PR #439), Dashboard labels (PRs #441,443), Chat card unification (PRs #442,445-448), Transaction header responsive (PR #449)"
+SPRINT-041,Bug Fixes,Completed,"5 tasks (TASK-1109-1113): Unlink UI refresh (PR #450), Duplicate sync (PR #451), Contact save (PR #452), Attachments stale ID (PR #453), UI freeze modal (PR #454). **Note:** BACKLOG-220 fix insufficient - reopened for SPRINT-042"
+SPRINT-042,Database Schema Alignment,Completed,"3 tasks (TASK-1114-1116): Thread-based communications schema, service updates, unlink UI integration. BACKLOG-220 (reopened), BACKLOG-296. PR #462"
+SPRINT-043,Security Hardening,Completed,"3 tasks (TASK-1117-1119): Sandbox re-enablement (PR #463), env var centralization (PRs #464,466), CSP tightening (PR #465). BACKLOG-247, 248, 249, 303"

@@ -26,6 +26,7 @@
 
 import { useEffect, useCallback, useState } from "react";
 import { usePlatform } from "../contexts/PlatformContext";
+import { hasMessagesImportTriggered } from "./useMacOSMessagesImport";
 
 // Module-level flag to track if onboarding import just completed
 // This is more reliable than localStorage across component remounts
@@ -422,8 +423,12 @@ export function useAutoRefresh({
       }
 
       // Messages sync (macOS only)
-      // Skip if we just imported during onboarding
-      if (isMacOS && hasPermissions && !skipNextMessagesSync) {
+      // Skip if:
+      // 1. We just imported during onboarding (skipNextMessagesSync)
+      // 2. useMacOSMessagesImport hook already triggered import this session
+      //    (prevents duplicate sync - that hook runs 500ms before this one)
+      const messagesAlreadyImported = skipNextMessagesSync || hasMessagesImportTriggered();
+      if (isMacOS && hasPermissions && !messagesAlreadyImported) {
         syncTasks.push({
           name: "messages",
           task: syncMessages(uid),

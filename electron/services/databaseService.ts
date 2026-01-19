@@ -365,11 +365,22 @@ class DatabaseService implements IDatabaseService {
 
     // TASK-975: Add message_id reference column and link metadata to communications table
     // This transforms communications into a junction/reference table linking messages to transactions
+    // Also add legacy columns that may be missing from old databases to prevent index creation failures
     await addMissingColumns('communications', [
       { name: 'message_id', sql: `ALTER TABLE communications ADD COLUMN message_id TEXT REFERENCES messages(id) ON DELETE CASCADE` },
       { name: 'link_source', sql: `ALTER TABLE communications ADD COLUMN link_source TEXT CHECK (link_source IN ('auto', 'manual', 'scan'))` },
       { name: 'link_confidence', sql: `ALTER TABLE communications ADD COLUMN link_confidence REAL` },
       { name: 'linked_at', sql: `ALTER TABLE communications ADD COLUMN linked_at DATETIME DEFAULT CURRENT_TIMESTAMP` },
+      // Legacy columns - ensure they exist for index creation
+      { name: 'sent_at', sql: `ALTER TABLE communications ADD COLUMN sent_at DATETIME` },
+      { name: 'sender', sql: `ALTER TABLE communications ADD COLUMN sender TEXT` },
+      { name: 'communication_type', sql: `ALTER TABLE communications ADD COLUMN communication_type TEXT DEFAULT 'email'` },
+    ]);
+
+    // TASK-1110: Add external_message_id to attachments for stable message linking
+    // This allows attachments to be linked to messages even when message_id changes on re-import
+    await addMissingColumns('attachments', [
+      { name: 'external_message_id', sql: `ALTER TABLE attachments ADD COLUMN external_message_id TEXT` },
     ]);
 
     // Populate display_name from name column if it exists
@@ -577,6 +588,10 @@ class DatabaseService implements IDatabaseService {
     runSafe(`CREATE INDEX IF NOT EXISTS idx_communications_message_id ON communications(message_id)`);
     runSafe(`CREATE INDEX IF NOT EXISTS idx_communications_txn_msg ON communications(transaction_id, message_id)`);
     runSafe(`CREATE UNIQUE INDEX IF NOT EXISTS idx_communications_msg_txn_unique ON communications(message_id, transaction_id) WHERE message_id IS NOT NULL`);
+
+    // Migration 13 (TASK-1110): Create index for attachments.external_message_id column
+    // This supports stable attachment linking when message_id changes on re-import
+    runSafe(`CREATE INDEX IF NOT EXISTS idx_attachments_external_message_id ON attachments(external_message_id)`);
 
     // Finalize schema version (create table if missing for backwards compatibility)
     const schemaVersionExists = db.prepare(
@@ -835,6 +850,18 @@ class DatabaseService implements IDatabaseService {
 
   async deleteCommunication(communicationId: string): Promise<void> {
     return communicationDb.deleteCommunication(communicationId);
+  }
+
+  async deleteCommunicationByMessageId(messageId: string): Promise<void> {
+    return communicationDb.deleteCommunicationByMessageId(messageId);
+  }
+
+  /**
+   * Delete communication records by thread_id for a specific transaction.
+   * TASK-1116: Used when unlinking a thread from a transaction.
+   */
+  async deleteCommunicationByThread(threadId: string, transactionId: string): Promise<void> {
+    return communicationDb.deleteCommunicationByThread(threadId, transactionId);
   }
 
   async addIgnoredCommunication(data: NewIgnoredCommunication): Promise<IgnoredCommunication> {

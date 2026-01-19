@@ -2,16 +2,16 @@
  * Google Auth Service
  * Handles Google OAuth authentication using Authorization Code Flow with local redirect
  * Supports two-step consent: login (minimal scopes) + mailbox access (Gmail scopes)
+ *
+ * Note: Environment variables (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET) are loaded
+ * centrally in electron/main.ts via dotenv. Do not import dotenv here.
  */
 
 import { google, Auth } from "googleapis";
 import http from "http";
 import url from "url";
-import dotenv from "dotenv";
 import databaseService from "./databaseService";
 import logService from "./logService";
-
-dotenv.config({ path: ".env.development" });
 
 // ============================================
 // TYPES & INTERFACES

@@ -2,6 +2,7 @@
  * App.tsx - Main Application Component
  *
  * This is the root component that composes the application from modular pieces:
+ * - NotificationProvider: Unified notification system (toasts)
  * - AppShell: Layout structure (title bar, offline banner, version info)
  * - AppRouter: Screen routing based on current step
  * - AppModals: Modal dialogs (profile, settings, etc.)
@@ -19,16 +20,19 @@ import {
   BackgroundServices,
   useAppStateMachine,
 } from "./appCore";
+import { NotificationProvider } from "./contexts/NotificationContext";
 
 function App() {
   const app = useAppStateMachine();
 
   return (
-    <AppShell app={app}>
-      <AppRouter app={app} />
-      <BackgroundServices app={app} />
-      <AppModals app={app} />
-    </AppShell>
+    <NotificationProvider>
+      <AppShell app={app}>
+        <AppRouter app={app} />
+        <BackgroundServices app={app} />
+        <AppModals app={app} />
+      </AppShell>
+    </NotificationProvider>
   );
 }
 

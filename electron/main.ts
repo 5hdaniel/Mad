@@ -67,23 +67,42 @@ let mainWindow: BrowserWindow | null = null;
 /**
  * Configure Content Security Policy for the application
  * This prevents the "unsafe-eval" security warning
+ *
+ * Development vs Production CSP differences:
+ * - script-src: Dev uses 'unsafe-inline' for Vite HMR (Hot Module Replacement).
+ *   Vite injects inline scripts for HMR updates. Cannot be removed without breaking HMR.
+ *   See: https://vitejs.dev/guide/features.html#content-security-policy
+ * - style-src: Both use 'unsafe-inline' for CSS-in-JS and dynamic styling.
+ * - connect-src: Dev allows localhost:5173 (Vite dev server) + ws:// for HMR websocket.
+ *   Production only allows HTTPS connections.
  */
 function setupContentSecurityPolicy(): void {
-  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
-    const isDevelopment =
-      process.env.NODE_ENV === "development" || !app.isPackaged;
+  const isDevelopment =
+    process.env.NODE_ENV === "development" || !app.isPackaged;
 
+  // Log CSP mode on startup for debugging
+  if (isDevelopment) {
+    console.log("[CSP] Development mode - tightened CSP active");
+  }
+
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     // Configure CSP based on environment
     // Development: Allow localhost dev server and inline styles for HMR
     // Production: Strict CSP without unsafe-eval
     const cspDirectives = isDevelopment
       ? [
           "default-src 'self'",
+          // NOTE: 'unsafe-inline' required for Vite HMR - cannot be removed without
+          // breaking hot module replacement. Production does not use this directive.
           "script-src 'self' 'unsafe-inline'",
+          // NOTE: 'unsafe-inline' required for CSS-in-JS and dynamic styling.
+          // This is also needed in production for the same reason.
           "style-src 'self' 'unsafe-inline'",
           "img-src 'self' data: https:",
           "font-src 'self' data:",
-          "connect-src 'self' http://localhost:* ws://localhost:* https:",
+          // Tightened: Specific port 5173 instead of wildcard localhost:*
+          // Port 5173 is Vite's default dev server port (see vite.config.js and package.json)
+          "connect-src 'self' http://localhost:5173 ws://localhost:5173 https:",
           "media-src 'self'",
           "object-src 'none'",
           "base-uri 'self'",
@@ -95,6 +114,7 @@ function setupContentSecurityPolicy(): void {
       : [
           "default-src 'self'",
           "script-src 'self'",
+          // NOTE: 'unsafe-inline' required for CSS-in-JS and dynamic styling
           "style-src 'self' 'unsafe-inline'",
           "img-src 'self' data: https:",
           "font-src 'self' data:",
@@ -123,9 +143,6 @@ function createWindow(): void {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      // Disable sandbox to allow preload script to use Node.js APIs
-      // Required for Electron 20+ where sandbox is enabled by default
-      sandbox: false,
       preload: path.join(__dirname, "preload.js"),
     },
     titleBarStyle: WINDOW_CONFIG.TITLE_BAR_STYLE as

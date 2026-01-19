@@ -2,9 +2,9 @@
 
 This index tracks all backlog items with their current status and metadata.
 
-**Last Updated:** 2026-01-15 (Codebase Audit Findings consolidated - 54 new items from 7 SR Engineer audits)
-**Total Items:** 265
-**Pending:** 148 | **In Progress:** 0 | **Completed:** 105 | **Partial:** 0 | **Obsolete:** 1 | **Deferred:** 2 | **Blocked:** 1
+**Last Updated:** 2026-01-17 (Backlog cleanup: counts corrected, BACKLOG-293-294 and BACKLOG-300-302 added)
+**Total Items:** 291
+**Pending:** 176 | **In Progress:** 1 | **Completed:** 97 | **Reopened:** 1 | **Obsolete:** 1 | **Deferred:** 2 | **Blocked:** 1
 
 ---
 
@@ -51,7 +51,7 @@ This index tracks all backlog items with their current status and metadata.
 - **Code Quality:** **266** (duplicate utils), **267** (error handling patterns), **268** (relative imports)
 - **Performance:** **269** (memoization), **270** (array operations), **271** (db indexes), **272** (JSON serialization)
 - **Reliability:** **273** (test coverage), **274** (app termination cleanup)
-- **Operations:** **275** (renderer logging), **276** (error recovery), **277** (CI secrets)
+- **Operations:** **275** (renderer logging), **276** (error recovery), **277** (CI secrets), **297** (startup error handling)
 - **Documentation:** **278** (JSDoc coverage), **279** (IPC docs), **280** (migration docs), **281** (doc standards), **282** (error docs), **283** (config docs)
 - **Existing:** Multiple (see full index), 014 (done), 050 (done), 054 (done), 065 (done), 077 (done), 078 (done), 079 (done), 081, 086, 087, 089, 092, 093, 094, 095, 096, 097, 100, 101, 102, 104 (done), **112**, **113**, **114**, **115**, **116**, 122 (done), 124 (done), 127 (done), 128 (done), 129 (done), **131**, 135 (done), 138 (done), 149 (done), 152 (done), **158**, **159**, 169 (done), 181 (done), **204**, 208 (done), **223**, **227**, 230 (done), **231**
 
@@ -330,7 +330,7 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-217 | UX Improvement - Edit Contacts Button Flow | enhancement/ux | High | Completed | SPRINT-034 | - | ~40K | - | ~156K | - | - | - | - | - | - | - | - | - | ~156K | TASK-1040, PR #418 | [BACKLOG-217.md](BACKLOG-217.md) |
 | BACKLOG-218 | Group Chat Display in Transaction Details (Placeholder) | enhancement/ux | High | Blocked | - | - | ~30K | - | - | - | - | - | - | - | - | - | - | - | - | - | Pending user requirements | [BACKLOG-218.md](BACKLOG-218.md) |
 | BACKLOG-219 | Audit Debug/Logging Calls Across Repository | tech-debt/quality | Low | Pending | - | - | ~20K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-219.md](BACKLOG-219.md) |
-| BACKLOG-220 | Unlink Communications UI Not Refreshing | bug/ui | High | Pending | - | - | ~25K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-220.md](BACKLOG-220.md) |
+| BACKLOG-220 | Unlink Communications UI Not Refreshing | bug/ui | High | **Reopened** | SPRINT-042 | - | ~25K | - | - | - | - | - | - | - | - | - | - | - | - | - | PR #450 insufficient; requires thread-based schema | [BACKLOG-220.md](BACKLOG-220.md) |
 | BACKLOG-221 | iMessage Attachments Not Displaying (Stale message_id) | bug/data-integrity | High | Pending | - | - | ~40K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-221.md](BACKLOG-221.md) |
 | BACKLOG-222 | Contact Changes Not Saving When Editing Transaction | bug/data-persistence | High | Pending | - | - | ~30K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-222.md](BACKLOG-222.md) |
 | BACKLOG-223 | Add Text Message Status Indicator (Like Email Status) | enhancement/ux | Medium | Pending | - | - | ~25K | - | - | - | - | - | - | - | - | - | - | - | - | - | - | [BACKLOG-223.md](BACKLOG-223.md) |
@@ -349,12 +349,12 @@ This index tracks all backlog items with their current status and metadata.
 <!-- ============================================== -->
 
 <!-- CRITICAL PRIORITY - Security & Reliability -->
-| BACKLOG-232 | Fix Disabled webSecurity in OAuth Popup Windows | security | Critical | Pending | - | - | ~40K | - | - | - | - | - | - | - | - | - | - | - | - | - | googleAuthHandlers.ts, microsoftAuthHandlers.ts | - |
-| BACKLOG-233 | Add Global Unhandled Rejection Handlers | reliability | Critical | Pending | - | - | ~25K | - | - | - | - | - | - | - | - | - | - | - | - | - | main.ts, main.tsx missing process.on handlers | - |
+| BACKLOG-232 | Fix Disabled webSecurity in OAuth Popup Windows | security | Critical | Completed | - | - | ~40K | - | - | - | - | - | - | - | - | - | - | - | - | - | googleAuthHandlers.ts, microsoftAuthHandlers.ts | PR #433 |
+| BACKLOG-233 | Add Global Unhandled Rejection Handlers | reliability | Critical | Completed | - | - | ~25K | - | - | - | - | - | - | - | - | - | - | - | - | - | main.ts, main.tsx missing process.on handlers | PR #435 |
 | BACKLOG-234 | Fix Race Condition in Sync Orchestrator | reliability | Critical | Pending | - | - | ~50K | - | - | - | - | - | - | - | - | - | - | - | - | - | Concurrent sync state conflicts | - |
-| BACKLOG-235 | Patch jsdiff DoS Vulnerability | security | Critical | Pending | - | - | ~10K | - | - | - | - | - | - | - | - | - | - | - | - | - | npm audit vulnerability | - |
+| BACKLOG-235 | Patch jsdiff DoS Vulnerability | security | Critical | Completed | - | - | ~10K | - | - | - | - | - | - | - | - | - | - | - | - | - | npm audit vulnerability | PR #434 |
 | BACKLOG-236 | Fix Incomplete PII Masking in LLM Pipeline | security | Critical | Completed | - | - | ~45K | - | - | - | - | - | - | - | - | - | - | - | - | - | Content sent to LLM may expose PII | PR #436 |
-| BACKLOG-287 | Dashboard Visible After Logout | security | **CRITICAL** | Pending | - | - | ~30K | - | - | - | - | - | - | - | - | - | - | - | - | - | Auth state not cleared on logout | - |
+| BACKLOG-287 | Dashboard Visible After Logout | security | **CRITICAL** | Completed | - | - | ~30K | - | - | - | - | - | - | - | - | - | - | - | - | - | Auth state not cleared on logout | PR #437 |
 
 <!-- CRITICAL PRIORITY - Architecture & Code Quality -->
 | BACKLOG-237 | Reduce Transactions.tsx State Complexity (19 useState) | code-quality | Critical | Pending | - | - | ~80K | - | - | - | - | - | - | - | - | - | - | - | - | - | Extract to custom hooks/context | - |
@@ -436,12 +436,22 @@ This index tracks all backlog items with their current status and metadata.
 | BACKLOG-285 | Add Data Abstraction Layer for Components | architecture | Low | Pending | - | - | ~100K | - | - | - | - | - | - | - | - | - | - | - | - | - | Direct data access in components | - |
 
 <!-- MEDIUM PRIORITY - UI/UX Architecture -->
-| BACKLOG-289 | Unified Notification System | ui-ux | Medium | Pending | - | - | ~50K | - | - | - | - | - | - | - | - | - | - | - | - | - | Consistent toast/alert API across app | - |
-| BACKLOG-290 | Reusable Sync Progress Component | ui-ux | Medium | Pending | - | - | ~40K | - | - | - | - | - | - | - | - | - | - | - | - | - | Shared progress UI for all sync operations | - |
+| BACKLOG-289 | Unified Notification System | ui-ux | Medium | Completed | SPRINT-040 | - | ~50K | - | - | ~40K | - | - | - | - | - | - | - | - | ~40K | - | PR #439 | - |
+| BACKLOG-290 | Reusable Sync Progress Component | ui-ux | Medium | Completed | SPRINT-040 | - | ~40K | - | - | ~45K | - | - | - | - | - | - | - | - | ~45K | - | PR #440 | - |
+| BACKLOG-293 | Duplicate macOS Messages Sync on Dashboard Load | bug | Medium | Pending | - | - | ~20K | - | - | - | - | - | - | - | - | - | - | - | - | - | Sync triggers twice for returning users | [BACKLOG-293.md](BACKLOG-293.md) |
+| BACKLOG-294 | Extract Reusable DashboardActionCard Component | refactor | Low | Pending | - | - | ~15K | - | - | - | - | - | - | - | - | - | - | - | - | - | DRY refactor for dashboard buttons | [BACKLOG-294.md](BACKLOG-294.md) |
 
 <!-- LOW PRIORITY - UI/UX -->
-| BACKLOG-286 | Unify Chat Card and Group Chat Card Components | ui-ux | Low | Pending | - | - | ~40K | - | - | - | - | - | - | - | - | - | - | - | - | - | Inconsistent designs, separate components | - |
-| BACKLOG-288 | Simplify Dashboard Button Labels | ui-ux | Low | Pending | - | - | ~10K | - | - | - | - | - | - | - | - | - | - | - | - | - | Rename buttons, move arrow to heading | - |
+| BACKLOG-286 | Unify Chat Card and Group Chat Card Components | ui-ux | Low | Completed | SPRINT-040 | - | ~40K | - | - | ~70K | - | - | - | - | - | - | - | - | ~70K | - | PRs #442,445-448 | - |
+| BACKLOG-288 | Simplify Dashboard Button Labels | ui-ux | Low | Completed | SPRINT-040 | - | ~10K | - | - | ~20K | - | - | - | - | - | - | - | - | ~20K | - | PRs #441,443 | - |
+| BACKLOG-295 | Transaction Header Responsive Layout | ui-ux | Medium | Completed | SPRINT-040 | - | ~18K | - | - | ~18K | - | - | - | - | - | - | - | - | ~18K | - | PR #449 | - |
+| BACKLOG-296 | Database Schema Alignment - Service Updates | tech-debt/data-integrity | High | In Progress | SPRINT-042 | - | ~40K | - | - | - | - | - | - | - | - | - | - | - | - | - | Thread-based communications schema | [BACKLOG-296.md](BACKLOG-296.md) |
+| BACKLOG-297 | Startup Error Handling - User-Friendly Failure Screen | ux/error-handling | Medium | Pending | - | - | ~50K | - | - | - | - | - | - | - | - | - | - | - | - | - | Timeout + error screen on init failure | [BACKLOG-297.md](BACKLOG-297.md) |
+| BACKLOG-298 | Video Attachment Support in ConversationViewModal | ui-ux | Medium | Pending | - | - | ~35K | - | - | - | - | - | - | - | - | - | - | - | - | - | Videos filtered out, only images displayed | [BACKLOG-298.md](BACKLOG-298.md) |
+| BACKLOG-299 | 1:1 Chat Incorrectly Shown as Group Chat | bug/data-quality | Medium | Pending | - | - | ~25K | - | - | - | - | - | - | - | - | - | - | - | - | - | "unknown" participant triggers isGroupChat() | [BACKLOG-299.md](BACKLOG-299.md) |
+| BACKLOG-300 | Display Contact Roles in User-Friendly Format | ux/polish | Low | Pending | - | - | ~5K | - | - | - | - | - | - | - | - | - | - | - | - | - | Format snake_case roles as "Title Case" | [BACKLOG-300.md](BACKLOG-300.md) |
+| BACKLOG-301 | Refactor Sync Coordination with SyncScheduler Service | tech-debt/arch | Medium | Pending | - | - | ~65K | - | - | - | - | - | - | - | - | - | - | - | - | - | Centralize sync triggers, remove cross-hook flags | [BACKLOG-301.md](BACKLOG-301.md) |
+| BACKLOG-302 | Service Pattern Audit - Coordination Refactoring | tech-debt/arch | Medium | Pending | - | - | ~10K | - | - | - | - | - | - | - | - | - | - | - | - | - | Audit findings for sync coordination patterns | [BACKLOG-302.md](BACKLOG-302.md) |
 
 ---
 
@@ -494,6 +504,9 @@ This index tracks all backlog items with their current status and metadata.
 | SPRINT-035 | Contact & Communication Fixes | Planning | 4 tasks (TASK-1042-1045): Contact save, unlink refresh, attachments stale ID, email banner |
 | SPRINT-036 | Deterministic Message Parsing | Completed | 6 of 7 tasks (TASK-1046-1051): Format detection, parser refactors, thread ID, test suite. TASK-1052 pending |
 | SPRINT-037 | Test Coverage | Completed | 3 tasks (TASK-1053-1055): databaseService mocking fix (PR #428), critical path tests (PR #429), CI coverage thresholds (PR #429). 20 iosMessagesParser tests still failing (BACKLOG-231) |
+| SPRINT-040 | UI Design System | Completed | 9 tasks (TASK-1100-1108) + 2 hotfixes: SyncProgress component (PR #440), Notification system (PR #439), Dashboard labels (PRs #441,443), Chat card unification (PRs #442,445-448), Transaction header responsive (PR #449) |
+| SPRINT-041 | Bug Fixes | Completed | 5 tasks (TASK-1109-1113): Unlink UI refresh (PR #450), Duplicate sync (PR #451), Contact save (PR #452), Attachments stale ID (PR #453), UI freeze modal (PR #454). **Note:** BACKLOG-220 fix insufficient - reopened for SPRINT-042 |
+| SPRINT-042 | Database Schema Alignment | Planning | 3 tasks (TASK-1114-1116): Thread-based communications schema, service updates, unlink UI integration. Includes BACKLOG-220 (reopened), BACKLOG-296 |
 
 ---
 
@@ -874,6 +887,55 @@ This index tracks all backlog items with their current status and metadata.
   - **Total Estimated Tokens:** ~2.6M tokens for all audit remediation work
   - **Sprint Planning Note:** Security/Critical items should be prioritized in upcoming sprints
   - Total items: 265, Pending: 148
+- 2026-01-17: **SPRINT-040 (UI Design System) CLOSED**
+  - Completed 9 tasks (TASK-1100 to TASK-1108) + 2 hotfixes
+  - **PRs Merged:** #439-449 (11 total)
+  - **Backlog Items Completed:** BACKLOG-286, 288, 289, 290, 295 (5 items)
+  - **Key Deliverables:**
+    - SyncProgress component with 3 variants (compact, standard, detailed)
+    - Unified notification system with context API
+    - Dashboard button labels simplified
+    - Chat cards unified (individual + group)
+    - Transaction header responsive layout
+  - **Duration:** 2 days (estimated 3-4 days)
+  - **Tokens:** ~220K (estimated ~227K)
+  - Total items: 266, Pending: 144, Completed: 110
+- 2026-01-17: **SPRINT-041 (Bug Fixes) CLOSED**
+  - Completed 5 tasks (TASK-1109 to TASK-1113)
+  - **PRs Merged:** #450-454 (5 total)
+  - **Backlog Items:** BACKLOG-220, 221, 222, 228, 293
+  - **Key Deliverables:**
+    - Unlink UI refresh (PR #450) - partial fix only
+    - Duplicate sync guard (PR #451)
+    - Contact save persistence (PR #452)
+    - Attachments stale ID fix (PR #453)
+    - UI freeze prevention (PR #454)
+  - **Issue:** BACKLOG-220 fix was insufficient - PR #450 addressed callback timing but root cause is thread-based schema architecture
+- 2026-01-17: **BACKLOG-220 REOPENED**
+  - **Reason:** PR #450 fix from SPRINT-041 was insufficient
+  - **Root Cause:** Communications table links by message_id but UI operates on threads
+  - **Required:** Thread-based schema refactor (communications.thread_id instead of message_id)
+  - **Stashed Work:** `stash@{0}: TASK-1109-thread-based-schema-refactor-deferred` (7 files, 502+/619-)
+  - **Reassigned to:** SPRINT-042 (Database Schema Alignment)
+- 2026-01-17: **SPRINT-042 (Database Schema Alignment) PLANNED**
+  - 3 tasks planned (TASK-1114 to TASK-1116)
+  - **Scope:** Thread-based schema, service updates, unlink UI integration
+  - **Backlog Items:** BACKLOG-220 (reopened), BACKLOG-296 (database schema alignment)
+  - **Reference:** Schema audit on `research/database-schema-audit` branch
+  - **Estimated Tokens:** ~55K
+  - Total items: 266, Pending: 143, Reopened: 1
+- 2026-01-17: **Added BACKLOG-298 and BACKLOG-299** (SPRINT-041 testing findings)
+  - BACKLOG-298 (Medium): Video Attachment Support in ConversationViewModal
+    - ConversationViewModal only displays image/* attachments
+    - Videos (.mov, .mp4) are filtered out by isDisplayableImage()
+    - Options: inline video player, thumbnail + click-to-open, or file icon
+    - Est. ~35K tokens
+  - BACKLOG-299 (Medium): 1:1 Chat Incorrectly Shown as Group Chat
+    - "unknown" participant value triggers isGroupChat() incorrectly
+    - Needs investigation: where does "unknown" originate?
+    - Root cause likely in message parser or phone normalization
+    - Est. ~25K tokens (includes investigation)
+  - Total items: 269, Pending: 147
 
 ---
 

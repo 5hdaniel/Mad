@@ -14,6 +14,7 @@ const mockUnlinkMessages = jest.fn();
 const mockGetMessageContacts = jest.fn();
 const mockGetMessagesByContact = jest.fn();
 const mockLinkMessages = jest.fn();
+const mockGetNamesByPhones = jest.fn();
 
 beforeAll(() => {
   Object.defineProperty(window, "api", {
@@ -23,6 +24,9 @@ beforeAll(() => {
         getMessageContacts: mockGetMessageContacts,
         getMessagesByContact: mockGetMessagesByContact,
         linkMessages: mockLinkMessages,
+      },
+      contacts: {
+        getNamesByPhones: mockGetNamesByPhones,
       },
     },
     writable: true,
@@ -36,6 +40,7 @@ describe("TransactionMessagesTab", () => {
     mockGetMessageContacts.mockResolvedValue({ success: true, contacts: [] });
     mockGetMessagesByContact.mockResolvedValue({ success: true, messages: [] });
     mockLinkMessages.mockResolvedValue({ success: true });
+    mockGetNamesByPhones.mockResolvedValue({ success: true, names: {} });
   });
 
   // Mock messages for testing
@@ -261,9 +266,11 @@ describe("TransactionMessagesTab", () => {
       const threadCards = screen.getAllByTestId("message-thread-card");
       expect(threadCards.length).toBe(2);
 
-      // Group chat threads show "X people" badge instead of preview
+      // Group chats no longer show "X people" badge - participant list at bottom instead
       const participantBadges = screen.queryAllByText(/\d+ people/);
-      expect(participantBadges.length).toBeGreaterThanOrEqual(1);
+      expect(participantBadges.length).toBe(0);
+      const participantNames = screen.getAllByTestId("thread-participants");
+      expect(participantNames.length).toBeGreaterThanOrEqual(1);
     });
 
     it("should group messages into threads", () => {
@@ -423,43 +430,6 @@ describe("TransactionMessagesTab", () => {
       expect(screen.getByTestId("toggle-thread-button")).toHaveTextContent("View");
     });
 
-    it("should display message count badge", () => {
-      const messages: Partial<Communication>[] = [
-        {
-          id: "msg-1",
-          user_id: "user-456",
-          channel: "sms",
-          body_text: "Message 1",
-          sent_at: "2024-01-20T10:00:00Z",
-          direction: "outbound",
-          thread_id: "thread-1",
-          has_attachments: false,
-          is_false_positive: false,
-        },
-        {
-          id: "msg-2",
-          user_id: "user-456",
-          channel: "sms",
-          body_text: "Message 2",
-          sent_at: "2024-01-20T11:00:00Z",
-          direction: "inbound",
-          thread_id: "thread-1",
-          has_attachments: false,
-          is_false_positive: false,
-        },
-      ];
-
-      render(
-        <TransactionMessagesTab
-          messages={messages as Communication[]}
-          loading={false}
-          error={null}
-        />
-      );
-
-      // Should show message count
-      expect(screen.getByText("2 messages")).toBeInTheDocument();
-    });
   });
 
   describe("date formatting", () => {
@@ -741,7 +711,8 @@ describe("TransactionMessagesTab", () => {
       fireEvent.click(screen.getByTestId("unlink-confirm-button"));
 
       await waitFor(() => {
-        expect(mockUnlinkMessages).toHaveBeenCalledWith(["msg-1", "msg-2"]);
+        // TASK-1116: unlinkMessages now requires transactionId for thread-based unlinking
+        expect(mockUnlinkMessages).toHaveBeenCalledWith(["msg-1", "msg-2"], "txn-123");
       });
 
       await waitFor(() => {
@@ -798,6 +769,55 @@ describe("TransactionMessagesTab", () => {
 
       await waitFor(() => {
         expect(mockOnShowError).toHaveBeenCalledWith("Connection failed");
+      });
+    });
+
+    it("should await async onMessagesChanged callback before closing modal", async () => {
+      // Track when the callback completes
+      let callbackResolved = false;
+      const mockOnMessagesChanged = jest.fn().mockImplementation(() => {
+        return new Promise<void>((resolve) => {
+          setTimeout(() => {
+            callbackResolved = true;
+            resolve();
+          }, 50);
+        });
+      });
+      const mockOnShowSuccess = jest.fn();
+
+      render(
+        <TransactionMessagesTab
+          messages={messagesWithUserId as Communication[]}
+          loading={false}
+          error={null}
+          userId="user-456"
+          transactionId="txn-123"
+          onMessagesChanged={mockOnMessagesChanged}
+          onShowSuccess={mockOnShowSuccess}
+        />
+      );
+
+      // Open unlink modal
+      fireEvent.click(screen.getByTestId("unlink-thread-button"));
+      expect(screen.getByTestId("unlink-message-modal")).toBeInTheDocument();
+
+      // Confirm unlink
+      fireEvent.click(screen.getByTestId("unlink-confirm-button"));
+
+      // Wait for API call
+      await waitFor(() => {
+        expect(mockUnlinkMessages).toHaveBeenCalled();
+      });
+
+      // Callback should be called and awaited before modal closes
+      await waitFor(() => {
+        expect(mockOnMessagesChanged).toHaveBeenCalled();
+        expect(callbackResolved).toBe(true);
+      });
+
+      // Modal should be closed after callback completes
+      await waitFor(() => {
+        expect(screen.queryByTestId("unlink-message-modal")).not.toBeInTheDocument();
       });
     });
   });

@@ -452,4 +452,169 @@ describe("EditTransactionModal", () => {
       expect(mockOnClose).toHaveBeenCalled();
     });
   });
+
+  describe("Contact Save Persistence (TASK-1111)", () => {
+    it("should not send unnecessary batch operations when no contacts changed", async () => {
+      // Setup: Two contacts assigned initially
+      const initialAssignments = [
+        {
+          id: "assign-1",
+          contact_id: "contact-1",
+          contact_name: "John Buyer",
+          contact_email: "john@example.com",
+          role: "client",
+          specific_role: "client",
+          is_primary: 1,
+        },
+        {
+          id: "assign-2",
+          contact_id: "contact-2",
+          contact_name: "Jane Agent",
+          contact_email: "jane@realty.com",
+          role: "seller_agent",
+          specific_role: "seller_agent",
+          is_primary: 0,
+        },
+      ];
+
+      window.api.transactions.getDetails.mockResolvedValue({
+        success: true,
+        transaction: {
+          ...mockTransaction,
+          contact_assignments: initialAssignments,
+        },
+      });
+
+      renderWithProvider(
+        <EditTransactionModal
+          transaction={mockTransaction}
+          onClose={mockOnClose}
+          onSuccess={mockOnSuccess}
+        />,
+      );
+
+      // Wait for contacts to load
+      await waitFor(() => {
+        expect(window.api.transactions.getDetails).toHaveBeenCalled();
+      });
+
+      // Click save without making changes
+      const saveButton = screen.getByRole("button", { name: /save changes/i });
+      await userEvent.click(saveButton);
+
+      // Verify onSuccess was called (save completed)
+      await waitFor(() => {
+        expect(mockOnSuccess).toHaveBeenCalled();
+      });
+
+      // Verify that batchUpdateContacts was NOT called (no changes)
+      // or called with empty operations array
+      if (window.api.transactions.batchUpdateContacts.mock.calls.length > 0) {
+        const [, operations] =
+          window.api.transactions.batchUpdateContacts.mock.calls[0];
+        expect(operations.length).toBe(0);
+      }
+    });
+
+    it("should preserve contacts in other roles when same contact has multiple roles", async () => {
+      // Setup: Same contact assigned to two roles (edge case)
+      const multiRoleAssignments = [
+        {
+          id: "assign-1",
+          contact_id: "contact-2",
+          contact_name: "Jane Agent",
+          contact_email: "jane@realty.com",
+          role: "seller_agent",
+          specific_role: "seller_agent",
+          is_primary: 0,
+        },
+        {
+          id: "assign-2",
+          contact_id: "contact-2",
+          contact_name: "Jane Agent",
+          contact_email: "jane@realty.com",
+          role: "escrow_officer",
+          specific_role: "escrow_officer",
+          is_primary: 0,
+        },
+      ];
+
+      window.api.transactions.getDetails.mockResolvedValue({
+        success: true,
+        transaction: {
+          ...mockTransaction,
+          contact_assignments: multiRoleAssignments,
+        },
+      });
+
+      renderWithProvider(
+        <EditTransactionModal
+          transaction={mockTransaction}
+          onClose={mockOnClose}
+          onSuccess={mockOnSuccess}
+        />,
+      );
+
+      // Wait for contacts to load and switch to contacts tab
+      await waitFor(() => {
+        expect(window.api.transactions.getDetails).toHaveBeenCalled();
+      });
+
+      const contactsTab = screen.getByText("Roles & Contacts");
+      await userEvent.click(contactsTab);
+
+      // Verify Jane Agent appears twice (once for each role)
+      await waitFor(() => {
+        const janeElements = screen.getAllByText("Jane Agent");
+        // Should have 2 instances since Jane is assigned to 2 roles
+        expect(janeElements.length).toBe(2);
+      });
+
+      // Click save without making changes
+      const saveButton = screen.getByRole("button", { name: /save changes/i });
+      await userEvent.click(saveButton);
+
+      // Verify save completed successfully
+      await waitFor(() => {
+        expect(mockOnSuccess).toHaveBeenCalled();
+      });
+    });
+
+    it("should correctly handle empty contact assignments", async () => {
+      // Setup: No initial contacts
+      window.api.transactions.getDetails.mockResolvedValue({
+        success: true,
+        transaction: {
+          ...mockTransaction,
+          contact_assignments: [],
+        },
+      });
+
+      renderWithProvider(
+        <EditTransactionModal
+          transaction={mockTransaction}
+          onClose={mockOnClose}
+          onSuccess={mockOnSuccess}
+        />,
+      );
+
+      // Wait for loading to finish
+      await waitFor(() => {
+        expect(window.api.transactions.getDetails).toHaveBeenCalled();
+      });
+
+      // Switch to contacts tab
+      const contactsTab = screen.getByText("Roles & Contacts");
+      await userEvent.click(contactsTab);
+
+      // Click save
+      const saveButton = screen.getByRole("button", { name: /save changes/i });
+      await userEvent.click(saveButton);
+
+      // Should call onSuccess without errors
+      await waitFor(() => {
+        expect(mockOnSuccess).toHaveBeenCalled();
+      });
+    });
+  });
 });

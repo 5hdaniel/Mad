@@ -186,6 +186,8 @@ export function EditContactsModal({
           operations.push({
             action: "remove",
             contactId: existing.contact_id,
+            role: role,
+            specificRole: role,
           });
         }
       }
@@ -582,6 +584,8 @@ function EditRoleAssignment({
           onSelect={handleContactSelected}
           onClose={() => setShowContactSelect(false)}
           propertyAddress={propertyAddress}
+          userId={userId}
+          onRefreshContacts={loadContacts}
         />
       )}
     </div>
