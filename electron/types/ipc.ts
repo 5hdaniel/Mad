@@ -1032,7 +1032,17 @@ export interface WindowApi {
         isPrimary?: boolean;
         notes?: string;
       }>,
-    ) => Promise<{ success: boolean; error?: string }>;
+    ) => Promise<{
+      success: boolean;
+      error?: string;
+      autoLinkResults?: Array<{
+        contactId: string;
+        emailsLinked: number;
+        messagesLinked: number;
+        alreadyLinked: number;
+        errors: number;
+      }>;
+    }>;
     unlinkCommunication: (
       communicationId: string,
       reason?: string,

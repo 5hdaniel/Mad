@@ -53,10 +53,22 @@ interface RoleConfig {
   multiple: boolean;
 }
 
+/**
+ * Auto-link results returned when contacts are added
+ * TASK-1126: Communications are auto-linked when contacts are added
+ */
+export interface AutoLinkResult {
+  contactId: string;
+  emailsLinked: number;
+  messagesLinked: number;
+  alreadyLinked: number;
+  errors: number;
+}
+
 export interface EditContactsModalProps {
   transaction: Transaction;
   onClose: () => void;
-  onSave: () => void;
+  onSave: (autoLinkResults?: AutoLinkResult[]) => void;
 }
 
 // ============================================
@@ -218,6 +230,8 @@ export function EditContactsModal({
       }
 
       // Execute all operations in a single batch call
+      // TASK-1126: batchUpdateContacts now returns autoLinkResults
+      let autoLinkResults: AutoLinkResult[] | undefined;
       if (operations.length > 0) {
         const batchResult = await window.api.transactions.batchUpdateContacts(
           transaction.id,
@@ -226,9 +240,10 @@ export function EditContactsModal({
         if (!batchResult.success) {
           throw new Error(batchResult.error || "Failed to update contacts");
         }
+        autoLinkResults = batchResult.autoLinkResults;
       }
 
-      onSave();
+      onSave(autoLinkResults);
       onClose();
     } catch (err) {
       const errorMessage =
