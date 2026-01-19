@@ -185,7 +185,7 @@ BACKLOG-203,Add Comprehensive Tests for macOSMessagesImportService,test,High,obs
 BACKLOG-204,Abstract window.api Calls into Service Layer,refactor,Medium,Pending,-,~80K,-,-,[BACKLOG-204.md](BACKLOG-204.md)
 BACKLOG-205,Fix Flaky useAutoRefresh Timer Tests,test,Low,Pending,-,~15K,-,-,[BACKLOG-205.md](BACKLOG-205.md)
 BACKLOG-206,UI Freezing During iMessage Sync/Import,enhancement/perf,High,Completed,SPRINT-033,~30K,-,[BACKLOG-206.md](BACKLOG-206.md),
-BACKLOG-207,Auto-Link Communications When Contact Added,enhancement,High,Reopened,SPRINT-033,~40K,-,[BACKLOG-207.md](BACKLOG-207.md),
+BACKLOG-207,Auto-Link Communications When Contact Added,enhancement,High,Completed,SPRINT-045,~40K,~20K,-50%,PR #475,~40K,-,[BACKLOG-207.md](BACKLOG-207.md),
 BACKLOG-208,Separate Email/Text Counts on Transaction Cards,ui,Medium,Completed,SPRINT-033,~20K,-,[BACKLOG-208.md](BACKLOG-208.md),
 BACKLOG-209,Fix iMessage Text Encoding Corruption (Data Loss),service/fix,Critical,Completed,SPRINT-033,~60K,-,[BACKLOG-209.md](BACKLOG-209.md),
 BACKLOG-210,Contacts Not Pre-Populating in Edit Transaction,bug,High,Completed,SPRINT-033,~20K,-,[BACKLOG-210.md](BACKLOG-210.md),
@@ -283,6 +283,6 @@ BACKLOG-303,Centralize dotenv.config() in supabaseService.ts,security,Low,Comple
 BACKLOG-304,Fix ESLint react-hooks/exhaustive-deps Rule Not Found,dx,Low,Completed,-,~3K,~1K,-67%,PR #468,[BACKLOG-304.md](items/BACKLOG-304.md)
 BACKLOG-305,Fix autoDetection.test.tsx Button Selector Failure,test,Medium,Completed,-,~5K,~1K,-80%,PR #468,[BACKLOG-305.md](items/BACKLOG-305.md)
 BACKLOG-292,Resolve Preload Script __DEV__ Undefined Error,build,Medium,Completed,-,~10K,~5K,-50%,PR #438,[BACKLOG-292.md](items/BACKLOG-292.md)
-BACKLOG-306,Hide Phone/Email in Contact Selection Modal,ui,Low,Pending,-,~5K,-,-,[BACKLOG-306.md](items/BACKLOG-306.md)
-BACKLOG-307,Contact Select Modal Missing Message-Derived Contacts,bug/ux,High,Pending,-,~15K,-,-,[BACKLOG-307.md](items/BACKLOG-307.md)
-BACKLOG-309,Import Contact Flow - Auto-Select and Refresh Issues,bug/ux,High,Pending,-,~20K,-,-,[BACKLOG-309.md](items/BACKLOG-309.md)
+BACKLOG-306,Hide Phone/Email in Contact Selection Modal,ui,Low,Completed,SPRINT-045,~8K,~8K,0%,PR #472,-,~5K,-,-,[BACKLOG-306.md](items/BACKLOG-306.md)
+BACKLOG-307,Contact Select Modal Missing Message-Derived Contacts,bug/ux,High,Completed,SPRINT-045,~45K,~35K,-22%,PR #473,-,~15K,-,-,[BACKLOG-307.md](items/BACKLOG-307.md)
+BACKLOG-309,Import Contact Flow - Auto-Select and Refresh Issues,bug/ux,High,Completed,SPRINT-045,~25K,~25K,0%,PR #474,-,~20K,-,-,[BACKLOG-309.md](items/BACKLOG-309.md)

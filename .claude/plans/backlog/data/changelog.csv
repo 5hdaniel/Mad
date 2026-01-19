@@ -173,3 +173,8 @@ date,action,details,items_affected
 2026-01-18,BACKLOG-207,status,Completed,Reopened,Auto-link not working as expected
 2026-01-18,SPRINT-044,completed,Planning,Completed,2 tasks: PR #470 #471 (~77K tokens)
 2026-01-18,BACKLOG-309,created,n/a,Pending,Import contact flow - auto-select and refresh issues
+2026-01-18,BACKLOG-306,status,Pending,Completed,PR #472 - hide phone/email in modal
+2026-01-18,BACKLOG-307,status,Pending,Completed,PR #473 - message-derived contacts
+2026-01-18,BACKLOG-309,status,Pending,Completed,PR #474 - import auto-select
+2026-01-18,BACKLOG-207,status,Reopened,Completed,PR #475 - wire auto-link
+2026-01-18,SPRINT-045,completed,Planning,Completed,4 tasks: PRs #472-475 (~88K tokens)
