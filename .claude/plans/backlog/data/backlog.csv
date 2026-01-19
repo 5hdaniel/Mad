@@ -185,7 +185,7 @@ BACKLOG-203,Add Comprehensive Tests for macOSMessagesImportService,test,High,obs
 BACKLOG-204,Abstract window.api Calls into Service Layer,refactor,Medium,Pending,-,~80K,-,-,[BACKLOG-204.md](BACKLOG-204.md)
 BACKLOG-205,Fix Flaky useAutoRefresh Timer Tests,test,Low,Pending,-,~15K,-,-,[BACKLOG-205.md](BACKLOG-205.md)
 BACKLOG-206,UI Freezing During iMessage Sync/Import,enhancement/perf,High,Completed,SPRINT-033,~30K,-,[BACKLOG-206.md](BACKLOG-206.md),
-BACKLOG-207,Auto-Link Communications When Contact Added,enhancement,High,Completed,SPRINT-033,~40K,-,[BACKLOG-207.md](BACKLOG-207.md),
+BACKLOG-207,Auto-Link Communications When Contact Added,enhancement,High,Reopened,SPRINT-033,~40K,-,[BACKLOG-207.md](BACKLOG-207.md),
 BACKLOG-208,Separate Email/Text Counts on Transaction Cards,ui,Medium,Completed,SPRINT-033,~20K,-,[BACKLOG-208.md](BACKLOG-208.md),
 BACKLOG-209,Fix iMessage Text Encoding Corruption (Data Loss),service/fix,Critical,Completed,SPRINT-033,~60K,-,[BACKLOG-209.md](BACKLOG-209.md),
 BACKLOG-210,Contacts Not Pre-Populating in Edit Transaction,bug,High,Completed,SPRINT-033,~20K,-,[BACKLOG-210.md](BACKLOG-210.md),
@@ -199,7 +199,7 @@ BACKLOG-217,UX Improvement - Edit Contacts Button Flow,enhancement/ux,High,Compl
 BACKLOG-218,Group Chat Display in Transaction Details (Placeholder),enhancement/ux,High,Blocked,-,~30K,-,Pending user requirements,[BACKLOG-218.md](BACKLOG-218.md)
 BACKLOG-219,Audit Debug/Logging Calls Across Repository,tech-debt/quality,Low,Pending,-,~20K,-,-,[BACKLOG-219.md](BACKLOG-219.md)
 BACKLOG-220,Unlink Communications UI Not Refreshing,bug/ui,High,Completed,SPRINT-042,~25K,~35K,+40%,PR #462,[BACKLOG-220.md](items/BACKLOG-220.md)
-BACKLOG-221,iMessage Attachments Not Displaying (Stale message_id),bug/data-integrity,High,Pending,-,~40K,-,-,[BACKLOG-221.md](BACKLOG-221.md)
+BACKLOG-221,iMessage Attachments Not Displaying (Stale message_id),bug/data-integrity,High,Completed,SPRINT-044,~40K,~25K,-37%,PR #471,[BACKLOG-221.md](BACKLOG-221.md)
 BACKLOG-222,Contact Changes Not Saving When Editing Transaction,bug/data-persistence,High,Pending,-,~30K,-,-,[BACKLOG-222.md](BACKLOG-222.md)
 BACKLOG-223,Add Text Message Status Indicator (Like Email Status),enhancement/ux,Medium,Pending,-,~25K,-,-,[BACKLOG-223.md](BACKLOG-223.md)
 BACKLOG-224,Apply Edit Contacts Pattern to Transaction Details,enhancement/ux,Low,Pending,-,~20K,-,-,[BACKLOG-224.md](BACKLOG-224.md)
@@ -207,7 +207,7 @@ BACKLOG-225,Video Attachment Support for iMessage Import,enhancement,Low,Pending
 BACKLOG-226,URL Preview Formatting in Messages,enhancement/ui,Low,Pending,-,~35K,-,-,[BACKLOG-226.md](BACKLOG-226.md)
 BACKLOG-227,Show iMessage Attachments in Attachments Tab,enhancement/ui,Medium,Pending,-,~30K,-,-,[BACKLOG-227.md](BACKLOG-227.md)
 BACKLOG-228,UI Freeze When Viewing Messages to Attach,bug/perf,High,Pending,-,~25K,-,Related to BACKLOG-173 regression,[BACKLOG-228.md](BACKLOG-228.md)
-BACKLOG-229,Binary Plist Text Still Showing as Garbage (CRITICAL),bug/data-integrity,Critical,Pending,-,~40K,-,TASK-1035 incomplete,[BACKLOG-229.md](BACKLOG-229.md)
+BACKLOG-229,Binary Plist Text Still Showing as Garbage (CRITICAL),bug/data-integrity,Critical,Completed,SPRINT-036,~40K,~30K,-25%,PR #431 (TASK-1071),[BACKLOG-229.md](BACKLOG-229.md)
 BACKLOG-230,NULL thread_id Investigation and Fix,data-integrity,Medium,Completed,-,~20K,-,"Analysis complete; macOS orphans, not parser issue",[BACKLOG-230-null-thread-id-investigation.md](BACKLOG-230-null-thread-id-investigation.md)
 BACKLOG-231,Fix Failing iosMessagesParser Tests (20 tests),test,Medium,Pending,-,~30K,-,Mock database setup issues,[BACKLOG-231.md](BACKLOG-231.md)
 BACKLOG-232,Fix Disabled webSecurity in OAuth Popup Windows,security,Critical,Completed,-,~40K,-,"googleAuthHandlers.ts, microsoftAuthHandlers.ts",PR #433
@@ -267,7 +267,7 @@ BACKLOG-284,Implement Dependency Injection for Services,architecture,Low,Pending
 BACKLOG-285,Add Data Abstraction Layer for Components,architecture,Low,Pending,-,~100K,-,Direct data access in components,-
 BACKLOG-289,Unified Notification System,ui-ux,Medium,Completed,SPRINT-040,~50K,~40K,PR #439,-
 BACKLOG-290,Reusable Sync Progress Component,ui-ux,Medium,Completed,SPRINT-040,~40K,~45K,PR #440,-
-BACKLOG-293,Duplicate macOS Messages Sync on Dashboard Load,bug,Medium,Pending,-,~20K,-,Sync triggers twice for returning users,[BACKLOG-293.md](BACKLOG-293.md)
+BACKLOG-293,Duplicate macOS Messages Sync on Dashboard Load,bug,Medium,Completed,SPRINT-041,~20K,~15K,-25%,PR (TASK-1113),[BACKLOG-293.md](BACKLOG-293.md)
 BACKLOG-294,Extract Reusable DashboardActionCard Component,refactor,Low,Pending,-,~15K,-,DRY refactor for dashboard buttons,[BACKLOG-294.md](BACKLOG-294.md)
 BACKLOG-286,Unify Chat Card and Group Chat Card Components,ui-ux,Low,Completed,SPRINT-040,~40K,~70K,"PRs #442,445-448",-
 BACKLOG-288,Simplify Dashboard Button Labels,ui-ux,Low,Completed,SPRINT-040,~10K,~20K,"PRs #441,443",-
@@ -275,7 +275,7 @@ BACKLOG-295,Transaction Header Responsive Layout,ui-ux,Medium,Completed,SPRINT-0
 BACKLOG-296,Database Schema Alignment - Service Updates,tech-debt/data-integrity,High,Completed,SPRINT-042,~40K,~35K,-12%,PR #462,[BACKLOG-296.md](items/BACKLOG-296.md)
 BACKLOG-297,Startup Error Handling - User-Friendly Failure Screen,ux/error-handling,Medium,Pending,-,~50K,-,Timeout + error screen on init failure,[BACKLOG-297.md](BACKLOG-297.md)
 BACKLOG-298,Video Attachment Support in ConversationViewModal,ui-ux,Medium,Pending,-,~35K,-,"Videos filtered out, only images displayed",[BACKLOG-298.md](BACKLOG-298.md)
-BACKLOG-299,1:1 Chat Incorrectly Shown as Group Chat,bug/data-quality,Medium,Pending,-,~25K,-,"""unknown"" participant triggers isGroupChat()",[BACKLOG-299.md](BACKLOG-299.md)
+BACKLOG-299,1:1 Chat Incorrectly Shown as Group Chat,bug/data-quality,Medium,Completed,SPRINT-044,~25K,~52K,+108%,PR #470,[BACKLOG-299.md](BACKLOG-299.md)
 BACKLOG-300,Display Contact Roles in User-Friendly Format,ux/polish,Low,Pending,-,~5K,-,"Format snake_case roles as ""Title Case""",[BACKLOG-300.md](BACKLOG-300.md)
 BACKLOG-301,Refactor Sync Coordination with SyncScheduler Service,tech-debt/arch,Medium,Pending,-,~65K,-,"Centralize sync triggers, remove cross-hook flags",[BACKLOG-301.md](BACKLOG-301.md)
 BACKLOG-302,Service Pattern Audit - Coordination Refactoring,tech-debt/arch,Medium,Pending,-,~10K,-,Audit findings for sync coordination patterns,[BACKLOG-302.md](BACKLOG-302.md)
@@ -283,3 +283,5 @@ BACKLOG-303,Centralize dotenv.config() in supabaseService.ts,security,Low,Comple
 BACKLOG-304,Fix ESLint react-hooks/exhaustive-deps Rule Not Found,dx,Low,Completed,-,~3K,~1K,-67%,PR #468,[BACKLOG-304.md](items/BACKLOG-304.md)
 BACKLOG-305,Fix autoDetection.test.tsx Button Selector Failure,test,Medium,Completed,-,~5K,~1K,-80%,PR #468,[BACKLOG-305.md](items/BACKLOG-305.md)
 BACKLOG-292,Resolve Preload Script __DEV__ Undefined Error,build,Medium,Completed,-,~10K,~5K,-50%,PR #438,[BACKLOG-292.md](items/BACKLOG-292.md)
+BACKLOG-306,Hide Phone/Email in Contact Selection Modal,ui,Low,Pending,-,~5K,-,-,[BACKLOG-306.md](items/BACKLOG-306.md)
+BACKLOG-307,Contact Select Modal Missing Message-Derived Contacts,bug/ux,High,Pending,-,~15K,-,-,[BACKLOG-307.md](items/BACKLOG-307.md)

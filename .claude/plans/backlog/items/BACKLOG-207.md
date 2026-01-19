@@ -3,7 +3,7 @@
 **Created**: 2026-01-11
 **Priority**: Medium
 **Category**: enhancement
-**Status**: Pending
+**Status**: Reopened (2026-01-18 - feature not working as expected)
 
 ---
 

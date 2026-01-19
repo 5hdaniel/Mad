@@ -36,3 +36,4 @@ SPRINT-040,UI Design System,Completed,"9 tasks (TASK-1100-1108) + 2 hotfixes: Sy
 SPRINT-041,Bug Fixes,Completed,"5 tasks (TASK-1109-1113): Unlink UI refresh (PR #450), Duplicate sync (PR #451), Contact save (PR #452), Attachments stale ID (PR #453), UI freeze modal (PR #454). **Note:** BACKLOG-220 fix insufficient - reopened for SPRINT-042"
 SPRINT-042,Database Schema Alignment,Completed,"3 tasks (TASK-1114-1116): Thread-based communications schema, service updates, unlink UI integration. BACKLOG-220 (reopened), BACKLOG-296. PR #462"
 SPRINT-043,Security Hardening,Completed,"3 tasks (TASK-1117-1119): Sandbox re-enablement (PR #463), env var centralization (PRs #464,466), CSP tightening (PR #465). BACKLOG-247, 248, 249, 303"
+SPRINT-044,Reliability & Data Integrity,Completed,"2 tasks completed: TASK-1122 iMessage attachments (PR #471), TASK-1123 group chat detection (PR #470). TASK-1120/1121 found already fixed (TASK-1071, TASK-1113). ~77K actual tokens"
