@@ -18,6 +18,7 @@ import path from "path";
 import fs from "fs/promises";
 import { app, BrowserWindow } from "electron";
 import logService from "./logService";
+import databaseService from "./databaseService";
 import type { Transaction, Communication } from "../types/models";
 
 export interface FolderExportOptions {
@@ -42,6 +43,7 @@ interface AttachmentManifestEntry {
   date: string;
   size: number;
   sourceEmailIndex?: number;
+  status?: "exported" | "file_not_found" | "copy_failed";
 }
 
 interface AttachmentManifest {
@@ -614,6 +616,7 @@ class FolderExportService {
 
   /**
    * Export attachments and create manifest
+   * Queries the attachments table by message_id and copies actual files to output folder
    */
   private async exportAttachments(
     transaction: Transaction,
@@ -627,35 +630,135 @@ class FolderExportService {
       attachments: [],
     };
 
-    // Note: In a full implementation, we would:
-    // 1. Query attachments table for each email
-    // 2. Copy attachment files to the output folder
-    // 3. Build the manifest
-    //
-    // For now, we create an empty manifest indicating where attachments would go
-    // This allows the folder structure to be complete for future enhancement
+    // Get message IDs for the linked communications
+    const messageIds = emails
+      .filter((email) => email.message_id)
+      .map((email) => email.message_id as string);
 
-    let attachmentIndex = 0;
-    for (let emailIndex = 0; emailIndex < emails.length; emailIndex++) {
-      const email = emails[emailIndex];
-      if (email.has_attachments && email.attachment_metadata) {
-        try {
-          const attachments = JSON.parse(email.attachment_metadata);
-          if (Array.isArray(attachments)) {
-            for (const att of attachments) {
-              manifest.attachments.push({
-                filename: att.filename || `attachment_${attachmentIndex + 1}`,
-                originalMessage: email.subject || "(No Subject)",
-                date: email.sent_at as string,
-                size: att.size || 0,
-                sourceEmailIndex: emailIndex + 1,
-              });
-              attachmentIndex++;
-            }
-          }
-        } catch {
-          // If metadata parsing fails, skip
+    if (messageIds.length === 0) {
+      // No linked messages, write empty manifest
+      await fs.writeFile(
+        path.join(outputPath, "manifest.json"),
+        JSON.stringify(manifest, null, 2),
+        "utf8"
+      );
+      return;
+    }
+
+    // Query attachments table for all linked messages
+    const db = databaseService.getRawDatabase();
+    const placeholders = messageIds.map(() => "?").join(", ");
+    const attachmentRows = db
+      .prepare(
+        `
+        SELECT id, message_id, filename, mime_type, file_size_bytes, storage_path
+        FROM attachments
+        WHERE message_id IN (${placeholders})
+      `
+      )
+      .all(...messageIds) as {
+      id: string;
+      message_id: string;
+      filename: string;
+      mime_type: string | null;
+      file_size_bytes: number | null;
+      storage_path: string | null;
+    }[];
+
+    // Build a map of message_id -> email index for quick lookup
+    const messageIdToEmailIndex = new Map<string, number>();
+    const messageIdToEmail = new Map<string, Communication>();
+    emails.forEach((email, index) => {
+      if (email.message_id) {
+        messageIdToEmailIndex.set(email.message_id, index + 1);
+        messageIdToEmail.set(email.message_id, email);
+      }
+    });
+
+    // Track used filenames to avoid collisions
+    const usedFilenames = new Set<string>();
+
+    for (const att of attachmentRows) {
+      const email = messageIdToEmail.get(att.message_id);
+      const emailIndex = messageIdToEmailIndex.get(att.message_id);
+      const originalFilename = att.filename || `attachment_${manifest.attachments.length + 1}`;
+
+      // Generate unique filename to avoid collisions
+      let exportFilename = this.sanitizeFileName(originalFilename);
+      let counter = 1;
+      const baseName = exportFilename.replace(/\.[^.]+$/, "");
+      const extension = exportFilename.includes(".") ? exportFilename.slice(exportFilename.lastIndexOf(".")) : "";
+
+      while (usedFilenames.has(exportFilename)) {
+        exportFilename = `${baseName}_${counter}${extension}`;
+        counter++;
+      }
+      usedFilenames.add(exportFilename);
+
+      const destPath = path.join(outputPath, exportFilename);
+
+      // Handle missing storage_path
+      if (!att.storage_path) {
+        logService.warn("[Folder Export] Attachment has no storage path", "FolderExport", {
+          attachmentId: att.id,
+          filename: att.filename,
+        });
+        manifest.attachments.push({
+          filename: originalFilename,
+          originalMessage: email?.subject || "(No Subject)",
+          date: (email?.sent_at as string) || new Date().toISOString(),
+          size: att.file_size_bytes || 0,
+          sourceEmailIndex: emailIndex,
+          status: "file_not_found",
+        });
+        continue;
+      }
+
+      try {
+        // Check if source file exists
+        if (await this.fileExists(att.storage_path)) {
+          // Copy the file to the output folder
+          await fs.copyFile(att.storage_path, destPath);
+          manifest.attachments.push({
+            filename: exportFilename,
+            originalMessage: email?.subject || "(No Subject)",
+            date: (email?.sent_at as string) || new Date().toISOString(),
+            size: att.file_size_bytes || 0,
+            sourceEmailIndex: emailIndex,
+            status: "exported",
+          });
+          logService.debug("[Folder Export] Exported attachment", "FolderExport", {
+            filename: exportFilename,
+            sourcePath: att.storage_path,
+          });
+        } else {
+          // File not found at storage path
+          logService.warn("[Folder Export] Attachment file not found", "FolderExport", {
+            attachmentId: att.id,
+            storagePath: att.storage_path,
+          });
+          manifest.attachments.push({
+            filename: originalFilename,
+            originalMessage: email?.subject || "(No Subject)",
+            date: (email?.sent_at as string) || new Date().toISOString(),
+            size: att.file_size_bytes || 0,
+            sourceEmailIndex: emailIndex,
+            status: "file_not_found",
+          });
         }
+      } catch (copyError) {
+        logService.warn("[Folder Export] Failed to copy attachment", "FolderExport", {
+          filename: att.filename,
+          error: copyError,
+        });
+        manifest.attachments.push({
+          filename: originalFilename,
+          originalMessage: email?.subject || "(No Subject)",
+          date: (email?.sent_at as string) || new Date().toISOString(),
+          size: att.file_size_bytes || 0,
+          sourceEmailIndex: emailIndex,
+          status: "copy_failed",
+        });
       }
     }
 
@@ -665,6 +768,13 @@ class FolderExportService {
       JSON.stringify(manifest, null, 2),
       "utf8"
     );
+
+    logService.info("[Folder Export] Attachments export complete", "FolderExport", {
+      total: attachmentRows.length,
+      exported: manifest.attachments.filter((a) => a.status === "exported").length,
+      notFound: manifest.attachments.filter((a) => a.status === "file_not_found").length,
+      failed: manifest.attachments.filter((a) => a.status === "copy_failed").length,
+    });
   }
 
   /**
@@ -737,6 +847,18 @@ class FolderExportService {
       "'": "&#39;",
     };
     return text.replace(/[&<>"']/g, (char) => htmlEscapes[char]);
+  }
+
+  /**
+   * Check if a file exists at the given path
+   */
+  private async fileExists(filePath: string): Promise<boolean> {
+    try {
+      await fs.access(filePath);
+      return true;
+    } catch {
+      return false;
+    }
   }
 }
 
