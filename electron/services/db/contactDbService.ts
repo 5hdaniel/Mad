@@ -988,5 +988,177 @@ export async function getOrCreateContactFromEmail(
   return contact;
 }
 
+/**
+ * Search contacts for selection modal (database-level search)
+ * Searches both imported contacts and message-derived contacts.
+ * Used when user types in search box - performs DB search instead of client-side filter.
+ *
+ * This fixes the LIMIT 200 issue where contacts beyond position 200 were unsearchable.
+ * Search has no arbitrary LIMIT on the searchable pool - only limits result count.
+ *
+ * @param userId - User ID to search contacts for
+ * @param query - Search query (min 2 characters for meaningful results)
+ * @param limit - Maximum results to return (default 50)
+ * @returns Contacts matching the search query, sorted by relevance
+ */
+export function searchContactsForSelection(
+  userId: string,
+  query: string,
+  limit: number = 50
+): ContactWithActivity[] {
+  const searchPattern = `%${query}%`;
+
+  // Get emails of imported contacts to exclude duplicates in message-derived results
+  const importedEmailsSql = `
+    SELECT LOWER(email) as email
+    FROM contact_emails ce
+    JOIN contacts c ON ce.contact_id = c.id
+    WHERE c.user_id = ? AND c.is_imported = 1
+  `;
+  const importedEmailRows = dbAll<{ email: string }>(importedEmailsSql, [userId]);
+  const importedEmails = new Set(importedEmailRows.map(r => r.email).filter(Boolean));
+
+  // Search imported contacts
+  // Searches across display_name, all emails, phone, and company
+  const importedSql = `
+    SELECT
+      c.id,
+      c.user_id,
+      c.display_name,
+      c.display_name as name,
+      ce_primary.email as email,
+      cp_primary.phone_e164 as phone,
+      c.company,
+      c.title,
+      c.source,
+      c.is_imported,
+      0 as is_message_derived,
+      MAX(comm.sent_at) as last_communication_at,
+      COUNT(DISTINCT comm.id) as communication_count,
+      0 as address_mention_count
+    FROM contacts c
+    LEFT JOIN contact_emails ce_primary ON c.id = ce_primary.contact_id AND ce_primary.is_primary = 1
+    LEFT JOIN contact_phones cp_primary ON c.id = cp_primary.contact_id AND cp_primary.is_primary = 1
+    LEFT JOIN contact_emails ce_all ON c.id = ce_all.contact_id
+    LEFT JOIN communications comm ON (
+      ce_all.email IS NOT NULL
+      AND (comm.sender = ce_all.email OR comm.recipients LIKE '%' || ce_all.email || '%')
+      AND comm.user_id = c.user_id
+    )
+    WHERE c.user_id = ? AND c.is_imported = 1
+      AND (
+        c.display_name LIKE ?
+        OR ce_all.email LIKE ?
+        OR cp_primary.phone_e164 LIKE ?
+        OR c.company LIKE ?
+      )
+    GROUP BY c.id
+    ORDER BY
+      CASE WHEN c.display_name LIKE ? THEN 0 ELSE 1 END,
+      last_communication_at DESC NULLS LAST
+    LIMIT ?
+  `;
+
+  // Search message-derived contacts (no LIMIT 200 restriction when searching)
+  // BACKLOG-313 filters still apply: exclude raw emails/phones as names
+  const messageSql = `
+    SELECT
+      'msg_' || LOWER(json_extract(participants, '$.from')) as id,
+      ? as user_id,
+      json_extract(participants, '$.from') as display_name,
+      json_extract(participants, '$.from') as name,
+      CASE
+        WHEN json_extract(participants, '$.from') LIKE '%@%'
+        THEN LOWER(json_extract(participants, '$.from'))
+        ELSE NULL
+      END as email,
+      CASE
+        WHEN json_extract(participants, '$.from') NOT LIKE '%@%'
+        THEN json_extract(participants, '$.from')
+        ELSE NULL
+      END as phone,
+      NULL as company,
+      NULL as title,
+      'messages' as source,
+      0 as is_imported,
+      1 as is_message_derived,
+      MAX(sent_at) as last_communication_at,
+      COUNT(*) as communication_count,
+      0 as address_mention_count
+    FROM messages
+    WHERE user_id = ?
+      AND participants IS NOT NULL
+      AND json_extract(participants, '$.from') IS NOT NULL
+      AND json_extract(participants, '$.from') != ''
+      AND json_extract(participants, '$.from') != 'me'
+      -- BACKLOG-313: Filter out entries where "name" is raw phone/email (no display name)
+      AND json_extract(participants, '$.from') NOT LIKE '%@%'
+      AND json_extract(participants, '$.from') NOT LIKE '+%'
+      AND json_extract(participants, '$.from') NOT GLOB '[0-9]*'
+      -- Search filter
+      AND json_extract(participants, '$.from') LIKE ?
+    GROUP BY LOWER(json_extract(participants, '$.from'))
+    ORDER BY last_communication_at DESC
+    LIMIT ?
+  `;
+
+  try {
+    // Execute imported contacts search
+    const importedResults = dbAll<ContactWithActivity>(importedSql, [
+      userId,
+      searchPattern,
+      searchPattern,
+      searchPattern,
+      searchPattern,
+      searchPattern, // For ORDER BY CASE
+      limit,
+    ]);
+
+    // Execute message-derived contacts search
+    const messageResults = dbAll<ContactWithActivity>(messageSql, [
+      userId, // For user_id column
+      userId, // For WHERE clause
+      searchPattern,
+      limit,
+    ]);
+
+    // Filter out message-derived contacts whose email is already imported
+    const filteredMessageResults = messageResults.filter(contact => {
+      if (contact.email) {
+        return !importedEmails.has(contact.email.toLowerCase());
+      }
+      return true;
+    });
+
+    // Merge results: imported first, then message-derived
+    const allResults = [...importedResults, ...filteredMessageResults];
+
+    // Sort by name match first, then by communication date
+    allResults.sort((a, b) => {
+      // Prioritize exact name prefix match
+      const aNameMatch = (a.display_name || a.name || '').toLowerCase().startsWith(query.toLowerCase()) ? 0 : 1;
+      const bNameMatch = (b.display_name || b.name || '').toLowerCase().startsWith(query.toLowerCase()) ? 0 : 1;
+      if (aNameMatch !== bNameMatch) {
+        return aNameMatch - bNameMatch;
+      }
+
+      // Then by last communication date
+      const dateA = a.last_communication_at ? new Date(a.last_communication_at).getTime() : 0;
+      const dateB = b.last_communication_at ? new Date(b.last_communication_at).getTime() : 0;
+      return dateB - dateA;
+    });
+
+    // Return up to limit results
+    return allResults.slice(0, limit);
+  } catch (error) {
+    logService.error("Error searching contacts for selection", "ContactDbService", {
+      error: (error as Error).message,
+      userId,
+      query,
+    });
+    throw error;
+  }
+}
+
 // Export types for consumers
 export type { ContactWithActivity, TransactionWithRoles };
