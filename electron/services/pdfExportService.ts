@@ -461,7 +461,7 @@ class PDFExportService {
 
     .back-to-top {
       color: #667eea;
-      text-decoration: none;
+      text-decoration: underline;
       font-size: 12px;
       display: inline-block;
       margin-top: 12px;
@@ -818,7 +818,10 @@ class PDFExportService {
         // Prefer HTML body for rich formatting, fall back to plain text
         // Note: The query returns HTML content in 'body' field (not 'body_html')
         const htmlBody = (comm as { body?: string }).body;
-        const hasHtmlBody = htmlBody && htmlBody.trim().length > 0 && htmlBody.includes('<');
+        // Check for actual HTML tags (not just angle brackets from URLs like <https://...>)
+        // Look for common HTML tags that indicate rich content
+        const hasHtmlBody = htmlBody && htmlBody.trim().length > 0 &&
+          (/<(html|body|div|p|table|tr|td|span|a\s|img|br|hr|h[1-6]|ul|ol|li|strong|em|b|i)\b/i.test(htmlBody));
         let bodyContent: string;
         let bodyClass: string;
 
