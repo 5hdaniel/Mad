@@ -836,7 +836,6 @@ class PDFExportService {
     if (hasAppendix) {
       html += '<div class="appendix">';
       html += '<a name="appendix"></a>';
-      html += '<h2>Full Messages</h2>';
 
       // Email appendix items
       emailsWithContent.forEach((comm, idx) => {
