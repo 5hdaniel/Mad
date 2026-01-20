@@ -365,6 +365,7 @@ class PDFExportService {
       margin-bottom: 24px;
       background: white;
       page-break-inside: avoid;
+      page-break-before: always;
     }
 
     .appendix-item .header-row {
@@ -416,7 +417,9 @@ class PDFExportService {
 
     /* Rich HTML email body styles */
     .appendix-item .message-body-html {
-      /* Reset common email styles that might break PDF layout */
+      /* White background for HTML emails so their own styling shows properly */
+      background: white;
+      border: 1px solid #e2e8f0;
     }
 
     .appendix-item .message-body-html img {
@@ -470,6 +473,15 @@ class PDFExportService {
     @media print {
       body {
         padding: 20px;
+      }
+    }
+
+    /* Page numbers */
+    @page {
+      @bottom-center {
+        content: "Page " counter(page) " of " counter(pages);
+        font-size: 10px;
+        color: #718096;
       }
     }
   </style>
