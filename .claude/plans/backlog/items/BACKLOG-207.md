@@ -3,7 +3,12 @@
 **Created**: 2026-01-11
 **Priority**: Medium
 **Category**: enhancement
-**Status**: Reopened (2026-01-18 - feature not working as expected)
+**Status**: Done
+**Sprint:** SPRINT-045
+**PR:** #475
+**Completed:** 2026-01-19
+
+*Previously reopened on 2026-01-18 because feature was not triggering properly.*
 
 ---
 

@@ -7,7 +7,11 @@ Bug / UX
 High
 
 ## Status
-Pending
+Done
+
+**Sprint:** SPRINT-045
+**PR:** #474
+**Completed:** 2026-01-19
 
 ## Summary
 

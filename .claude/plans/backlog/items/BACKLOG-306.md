@@ -1,5 +1,10 @@
 # BACKLOG-306: Hide Phone/Email in Contact Selection Modal
 
+**Status:** Done
+**Sprint:** SPRINT-045
+**PR:** #472
+**Completed:** 2026-01-19
+
 ## Summary
 
 In the "Select Contact" / "Link chats to" modal, do not display phone numbers or email addresses for contacts. Only show the contact name.
