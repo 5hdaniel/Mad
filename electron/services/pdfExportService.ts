@@ -591,6 +591,7 @@ class PDFExportService {
 
       // Remove data: URLs (could contain malicious content)
       sanitized = sanitized.replace(/src\s*=\s*["']data:[^"']*["']/gi, 'src=""');
+      sanitized = sanitized.replace(/href\s*=\s*["']data:[^"']*["']/gi, 'href="#"');
 
       // Remove iframe, embed, object tags
       sanitized = sanitized.replace(/<iframe\b[^>]*>.*?<\/iframe>/gi, '');
