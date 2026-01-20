@@ -415,11 +415,14 @@ function EditContactAssignments({
     useContactsLoader(userId, propertyAddress);
 
   return (
-    <div className="space-y-6">
-      {/* Show contacts loading/error state */}
+    <div className="space-y-6 relative">
+      {/* Loading overlay - prevents layout shift by covering content */}
       {contactsLoading && (
-        <div className="text-sm text-gray-500 text-center py-2">
-          Loading contacts...
+        <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10">
+          <div className="flex flex-col items-center gap-2">
+            <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+            <span className="text-sm text-gray-600">Loading contacts...</span>
+          </div>
         </div>
       )}
       {contactsError && (
