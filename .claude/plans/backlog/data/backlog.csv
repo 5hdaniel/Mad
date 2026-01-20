@@ -305,3 +305,4 @@ BACKLOG-331,PDF Export Date Range Filtering,pdf-export,medium,pending,-,-,-,-,[B
 BACKLOG-332,Audit Package Missing Attachments and Text Messages,audit-export,high,pending,-,-,-,-,[BACKLOG-332.md](BACKLOG-332.md)
 BACKLOG-333,Gray Out Unimplemented Export Options with Coming Soon Label,ui,low,pending,-,-,-,-,[BACKLOG-333.md](BACKLOG-333.md)
 BACKLOG-334,Export Settings - Persist Default Export Options and Format,settings,medium,pending,-,-,-,-,[BACKLOG-334.md](BACKLOG-334.md)
+BACKLOG-335,Enforce Transaction Start Date with Historical Message Filtering,transactions,high,pending,-,-,-,-,[BACKLOG-335.md](BACKLOG-335.md)
