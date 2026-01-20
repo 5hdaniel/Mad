@@ -655,4 +655,208 @@ describe("ContactSelectModal", () => {
       expect(screen.getByRole("button", { name: /add/i })).toBeInTheDocument();
     });
   });
+
+  describe("Message Contacts Toggle (TASK-1131)", () => {
+    // Contacts with message-derived flag
+    const mockContactsWithMessageDerived: ExtendedContact[] = [
+      {
+        id: "imported-1",
+        user_id: "user-1",
+        name: "Alice Imported",
+        email: "alice@example.com",
+        source: "contacts_app",
+        is_message_derived: 0, // Not message-derived (imported)
+      },
+      {
+        id: "imported-2",
+        user_id: "user-1",
+        name: "Bob Imported",
+        email: "bob@example.com",
+        source: "email",
+        is_message_derived: false, // Also not message-derived (boolean form)
+      },
+      {
+        id: "msg_charlie",
+        user_id: "user-1",
+        name: "Charlie FromMessage",
+        email: "charlie@example.com",
+        source: "messages",
+        is_message_derived: 1, // Message-derived (number form)
+      },
+      {
+        id: "msg_diana",
+        user_id: "user-1",
+        name: "Diana FromMessage",
+        email: null,
+        source: "messages",
+        is_message_derived: true, // Message-derived (boolean form)
+      },
+    ];
+
+    beforeEach(() => {
+      // Clear localStorage before each test
+      localStorage.removeItem("contactModal.showMessageContacts");
+    });
+
+    it("should render the toggle checkbox", () => {
+      render(
+        <ContactSelectModal
+          contacts={mockContactsWithMessageDerived}
+          onSelect={mockOnSelect}
+          onClose={mockOnClose}
+        />
+      );
+
+      expect(screen.getByText("Include message contacts")).toBeInTheDocument();
+      expect(screen.getByRole("checkbox")).toBeInTheDocument();
+    });
+
+    it("should hide message-derived contacts by default (toggle OFF)", () => {
+      render(
+        <ContactSelectModal
+          contacts={mockContactsWithMessageDerived}
+          onSelect={mockOnSelect}
+          onClose={mockOnClose}
+        />
+      );
+
+      // Imported contacts should be visible
+      expect(screen.getByText("Alice Imported")).toBeInTheDocument();
+      expect(screen.getByText("Bob Imported")).toBeInTheDocument();
+
+      // Message-derived contacts should be hidden
+      expect(screen.queryByText("Charlie FromMessage")).not.toBeInTheDocument();
+      expect(screen.queryByText("Diana FromMessage")).not.toBeInTheDocument();
+    });
+
+    it("should show message-derived contacts when toggle is ON", async () => {
+      render(
+        <ContactSelectModal
+          contacts={mockContactsWithMessageDerived}
+          onSelect={mockOnSelect}
+          onClose={mockOnClose}
+        />
+      );
+
+      // Click the toggle
+      const toggle = screen.getByRole("checkbox");
+      fireEvent.click(toggle);
+
+      // Now all contacts should be visible
+      await waitFor(() => {
+        expect(screen.getByText("Alice Imported")).toBeInTheDocument();
+        expect(screen.getByText("Bob Imported")).toBeInTheDocument();
+        expect(screen.getByText("Charlie FromMessage")).toBeInTheDocument();
+        expect(screen.getByText("Diana FromMessage")).toBeInTheDocument();
+      });
+    });
+
+    it("should toggle OFF again to hide message-derived contacts", async () => {
+      render(
+        <ContactSelectModal
+          contacts={mockContactsWithMessageDerived}
+          onSelect={mockOnSelect}
+          onClose={mockOnClose}
+        />
+      );
+
+      const toggle = screen.getByRole("checkbox");
+
+      // Turn ON
+      fireEvent.click(toggle);
+      await waitFor(() => {
+        expect(screen.getByText("Charlie FromMessage")).toBeInTheDocument();
+      });
+
+      // Turn OFF
+      fireEvent.click(toggle);
+      await waitFor(() => {
+        expect(screen.queryByText("Charlie FromMessage")).not.toBeInTheDocument();
+      });
+    });
+
+    it("should persist toggle state in localStorage", async () => {
+      const { unmount } = render(
+        <ContactSelectModal
+          contacts={mockContactsWithMessageDerived}
+          onSelect={mockOnSelect}
+          onClose={mockOnClose}
+        />
+      );
+
+      // Enable toggle
+      const toggle = screen.getByRole("checkbox");
+      fireEvent.click(toggle);
+
+      // Wait for state update and localStorage write
+      await waitFor(() => {
+        expect(localStorage.getItem("contactModal.showMessageContacts")).toBe("true");
+      });
+
+      // Unmount
+      unmount();
+
+      // Render fresh instance - should read from localStorage
+      render(
+        <ContactSelectModal
+          contacts={mockContactsWithMessageDerived}
+          onSelect={mockOnSelect}
+          onClose={mockOnClose}
+        />
+      );
+
+      // Toggle should still be checked and message contacts visible
+      await waitFor(() => {
+        const newToggle = screen.getByRole("checkbox");
+        expect(newToggle).toBeChecked();
+        expect(screen.getByText("Charlie FromMessage")).toBeInTheDocument();
+      });
+    });
+
+    it("should work with search filtering when toggle is ON", async () => {
+      render(
+        <ContactSelectModal
+          contacts={mockContactsWithMessageDerived}
+          onSelect={mockOnSelect}
+          onClose={mockOnClose}
+        />
+      );
+
+      // Enable toggle first
+      const toggle = screen.getByRole("checkbox");
+      fireEvent.click(toggle);
+
+      // Search for message-derived contact
+      const searchInput = screen.getByPlaceholderText(/search contacts/i);
+      fireEvent.change(searchInput, { target: { value: "Charlie" } });
+
+      await waitFor(() => {
+        expect(screen.getByText("Charlie FromMessage")).toBeInTheDocument();
+        expect(screen.queryByText("Alice Imported")).not.toBeInTheDocument();
+      });
+    });
+
+    it("should show empty state when all contacts are message-derived and toggle is OFF", () => {
+      const onlyMessageContacts: ExtendedContact[] = [
+        {
+          id: "msg_only",
+          user_id: "user-1",
+          name: "Message Only Contact",
+          source: "messages",
+          is_message_derived: 1,
+        },
+      ];
+
+      render(
+        <ContactSelectModal
+          contacts={onlyMessageContacts}
+          onSelect={mockOnSelect}
+          onClose={mockOnClose}
+        />
+      );
+
+      // With only message-derived contacts and toggle OFF, should show empty state
+      expect(screen.getByText("No contacts available")).toBeInTheDocument();
+    });
+  });
 });

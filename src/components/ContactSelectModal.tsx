@@ -31,6 +31,9 @@ interface ContactSelectModalProps {
  * - Displays last communication date
  * - Checkbox-based selection with visual feedback
  */
+// LocalStorage key for toggle persistence
+const SHOW_MESSAGE_CONTACTS_KEY = "contactModal.showMessageContacts";
+
 function ContactSelectModal({
   contacts,
   excludeIds = [],
@@ -46,6 +49,25 @@ function ContactSelectModal({
   const [showImportModal, setShowImportModal] = useState(false);
   // Track IDs to auto-select after import (cleared once contacts refresh)
   const [pendingAutoSelectIds, setPendingAutoSelectIds] = useState<string[]>([]);
+
+  // Toggle for showing message-derived contacts (default: hide them)
+  const [showMessageContacts, setShowMessageContacts] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem(SHOW_MESSAGE_CONTACTS_KEY);
+      return stored === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  // Persist toggle state to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(SHOW_MESSAGE_CONTACTS_KEY, String(showMessageContacts));
+    } catch {
+      // Ignore localStorage errors
+    }
+  }, [showMessageContacts]);
 
   // Database search state
   const [searchResults, setSearchResults] = useState<ExtendedContact[] | null>(null);
@@ -160,25 +182,39 @@ function ContactSelectModal({
 
   const availableContacts = contacts.filter((c) => !excludeIds.includes(c.id));
 
+  // Helper to check if a contact is message-derived
+  const isMessageDerived = (contact: ExtendedContact): boolean => {
+    // is_message_derived can be number (1) or boolean (true)
+    return contact.is_message_derived === 1 || contact.is_message_derived === true;
+  };
+
   // Use database search results if available, otherwise filter client-side
   const filteredContacts = React.useMemo(() => {
+    let result: ExtendedContact[];
+
     if (searchResults !== null) {
       // Database search results - filter out excluded IDs
-      return searchResults.filter((c) => !excludeIds.includes(c.id));
+      result = searchResults.filter((c) => !excludeIds.includes(c.id));
+    } else if (!searchQuery) {
+      // No search query - use all available contacts
+      result = availableContacts;
+    } else {
+      // Client-side filtering for short queries
+      result = availableContacts.filter(
+        (c) =>
+          c.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          c.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          c.company?.toLowerCase().includes(searchQuery.toLowerCase()),
+      );
     }
 
-    // Client-side filtering for short/empty queries
-    if (!searchQuery) {
-      return availableContacts;
+    // Apply message-derived filter if toggle is off
+    if (!showMessageContacts) {
+      result = result.filter((c) => !isMessageDerived(c));
     }
 
-    return availableContacts.filter(
-      (c) =>
-        c.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        c.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        c.company?.toLowerCase().includes(searchQuery.toLowerCase()),
-    );
-  }, [searchResults, searchQuery, availableContacts, excludeIds]);
+    return result;
+  }, [searchResults, searchQuery, availableContacts, excludeIds, showMessageContacts]);
 
   const handleToggleContact = (contactId: string) => {
     if (multiple) {
@@ -281,6 +317,16 @@ function ContactSelectModal({
                 </svg>
               )}
             </div>
+            {/* Toggle for message-derived contacts */}
+            <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none flex-shrink-0 whitespace-nowrap">
+              <input
+                type="checkbox"
+                checked={showMessageContacts}
+                onChange={(e) => setShowMessageContacts(e.target.checked)}
+                className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
+              />
+              <span>Include message contacts</span>
+            </label>
             {/* Import Contacts Button */}
             {userId && (
               <button
