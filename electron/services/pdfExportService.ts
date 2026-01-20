@@ -682,6 +682,7 @@ class PDFExportService {
     // Text Threads Section (grouped by conversation)
     if (sortedThreads.length > 0) {
       html += '<div class="section">';
+      html += '<a name="text-conversations"></a>';
       html += '<h3>Text Conversations (' + sortedThreads.length + ')</h3>';
       html += '<div class="communications">';
 
@@ -798,7 +799,7 @@ class PDFExportService {
         });
         html += '</div>';
 
-        html += '<a href="#appendix" class="back-to-top">&larr; Back to Messages</a>';
+        html += '<a href="#text-conversations" class="back-to-top">&larr; Back to Messages</a>';
         html += '</div>';
       });
 
