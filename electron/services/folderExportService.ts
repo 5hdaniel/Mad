@@ -951,12 +951,12 @@ class FolderExportService {
     let attachmentHtml = "";
     for (const att of attachments) {
       if (att.mime_type?.startsWith("image/") && att.storage_path) {
-        // Try to embed image as base64 for PDF
+        // Use file:// URL to reference image directly (more efficient than base64)
         try {
           if (fsSync.existsSync(att.storage_path)) {
-            const imageData = fsSync.readFileSync(att.storage_path);
-            const base64 = imageData.toString("base64");
-            attachmentHtml += `<div class="attachment-image"><img src="data:${att.mime_type};base64,${base64}" alt="${this.escapeHtml(att.filename)}" /></div>`;
+            // Use file:// URL - works because we load HTML from temp file
+            const fileUrl = `file://${att.storage_path}`;
+            attachmentHtml += `<div class="attachment-image"><img src="${fileUrl}" alt="${this.escapeHtml(att.filename)}" /></div>`;
           } else {
             // Image file not found - show placeholder
             attachmentHtml += `<div class="attachment-ref">[Image: ${this.escapeHtml(att.filename)} - file not found]</div>`;
@@ -1198,7 +1198,7 @@ class FolderExportService {
 
   /**
    * Convert HTML to PDF using Electron's built-in capability
-   * Uses a temp file instead of data URL to avoid URL length limits with large base64 images
+   * Uses a temp file to allow file:// URLs for images (more efficient than base64 embedding)
    */
   private async htmlToPdf(html: string): Promise<Buffer> {
     // Write HTML to temp file to avoid data URL length limits
