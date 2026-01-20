@@ -709,11 +709,14 @@ class FolderExportService {
     for (const [, msgs] of textThreads) {
       const contact = this.getThreadContact(msgs, phoneNameMap);
       const isGroupChat = this._isGroupChat(msgs);
+      const participants = isGroupChat ? this.getGroupChatParticipants(msgs, phoneNameMap) : undefined;
       const html = this.generateTextThreadHTML(
         msgs,
         contact,
         phoneNameMap,
-        isGroupChat
+        isGroupChat,
+        threadIndex,
+        participants
       );
       const pdfBuffer = await this.htmlToPdf(html);
 
@@ -859,6 +862,44 @@ class FolderExportService {
   }
 
   /**
+   * Get all participants in a group chat with their names and phone numbers
+   */
+  private getGroupChatParticipants(
+    msgs: Communication[],
+    phoneNameMap: Record<string, string>
+  ): Array<{ phone: string; name: string | null }> {
+    const participantPhones = new Set<string>();
+
+    for (const msg of msgs) {
+      try {
+        if (msg.participants) {
+          const parsed =
+            typeof msg.participants === "string"
+              ? JSON.parse(msg.participants)
+              : msg.participants;
+
+          if (parsed.from) {
+            participantPhones.add(parsed.from);
+          }
+          if (parsed.to) {
+            const toList = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
+            toList.forEach((p: string) => participantPhones.add(p));
+          }
+        }
+      } catch {
+        // Continue
+      }
+    }
+
+    // Convert to array with names
+    return Array.from(participantPhones).map((phone) => {
+      const normalized = this.normalizePhone(phone);
+      const name = phoneNameMap[normalized] || phoneNameMap[phone] || null;
+      return { phone, name };
+    });
+  }
+
+  /**
    * Look up contact names for phone numbers
    */
   private getContactNamesByPhones(phones: string[]): Record<string, string> {
@@ -924,7 +965,9 @@ class FolderExportService {
     msgs: Communication[],
     contact: { phone: string; name: string | null },
     phoneNameMap: Record<string, string>,
-    isGroupChat: boolean
+    isGroupChat: boolean,
+    threadIndex: number,
+    participants?: Array<{ phone: string; name: string | null }>
   ): string {
     const messagesHtml = msgs
       .map((msg) =>
@@ -1012,12 +1055,26 @@ class FolderExportService {
 <body>
   <div class="header">
     <h1>${(() => {
+      const threadId = String(threadIndex + 1).padStart(3, "0");
       if (!contact.name && contact.phone.toLowerCase() === "unknown") {
-        return isGroupChat ? "Group Chat" : "Unknown Contact";
+        return isGroupChat ? `Group Chat <span class="badge">#${threadId}</span>` : `Unknown Contact <span class="badge">#${threadId}</span>`;
       }
-      return `Conversation with ${this.escapeHtml(contact.name || contact.phone)}${isGroupChat ? '<span class="badge">Group Chat</span>' : ""}`;
+      return `Conversation with ${this.escapeHtml(contact.name || contact.phone)} <span class="badge">#${threadId}</span>${isGroupChat ? '<span class="badge">Group Chat</span>' : ""}`;
     })()}</h1>
     <div class="meta">${contact.name ? this.escapeHtml(contact.phone) + " | " : ""}${msgs.length} message${msgs.length === 1 ? "" : "s"}</div>
+    ${isGroupChat && participants && participants.length > 0 ? `
+    <div class="participants" style="margin-top: 12px; padding: 12px; background: #f7fafc; border-radius: 8px; font-size: 13px;">
+      <div style="font-weight: 600; margin-bottom: 8px; color: #4a5568;">Participants (${participants.length}):</div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px;">
+        ${participants.map(p => `
+          <div style="padding: 4px 0;">
+            <span style="color: #2d3748;">${this.escapeHtml(p.name || "Unknown")}</span>
+            <span style="color: #718096; font-size: 12px; display: block;">${this.escapeHtml(p.phone)}</span>
+          </div>
+        `).join("")}
+      </div>
+    </div>
+    ` : ""}
   </div>
 
   ${messagesHtml}
