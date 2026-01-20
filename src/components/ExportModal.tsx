@@ -346,6 +346,7 @@ function ExportModal({
                   Export Format
                 </label>
                 <div className="grid grid-cols-2 gap-3">
+                  {/* Active export formats */}
                   <button
                     onClick={() => setExportFormat("pdf")}
                     className={`px-4 py-3 rounded-lg font-medium transition-all text-left ${
@@ -359,6 +360,20 @@ function ExportModal({
                       Transaction report only
                     </div>
                   </button>
+                  <button
+                    onClick={() => setExportFormat("folder")}
+                    className={`px-4 py-3 rounded-lg font-medium transition-all text-left ${
+                      exportFormat === "folder"
+                        ? "bg-purple-500 text-white shadow-md"
+                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    }`}
+                  >
+                    <div className="font-semibold">Audit Package</div>
+                    <div className="text-xs opacity-80">
+                      Folder with individual PDFs
+                    </div>
+                  </button>
+                  {/* Coming soon formats */}
                   <button
                     disabled
                     className="px-4 py-3 rounded-lg font-medium text-left bg-gray-50 text-gray-400 cursor-not-allowed border border-gray-200"
@@ -401,19 +416,6 @@ function ExportModal({
                     </div>
                     <div className="text-xs opacity-80">
                       Text files and email files
-                    </div>
-                  </button>
-                  <button
-                    onClick={() => setExportFormat("folder")}
-                    className={`px-4 py-3 rounded-lg font-medium transition-all text-left ${
-                      exportFormat === "folder"
-                        ? "bg-purple-500 text-white shadow-md"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                    }`}
-                  >
-                    <div className="font-semibold">Audit Package</div>
-                    <div className="text-xs opacity-80">
-                      Folder with individual PDFs
                     </div>
                   </button>
                 </div>
