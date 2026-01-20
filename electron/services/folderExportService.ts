@@ -522,10 +522,13 @@ class FolderExportService {
         const isGroupChat = this._isGroupChat(msgs);
         const lastMsg = msgs[msgs.length - 1];
         const date = new Date((lastMsg.sent_at || lastMsg.received_at) as string);
-        // For group chats with unknown contact, show "Group Chat"
-        const displayName = isGroupChat && (!contact.name && contact.phone === "Unknown")
-          ? "Group Chat"
-          : (contact.name || contact.phone);
+        // Use better display name for unknown contacts
+        let displayName: string;
+        if (!contact.name && contact.phone === "Unknown") {
+          displayName = isGroupChat ? "Group Chat" : "Unknown Contact";
+        } else {
+          displayName = contact.name || contact.phone;
+        }
 
         return `
           <div class="text-item">
@@ -724,10 +727,13 @@ class FolderExportService {
       const firstDate = firstMsgDate
         ? new Date(firstMsgDate as string).toISOString().split("T")[0]
         : "unknown";
-      // For group chats with unknown contact, use "Group_Chat" as the name
-      const displayName = isGroupChat && (!contact.name && contact.phone === "Unknown")
-        ? "Group_Chat"
-        : (contact.name || contact.phone);
+      // Use better display name for unknown contacts
+      let displayName: string;
+      if (!contact.name && contact.phone === "Unknown") {
+        displayName = isGroupChat ? "Group_Chat" : "Unknown_Contact";
+      } else {
+        displayName = contact.name || contact.phone;
+      }
       const contactName = this.sanitizeFileName(displayName);
       const fileName = `thread_${String(threadIndex + 1).padStart(3, "0")}_${contactName}_${firstDate}.pdf`;
 
@@ -1010,9 +1016,12 @@ class FolderExportService {
 </head>
 <body>
   <div class="header">
-    <h1>${isGroupChat && (!contact.name && contact.phone === "Unknown")
-      ? 'Group Chat'
-      : `Conversation with ${this.escapeHtml(contact.name || contact.phone)}${isGroupChat ? '<span class="badge">Group Chat</span>' : ""}`}</h1>
+    <h1>${(() => {
+      if (!contact.name && contact.phone === "Unknown") {
+        return isGroupChat ? "Group Chat" : "Unknown Contact";
+      }
+      return `Conversation with ${this.escapeHtml(contact.name || contact.phone)}${isGroupChat ? '<span class="badge">Group Chat</span>' : ""}`;
+    })()}</h1>
     <div class="meta">${contact.name ? this.escapeHtml(contact.phone) + " | " : ""}${msgs.length} message${msgs.length === 1 ? "" : "s"}</div>
   </div>
 
