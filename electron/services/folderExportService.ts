@@ -420,7 +420,7 @@ class FolderExportService {
 
   ${emails.length > 0 ? `
   <div class="section">
-    <h3>Email Index (${emails.length})</h3>
+    <h3>Email Threads Index (${emails.length})</h3>
     <div class="email-list">
       ${sortedEmails
         .map((email, index) => {
@@ -446,7 +446,7 @@ class FolderExportService {
 
   ${texts.length > 0 ? `
   <div class="section">
-    <h3>Text Conversations Index (${this.countTextThreads(texts)})</h3>
+    <h3>Text Threads Index (${this.countTextThreads(texts)})</h3>
     <div class="email-list">
       ${this.generateTextIndex(texts)}
     </div>
