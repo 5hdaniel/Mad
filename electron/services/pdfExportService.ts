@@ -464,10 +464,13 @@ class PDFExportService {
 
     .back-to-top {
       color: #667eea;
-      text-decoration: underline;
+      text-decoration: none;
       font-size: 12px;
       display: inline-block;
-      margin-top: 12px;
+      margin-top: 16px;
+      padding-top: 12px;
+      border-top: 1px solid #e2e8f0;
+      width: 100%;
     }
 
     @media print {
