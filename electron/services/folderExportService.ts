@@ -519,14 +519,19 @@ class FolderExportService {
     return sortedThreads
       .map((msgs, index) => {
         const contact = this.getThreadContact(msgs, phoneNameMap);
+        const isGroupChat = this._isGroupChat(msgs);
         const lastMsg = msgs[msgs.length - 1];
         const date = new Date((lastMsg.sent_at || lastMsg.received_at) as string);
+        // For group chats with unknown contact, show "Group Chat"
+        const displayName = isGroupChat && (!contact.name && contact.phone === "Unknown")
+          ? "Group Chat"
+          : (contact.name || contact.phone);
 
         return `
           <div class="text-item">
             <div class="header-row">
               <span class="index">${String(index + 1).padStart(3, "0")}</span>
-              <span class="contact">${this.escapeHtml(contact.name || contact.phone)} (${msgs.length} msg${msgs.length === 1 ? "" : "s"})</span>
+              <span class="contact">${this.escapeHtml(displayName)} (${msgs.length} msg${msgs.length === 1 ? "" : "s"})</span>
               <span class="date">${date.toLocaleDateString()}</span>
             </div>
           </div>
@@ -719,7 +724,11 @@ class FolderExportService {
       const firstDate = firstMsgDate
         ? new Date(firstMsgDate as string).toISOString().split("T")[0]
         : "unknown";
-      const contactName = this.sanitizeFileName(contact.name || contact.phone);
+      // For group chats with unknown contact, use "Group_Chat" as the name
+      const displayName = isGroupChat && (!contact.name && contact.phone === "Unknown")
+        ? "Group_Chat"
+        : (contact.name || contact.phone);
+      const contactName = this.sanitizeFileName(displayName);
       const fileName = `thread_${String(threadIndex + 1).padStart(3, "0")}_${contactName}_${firstDate}.pdf`;
 
       await fs.writeFile(path.join(outputPath, fileName), pdfBuffer);
@@ -1001,7 +1010,9 @@ class FolderExportService {
 </head>
 <body>
   <div class="header">
-    <h1>Conversation with ${this.escapeHtml(contact.name || contact.phone)}${isGroupChat ? '<span class="badge">Group Chat</span>' : ""}</h1>
+    <h1>${isGroupChat && (!contact.name && contact.phone === "Unknown")
+      ? 'Group Chat'
+      : `Conversation with ${this.escapeHtml(contact.name || contact.phone)}${isGroupChat ? '<span class="badge">Group Chat</span>' : ""}`}</h1>
     <div class="meta">${contact.name ? this.escapeHtml(contact.phone) + " | " : ""}${msgs.length} message${msgs.length === 1 ? "" : "s"}</div>
   </div>
 
