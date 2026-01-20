@@ -554,7 +554,7 @@ class FolderExportService {
     const subject = this.sanitizeFileName(email.subject || "no_subject");
     const paddedIndex = String(index).padStart(3, "0");
 
-    const fileName = `${paddedIndex}_${dateStr}_${subject}.pdf`;
+    const fileName = `email_${paddedIndex}_${dateStr}_${subject}.pdf`;
     await fs.writeFile(path.join(outputPath, fileName), pdfBuffer);
   }
 
@@ -733,7 +733,7 @@ class FolderExportService {
         displayName = contact.name || contact.phone;
       }
       const contactName = this.sanitizeFileName(displayName);
-      const fileName = `thread_${String(threadIndex + 1).padStart(3, "0")}_${contactName}_${firstDate}.pdf`;
+      const fileName = `text_${String(threadIndex + 1).padStart(3, "0")}_${contactName}_${firstDate}.pdf`;
 
       await fs.writeFile(path.join(outputPath, fileName), pdfBuffer);
       threadIndex++;
