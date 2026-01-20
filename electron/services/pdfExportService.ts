@@ -95,6 +95,10 @@ class PDFExportService {
     communications: Communication[],
     outputPath: string,
   ): Promise<string> {
+    // Write HTML to temp file to avoid data URL length limits
+    const tempDir = app.getPath("temp");
+    const tempFile = path.join(tempDir, `pdf-export-${Date.now()}-${Math.random().toString(36).slice(2)}.html`);
+
     try {
       logService.info(
         "[PDF Export] Generating PDF for transaction:",
@@ -104,6 +108,9 @@ class PDFExportService {
 
       // Create HTML content
       const html = this._generateHTML(transaction, communications);
+
+      // Write HTML to temp file
+      await fs.writeFile(tempFile, html, "utf8");
 
       // Create hidden window for PDF generation
       this.exportWindow = new BrowserWindow({
@@ -116,10 +123,8 @@ class PDFExportService {
         },
       });
 
-      // Load HTML content
-      await this.exportWindow.loadURL(
-        `data:text/html;charset=utf-8,${encodeURIComponent(html)}`,
-      );
+      // Load HTML from temp file (avoids data URL length limits)
+      await this.exportWindow.loadFile(tempFile);
 
       // Wait for page to fully render
       await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -147,6 +152,13 @@ class PDFExportService {
         this.exportWindow = null;
       }
       throw error;
+    } finally {
+      // Clean up temp file
+      try {
+        await fs.unlink(tempFile);
+      } catch {
+        // Ignore cleanup errors
+      }
     }
   }
 
