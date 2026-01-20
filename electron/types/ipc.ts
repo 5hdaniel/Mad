@@ -1500,6 +1500,9 @@ export interface WindowApi {
   onTransactionScanProgress: (
     callback: (progress: unknown) => void,
   ) => () => void;
+  onExportFolderProgress: (
+    callback: (progress: { stage: string; current: number; total: number; message: string }) => void,
+  ) => () => void;
 }
 
 // Augment Window interface

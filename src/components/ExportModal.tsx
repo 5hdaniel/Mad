@@ -72,6 +72,16 @@ function ExportModal({
     loadDefaultFormat();
   }, [userId]);
 
+  // Listen for folder export progress events
+  useEffect(() => {
+    if (exporting && exportFormat === "folder") {
+      const cleanup = window.api.onExportFolderProgress((progress) => {
+        setExportProgress(progress);
+      });
+      return cleanup;
+    }
+  }, [exporting, exportFormat]);
+
   const handleDateVerification = () => {
     if (!representationStartDate || !closingDate) {
       setError("Please provide both dates to continue");

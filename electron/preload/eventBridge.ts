@@ -214,6 +214,18 @@ export const eventBridge = {
   },
 
   /**
+   * Listens for folder export progress updates
+   * @param callback - Callback function to handle progress updates
+   * @returns Cleanup function to remove listener
+   */
+  onExportFolderProgress: (callback: (progress: { stage: string; current: number; total: number; message: string }) => void) => {
+    const listener = (_: IpcRendererEvent, progress: { stage: string; current: number; total: number; message: string }) => callback(progress);
+    ipcRenderer.on("transactions:export-folder-progress", listener);
+    return () =>
+      ipcRenderer.removeListener("transactions:export-folder-progress", listener);
+  },
+
+  /**
    * Listens for backup progress updates
    * @param callback - Callback function to handle progress updates
    * @returns Cleanup function to remove listener

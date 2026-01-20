@@ -121,6 +121,9 @@ interface ElectronAPI {
   onTransactionScanProgress: (
     callback: (progress: unknown) => void,
   ) => () => void;
+  onExportFolderProgress: (
+    callback: (progress: { stage: string; current: number; total: number; message: string }) => void,
+  ) => () => void;
 
   // File System
   openFolder: (folderPath: string) => Promise<{ success: boolean }>;
@@ -1142,6 +1145,11 @@ interface MainAPI {
   // Transaction scan progress event
   onTransactionScanProgress: (
     callback: (progress: { step: string; message: string }) => void,
+  ) => () => void;
+
+  // Folder export progress event
+  onExportFolderProgress: (
+    callback: (progress: { stage: string; current: number; total: number; message: string }) => void,
   ) => () => void;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
