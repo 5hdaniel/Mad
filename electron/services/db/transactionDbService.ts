@@ -292,6 +292,8 @@ export async function updateTransaction(
     "property_coordinates",
     "transaction_type",
     "status",
+    "started_at",
+    "closed_at",
     "closing_deadline",
     "closing_date",
     "representation_start_date",
