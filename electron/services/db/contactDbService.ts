@@ -60,7 +60,7 @@ export function getMessageDerivedContacts(userId: string): MessageDerivedContact
   const importedEmails = new Set(importedEmailRows.map(r => r.email).filter(Boolean));
 
   // Extract unique senders from messages (from field in participants JSON)
-  // Only include email addresses (contain @), exclude already-imported contacts
+  // BACKLOG-313: Only include senders with actual display names (filter out raw emails/phones)
   // BACKLOG-311: Include COUNT(*) to avoid N+1 queries
   const sql = `
     SELECT
@@ -89,6 +89,10 @@ export function getMessageDerivedContacts(userId: string): MessageDerivedContact
       AND json_extract(participants, '$.from') IS NOT NULL
       AND json_extract(participants, '$.from') != ''
       AND json_extract(participants, '$.from') != 'me'
+      -- BACKLOG-313: Filter out entries where "name" is raw phone/email (no display name)
+      AND json_extract(participants, '$.from') NOT LIKE '%@%'
+      AND json_extract(participants, '$.from') NOT LIKE '+%'
+      AND json_extract(participants, '$.from') NOT GLOB '[0-9]*'
     GROUP BY LOWER(json_extract(participants, '$.from'))
     ORDER BY last_communication_at DESC
     LIMIT 200
