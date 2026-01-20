@@ -727,7 +727,8 @@ class PDFExportService {
     );
 
     // Check if there's any content for appendix
-    const emailsWithContent = sortedEmails.filter(c => c.body_text || c.body_plain || c.body_html);
+    // Note: HTML content is in 'body' field, not 'body_html'
+    const emailsWithContent = sortedEmails.filter(c => c.body_text || c.body_plain || (c as { body?: string }).body);
     const threadsWithContent = sortedThreads.filter(([_, msgs]) =>
       msgs.some(m => m.body_text || m.body_plain)
     );
@@ -742,7 +743,7 @@ class PDFExportService {
       html += '<div class="communications">';
 
       sortedEmails.forEach((comm, idx) => {
-        const hasContent = comm.body_text || comm.body_plain || comm.body_html;
+        const hasContent = comm.body_text || comm.body_plain || (comm as { body?: string }).body;
         const anchorId = 'email-' + idx;
         html += '<div class="communication">';
         html += '<div class="subject">' + (escapeHtml(comm.subject) || '(No Subject)') + '</div>';
@@ -815,13 +816,15 @@ class PDFExportService {
       // Email appendix items
       emailsWithContent.forEach((comm, idx) => {
         // Prefer HTML body for rich formatting, fall back to plain text
-        const hasHtmlBody = comm.body_html && comm.body_html.trim().length > 0;
+        // Note: The query returns HTML content in 'body' field (not 'body_html')
+        const htmlBody = (comm as { body?: string }).body;
+        const hasHtmlBody = htmlBody && htmlBody.trim().length > 0 && htmlBody.includes('<');
         let bodyContent: string;
         let bodyClass: string;
 
         if (hasHtmlBody) {
           // Use sanitized HTML for rich formatting
-          bodyContent = sanitizeHtml(comm.body_html);
+          bodyContent = sanitizeHtml(htmlBody);
           bodyClass = 'message-body message-body-html';
         } else {
           // Fall back to plain text
