@@ -842,10 +842,19 @@ class FolderExportService {
     .header .meta { font-size: 13px; color: #718096; }
     .message {
       margin-bottom: 16px;
-      padding-bottom: 12px;
-      border-bottom: 1px solid #e2e8f0;
+      padding: 12px;
+      border-radius: 12px;
+      max-width: 80%;
+      background: #f1f1f1;
     }
-    .message:last-child { border-bottom: none; }
+    .message.outbound {
+      margin-left: auto;
+      background: #007aff;
+      color: white;
+    }
+    .message.outbound .sender { color: rgba(255,255,255,0.9); }
+    .message.outbound .time { color: rgba(255,255,255,0.7); }
+    .message.outbound .phone { color: rgba(255,255,255,0.7); }
     .message .sender { font-weight: 600; color: #2d3748; }
     .message .time { font-size: 11px; color: #718096; margin-left: 8px; }
     .message .phone { font-size: 11px; color: #718096; display: block; margin-bottom: 4px; }
@@ -976,7 +985,7 @@ class FolderExportService {
     }
 
     return `
-    <div class="message">
+    <div class="message${isOutbound ? " outbound" : ""}">
       <span class="sender">${this.escapeHtml(senderName)}</span>
       <span class="time">${time}</span>
       ${senderPhone ? `<span class="phone">${this.escapeHtml(senderPhone)}</span>` : ""}
