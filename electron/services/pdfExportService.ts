@@ -222,27 +222,15 @@ class PDFExportService {
       margin-bottom: 8px;
     }
 
+    .header .address {
+      font-size: 18px;
+      color: #2d3748;
+      margin-bottom: 4px;
+    }
+
     .header .subtitle {
       font-size: 14px;
       color: #718096;
-    }
-
-    .property-info {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      padding: 24px;
-      border-radius: 8px;
-      margin-bottom: 30px;
-    }
-
-    .property-info h2 {
-      font-size: 20px;
-      margin-bottom: 12px;
-    }
-
-    .property-info .address {
-      font-size: 16px;
-      opacity: 0.95;
     }
 
     .details-grid {
@@ -439,14 +427,9 @@ class PDFExportService {
 <body>
   <!-- Header -->
   <div class="header">
-    <h1>Real Estate Transaction Report</h1>
-    <div class="subtitle">Generated on ${formatDateTime(new Date().toISOString())}</div>
-  </div>
-
-  <!-- Property Info -->
-  <div class="property-info">
-    <h2>Property Information</h2>
+    <h1>Transaction Audit Report</h1>
     <div class="address">${transaction.property_address || "N/A"}</div>
+    <div class="subtitle">Generated on ${formatDateTime(new Date().toISOString())}</div>
   </div>
 
   <!-- Transaction Details -->
