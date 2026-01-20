@@ -4487,3 +4487,153 @@
   "started_at": "2026-01-18T05:23:40.172Z",
   "ended_at": "2026-01-18T05:25:10.190Z"
 }
+{
+  "timestamp": "2026-01-20T02:51:41Z",
+  "session_id": "4b8a6739-7adf-479e-8afe-591dfbee5330",
+  "agent_id": "ab4c918",
+  "input_tokens": 11061,
+  "output_tokens": 4267,
+  "cache_read": 1264585,
+  "cache_create": 58257,
+  "billable_tokens": 62524,
+  "total_tokens": 1338170,
+  "api_calls": 41,
+  "duration_secs": 189,
+  "started_at": "2026-01-20T02:48:32.668Z",
+  "ended_at": "2026-01-20T02:51:41.561Z"
+}
+{
+  "timestamp": "2026-01-20T02:53:07Z",
+  "session_id": "4b8a6739-7adf-479e-8afe-591dfbee5330",
+  "agent_id": "a7fbcad",
+  "input_tokens": 75,
+  "output_tokens": 5637,
+  "cache_read": 2133312,
+  "cache_create": 75254,
+  "billable_tokens": 80891,
+  "total_tokens": 2214278,
+  "api_calls": 69,
+  "duration_secs": 275,
+  "started_at": "2026-01-20T02:48:32.667Z",
+  "ended_at": "2026-01-20T02:53:07.077Z"
+}
+{
+  "timestamp": "2026-01-20T02:54:09Z",
+  "session_id": "4b8a6739-7adf-479e-8afe-591dfbee5330",
+  "agent_id": "a9ac7a2",
+  "input_tokens": 1995,
+  "output_tokens": 6002,
+  "cache_read": 2345562,
+  "cache_create": 70373,
+  "billable_tokens": 76375,
+  "total_tokens": 2423932,
+  "api_calls": 75,
+  "duration_secs": 337,
+  "started_at": "2026-01-20T02:48:32.668Z",
+  "ended_at": "2026-01-20T02:54:09.171Z"
+}
+{
+  "timestamp": "2026-01-20T02:55:36Z",
+  "session_id": "4b8a6739-7adf-479e-8afe-591dfbee5330",
+  "agent_id": "ae1ba35",
+  "input_tokens": 454,
+  "output_tokens": 1269,
+  "cache_read": 465235,
+  "cache_create": 93784,
+  "billable_tokens": 95053,
+  "total_tokens": 560742,
+  "api_calls": 24,
+  "duration_secs": 72,
+  "started_at": "2026-01-20T02:54:23.677Z",
+  "ended_at": "2026-01-20T02:55:35.910Z"
+}
+{
+  "timestamp": "2026-01-20T02:57:58Z",
+  "session_id": "4b8a6739-7adf-479e-8afe-591dfbee5330",
+  "agent_id": "a6911ce",
+  "input_tokens": 159,
+  "output_tokens": 1183,
+  "cache_read": 611916,
+  "cache_create": 42713,
+  "billable_tokens": 43896,
+  "total_tokens": 655971,
+  "api_calls": 22,
+  "duration_secs": 112,
+  "started_at": "2026-01-20T02:56:06.754Z",
+  "ended_at": "2026-01-20T02:57:58.684Z"
+}
+{
+  "timestamp": "2026-01-20T03:03:11Z",
+  "session_id": "4b8a6739-7adf-479e-8afe-591dfbee5330",
+  "agent_id": "ac5d9b2",
+  "input_tokens": 26,
+  "output_tokens": 542,
+  "cache_read": 367878,
+  "cache_create": 34616,
+  "billable_tokens": 35158,
+  "total_tokens": 403062,
+  "api_calls": 18,
+  "duration_secs": 307,
+  "started_at": "2026-01-20T02:58:04.429Z",
+  "ended_at": "2026-01-20T03:03:11.408Z"
+}
+{
+  "timestamp": "2026-01-20T03:05:08Z",
+  "session_id": "4b8a6739-7adf-479e-8afe-591dfbee5330",
+  "agent_id": "a52378f",
+  "input_tokens": 35,
+  "output_tokens": 2754,
+  "cache_read": 887163,
+  "cache_create": 65146,
+  "billable_tokens": 67900,
+  "total_tokens": 955098,
+  "api_calls": 29,
+  "duration_secs": 108,
+  "started_at": "2026-01-20T03:03:20.042Z",
+  "ended_at": "2026-01-20T03:05:08.004Z"
+}
+{
+  "timestamp": "2026-01-20T03:10:18Z",
+  "session_id": "4b8a6739-7adf-479e-8afe-591dfbee5330",
+  "agent_id": "ad3ce41",
+  "input_tokens": 32,
+  "output_tokens": 1277,
+  "cache_read": 544061,
+  "cache_create": 50489,
+  "billable_tokens": 51766,
+  "total_tokens": 595859,
+  "api_calls": 24,
+  "duration_secs": 306,
+  "started_at": "2026-01-20T03:05:12.360Z",
+  "ended_at": "2026-01-20T03:10:18.630Z"
+}
+{
+  "timestamp": "2026-01-20T03:13:19Z",
+  "session_id": "4b8a6739-7adf-479e-8afe-591dfbee5330",
+  "agent_id": "a5e17db",
+  "input_tokens": 35,
+  "output_tokens": 4767,
+  "cache_read": 1131653,
+  "cache_create": 91952,
+  "billable_tokens": 96719,
+  "total_tokens": 1228407,
+  "api_calls": 29,
+  "duration_secs": 165,
+  "started_at": "2026-01-20T03:10:34.571Z",
+  "ended_at": "2026-01-20T03:13:19.858Z"
+}
+{
+  "timestamp": "2026-01-20T03:18:33Z",
+  "session_id": "4b8a6739-7adf-479e-8afe-591dfbee5330",
+  "agent_id": "a915289",
+  "input_tokens": 634,
+  "output_tokens": 1661,
+  "cache_read": 428004,
+  "cache_create": 95200,
+  "billable_tokens": 96861,
+  "total_tokens": 525499,
+  "api_calls": 18,
+  "duration_secs": 308,
+  "started_at": "2026-01-20T03:13:25.931Z",
+  "ended_at": "2026-01-20T03:18:33.073Z"
+}
