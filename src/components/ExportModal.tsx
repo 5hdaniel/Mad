@@ -106,9 +106,14 @@ function ExportModal({
         });
       } else {
         // Use enhanced export for single-file formats
+        // Pass dates to enable date range filtering for PDF exports
         result = await window.api.transactions.exportEnhanced(
           transaction.id,
-          { exportFormat },
+          {
+            exportFormat,
+            representationStartDate,
+            closingDate,
+          },
         );
       }
 
