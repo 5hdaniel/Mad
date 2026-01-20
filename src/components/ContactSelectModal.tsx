@@ -199,7 +199,7 @@ function ContactSelectModal({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[70] p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[80vh] flex flex-col">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl h-[70vh] max-h-[80vh] flex flex-col">
         {/* Header */}
         <div className="flex-shrink-0 bg-gradient-to-r from-purple-500 to-pink-600 px-6 py-4 flex items-center justify-between rounded-t-xl">
           <div>
