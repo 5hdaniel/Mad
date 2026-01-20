@@ -17,7 +17,7 @@ export function TransactionTabs({
   activeTab,
   contactCount,
   messageCount,
-  attachmentCount,
+  attachmentCount: _attachmentCount, // Temporarily unused while attachments tab is hidden
   onTabChange,
 }: TransactionTabsProps): React.ReactElement {
   return (
@@ -53,6 +53,7 @@ export function TransactionTabs({
         >
           Messages ({messageCount})
         </button>
+{/* Attachments tab temporarily hidden - BACKLOG-321, re-enable with BACKLOG-322
         <button
           onClick={() => onTabChange("attachments")}
           className={`px-4 py-3 font-medium text-sm transition-all ${
@@ -61,8 +62,9 @@ export function TransactionTabs({
               : "text-gray-600 hover:text-gray-900"
           }`}
         >
-          Attachments ({attachmentCount})
+          Attachments ({_attachmentCount})
         </button>
+*/}
       </div>
     </div>
   );
