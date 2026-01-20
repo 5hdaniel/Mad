@@ -521,7 +521,6 @@ class FolderExportService {
         const contact = this.getThreadContact(msgs, phoneNameMap);
         const lastMsg = msgs[msgs.length - 1];
         const date = new Date((lastMsg.sent_at || lastMsg.received_at) as string);
-        const preview = (lastMsg.body_text || lastMsg.body_plain || "").slice(0, 60);
 
         return `
           <div class="text-item">
@@ -530,7 +529,6 @@ class FolderExportService {
               <span class="contact">${this.escapeHtml(contact.name || contact.phone)} (${msgs.length} msg${msgs.length === 1 ? "" : "s"})</span>
               <span class="date">${date.toLocaleDateString()}</span>
             </div>
-            <div class="preview">${this.escapeHtml(preview)}${preview.length >= 60 ? "..." : ""}</div>
           </div>
         `;
       })
