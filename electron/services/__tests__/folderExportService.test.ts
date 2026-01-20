@@ -540,4 +540,95 @@ describe("FolderExportService", () => {
       expect(textPdfCalls[0][0]).toContain("2024-03-20");
     });
   });
+
+  describe("text message attachments", () => {
+    const mockTransaction: Transaction = {
+      id: "txn-test",
+      user_id: "user-123",
+      property_address: "123 Test St",
+      transaction_type: "purchase",
+      is_active: true,
+      created_at: new Date().toISOString(),
+    } as Transaction;
+
+    it("should include CSS styles for attachments in text thread PDF", async () => {
+      // Verify that the CSS styles for attachment-image and attachment-ref are included
+      const texts: Communication[] = [
+        {
+          id: "text-msg-1",
+          user_id: "user-123",
+          thread_id: "thread-A",
+          sender: "+15551234567",
+          body_text: "Hello",
+          direction: "inbound",
+          sent_at: "2024-01-15T10:00:00Z",
+          communication_type: "sms",
+          channel: "sms",
+          has_attachments: false,
+          is_false_positive: false,
+          created_at: new Date().toISOString(),
+        } as unknown as Communication,
+      ];
+
+      await folderExportService.exportTransactionToFolder(
+        mockTransaction,
+        texts,
+        {
+          transactionId: mockTransaction.id,
+          outputPath: "/mock/output",
+          includeEmails: false,
+          includeTexts: true,
+          includeAttachments: false,
+        }
+      );
+
+      // Check the HTML contains the attachment CSS styles
+      const lastCall = mockLoadURL.mock.calls[mockLoadURL.mock.calls.length - 1];
+      expect(lastCall).toBeDefined();
+      const htmlContent = decodeURIComponent(lastCall[0] as string);
+      expect(htmlContent).toContain(".attachment-image");
+      expect(htmlContent).toContain(".attachment-ref");
+    });
+
+    it("should create texts folder when exporting text messages", async () => {
+      // This test verifies that text messages are properly handled
+      const texts: Communication[] = [
+        {
+          id: "text-msg-1",
+          user_id: "user-123",
+          thread_id: "thread-A",
+          sender: "+15551234567",
+          body_text: "Hello",
+          direction: "inbound",
+          sent_at: "2024-01-15T10:00:00Z",
+          communication_type: "sms",
+          channel: "sms",
+          has_attachments: false,
+          is_false_positive: false,
+          created_at: new Date().toISOString(),
+        } as unknown as Communication,
+      ];
+
+      await folderExportService.exportTransactionToFolder(
+        mockTransaction,
+        texts,
+        {
+          transactionId: mockTransaction.id,
+          outputPath: "/mock/output",
+          includeEmails: false,
+          includeTexts: true,
+          includeAttachments: false, // Don't include attachments to avoid DB call
+        }
+      );
+
+      // Verify texts folder was created
+      expect(mockMkdir).toHaveBeenCalledWith("/mock/output/texts", { recursive: true });
+
+      // Verify a text thread PDF was written
+      const textPdfCalls = mockWriteFile.mock.calls.filter(
+        (call: unknown[]) => (call[0] as string).includes("/texts/thread_")
+      );
+      expect(textPdfCalls.length).toBeGreaterThan(0);
+    });
+  });
 });

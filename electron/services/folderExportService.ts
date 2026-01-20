@@ -17,6 +17,7 @@
 
 import path from "path";
 import fs from "fs/promises";
+import fsSync from "fs";
 import { app, BrowserWindow } from "electron";
 import logService from "./logService";
 import databaseService from "./databaseService";
@@ -44,6 +45,8 @@ interface AttachmentManifestEntry {
   date: string;
   size: number;
   sourceEmailIndex?: number;
+  messageType?: "email" | "text";
+  messagePreview?: string;
   status?: "exported" | "file_not_found" | "copy_failed";
 }
 
@@ -185,7 +188,9 @@ class FolderExportService {
           message: "Collecting attachments...",
         });
 
-        await this.exportAttachments(transaction, emails, attachmentsPath);
+        // Include both email and text attachments
+        const allCommunications = [...emails, ...texts];
+        await this.exportAttachments(transaction, allCommunications, attachmentsPath);
 
         onProgress?.({
           stage: "attachments",
@@ -845,6 +850,24 @@ class FolderExportService {
     .message .time { font-size: 11px; color: #718096; margin-left: 8px; }
     .message .phone { font-size: 11px; color: #718096; display: block; margin-bottom: 4px; }
     .message .body { margin-top: 4px; line-height: 1.5; }
+    .attachment-image {
+      margin-top: 8px;
+    }
+    .attachment-image img {
+      max-width: 200px;
+      max-height: 200px;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
+    }
+    .attachment-ref {
+      margin-top: 8px;
+      padding: 8px 12px;
+      background: #f7fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      font-size: 12px;
+      color: #4a5568;
+    }
     .badge {
       display: inline-block;
       padding: 2px 8px;
@@ -883,6 +906,7 @@ class FolderExportService {
 
   /**
    * Generate HTML for a single text message within a thread
+   * Includes inline images for attachments
    */
   private generateTextMessageHTML(
     msg: Communication,
@@ -918,12 +942,46 @@ class FolderExportService {
         })
       : "";
 
+    // Get attachments for this message
+    // Check both message_id and id since text messages may link differently
+    const messageId = msg.message_id || msg.id;
+    const attachments = messageId ? this.getAttachmentsForMessage(messageId) : [];
+
+    // Generate attachment HTML
+    let attachmentHtml = "";
+    for (const att of attachments) {
+      if (att.mime_type?.startsWith("image/") && att.storage_path) {
+        // Try to embed image as base64 for PDF
+        try {
+          if (fsSync.existsSync(att.storage_path)) {
+            const imageData = fsSync.readFileSync(att.storage_path);
+            const base64 = imageData.toString("base64");
+            attachmentHtml += `<div class="attachment-image"><img src="data:${att.mime_type};base64,${base64}" alt="${this.escapeHtml(att.filename)}" /></div>`;
+          } else {
+            // Image file not found - show placeholder
+            attachmentHtml += `<div class="attachment-ref">[Image: ${this.escapeHtml(att.filename)} - file not found]</div>`;
+          }
+        } catch (error) {
+          // Failed to read image - show placeholder
+          logService.warn("[Folder Export] Failed to embed image in PDF", "FolderExport", {
+            filename: att.filename,
+            error,
+          });
+          attachmentHtml += `<div class="attachment-ref">[Image: ${this.escapeHtml(att.filename)}]</div>`;
+        }
+      } else {
+        // Non-image attachment - show reference
+        attachmentHtml += `<div class="attachment-ref">[Attachment: ${this.escapeHtml(att.filename)}]</div>`;
+      }
+    }
+
     return `
     <div class="message">
       <span class="sender">${this.escapeHtml(senderName)}</span>
       <span class="time">${time}</span>
       ${senderPhone ? `<span class="phone">${this.escapeHtml(senderPhone)}</span>` : ""}
       <div class="body">${this.escapeHtml(msg.body_text || msg.body_plain || "")}</div>
+      ${attachmentHtml}
     </div>
     `;
   }
@@ -934,7 +992,7 @@ class FolderExportService {
    */
   private async exportAttachments(
     transaction: Transaction,
-    emails: Communication[],
+    communications: Communication[],
     outputPath: string
   ): Promise<void> {
     const manifest: AttachmentManifest = {
@@ -945,9 +1003,10 @@ class FolderExportService {
     };
 
     // Get message IDs for the linked communications
-    const messageIds = emails
-      .filter((email) => email.message_id)
-      .map((email) => email.message_id as string);
+    // For emails, use message_id; for texts, also check the communication id
+    const messageIds = communications
+      .filter((comm) => comm.message_id || comm.id)
+      .map((comm) => comm.message_id || comm.id) as string[];
 
     if (messageIds.length === 0) {
       // No linked messages, write empty manifest
@@ -979,22 +1038,56 @@ class FolderExportService {
       storage_path: string | null;
     }[];
 
-    // Build a map of message_id -> email index for quick lookup
-    const messageIdToEmailIndex = new Map<string, number>();
-    const messageIdToEmail = new Map<string, Communication>();
-    emails.forEach((email, index) => {
-      if (email.message_id) {
-        messageIdToEmailIndex.set(email.message_id, index + 1);
-        messageIdToEmail.set(email.message_id, email);
+    // Build maps for quick lookup
+    // We need to track both message_id and communication id for text messages
+    const messageIdToCommIndex = new Map<string, number>();
+    const messageIdToComm = new Map<string, Communication>();
+    communications.forEach((comm, index) => {
+      // Map by message_id if available
+      if (comm.message_id) {
+        messageIdToCommIndex.set(comm.message_id, index + 1);
+        messageIdToComm.set(comm.message_id, comm);
+      }
+      // Also map by communication id (for text messages that link by id)
+      if (comm.id) {
+        messageIdToCommIndex.set(comm.id, index + 1);
+        messageIdToComm.set(comm.id, comm);
       }
     });
+
+    // Helper to determine message type
+    const getMessageType = (comm: Communication): "email" | "text" => {
+      const type = comm.communication_type;
+      if (type === "sms" || type === "imessage" || type === "text") {
+        return "text";
+      }
+      return "email";
+    };
+
+    // Helper to get message preview (first 100 chars)
+    const getMessagePreview = (comm: Communication): string => {
+      const body = comm.body_text || comm.body_plain || "";
+      return body.slice(0, 100);
+    };
+
+    // Helper to get original message description
+    const getOriginalMessage = (comm: Communication): string => {
+      const type = getMessageType(comm);
+      if (type === "email") {
+        return comm.subject || "(No Subject)";
+      }
+      // For texts, show sender/recipient and preview
+      const preview = getMessagePreview(comm);
+      const participant = comm.sender || "Unknown";
+      return preview ? `${participant}: ${preview.slice(0, 50)}...` : participant;
+    };
 
     // Track used filenames to avoid collisions
     const usedFilenames = new Set<string>();
 
     for (const att of attachmentRows) {
-      const email = messageIdToEmail.get(att.message_id);
-      const emailIndex = messageIdToEmailIndex.get(att.message_id);
+      const comm = messageIdToComm.get(att.message_id);
+      const commIndex = messageIdToCommIndex.get(att.message_id);
       const originalFilename = att.filename || `attachment_${manifest.attachments.length + 1}`;
 
       // Generate unique filename to avoid collisions
@@ -1011,6 +1104,10 @@ class FolderExportService {
 
       const destPath = path.join(outputPath, exportFilename);
 
+      // Determine message type and preview
+      const messageType = comm ? getMessageType(comm) : "email";
+      const messagePreview = comm ? getMessagePreview(comm) : undefined;
+
       // Handle missing storage_path
       if (!att.storage_path) {
         logService.warn("[Folder Export] Attachment has no storage path", "FolderExport", {
@@ -1019,10 +1116,12 @@ class FolderExportService {
         });
         manifest.attachments.push({
           filename: originalFilename,
-          originalMessage: email?.subject || "(No Subject)",
-          date: (email?.sent_at as string) || new Date().toISOString(),
+          originalMessage: comm ? getOriginalMessage(comm) : "(No Subject)",
+          date: (comm?.sent_at as string) || new Date().toISOString(),
           size: att.file_size_bytes || 0,
-          sourceEmailIndex: emailIndex,
+          sourceEmailIndex: commIndex,
+          messageType,
+          messagePreview,
           status: "file_not_found",
         });
         continue;
@@ -1035,10 +1134,12 @@ class FolderExportService {
           await fs.copyFile(att.storage_path, destPath);
           manifest.attachments.push({
             filename: exportFilename,
-            originalMessage: email?.subject || "(No Subject)",
-            date: (email?.sent_at as string) || new Date().toISOString(),
+            originalMessage: comm ? getOriginalMessage(comm) : "(No Subject)",
+            date: (comm?.sent_at as string) || new Date().toISOString(),
             size: att.file_size_bytes || 0,
-            sourceEmailIndex: emailIndex,
+            sourceEmailIndex: commIndex,
+            messageType,
+            messagePreview,
             status: "exported",
           });
           logService.debug("[Folder Export] Exported attachment", "FolderExport", {
@@ -1053,10 +1154,12 @@ class FolderExportService {
           });
           manifest.attachments.push({
             filename: originalFilename,
-            originalMessage: email?.subject || "(No Subject)",
-            date: (email?.sent_at as string) || new Date().toISOString(),
+            originalMessage: comm ? getOriginalMessage(comm) : "(No Subject)",
+            date: (comm?.sent_at as string) || new Date().toISOString(),
             size: att.file_size_bytes || 0,
-            sourceEmailIndex: emailIndex,
+            sourceEmailIndex: commIndex,
+            messageType,
+            messagePreview,
             status: "file_not_found",
           });
         }
@@ -1067,10 +1170,12 @@ class FolderExportService {
         });
         manifest.attachments.push({
           filename: originalFilename,
-          originalMessage: email?.subject || "(No Subject)",
-          date: (email?.sent_at as string) || new Date().toISOString(),
+          originalMessage: comm ? getOriginalMessage(comm) : "(No Subject)",
+          date: (comm?.sent_at as string) || new Date().toISOString(),
           size: att.file_size_bytes || 0,
-          sourceEmailIndex: emailIndex,
+          sourceEmailIndex: commIndex,
+          messageType,
+          messagePreview,
           status: "copy_failed",
         });
       }
@@ -1137,6 +1242,40 @@ class FolderExportService {
       `Transaction_${transaction.property_address}_${Date.now()}`
     );
     return path.join(downloadsPath, folderName);
+  }
+
+  /**
+   * Get attachments for a specific message
+   * Used for embedding images inline in text thread PDFs
+   */
+  private getAttachmentsForMessage(messageId: string): {
+    id: string;
+    filename: string;
+    mime_type: string | null;
+    storage_path: string | null;
+    file_size_bytes: number | null;
+  }[] {
+    try {
+      const db = databaseService.getRawDatabase();
+      const sql = `
+        SELECT id, filename, mime_type, storage_path, file_size_bytes
+        FROM attachments
+        WHERE message_id = ?
+      `;
+      return db.prepare(sql).all(messageId) as {
+        id: string;
+        filename: string;
+        mime_type: string | null;
+        storage_path: string | null;
+        file_size_bytes: number | null;
+      }[];
+    } catch (error) {
+      logService.warn("[Folder Export] Failed to get attachments for message", "FolderExport", {
+        messageId,
+        error,
+      });
+      return [];
+    }
   }
 
   /**
