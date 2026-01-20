@@ -44,6 +44,9 @@ function ExportModal({
     message: string;
   } | null>(null);
 
+  // Formats that are currently implemented
+  const implementedFormats = ["pdf", "folder"];
+
   // Load user preferences to set default export format
   useEffect(() => {
     const loadDefaultFormat = async () => {
@@ -54,7 +57,8 @@ function ExportModal({
             const prefs = result.preferences as {
               export?: { defaultFormat?: string };
             };
-            if (prefs.export?.defaultFormat) {
+            // Only use saved preference if it's an implemented format
+            if (prefs.export?.defaultFormat && implementedFormats.includes(prefs.export.defaultFormat)) {
               setExportFormat(prefs.export.defaultFormat);
             }
           }
@@ -356,49 +360,45 @@ function ExportModal({
                     </div>
                   </button>
                   <button
-                    onClick={() => setExportFormat("excel")}
-                    className={`px-4 py-3 rounded-lg font-medium transition-all text-left ${
-                      exportFormat === "excel"
-                        ? "bg-purple-500 text-white shadow-md"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                    }`}
+                    disabled
+                    className="px-4 py-3 rounded-lg font-medium text-left bg-gray-50 text-gray-400 cursor-not-allowed border border-gray-200"
                   >
-                    <div className="font-semibold">Excel (.xlsx)</div>
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold">Excel (.xlsx)</span>
+                      <span className="text-xs bg-gray-200 text-gray-500 px-2 py-0.5 rounded">Coming Soon</span>
+                    </div>
                     <div className="text-xs opacity-80">Spreadsheet format</div>
                   </button>
                   <button
-                    onClick={() => setExportFormat("csv")}
-                    className={`px-4 py-3 rounded-lg font-medium transition-all text-left ${
-                      exportFormat === "csv"
-                        ? "bg-purple-500 text-white shadow-md"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                    }`}
+                    disabled
+                    className="px-4 py-3 rounded-lg font-medium text-left bg-gray-50 text-gray-400 cursor-not-allowed border border-gray-200"
                   >
-                    <div className="font-semibold">CSV</div>
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold">CSV</span>
+                      <span className="text-xs bg-gray-200 text-gray-500 px-2 py-0.5 rounded">Coming Soon</span>
+                    </div>
                     <div className="text-xs opacity-80">
                       Comma-separated values
                     </div>
                   </button>
                   <button
-                    onClick={() => setExportFormat("json")}
-                    className={`px-4 py-3 rounded-lg font-medium transition-all text-left ${
-                      exportFormat === "json"
-                        ? "bg-purple-500 text-white shadow-md"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                    }`}
+                    disabled
+                    className="px-4 py-3 rounded-lg font-medium text-left bg-gray-50 text-gray-400 cursor-not-allowed border border-gray-200"
                   >
-                    <div className="font-semibold">JSON</div>
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold">JSON</span>
+                      <span className="text-xs bg-gray-200 text-gray-500 px-2 py-0.5 rounded">Coming Soon</span>
+                    </div>
                     <div className="text-xs opacity-80">Structured data</div>
                   </button>
                   <button
-                    onClick={() => setExportFormat("txt_eml")}
-                    className={`px-4 py-3 rounded-lg font-medium transition-all text-left ${
-                      exportFormat === "txt_eml"
-                        ? "bg-purple-500 text-white shadow-md"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                    }`}
+                    disabled
+                    className="px-4 py-3 rounded-lg font-medium text-left bg-gray-50 text-gray-400 cursor-not-allowed border border-gray-200"
                   >
-                    <div className="font-semibold">TXT + EML Files</div>
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold">TXT + EML Files</span>
+                      <span className="text-xs bg-gray-200 text-gray-500 px-2 py-0.5 rounded">Coming Soon</span>
+                    </div>
                     <div className="text-xs opacity-80">
                       Text files and email files
                     </div>
