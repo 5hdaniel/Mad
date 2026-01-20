@@ -623,6 +623,16 @@ class PDFExportService {
       sanitized = sanitized.replace(/<link\b[^>]*\/?>/gi, '');
       sanitized = sanitized.replace(/<base\b[^>]*\/?>/gi, '');
 
+      // CRITICAL: Remove document-level tags that can affect the whole PDF
+      // These tags from email HTML bleed styles into our document
+      sanitized = sanitized.replace(/<!DOCTYPE[^>]*>/gi, '');
+      sanitized = sanitized.replace(/<\/?html\b[^>]*>/gi, '');
+      sanitized = sanitized.replace(/<head\b[^>]*>[\s\S]*?<\/head>/gi, '');
+      sanitized = sanitized.replace(/<\/?body\b[^>]*>/gi, '');
+
+      // Remove any background-color styles that could affect the page
+      sanitized = sanitized.replace(/background(-color)?\s*:\s*[^;"}]+[;"]?/gi, '');
+
       return sanitized;
     };
 
