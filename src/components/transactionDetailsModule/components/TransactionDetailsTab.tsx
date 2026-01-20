@@ -27,6 +27,7 @@ export function TransactionDetailsTab({
     <>
       {/* Transaction Info */}
       <div className="grid grid-cols-2 gap-4 mb-6">
+        {/* Sale Price temporarily hidden - BACKLOG-320
         <div className="bg-gray-50 p-4 rounded-lg">
           <p className="text-sm text-gray-600 mb-1">Sale Price</p>
           <p className="text-xl font-bold text-gray-900">
@@ -38,6 +39,7 @@ export function TransactionDetailsTab({
               : "N/A"}
           </p>
         </div>
+        */}
         <div className="bg-gray-50 p-4 rounded-lg">
           <p className="text-sm text-gray-600 mb-1">Closing Date</p>
           <p className="text-xl font-bold text-gray-900">
