@@ -71,7 +71,11 @@ class FolderExportService {
       logService.info("[Folder Export] Starting folder export", "FolderExport", {
         transactionId: transaction.id,
         emailCount: communications.filter((c) => c.communication_type === "email").length,
-        textCount: communications.filter((c) => c.communication_type === "text").length,
+        textCount: communications.filter((c) =>
+          c.communication_type === "sms" ||
+          c.communication_type === "imessage" ||
+          c.communication_type === "text"
+        ).length,
       });
 
       // Create base folder
@@ -101,8 +105,13 @@ class FolderExportService {
       });
 
       // Separate emails and texts
+      // Note: Text messages use channel 'sms' or 'imessage', not 'text'
       const emails = communications.filter((c) => c.communication_type === "email");
-      const texts = communications.filter((c) => c.communication_type === "text");
+      const texts = communications.filter((c) =>
+        c.communication_type === "sms" ||
+        c.communication_type === "imessage" ||
+        c.communication_type === "text"  // Legacy fallback
+      );
 
       // Sort by date (oldest first for indexing)
       emails.sort((a, b) => {
@@ -246,7 +255,11 @@ class FolderExportService {
     };
 
     const emails = communications.filter((c) => c.communication_type === "email");
-    const texts = communications.filter((c) => c.communication_type === "text");
+    const texts = communications.filter((c) =>
+      c.communication_type === "sms" ||
+      c.communication_type === "imessage" ||
+      c.communication_type === "text"  // Legacy fallback
+    );
 
     // Sort emails for the list
     const sortedEmails = [...emails].sort((a, b) => {
