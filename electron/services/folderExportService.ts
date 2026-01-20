@@ -1198,39 +1198,52 @@ class FolderExportService {
 
   /**
    * Convert HTML to PDF using Electron's built-in capability
+   * Uses a temp file instead of data URL to avoid URL length limits with large base64 images
    */
   private async htmlToPdf(html: string): Promise<Buffer> {
-    // Create hidden window for PDF generation
-    this.exportWindow = new BrowserWindow({
-      width: 800,
-      height: 1200,
-      show: false,
-      webPreferences: {
-        nodeIntegration: false,
-        contextIsolation: true,
-      },
-    });
+    // Write HTML to temp file to avoid data URL length limits
+    const tempDir = app.getPath("temp");
+    const tempFile = path.join(tempDir, `export-${Date.now()}-${Math.random().toString(36).slice(2)}.html`);
+    await fs.writeFile(tempFile, html, "utf8");
 
-    // Load HTML content
-    await this.exportWindow.loadURL(
-      `data:text/html;charset=utf-8,${encodeURIComponent(html)}`
-    );
+    try {
+      // Create hidden window for PDF generation
+      this.exportWindow = new BrowserWindow({
+        width: 800,
+        height: 1200,
+        show: false,
+        webPreferences: {
+          nodeIntegration: false,
+          contextIsolation: true,
+        },
+      });
 
-    // Wait for page to render
-    await new Promise((resolve) => setTimeout(resolve, 500));
+      // Load HTML from temp file
+      await this.exportWindow.loadFile(tempFile);
 
-    // Generate PDF
-    const pdfData = await this.exportWindow.webContents.printToPDF({
-      printBackground: true,
-      landscape: false,
-      pageSize: "Letter",
-    });
+      // Wait for page to render (including images)
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
-    // Clean up window
-    this.exportWindow.close();
-    this.exportWindow = null;
+      // Generate PDF
+      const pdfData = await this.exportWindow.webContents.printToPDF({
+        printBackground: true,
+        landscape: false,
+        pageSize: "Letter",
+      });
 
-    return pdfData;
+      // Clean up window
+      this.exportWindow.close();
+      this.exportWindow = null;
+
+      return pdfData;
+    } finally {
+      // Clean up temp file
+      try {
+        await fs.unlink(tempFile);
+      } catch {
+        // Ignore cleanup errors
+      }
+    }
   }
 
   /**
