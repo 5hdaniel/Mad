@@ -671,9 +671,6 @@ class PDFExportService {
 
       sortedThreads.forEach(([threadId, msgs], idx) => {
         const contact = getThreadContact(msgs);
-        const displayName = contact.name
-          ? contact.name + ' (' + contact.phone + ')'
-          : contact.phone;
         const lastMsg = msgs[msgs.length - 1];
         const preview = truncatePreview(lastMsg.body_text || lastMsg.body_plain);
         const hasContent = msgs.some(m => m.body_text || m.body_plain);
@@ -681,11 +678,16 @@ class PDFExportService {
         const isGroupChat = this._isGroupChat(msgs);
 
         html += '<div class="communication">';
-        html += '<div class="subject">' + escapeHtml(displayName);
+        // Contact name in bold (or phone if no name)
+        html += '<div class="subject">' + escapeHtml(contact.name || contact.phone);
         if (isGroupChat) {
           html += ' <span style="font-size: 11px; color: #718096; font-weight: normal;">(Group Chat)</span>';
         }
         html += '</div>';
+        // Phone number on separate line (only if we have a name)
+        if (contact.name) {
+          html += '<div style="font-size: 12px; color: #718096;">' + escapeHtml(contact.phone) + '</div>';
+        }
         html += '<div style="font-size: 13px; color: #4a5568; margin: 8px 0;">' + preview + '</div>';
         html += '<div class="meta">';
         html += '<span>' + msgs.length + ' message' + (msgs.length === 1 ? '' : 's');
@@ -737,20 +739,22 @@ class PDFExportService {
       // Text thread appendix items (show all messages in thread)
       threadsWithContent.forEach(([threadId, msgs], threadIdx) => {
         const contact = getThreadContact(msgs);
-        const displayName = contact.name
-          ? contact.name + ' (' + contact.phone + ')'
-          : contact.phone;
         const isGroupChat = this._isGroupChat(msgs);
 
         html += '<div class="appendix-item">';
         html += '<a name="thread-' + threadIdx + '"></a>';
         html += '<div class="header-row">';
         html += '<div>';
-        html += '<div class="subject-line">Conversation with ' + escapeHtml(displayName);
+        // Contact name in bold, with phone below
+        html += '<div class="subject-line">Conversation with ' + escapeHtml(contact.name || contact.phone);
         if (isGroupChat) {
           html += ' (Group Chat)';
         }
         html += '</div>';
+        // Show phone on separate line if we have a contact name
+        if (contact.name) {
+          html += '<div class="meta-info">' + escapeHtml(contact.phone) + '</div>';
+        }
         html += '<div class="meta-info">' + msgs.length + ' message' + (msgs.length === 1 ? '' : 's') + '</div>';
         html += '</div>';
         html += '<span class="msg-id">Thread #' + (threadIdx + 1) + '</span>';
@@ -760,24 +764,41 @@ class PDFExportService {
         html += '<div class="message-body">';
         msgs.forEach((msg, msgIdx) => {
           const isOutbound = msg.direction === 'outbound';
-          let senderLabel = 'You';
+          let senderName = 'You';
+          let senderPhone: string | null = null;
+
           if (!isOutbound) {
             // For group chats, try to show individual sender
             if (isGroupChat && msg.sender) {
               const senderNormalized = normalizePhone(msg.sender);
-              senderLabel = phoneNameMap[senderNormalized] || phoneNameMap[msg.sender] || msg.sender;
+              const resolvedName = phoneNameMap[senderNormalized] || phoneNameMap[msg.sender];
+              senderName = resolvedName || msg.sender;
+              // Show phone if we resolved to a name
+              if (resolvedName) {
+                senderPhone = msg.sender;
+              }
             } else {
-              senderLabel = contact.name || contact.phone;
+              // Use thread contact info
+              senderName = contact.name || contact.phone;
+              // Show phone if we have a contact name
+              if (contact.name) {
+                senderPhone = contact.phone;
+              }
             }
           }
           const body = msg.body_text || msg.body_plain || '';
           const time = formatDateTime(msg.sent_at as string);
 
           if (msgIdx > 0) html += '<hr style="border: none; border-top: 1px solid #e2e8f0; margin: 12px 0;">';
-          html += '<div style="margin-bottom: 8px;">';
-          html += '<strong>' + escapeHtml(senderLabel) + '</strong>';
+          // Name in bold with timestamp
+          html += '<div style="margin-bottom: 4px;">';
+          html += '<strong>' + escapeHtml(senderName) + '</strong>';
           html += ' <span style="color: #718096; font-size: 11px;">' + time + '</span>';
           html += '</div>';
+          // Phone number below name (if resolved to contact name)
+          if (senderPhone) {
+            html += '<div style="font-size: 11px; color: #718096; margin-bottom: 8px;">' + escapeHtml(senderPhone) + '</div>';
+          }
           html += '<div>' + escapeHtml(body) + '</div>';
         });
         html += '</div>';
