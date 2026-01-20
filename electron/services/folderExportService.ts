@@ -424,13 +424,11 @@ class FolderExportService {
     <div class="email-list">
       ${sortedEmails
         .map((email, index) => {
-          const date = new Date(email.sent_at as string);
           return `
         <div class="email-item">
           <div class="header-row">
             <span class="index">${String(index + 1).padStart(3, "0")}</span>
             <span class="subject">${this.escapeHtml(email.subject || "(No Subject)")}</span>
-            <span class="date">${date.toLocaleDateString()}</span>
           </div>
           <div class="from">${this.escapeHtml(email.sender || "Unknown")}</div>
         </div>
@@ -520,11 +518,9 @@ class FolderExportService {
       .map((msgs, index) => {
         const contact = this.getThreadContact(msgs, phoneNameMap);
         const isGroupChat = this._isGroupChat(msgs);
-        const lastMsg = msgs[msgs.length - 1];
-        const date = new Date((lastMsg.sent_at || lastMsg.received_at) as string);
         // Use better display name for unknown contacts
         let displayName: string;
-        if (!contact.name && contact.phone === "Unknown") {
+        if (!contact.name && contact.phone.toLowerCase() === "unknown") {
           displayName = isGroupChat ? "Group Chat" : "Unknown Contact";
         } else {
           displayName = contact.name || contact.phone;
@@ -535,7 +531,6 @@ class FolderExportService {
             <div class="header-row">
               <span class="index">${String(index + 1).padStart(3, "0")}</span>
               <span class="contact">${this.escapeHtml(displayName)} (${msgs.length} msg${msgs.length === 1 ? "" : "s"})</span>
-              <span class="date">${date.toLocaleDateString()}</span>
             </div>
           </div>
         `;
@@ -729,7 +724,7 @@ class FolderExportService {
         : "unknown";
       // Use better display name for unknown contacts
       let displayName: string;
-      if (!contact.name && contact.phone === "Unknown") {
+      if (!contact.name && contact.phone.toLowerCase() === "unknown") {
         displayName = isGroupChat ? "Group_Chat" : "Unknown_Contact";
       } else {
         displayName = contact.name || contact.phone;
@@ -1017,7 +1012,7 @@ class FolderExportService {
 <body>
   <div class="header">
     <h1>${(() => {
-      if (!contact.name && contact.phone === "Unknown") {
+      if (!contact.name && contact.phone.toLowerCase() === "unknown") {
         return isGroupChat ? "Group Chat" : "Unknown Contact";
       }
       return `Conversation with ${this.escapeHtml(contact.name || contact.phone)}${isGroupChat ? '<span class="badge">Group Chat</span>' : ""}`;
