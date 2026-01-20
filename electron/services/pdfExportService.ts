@@ -414,9 +414,20 @@ class PDFExportService {
       white-space: pre-wrap;
     }
 
-    /* Rich HTML email body styles */
+    /* Rich HTML email body styles - isolate email content */
     .appendix-item .message-body-html {
-      /* Reset common email styles that might break PDF layout */
+      /* Ensure our font is used, not email's font */
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif !important;
+      font-size: 13px !important;
+      line-height: 1.6 !important;
+      color: #2d3748 !important;
+      /* Contain the HTML content */
+      overflow: hidden;
+    }
+
+    /* Override any nested font declarations in email HTML */
+    .appendix-item .message-body-html * {
+      font-family: inherit !important;
     }
 
     .appendix-item .message-body-html img {
@@ -610,6 +621,16 @@ class PDFExportService {
       sanitized = sanitized.replace(/<meta\b[^>]*\/?>/gi, '');
       sanitized = sanitized.replace(/<link\b[^>]*\/?>/gi, '');
       sanitized = sanitized.replace(/<base\b[^>]*\/?>/gi, '');
+
+      // Remove document-level tags that can affect the whole page
+      // Remove <html> and </html> tags
+      sanitized = sanitized.replace(/<\/?html\b[^>]*>/gi, '');
+      // Remove <head> and its contents
+      sanitized = sanitized.replace(/<head\b[^>]*>[\s\S]*?<\/head>/gi, '');
+      // Remove <body> opening and closing tags (keep inner content)
+      sanitized = sanitized.replace(/<\/?body\b[^>]*>/gi, '');
+      // Remove DOCTYPE declarations
+      sanitized = sanitized.replace(/<!DOCTYPE[^>]*>/gi, '');
 
       return sanitized;
     };
