@@ -1069,7 +1069,12 @@ interface MainAPI {
     }>;
     exportEnhanced: (
       transactionId: string,
-      options: Record<string, unknown>,
+      options: {
+        exportFormat?: string;
+        contentType?: "text" | "email" | "both";
+        representationStartDate?: string;
+        closingDate?: string;
+      },
     ) => Promise<{
       success: boolean;
       filePath?: string;

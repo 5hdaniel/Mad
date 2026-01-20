@@ -50,14 +50,34 @@ class EnhancedExportService {
         contentType,
         transactionId: transaction.id,
         propertyAddress: transaction.property_address,
+        representationStartDate: representationStartDate || "not set",
+        closingDate: closingDate || "not set",
       });
 
       // Filter communications by date range
+      // If dates aren't provided in options, use transaction dates
+      const startDate = representationStartDate || (transaction.representation_start_date as string | undefined);
+      const endDate = closingDate || (transaction.closing_date as string | undefined);
+
+      const totalBefore = communications.length;
       let filteredComms = this._filterCommunicationsByDate(
         communications,
-        representationStartDate,
-        closingDate,
+        startDate,
+        endDate,
       );
+      const afterDateFilter = filteredComms.length;
+
+      if (startDate || endDate) {
+        logService.info(
+          `[Enhanced Export] Date filtering: ${totalBefore} -> ${afterDateFilter} communications (filtered ${totalBefore - afterDateFilter} outside date range)`,
+          "EnhancedExport",
+          {
+            startDate: startDate || "none",
+            endDate: endDate || "none",
+            filtered: totalBefore - afterDateFilter,
+          },
+        );
+      }
 
       // IMPORTANT: Verify address relevance to prevent cross-transaction contamination
       // This ensures that contacts working on multiple transactions don't get mixed emails
