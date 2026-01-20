@@ -1785,10 +1785,36 @@ export const registerTransactionHandlers = (
           };
         }
 
+        // Filter communications by date range if transaction has dates set
+        let communications = (details as any).communications || [];
+        const startDate = details.started_at || details.representation_start_date;
+        const endDate = details.closed_at || details.closing_date;
+
+        if (startDate || endDate) {
+          const start = startDate ? new Date(startDate as string) : null;
+          const end = endDate ? new Date(endDate as string) : null;
+          // Add a day to end date to include messages on the closing day
+          if (end) end.setDate(end.getDate() + 1);
+
+          communications = communications.filter((comm: any) => {
+            const commDate = new Date(comm.sent_at || comm.received_at);
+            if (start && commDate < start) return false;
+            if (end && commDate > end) return false;
+            return true;
+          });
+
+          logService.info("Filtered communications by date range", "Transactions", {
+            original: ((details as any).communications || []).length,
+            filtered: communications.length,
+            startDate: startDate,
+            endDate: endDate,
+          });
+        }
+
         // Export to folder structure
         const exportPath = await folderExportService.exportTransactionToFolder(
           details,
-          (details as any).communications || [],
+          communications,
           {
             transactionId: validatedTransactionId,
             includeEmails: sanitizedOptions.includeEmails ?? true,

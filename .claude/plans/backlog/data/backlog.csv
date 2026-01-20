@@ -308,3 +308,5 @@ BACKLOG-334,Export Settings - Persist Default Export Options and Format,settings
 BACKLOG-335,Enforce Transaction Start Date with Historical Message Filtering,transactions,high,pending,-,-,-,-,[BACKLOG-335.md](BACKLOG-335.md)
 BACKLOG-338,Google Profile Image Display Issue,UI,low,pending,,"Google profile images not displaying correctly in circular avatar frames. Images appear broken or improperly cropped when user logs in with Google OAuth.",ui
 BACKLOG-339,Export Progress Indicator with Time Estimate,UI,low,pending,,"Add time estimate or detailed progress bar to export process instead of just a spinning loader. Show estimated time remaining or percentage complete.",ui
+BACKLOG-340,Show/Hide Messages Outside Date Range,UI,medium,pending,,"Add toggle button to show or hide messages that fall outside the transaction date range when viewing an attached text thread. Helps users see context while keeping focus on relevant messages.",ui
+BACKLOG-341,Add Year to Message Timestamps in Viewer,UI,low,pending,,"Show full year in message timestamps when viewing messages in the app (currently shows month/day but not year). Export already shows year correctly.",ui
