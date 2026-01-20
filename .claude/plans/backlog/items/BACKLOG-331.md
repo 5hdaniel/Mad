@@ -1,68 +1,52 @@
-# BACKLOG-331: Transaction Details Modal Responsive Size
-
-## Type
-UI / UX Polish
-
-## Priority
-Low
-
-## Status
-In Progress
-
-**Sprint:** SPRINT-046
-**Task:** TASK-1140
+# BACKLOG-331: PDF Export Date Range Filtering
 
 ## Summary
 
-When switching between tabs on the Transaction Details modal, the popup size changes based on content within each tab. This causes jarring layout shifts.
+Filter/truncate messages in PDF export based on transaction start date and closing date. Only include messages that fall within the transaction's date range.
 
-## Current Behavior
+## Problem
 
-1. User opens Transaction Details modal
-2. User switches between tabs (Details, Contacts, Messages, Emails, etc.)
-3. Modal height/width changes based on content in each tab
-4. This causes jarring visual jump as modal resizes
+Currently, PDF exports include ALL linked messages regardless of when they occurred. Users need exports to only include communications relevant to the transaction timeframe.
 
-## Expected Behavior
+## Requirements
 
-- Modal should have a fixed/responsive size based on viewport
-- Content should scroll within the fixed container
-- No size jumping when switching tabs
-- Consistent modal dimensions regardless of tab content
+1. **Date range filtering at export time**
+   - Apply filtering during PDF generation (not at message linking time)
+   - Use transaction's start date as lower bound (if set)
+   - Use transaction's closing date as upper bound (if set)
 
-## Similar Implementation
+2. **Why at export time?**
+   - Closing date may not be known when messages are linked
+   - User may update closing date after linking messages
+   - Keeps linked messages intact for reference, only filters on export
 
-**BACKLOG-315 / TASK-1130** - Contact modal fixed size
-- Same pattern: fixed outer container, scrollable inner content
-- Can reference that implementation for consistency
+3. **Edge cases**
+   - If no start date: include all messages up to closing date
+   - If no closing date: include all messages from start date onwards
+   - If neither date set: include all linked messages (current behavior)
 
-## Affected Files
+## Implementation Notes
 
-- `src/components/transactionDetailsModule/` - TransactionDetails modal/container
-- Likely needs CSS changes to:
-  - Set fixed/max modal dimensions
-  - Make content area scrollable
-  - Ensure consistent size across all tabs
+- Modify `pdfExportService.ts` to filter communications by date range
+- Use `sent_at` timestamp for filtering
+- Consider adding a small buffer (e.g., 1 day before start, 1 day after close) for edge cases
+
+## Files Likely Affected
+
+- `electron/services/pdfExportService.ts`
 
 ## Acceptance Criteria
 
-- [ ] Modal maintains consistent size when switching tabs
-- [ ] Content scrolls within the fixed container
-- [ ] No visible layout shift during tab changes
-- [ ] Modal remains usable on various screen sizes (responsive)
-- [ ] Scrollbars appear only when content exceeds container height
+- [ ] Messages before transaction start date are excluded from PDF
+- [ ] Messages after closing date are excluded from PDF
+- [ ] Filtering only happens at export, linked messages remain in UI
+- [ ] Edge cases handled (missing dates)
+- [ ] Export summary shows filtered message count vs total linked
 
-## Technical Notes
+## Priority
 
-This is a CSS-focused fix similar to TASK-1130 for the Contact modal. The approach should be:
-1. Set fixed dimensions (or max dimensions) on the modal container
-2. Set the content area to overflow: auto
-3. Ensure all tabs render within the same container constraints
+Medium - UX improvement for accurate audit reports
 
-## Estimated Effort
+## Created
 
-~5K tokens (CSS fix similar to TASK-1130)
-
-## Discovered During
-
-User testing - 2026-01-19
+2026-01-19

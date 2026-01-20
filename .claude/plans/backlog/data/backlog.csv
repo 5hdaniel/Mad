@@ -301,3 +301,7 @@ BACKLOG-326,PDF Text Conversations Contact Name and Formatting,fix/ui,Medium,Pen
 BACKLOG-327,PDF Export Show Rich HTML Emails,feature/ui,Medium,Pending,-,~20K,-,-,[BACKLOG-327.md](items/BACKLOG-327.md)
 BACKLOG-329,Email Card Design Consistency with Message Cards,ui,Low,Pending,-,~8K,-,Includes View button,[BACKLOG-329.md](items/BACKLOG-329.md)
 BACKLOG-330,Sort Contacts by Most Recent Communication,ui,Medium,Pending,-,~8K,-,-,[BACKLOG-330.md](items/BACKLOG-330.md)
+BACKLOG-331,PDF Export Date Range Filtering,pdf-export,medium,pending,-,-,-,-,[BACKLOG-331.md](BACKLOG-331.md)
+BACKLOG-332,Audit Package Missing Attachments and Text Messages,audit-export,high,pending,-,-,-,-,[BACKLOG-332.md](BACKLOG-332.md)
+BACKLOG-333,Gray Out Unimplemented Export Options with Coming Soon Label,ui,low,pending,-,-,-,-,[BACKLOG-333.md](BACKLOG-333.md)
+BACKLOG-334,Export Settings - Persist Default Export Options and Format,settings,medium,pending,-,-,-,-,[BACKLOG-334.md](BACKLOG-334.md)
