@@ -405,8 +405,58 @@ class PDFExportService {
       font-size: 13px;
       line-height: 1.6;
       color: #2d3748;
-      white-space: pre-wrap;
       word-wrap: break-word;
+      overflow-wrap: break-word;
+    }
+
+    /* Plain text message body (for SMS/texts) */
+    .appendix-item .message-body-plain {
+      white-space: pre-wrap;
+    }
+
+    /* Rich HTML email body styles */
+    .appendix-item .message-body-html {
+      /* Reset common email styles that might break PDF layout */
+    }
+
+    .appendix-item .message-body-html img {
+      max-width: 100%;
+      height: auto;
+    }
+
+    .appendix-item .message-body-html table {
+      max-width: 100%;
+      border-collapse: collapse;
+    }
+
+    .appendix-item .message-body-html a {
+      color: #667eea;
+      text-decoration: underline;
+    }
+
+    .appendix-item .message-body-html blockquote {
+      margin: 8px 0;
+      padding-left: 12px;
+      border-left: 3px solid #e2e8f0;
+      color: #718096;
+    }
+
+    .appendix-item .message-body-html ul,
+    .appendix-item .message-body-html ol {
+      padding-left: 24px;
+      margin: 8px 0;
+    }
+
+    .appendix-item .message-body-html p {
+      margin: 8px 0;
+    }
+
+    .appendix-item .message-body-html h1,
+    .appendix-item .message-body-html h2,
+    .appendix-item .message-body-html h3,
+    .appendix-item .message-body-html h4 {
+      margin: 12px 0 8px 0;
+      color: #2d3748;
     }
 
     .back-to-top {
@@ -516,6 +566,51 @@ class PDFExportService {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
+    };
+
+    // Helper to sanitize HTML for PDF display
+    // Removes dangerous elements while preserving formatting
+    const sanitizeHtml = (html: string | null | undefined): string => {
+      if (!html) return '';
+
+      let sanitized = html;
+
+      // Remove script tags and their content
+      sanitized = sanitized.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+
+      // Remove style tags and their content (we use our own styles)
+      sanitized = sanitized.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
+
+      // Remove all event handlers (onclick, onerror, onload, etc.)
+      sanitized = sanitized.replace(/\s+on\w+\s*=\s*["'][^"']*["']/gi, '');
+      sanitized = sanitized.replace(/\s+on\w+\s*=\s*[^\s>]+/gi, '');
+
+      // Remove javascript: URLs
+      sanitized = sanitized.replace(/href\s*=\s*["']javascript:[^"']*["']/gi, 'href="#"');
+      sanitized = sanitized.replace(/src\s*=\s*["']javascript:[^"']*["']/gi, 'src=""');
+
+      // Remove data: URLs (could contain malicious content)
+      sanitized = sanitized.replace(/src\s*=\s*["']data:[^"']*["']/gi, 'src=""');
+
+      // Remove iframe, embed, object tags
+      sanitized = sanitized.replace(/<iframe\b[^>]*>.*?<\/iframe>/gi, '');
+      sanitized = sanitized.replace(/<iframe\b[^>]*\/?>/gi, '');
+      sanitized = sanitized.replace(/<embed\b[^>]*\/?>/gi, '');
+      sanitized = sanitized.replace(/<object\b[^>]*>.*?<\/object>/gi, '');
+      sanitized = sanitized.replace(/<object\b[^>]*\/?>/gi, '');
+
+      // Remove form elements
+      sanitized = sanitized.replace(/<form\b[^>]*>.*?<\/form>/gi, '');
+      sanitized = sanitized.replace(/<input\b[^>]*\/?>/gi, '');
+      sanitized = sanitized.replace(/<button\b[^>]*>.*?<\/button>/gi, '');
+      sanitized = sanitized.replace(/<textarea\b[^>]*>.*?<\/textarea>/gi, '');
+
+      // Remove meta, link, base tags
+      sanitized = sanitized.replace(/<meta\b[^>]*\/?>/gi, '');
+      sanitized = sanitized.replace(/<link\b[^>]*\/?>/gi, '');
+      sanitized = sanitized.replace(/<base\b[^>]*\/?>/gi, '');
+
+      return sanitized;
     };
 
     // Helper to truncate preview text
@@ -718,8 +813,21 @@ class PDFExportService {
 
       // Email appendix items
       emailsWithContent.forEach((comm, idx) => {
-        const body = comm.body_text || comm.body_plain ||
-          (comm.body_html ? comm.body_html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() : '');
+        // Prefer HTML body for rich formatting, fall back to plain text
+        const hasHtmlBody = comm.body_html && comm.body_html.trim().length > 0;
+        let bodyContent: string;
+        let bodyClass: string;
+
+        if (hasHtmlBody) {
+          // Use sanitized HTML for rich formatting
+          bodyContent = sanitizeHtml(comm.body_html);
+          bodyClass = 'message-body message-body-html';
+        } else {
+          // Fall back to plain text
+          const plainText = comm.body_text || comm.body_plain || '';
+          bodyContent = escapeHtml(plainText);
+          bodyClass = 'message-body message-body-plain';
+        }
 
         html += '<div class="appendix-item">';
         html += '<a name="email-' + idx + '"></a>';
@@ -731,7 +839,7 @@ class PDFExportService {
         html += '</div>';
         html += '<span class="msg-id">Email #' + (idx + 1) + '</span>';
         html += '</div>';
-        html += '<div class="message-body">' + escapeHtml(body) + '</div>';
+        html += '<div class="' + bodyClass + '">' + bodyContent + '</div>';
         html += '<a href="#appendix" class="back-to-top">&larr; Back to Messages</a>';
         html += '</div>';
       });
@@ -760,8 +868,8 @@ class PDFExportService {
         html += '<span class="msg-id">Thread #' + (threadIdx + 1) + '</span>';
         html += '</div>';
 
-        // Show each message in the thread
-        html += '<div class="message-body">';
+        // Show each message in the thread (text messages use plain text formatting)
+        html += '<div class="message-body message-body-plain">';
         msgs.forEach((msg, msgIdx) => {
           const isOutbound = msg.direction === 'outbound';
           let senderName = 'You';
