@@ -732,6 +732,10 @@ class DatabaseService implements IDatabaseService {
     return contactDb.searchContacts(query, userId);
   }
 
+  searchContactsForSelection(userId: string, query: string, limit?: number): contactDb.ContactWithActivity[] {
+    return contactDb.searchContactsForSelection(userId, query, limit);
+  }
+
   async updateContact(contactId: string, updates: Partial<Contact>): Promise<void> {
     return contactDb.updateContact(contactId, updates);
   }

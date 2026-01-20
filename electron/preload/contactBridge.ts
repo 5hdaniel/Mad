@@ -95,6 +95,19 @@ export const contactBridge = {
     ipcRenderer.invoke("contacts:get-names-by-phones", phones),
 
   /**
+   * Search contacts at database level (for selection modal)
+   * This enables searching beyond the initial LIMIT 200 contacts.
+   * @param userId - User ID to search contacts for
+   * @param query - Search query (name, email, phone, company)
+   * @returns Matching contacts sorted by relevance
+   */
+  searchContacts: (userId: string, query: string): Promise<{
+    success: boolean;
+    contacts?: Contact[];
+    error?: string;
+  }> => ipcRenderer.invoke("contacts:search", userId, query),
+
+  /**
    * Listen for import progress updates
    * @param callback - Called with progress updates during contact import
    * @returns Cleanup function to remove listener

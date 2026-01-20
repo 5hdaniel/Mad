@@ -868,6 +868,76 @@ interface MainAPI {
     onError: (callback: (error: { message: string }) => void) => () => void;
   };
 
+  // Contacts API
+  contacts: {
+    getAll: (userId: string) => Promise<{
+      success: boolean;
+      contacts?: unknown[];
+      error?: string;
+    }>;
+    getAvailable: (userId: string) => Promise<{
+      success: boolean;
+      contacts?: unknown[];
+      contactsStatus?: unknown;
+      error?: string;
+    }>;
+    import: (userId: string, contactsToImport: unknown[]) => Promise<{
+      success: boolean;
+      contacts?: unknown[];
+      error?: string;
+    }>;
+    getSortedByActivity: (userId: string, propertyAddress?: string) => Promise<{
+      success: boolean;
+      contacts?: unknown[];
+      error?: string;
+    }>;
+    create: (userId: string, contactData: unknown) => Promise<{
+      success: boolean;
+      contact?: unknown;
+      error?: string;
+    }>;
+    update: (contactId: string, updates: unknown) => Promise<{
+      success: boolean;
+      contact?: unknown;
+      error?: string;
+    }>;
+    checkCanDelete: (contactId: string) => Promise<{
+      success: boolean;
+      canDelete?: boolean;
+      transactions?: unknown[];
+      count?: number;
+      error?: string;
+    }>;
+    delete: (contactId: string) => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
+    remove: (contactId: string) => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
+    getNamesByPhones: (phones: string[]) => Promise<{
+      success: boolean;
+      names: Record<string, string>;
+      error?: string;
+    }>;
+    /**
+     * Search contacts at database level (for selection modal)
+     * Enables searching beyond the initial LIMIT 200 contacts
+     * @param userId - User ID to search contacts for
+     * @param query - Search query (name, email, phone, company)
+     * @returns Matching contacts sorted by relevance
+     */
+    searchContacts: (userId: string, query: string) => Promise<{
+      success: boolean;
+      contacts?: unknown[];
+      error?: string;
+    }>;
+    onImportProgress: (
+      callback: (progress: { current: number; total: number; percent: number }) => void
+    ) => () => void;
+  };
+
   // Transactions API
   transactions: {
     getAll: (

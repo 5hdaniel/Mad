@@ -927,6 +927,88 @@ export function registerContactHandlers(mainWindow: BrowserWindow): void {
     },
   );
 
+  // Search contacts (database-level search for contact selection)
+  // This fixes the LIMIT 200 issue where contacts beyond position 200 were unsearchable
+  ipcMain.handle(
+    "contacts:search",
+    async (
+      _event: IpcMainInvokeEvent,
+      userId: string,
+      query: string,
+    ): Promise<ContactResponse> => {
+      try {
+        // Validate inputs
+        const validatedUserId = validateUserId(userId);
+        if (!validatedUserId) {
+          throw new ValidationError("User ID validation failed", "userId");
+        }
+
+        // For empty/short queries, return the default sorted list
+        if (!query || query.length < 2) {
+          logService.info(
+            "[Main] Short query, returning sorted contacts",
+            "Contacts",
+            { userId, queryLength: query?.length || 0 },
+          );
+          const contacts = await databaseService.getContactsSortedByActivity(validatedUserId);
+          return {
+            success: true,
+            contacts,
+          };
+        }
+
+        // Validate and sanitize query
+        const validatedQuery = validateString(query, "query", {
+          required: true,
+          maxLength: 200,
+        });
+
+        if (!validatedQuery) {
+          throw new ValidationError("Query validation failed", "query");
+        }
+
+        logService.info(
+          "[Main] Searching contacts in database",
+          "Contacts",
+          { userId, query: validatedQuery },
+        );
+
+        // Perform database-level search
+        const contacts = databaseService.searchContactsForSelection(
+          validatedUserId,
+          validatedQuery,
+        );
+
+        logService.info(
+          `[Main] Found ${contacts.length} contacts matching query`,
+          "Contacts",
+          { userId, resultCount: contacts.length },
+        );
+
+        return {
+          success: true,
+          contacts,
+        };
+      } catch (error) {
+        logService.error("[Main] Search contacts failed:", "Contacts", {
+          userId,
+          query,
+          error,
+        });
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
   // Look up contact names by phone numbers (batch)
   ipcMain.handle(
     "contacts:get-names-by-phones",

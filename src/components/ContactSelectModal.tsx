@@ -1,6 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import type { ExtendedContact } from "../types/components";
 import { ImportContactsModal } from "./contact";
+
+// Debounce delay for search (ms)
+const SEARCH_DEBOUNCE_MS = 300;
 
 interface ContactSelectModalProps {
   contacts: ExtendedContact[];
@@ -43,6 +46,75 @@ function ContactSelectModal({
   const [showImportModal, setShowImportModal] = useState(false);
   // Track IDs to auto-select after import (cleared once contacts refresh)
   const [pendingAutoSelectIds, setPendingAutoSelectIds] = useState<string[]>([]);
+
+  // Database search state
+  const [searchResults, setSearchResults] = useState<ExtendedContact[] | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Debounced database search
+  const performDatabaseSearch = useCallback(async (query: string) => {
+    if (!userId) {
+      setSearchResults(null);
+      return;
+    }
+
+    // For short queries, clear search results and use client-side filter
+    if (query.length < 2) {
+      setSearchResults(null);
+      setIsSearching(false);
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      // Use the contacts:search IPC handler via the bridge
+      // Type assertion needed because window.d.ts types may be out of sync with contactBridge
+      const contactsApi = window.api.contacts as unknown as {
+        searchContacts: (userId: string, query: string) => Promise<{
+          success: boolean;
+          contacts?: ExtendedContact[];
+          error?: string;
+        }>;
+      };
+      const result = await contactsApi.searchContacts(userId, query);
+      if (result.success && result.contacts) {
+        setSearchResults(result.contacts);
+      } else {
+        // On error, fall back to client-side filtering
+        setSearchResults(null);
+      }
+    } catch (error) {
+      console.error("Database search failed:", error);
+      setSearchResults(null);
+    } finally {
+      setIsSearching(false);
+    }
+  }, [userId]);
+
+  // Handle search input change with debounce
+  const handleSearchChange = useCallback((value: string) => {
+    setSearchQuery(value);
+
+    // Clear existing timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    // Set new debounced search
+    searchTimeoutRef.current = setTimeout(() => {
+      performDatabaseSearch(value);
+    }, SEARCH_DEBOUNCE_MS);
+  }, [performDatabaseSearch]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Create a set of valid contact IDs for O(1) lookup
   const validContactIds = React.useMemo(
@@ -88,12 +160,25 @@ function ContactSelectModal({
 
   const availableContacts = contacts.filter((c) => !excludeIds.includes(c.id));
 
-  const filteredContacts = availableContacts.filter(
-    (c) =>
-      c.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.company?.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
+  // Use database search results if available, otherwise filter client-side
+  const filteredContacts = React.useMemo(() => {
+    if (searchResults !== null) {
+      // Database search results - filter out excluded IDs
+      return searchResults.filter((c) => !excludeIds.includes(c.id));
+    }
+
+    // Client-side filtering for short/empty queries
+    if (!searchQuery) {
+      return availableContacts;
+    }
+
+    return availableContacts.filter(
+      (c) =>
+        c.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        c.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        c.company?.toLowerCase().includes(searchQuery.toLowerCase()),
+    );
+  }, [searchResults, searchQuery, availableContacts, excludeIds]);
 
   const handleToggleContact = (contactId: string) => {
     if (multiple) {
@@ -155,23 +240,46 @@ function ContactSelectModal({
                 type="text"
                 placeholder="Search contacts by name, email, or company..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => handleSearchChange(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                 autoFocus
               />
-              <svg
-                className="w-5 h-5 text-gray-400 absolute left-3 top-2.5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                />
-              </svg>
+              {/* Search icon - shows spinner when searching */}
+              {isSearching ? (
+                <svg
+                  className="w-5 h-5 text-purple-500 absolute left-3 top-2.5 animate-spin"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  />
+                </svg>
+              ) : (
+                <svg
+                  className="w-5 h-5 text-gray-400 absolute left-3 top-2.5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                  />
+                </svg>
+              )}
             </div>
             {/* Import Contacts Button */}
             {userId && (
