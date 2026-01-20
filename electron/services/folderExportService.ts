@@ -8,7 +8,8 @@
  * │   ├── 001_2024-01-15_RE_Inspection.pdf
  * │   └── ...
  * ├── texts/
- * │   └── conversation_John_Smith.txt
+ * │   ├── thread_001_John_Smith_2024-01-15.pdf
+ * │   └── ...
  * └── attachments/
  *     ├── document.pdf
  *     └── manifest.json
@@ -544,74 +545,374 @@ class FolderExportService {
   }
 
   /**
-   * Export text conversations grouped by contact
+   * Export text conversations as individual PDF files (one per thread)
    */
   private async exportTextConversations(
     texts: Communication[],
     outputPath: string
   ): Promise<void> {
-    // Group texts by contact (sender or recipient)
-    const conversationMap = new Map<string, Communication[]>();
+    // Look up contact names for phone numbers
+    const textPhones = texts
+      .map((t) => t.sender)
+      .filter(
+        (s): s is string =>
+          !!s && (s.startsWith("+") || /^\d{7,}$/.test(s.replace(/\D/g, "")))
+      );
+    const phoneNameMap = this.getContactNamesByPhones(textPhones);
 
-    for (const text of texts) {
-      // Use sender as the key (the other party in the conversation)
-      const contactName = text.sender || "Unknown";
-      if (!conversationMap.has(contactName)) {
-        conversationMap.set(contactName, []);
-      }
-      conversationMap.get(contactName)!.push(text);
+    // Group texts by thread
+    const textThreads = new Map<string, Communication[]>();
+    for (const msg of texts) {
+      const key = this.getThreadKey(msg);
+      const thread = textThreads.get(key) || [];
+      thread.push(msg);
+      textThreads.set(key, thread);
     }
 
-    // Export each conversation as a separate file
-    for (const [contactName, messages] of conversationMap) {
-      // Sort messages by date
-      messages.sort((a, b) => {
-        const dateA = new Date(a.sent_at as string).getTime();
-        const dateB = new Date(b.sent_at as string).getTime();
-        return dateA - dateB;
-      });
+    // Sort messages within each thread chronologically
+    textThreads.forEach((msgs, key) => {
+      textThreads.set(
+        key,
+        msgs.sort((a, b) => {
+          const dateA = new Date(a.sent_at || a.received_at || 0).getTime();
+          const dateB = new Date(b.sent_at || b.received_at || 0).getTime();
+          return dateA - dateB;
+        })
+      );
+    });
 
-      const content = this.formatTextConversation(contactName, messages);
-      const fileName = `conversation_${this.sanitizeFileName(contactName)}.txt`;
-      await fs.writeFile(path.join(outputPath, fileName), content, "utf8");
+    // Export each thread as PDF
+    let threadIndex = 0;
+    for (const [, msgs] of textThreads) {
+      const contact = this.getThreadContact(msgs, phoneNameMap);
+      const isGroupChat = this._isGroupChat(msgs);
+      const html = this.generateTextThreadHTML(
+        msgs,
+        contact,
+        phoneNameMap,
+        isGroupChat
+      );
+      const pdfBuffer = await this.htmlToPdf(html);
+
+      // Get date from first message
+      const firstMsgDate = msgs[0].sent_at || msgs[0].received_at;
+      const firstDate = firstMsgDate
+        ? new Date(firstMsgDate as string).toISOString().split("T")[0]
+        : "unknown";
+      const contactName = this.sanitizeFileName(contact.name || contact.phone);
+      const fileName = `thread_${String(threadIndex + 1).padStart(3, "0")}_${contactName}_${firstDate}.pdf`;
+
+      await fs.writeFile(path.join(outputPath, fileName), pdfBuffer);
+      threadIndex++;
     }
   }
 
   /**
-   * Format a text conversation as readable transcript
+   * Normalize phone number to last 10 digits for matching
    */
-  private formatTextConversation(
-    contactName: string,
-    messages: Communication[]
-  ): string {
-    const lines: string[] = [];
+  private normalizePhone(phone: string): string {
+    return phone.replace(/\D/g, "").slice(-10);
+  }
 
-    lines.push(`=== Conversation with ${contactName} ===`);
-    lines.push("");
-    lines.push(`Total Messages: ${messages.length}`);
-    lines.push("");
-    lines.push("---");
-    lines.push("");
+  /**
+   * Get thread key for grouping messages (uses thread_id if available)
+   */
+  private getThreadKey(msg: Communication): string {
+    // Use thread_id if available
+    if (msg.thread_id) return msg.thread_id;
 
-    for (const msg of messages) {
-      const date = new Date(msg.sent_at as string);
-      const dateStr = date.toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-      });
-      const timeStr = date.toLocaleTimeString("en-US", {
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: true,
-      });
+    // Fallback: compute from participants
+    try {
+      if (msg.participants) {
+        const parsed =
+          typeof msg.participants === "string"
+            ? JSON.parse(msg.participants)
+            : msg.participants;
 
-      lines.push(`[${dateStr} ${timeStr}] ${msg.sender || "Unknown"}:`);
-      lines.push(msg.body_plain || msg.body || "(No content)");
-      lines.push("");
+        const allParticipants = new Set<string>();
+        if (parsed.from) allParticipants.add(this.normalizePhone(parsed.from));
+        if (parsed.to) {
+          const toList = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
+          toList.forEach((p: string) =>
+            allParticipants.add(this.normalizePhone(p))
+          );
+        }
+
+        if (allParticipants.size > 0) {
+          return (
+            "participants-" + Array.from(allParticipants).sort().join("-")
+          );
+        }
+      }
+    } catch {
+      // Fall through
     }
 
-    return lines.join("\n");
+    // Last resort: use message id
+    return "msg-" + msg.id;
+  }
+
+  /**
+   * Extract phone/contact name from thread
+   */
+  private getThreadContact(
+    msgs: Communication[],
+    phoneNameMap: Record<string, string>
+  ): { phone: string; name: string | null } {
+    for (const msg of msgs) {
+      try {
+        if (msg.participants) {
+          const parsed =
+            typeof msg.participants === "string"
+              ? JSON.parse(msg.participants)
+              : msg.participants;
+
+          let phone: string | null = null;
+          if (msg.direction === "inbound" && parsed.from) {
+            phone = parsed.from;
+          } else if (msg.direction === "outbound" && parsed.to?.length > 0) {
+            phone = Array.isArray(parsed.to) ? parsed.to[0] : parsed.to;
+          }
+
+          if (phone) {
+            const normalized = this.normalizePhone(phone);
+            const name =
+              phoneNameMap[normalized] || phoneNameMap[phone] || null;
+            return { phone, name };
+          }
+        }
+      } catch {
+        // Continue
+      }
+
+      // Fallback to sender
+      if (msg.sender) {
+        const normalized = this.normalizePhone(msg.sender);
+        const name =
+          phoneNameMap[normalized] || phoneNameMap[msg.sender] || null;
+        return { phone: msg.sender, name };
+      }
+    }
+    return { phone: "Unknown", name: null };
+  }
+
+  /**
+   * Check if a thread is a group chat (has multiple unique participants)
+   */
+  private _isGroupChat(msgs: Communication[]): boolean {
+    const participants = new Set<string>();
+
+    for (const msg of msgs) {
+      try {
+        if (msg.participants) {
+          const parsed =
+            typeof msg.participants === "string"
+              ? JSON.parse(msg.participants)
+              : msg.participants;
+
+          if (parsed.from)
+            participants.add(parsed.from.replace(/\D/g, "").slice(-10));
+          if (parsed.to) {
+            const toList = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
+            toList.forEach((p: string) =>
+              participants.add(p.replace(/\D/g, "").slice(-10))
+            );
+          }
+        }
+      } catch {
+        // Continue
+      }
+    }
+
+    // Group chat if more than 2 participants
+    return participants.size > 2;
+  }
+
+  /**
+   * Look up contact names for phone numbers
+   */
+  private getContactNamesByPhones(phones: string[]): Record<string, string> {
+    if (phones.length === 0) return {};
+
+    try {
+      // Normalize phones to last 10 digits for matching
+      const normalizedPhones = phones.map((p) =>
+        p.replace(/\D/g, "").slice(-10)
+      );
+
+      // Query contact_phones to find names
+      const placeholders = normalizedPhones.map(() => "?").join(",");
+      const sql = `
+        SELECT
+          cp.phone_e164,
+          cp.phone_display,
+          c.display_name
+        FROM contact_phones cp
+        JOIN contacts c ON cp.contact_id = c.id
+        WHERE substr(replace(replace(replace(cp.phone_e164, '+', ''), '-', ''), ' ', ''), -10) IN (${placeholders})
+           OR substr(replace(replace(replace(cp.phone_display, '+', ''), '-', ''), ' ', ''), -10) IN (${placeholders})
+      `;
+
+      const db = databaseService.getRawDatabase();
+      const rows = db.prepare(sql).all(...normalizedPhones, ...normalizedPhones) as {
+        phone_e164: string | null;
+        phone_display: string | null;
+        display_name: string | null;
+      }[];
+
+      const result: Record<string, string> = {};
+      for (const row of rows) {
+        if (row.display_name) {
+          if (row.phone_e164) {
+            const norm = row.phone_e164.replace(/\D/g, "").slice(-10);
+            result[norm] = row.display_name;
+            result[row.phone_e164] = row.display_name;
+          }
+          if (row.phone_display) {
+            const norm = row.phone_display.replace(/\D/g, "").slice(-10);
+            result[norm] = row.display_name;
+            result[row.phone_display] = row.display_name;
+          }
+        }
+      }
+
+      return result;
+    } catch (error) {
+      logService.warn(
+        "[Folder Export] Failed to look up contact names",
+        "FolderExport",
+        { error }
+      );
+      return {};
+    }
+  }
+
+  /**
+   * Generate HTML for a single text conversation thread (styled like PDF export)
+   */
+  private generateTextThreadHTML(
+    msgs: Communication[],
+    contact: { phone: string; name: string | null },
+    phoneNameMap: Record<string, string>,
+    isGroupChat: boolean
+  ): string {
+    const messagesHtml = msgs
+      .map((msg) =>
+        this.generateTextMessageHTML(msg, contact, phoneNameMap, isGroupChat)
+      )
+      .join("");
+
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      padding: 40px;
+      color: #1a202c;
+      background: white;
+    }
+    .header {
+      border-bottom: 4px solid #667eea;
+      padding-bottom: 20px;
+      margin-bottom: 30px;
+    }
+    .header h1 { font-size: 20px; color: #1a202c; margin-bottom: 8px; }
+    .header .meta { font-size: 13px; color: #718096; }
+    .message {
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .message:last-child { border-bottom: none; }
+    .message .sender { font-weight: 600; color: #2d3748; }
+    .message .time { font-size: 11px; color: #718096; margin-left: 8px; }
+    .message .phone { font-size: 11px; color: #718096; display: block; margin-bottom: 4px; }
+    .message .body { margin-top: 4px; line-height: 1.5; }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      background: #e2e8f0;
+      border-radius: 4px;
+      font-size: 11px;
+      color: #718096;
+      margin-left: 8px;
+    }
+    .footer {
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid #e2e8f0;
+      font-size: 11px;
+      color: #a0aec0;
+      text-align: center;
+    }
+    @media print { body { padding: 20px; } }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Conversation with ${this.escapeHtml(contact.name || contact.phone)}${isGroupChat ? '<span class="badge">Group Chat</span>' : ""}</h1>
+    <div class="meta">${contact.name ? this.escapeHtml(contact.phone) + " | " : ""}${msgs.length} message${msgs.length === 1 ? "" : "s"}</div>
+  </div>
+
+  ${messagesHtml}
+
+  <div class="footer">
+    <p>Exported from MagicAudit</p>
+  </div>
+</body>
+</html>
+    `;
+  }
+
+  /**
+   * Generate HTML for a single text message within a thread
+   */
+  private generateTextMessageHTML(
+    msg: Communication,
+    contact: { phone: string; name: string | null },
+    phoneNameMap: Record<string, string>,
+    isGroupChat: boolean
+  ): string {
+    const isOutbound = msg.direction === "outbound";
+    let senderName = "You";
+    let senderPhone: string | null = null;
+
+    if (!isOutbound) {
+      if (isGroupChat && msg.sender) {
+        const normalized = this.normalizePhone(msg.sender);
+        const resolvedName =
+          phoneNameMap[normalized] || phoneNameMap[msg.sender];
+        senderName = resolvedName || msg.sender;
+        if (resolvedName) senderPhone = msg.sender;
+      } else {
+        senderName = contact.name || contact.phone;
+        if (contact.name) senderPhone = contact.phone;
+      }
+    }
+
+    const msgDate = msg.sent_at || msg.received_at;
+    const time = msgDate
+      ? new Date(msgDate as string).toLocaleString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      : "";
+
+    return `
+    <div class="message">
+      <span class="sender">${this.escapeHtml(senderName)}</span>
+      <span class="time">${time}</span>
+      ${senderPhone ? `<span class="phone">${this.escapeHtml(senderPhone)}</span>` : ""}
+      <div class="body">${this.escapeHtml(msg.body_text || msg.body_plain || "")}</div>
+    </div>
+    `;
   }
 
   /**
