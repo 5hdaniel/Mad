@@ -365,6 +365,7 @@ class PDFExportService {
       margin-bottom: 24px;
       background: white;
       page-break-inside: avoid;
+      page-break-before: always;
     }
 
     .appendix-item .header-row {
@@ -416,7 +417,9 @@ class PDFExportService {
 
     /* Rich HTML email body styles */
     .appendix-item .message-body-html {
-      /* Reset common email styles that might break PDF layout */
+      /* White background for HTML emails so their own styling shows properly */
+      background: white;
+      border: 1px solid #e2e8f0;
     }
 
     .appendix-item .message-body-html img {
@@ -464,12 +467,24 @@ class PDFExportService {
       text-decoration: none;
       font-size: 12px;
       display: inline-block;
-      margin-top: 12px;
+      margin-top: 16px;
+      padding-top: 12px;
+      border-top: 1px solid #e2e8f0;
+      width: 100%;
     }
 
     @media print {
       body {
         padding: 20px;
+      }
+    }
+
+    /* Page numbers */
+    @page {
+      @bottom-center {
+        content: "Page " counter(page) " of " counter(pages);
+        font-size: 10px;
+        color: #718096;
       }
     }
   </style>
@@ -610,6 +625,16 @@ class PDFExportService {
       sanitized = sanitized.replace(/<meta\b[^>]*\/?>/gi, '');
       sanitized = sanitized.replace(/<link\b[^>]*\/?>/gi, '');
       sanitized = sanitized.replace(/<base\b[^>]*\/?>/gi, '');
+
+      // CRITICAL: Remove document-level tags that can affect the whole PDF
+      // These tags from email HTML bleed styles into our document
+      sanitized = sanitized.replace(/<!DOCTYPE[^>]*>/gi, '');
+      sanitized = sanitized.replace(/<\/?html\b[^>]*>/gi, '');
+      sanitized = sanitized.replace(/<head\b[^>]*>[\s\S]*?<\/head>/gi, '');
+      sanitized = sanitized.replace(/<\/?body\b[^>]*>/gi, '');
+
+      // Remove any background-color styles that could affect the page
+      sanitized = sanitized.replace(/background(-color)?\s*:\s*[^;"}]+[;"]?/gi, '');
 
       return sanitized;
     };
@@ -811,14 +836,16 @@ class PDFExportService {
     if (hasAppendix) {
       html += '<div class="appendix">';
       html += '<a name="appendix"></a>';
-      html += '<h2>Full Messages</h2>';
 
       // Email appendix items
       emailsWithContent.forEach((comm, idx) => {
         // Prefer HTML body for rich formatting, fall back to plain text
         // Note: The query returns HTML content in 'body' field (not 'body_html')
         const htmlBody = (comm as { body?: string }).body;
-        const hasHtmlBody = htmlBody && htmlBody.trim().length > 0 && htmlBody.includes('<');
+        // Check for actual HTML tags (not just angle brackets from URLs like <https://...>)
+        // Look for common HTML tags that indicate rich content
+        const hasHtmlBody = htmlBody && htmlBody.trim().length > 0 &&
+          (/<(html|body|div|p|table|tr|td|span|a\s|img|br|hr|h[1-6]|ul|ol|li|strong|em|b|i)\b/i.test(htmlBody));
         let bodyContent: string;
         let bodyClass: string;
 
