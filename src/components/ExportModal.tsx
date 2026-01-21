@@ -490,6 +490,28 @@ function ExportModal({
                     </div>
                     <div className="text-xs opacity-80">Combined PDF with all content</div>
                   </button>
+                  {/* Emails Only - Coming Soon */}
+                  <button
+                    disabled
+                    className="px-4 py-3 rounded-lg font-medium text-left bg-gray-50 text-gray-400 cursor-not-allowed border border-gray-200"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold">Emails Only</span>
+                      <span className="text-xs bg-gray-200 text-gray-500 px-2 py-0.5 rounded">Coming Soon</span>
+                    </div>
+                    <div className="text-xs opacity-80">Export only email communications</div>
+                  </button>
+                  {/* Texts Only - Coming Soon */}
+                  <button
+                    disabled
+                    className="px-4 py-3 rounded-lg font-medium text-left bg-gray-50 text-gray-400 cursor-not-allowed border border-gray-200"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold">Texts Only</span>
+                      <span className="text-xs bg-gray-200 text-gray-500 px-2 py-0.5 rounded">Coming Soon</span>
+                    </div>
+                    <div className="text-xs opacity-80">Export only text messages</div>
+                  </button>
                 </div>
                 {exportFormat === "folder" && (
                   <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
