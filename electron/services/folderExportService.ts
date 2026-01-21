@@ -1382,12 +1382,19 @@ class FolderExportService {
       }
     }
 
+    // Determine body content - show attachment indicator for attachment-only messages
+    const bodyText = msg.body_text || msg.body_plain || "";
+    const hasBody = bodyText.trim().length > 0;
+    const bodyContent = hasBody
+      ? this.escapeHtml(bodyText)
+      : (attachments.length > 0 ? "" : ""); // Empty if no text and no attachments
+
     return `
     <div class="message${isOutbound ? " outbound" : ""}">
       <span class="sender">${this.escapeHtml(senderName)}</span>
       <span class="time">${time}</span>
       ${senderPhone ? `<span class="phone">${this.escapeHtml(senderPhone)}</span>` : ""}
-      <div class="body">${this.escapeHtml(msg.body_text || msg.body_plain || "")}</div>
+      ${bodyContent ? `<div class="body">${bodyContent}</div>` : ""}
       ${attachmentHtml}
     </div>
     `;
@@ -1667,6 +1674,8 @@ class FolderExportService {
   /**
    * Get attachments for a specific message
    * Used for embedding images inline in text thread PDFs
+   *
+   * Includes external_message_id fallback for when message_id is stale after re-import
    */
   private getAttachmentsForMessage(messageId: string): {
     id: string;
@@ -1677,18 +1686,52 @@ class FolderExportService {
   }[] {
     try {
       const db = databaseService.getRawDatabase();
+
+      // First try direct message_id lookup
       const sql = `
         SELECT id, filename, mime_type, storage_path, file_size_bytes
         FROM attachments
         WHERE message_id = ?
       `;
-      return db.prepare(sql).all(messageId) as {
+      let rows = db.prepare(sql).all(messageId) as {
         id: string;
         filename: string;
         mime_type: string | null;
         storage_path: string | null;
         file_size_bytes: number | null;
       }[];
+
+      // If no results, try external_message_id fallback
+      // After re-import, message IDs change but external_message_id (macOS GUID) is stable
+      if (rows.length === 0) {
+        // Get the message's external_id (macOS GUID)
+        const messageRow = db.prepare(
+          `SELECT external_id FROM messages WHERE id = ?`
+        ).get(messageId) as { external_id: string | null } | undefined;
+
+        if (messageRow?.external_id) {
+          rows = db.prepare(`
+            SELECT id, filename, mime_type, storage_path, file_size_bytes
+            FROM attachments
+            WHERE external_message_id = ?
+          `).all(messageRow.external_id) as typeof rows;
+
+          // If found via fallback, update the stale message_id for future queries
+          if (rows.length > 0) {
+            logService.debug(
+              `[Folder Export] Found ${rows.length} attachments via external_message_id fallback`,
+              "FolderExport",
+              { messageId, externalId: messageRow.external_id }
+            );
+            const updateStmt = db.prepare(
+              `UPDATE attachments SET message_id = ? WHERE external_message_id = ?`
+            );
+            updateStmt.run(messageId, messageRow.external_id);
+          }
+        }
+      }
+
+      return rows;
     } catch (error) {
       logService.warn("[Folder Export] Failed to get attachments for message", "FolderExport", {
         messageId,
