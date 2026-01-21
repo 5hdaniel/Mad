@@ -112,7 +112,7 @@ describe("PDFExportService", () => {
       transaction_type: "purchase",
       sale_price: 500000,
       listing_price: 525000,
-      closing_date: "2024-03-15",
+      closed_at: "2024-03-15",
       earnest_money_amount: 10000,
       total_communications_count: 5,
       extraction_confidence: 85,
@@ -321,7 +321,7 @@ describe("PDFExportService", () => {
       const transaction = {
         id: "txn-dates",
         property_address: "789 Calendar St",
-        closing_date: "2024-06-15",
+        closed_at: "2024-06-15",
         first_communication_date: "2024-01-01",
         last_communication_date: "2024-06-01",
       };
@@ -339,7 +339,7 @@ describe("PDFExportService", () => {
       const transaction = {
         id: "txn-nulldates",
         property_address: "101 NoDate Blvd",
-        closing_date: null,
+        closed_at: null,
         first_communication_date: undefined,
         last_communication_date: null,
       };
@@ -357,7 +357,7 @@ describe("PDFExportService", () => {
       const transaction = {
         id: "txn-dateobj",
         property_address: "202 DateObj Ln",
-        closing_date: new Date("2024-12-25"),
+        closed_at: new Date("2024-12-25"),
       };
 
       await expect(

@@ -219,7 +219,7 @@ describe("Contacts - Deletion Prevention", () => {
         {
           id: "txn-1",
           property_address: "123 Main St",
-          closing_date: "2024-01-15",
+          closed_at: "2024-01-15",
           transaction_type: "purchase",
           status: "active",
           roles: "Buyer Agent",
@@ -227,7 +227,7 @@ describe("Contacts - Deletion Prevention", () => {
         {
           id: "txn-2",
           property_address: "456 Oak Ave",
-          closing_date: "2024-02-20",
+          closed_at: "2024-02-20",
           transaction_type: "sale",
           status: "closed",
           roles: "Seller Agent, Inspector",

@@ -132,9 +132,7 @@ async function getTransactionDateRange(
     SELECT
       user_id,
       started_at,
-      closed_at,
-      representation_start_date,
-      closing_date
+      closed_at
     FROM transactions
     WHERE id = ?
   `;
@@ -143,26 +141,19 @@ async function getTransactionDateRange(
     user_id: string;
     started_at: string | null;
     closed_at: string | null;
-    representation_start_date: string | null;
-    closing_date: string | null;
   }>(sql, [transactionId]);
 
   if (!transaction) {
     return null;
   }
 
-  // Use the earliest available date as start
-  const startDate =
-    transaction.started_at ||
-    transaction.representation_start_date ||
-    null;
+  const startDate = transaction.started_at;
 
   // Use the latest available date as end, with buffer
   let endDate: string | null = null;
-  const closingDate = transaction.closed_at || transaction.closing_date;
-  if (closingDate) {
+  if (transaction.closed_at) {
     // Add buffer days after closing
-    const closeDateTime = new Date(closingDate);
+    const closeDateTime = new Date(transaction.closed_at);
     closeDateTime.setDate(closeDateTime.getDate() + DEFAULT_BUFFER_DAYS);
     endDate = closeDateTime.toISOString();
   }

@@ -151,13 +151,16 @@ function AuditTransactionModal({
               addressData={addressData}
               onAddressChange={handleAddressChange}
               onTransactionTypeChange={(type) =>
-                setAddressData({ ...addressData, transaction_type: type })
+                setAddressData(prev => ({ ...prev, transaction_type: type }))
               }
               onStartDateChange={(date) =>
-                setAddressData({ ...addressData, started_at: date })
+                setAddressData(prev => ({ ...prev, started_at: date }))
+              }
+              onClosingDateChange={(date) =>
+                setAddressData(prev => ({ ...prev, closing_deadline: date }))
               }
               onEndDateChange={(date) =>
-                setAddressData({ ...addressData, closed_at: date })
+                setAddressData(prev => ({ ...prev, closed_at: date }))
               }
               showAutocomplete={showAddressAutocomplete}
               suggestions={addressSuggestions}

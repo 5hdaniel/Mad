@@ -19,8 +19,9 @@ export interface AddressData {
   property_zip: string;
   property_coordinates: Coordinates | null;
   transaction_type: string;
-  started_at: string;  // ISO8601 date string (required)
-  closed_at?: string;  // ISO8601 date string (optional, null = ongoing)
+  started_at: string;  // ISO8601 date string - when representation began
+  closing_deadline?: string;  // ISO8601 date string - scheduled closing date
+  closed_at?: string;  // ISO8601 date string - when transaction ended (optional, null = ongoing)
 }
 
 export interface Coordinates {
@@ -123,6 +124,7 @@ const initialAddressData: AddressData = {
   property_coordinates: null,
   transaction_type: "purchase",
   started_at: getDefaultStartDate(),
+  closing_deadline: undefined,
   closed_at: undefined,
 };
 
@@ -202,6 +204,11 @@ export function useAuditTransaction({
               ? txn.started_at.split("T")[0]
               : txn.started_at.toISOString().split("T")[0])
           : getDefaultStartDate(),
+        closing_deadline: txn.closing_deadline
+          ? (typeof txn.closing_deadline === "string"
+              ? txn.closing_deadline.split("T")[0]
+              : txn.closing_deadline.toISOString().split("T")[0])
+          : undefined,
         closed_at: txn.closed_at
           ? (typeof txn.closed_at === "string"
               ? txn.closed_at.split("T")[0]
@@ -570,6 +577,7 @@ export function useAuditTransaction({
           detection_status: "confirmed" as const,
           reviewed_at: new Date().toISOString(),
           started_at: addressData.started_at,
+          closing_deadline: addressData.closing_deadline || null,
           closed_at: addressData.closed_at || null,
         };
 

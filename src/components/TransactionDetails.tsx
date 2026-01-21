@@ -9,7 +9,7 @@
  * - TransactionContactsTab: Contacts tab with AI suggestions
  * - Various modal dialogs
  */
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import type { Transaction } from "@/types";
 import ExportModal from "./ExportModal";
 import AuditTransactionModal from "./AuditTransactionModal";
@@ -60,7 +60,7 @@ interface TransactionDetailsComponentProps {
  * Shows full details of a single transaction
  */
 function TransactionDetails({
-  transaction,
+  transaction: transactionProp,
   onClose,
   onTransactionUpdated,
   isPendingReview = false,
@@ -68,6 +68,15 @@ function TransactionDetails({
   onShowSuccess,
   onShowError,
 }: TransactionDetailsComponentProps) {
+  // Local state to track transaction - allows updates from edit modal
+  // without requiring parent to re-render
+  const [transaction, setTransaction] = useState(transactionProp);
+
+  // Sync with prop when parent updates (e.g., list refresh)
+  useEffect(() => {
+    setTransaction(transactionProp);
+  }, [transactionProp]);
+
   // Toast notifications - use props if provided, otherwise use local fallback
   const localToast = useToast();
   const showSuccess = onShowSuccess || localToast.showSuccess;
@@ -150,11 +159,23 @@ function TransactionDetails({
   const isRejected = transaction.detection_status === "rejected";
 
   // Export handlers
-  const handleExportComplete = (result: unknown): void => {
+  const handleExportComplete = async (result: unknown): Promise<void> => {
     const exportResult = result as { path?: string };
     setShowExportModal(false);
-    setExportSuccess(exportResult.path || "Export completed successfully!");
+    setExportSuccess(exportResult.path || null);
     setTimeout(() => setExportSuccess(null), 5000);
+
+    // Refresh transaction data to reflect any date changes made during export
+    try {
+      const refreshed = await window.api.transactions.getDetails(transaction.id);
+      if (refreshed.success && refreshed.transaction) {
+        setTransaction(refreshed.transaction as Transaction);
+        loadDetails();
+        onTransactionUpdated?.();
+      }
+    } catch (err) {
+      console.error("Failed to refresh transaction after export:", err);
+    }
 
     if (transaction.status === "active") {
       setShowArchivePrompt(true);
@@ -418,8 +439,10 @@ function TransactionDetails({
         <AuditTransactionModal
           userId={transaction.user_id}
           onClose={() => setShowEditModal(false)}
-          onSuccess={() => {
+          onSuccess={(updatedTransaction) => {
             setShowEditModal(false);
+            // Update local transaction state with fresh data from save
+            setTransaction(updatedTransaction);
             loadDetails();
             onTransactionUpdated?.();
           }}

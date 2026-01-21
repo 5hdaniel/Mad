@@ -74,9 +74,18 @@ const DELETE_BATCH_SIZE = 5000; // Messages per delete batch (larger for efficie
 const YIELD_INTERVAL = 1; // Yield every N batches (reduced from 2 for better UI responsiveness)
 const QUERY_BATCH_SIZE = 10000; // Messages per query batch (for pagination)
 
-// Attachment constants (TASK-1012)
-const SUPPORTED_IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".gif", ".heic"];
-const MAX_ATTACHMENT_SIZE = 50 * 1024 * 1024; // 50MB max per attachment
+// Attachment constants (TASK-1012, expanded TASK-1122 to include videos)
+const SUPPORTED_IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".gif", ".heic", ".webp", ".bmp", ".tiff", ".tif"];
+const SUPPORTED_VIDEO_EXTENSIONS = [".mp4", ".mov", ".m4v", ".avi", ".mkv", ".webm"];
+const SUPPORTED_AUDIO_EXTENSIONS = [".mp3", ".m4a", ".aac", ".wav", ".caf"]; // caf = Core Audio Format (iOS voice messages)
+const SUPPORTED_DOCUMENT_EXTENSIONS = [".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".rtf"];
+const ALL_SUPPORTED_EXTENSIONS = [
+  ...SUPPORTED_IMAGE_EXTENSIONS,
+  ...SUPPORTED_VIDEO_EXTENSIONS,
+  ...SUPPORTED_AUDIO_EXTENSIONS,
+  ...SUPPORTED_DOCUMENT_EXTENSIONS,
+];
+const MAX_ATTACHMENT_SIZE = 100 * 1024 * 1024; // 100MB max per attachment (increased for videos)
 const ATTACHMENTS_DIR = "message-attachments"; // Directory name in app data
 
 /**
@@ -138,6 +147,14 @@ interface ChatMemberRow {
 }
 
 /**
+ * Chat account info - maps chat to user's identifier (phone/Apple ID)
+ */
+interface ChatAccountRow {
+  chat_id: number;
+  account_login: string | null;
+}
+
+/**
  * Raw attachment from macOS Messages database (TASK-1012)
  */
 interface RawMacAttachment {
@@ -153,7 +170,17 @@ interface RawMacAttachment {
 }
 
 /**
- * Check if a file extension is a supported image type
+ * Check if a file extension is a supported media type
+ * TASK-1122: Expanded to include videos, audio, and documents
+ */
+function isSupportedMediaType(filename: string | null): boolean {
+  if (!filename) return false;
+  const ext = path.extname(filename).toLowerCase();
+  return ALL_SUPPORTED_EXTENSIONS.includes(ext);
+}
+
+/**
+ * Check if a file extension is a supported image type (for inline display)
  */
 function isSupportedImageType(filename: string | null): boolean {
   if (!filename) return false;
@@ -163,15 +190,44 @@ function isSupportedImageType(filename: string | null): boolean {
 
 /**
  * Get MIME type from filename
+ * TASK-1122: Expanded to support videos, audio, and documents
  */
 function getMimeTypeFromFilename(filename: string): string {
   const ext = path.extname(filename).toLowerCase();
   const mimeTypes: Record<string, string> = {
+    // Images
     ".jpg": "image/jpeg",
     ".jpeg": "image/jpeg",
     ".png": "image/png",
     ".gif": "image/gif",
     ".heic": "image/heic",
+    ".webp": "image/webp",
+    ".bmp": "image/bmp",
+    ".tiff": "image/tiff",
+    ".tif": "image/tiff",
+    // Videos
+    ".mp4": "video/mp4",
+    ".mov": "video/quicktime",
+    ".m4v": "video/x-m4v",
+    ".avi": "video/x-msvideo",
+    ".mkv": "video/x-matroska",
+    ".webm": "video/webm",
+    // Audio
+    ".mp3": "audio/mpeg",
+    ".m4a": "audio/mp4",
+    ".aac": "audio/aac",
+    ".wav": "audio/wav",
+    ".caf": "audio/x-caf",
+    // Documents
+    ".pdf": "application/pdf",
+    ".doc": "application/msword",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".xls": "application/vnd.ms-excel",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".ppt": "application/vnd.ms-powerpoint",
+    ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    ".txt": "text/plain",
+    ".rtf": "application/rtf",
   };
   return mimeTypes[ext] || "application/octet-stream";
 }
@@ -420,6 +476,39 @@ class MacOSMessagesImportService {
 
         await yieldToEventLoop();
 
+        // Query chat account_login to get user's identifier (phone/Apple ID) for each chat
+        // This tells us which of the user's identifiers they're using in each conversation
+        const chatAccountRows = await dbAll<ChatAccountRow>(`
+          SELECT
+            ROWID as chat_id,
+            account_login
+          FROM chat
+          WHERE account_login IS NOT NULL
+        `);
+
+        // Build a map of chat_id -> user's account_login (phone number or email)
+        // account_login has prefixes: "P:" for phone, "E:" for email - strip them
+        const chatAccountMap = new Map<number, string>();
+        for (const row of chatAccountRows) {
+          if (row.account_login) {
+            // Strip "P:" or "E:" prefix from account_login
+            let identifier = row.account_login;
+            if (identifier.startsWith("P:") || identifier.startsWith("E:")) {
+              identifier = identifier.substring(2);
+            }
+            if (identifier) {
+              chatAccountMap.set(row.chat_id, identifier);
+            }
+          }
+        }
+
+        logService.info(
+          `Loaded ${chatAccountMap.size} chat account mappings`,
+          MacOSMessagesImportService.SERVICE_NAME
+        );
+
+        await yieldToEventLoop();
+
         // Fetch messages using cursor-based pagination to avoid loading all 600K+ at once
         // This prevents the UI from freezing during the initial query
         const allMessages: RawMacMessage[] = [];
@@ -522,7 +611,7 @@ class MacOSMessagesImportService {
         );
 
         // Store messages to app database
-        const messageResult = await this.storeMessages(userId, allMessages, chatMembersMap, onProgress);
+        const messageResult = await this.storeMessages(userId, allMessages, chatMembersMap, chatAccountMap, onProgress);
 
         // Store attachments (TASK-1012)
         const attachmentResult = await this.storeAttachments(userId, attachments, messageResult.messageIdMap, onProgress);
@@ -608,6 +697,7 @@ class MacOSMessagesImportService {
     userId: string,
     messages: RawMacMessage[],
     chatMembersMap: Map<number, string[]>,
+    chatAccountMap: Map<number, string>,
     onProgress?: ImportProgressCallback
   ): Promise<{ stored: number; skipped: number; nullThreadIdCount: number; messageIdMap: Map<string, string> }> {
     // Map of macOS message GUID -> internal message ID (TASK-1012)
@@ -763,10 +853,15 @@ class MacOSMessagesImportService {
           // Get actual chat members for this chat (for group chats)
           const chatMembers = msg.chat_id ? chatMembersMap.get(msg.chat_id) : undefined;
 
+          // Get user's identifier for this chat (phone number or Apple ID like "magicauditwa")
+          // This is what the user actually appears as in the conversation
+          const userAccountLogin = msg.chat_id ? chatAccountMap.get(msg.chat_id) : undefined;
+
           // Build participants JSON with actual chat members
+          // For outbound messages, use the user's actual identifier instead of "me"
           const participantsObj = {
-            from: msg.is_from_me === 1 ? "me" : sanitizedHandle,
-            to: msg.is_from_me === 1 ? [sanitizedHandle] : ["me"],
+            from: msg.is_from_me === 1 ? (userAccountLogin || "me") : sanitizedHandle,
+            to: msg.is_from_me === 1 ? [sanitizedHandle] : [(userAccountLogin || "me")],
             // Include actual chat members for group chats (more than 1 member)
             ...(chatMembers && chatMembers.length > 1 ? { chat_members: chatMembers } : {}),
           };
@@ -982,9 +1077,9 @@ class MacOSMessagesImportService {
       }
 
       try {
-        // Skip non-image attachments
+        // Skip unsupported attachment types (TASK-1122: expanded to include videos, audio, documents)
         const filename = attachment.transfer_name || attachment.filename;
-        if (!isSupportedImageType(filename)) {
+        if (!isSupportedMediaType(filename)) {
           skipped++;
           processed++;
           continue;
@@ -1213,7 +1308,8 @@ class MacOSMessagesImportService {
     });
 
     // Delete attachments first (in one go - usually much fewer than messages)
-    const attachResult = db
+    // Delete by message_id for currently-linked attachments
+    const attachResult1 = db
       .prepare(
         `
       DELETE FROM attachments
@@ -1224,8 +1320,22 @@ class MacOSMessagesImportService {
       )
       .run(userId);
 
+    // Also delete orphaned attachments by external_message_id
+    // This catches attachments from previous imports where message_id is now stale
+    const attachResult2 = db
+      .prepare(
+        `
+      DELETE FROM attachments
+      WHERE external_message_id IN (
+        SELECT external_id FROM messages WHERE user_id = ? AND external_id IS NOT NULL
+      )
+    `
+      )
+      .run(userId);
+
+    const attachmentsDeleted = attachResult1.changes + attachResult2.changes;
     logService.info(
-      `Deleted ${attachResult.changes} attachments`,
+      `Deleted ${attachmentsDeleted} attachments (${attachResult1.changes} by message_id, ${attachResult2.changes} by external_id)`,
       MacOSMessagesImportService.SERVICE_NAME
     );
 

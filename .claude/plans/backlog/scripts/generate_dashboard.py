@@ -14,20 +14,50 @@ import argparse
 import csv
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).parent
 DATA_DIR = SCRIPT_DIR.parent / 'data'
+ITEMS_DIR = SCRIPT_DIR.parent / 'items'
 TEMPLATE_FILE = SCRIPT_DIR.parent / 'dashboard.html'
 BACKLOG_FILE = DATA_DIR / 'backlog.csv'
 
 
+def extract_description(md_path: Path) -> str:
+    """Extract the Description section from a markdown file."""
+    if not md_path.exists():
+        return ''
+
+    try:
+        content = md_path.read_text(encoding='utf-8')
+        # Find ## Description section
+        match = re.search(r'## Description\s*\n(.*?)(?=\n## |\Z)', content, re.DOTALL)
+        if match:
+            desc = match.group(1).strip()
+            # Limit to first 500 chars for display
+            if len(desc) > 500:
+                desc = desc[:500] + '...'
+            return desc
+    except Exception:
+        pass
+    return ''
+
+
 def load_backlog() -> list[dict]:
-    """Load backlog data from CSV."""
+    """Load backlog data from CSV and enrich with descriptions."""
     with open(BACKLOG_FILE, newline='', encoding='utf-8') as f:
-        return list(csv.DictReader(f))
+        items = list(csv.DictReader(f))
+
+    # Add descriptions from markdown files
+    for item in items:
+        item_id = item.get('id', '')
+        md_file = ITEMS_DIR / f'{item_id}.md'
+        item['description'] = extract_description(md_file)
+
+    return items
 
 
 def generate_dashboard(output_path: Path):

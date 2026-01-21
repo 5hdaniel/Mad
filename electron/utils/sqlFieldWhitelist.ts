@@ -119,7 +119,6 @@ export const TABLE_FIELDS = {
     "created_at",
     "updated_at",
     // Extended fields used in application (from migrations/updates)
-    "representation_start_date",
     "closing_date_verified",
     "representation_start_confidence",
     "closing_date_confidence",

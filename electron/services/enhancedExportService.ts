@@ -1,7 +1,7 @@
 import path from "path";
 import fs from "fs/promises";
 import { app } from "electron";
-import pdfExportService from "./pdfExportService";
+import folderExportService from "./folderExportService";
 import logService from "./logService";
 import { Transaction, Communication } from "../types/models";
 
@@ -18,8 +18,8 @@ import { Transaction, Communication } from "../types/models";
 interface ExportOptions {
   contentType?: "text" | "email" | "both";
   exportFormat?: "pdf" | "excel" | "csv" | "json" | "txt_eml";
-  representationStartDate?: string;
-  closingDate?: string;
+  startDate?: string;
+  endDate?: string;
 }
 
 class EnhancedExportService {
@@ -40,8 +40,8 @@ class EnhancedExportService {
     const {
       contentType = "both",
       exportFormat = "pdf",
-      representationStartDate,
-      closingDate,
+      startDate: optionStartDate,
+      endDate: optionEndDate,
     } = options;
 
     try {
@@ -50,14 +50,14 @@ class EnhancedExportService {
         contentType,
         transactionId: transaction.id,
         propertyAddress: transaction.property_address,
-        representationStartDate: representationStartDate || "not set",
-        closingDate: closingDate || "not set",
+        startDate: optionStartDate || "not set",
+        endDate: optionEndDate || "not set",
       });
 
       // Filter communications by date range
       // If dates aren't provided in options, use transaction dates
-      const startDate = representationStartDate || (transaction.representation_start_date as string | undefined);
-      const endDate = closingDate || (transaction.closing_date as string | undefined);
+      const startDate = optionStartDate || (transaction.started_at as string | undefined);
+      const endDate = optionEndDate || (transaction.closed_at as string | undefined);
 
       const totalBefore = communications.length;
       let filteredComms = this._filterCommunicationsByDate(
@@ -293,7 +293,9 @@ class EnhancedExportService {
   }
 
   /**
-   * Export as PDF using existing PDF export service
+   * Export as PDF using folder export service's combined PDF functionality
+   * This generates individual PDFs (summary, emails, texts) and combines them
+   * into a single document for a comprehensive audit report
    * @private
    */
   private async _exportPDF(
@@ -306,7 +308,7 @@ class EnhancedExportService {
     );
     const outputPath = path.join(downloadsPath, fileName);
 
-    return await pdfExportService.generateTransactionPDF(
+    return await folderExportService.exportTransactionToCombinedPDF(
       transaction,
       communications,
       outputPath,
@@ -357,13 +359,13 @@ class EnhancedExportService {
       `Transaction Report: ${transaction.property_address}`,
       `Generated: ${new Date().toLocaleString()}`,
       `Representation Start: ${
-        transaction.representation_start_date
-          ? new Date(transaction.representation_start_date).toLocaleDateString()
+        transaction.started_at
+          ? new Date(transaction.started_at).toLocaleDateString()
           : "N/A"
       }`,
       `Closing Date: ${
-        transaction.closing_date
-          ? new Date(transaction.closing_date).toLocaleDateString()
+        transaction.closed_at
+          ? new Date(transaction.closed_at).toLocaleDateString()
           : "N/A"
       }`,
       `Total Communications: ${communications.length}`,
@@ -399,8 +401,8 @@ class EnhancedExportService {
         property_address: transaction.property_address,
         transaction_type: transaction.transaction_type,
         status: transaction.status,
-        representation_start_date: transaction.representation_start_date,
-        closing_date: transaction.closing_date,
+        started_at: transaction.started_at,
+        closed_at: transaction.closed_at,
         sale_price: transaction.sale_price,
         listing_price: transaction.listing_price,
         earnest_money_amount: transaction.earnest_money_amount,
@@ -562,15 +564,15 @@ class EnhancedExportService {
     lines.push("");
     lines.push(
       `Representation Start Date: ${
-        transaction.representation_start_date
-          ? new Date(transaction.representation_start_date).toLocaleDateString()
+        transaction.started_at
+          ? new Date(transaction.started_at).toLocaleDateString()
           : "N/A"
       }`,
     );
     lines.push(
       `Closing Date: ${
-        transaction.closing_date
-          ? new Date(transaction.closing_date).toLocaleDateString()
+        transaction.closed_at
+          ? new Date(transaction.closed_at).toLocaleDateString()
           : "N/A"
       }`,
     );

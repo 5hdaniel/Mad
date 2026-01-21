@@ -85,7 +85,7 @@ function getThreadDateRange(messages: MessageLike[]): string {
   const firstDate = new Date(dates[0]);
   const lastDate = new Date(dates[dates.length - 1]);
 
-  const formatOpts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
+  const formatOpts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", year: "numeric" };
   const first = firstDate.toLocaleDateString(undefined, formatOpts);
   const last = lastDate.toLocaleDateString(undefined, formatOpts);
 
@@ -130,7 +130,10 @@ function getThreadParticipants(messages: MessageLike[], selectedContact: string)
     }
   }
 
-  // Fallback: collect from/to from individual messages (legacy behavior)
+  // Fallback: use message direction to identify the OTHER person
+  // For 1:1 chats, we need to identify who is NOT the user
+  // - Inbound messages: `from` is the other person
+  // - Outbound messages: `to` is the other person
   const participants = new Set<string>();
 
   for (const msg of messages) {
@@ -140,10 +143,20 @@ function getThreadParticipants(messages: MessageLike[], selectedContact: string)
           ? JSON.parse(msg.participants)
           : msg.participants;
 
-        if (parsed.from) participants.add(parsed.from);
-        if (parsed.to) {
+        // Use message direction to identify the OTHER person
+        if (msg.direction === 'inbound' && parsed.from) {
+          const from = parsed.from;
+          if (from !== 'me' && from !== 'unknown') {
+            participants.add(from);
+          }
+        }
+        if (msg.direction === 'outbound' && parsed.to) {
           const toList = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
-          toList.forEach((p: string) => participants.add(p));
+          toList.forEach((p: string) => {
+            if (p && p !== 'me' && p !== 'unknown') {
+              participants.add(p);
+            }
+          });
         }
       }
     } catch {
@@ -151,9 +164,15 @@ function getThreadParticipants(messages: MessageLike[], selectedContact: string)
     }
   }
 
-  // Remove the selected contact and "me" from the list
+  // Remove the selected contact from the list
   participants.delete(selectedContact);
-  participants.delete('me');
+  // Also try normalized phone comparison
+  const selectedNormalized = normalizePhone(selectedContact);
+  for (const p of participants) {
+    if (normalizePhone(p) === selectedNormalized) {
+      participants.delete(p);
+    }
+  }
 
   return Array.from(participants);
 }
@@ -623,9 +642,15 @@ export function AttachMessagesModal({
                 <div className="grid gap-3">
                   {sortedThreads.map(([threadId, messages]) => {
                     const isSelected = selectedThreadIds.has(threadId);
-                    const isGroup = isGroupChat(messages);
                     const otherParticipants = getThreadParticipants(messages, selectedContact || "");
                     const dateRange = getThreadDateRange(messages);
+
+                    // Resolve names and deduplicate (same person may have multiple phones)
+                    const uniqueParticipantNames = [...new Set(
+                      otherParticipants.map(p => resolveParticipantName(p))
+                    )];
+                    // It's a group chat if there are multiple unique participants (not the same person with 2 phones)
+                    const isGroup = uniqueParticipantNames.length > 1;
 
                     return (
                       <div
@@ -679,16 +704,16 @@ export function AttachMessagesModal({
                               </h4>
                               {isGroup && (
                                 <span className="inline-block px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded-full">
-                                  {otherParticipants.length + 1} people
+                                  {uniqueParticipantNames.length + 1} people
                                 </span>
                               )}
                             </div>
 
                             {/* Other participants in group */}
-                            {isGroup && otherParticipants.length > 0 && (
+                            {isGroup && uniqueParticipantNames.length > 0 && (
                               <p className="text-xs text-gray-500 mt-1">
-                                Also includes: {otherParticipants.slice(0, 3).map(p => resolveParticipantName(p)).join(", ")}
-                                {otherParticipants.length > 3 && ` +${otherParticipants.length - 3} more`}
+                                Also includes: {uniqueParticipantNames.slice(0, 3).join(", ")}
+                                {uniqueParticipantNames.length > 3 && ` +${uniqueParticipantNames.length - 3} more`}
                               </p>
                             )}
 

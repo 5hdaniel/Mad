@@ -11,6 +11,7 @@ interface AddressVerificationStepProps {
   onAddressChange: (value: string) => void;
   onTransactionTypeChange: (type: string) => void;
   onStartDateChange: (date: string) => void;
+  onClosingDateChange: (date: string | undefined) => void;
   onEndDateChange: (date: string | undefined) => void;
   showAutocomplete: boolean;
   suggestions: AddressSuggestion[];
@@ -22,6 +23,7 @@ function AddressVerificationStep({
   onAddressChange,
   onTransactionTypeChange,
   onStartDateChange,
+  onClosingDateChange,
   onEndDateChange,
   showAutocomplete,
   suggestions,
@@ -103,9 +105,9 @@ function AddressVerificationStep({
       {/* Transaction Date Range */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-3">
-          Transaction Date Range
+          Transaction Dates
         </label>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">
               Start Date *
@@ -120,12 +122,29 @@ function AddressVerificationStep({
               required
             />
             <p className="text-xs text-gray-500 mt-1">
-              When the transaction started
+              When representation began
             </p>
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">
-              End Date (optional)
+              Closing Date
+            </label>
+            <input
+              type="date"
+              value={addressData.closing_deadline || ""}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                onClosingDateChange(e.target.value || undefined)
+              }
+              min={addressData.started_at}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Scheduled closing date
+            </p>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              End Date
             </label>
             <input
               type="date"
@@ -137,7 +156,7 @@ function AddressVerificationStep({
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             />
             <p className="text-xs text-gray-500 mt-1">
-              Leave empty if transaction is ongoing
+              When transaction ended
             </p>
           </div>
         </div>

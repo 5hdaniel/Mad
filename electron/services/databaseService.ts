@@ -1069,7 +1069,7 @@ class DatabaseService implements IDatabaseService {
         AND channel IN ('sms', 'imessage')
         AND participants IS NOT NULL
       GROUP BY contact
-      HAVING contact IS NOT NULL AND contact != 'me' AND contact != ''
+      HAVING contact IS NOT NULL AND contact != 'me' AND contact != 'unknown' AND contact != ''
       ORDER BY lastMessageAt DESC
     `;
     return db.prepare(sql).all(userId) as { contact: string; messageCount: number; lastMessageAt: string }[];

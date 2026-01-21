@@ -40,12 +40,12 @@ function getAvatarInitial(contactName?: string, phoneNumber?: string): string {
 }
 
 /**
- * Get all unique participants from a thread (excluding "me" and "unknown").
+ * Get all unique participants from a thread (excluding the user).
  * Returns an array of phone numbers/identifiers.
  *
- * Note: "unknown" is filtered out because it represents an unresolved participant
- * (e.g., a phone number that couldn't be matched to a contact). Including it would
- * cause 1:1 conversations to be incorrectly flagged as group chats.
+ * Collects from multiple sources to ensure all participants are found:
+ * 1. chat_members (from Apple's chat_handle_join) - authoritative list
+ * 2. from/to fields - catches participants missed by chat_members
  */
 function getThreadParticipants(messages: MessageLike[]): string[] {
   const participants = new Set<string>();
@@ -58,10 +58,23 @@ function getThreadParticipants(messages: MessageLike[]): string[] {
             ? JSON.parse(msg.participants)
             : msg.participants;
 
-        if (parsed.from && parsed.from !== "me" && parsed.from !== "unknown") {
-          participants.add(parsed.from);
+        // Collect from chat_members (authoritative, doesn't include user)
+        if (parsed.chat_members && Array.isArray(parsed.chat_members)) {
+          parsed.chat_members.forEach((m: string) => {
+            if (m && m !== "unknown") participants.add(m);
+          });
         }
-        if (parsed.to) {
+
+        // Also collect from from/to fields to catch any missed participants
+        // For inbound messages, the sender (from) is the other person
+        if (msg.direction === "inbound" && parsed.from) {
+          const from = parsed.from;
+          if (from !== "me" && from !== "unknown") {
+            participants.add(from);
+          }
+        }
+        // For outbound messages, the recipient (to) is the other person
+        if (msg.direction === "outbound" && parsed.to) {
           const toList = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
           toList.forEach((p: string) => {
             if (p && p !== "me" && p !== "unknown") participants.add(p);
@@ -69,7 +82,7 @@ function getThreadParticipants(messages: MessageLike[]): string[] {
         }
       }
     } catch {
-      // Fall through - if no participants JSON, this message won't contribute
+      // Continue to next message
     }
   }
 
@@ -77,11 +90,46 @@ function getThreadParticipants(messages: MessageLike[]): string[] {
 }
 
 /**
- * Check if a thread is a group chat (more than one external participant).
+ * Check if a thread is a group chat (more than one unique external participant).
+ * Considers resolved contact names to avoid treating one contact with multiple
+ * phone numbers as a group chat.
  */
-function isGroupChat(messages: MessageLike[]): boolean {
+function isGroupChat(
+  messages: MessageLike[],
+  contactNames: Record<string, string> = {}
+): boolean {
   const participants = getThreadParticipants(messages);
-  return participants.length > 1;
+
+  // Resolve phone numbers to names and deduplicate
+  const normalizePhone = (phone: string): string => {
+    const digits = phone.replace(/\D/g, "");
+    return digits.length >= 10 ? digits.slice(-10) : digits;
+  };
+
+  const resolvedNames = new Set<string>();
+  for (const p of participants) {
+    // Try direct lookup
+    if (contactNames[p]) {
+      resolvedNames.add(contactNames[p]);
+      continue;
+    }
+    // Try normalized phone lookup
+    const normalized = normalizePhone(p);
+    let found = false;
+    for (const [phone, name] of Object.entries(contactNames)) {
+      if (normalizePhone(phone) === normalized) {
+        resolvedNames.add(name);
+        found = true;
+        break;
+      }
+    }
+    // If no name found, use phone as unique identifier
+    if (!found) {
+      resolvedNames.add(p);
+    }
+  }
+
+  return resolvedNames.size > 1;
 }
 
 /**
@@ -110,10 +158,13 @@ function formatParticipantNames(
     return p;
   });
 
-  if (names.length <= maxShow) {
-    return names.join(", ");
+  // Deduplicate names (same contact may have multiple phone numbers)
+  const uniqueNames = [...new Set(names)];
+
+  if (uniqueNames.length <= maxShow) {
+    return uniqueNames.join(", ");
   }
-  return `${names.slice(0, maxShow).join(", ")} +${names.length - maxShow} more`;
+  return `${uniqueNames.slice(0, maxShow).join(", ")} +${uniqueNames.length - maxShow} more`;
 }
 
 /**
@@ -163,9 +214,9 @@ export function MessageThreadCard({
 }: MessageThreadCardProps): React.ReactElement {
   const [showModal, setShowModal] = useState(false);
 
-  // Detect group chat
+  // Detect group chat (using contactNames to resolve duplicates)
   const participants = getThreadParticipants(messages);
-  const isGroup = isGroupChat(messages);
+  const isGroup = isGroupChat(messages, contactNames);
   const avatarInitial = getAvatarInitial(contactName, phoneNumber);
 
   // Get preview of last message
@@ -182,7 +233,7 @@ export function MessageThreadCard({
     const firstDate = new Date(first.sent_at || first.received_at || 0);
     const lastDate = new Date(last.sent_at || last.received_at || 0);
     const formatDate = (d: Date) =>
-      d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+      d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
     if (firstDate.toDateString() === lastDate.toDateString()) {
       return formatDate(firstDate);
     }

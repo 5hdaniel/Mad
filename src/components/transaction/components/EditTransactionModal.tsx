@@ -74,15 +74,15 @@ export function EditTransactionModal({
   const [formData, setFormData] = useState({
     property_address: transaction.property_address || "",
     transaction_type: transaction.transaction_type || "purchase",
-    representation_start_date: transaction.representation_start_date
-      ? typeof transaction.representation_start_date === "string"
-        ? transaction.representation_start_date
-        : transaction.representation_start_date.toISOString().split("T")[0]
+    started_at: transaction.started_at
+      ? typeof transaction.started_at === "string"
+        ? transaction.started_at
+        : transaction.started_at.toISOString().split("T")[0]
       : "",
-    closing_date: transaction.closing_date
-      ? typeof transaction.closing_date === "string"
-        ? transaction.closing_date
-        : transaction.closing_date.toISOString().split("T")[0]
+    closed_at: transaction.closed_at
+      ? typeof transaction.closed_at === "string"
+        ? transaction.closed_at
+        : transaction.closed_at.toISOString().split("T")[0]
       : "",
     sale_price: transaction.sale_price || "",
     listing_price: transaction.listing_price || "",
@@ -182,8 +182,8 @@ export function EditTransactionModal({
       const updates = {
         property_address: formData.property_address.trim(),
         transaction_type: formData.transaction_type,
-        representation_start_date: formData.representation_start_date || null,
-        closing_date: formData.closing_date || null,
+        started_at: formData.started_at || null,
+        closed_at: formData.closed_at || null,
         sale_price: formData.sale_price
           ? parseFloat(formData.sale_price as string)
           : null,
@@ -395,9 +395,9 @@ export function EditTransactionModal({
                   </label>
                   <input
                     type="date"
-                    value={formData.representation_start_date}
+                    value={formData.started_at}
                     onChange={(e) =>
-                      handleChange("representation_start_date", e.target.value)
+                      handleChange("started_at", e.target.value)
                     }
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
@@ -408,9 +408,9 @@ export function EditTransactionModal({
                   </label>
                   <input
                     type="date"
-                    value={formData.closing_date}
+                    value={formData.closed_at}
                     onChange={(e) =>
-                      handleChange("closing_date", e.target.value)
+                      handleChange("closed_at", e.target.value)
                     }
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />

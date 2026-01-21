@@ -1187,9 +1187,9 @@
                     <div class="detail-label">Variance</div>
                     <div class="detail-value">${item.variance || '-'}</div>
                 </div>
-                <div class="detail-row">
-                    <div class="detail-label">File</div>
-                    <div class="detail-value">${item.file || '-'}</div>
+                <div class="detail-row" style="flex-direction: column;">
+                    <div class="detail-label" style="width: 100%; margin-bottom: 8px;">Description</div>
+                    <div class="detail-value" style="white-space: pre-wrap;">${item.description || 'No description available'}</div>
                 </div>
             `;
 

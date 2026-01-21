@@ -18,7 +18,6 @@ import type {
 } from "./types/models";
 
 // Services (still JS - to be migrated)
-const pdfExportService = require("./services/pdfExportService").default;
 const enhancedExportService =
   require("./services/enhancedExportService").default;
 const folderExportService = require("./services/folderExportService").default;
@@ -371,8 +370,9 @@ export const registerTransactionHandlers = (
             "transactionId",
           );
         }
+        const sanitizedUpdates = sanitizeObject(updates || {});
         const validatedUpdates = validateTransactionData(
-          sanitizeObject(updates || {}),
+          sanitizedUpdates,
           true,
         );
 
@@ -1051,10 +1051,10 @@ export const registerTransactionHandlers = (
 
         // Use provided output path or generate default one
         const pdfPath =
-          validatedPath || pdfExportService.getDefaultExportPath(details);
+          validatedPath || folderExportService.getDefaultExportPath(details).replace(/\/$/, "") + ".pdf";
 
-        // Generate PDF
-        const generatedPath = await pdfExportService.generateTransactionPDF(
+        // Generate combined PDF using folder export service
+        const generatedPath = await folderExportService.exportTransactionToCombinedPDF(
           details,
           (details as any).communications || [],
           pdfPath,
@@ -1787,8 +1787,8 @@ export const registerTransactionHandlers = (
 
         // Filter communications by date range if transaction has dates set
         let communications = (details as any).communications || [];
-        const startDate = details.started_at || details.representation_start_date;
-        const endDate = details.closed_at || details.closing_date;
+        const startDate = details.started_at;
+        const endDate = details.closed_at;
 
         if (startDate || endDate) {
           const start = startDate ? new Date(startDate as string) : null;

@@ -19,20 +19,34 @@ function ExportModal({
   onExportComplete,
 }: ExportModalProps) {
   const [step, setStep] = useState(1); // 1: Date Verification, 2: Export Options, 3: Exporting
-  const [representationStartDate, setRepresentationStartDate] = useState(
-    transaction.representation_start_date
-      ? typeof transaction.representation_start_date === "string"
-        ? transaction.representation_start_date
-        : transaction.representation_start_date.toISOString().split("T")[0]
+
+  // Start Date (started_at) - when agent began working on transaction
+  const [startDate, setStartDate] = useState(
+    transaction.started_at
+      ? typeof transaction.started_at === "string"
+        ? transaction.started_at.split("T")[0]
+        : transaction.started_at.toISOString().split("T")[0]
       : "",
   );
+
+  // Closing Date (closing_deadline) - scheduled/expected closing date
   const [closingDate, setClosingDate] = useState(
-    transaction.closing_date
-      ? typeof transaction.closing_date === "string"
-        ? transaction.closing_date
-        : transaction.closing_date.toISOString().split("T")[0]
+    transaction.closing_deadline
+      ? typeof transaction.closing_deadline === "string"
+        ? transaction.closing_deadline.split("T")[0]
+        : transaction.closing_deadline.toISOString().split("T")[0]
       : "",
   );
+
+  // End Date (closed_at) - when transaction actually ended (for filtering)
+  const [endDate, setEndDate] = useState(
+    transaction.closed_at
+      ? typeof transaction.closed_at === "string"
+        ? transaction.closed_at.split("T")[0]
+        : transaction.closed_at.toISOString().split("T")[0]
+      : "",
+  );
+
   const [contentType, setContentType] = useState("both"); // text, email, both
   const [exportFormat, setExportFormat] = useState("pdf"); // pdf, excel, csv, json, txt_eml, folder
   const [exporting, setExporting] = useState(false);
@@ -83,8 +97,13 @@ function ExportModal({
   }, [exporting, exportFormat]);
 
   const handleDateVerification = () => {
-    if (!representationStartDate || !closingDate) {
-      setError("Please provide both dates to continue");
+    if (!startDate || !endDate) {
+      setError("Please provide Start Date and End Date to continue");
+      return;
+    }
+    // Validate end date is after start date
+    if (startDate > endDate) {
+      setError("End Date must be after Start Date");
       return;
     }
     setError(null);
@@ -99,11 +118,21 @@ function ExportModal({
 
     try {
       // Update transaction dates first
-      await window.api.transactions.update(transaction.id, {
-        representation_start_date: representationStartDate,
-        closing_date: closingDate,
+      const updateData = {
+        started_at: startDate,
+        closing_deadline: closingDate || null,
+        closed_at: endDate,
         closing_date_verified: 1,
-      });
+      };
+
+      const updateResult = await window.api.transactions.update(transaction.id, updateData);
+
+      if (!updateResult.success) {
+        setError(`Failed to save dates: ${updateResult.error}`);
+        setStep(1);
+        setExporting(false);
+        return;
+      }
 
       let result;
 
@@ -111,12 +140,14 @@ function ExportModal({
         // Use folder export for comprehensive audit package
         // Note: Type cast needed due to type inference issue with window.d.ts
         const exportFolderFn = (window.api.transactions as unknown as {
-          exportFolder: (id: string, opts: { includeEmails: boolean; includeTexts: boolean; includeAttachments: boolean }) => Promise<{ success: boolean; path?: string; error?: string }>;
+          exportFolder: (id: string, opts: { includeEmails: boolean; includeTexts: boolean; includeAttachments: boolean; startDate?: string; endDate?: string }) => Promise<{ success: boolean; path?: string; error?: string }>;
         }).exportFolder;
         result = await exportFolderFn(transaction.id, {
           includeEmails: contentType === "email" || contentType === "both",
           includeTexts: contentType === "text" || contentType === "both",
           includeAttachments: true,
+          startDate,
+          endDate,
         });
       } else {
         // Use enhanced export for single-file formats
@@ -125,8 +156,8 @@ function ExportModal({
           transaction.id,
           {
             exportFormat,
-            representationStartDate,
-            closingDate,
+            startDate,
+            endDate,
           },
         );
       }
@@ -206,16 +237,17 @@ function ExportModal({
                   Verify Transaction Dates
                 </h4>
                 <p className="text-sm text-gray-600 mb-6">
-                  These dates will be used to filter communications included in
-                  your audit export.
+                  Communications will be filtered to only include those between
+                  Start Date and End Date.
                 </p>
               </div>
 
               <div className="space-y-4">
+                {/* Start Date */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <label className="block text-sm font-medium text-gray-700">
-                      Representation Start Date *
+                      Start Date *
                     </label>
                     {transaction.representation_start_confidence &&
                       formatConfidence(
@@ -235,8 +267,8 @@ function ExportModal({
                   </div>
                   <input
                     type="date"
-                    value={representationStartDate}
-                    onChange={(e) => setRepresentationStartDate(e.target.value)}
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                   />
                   <p className="mt-1 text-xs text-gray-500">
@@ -245,10 +277,11 @@ function ExportModal({
                   </p>
                 </div>
 
+                {/* Closing Date (optional) */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <label className="block text-sm font-medium text-gray-700">
-                      Closing Date *
+                      Closing Date
                     </label>
                     {transaction.closing_date_confidence &&
                       formatConfidence(transaction.closing_date_confidence) && (
@@ -271,7 +304,25 @@ function ExportModal({
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                   />
                   <p className="mt-1 text-xs text-gray-500">
-                    When did the transaction officially close?
+                    Scheduled closing date (optional)
+                  </p>
+                </div>
+
+                {/* End Date */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-gray-700">
+                      End Date *
+                    </label>
+                  </div>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    When did the transaction end? (Used to filter communications)
                   </p>
                 </div>
               </div>
@@ -488,10 +539,10 @@ function ExportModal({
             <button
               onClick={step === 1 ? handleDateVerification : handleExport}
               disabled={
-                step === 1 && (!representationStartDate || !closingDate)
+                step === 1 && (!startDate || !endDate)
               }
               className={`px-6 py-2 rounded-lg font-semibold transition-all ${
-                step === 1 && (!representationStartDate || !closingDate)
+                step === 1 && (!startDate || !endDate)
                   ? "bg-gray-300 text-gray-500 cursor-not-allowed"
                   : "bg-gradient-to-r from-purple-500 to-indigo-600 text-white hover:from-purple-600 hover:to-indigo-700 shadow-md hover:shadow-lg"
               }`}

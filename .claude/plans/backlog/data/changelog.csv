@@ -189,3 +189,12 @@ date,action,details,items_affected
 2026-01-19,BACKLOG-311,status,Pending,Done,"PRs #477, #478 - lift contact loading + fix N+1 query"
 2026-01-19,BACKLOG-318,status,In Sprint,Done,PR #484 - loading overlay spinner
 2026-01-19,SPRINT-045,wrap-up,In Progress,Completed,"Final wrap-up: 11 PRs merged (#472-475, #477-484), ~180K tokens"
+2026-01-20,BACKLOG-206,reopened,completed→reopened,UI freeze during force reimport still occurring - previous fix incomplete
+2026-01-20,BACKLOG-344,created,new,Add Audit Package as Default Export Format Option
+2026-01-21,BACKLOG-345,created,"Added: Verify PDF Export Uses Audit Package as Foundation - consolidate export logic"
+2026-01-21,BACKLOG-346,created,"SR Engineer rec: Test coverage for folderExportService.ts"
+2026-01-21,BACKLOG-347,created,"SR Engineer rec: Branch protection rules on develop"
+2026-01-21,BACKLOG-348,created,"SR Engineer rec: Consolidate field allowlists"
+2026-01-21,BACKLOG-349,created,"SR Engineer rec: Share FolderExportProgress type"
+2026-01-21,BACKLOG-350,created,"SR Engineer rec: Refactor folderExportService.ts"
+2026-01-21,BACKLOG-351,created,"SR Engineer rec: Add logging to empty catch blocks"

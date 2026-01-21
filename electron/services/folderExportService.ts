@@ -19,8 +19,11 @@ import path from "path";
 import fs from "fs/promises";
 import fsSync from "fs";
 import { app, BrowserWindow } from "electron";
+import { PDFDocument } from "pdf-lib";
 import logService from "./logService";
 import databaseService from "./databaseService";
+import { getContactNames } from "./contactsService";
+import { getUserById } from "./db/userDbService";
 import type { Transaction, Communication } from "../types/models";
 
 export interface FolderExportOptions {
@@ -129,6 +132,23 @@ class FolderExportService {
         return dateA - dateB;
       });
 
+      // Pre-load contact names for all phone numbers (from both imported contacts and macOS Contacts)
+      const allPhones = this.extractAllPhones(texts);
+      const phoneNameMap = await this.getContactNamesByPhonesAsync(allPhones);
+
+      // Get user's name and email for "me" display in group chats
+      let userName: string | undefined;
+      let userEmail: string | undefined;
+      try {
+        const user = await getUserById(transaction.user_id);
+        if (user) {
+          userName = user.display_name || user.first_name || user.email?.split("@")[0];
+          userEmail = user.email || undefined;
+        }
+      } catch {
+        // Ignore - will fall back to "You"
+      }
+
       // Generate Summary PDF
       onProgress?.({
         stage: "summary",
@@ -137,7 +157,7 @@ class FolderExportService {
         message: "Generating summary report...",
       });
 
-      await this.generateSummaryPDF(transaction, communications, basePath);
+      await this.generateSummaryPDF(transaction, communications, basePath, phoneNameMap);
 
       onProgress?.({
         stage: "summary",
@@ -169,7 +189,7 @@ class FolderExportService {
           message: "Exporting text conversations...",
         });
 
-        await this.exportTextConversations(texts, textsPath);
+        await this.exportTextConversations(texts, textsPath, phoneNameMap, userName, userEmail);
 
         onProgress?.({
           stage: "texts",
@@ -226,9 +246,10 @@ class FolderExportService {
   private async generateSummaryPDF(
     transaction: Transaction,
     communications: Communication[],
-    basePath: string
+    basePath: string,
+    phoneNameMap?: Record<string, string>
   ): Promise<void> {
-    const html = this.generateSummaryHTML(transaction, communications);
+    const html = this.generateSummaryHTML(transaction, communications, phoneNameMap);
     const pdfBuffer = await this.htmlToPdf(html);
     await fs.writeFile(path.join(basePath, "Summary_Report.pdf"), pdfBuffer);
   }
@@ -238,7 +259,8 @@ class FolderExportService {
    */
   private generateSummaryHTML(
     transaction: Transaction,
-    communications: Communication[]
+    communications: Communication[],
+    phoneNameMap?: Record<string, string>
   ): string {
     const formatCurrency = (amount?: number | null): string => {
       if (!amount) return "N/A";
@@ -402,7 +424,7 @@ class FolderExportService {
     </div>
     <div class="detail-card">
       <div class="label">Closing Date</div>
-      <div class="value">${formatDate(transaction.closing_date)}</div>
+      <div class="value">${formatDate(transaction.closed_at)}</div>
     </div>
     <div class="detail-card">
       <div class="label">Listing Price</div>
@@ -446,7 +468,7 @@ class FolderExportService {
   <div class="section">
     <h3>Text Threads Index (${this.countTextThreads(texts)})</h3>
     <div class="email-list">
-      ${this.generateTextIndex(texts)}
+      ${this.generateTextIndex(texts, phoneNameMap)}
     </div>
     <div class="note">
       Full text conversations are available in the /texts folder as individual PDF files.
@@ -477,15 +499,9 @@ class FolderExportService {
   /**
    * Generate HTML for text conversations index in summary
    */
-  private generateTextIndex(texts: Communication[]): string {
-    // Look up contact names
-    const textPhones = texts
-      .map((t) => t.sender)
-      .filter(
-        (s): s is string =>
-          !!s && (s.startsWith("+") || /^\d{7,}$/.test(s.replace(/\D/g, "")))
-      );
-    const phoneNameMap = this.getContactNamesByPhones(textPhones);
+  private generateTextIndex(texts: Communication[], phoneNameMap?: Record<string, string>): string {
+    // Use provided phoneNameMap or fall back to sync lookup
+    const nameMap = phoneNameMap || this.getContactNamesByPhones(this.extractAllPhones(texts));
 
     // Group by thread
     const textThreads = new Map<string, Communication[]>();
@@ -516,7 +532,7 @@ class FolderExportService {
 
     return sortedThreads
       .map((msgs, index) => {
-        const contact = this.getThreadContact(msgs, phoneNameMap);
+        const contact = this.getThreadContact(msgs, nameMap);
         const isGroupChat = this._isGroupChat(msgs);
         // Use better display name for unknown contacts
         let displayName: string;
@@ -672,16 +688,13 @@ class FolderExportService {
    */
   private async exportTextConversations(
     texts: Communication[],
-    outputPath: string
+    outputPath: string,
+    phoneNameMap?: Record<string, string>,
+    userName?: string,
+    userEmail?: string
   ): Promise<void> {
-    // Look up contact names for phone numbers
-    const textPhones = texts
-      .map((t) => t.sender)
-      .filter(
-        (s): s is string =>
-          !!s && (s.startsWith("+") || /^\d{7,}$/.test(s.replace(/\D/g, "")))
-      );
-    const phoneNameMap = this.getContactNamesByPhones(textPhones);
+    // Use provided phoneNameMap or fall back to sync lookup
+    const nameMap = phoneNameMap || this.getContactNamesByPhones(this.extractAllPhones(texts));
 
     // Group texts by thread
     const textThreads = new Map<string, Communication[]>();
@@ -707,13 +720,13 @@ class FolderExportService {
     // Export each thread as PDF
     let threadIndex = 0;
     for (const [, msgs] of textThreads) {
-      const contact = this.getThreadContact(msgs, phoneNameMap);
+      const contact = this.getThreadContact(msgs, nameMap);
       const isGroupChat = this._isGroupChat(msgs);
-      const participants = isGroupChat ? this.getGroupChatParticipants(msgs, phoneNameMap) : undefined;
+      const participants = isGroupChat ? this.getGroupChatParticipants(msgs, nameMap, userName, userEmail) : undefined;
       const html = this.generateTextThreadHTML(
         msgs,
         contact,
-        phoneNameMap,
+        nameMap,
         isGroupChat,
         threadIndex,
         participants
@@ -745,6 +758,47 @@ class FolderExportService {
    */
   private normalizePhone(phone: string): string {
     return phone.replace(/\D/g, "").slice(-10);
+  }
+
+  /**
+   * Extract all unique phone numbers from communications
+   * Includes both sender field and all participants (from/to) from JSON
+   */
+  private extractAllPhones(communications: Communication[]): string[] {
+    const phones = new Set<string>();
+
+    for (const comm of communications) {
+      // Add sender if it's a phone number
+      if (comm.sender && (comm.sender.startsWith("+") || /^\d{7,}$/.test(comm.sender.replace(/\D/g, "")))) {
+        phones.add(comm.sender);
+      }
+
+      // Parse participants JSON to get all phone numbers
+      if (comm.participants) {
+        try {
+          const parsed = typeof comm.participants === "string"
+            ? JSON.parse(comm.participants)
+            : comm.participants;
+
+          if (parsed.from && (parsed.from.startsWith("+") || /^\d{7,}$/.test(parsed.from.replace(/\D/g, "")))) {
+            phones.add(parsed.from);
+          }
+
+          if (parsed.to) {
+            const toList = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
+            for (const p of toList) {
+              if (p && (p.startsWith("+") || /^\d{7,}$/.test(p.replace(/\D/g, "")))) {
+                phones.add(p);
+              }
+            }
+          }
+        } catch {
+          // Ignore parse errors
+        }
+      }
+    }
+
+    return Array.from(phones);
   }
 
   /**
@@ -831,10 +885,10 @@ class FolderExportService {
 
   /**
    * Check if a thread is a group chat (has multiple unique participants)
+   * Uses chat_members (authoritative) when available, falls back to from/to parsing
    */
   private _isGroupChat(msgs: Communication[]): boolean {
-    const participants = new Set<string>();
-
+    // First check for chat_members (authoritative source)
     for (const msg of msgs) {
       try {
         if (msg.participants) {
@@ -843,13 +897,43 @@ class FolderExportService {
               ? JSON.parse(msg.participants)
               : msg.participants;
 
-          if (parsed.from)
-            participants.add(parsed.from.replace(/\D/g, "").slice(-10));
+          // chat_members is the authoritative list from Apple's chat_handle_join
+          if (parsed.chat_members && Array.isArray(parsed.chat_members)) {
+            // chat_members doesn't include "me", so 2+ members means group chat (3+ total with user)
+            return parsed.chat_members.length >= 2;
+          }
+        }
+      } catch {
+        // Continue
+      }
+    }
+
+    // Fallback: extract from from/to (less reliable)
+    const participants = new Set<string>();
+    for (const msg of msgs) {
+      try {
+        if (msg.participants) {
+          const parsed =
+            typeof msg.participants === "string"
+              ? JSON.parse(msg.participants)
+              : msg.participants;
+
+          if (parsed.from) {
+            const normalized = parsed.from.replace(/\D/g, "").slice(-10);
+            // Skip "unknown" ghost participants
+            if (normalized && parsed.from.toLowerCase() !== "unknown") {
+              participants.add(normalized);
+            }
+          }
           if (parsed.to) {
             const toList = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
-            toList.forEach((p: string) =>
-              participants.add(p.replace(/\D/g, "").slice(-10))
-            );
+            toList.forEach((p: string) => {
+              const normalized = p.replace(/\D/g, "").slice(-10);
+              // Skip "unknown" ghost participants
+              if (normalized && p.toLowerCase() !== "unknown") {
+                participants.add(normalized);
+              }
+            });
           }
         }
       } catch {
@@ -863,13 +947,21 @@ class FolderExportService {
 
   /**
    * Get all participants in a group chat with their names and phone numbers
+   * Uses chat_members (from Apple's chat_handle_join table) as the authoritative source
+   * Falls back to from/to extraction only if chat_members unavailable
    */
   private getGroupChatParticipants(
     msgs: Communication[],
-    phoneNameMap: Record<string, string>
+    phoneNameMap: Record<string, string>,
+    userName?: string,
+    userEmail?: string
   ): Array<{ phone: string; name: string | null }> {
     const participantPhones = new Set<string>();
+    let hasChatMembers = false;
+    let userIdentifier: string | null = null;
 
+    // First pass: look for chat_members (authoritative source from Apple's chat_handle_join)
+    // Also extract the user's identifier from outbound messages
     for (const msg of msgs) {
       try {
         if (msg.participants) {
@@ -878,12 +970,16 @@ class FolderExportService {
               ? JSON.parse(msg.participants)
               : msg.participants;
 
-          if (parsed.from) {
-            participantPhones.add(parsed.from);
+          // Use chat_members as authoritative source if available
+          if (!hasChatMembers && parsed.chat_members && Array.isArray(parsed.chat_members) && parsed.chat_members.length > 0) {
+            hasChatMembers = true;
+            parsed.chat_members.forEach((member: string) => participantPhones.add(member));
           }
-          if (parsed.to) {
-            const toList = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
-            toList.forEach((p: string) => participantPhones.add(p));
+
+          // Extract user's identifier from outbound messages (from field when direction is outbound)
+          // The from field now contains the actual identifier (email or phone) instead of "me"
+          if (!userIdentifier && msg.direction === "outbound" && parsed.from) {
+            userIdentifier = parsed.from;
           }
         }
       } catch {
@@ -891,20 +987,91 @@ class FolderExportService {
       }
     }
 
-    // Convert to array with names
-    return Array.from(participantPhones).map((phone) => {
-      const normalized = this.normalizePhone(phone);
-      const name = phoneNameMap[normalized] || phoneNameMap[phone] || null;
-      return { phone, name };
-    });
+    // Add user's identifier (or fallback to "me" for old data)
+    if (hasChatMembers) {
+      participantPhones.add(userIdentifier || "me");
+    }
+
+    // Fallback: if no chat_members, extract from from/to (less reliable)
+    if (!hasChatMembers) {
+      for (const msg of msgs) {
+        try {
+          if (msg.participants) {
+            const parsed =
+              typeof msg.participants === "string"
+                ? JSON.parse(msg.participants)
+                : msg.participants;
+
+            if (parsed.from) {
+              participantPhones.add(parsed.from);
+            }
+            if (parsed.to) {
+              const toList = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
+              toList.forEach((p: string) => participantPhones.add(p));
+            }
+          }
+        } catch {
+          // Continue
+        }
+      }
+    }
+
+    // Convert to array with names, handling special cases
+    return Array.from(participantPhones)
+      .filter((phone) => {
+        // Filter out empty/null values
+        if (!phone || phone.trim() === "") return false;
+        // Filter out "unknown" - ghost participants from NULL handles (only relevant in fallback path)
+        if (phone.toLowerCase().trim() === "unknown") return false;
+        return true;
+      })
+      .map((phone) => {
+        const lowerPhone = phone.toLowerCase().trim();
+
+        // Handle "me" - this is the user
+        if (lowerPhone === "me") {
+          return { phone: "", name: userName || "You" };
+        }
+
+        // Check if it's a valid phone number (has digits)
+        const isPhone = /\d{7,}/.test(phone.replace(/\D/g, ""));
+
+        if (isPhone) {
+          const normalized = this.normalizePhone(phone);
+          const name = phoneNameMap[normalized] || phoneNameMap[phone] || null;
+          return { phone, name };
+        }
+
+        // If it's not "me" or a phone number, it might be an Apple ID/email (like "magicauditwa")
+        // Check if it matches the user's email identifier - if so, show their name
+        if (userName && userEmail) {
+          const emailPrefix = userEmail.split("@")[0].toLowerCase();
+          // Check if this identifier matches the user's email or email prefix
+          if (lowerPhone === userEmail.toLowerCase() ||
+              lowerPhone === emailPrefix ||
+              lowerPhone.includes(emailPrefix)) {
+            // This is the user's iMessage identifier
+            return { phone, name: userName };
+          }
+        }
+
+        // Try to look it up in contacts, otherwise use it as the display name
+        const name = phoneNameMap[phone] || null;
+        return { phone, name: name || phone };
+      });
   }
 
   /**
-   * Look up contact names for phone numbers
+   * Look up contact names for phone numbers from multiple sources:
+   * 1. App's imported contacts (contact_phones table)
+   * 2. macOS Contacts database (AddressBook)
    */
   private getContactNamesByPhones(phones: string[]): Record<string, string> {
     if (phones.length === 0) return {};
 
+    const result: Record<string, string> = {};
+
+    // Source 1: App's imported contacts
     try {
       // Normalize phones to last 10 digits for matching
       const normalizedPhones = phones.map((p) =>
@@ -931,7 +1098,6 @@ class FolderExportService {
         display_name: string | null;
       }[];
 
-      const result: Record<string, string> = {};
       for (const row of rows) {
         if (row.display_name) {
           if (row.phone_e164) {
@@ -946,16 +1112,74 @@ class FolderExportService {
           }
         }
       }
-
-      return result;
     } catch (error) {
       logService.warn(
-        "[Folder Export] Failed to look up contact names",
+        "[Folder Export] Failed to look up contact names from imported contacts",
         "FolderExport",
         { error }
       );
-      return {};
     }
+
+    return result;
+  }
+
+  /**
+   * Async version that also checks macOS Contacts database
+   * Call this once at the start of export and pass the result to other methods
+   */
+  private async getContactNamesByPhonesAsync(phones: string[]): Promise<Record<string, string>> {
+    if (phones.length === 0) return {};
+
+    // Start with synchronous lookup from imported contacts
+    const result = this.getContactNamesByPhones(phones);
+
+    // Source 2: macOS Contacts database (AddressBook)
+    try {
+      const { contactMap } = await getContactNames();
+
+      // Add any names from macOS Contacts that we don't already have
+      for (const phone of phones) {
+        const normalized = this.normalizePhone(phone);
+        const digitsOnly = phone.replace(/\D/g, "");
+
+        // Skip if we already have a name for this phone
+        if (result[normalized] || result[phone]) continue;
+
+        // Try to find in macOS contacts
+        // contactMap keys might be formatted differently, try multiple formats
+        const possibleKeys = [
+          phone,                          // +14082104874
+          normalized,                     // 4082104874 (last 10 digits)
+          digitsOnly,                     // 14082104874 (all digits)
+          `+1${normalized}`,              // +14082104874
+          `1${normalized}`,               // 14082104874
+          normalized.slice(-10),          // 4082104874
+          digitsOnly.slice(-10),          // 4082104874
+          digitsOnly.slice(-11),          // 14082104874 (with country code)
+        ];
+
+        for (const key of possibleKeys) {
+          if (key && contactMap[key]) {
+            result[normalized] = contactMap[key];
+            result[phone] = contactMap[key];
+            logService.debug("[Folder Export] Found contact in macOS Contacts", "FolderExport", {
+              phone,
+              matchedKey: key,
+              name: contactMap[key],
+            });
+            break;
+          }
+        }
+      }
+    } catch (error) {
+      logService.warn(
+        "[Folder Export] Failed to look up contact names from macOS Contacts",
+        "FolderExport",
+        { error }
+      );
+    }
+
+    return result;
   }
 
   /**
@@ -1056,20 +1280,24 @@ class FolderExportService {
   <div class="header">
     <h1>${(() => {
       const threadId = String(threadIndex + 1).padStart(3, "0");
-      if (!contact.name && contact.phone.toLowerCase() === "unknown") {
-        return isGroupChat ? `Group Chat <span class="badge">#${threadId}</span>` : `Unknown Contact <span class="badge">#${threadId}</span>`;
+      // Group chats always show "Group Chat #XXX"
+      if (isGroupChat) {
+        return `Group Chat <span class="badge">#${threadId}</span>`;
       }
-      return `Conversation with ${this.escapeHtml(contact.name || contact.phone)} <span class="badge">#${threadId}</span>${isGroupChat ? '<span class="badge">Group Chat</span>' : ""}`;
+      if (!contact.name && contact.phone.toLowerCase() === "unknown") {
+        return `Unknown Contact <span class="badge">#${threadId}</span>`;
+      }
+      return `Conversation with ${this.escapeHtml(contact.name || contact.phone)} <span class="badge">#${threadId}</span>`;
     })()}</h1>
-    <div class="meta">${contact.name ? this.escapeHtml(contact.phone) + " | " : ""}${msgs.length} message${msgs.length === 1 ? "" : "s"}</div>
+    <div class="meta">${!isGroupChat && contact.name ? this.escapeHtml(contact.phone) + " | " : ""}${msgs.length} message${msgs.length === 1 ? "" : "s"}</div>
     ${isGroupChat && participants && participants.length > 0 ? `
     <div class="participants" style="margin-top: 12px; padding: 12px; background: #f7fafc; border-radius: 8px; font-size: 13px;">
       <div style="font-weight: 600; margin-bottom: 8px; color: #4a5568;">Participants (${participants.length}):</div>
       <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px;">
         ${participants.map(p => `
           <div style="padding: 4px 0;">
-            <span style="color: #2d3748;">${this.escapeHtml(p.name || "Unknown")}</span>
-            <span style="color: #718096; font-size: 12px; display: block;">${this.escapeHtml(p.phone)}</span>
+            <span style="color: #2d3748;">${this.escapeHtml(p.name || p.phone || "Unknown")}</span>
+            ${p.phone && p.name ? `<span style="color: #718096; font-size: 12px; display: block;">${this.escapeHtml(p.phone)}</span>` : ""}
           </div>
         `).join("")}
       </div>
@@ -1127,8 +1355,19 @@ class FolderExportService {
 
     // Get attachments for this message
     // Check both message_id and id since text messages may link differently
+    // Also pass external_id (macOS GUID) for fallback lookup
     const messageId = msg.message_id || msg.id;
-    const attachments = messageId ? this.getAttachmentsForMessage(messageId) : [];
+    const externalId = (msg as any).external_id;
+    const attachments = messageId ? this.getAttachmentsForMessage(messageId, externalId) : [];
+
+    // Debug: Log attachment lookup for messages that should have attachments
+    if (msg.has_attachments) {
+      logService.info(
+        `[Folder Export] Message has_attachments=true, found ${attachments.length} attachments`,
+        "FolderExport",
+        { messageId, externalId, attachmentCount: attachments.length }
+      );
+    }
 
     // Generate attachment HTML
     let attachmentHtml = "";
@@ -1153,17 +1392,25 @@ class FolderExportService {
           attachmentHtml += `<div class="attachment-ref">[Image: ${this.escapeHtml(att.filename)}]</div>`;
         }
       } else {
-        // Non-image attachment - show reference
-        attachmentHtml += `<div class="attachment-ref">[Attachment: ${this.escapeHtml(att.filename)}]</div>`;
+        // Non-image attachment - show reference with specific type
+        const attachmentType = this.getAttachmentTypeLabel(att.mime_type, att.filename);
+        attachmentHtml += `<div class="attachment-ref">[${attachmentType}: ${this.escapeHtml(att.filename)}]</div>`;
       }
     }
+
+    // Determine body content - show attachment indicator for attachment-only messages
+    const bodyText = msg.body_text || msg.body_plain || "";
+    const hasBody = bodyText.trim().length > 0;
+    const bodyContent = hasBody
+      ? this.escapeHtml(bodyText)
+      : (attachments.length > 0 ? "" : ""); // Empty if no text and no attachments
 
     return `
     <div class="message${isOutbound ? " outbound" : ""}">
       <span class="sender">${this.escapeHtml(senderName)}</span>
       <span class="time">${time}</span>
       ${senderPhone ? `<span class="phone">${this.escapeHtml(senderPhone)}</span>` : ""}
-      <div class="body">${this.escapeHtml(msg.body_text || msg.body_plain || "")}</div>
+      ${bodyContent ? `<div class="body">${bodyContent}</div>` : ""}
       ${attachmentHtml}
     </div>
     `;
@@ -1185,11 +1432,29 @@ class FolderExportService {
       attachments: [],
     };
 
-    // Get message IDs for the linked communications
+    // Get message IDs and external IDs for the linked communications
     // For emails, use message_id; for texts, also check the communication id
     const messageIds = communications
       .filter((comm) => comm.message_id || comm.id)
       .map((comm) => comm.message_id || comm.id) as string[];
+
+    // Also collect external_ids for fallback lookup
+    const externalIds = communications
+      .filter((comm) => (comm as any).external_id)
+      .map((comm) => (comm as any).external_id) as string[];
+
+    // Debug logging
+    const commsWithAttachments = communications.filter((c) => c.has_attachments);
+    logService.info(
+      `[Folder Export] exportAttachments called`,
+      "FolderExport",
+      {
+        totalCommunications: communications.length,
+        withHasAttachments: commsWithAttachments.length,
+        messageIds: messageIds.length,
+        externalIds: externalIds.length,
+      }
+    );
 
     if (messageIds.length === 0) {
       // No linked messages, write empty manifest
@@ -1204,7 +1469,7 @@ class FolderExportService {
     // Query attachments table for all linked messages
     const db = databaseService.getRawDatabase();
     const placeholders = messageIds.map(() => "?").join(", ");
-    const attachmentRows = db
+    let attachmentRows = db
       .prepare(
         `
         SELECT id, message_id, filename, mime_type, file_size_bytes, storage_path
@@ -1221,10 +1486,45 @@ class FolderExportService {
       storage_path: string | null;
     }[];
 
+    // Fallback: Also query by external_message_id for attachments with stale message_id
+    if (externalIds.length > 0) {
+      const externalPlaceholders = externalIds.map(() => "?").join(", ");
+      const fallbackRows = db
+        .prepare(
+          `
+          SELECT id, message_id, external_message_id, filename, mime_type, file_size_bytes, storage_path
+          FROM attachments
+          WHERE external_message_id IN (${externalPlaceholders})
+            AND id NOT IN (SELECT id FROM attachments WHERE message_id IN (${placeholders}))
+        `
+        )
+        .all(...externalIds, ...messageIds) as {
+        id: string;
+        message_id: string;
+        external_message_id: string;
+        filename: string;
+        mime_type: string | null;
+        file_size_bytes: number | null;
+        storage_path: string | null;
+      }[];
+
+      if (fallbackRows.length > 0) {
+        logService.info(
+          `[Folder Export] Found ${fallbackRows.length} additional attachments via external_message_id fallback`,
+          "FolderExport"
+        );
+        // Merge fallback results
+        attachmentRows = [...attachmentRows, ...fallbackRows];
+      }
+    }
+
     // Build maps for quick lookup
     // We need to track both message_id and communication id for text messages
     const messageIdToCommIndex = new Map<string, number>();
     const messageIdToComm = new Map<string, Communication>();
+    // Also map by external_id for fallback attachments
+    const externalIdToCommIndex = new Map<string, number>();
+    const externalIdToComm = new Map<string, Communication>();
     communications.forEach((comm, index) => {
       // Map by message_id if available
       if (comm.message_id) {
@@ -1235,6 +1535,12 @@ class FolderExportService {
       if (comm.id) {
         messageIdToCommIndex.set(comm.id, index + 1);
         messageIdToComm.set(comm.id, comm);
+      }
+      // Map by external_id (macOS GUID) for fallback lookup
+      const extId = (comm as any).external_id;
+      if (extId) {
+        externalIdToCommIndex.set(extId, index + 1);
+        externalIdToComm.set(extId, comm);
       }
     });
 
@@ -1269,8 +1575,16 @@ class FolderExportService {
     const usedFilenames = new Set<string>();
 
     for (const att of attachmentRows) {
-      const comm = messageIdToComm.get(att.message_id);
-      const commIndex = messageIdToCommIndex.get(att.message_id);
+      // Try message_id lookup first, fall back to external_message_id
+      let comm = messageIdToComm.get(att.message_id);
+      let commIndex = messageIdToCommIndex.get(att.message_id);
+
+      // Fallback: try external_message_id if regular lookup failed
+      if (!comm && (att as any).external_message_id) {
+        comm = externalIdToComm.get((att as any).external_message_id);
+        commIndex = externalIdToCommIndex.get((att as any).external_message_id);
+      }
+
       const originalFilename = att.filename || `attachment_${manifest.attachments.length + 1}`;
 
       // Generate unique filename to avoid collisions
@@ -1443,8 +1757,12 @@ class FolderExportService {
   /**
    * Get attachments for a specific message
    * Used for embedding images inline in text thread PDFs
+   *
+   * Includes external_message_id fallback for when message_id is stale after re-import
+   * @param messageId - Internal message UUID
+   * @param externalId - Optional macOS GUID for fallback lookup
    */
-  private getAttachmentsForMessage(messageId: string): {
+  private getAttachmentsForMessage(messageId: string, externalId?: string): {
     id: string;
     filename: string;
     mime_type: string | null;
@@ -1453,18 +1771,56 @@ class FolderExportService {
   }[] {
     try {
       const db = databaseService.getRawDatabase();
+
+      // First try direct message_id lookup
       const sql = `
         SELECT id, filename, mime_type, storage_path, file_size_bytes
         FROM attachments
         WHERE message_id = ?
       `;
-      return db.prepare(sql).all(messageId) as {
+      let rows = db.prepare(sql).all(messageId) as {
         id: string;
         filename: string;
         mime_type: string | null;
         storage_path: string | null;
         file_size_bytes: number | null;
       }[];
+
+      // If no results, try external_message_id fallback
+      // After re-import, message IDs change but external_message_id (macOS GUID) is stable
+      if (rows.length === 0) {
+        // Use provided externalId or look it up from messages table
+        let lookupExternalId = externalId;
+        if (!lookupExternalId) {
+          const messageRow = db.prepare(
+            `SELECT external_id FROM messages WHERE id = ?`
+          ).get(messageId) as { external_id: string | null } | undefined;
+          lookupExternalId = messageRow?.external_id || undefined;
+        }
+
+        if (lookupExternalId) {
+          rows = db.prepare(`
+            SELECT id, filename, mime_type, storage_path, file_size_bytes
+            FROM attachments
+            WHERE external_message_id = ?
+          `).all(lookupExternalId) as typeof rows;
+
+          // If found via fallback, update the stale message_id for future queries
+          if (rows.length > 0) {
+            logService.debug(
+              `[Folder Export] Found ${rows.length} attachments via external_message_id fallback`,
+              "FolderExport",
+              { messageId, externalId: lookupExternalId }
+            );
+            const updateStmt = db.prepare(
+              `UPDATE attachments SET message_id = ? WHERE external_message_id = ?`
+            );
+            updateStmt.run(messageId, lookupExternalId);
+          }
+        }
+      }
+
+      return rows;
     } catch (error) {
       logService.warn("[Folder Export] Failed to get attachments for message", "FolderExport", {
         messageId,
@@ -1499,6 +1855,49 @@ class FolderExportService {
   }
 
   /**
+   * Get a human-readable label for an attachment type
+   */
+  private getAttachmentTypeLabel(mimeType: string | null, filename: string): string {
+    // Check mime type first
+    if (mimeType) {
+      if (mimeType.startsWith("video/")) return "Video";
+      if (mimeType.startsWith("audio/")) return "Audio";
+      if (mimeType.startsWith("image/")) return "Image";
+      if (mimeType === "application/pdf") return "PDF";
+      if (mimeType.includes("word") || mimeType.includes("document")) return "Document";
+      if (mimeType.includes("excel") || mimeType.includes("spreadsheet")) return "Spreadsheet";
+      if (mimeType.includes("powerpoint") || mimeType.includes("presentation")) return "Presentation";
+    }
+
+    // Fall back to extension
+    const ext = filename.toLowerCase().split(".").pop() || "";
+    const extensionLabels: Record<string, string> = {
+      mp4: "Video",
+      mov: "Video",
+      m4v: "Video",
+      avi: "Video",
+      mkv: "Video",
+      webm: "Video",
+      mp3: "Audio",
+      m4a: "Audio",
+      aac: "Audio",
+      wav: "Audio",
+      caf: "Voice Message",
+      pdf: "PDF",
+      doc: "Document",
+      docx: "Document",
+      xls: "Spreadsheet",
+      xlsx: "Spreadsheet",
+      ppt: "Presentation",
+      pptx: "Presentation",
+      txt: "Text File",
+      rtf: "Document",
+    };
+
+    return extensionLabels[ext] || "Attachment";
+  }
+
+  /**
    * Check if a file exists at the given path
    */
   private async fileExists(filePath: string): Promise<boolean> {
@@ -1507,6 +1906,153 @@ class FolderExportService {
       return true;
     } catch {
       return false;
+    }
+  }
+
+  /**
+   * Export transaction to a single combined PDF
+   * Uses folder export logic to generate individual PDFs, then combines them
+   * This provides consistent output with the audit package but in a single file
+   */
+  async exportTransactionToCombinedPDF(
+    transaction: Transaction,
+    communications: Communication[],
+    outputPath: string
+  ): Promise<string> {
+    // Create temp folder for individual PDFs
+    const tempDir = app.getPath("temp");
+    const tempFolder = path.join(tempDir, `pdf-combine-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+
+    try {
+      logService.info("[Folder Export] Starting combined PDF export", "FolderExport", {
+        transactionId: transaction.id,
+        outputPath,
+      });
+
+      await fs.mkdir(tempFolder, { recursive: true });
+      const emailsPath = path.join(tempFolder, "emails");
+      const textsPath = path.join(tempFolder, "texts");
+      await fs.mkdir(emailsPath, { recursive: true });
+      await fs.mkdir(textsPath, { recursive: true });
+
+      // Separate emails and texts
+      const emails = communications.filter((c) => c.communication_type === "email");
+      const texts = communications.filter((c) =>
+        c.communication_type === "sms" ||
+        c.communication_type === "imessage" ||
+        c.communication_type === "text"
+      );
+
+      // Sort by date (oldest first for consistent ordering)
+      emails.sort((a, b) => {
+        const dateA = new Date(a.sent_at as string).getTime();
+        const dateB = new Date(b.sent_at as string).getTime();
+        return dateA - dateB;
+      });
+
+      texts.sort((a, b) => {
+        const dateA = new Date(a.sent_at as string).getTime();
+        const dateB = new Date(b.sent_at as string).getTime();
+        return dateA - dateB;
+      });
+
+      // Pre-load contact names for all phone numbers (from both imported contacts and macOS Contacts)
+      const allPhones = this.extractAllPhones(texts);
+      const phoneNameMap = await this.getContactNamesByPhonesAsync(allPhones);
+
+      // Get user's name and email for "me" display in group chats
+      let userName: string | undefined;
+      let userEmail: string | undefined;
+      try {
+        const user = await getUserById(transaction.user_id);
+        if (user) {
+          userName = user.display_name || user.first_name || user.email?.split("@")[0];
+          userEmail = user.email || undefined;
+        }
+      } catch {
+        // Ignore - will fall back to "You"
+      }
+
+      // Generate Summary PDF
+      await this.generateSummaryPDF(transaction, communications, tempFolder, phoneNameMap);
+
+      // Generate individual email PDFs
+      for (let i = 0; i < emails.length; i++) {
+        await this.exportEmailToPDF(emails[i], i + 1, emailsPath);
+      }
+
+      // Generate text conversation PDFs
+      if (texts.length > 0) {
+        await this.exportTextConversations(texts, textsPath, phoneNameMap, userName, userEmail);
+      }
+
+      // Collect all PDF files in order: Summary, then emails, then texts
+      const pdfFiles: string[] = [];
+
+      // Add summary
+      const summaryPath = path.join(tempFolder, "Summary_Report.pdf");
+      if (await this.fileExists(summaryPath)) {
+        pdfFiles.push(summaryPath);
+      }
+
+      // Add emails (sorted by filename which includes index)
+      const emailFiles = await fs.readdir(emailsPath);
+      const sortedEmailFiles = emailFiles.filter(f => f.endsWith(".pdf")).sort();
+      for (const file of sortedEmailFiles) {
+        pdfFiles.push(path.join(emailsPath, file));
+      }
+
+      // Add texts (sorted by filename which includes index)
+      const textFiles = await fs.readdir(textsPath);
+      const sortedTextFiles = textFiles.filter(f => f.endsWith(".pdf")).sort();
+      for (const file of sortedTextFiles) {
+        pdfFiles.push(path.join(textsPath, file));
+      }
+
+      // Combine all PDFs using pdf-lib
+      const combinedPdf = await PDFDocument.create();
+
+      for (const pdfPath of pdfFiles) {
+        try {
+          const pdfBytes = await fs.readFile(pdfPath);
+          const pdf = await PDFDocument.load(pdfBytes);
+          const pages = await combinedPdf.copyPages(pdf, pdf.getPageIndices());
+          pages.forEach((page) => combinedPdf.addPage(page));
+        } catch (err) {
+          logService.warn("[Folder Export] Failed to add PDF to combined document", "FolderExport", {
+            pdfPath,
+            error: err,
+          });
+        }
+      }
+
+      // Save combined PDF
+      const combinedPdfBytes = await combinedPdf.save();
+      await fs.writeFile(outputPath, combinedPdfBytes);
+
+      logService.info("[Folder Export] Combined PDF export complete", "FolderExport", {
+        outputPath,
+        pageCount: combinedPdf.getPageCount(),
+        sourceFiles: pdfFiles.length,
+      });
+
+      return outputPath;
+    } catch (error) {
+      logService.error("[Folder Export] Combined PDF export failed", "FolderExport", { error });
+      throw error;
+    } finally {
+      // Clean up temp folder
+      try {
+        await fs.rm(tempFolder, { recursive: true, force: true });
+      } catch {
+        // Ignore cleanup errors
+      }
+
+      // Clean up any lingering export window
+      if (this.exportWindow) {
+        this.exportWindow.close();
+        this.exportWindow = null;
+      }
     }
   }
 }
