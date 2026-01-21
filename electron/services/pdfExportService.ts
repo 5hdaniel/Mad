@@ -776,6 +776,7 @@ class PDFExportService {
     // Email Threads Section
     if (sortedEmails.length > 0) {
       html += '<div class="section">';
+      html += '<a name="email-threads"></a>';
       html += '<h3>Email Threads (' + sortedEmails.length + ')</h3>';
       html += '<div class="communications">';
 
@@ -883,7 +884,7 @@ class PDFExportService {
         html += '<span class="msg-id">Email #' + (idx + 1) + '</span>';
         html += '</div>';
         html += '<div class="' + bodyClass + '">' + bodyContent + '</div>';
-        html += '<a href="#appendix" class="back-to-top">&larr; Back to Messages</a>';
+        html += '<a href="#email-threads" class="back-to-top">&larr; Back to Email Threads</a>';
         html += '</div>';
       });
 
@@ -954,7 +955,7 @@ class PDFExportService {
         });
         html += '</div>';
 
-        html += '<a href="#text-conversations" class="back-to-top">&larr; Back to Messages</a>';
+        html += '<a href="#text-conversations" class="back-to-top">&larr; Back to Text Conversations</a>';
         html += '</div>';
       });
 
