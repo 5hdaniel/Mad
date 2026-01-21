@@ -1351,8 +1351,10 @@ class FolderExportService {
 
     // Get attachments for this message
     // Check both message_id and id since text messages may link differently
+    // Also pass external_id (macOS GUID) for fallback lookup
     const messageId = msg.message_id || msg.id;
-    const attachments = messageId ? this.getAttachmentsForMessage(messageId) : [];
+    const externalId = (msg as any).external_id;
+    const attachments = messageId ? this.getAttachmentsForMessage(messageId, externalId) : [];
 
     // Generate attachment HTML
     let attachmentHtml = "";
@@ -1676,8 +1678,10 @@ class FolderExportService {
    * Used for embedding images inline in text thread PDFs
    *
    * Includes external_message_id fallback for when message_id is stale after re-import
+   * @param messageId - Internal message UUID
+   * @param externalId - Optional macOS GUID for fallback lookup
    */
-  private getAttachmentsForMessage(messageId: string): {
+  private getAttachmentsForMessage(messageId: string, externalId?: string): {
     id: string;
     filename: string;
     mime_type: string | null;
@@ -1704,29 +1708,33 @@ class FolderExportService {
       // If no results, try external_message_id fallback
       // After re-import, message IDs change but external_message_id (macOS GUID) is stable
       if (rows.length === 0) {
-        // Get the message's external_id (macOS GUID)
-        const messageRow = db.prepare(
-          `SELECT external_id FROM messages WHERE id = ?`
-        ).get(messageId) as { external_id: string | null } | undefined;
+        // Use provided externalId or look it up from messages table
+        let lookupExternalId = externalId;
+        if (!lookupExternalId) {
+          const messageRow = db.prepare(
+            `SELECT external_id FROM messages WHERE id = ?`
+          ).get(messageId) as { external_id: string | null } | undefined;
+          lookupExternalId = messageRow?.external_id || undefined;
+        }
 
-        if (messageRow?.external_id) {
+        if (lookupExternalId) {
           rows = db.prepare(`
             SELECT id, filename, mime_type, storage_path, file_size_bytes
             FROM attachments
             WHERE external_message_id = ?
-          `).all(messageRow.external_id) as typeof rows;
+          `).all(lookupExternalId) as typeof rows;
 
           // If found via fallback, update the stale message_id for future queries
           if (rows.length > 0) {
             logService.debug(
               `[Folder Export] Found ${rows.length} attachments via external_message_id fallback`,
               "FolderExport",
-              { messageId, externalId: messageRow.external_id }
+              { messageId, externalId: lookupExternalId }
             );
             const updateStmt = db.prepare(
               `UPDATE attachments SET message_id = ? WHERE external_message_id = ?`
             );
-            updateStmt.run(messageId, messageRow.external_id);
+            updateStmt.run(messageId, lookupExternalId);
           }
         }
       }

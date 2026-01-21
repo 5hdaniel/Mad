@@ -530,6 +530,8 @@ export async function getCommunicationsWithMessages(
       m.participants as participants,
       -- TASK-992: Direction from messages table for bubble display
       m.direction as direction,
+      -- External ID (macOS GUID) for attachment lookup fallback
+      m.external_id as external_id,
       -- Legacy columns preserved for backward compatibility
       c.source,
       c.cc,
