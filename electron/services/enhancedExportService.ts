@@ -205,7 +205,14 @@ class EnhancedExportService {
     const addressParts = this._extractAddressParts(normalizedAddress);
 
     return communications.filter((comm) => {
-      // Check subject and body for address references
+      // IMPORTANT: Text messages are linked by contact relationship, not content matching
+      // They should always be included - the user explicitly linked these messages
+      // to this transaction via contact assignment, so address filtering doesn't apply
+      if (comm.communication_type === "text") {
+        return true;
+      }
+
+      // For emails: Check subject and body for address references
       const subject = (comm.subject || "").toLowerCase();
       const body = (comm.body_plain || comm.body || "").toLowerCase();
       const combinedContent = `${subject} ${body}`;
