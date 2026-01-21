@@ -314,6 +314,8 @@ class FolderExportService {
       margin-bottom: 30px;
     }
     .header h1 { font-size: 28px; color: #1a202c; margin-bottom: 8px; }
+    .header .address { font-size: 16px; color: #2d3748; margin-bottom: 4px; }
+    .header .audit-period { font-size: 14px; color: #4a5568; margin-bottom: 8px; }
     .header .subtitle { font-size: 14px; color: #718096; }
     .property-info {
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -405,6 +407,8 @@ class FolderExportService {
 <body>
   <div class="header">
     <h1>Transaction Audit Summary</h1>
+    <div class="address">${transaction.property_address || "N/A"}</div>
+    <div class="audit-period">Audit Period: ${formatDate(transaction.started_at)} - ${formatDate(transaction.closed_at)}</div>
     <div class="subtitle">Generated on ${formatDate(new Date())}</div>
   </div>
 
