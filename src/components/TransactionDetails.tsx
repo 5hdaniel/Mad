@@ -367,6 +367,8 @@ function TransactionDetails({
               onMessagesChanged={refreshMessages}
               onShowSuccess={showSuccess}
               onShowError={showError}
+              auditStartDate={transaction.started_at}
+              auditEndDate={transaction.closed_at}
             />
           )}
 

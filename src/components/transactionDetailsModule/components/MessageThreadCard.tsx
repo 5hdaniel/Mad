@@ -25,6 +25,10 @@ export interface MessageThreadCardProps {
   onUnlink?: (threadId: string) => void;
   /** Map of phone number -> contact name for resolving senders */
   contactNames?: Record<string, string>;
+  /** Audit period start date for filtering (TASK-1157) */
+  auditStartDate?: Date | string | null;
+  /** Audit period end date for filtering (TASK-1157) */
+  auditEndDate?: Date | string | null;
 }
 
 /**
@@ -212,6 +216,8 @@ export function MessageThreadCard({
   phoneNumber,
   onUnlink,
   contactNames = {},
+  auditStartDate,
+  auditEndDate,
 }: MessageThreadCardProps): React.ReactElement {
   const [showModal, setShowModal] = useState(false);
 
@@ -339,6 +345,8 @@ export function MessageThreadCard({
           contactName={contactName}
           phoneNumber={phoneNumber}
           contactNames={contactNames}
+          auditStartDate={auditStartDate}
+          auditEndDate={auditEndDate}
           onClose={() => setShowModal(false)}
         />
       )}
