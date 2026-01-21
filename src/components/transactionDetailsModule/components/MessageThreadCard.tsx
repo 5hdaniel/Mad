@@ -40,16 +40,15 @@ function getAvatarInitial(contactName?: string, phoneNumber?: string): string {
 }
 
 /**
- * Get all unique participants from a thread (excluding "me" and "unknown").
+ * Get all unique participants from a thread (excluding the user).
  * Returns an array of phone numbers/identifiers.
  *
- * Note: "unknown" is filtered out because it represents an unresolved participant
- * (e.g., a phone number that couldn't be matched to a contact). Including it would
- * cause 1:1 conversations to be incorrectly flagged as group chats.
+ * Uses chat_members (from Apple's chat_handle_join) as the authoritative source
+ * when available, as it contains only OTHER participants (not the user).
+ * Falls back to from/to parsing for older data.
  */
 function getThreadParticipants(messages: MessageLike[]): string[] {
-  const participants = new Set<string>();
-
+  // First try to get chat_members (authoritative, doesn't include user)
   for (const msg of messages) {
     try {
       if (msg.participants) {
@@ -58,10 +57,38 @@ function getThreadParticipants(messages: MessageLike[]): string[] {
             ? JSON.parse(msg.participants)
             : msg.participants;
 
-        if (parsed.from && parsed.from !== "me" && parsed.from !== "unknown") {
-          participants.add(parsed.from);
+        if (parsed.chat_members && Array.isArray(parsed.chat_members) && parsed.chat_members.length > 0) {
+          // chat_members is authoritative - use it directly
+          return parsed.chat_members.filter((m: string) => m && m !== "unknown");
         }
-        if (parsed.to) {
+      }
+    } catch {
+      // Continue to next message
+    }
+  }
+
+  // Fallback: extract from from/to (for older data or 1:1 chats without chat_members)
+  const participants = new Set<string>();
+
+  // For 1:1 chats, we need to identify the OTHER person, not the user
+  // The user's identifier could be "me", an email, or phone - we filter these out
+  for (const msg of messages) {
+    try {
+      if (msg.participants) {
+        const parsed =
+          typeof msg.participants === "string"
+            ? JSON.parse(msg.participants)
+            : msg.participants;
+
+        // For inbound messages, the sender (from) is the other person
+        if (msg.direction === "inbound" && parsed.from) {
+          const from = parsed.from;
+          if (from !== "me" && from !== "unknown") {
+            participants.add(from);
+          }
+        }
+        // For outbound messages, the recipient (to) is the other person
+        if (msg.direction === "outbound" && parsed.to) {
           const toList = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
           toList.forEach((p: string) => {
             if (p && p !== "me" && p !== "unknown") participants.add(p);
@@ -69,7 +96,7 @@ function getThreadParticipants(messages: MessageLike[]): string[] {
         }
       }
     } catch {
-      // Fall through - if no participants JSON, this message won't contribute
+      // Fall through
     }
   }
 
