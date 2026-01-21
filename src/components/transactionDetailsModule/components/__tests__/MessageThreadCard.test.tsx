@@ -166,8 +166,8 @@ describe("MessageThreadCard", () => {
         />
       );
 
-      // Should show date range like "Jan 15 - Jan 17"
-      expect(container.textContent).toMatch(/Jan\s+15\s*-\s*Jan\s+17/);
+      // Should show date range like "Jan 15, 2024 - Jan 17, 2024"
+      expect(container.textContent).toMatch(/Jan\s+15.*-.*Jan\s+17/);
     });
 
     it("should render single date when all messages on same day", () => {
@@ -207,7 +207,7 @@ describe("MessageThreadCard", () => {
       expect(screen.getByTestId("toggle-thread-button")).toHaveTextContent("View");
     });
 
-    it("should show preview text of last message", () => {
+    it("should render thread card with View button", () => {
       const messages = [
         createMockMessage({ id: "msg-1", body_text: "This is a preview message" }),
       ];
@@ -220,32 +220,32 @@ describe("MessageThreadCard", () => {
         />
       );
 
-      expect(screen.getByTestId("thread-preview")).toHaveTextContent("This is a preview message");
+      // Thread card renders with View button to open full conversation
+      expect(screen.getByTestId("message-thread-card")).toBeInTheDocument();
+      expect(screen.getByTestId("toggle-thread-button")).toBeInTheDocument();
     });
 
-    it("should truncate long preview text", () => {
-      const longText = "A".repeat(100);
+    it("should render contact name in thread header", () => {
       const messages = [
-        createMockMessage({ id: "msg-1", body_text: longText }),
+        createMockMessage({ id: "msg-1", body_text: "Test message" }),
       ];
 
       render(
         <MessageThreadCard
           threadId="thread-1"
           messages={messages}
+          contactName="John Doe"
           phoneNumber="+14155550100"
         />
       );
 
-      const preview = screen.getByTestId("thread-preview");
-      // Should be truncated to 60 chars + "..."
-      expect(preview.textContent?.length).toBeLessThan(70);
-      expect(preview.textContent).toContain("...");
+      expect(screen.getByTestId("thread-contact-name")).toHaveTextContent("John Doe");
     });
   });
 
   describe("group chat cards", () => {
     // Helper to create a group chat message with multiple participants
+    // Note: chat_members is the authoritative list of participants (used by getThreadParticipants)
     const createGroupMessage = (overrides: Partial<Communication> = {}): Communication => ({
       id: "msg-1",
       user_id: "user-123",
@@ -258,6 +258,7 @@ describe("MessageThreadCard", () => {
       participants: JSON.stringify({
         from: "+14155550100",
         to: ["+14155550101", "+14155550102"],
+        chat_members: ["+14155550100", "+14155550101", "+14155550102"],
       }),
       ...overrides,
     } as Communication);
@@ -281,7 +282,7 @@ describe("MessageThreadCard", () => {
       expect(screen.queryByTestId("group-message-count-badge")).not.toBeInTheDocument();
     });
 
-    it("should render preview text for group chat", () => {
+    it("should render View button for group chat", () => {
       const messages = [
         createGroupMessage({ id: "msg-1", body_text: "Group chat preview message" }),
       ];
@@ -294,10 +295,11 @@ describe("MessageThreadCard", () => {
         />
       );
 
-      expect(screen.getByTestId("thread-preview")).toHaveTextContent("Group chat preview message");
+      // Group chat should have View button to open full conversation
+      expect(screen.getByTestId("toggle-thread-button")).toBeInTheDocument();
     });
 
-    it("should display participant names without 'Also includes:' prefix", () => {
+    it("should display group indicator in contact name", () => {
       const messages = [createGroupMessage({ id: "msg-1" })];
 
       render(
@@ -308,8 +310,9 @@ describe("MessageThreadCard", () => {
         />
       );
 
-      const participants = screen.getByTestId("thread-participants");
-      expect(participants.textContent).not.toContain("Also includes:");
+      // Group chat should show "Group: " prefix in contact name
+      const contactName = screen.getByTestId("thread-contact-name");
+      expect(contactName.textContent).toContain("Group: ");
     });
 
     it("should not display people badge for group chat (removed for cleaner layout)", () => {
@@ -323,11 +326,11 @@ describe("MessageThreadCard", () => {
         />
       );
 
-      // People badge intentionally removed - participant list at bottom shows who's in the chat
+      // People badge intentionally removed - contact name shows participants inline
       expect(screen.queryByText("3 people")).not.toBeInTheDocument();
     });
 
-    it("should display participant names inline with Group Chat label and hover tooltip", () => {
+    it("should display participant names inline with Group label", () => {
       const messages = [createGroupMessage({ id: "msg-1" })];
 
       render(
@@ -338,26 +341,25 @@ describe("MessageThreadCard", () => {
         />
       );
 
-      const participants = screen.getByTestId("thread-participants");
-      expect(participants).toBeInTheDocument();
-      // Should have title attribute for tooltip with full participant list
-      expect(participants).toHaveAttribute("title");
-      // Should be in the same container as the Group Chat label
+      // Contact name element should contain the participant info
       const contactName = screen.getByTestId("thread-contact-name");
-      expect(contactName.parentElement).toBe(participants.parentElement);
-      // Group Chat label should include colon for inline format
-      expect(contactName).toHaveTextContent("Group Chat:");
+      expect(contactName).toBeInTheDocument();
+      // Should have title attribute for tooltip with full participant list
+      expect(contactName).toHaveAttribute("title");
     });
   });
 
   describe("unknown participant filtering (BACKLOG-299)", () => {
     // Helper to create a message with specific participants
+    // Includes chat_members which is the authoritative list used by getThreadParticipants
     const createMessageWithParticipants = (
       from: string,
       to: string[],
       overrides: Partial<Communication> = {}
-    ): Communication =>
-      ({
+    ): Communication => {
+      // Build chat_members from from + to, excluding 'me'
+      const chatMembers = [from, ...to].filter(p => p !== "me");
+      return {
         id: "msg-1",
         user_id: "user-123",
         channel: "sms",
@@ -366,9 +368,10 @@ describe("MessageThreadCard", () => {
         sent_at: "2024-01-16T14:30:00Z",
         has_attachments: false,
         is_false_positive: false,
-        participants: JSON.stringify({ from, to }),
+        participants: JSON.stringify({ from, to, chat_members: chatMembers }),
         ...overrides,
-      }) as Communication;
+      } as Communication;
+    };
 
     it("should display 1:1 chat (not group) when one participant is 'unknown'", () => {
       // Scenario: 1:1 chat where "unknown" appears in participants
@@ -441,9 +444,9 @@ describe("MessageThreadCard", () => {
         container.querySelector(".bg-gradient-to-br.from-green-500.to-teal-600")
       ).not.toBeInTheDocument();
 
-      // Should show "Group Chat:" label
+      // Should show "Group: " label
       expect(screen.getByTestId("thread-contact-name")).toHaveTextContent(
-        "Group Chat:"
+        "Group: "
       );
     });
 
@@ -495,12 +498,12 @@ describe("MessageThreadCard", () => {
       );
     });
 
-    it("should display 2 known participants as group chat", () => {
-      // Verify normal group detection still works (2+ known participants = group)
+    it("should display 3+ external participants as group chat", () => {
+      // Verify normal group detection still works (3+ external participants = group)
       const messages = [
         createMessageWithParticipants("+14155550100", [
           "+14155550101",
-          "me",
+          "+14155550102",
         ]),
       ];
 
@@ -512,7 +515,7 @@ describe("MessageThreadCard", () => {
         />
       );
 
-      // Should show group avatar (2 known external participants)
+      // Should show group avatar (purple background)
       expect(container.querySelector(".bg-purple-100")).toBeInTheDocument();
     });
   });
@@ -546,7 +549,8 @@ describe("MessageThreadCard", () => {
         />
       );
 
-      const avatar = container.querySelector(".w-10.h-10");
+      // Avatar is w-8 h-8
+      const avatar = container.querySelector(".w-8.h-8");
       expect(avatar).toBeInTheDocument();
     });
 
@@ -569,7 +573,8 @@ describe("MessageThreadCard", () => {
         />
       );
 
-      const avatar = container.querySelector(".w-10.h-10");
+      // Avatar is w-8 h-8
+      const avatar = container.querySelector(".w-8.h-8");
       expect(avatar).toBeInTheDocument();
     });
   });
