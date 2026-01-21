@@ -1881,4 +1881,140 @@ export const registerTransactionHandlers = (
       }
     },
   );
+
+  // Re-sync auto-link communications for all contacts on a transaction
+  // Use when contacts have been updated and user wants to re-link communications
+  ipcMain.handle(
+    "transactions:resync-auto-link",
+    async (
+      event: IpcMainInvokeEvent,
+      transactionId: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        logService.info("Re-syncing auto-link for transaction", "Transactions", {
+          transactionId,
+        });
+
+        // Validate transaction ID
+        const validatedTransactionId = validateTransactionId(transactionId);
+        if (!validatedTransactionId) {
+          throw new ValidationError(
+            "Transaction ID validation failed",
+            "transactionId",
+          );
+        }
+
+        // Get transaction with contacts
+        const transactionDetails = await transactionService.getTransactionWithContacts(
+          validatedTransactionId,
+        );
+
+        if (!transactionDetails) {
+          return {
+            success: false,
+            error: "Transaction not found",
+          };
+        }
+
+        const contactAssignments = (transactionDetails as any).contact_assignments || [];
+
+        if (contactAssignments.length === 0) {
+          return {
+            success: true,
+            message: "No contacts to sync",
+            totalEmailsLinked: 0,
+            totalMessagesLinked: 0,
+            totalAlreadyLinked: 0,
+          };
+        }
+
+        // Auto-link communications for each contact
+        const results: Array<{
+          contactId: string;
+          emailsLinked: number;
+          messagesLinked: number;
+          alreadyLinked: number;
+          errors: number;
+        }> = [];
+
+        let totalEmailsLinked = 0;
+        let totalMessagesLinked = 0;
+        let totalAlreadyLinked = 0;
+        let totalErrors = 0;
+
+        for (const assignment of contactAssignments) {
+          try {
+            const result = await autoLinkCommunicationsForContact({
+              contactId: assignment.contact_id,
+              transactionId: validatedTransactionId,
+            });
+
+            results.push({
+              contactId: assignment.contact_id,
+              ...result,
+            });
+
+            totalEmailsLinked += result.emailsLinked;
+            totalMessagesLinked += result.messagesLinked;
+            totalAlreadyLinked += result.alreadyLinked;
+            totalErrors += result.errors;
+
+            logService.debug(
+              "Re-sync auto-link complete for contact",
+              "Transactions",
+              {
+                contactId: assignment.contact_id,
+                emailsLinked: result.emailsLinked,
+                messagesLinked: result.messagesLinked,
+                alreadyLinked: result.alreadyLinked,
+              }
+            );
+          } catch (error) {
+            totalErrors++;
+            logService.warn(
+              `Re-sync auto-link failed for contact ${assignment.contact_id}`,
+              "Transactions",
+              {
+                error: error instanceof Error ? error.message : "Unknown",
+              }
+            );
+          }
+        }
+
+        logService.info("Re-sync auto-link complete", "Transactions", {
+          transactionId: validatedTransactionId,
+          contactsProcessed: contactAssignments.length,
+          totalEmailsLinked,
+          totalMessagesLinked,
+          totalAlreadyLinked,
+          totalErrors,
+        });
+
+        return {
+          success: true,
+          contactsProcessed: contactAssignments.length,
+          totalEmailsLinked,
+          totalMessagesLinked,
+          totalAlreadyLinked,
+          totalErrors,
+          results,
+        };
+      } catch (error) {
+        logService.error("Re-sync auto-link failed", "Transactions", {
+          transactionId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
 };

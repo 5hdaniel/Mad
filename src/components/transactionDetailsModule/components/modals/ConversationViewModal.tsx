@@ -179,12 +179,20 @@ function AttachmentImage({
 
 /**
  * Format a date range for display in the toggle label
+ * Handles partial dates (only start, only end, or both)
  */
 function formatDateRangeLabel(startDate: Date | null, endDate: Date | null): string {
-  if (!startDate || !endDate) return "";
   const formatDate = (d: Date) =>
     d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-  return `${formatDate(startDate)} - ${formatDate(endDate)}`;
+
+  if (startDate && endDate) {
+    return `${formatDate(startDate)} - ${formatDate(endDate)}`;
+  } else if (startDate) {
+    return `from ${formatDate(startDate)}`;
+  } else if (endDate) {
+    return `until ${formatDate(endDate)}`;
+  }
+  return "";
 }
 
 export function ConversationViewModal({
@@ -207,7 +215,8 @@ export function ConversationViewModal({
   // Parse audit dates
   const parsedStartDate = auditStartDate ? new Date(auditStartDate) : null;
   const parsedEndDate = auditEndDate ? new Date(auditEndDate) : null;
-  const hasAuditDates = !!(parsedStartDate && parsedEndDate);
+  // Show filter if at least one date is set (handles ongoing transactions with only start date)
+  const hasAuditDates = !!(parsedStartDate || parsedEndDate);
 
   // Default to showing audit period only when dates are available
   const [showAuditPeriodOnly, setShowAuditPeriodOnly] = useState<boolean>(hasAuditDates);
@@ -221,18 +230,30 @@ export function ConversationViewModal({
 
   // TASK-1157: Filter messages by audit date range
   const filteredMessages = React.useMemo(() => {
-    if (!showAuditPeriodOnly || !parsedStartDate || !parsedEndDate) {
+    if (!showAuditPeriodOnly || !hasAuditDates) {
       return sortedMessages;
     }
-    // Set end date to end of day for inclusive comparison
-    const endOfDay = new Date(parsedEndDate);
-    endOfDay.setHours(23, 59, 59, 999);
 
     return sortedMessages.filter((msg) => {
       const msgDate = new Date(msg.sent_at || msg.received_at || 0);
-      return msgDate >= parsedStartDate && msgDate <= endOfDay;
+
+      // Check start date (if set)
+      if (parsedStartDate && msgDate < parsedStartDate) {
+        return false;
+      }
+
+      // Check end date (if set) - use end of day for inclusive comparison
+      if (parsedEndDate) {
+        const endOfDay = new Date(parsedEndDate);
+        endOfDay.setHours(23, 59, 59, 999);
+        if (msgDate > endOfDay) {
+          return false;
+        }
+      }
+
+      return true;
     });
-  }, [sortedMessages, showAuditPeriodOnly, parsedStartDate, parsedEndDate]);
+  }, [sortedMessages, showAuditPeriodOnly, hasAuditDates, parsedStartDate, parsedEndDate]);
 
   // Collect unique participants from all sources (not just inbound senders)
   const uniqueSenders = new Set<string>();
