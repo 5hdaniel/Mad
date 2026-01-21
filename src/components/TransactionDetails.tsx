@@ -381,6 +381,11 @@ function TransactionDetails({
               onSyncCommunications={handleSyncCommunications}
               syncingCommunications={syncingCommunications}
               hasContacts={contactAssignments.length > 0}
+              userId={userId}
+              transactionId={transaction.id}
+              propertyAddress={transaction.property_address}
+              onEmailsChanged={loadDetails}
+              onShowSuccess={showSuccess}
             />
           )}
 

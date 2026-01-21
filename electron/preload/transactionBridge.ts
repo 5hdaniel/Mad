@@ -344,4 +344,13 @@ export const transactionBridge = {
    */
   resyncAutoLink: (transactionId: string) =>
     ipcRenderer.invoke("transactions:resync-auto-link", transactionId),
+
+  /**
+   * Link emails to a transaction
+   * @param emailIds - Array of email IDs to link
+   * @param transactionId - Transaction ID to link to
+   * @returns Success/error result
+   */
+  linkEmails: (emailIds: string[], transactionId: string) =>
+    ipcRenderer.invoke("transactions:link-emails", emailIds, transactionId),
 };

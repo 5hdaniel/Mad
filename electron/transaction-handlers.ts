@@ -1398,6 +1398,78 @@ export const registerTransactionHandlers = (
     },
   );
 
+  // Link emails to a transaction
+  ipcMain.handle(
+    "transactions:link-emails",
+    async (
+      event: IpcMainInvokeEvent,
+      emailIds: string[],
+      transactionId: string,
+    ): Promise<TransactionResponse> => {
+      try {
+        logService.info("Linking emails to transaction", "Transactions", {
+          emailCount: emailIds?.length || 0,
+          transactionId,
+        });
+
+        // Validate transaction ID
+        const validatedTransactionId = validateTransactionId(transactionId);
+        if (!validatedTransactionId) {
+          throw new ValidationError(
+            "Transaction ID validation failed",
+            "transactionId",
+          );
+        }
+
+        // Validate email IDs
+        if (!Array.isArray(emailIds) || emailIds.length === 0) {
+          throw new ValidationError(
+            "Email IDs must be a non-empty array",
+            "emailIds",
+          );
+        }
+
+        // Import the function we need
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { linkCommunicationToTransaction } = require("./services/db/communicationDbService");
+
+        // Link each email
+        for (const emailId of emailIds) {
+          if (!emailId || typeof emailId !== "string" || emailId.trim().length === 0) {
+            throw new ValidationError(`Invalid email ID: ${emailId}`, "emailIds");
+          }
+          await linkCommunicationToTransaction(emailId, validatedTransactionId);
+        }
+
+        logService.info("Emails linked successfully", "Transactions", {
+          emailCount: emailIds.length,
+          transactionId: validatedTransactionId,
+        });
+
+        return {
+          success: true,
+          linkedCount: emailIds.length,
+        };
+      } catch (error) {
+        logService.error("Link emails failed", "Transactions", {
+          emailCount: emailIds?.length || 0,
+          transactionId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+        if (error instanceof ValidationError) {
+          return {
+            success: false,
+            error: `Validation error: ${error.message}`,
+          };
+        }
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+  );
+
   // Get message contacts for contact-first browsing
   ipcMain.handle(
     "transactions:get-message-contacts",

@@ -3,8 +3,9 @@
  * Emails tab content showing email threads linked to a transaction.
  * Moved from TransactionDetailsTab as part of TASK-1152.
  */
-import React from "react";
+import React, { useState, useCallback } from "react";
 import type { Communication } from "../types";
+import { AttachEmailsModal } from "./modals";
 
 interface TransactionEmailsTabProps {
   communications: Communication[];
@@ -18,6 +19,16 @@ interface TransactionEmailsTabProps {
   syncingCommunications?: boolean;
   /** Whether there are contacts assigned (to show appropriate help text) */
   hasContacts?: boolean;
+  /** User ID for API calls */
+  userId?: string;
+  /** Transaction ID for API calls */
+  transactionId?: string;
+  /** Property address for display */
+  propertyAddress?: string;
+  /** Callback when emails are modified (attached/unlinked) */
+  onEmailsChanged?: () => void;
+  /** Toast handler for success messages */
+  onShowSuccess?: (message: string) => void;
 }
 
 export function TransactionEmailsTab({
@@ -29,7 +40,24 @@ export function TransactionEmailsTab({
   onSyncCommunications,
   syncingCommunications = false,
   hasContacts = false,
+  userId,
+  transactionId,
+  propertyAddress,
+  onEmailsChanged,
+  onShowSuccess,
 }: TransactionEmailsTabProps): React.ReactElement {
+  const [showAttachModal, setShowAttachModal] = useState(false);
+
+  // Handle attach button click
+  const handleAttachClick = useCallback(() => {
+    setShowAttachModal(true);
+  }, []);
+
+  // Handle emails attached successfully
+  const handleAttached = useCallback(() => {
+    onEmailsChanged?.();
+    onShowSuccess?.("Emails attached successfully");
+  }, [onEmailsChanged, onShowSuccess]);
   // Loading state
   if (loading) {
     return (
@@ -44,9 +72,23 @@ export function TransactionEmailsTab({
   if (communications.length === 0) {
     return (
       <div>
-        {/* Sync button */}
-        {onSyncCommunications && hasContacts && (
-          <div className="flex justify-end mb-4">
+        {/* Action buttons */}
+        <div className="flex justify-end gap-2 mb-4">
+          {/* Attach Emails button */}
+          {userId && transactionId && (
+            <button
+              onClick={handleAttachClick}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
+              data-testid="attach-emails-button"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Attach Emails
+            </button>
+          )}
+          {/* Sync button */}
+          {onSyncCommunications && hasContacts && (
             <button
               onClick={onSyncCommunications}
               disabled={syncingCommunications}
@@ -69,8 +111,8 @@ export function TransactionEmailsTab({
                 </>
               )}
             </button>
-          </div>
-        )}
+          )}
+        </div>
 
         <div className="text-center py-12">
           <svg
@@ -88,20 +130,43 @@ export function TransactionEmailsTab({
           </svg>
           <p className="text-gray-600 mb-2">No emails linked</p>
           <p className="text-sm text-gray-500">
-            {hasContacts
-              ? 'Click "Sync Emails" to find emails from your contacts'
-              : 'Add contacts in the Overview tab to auto-link related emails'}
+            Click &quot;Attach Emails&quot; to manually select emails, or add contacts to auto-link
           </p>
         </div>
+
+        {/* Attach Emails Modal */}
+        {showAttachModal && userId && transactionId && (
+          <AttachEmailsModal
+            userId={userId}
+            transactionId={transactionId}
+            propertyAddress={propertyAddress}
+            onClose={() => setShowAttachModal(false)}
+            onAttached={handleAttached}
+          />
+        )}
       </div>
     );
   }
 
   return (
     <div>
-      {/* Sync button */}
-      {onSyncCommunications && hasContacts && (
-        <div className="flex justify-end mb-4">
+      {/* Action buttons */}
+      <div className="flex justify-end gap-2 mb-4">
+        {/* Attach Emails button */}
+        {userId && transactionId && (
+          <button
+            onClick={handleAttachClick}
+            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
+            data-testid="attach-emails-button"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Attach Emails
+          </button>
+        )}
+        {/* Sync button */}
+        {onSyncCommunications && hasContacts && (
           <button
             onClick={onSyncCommunications}
             disabled={syncingCommunications}
@@ -124,8 +189,8 @@ export function TransactionEmailsTab({
               </>
             )}
           </button>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Email list */}
       <div className="space-y-3">
@@ -139,6 +204,17 @@ export function TransactionEmailsTab({
           />
         ))}
       </div>
+
+      {/* Attach Emails Modal */}
+      {showAttachModal && userId && transactionId && (
+        <AttachEmailsModal
+          userId={userId}
+          transactionId={transactionId}
+          propertyAddress={propertyAddress}
+          onClose={() => setShowAttachModal(false)}
+          onAttached={handleAttached}
+        />
+      )}
     </div>
   );
 }
