@@ -1418,11 +1418,16 @@ class FolderExportService {
       attachments: [],
     };
 
-    // Get message IDs for the linked communications
+    // Get message IDs and external IDs for the linked communications
     // For emails, use message_id; for texts, also check the communication id
     const messageIds = communications
       .filter((comm) => comm.message_id || comm.id)
       .map((comm) => comm.message_id || comm.id) as string[];
+
+    // Also collect external_ids for fallback lookup
+    const externalIds = communications
+      .filter((comm) => (comm as any).external_id)
+      .map((comm) => (comm as any).external_id) as string[];
 
     if (messageIds.length === 0) {
       // No linked messages, write empty manifest
@@ -1437,7 +1442,7 @@ class FolderExportService {
     // Query attachments table for all linked messages
     const db = databaseService.getRawDatabase();
     const placeholders = messageIds.map(() => "?").join(", ");
-    const attachmentRows = db
+    let attachmentRows = db
       .prepare(
         `
         SELECT id, message_id, filename, mime_type, file_size_bytes, storage_path
@@ -1454,10 +1459,45 @@ class FolderExportService {
       storage_path: string | null;
     }[];
 
+    // Fallback: Also query by external_message_id for attachments with stale message_id
+    if (externalIds.length > 0) {
+      const externalPlaceholders = externalIds.map(() => "?").join(", ");
+      const fallbackRows = db
+        .prepare(
+          `
+          SELECT id, message_id, external_message_id, filename, mime_type, file_size_bytes, storage_path
+          FROM attachments
+          WHERE external_message_id IN (${externalPlaceholders})
+            AND id NOT IN (SELECT id FROM attachments WHERE message_id IN (${placeholders}))
+        `
+        )
+        .all(...externalIds, ...messageIds) as {
+        id: string;
+        message_id: string;
+        external_message_id: string;
+        filename: string;
+        mime_type: string | null;
+        file_size_bytes: number | null;
+        storage_path: string | null;
+      }[];
+
+      if (fallbackRows.length > 0) {
+        logService.info(
+          `[Folder Export] Found ${fallbackRows.length} additional attachments via external_message_id fallback`,
+          "FolderExport"
+        );
+        // Merge fallback results
+        attachmentRows = [...attachmentRows, ...fallbackRows];
+      }
+    }
+
     // Build maps for quick lookup
     // We need to track both message_id and communication id for text messages
     const messageIdToCommIndex = new Map<string, number>();
     const messageIdToComm = new Map<string, Communication>();
+    // Also map by external_id for fallback attachments
+    const externalIdToCommIndex = new Map<string, number>();
+    const externalIdToComm = new Map<string, Communication>();
     communications.forEach((comm, index) => {
       // Map by message_id if available
       if (comm.message_id) {
@@ -1468,6 +1508,12 @@ class FolderExportService {
       if (comm.id) {
         messageIdToCommIndex.set(comm.id, index + 1);
         messageIdToComm.set(comm.id, comm);
+      }
+      // Map by external_id (macOS GUID) for fallback lookup
+      const extId = (comm as any).external_id;
+      if (extId) {
+        externalIdToCommIndex.set(extId, index + 1);
+        externalIdToComm.set(extId, comm);
       }
     });
 
@@ -1502,8 +1548,16 @@ class FolderExportService {
     const usedFilenames = new Set<string>();
 
     for (const att of attachmentRows) {
-      const comm = messageIdToComm.get(att.message_id);
-      const commIndex = messageIdToCommIndex.get(att.message_id);
+      // Try message_id lookup first, fall back to external_message_id
+      let comm = messageIdToComm.get(att.message_id);
+      let commIndex = messageIdToCommIndex.get(att.message_id);
+
+      // Fallback: try external_message_id if regular lookup failed
+      if (!comm && (att as any).external_message_id) {
+        comm = externalIdToComm.get((att as any).external_message_id);
+        commIndex = externalIdToCommIndex.get((att as any).external_message_id);
+      }
+
       const originalFilename = att.filename || `attachment_${manifest.attachments.length + 1}`;
 
       // Generate unique filename to avoid collisions
