@@ -438,11 +438,19 @@ class MacOSMessagesImportService {
           WHERE account_login IS NOT NULL
         `);
 
-        // Build a map of chat_id -> user's account_login (phone number or Apple ID)
+        // Build a map of chat_id -> user's account_login (phone number or email)
+        // account_login has prefixes: "P:" for phone, "E:" for email - strip them
         const chatAccountMap = new Map<number, string>();
         for (const row of chatAccountRows) {
           if (row.account_login) {
-            chatAccountMap.set(row.chat_id, row.account_login);
+            // Strip "P:" or "E:" prefix from account_login
+            let identifier = row.account_login;
+            if (identifier.startsWith("P:") || identifier.startsWith("E:")) {
+              identifier = identifier.substring(2);
+            }
+            if (identifier) {
+              chatAccountMap.set(row.chat_id, identifier);
+            }
           }
         }
 
