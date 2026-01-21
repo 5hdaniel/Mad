@@ -391,14 +391,14 @@ describe("Transaction Handlers Integration Tests", () => {
       mockTransactionService.updateTransaction.mockResolvedValue({
         ...baseTransaction,
         status: "closed",
-        closing_date: "2025-06-15",
+        closed_at: "2025-06-15",
         closing_date_verified: 1,
       });
 
       const handler = registeredHandlers.get("transactions:update");
       const result = await handler(mockEvent, TEST_TXN_ID, {
         status: "closed",
-        closing_date: "2025-06-15",
+        closed_at: "2025-06-15",
         closing_date_verified: 1,
       });
 
@@ -655,8 +655,8 @@ describe("Transaction Handlers Integration Tests", () => {
         property_address: "100 Corporate Dr, Suite 500",
         transaction_type: "lease",
         status: "active",
-        representation_start_date: "2025-01-01",
-        closing_date: "2025-06-30",
+        started_at: "2025-01-01",
+        closed_at: "2025-06-30",
         listing_price: 75000,
         sale_price: 72000,
         contacts: [{ id: TEST_CONTACT_ID, role: "Tenant", isPrimary: true }],
@@ -671,8 +671,8 @@ describe("Transaction Handlers Integration Tests", () => {
         property_address: "100 Corporate Dr, Suite 500",
         transaction_type: "lease",
         status: "active",
-        representation_start_date: "2025-01-01",
-        closing_date: "2025-06-30",
+        started_at: "2025-01-01",
+        closed_at: "2025-06-30",
         listing_price: 75000,
         sale_price: 72000,
       });

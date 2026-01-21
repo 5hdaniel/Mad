@@ -14,7 +14,7 @@ interface MockStatement {
 interface TransactionResult {
   id: string;
   property_address: string;
-  closing_date: string;
+  closed_at: string;
   transaction_type: string;
   status: string;
   role?: string;
@@ -142,7 +142,7 @@ describe("DatabaseService - Contact Deletion Prevention", () => {
       const mockTransaction: TransactionResult = {
         id: "txn-1",
         property_address: "123 Main St",
-        closing_date: "2024-01-15",
+        closed_at: "2024-01-15",
         transaction_type: "purchase",
         status: "active",
         role: "Buyer Agent",
@@ -165,7 +165,7 @@ describe("DatabaseService - Contact Deletion Prevention", () => {
       const mockTransaction: TransactionResult = {
         id: "txn-2",
         property_address: "456 Oak Ave",
-        closing_date: "2024-02-20",
+        closed_at: "2024-02-20",
         transaction_type: "sale",
         status: "active",
         specific_role: "inspector",
@@ -189,7 +189,7 @@ describe("DatabaseService - Contact Deletion Prevention", () => {
       const mockTransaction: TransactionResult = {
         id: "txn-3",
         property_address: "789 Elm St",
-        closing_date: "2024-03-10",
+        closed_at: "2024-03-10",
         transaction_type: "purchase",
         status: "closed",
       };
@@ -211,7 +211,7 @@ describe("DatabaseService - Contact Deletion Prevention", () => {
       const directTxn: TransactionResult = {
         id: "txn-1",
         property_address: "123 Main St",
-        closing_date: "2024-01-15",
+        closed_at: "2024-01-15",
         transaction_type: "purchase",
         status: "active",
         role: "Buyer Agent",
@@ -220,7 +220,7 @@ describe("DatabaseService - Contact Deletion Prevention", () => {
       const junctionTxn: TransactionResult = {
         id: "txn-1",
         property_address: "123 Main St",
-        closing_date: "2024-01-15",
+        closed_at: "2024-01-15",
         transaction_type: "purchase",
         status: "active",
         specific_role: "escrow_officer",
@@ -243,7 +243,7 @@ describe("DatabaseService - Contact Deletion Prevention", () => {
         {
           id: "txn-1",
           property_address: "123 Main St",
-          closing_date: "2024-01-15",
+          closed_at: "2024-01-15",
           transaction_type: "purchase",
           status: "active",
           role: "Buyer Agent",
@@ -251,7 +251,7 @@ describe("DatabaseService - Contact Deletion Prevention", () => {
         {
           id: "txn-1",
           property_address: "123 Main St",
-          closing_date: "2024-01-15",
+          closed_at: "2024-01-15",
           transaction_type: "purchase",
           status: "active",
           role: "Seller Agent",
@@ -270,7 +270,7 @@ describe("DatabaseService - Contact Deletion Prevention", () => {
       const directTxn: TransactionResult = {
         id: "txn-1",
         property_address: "123 Main St",
-        closing_date: "2024-01-15",
+        closed_at: "2024-01-15",
         transaction_type: "purchase",
         status: "active",
         role: "Buyer Agent",
@@ -279,7 +279,7 @@ describe("DatabaseService - Contact Deletion Prevention", () => {
       const junctionTxn: TransactionResult = {
         id: "txn-2",
         property_address: "456 Oak Ave",
-        closing_date: "2024-02-20",
+        closed_at: "2024-02-20",
         transaction_type: "sale",
         status: "active",
         specific_role: "inspector",
@@ -288,7 +288,7 @@ describe("DatabaseService - Contact Deletion Prevention", () => {
       const jsonTxn: TransactionResult = {
         id: "txn-3",
         property_address: "789 Elm St",
-        closing_date: "2024-03-10",
+        closed_at: "2024-03-10",
         transaction_type: "purchase",
         status: "closed",
       };
@@ -309,7 +309,7 @@ describe("DatabaseService - Contact Deletion Prevention", () => {
       const mockTransaction: TransactionResult = {
         id: "txn-1",
         property_address: "123 Main St",
-        closing_date: "2024-01-15",
+        closed_at: "2024-01-15",
         transaction_type: "purchase",
         status: "active",
         specific_role: null,
@@ -327,7 +327,7 @@ describe("DatabaseService - Contact Deletion Prevention", () => {
       const mockTransaction: TransactionResult = {
         id: "txn-1",
         property_address: "123 Main St",
-        closing_date: "2024-01-15",
+        closed_at: "2024-01-15",
         transaction_type: "purchase",
         status: "active",
         specific_role: null,
@@ -346,7 +346,7 @@ describe("DatabaseService - Contact Deletion Prevention", () => {
         {
           id: "txn-1",
           property_address: "123 Main St",
-          closing_date: "2024-01-15",
+          closed_at: "2024-01-15",
           transaction_type: "purchase",
           status: "active",
           role: "Buyer Agent",
@@ -354,7 +354,7 @@ describe("DatabaseService - Contact Deletion Prevention", () => {
         {
           id: "txn-2",
           property_address: "456 Oak Ave",
-          closing_date: "2024-02-20",
+          closed_at: "2024-02-20",
           transaction_type: "sale",
           status: "closed",
           role: "Seller Agent",

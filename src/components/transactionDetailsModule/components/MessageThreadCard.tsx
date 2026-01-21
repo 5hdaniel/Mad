@@ -182,7 +182,7 @@ export function MessageThreadCard({
     const firstDate = new Date(first.sent_at || first.received_at || 0);
     const lastDate = new Date(last.sent_at || last.received_at || 0);
     const formatDate = (d: Date) =>
-      d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+      d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
     if (firstDate.toDateString() === lastDate.toDateString()) {
       return formatDate(firstDate);
     }

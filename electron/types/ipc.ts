@@ -1010,8 +1010,8 @@ export interface WindowApi {
       options?: {
         exportFormat?: string;
         contentType?: "text" | "email" | "both";
-        representationStartDate?: string;
-        closingDate?: string;
+        startDate?: string;
+        endDate?: string;
       },
     ) => Promise<{ success: boolean; path?: string; error?: string }>;
     assignContact: (

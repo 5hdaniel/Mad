@@ -85,7 +85,7 @@ function getThreadDateRange(messages: MessageLike[]): string {
   const firstDate = new Date(dates[0]);
   const lastDate = new Date(dates[dates.length - 1]);
 
-  const formatOpts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
+  const formatOpts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", year: "numeric" };
   const first = firstDate.toLocaleDateString(undefined, formatOpts);
   const last = lastDate.toLocaleDateString(undefined, formatOpts);
 

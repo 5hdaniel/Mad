@@ -500,10 +500,6 @@ export interface Transaction {
   // ========== Legacy Fields (backwards compatibility) ==========
   /** @deprecated Use status instead */
   transaction_status?: string;
-  /** @deprecated Use closed_at instead */
-  closing_date?: Date | string;
-  /** @deprecated Use started_at instead */
-  representation_start_date?: Date | string;
   /** @deprecated Use confidence_score instead */
   extraction_confidence?: number;
   /** @deprecated Use message_count instead */

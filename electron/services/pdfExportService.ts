@@ -525,7 +525,7 @@ class PDFExportService {
 
     <div class="detail-card">
       <div class="label">Closing Date</div>
-      <div class="value">${formatDate(transaction.closing_date)}</div>
+      <div class="value">${formatDate(transaction.closed_at)}</div>
     </div>
 
     <div class="detail-card">

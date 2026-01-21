@@ -295,8 +295,6 @@ export async function updateTransaction(
     "started_at",
     "closed_at",
     "closing_deadline",
-    "closing_date",
-    "representation_start_date",
     "closing_date_verified",
     "representation_start_confidence",
     "closing_date_confidence",

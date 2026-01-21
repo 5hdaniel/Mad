@@ -183,22 +183,22 @@ describe("EnhancedExportService Date Filtering", () => {
 });
 
 describe("ExportOptions date parameters", () => {
-  it("should accept representationStartDate and closingDate in options interface", () => {
+  it("should accept startDate and endDate in options interface", () => {
     // This is a type test - verifying the interface accepts these fields
     interface ExportOptions {
       contentType?: "text" | "email" | "both";
       exportFormat?: "pdf" | "excel" | "csv" | "json" | "txt_eml";
-      representationStartDate?: string;
-      closingDate?: string;
+      startDate?: string;
+      endDate?: string;
     }
 
     const options: ExportOptions = {
       exportFormat: "pdf",
-      representationStartDate: "2024-01-15",
-      closingDate: "2024-03-01",
+      startDate: "2024-01-15",
+      endDate: "2024-03-01",
     };
 
-    expect(options.representationStartDate).toBe("2024-01-15");
-    expect(options.closingDate).toBe("2024-03-01");
+    expect(options.startDate).toBe("2024-01-15");
+    expect(options.endDate).toBe("2024-03-01");
   });
 });

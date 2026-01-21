@@ -166,7 +166,7 @@ function BlockingTransactionsModal({
                           </span>
                         </div>
                       )}
-                      {txn.closing_date && (
+                      {txn.closed_at && (
                         <div className="flex items-center gap-1">
                           <svg
                             className="w-4 h-4 text-gray-400"
@@ -182,7 +182,7 @@ function BlockingTransactionsModal({
                             />
                           </svg>
                           <span>
-                            {new Date(txn.closing_date).toLocaleDateString()}
+                            {new Date(txn.closed_at).toLocaleDateString()}
                           </span>
                         </div>
                       )}

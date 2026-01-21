@@ -21,7 +21,7 @@ describe("TransactionDetails", () => {
     transaction_type: "purchase",
     status: "active" as const,
     sale_price: 450000,
-    closing_date: "2024-03-15",
+    closed_at: "2024-03-15",
     message_count: 10,
     attachment_count: 5,
     export_status: "not_exported" as const,

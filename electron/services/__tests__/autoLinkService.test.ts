@@ -86,8 +86,6 @@ describe("autoLinkService", () => {
                 user_id: mockUserId,
                 started_at: "2024-01-01T00:00:00Z",
                 closed_at: null,
-                representation_start_date: null,
-                closing_date: null,
               }
             : null;
         }

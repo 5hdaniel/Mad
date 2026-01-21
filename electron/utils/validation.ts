@@ -410,9 +410,10 @@ export interface ValidatedTransactionData {
   notes?: string | null;
   sale_price?: number;
   listing_price?: number;
-  representation_start_date?: string;
-  closing_date?: string;
   closing_date_verified?: number;
+  started_at?: string;
+  closed_at?: string;
+  closing_deadline?: string;
   // AI detection fields
   detection_status?: string;
   reviewed_at?: string;
@@ -446,9 +447,10 @@ export interface RawTransactionData {
   notes?: unknown;
   sale_price?: unknown;
   listing_price?: unknown;
-  representation_start_date?: unknown;
-  closing_date?: unknown;
   closing_date_verified?: unknown;
+  started_at?: unknown;
+  closed_at?: unknown;
+  closing_deadline?: unknown;
   // AI detection fields
   detection_status?: unknown;
   reviewed_at?: unknown;
@@ -603,42 +605,6 @@ export function validateTransactionData(
     validated.listing_price = price;
   }
 
-  // Representation start date (optional, must be valid date string)
-  if (
-    data.representation_start_date !== undefined &&
-    data.representation_start_date !== null
-  ) {
-    if (
-      typeof data.representation_start_date === "string" &&
-      data.representation_start_date.trim()
-    ) {
-      // Validate it's a valid date format (YYYY-MM-DD or ISO date string)
-      const dateStr = data.representation_start_date.trim();
-      if (!/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
-        throw new ValidationError(
-          "Representation start date must be in YYYY-MM-DD format",
-          "representation_start_date",
-        );
-      }
-      validated.representation_start_date = dateStr;
-    }
-  }
-
-  // Closing date (optional, must be valid date string)
-  if (data.closing_date !== undefined && data.closing_date !== null) {
-    if (typeof data.closing_date === "string" && data.closing_date.trim()) {
-      // Validate it's a valid date format (YYYY-MM-DD or ISO date string)
-      const dateStr = data.closing_date.trim();
-      if (!/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
-        throw new ValidationError(
-          "Closing date must be in YYYY-MM-DD format",
-          "closing_date",
-        );
-      }
-      validated.closing_date = dateStr;
-    }
-  }
-
   // Closing date verified flag (optional, must be 0 or 1)
   if (
     data.closing_date_verified !== undefined &&
@@ -652,6 +618,51 @@ export function validateTransactionData(
       );
     }
     validated.closing_date_verified = verified;
+  }
+
+  // Started at date (optional, must be valid date string)
+  if (data.started_at !== undefined && data.started_at !== null) {
+    if (typeof data.started_at === "string" && data.started_at.trim()) {
+      // Validate it's a valid date format (YYYY-MM-DD or ISO date string)
+      const dateStr = data.started_at.trim();
+      if (!/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
+        throw new ValidationError(
+          "Started at date must be in YYYY-MM-DD format",
+          "started_at",
+        );
+      }
+      validated.started_at = dateStr;
+    }
+  }
+
+  // Closed at date (optional, must be valid date string)
+  if (data.closed_at !== undefined && data.closed_at !== null) {
+    if (typeof data.closed_at === "string" && data.closed_at.trim()) {
+      // Validate it's a valid date format (YYYY-MM-DD or ISO date string)
+      const dateStr = data.closed_at.trim();
+      if (!/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
+        throw new ValidationError(
+          "Closed at date must be in YYYY-MM-DD format",
+          "closed_at",
+        );
+      }
+      validated.closed_at = dateStr;
+    }
+  }
+
+  // Closing deadline date (optional, must be valid date string)
+  if (data.closing_deadline !== undefined && data.closing_deadline !== null) {
+    if (typeof data.closing_deadline === "string" && data.closing_deadline.trim()) {
+      // Validate it's a valid date format (YYYY-MM-DD or ISO date string)
+      const dateStr = data.closing_deadline.trim();
+      if (!/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
+        throw new ValidationError(
+          "Closing deadline date must be in YYYY-MM-DD format",
+          "closing_deadline",
+        );
+      }
+      validated.closing_deadline = dateStr;
+    }
   }
 
   // Detection status (for AI-detected transactions)

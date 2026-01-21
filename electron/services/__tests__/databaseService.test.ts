@@ -512,7 +512,7 @@ describe("DatabaseService", () => {
           property_state: "IL",
           property_zip: "62701",
           transaction_type: "purchase" as const,
-          closing_date: "2024-12-31",
+          closed_at: "2024-12-31",
         };
 
         const mockTransaction = {
@@ -619,7 +619,7 @@ describe("DatabaseService", () => {
       it("should update transaction fields", async () => {
         await databaseService.updateTransaction("txn-123", {
           property_address: "Updated Address",
-          closing_date: "2024-12-31",
+          closed_at: "2024-12-31",
         });
 
         expect(mockStatement.run).toHaveBeenCalled();
