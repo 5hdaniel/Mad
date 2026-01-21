@@ -25,6 +25,10 @@ export interface MessageThreadCardProps {
   onUnlink?: (threadId: string) => void;
   /** Map of phone number -> contact name for resolving senders */
   contactNames?: Record<string, string>;
+  /** Audit period start date for filtering (TASK-1157) */
+  auditStartDate?: Date | string | null;
+  /** Audit period end date for filtering (TASK-1157) */
+  auditEndDate?: Date | string | null;
 }
 
 /**
@@ -202,7 +206,8 @@ function normalizePhoneForLookup(phone: string): string {
 
 /**
  * MessageThreadCard component for displaying a conversation thread.
- * Shows a header with contact info. Clicking "View" opens a popup modal.
+ * Redesigned for TASK-1156: Compact single-line layout with date range.
+ * Format: "ContactName (+1234567890)    Jan 1 - Jan 6    View Full ->"
  */
 export function MessageThreadCard({
   threadId,
@@ -211,6 +216,8 @@ export function MessageThreadCard({
   phoneNumber,
   onUnlink,
   contactNames = {},
+  auditStartDate,
+  auditEndDate,
 }: MessageThreadCardProps): React.ReactElement {
   const [showModal, setShowModal] = useState(false);
 
@@ -219,13 +226,7 @@ export function MessageThreadCard({
   const isGroup = isGroupChat(messages, contactNames);
   const avatarInitial = getAvatarInitial(contactName, phoneNumber);
 
-  // Get preview of last message
-  const lastMessage = messages[messages.length - 1];
-  const previewText = lastMessage
-    ? (lastMessage.body_text || lastMessage.body_plain || lastMessage.body || "")?.slice(0, 60)
-    : "";
-
-  // Get date range for group chats
+  // Get date range for the conversation
   const getDateRange = (): string => {
     if (messages.length === 0) return "";
     const first = messages[0];
@@ -243,101 +244,73 @@ export function MessageThreadCard({
   return (
     <>
       <div
-        className="bg-white rounded-lg border border-gray-200 mb-4 overflow-hidden hover:bg-gray-50 transition-colors"
+        className="bg-white rounded-lg border border-gray-200 mb-3 overflow-hidden hover:bg-gray-50 transition-colors"
         data-testid="message-thread-card"
         data-thread-id={threadId}
       >
-        {/* Thread Header */}
-        <div className="bg-gray-50 px-4 py-3 flex items-center gap-3">
-          {/* Avatar - Purple for group, Green for 1:1 */}
-          {isGroup ? (
-            <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 bg-purple-100">
-              <svg
-                className="w-5 h-5 text-purple-600"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-                />
-              </svg>
-            </div>
-          ) : (
-            <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-teal-600 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0">
-              {avatarInitial}
-            </div>
-          )}
-
-          <div className="min-w-0 flex-1">
+        {/* Compact single-line layout */}
+        <div className="bg-gray-50 px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            {/* Avatar - Purple for group, Green for 1:1 */}
             {isGroup ? (
-              <>
-                {/* Group chat header with inline participants */}
-                <div className="flex items-baseline gap-1 min-w-0 flex-1">
-                  <h4
-                    className="font-semibold text-gray-900 flex-shrink-0"
-                    data-testid="thread-contact-name"
-                  >
-                    Group Chat:
-                  </h4>
-                  <span
-                    className="text-xs text-gray-500 truncate"
-                    data-testid="thread-participants"
-                    title={formatParticipantNames(participants, contactNames, 999)}
-                  >
-                    {formatParticipantNames(participants, contactNames)}
-                  </span>
-                </div>
-                {/* Date range */}
-                <p className="text-xs text-gray-400 mt-1">{getDateRange()}</p>
-                {/* Preview text */}
-                {previewText && (
-                  <p
-                    className="text-sm text-gray-400 truncate mt-1"
-                    data-testid="thread-preview"
-                  >
-                    {previewText}
-                    {previewText.length >= 60 ? "..." : ""}
-                  </p>
-                )}
-              </>
+              <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 bg-purple-100">
+                <svg
+                  className="w-4 h-4 text-purple-600"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                  />
+                </svg>
+              </div>
             ) : (
-              <>
-                {/* 1:1 chat header */}
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h4
-                    className="font-semibold text-gray-900 truncate"
-                    data-testid="thread-contact-name"
-                  >
-                    {contactName || phoneNumber}
-                  </h4>
-                </div>
-                {/* Date range - consistent with group chat layout */}
-                <p className="text-xs text-gray-400 mt-1">{getDateRange()}</p>
-                {/* Preview of last message */}
-                {previewText && (
-                  <p
-                    className="text-sm text-gray-400 truncate mt-1"
-                    data-testid="thread-preview"
-                  >
-                    {previewText}
-                    {previewText.length >= 60 ? "..." : ""}
-                  </p>
-                )}
-              </>
+              <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-teal-600 rounded-full flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">
+                {avatarInitial}
+              </div>
             )}
+
+            {/* Contact info: Name (Phone) */}
+            <div className="min-w-0 flex-1">
+              {isGroup ? (
+                <span
+                  className="font-semibold text-gray-900 truncate block"
+                  data-testid="thread-contact-name"
+                  title={formatParticipantNames(participants, contactNames, 999)}
+                >
+                  Group: {formatParticipantNames(participants, contactNames, 2)}
+                </span>
+              ) : (
+                <span
+                  className="font-semibold text-gray-900"
+                  data-testid="thread-contact-name"
+                >
+                  {contactName || phoneNumber}
+                  {contactName && phoneNumber && (
+                    <span className="font-normal text-gray-500 text-sm ml-1">
+                      ({phoneNumber})
+                    </span>
+                  )}
+                </span>
+              )}
+            </div>
           </div>
 
-          <div className="flex items-center gap-2 flex-shrink-0">
+          {/* Date range and action buttons */}
+          <div className="flex items-center gap-4 flex-shrink-0">
+            <span className="text-sm text-gray-500 hidden sm:inline">
+              {getDateRange()}
+            </span>
             <button
               onClick={() => setShowModal(true)}
-              className="px-3 py-1 text-xs font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-all"
+              className="text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors whitespace-nowrap"
               data-testid="toggle-thread-button"
             >
-              View
+              View Full &rarr;
             </button>
             {onUnlink && (
               <button
@@ -372,6 +345,8 @@ export function MessageThreadCard({
           contactName={contactName}
           phoneNumber={phoneNumber}
           contactNames={contactNames}
+          auditStartDate={auditStartDate}
+          auditEndDate={auditEndDate}
           onClose={() => setShowModal(false)}
         />
       )}

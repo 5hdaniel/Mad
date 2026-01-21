@@ -33,6 +33,10 @@ interface TransactionMessagesTabProps {
   onShowSuccess?: (message: string) => void;
   /** Toast handler for error messages */
   onShowError?: (message: string) => void;
+  /** Audit period start date for filtering (TASK-1157) */
+  auditStartDate?: Date | string | null;
+  /** Audit period end date for filtering (TASK-1157) */
+  auditEndDate?: Date | string | null;
 }
 
 /**
@@ -84,6 +88,8 @@ export function TransactionMessagesTab({
   onMessagesChanged,
   onShowSuccess,
   onShowError,
+  auditStartDate,
+  auditEndDate,
 }: TransactionMessagesTabProps): React.ReactElement {
   const [showAttachModal, setShowAttachModal] = useState(false);
   const [unlinkTarget, setUnlinkTarget] = useState<{
@@ -246,30 +252,12 @@ export function TransactionMessagesTab({
   if (messages.length === 0) {
     return (
       <div>
-        {/* Header with Attach button */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-2">
-            <svg
-              className="w-5 h-5 text-blue-600"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-              />
-            </svg>
-            <h4 className="text-lg font-semibold text-gray-900">
-              Text Messages (0)
-            </h4>
-          </div>
-          {userId && transactionId && (
+        {/* Attach button */}
+        {userId && transactionId && (
+          <div className="flex justify-end mb-4">
             <button
               onClick={handleAttachClick}
-              className="px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1.5"
+              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
               data-testid="attach-messages-button"
             >
               <svg
@@ -287,8 +275,8 @@ export function TransactionMessagesTab({
               </svg>
               Attach Messages
             </button>
-          )}
-        </div>
+          </div>
+        )}
 
         <div className="text-center py-12">
           <svg
@@ -326,35 +314,12 @@ export function TransactionMessagesTab({
 
   return (
     <div>
-      {/* Header with Attach button */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-2">
-          <svg
-            className="w-5 h-5 text-blue-600"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-            />
-          </svg>
-          <h4 className="text-lg font-semibold text-gray-900">
-            Text Messages ({messages.length})
-          </h4>
-          {sortedThreads.length > 1 && (
-            <span className="text-sm text-gray-500">
-              in {sortedThreads.length} conversations
-            </span>
-          )}
-        </div>
-        {userId && transactionId && (
+      {/* Attach button */}
+      {userId && transactionId && (
+        <div className="flex justify-end mb-4">
           <button
             onClick={handleAttachClick}
-            className="px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1.5"
+            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
             data-testid="attach-messages-button"
           >
             <svg
@@ -372,8 +337,8 @@ export function TransactionMessagesTab({
             </svg>
             Attach Messages
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Thread list */}
       <div className="space-y-4" data-testid="message-thread-list">
@@ -392,6 +357,8 @@ export function TransactionMessagesTab({
               contactName={contactName}
               contactNames={contactNames}
               onUnlink={userId && transactionId ? handleUnlinkClick : undefined}
+              auditStartDate={auditStartDate}
+              auditEndDate={auditEndDate}
             />
           );
         })}

@@ -1,140 +1,178 @@
 /**
- * TransactionDetailsTab Component
- * Details tab content showing transaction info and communications
+ * TransactionDetailsTab Component (renamed to Overview)
+ * Overview tab content showing audit period dates, AI suggestions, and key contacts summary.
+ * Email threads moved to TransactionEmailsTab as part of TASK-1152.
  */
 import React from "react";
 import type { Transaction } from "@/types";
-import type { Communication } from "../types";
+import type { ContactAssignment, ResolvedSuggestedContact } from "../types";
 
 interface TransactionDetailsTabProps {
   transaction: Transaction;
-  communications: Communication[];
+  contactAssignments: ContactAssignment[];
   loading: boolean;
-  unlinkingCommId: string | null;
-  onViewEmail: (comm: Communication) => void;
-  onShowUnlinkConfirm: (comm: Communication) => void;
+  onEditContacts?: () => void;
+  /** AI suggested contacts to review */
+  resolvedSuggestions?: ResolvedSuggestedContact[];
+  /** ID of contact currently being processed */
+  processingContactId?: string | null;
+  /** Whether all suggestions are being processed */
+  processingAll?: boolean;
+  /** Callback when a suggestion is accepted */
+  onAcceptSuggestion?: (suggestion: ResolvedSuggestedContact) => void;
+  /** Callback when a suggestion is rejected */
+  onRejectSuggestion?: (suggestion: ResolvedSuggestedContact) => void;
+  /** Callback to accept all suggestions */
+  onAcceptAll?: () => void;
 }
 
 export function TransactionDetailsTab({
   transaction,
-  communications,
+  contactAssignments,
   loading,
-  unlinkingCommId,
-  onViewEmail,
-  onShowUnlinkConfirm,
+  onEditContacts,
+  resolvedSuggestions = [],
+  processingContactId,
+  processingAll = false,
+  onAcceptSuggestion,
+  onRejectSuggestion,
+  onAcceptAll,
 }: TransactionDetailsTabProps): React.ReactElement {
   return (
     <>
-      {/* Transaction Info */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        <div className="bg-gray-50 p-4 rounded-lg">
-          <p className="text-sm text-gray-600 mb-1">Start Date</p>
-          <p className="text-xl font-bold text-gray-900">
-            {transaction.started_at
-              ? new Date(transaction.started_at).toLocaleDateString(undefined, { timeZone: "UTC" })
-              : "N/A"}
-          </p>
+      {/* AI Suggested Contacts Section - only show if there are suggestions */}
+      {resolvedSuggestions.length > 0 && onAcceptSuggestion && onRejectSuggestion && onAcceptAll && (
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <svg
+                className="w-5 h-5 text-purple-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+                />
+              </svg>
+              <h4 className="text-lg font-semibold text-gray-900">
+                AI Suggested Contacts
+              </h4>
+              <span className="inline-block px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded-full">
+                {resolvedSuggestions.length} suggestion{resolvedSuggestions.length !== 1 ? "s" : ""}
+              </span>
+            </div>
+            <button
+              onClick={onAcceptAll}
+              disabled={processingAll || !!processingContactId}
+              className="px-3 py-1.5 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+            >
+              {processingAll ? (
+                <>
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Accept All
+                </>
+              )}
+            </button>
+          </div>
+          <div className="space-y-3">
+            {resolvedSuggestions.map((suggestion) => (
+              <SuggestedContactCard
+                key={suggestion.contact_id}
+                suggestion={suggestion}
+                isProcessing={processingContactId === suggestion.contact_id}
+                isDisabled={processingAll}
+                onAccept={() => onAcceptSuggestion(suggestion)}
+                onReject={() => onRejectSuggestion(suggestion)}
+              />
+            ))}
+          </div>
         </div>
-        <div className="bg-gray-50 p-4 rounded-lg">
-          <p className="text-sm text-gray-600 mb-1">Closing Date</p>
-          <p className="text-xl font-bold text-gray-900">
-            {transaction.closing_deadline
-              ? new Date(transaction.closing_deadline).toLocaleDateString(undefined, { timeZone: "UTC" })
-              : "N/A"}
-          </p>
-        </div>
-        <div className="bg-gray-50 p-4 rounded-lg">
-          <p className="text-sm text-gray-600 mb-1">End Date</p>
-          <p className="text-xl font-bold text-gray-900">
-            {transaction.closed_at
-              ? new Date(transaction.closed_at).toLocaleDateString(undefined, { timeZone: "UTC" })
-              : "Ongoing"}
-          </p>
+      )}
+
+      {/* Audit Period Section */}
+      <div className="mb-8">
+        <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+          <svg
+            className="w-5 h-5 text-green-600"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+            />
+          </svg>
+          Audit Period
+        </h4>
+        <div className="grid grid-cols-3 gap-4">
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <p className="text-sm text-gray-600 mb-1">Start Date</p>
+            <p className="text-xl font-bold text-gray-900">
+              {transaction.started_at
+                ? new Date(transaction.started_at).toLocaleDateString(undefined, { timeZone: "UTC" })
+                : "N/A"}
+            </p>
+          </div>
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <p className="text-sm text-gray-600 mb-1">Closing Date</p>
+            <p className="text-xl font-bold text-gray-900">
+              {transaction.closing_deadline
+                ? new Date(transaction.closing_deadline).toLocaleDateString(undefined, { timeZone: "UTC" })
+                : "N/A"}
+            </p>
+          </div>
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <p className="text-sm text-gray-600 mb-1">End Date</p>
+            <p className="text-xl font-bold text-gray-900">
+              {transaction.closed_at
+                ? new Date(transaction.closed_at).toLocaleDateString(undefined, { timeZone: "UTC" })
+                : "Ongoing"}
+            </p>
+          </div>
         </div>
       </div>
 
-      {/* Communications */}
-      {communications.length > 0 && (
-        <div>
-          <h4 className="text-lg font-semibold text-gray-900 mb-3">
-            Related Emails ({communications.length})
+      {/* Key Contacts Section */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h4 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+            <svg
+              className="w-5 h-5 text-blue-600"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+              />
+            </svg>
+            Key Contacts
           </h4>
-          {loading ? (
-            <div className="text-center py-8">
-              <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {communications.map((comm) => (
-                <CommunicationCard
-                  key={comm.id}
-                  communication={comm}
-                  isUnlinking={unlinkingCommId === comm.id}
-                  onClick={() => onViewEmail(comm)}
-                  onUnlink={() => onShowUnlinkConfirm(comm)}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-    </>
-  );
-}
-
-// Sub-component for individual communication cards
-function CommunicationCard({
-  communication,
-  isUnlinking,
-  onClick,
-  onUnlink,
-}: {
-  communication: Communication;
-  isUnlinking: boolean;
-  onClick: () => void;
-  onUnlink: () => void;
-}) {
-  return (
-    <div
-      className="bg-gray-50 border border-gray-200 rounded-lg p-4 cursor-pointer hover:bg-gray-100 hover:border-gray-300 transition-colors"
-      onClick={onClick}
-    >
-      <div className="flex items-start justify-between mb-2">
-        <h5 className="font-semibold text-gray-900 flex-1 pr-4">
-          {communication.subject || "(No Subject)"}
-        </h5>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <span className="text-xs text-gray-500">
-            {communication.sent_at
-              ? new Date(communication.sent_at).toLocaleDateString()
-              : "Unknown date"}
-          </span>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onUnlink();
-            }}
-            disabled={isUnlinking}
-            className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
-            title="Remove this email from transaction"
-          >
-            {isUnlinking ? (
-              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                ></circle>
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                ></path>
-              </svg>
-            ) : (
+          {onEditContacts && (
+            <button
+              onClick={onEditContacts}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
+            >
               <svg
                 className="w-4 h-4"
                 fill="none"
@@ -145,16 +183,176 @@ function CommunicationCard({
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
-                  d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
+                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
                 />
+              </svg>
+              Edit Contacts
+            </button>
+          )}
+        </div>
+        {loading ? (
+          <div className="text-center py-8">
+            <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+          </div>
+        ) : contactAssignments.length === 0 ? (
+          <div className="bg-gray-50 rounded-lg p-6 text-center">
+            <svg
+              className="w-12 h-12 text-gray-300 mx-auto mb-3"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+              />
+            </svg>
+            <p className="text-gray-600 mb-1">No contacts assigned</p>
+            <p className="text-sm text-gray-500">
+              Click &quot;Edit Contacts&quot; to add contacts to this transaction
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {contactAssignments.map((assignment) => (
+              <ContactSummaryCard key={assignment.id} assignment={assignment} />
+            ))}
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+// Sub-component for contact summary cards in Overview
+function ContactSummaryCard({
+  assignment,
+}: {
+  assignment: ContactAssignment;
+}) {
+  const role = assignment.specific_role || assignment.role || "Unknown Role";
+  const name = assignment.contact_name || "Unknown Contact";
+  const email = assignment.contact_email;
+  const phone = assignment.contact_phone;
+  const company = assignment.contact_company;
+  const isPrimary = assignment.is_primary === 1;
+
+  return (
+    <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 flex items-center justify-between">
+      <div className="flex items-center gap-3">
+        {/* Avatar */}
+        <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0">
+          {name.charAt(0).toUpperCase()}
+        </div>
+        {/* Info */}
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-gray-900">{name}</span>
+            {isPrimary && (
+              <span className="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">
+                Primary
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 text-sm text-gray-600">
+            {email && <span>{email}</span>}
+            {email && phone && <span className="text-gray-300">|</span>}
+            {phone && <span>{phone}</span>}
+          </div>
+          {company && (
+            <span className="text-xs text-gray-500">{company}</span>
+          )}
+        </div>
+      </div>
+      {/* Role badge */}
+      <span className="inline-block px-3 py-1 bg-green-100 text-green-800 text-xs font-semibold rounded-full">
+        {role}
+      </span>
+    </div>
+  );
+}
+
+// Sub-component for AI suggested contact cards
+function SuggestedContactCard({
+  suggestion,
+  isProcessing,
+  isDisabled,
+  onAccept,
+  onReject,
+}: {
+  suggestion: ResolvedSuggestedContact;
+  isProcessing: boolean;
+  isDisabled: boolean;
+  onAccept: () => void;
+  onReject: () => void;
+}) {
+  const contact = suggestion.contact;
+  const displayName = contact?.display_name || contact?.name || "Unknown Contact";
+  const displayEmail = contact?.email || "";
+  const displayCompany = contact?.company || "";
+
+  return (
+    <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+      <div className="flex items-start justify-between">
+        <div className="flex-1">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="inline-block px-3 py-1 bg-purple-100 text-purple-800 text-xs font-semibold rounded-full">
+              {suggestion.role}
+            </span>
+            {suggestion.is_primary && (
+              <span className="inline-block px-2 py-1 bg-blue-100 text-blue-800 text-xs font-semibold rounded-full">
+                Primary
+              </span>
+            )}
+            <span className="inline-block px-2 py-0.5 bg-yellow-100 text-yellow-800 text-xs font-medium rounded-full">
+              AI Suggested
+            </span>
+          </div>
+          <h5 className="font-semibold text-gray-900">{displayName}</h5>
+          {displayEmail && (
+            <p className="text-sm text-gray-600 mt-1">{displayEmail}</p>
+          )}
+          {displayCompany && (
+            <p className="text-sm text-gray-500 mt-0.5">{displayCompany}</p>
+          )}
+          {suggestion.notes && (
+            <p className="text-sm text-gray-700 mt-2 italic">
+              Note: {suggestion.notes}
+            </p>
+          )}
+        </div>
+        <div className="flex items-center gap-2 ml-4">
+          <button
+            onClick={onAccept}
+            disabled={isProcessing || isDisabled}
+            className="p-2 text-green-600 hover:bg-green-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Accept suggestion"
+          >
+            {isProcessing ? (
+              <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            ) : (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             )}
           </button>
+          <button
+            onClick={onReject}
+            disabled={isProcessing || isDisabled}
+            className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Reject suggestion"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
       </div>
-      <p className="text-sm text-gray-600 mb-2">
-        From: {communication.sender || "Unknown"}
-      </p>
     </div>
   );
 }

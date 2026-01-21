@@ -405,6 +405,7 @@ class FolderExportService {
 <body>
   <div class="header">
     <h1>Transaction Audit Summary</h1>
+    <div class="subtitle">Audit Period: ${formatDate(transaction.started_at) || "Not set"} - ${formatDate(transaction.closed_at) || "Not set"}</div>
     <div class="subtitle">Generated on ${formatDate(new Date())}</div>
   </div>
 
@@ -1917,7 +1918,8 @@ class FolderExportService {
   async exportTransactionToCombinedPDF(
     transaction: Transaction,
     communications: Communication[],
-    outputPath: string
+    outputPath: string,
+    summaryOnly: boolean = false
   ): Promise<string> {
     // Create temp folder for individual PDFs
     const tempDir = app.getPath("temp");
@@ -1973,17 +1975,22 @@ class FolderExportService {
         // Ignore - will fall back to "You"
       }
 
-      // Generate Summary PDF
+      // Generate Summary PDF (always included - has report + indexes)
       await this.generateSummaryPDF(transaction, communications, tempFolder, phoneNameMap);
 
-      // Generate individual email PDFs
-      for (let i = 0; i < emails.length; i++) {
-        await this.exportEmailToPDF(emails[i], i + 1, emailsPath);
-      }
+      // For summaryOnly mode, skip full content PDFs (emails and texts)
+      if (!summaryOnly) {
+        // Generate individual email PDFs
+        for (let i = 0; i < emails.length; i++) {
+          await this.exportEmailToPDF(emails[i], i + 1, emailsPath);
+        }
 
-      // Generate text conversation PDFs
-      if (texts.length > 0) {
-        await this.exportTextConversations(texts, textsPath, phoneNameMap, userName, userEmail);
+        // Generate text conversation PDFs
+        if (texts.length > 0) {
+          await this.exportTextConversations(texts, textsPath, phoneNameMap, userName, userEmail);
+        }
+      } else {
+        logService.info("[Folder Export] Summary-only mode: skipping full content PDFs", "FolderExport");
       }
 
       // Collect all PDF files in order: Summary, then emails, then texts

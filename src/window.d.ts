@@ -1077,6 +1077,9 @@ interface MainAPI {
         contentType?: "text" | "email" | "both";
         representationStartDate?: string;
         closingDate?: string;
+        startDate?: string;
+        endDate?: string;
+        summaryOnly?: boolean;
       },
     ) => Promise<{
       success: boolean;

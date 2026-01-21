@@ -28,16 +28,16 @@ import {
   TransactionHeader,
   TransactionTabs,
   TransactionDetailsTab,
-  TransactionContactsTab,
+  TransactionEmailsTab,
   TransactionMessagesTab,
   TransactionAttachmentsTab,
   ExportSuccessMessage,
-  ArchivePromptModal,
   DeleteConfirmModal,
   UnlinkEmailModal,
   EmailViewModal,
   RejectReasonModal,
   EditContactsModal,
+  groupMessagesByThread,
 } from "./transactionDetailsModule";
 import type { AutoLinkResult } from "./transactionDetailsModule/components/modals/EditContactsModal";
 
@@ -145,10 +145,15 @@ function TransactionDetails({
     });
   }, [communications]);
 
+  // Calculate conversation count (number of threads, not individual messages)
+  const conversationCount = useMemo(() => {
+    if (textMessages.length === 0) return 0;
+    return groupMessagesByThread(textMessages).size;
+  }, [textMessages]);
+
   // Modal states
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
   const [exportSuccess, setExportSuccess] = useState<string | null>(null);
-  const [showArchivePrompt, setShowArchivePrompt] = useState<boolean>(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean>(false);
   const [showRejectReasonModal, setShowRejectReasonModal] = useState<boolean>(false);
   const [rejectReason, setRejectReason] = useState<string>("");
@@ -176,20 +181,7 @@ function TransactionDetails({
     } catch (err) {
       console.error("Failed to refresh transaction after export:", err);
     }
-
-    if (transaction.status === "active") {
-      setShowArchivePrompt(true);
-    }
-  };
-
-  const handleArchive = async (): Promise<void> => {
-    try {
-      await window.api.transactions.update(transaction.id, { status: "closed" });
-      setShowArchivePrompt(false);
-      onTransactionUpdated?.();
-    } catch (err) {
-      console.error("Failed to archive transaction:", err);
-    }
+    // Note: Close transaction prompt is now handled within ExportModal (step 4)
   };
 
   const handleDelete = async (): Promise<void> => {
@@ -314,17 +306,31 @@ function TransactionDetails({
         {/* Tabs */}
         <TransactionTabs
           activeTab={activeTab}
-          contactCount={contactAssignments.length}
-          messageCount={textMessages.length}
+          conversationCount={conversationCount}
+          emailCount={emailCommunications.length}
           attachmentCount={attachmentCount}
           onTabChange={setActiveTab}
         />
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
-          {activeTab === "details" && (
+          {activeTab === "overview" && (
             <TransactionDetailsTab
               transaction={transaction}
+              contactAssignments={contactAssignments}
+              loading={loading}
+              onEditContacts={() => setShowEditContactsModal(true)}
+              resolvedSuggestions={resolvedSuggestions}
+              processingContactId={processingContactId}
+              processingAll={processingAll}
+              onAcceptSuggestion={handleAcceptSuggestionWithCallbacks}
+              onRejectSuggestion={handleRejectSuggestionWithCallbacks}
+              onAcceptAll={handleAcceptAllWithCallbacks}
+            />
+          )}
+
+          {activeTab === "emails" && (
+            <TransactionEmailsTab
               communications={emailCommunications}
               loading={loading}
               unlinkingCommId={unlinkingCommId}
@@ -333,19 +339,6 @@ function TransactionDetails({
             />
           )}
 
-          {activeTab === "contacts" && (
-            <TransactionContactsTab
-              resolvedSuggestions={resolvedSuggestions}
-              contactAssignments={contactAssignments}
-              loading={loading}
-              processingContactId={processingContactId}
-              processingAll={processingAll}
-              onAcceptSuggestion={handleAcceptSuggestionWithCallbacks}
-              onRejectSuggestion={handleRejectSuggestionWithCallbacks}
-              onAcceptAll={handleAcceptAllWithCallbacks}
-              onEditContacts={() => setShowEditContactsModal(true)}
-            />
-          )}
 
           {activeTab === "messages" && (
             <TransactionMessagesTab
@@ -358,6 +351,8 @@ function TransactionDetails({
               onMessagesChanged={refreshMessages}
               onShowSuccess={showSuccess}
               onShowError={showError}
+              auditStartDate={transaction.started_at}
+              auditEndDate={transaction.closed_at}
             />
           )}
 
@@ -378,14 +373,6 @@ function TransactionDetails({
           userId={transaction.user_id}
           onClose={() => setShowExportModal(false)}
           onExportComplete={handleExportComplete}
-        />
-      )}
-
-      {/* Archive Prompt */}
-      {showArchivePrompt && (
-        <ArchivePromptModal
-          onKeepActive={() => setShowArchivePrompt(false)}
-          onArchive={handleArchive}
         />
       )}
 
