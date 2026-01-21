@@ -16,7 +16,7 @@ interface UseTransactionTabsResult {
  * Hook for managing transaction details tab state
  */
 export function useTransactionTabs(
-  initialTab: TransactionTab = "details"
+  initialTab: TransactionTab = "overview"
 ): UseTransactionTabsResult {
   const [activeTab, setActiveTab] = useState<TransactionTab>(initialTab);
 
@@ -27,7 +27,7 @@ export function useTransactionTabs(
   return {
     activeTab,
     setActiveTab: handleSetActiveTab,
-    isDetailsTab: activeTab === "details",
+    isDetailsTab: activeTab === "overview",
     isContactsTab: activeTab === "contacts",
   };
 }
