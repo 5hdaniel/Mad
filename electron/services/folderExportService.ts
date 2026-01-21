@@ -406,6 +406,9 @@ class FolderExportService {
   <div class="header">
     <h1>Transaction Audit Summary</h1>
     <div class="subtitle">Generated on ${formatDate(new Date())}</div>
+    <div class="subtitle" style="margin-top: 4px; font-size: 12px;">
+      Audit Period: ${formatDate(transaction.started_at) || "Not set"} - ${formatDate(transaction.closed_at) || "Not set"}
+    </div>
   </div>
 
   <div class="property-info">
