@@ -130,7 +130,10 @@ function getThreadParticipants(messages: MessageLike[], selectedContact: string)
     }
   }
 
-  // Fallback: collect from/to from individual messages (legacy behavior)
+  // Fallback: use message direction to identify the OTHER person
+  // For 1:1 chats, we need to identify who is NOT the user
+  // - Inbound messages: `from` is the other person
+  // - Outbound messages: `to` is the other person
   const participants = new Set<string>();
 
   for (const msg of messages) {
@@ -140,10 +143,20 @@ function getThreadParticipants(messages: MessageLike[], selectedContact: string)
           ? JSON.parse(msg.participants)
           : msg.participants;
 
-        if (parsed.from) participants.add(parsed.from);
-        if (parsed.to) {
+        // Use message direction to identify the OTHER person
+        if (msg.direction === 'inbound' && parsed.from) {
+          const from = parsed.from;
+          if (from !== 'me' && from !== 'unknown') {
+            participants.add(from);
+          }
+        }
+        if (msg.direction === 'outbound' && parsed.to) {
           const toList = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
-          toList.forEach((p: string) => participants.add(p));
+          toList.forEach((p: string) => {
+            if (p && p !== 'me' && p !== 'unknown') {
+              participants.add(p);
+            }
+          });
         }
       }
     } catch {
@@ -151,9 +164,15 @@ function getThreadParticipants(messages: MessageLike[], selectedContact: string)
     }
   }
 
-  // Remove the selected contact and "me" from the list
+  // Remove the selected contact from the list
   participants.delete(selectedContact);
-  participants.delete('me');
+  // Also try normalized phone comparison
+  const selectedNormalized = normalizePhone(selectedContact);
+  for (const p of participants) {
+    if (normalizePhone(p) === selectedNormalized) {
+      participants.delete(p);
+    }
+  }
 
   return Array.from(participants);
 }
