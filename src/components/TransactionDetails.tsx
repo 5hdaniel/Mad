@@ -314,6 +314,7 @@ function TransactionDetails({
               transaction={transaction}
               contactAssignments={contactAssignments}
               loading={loading}
+              onEditContacts={() => setShowEditContactsModal(true)}
             />
           )}
 
