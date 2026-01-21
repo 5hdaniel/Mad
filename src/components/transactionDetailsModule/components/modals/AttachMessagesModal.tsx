@@ -623,9 +623,15 @@ export function AttachMessagesModal({
                 <div className="grid gap-3">
                   {sortedThreads.map(([threadId, messages]) => {
                     const isSelected = selectedThreadIds.has(threadId);
-                    const isGroup = isGroupChat(messages);
                     const otherParticipants = getThreadParticipants(messages, selectedContact || "");
                     const dateRange = getThreadDateRange(messages);
+
+                    // Resolve names and deduplicate (same person may have multiple phones)
+                    const uniqueParticipantNames = [...new Set(
+                      otherParticipants.map(p => resolveParticipantName(p))
+                    )];
+                    // It's a group chat if there are multiple unique participants (not the same person with 2 phones)
+                    const isGroup = uniqueParticipantNames.length > 1;
 
                     return (
                       <div
@@ -679,16 +685,16 @@ export function AttachMessagesModal({
                               </h4>
                               {isGroup && (
                                 <span className="inline-block px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded-full">
-                                  {otherParticipants.length + 1} people
+                                  {uniqueParticipantNames.length + 1} people
                                 </span>
                               )}
                             </div>
 
                             {/* Other participants in group */}
-                            {isGroup && otherParticipants.length > 0 && (
+                            {isGroup && uniqueParticipantNames.length > 0 && (
                               <p className="text-xs text-gray-500 mt-1">
-                                Also includes: {otherParticipants.slice(0, 3).map(p => resolveParticipantName(p)).join(", ")}
-                                {otherParticipants.length > 3 && ` +${otherParticipants.length - 3} more`}
+                                Also includes: {uniqueParticipantNames.slice(0, 3).join(", ")}
+                                {uniqueParticipantNames.length > 3 && ` +${uniqueParticipantNames.length - 3} more`}
                               </p>
                             )}
 
