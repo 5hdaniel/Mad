@@ -138,6 +138,14 @@ interface ChatMemberRow {
 }
 
 /**
+ * Chat account info - maps chat to user's identifier (phone/Apple ID)
+ */
+interface ChatAccountRow {
+  chat_id: number;
+  account_login: string | null;
+}
+
+/**
  * Raw attachment from macOS Messages database (TASK-1012)
  */
 interface RawMacAttachment {
@@ -420,6 +428,31 @@ class MacOSMessagesImportService {
 
         await yieldToEventLoop();
 
+        // Query chat account_login to get user's identifier (phone/Apple ID) for each chat
+        // This tells us which of the user's identifiers they're using in each conversation
+        const chatAccountRows = await dbAll<ChatAccountRow>(`
+          SELECT
+            ROWID as chat_id,
+            account_login
+          FROM chat
+          WHERE account_login IS NOT NULL
+        `);
+
+        // Build a map of chat_id -> user's account_login (phone number or Apple ID)
+        const chatAccountMap = new Map<number, string>();
+        for (const row of chatAccountRows) {
+          if (row.account_login) {
+            chatAccountMap.set(row.chat_id, row.account_login);
+          }
+        }
+
+        logService.info(
+          `Loaded ${chatAccountMap.size} chat account mappings`,
+          MacOSMessagesImportService.SERVICE_NAME
+        );
+
+        await yieldToEventLoop();
+
         // Fetch messages using cursor-based pagination to avoid loading all 600K+ at once
         // This prevents the UI from freezing during the initial query
         const allMessages: RawMacMessage[] = [];
@@ -522,7 +555,7 @@ class MacOSMessagesImportService {
         );
 
         // Store messages to app database
-        const messageResult = await this.storeMessages(userId, allMessages, chatMembersMap, onProgress);
+        const messageResult = await this.storeMessages(userId, allMessages, chatMembersMap, chatAccountMap, onProgress);
 
         // Store attachments (TASK-1012)
         const attachmentResult = await this.storeAttachments(userId, attachments, messageResult.messageIdMap, onProgress);
@@ -608,6 +641,7 @@ class MacOSMessagesImportService {
     userId: string,
     messages: RawMacMessage[],
     chatMembersMap: Map<number, string[]>,
+    chatAccountMap: Map<number, string>,
     onProgress?: ImportProgressCallback
   ): Promise<{ stored: number; skipped: number; nullThreadIdCount: number; messageIdMap: Map<string, string> }> {
     // Map of macOS message GUID -> internal message ID (TASK-1012)
@@ -763,10 +797,15 @@ class MacOSMessagesImportService {
           // Get actual chat members for this chat (for group chats)
           const chatMembers = msg.chat_id ? chatMembersMap.get(msg.chat_id) : undefined;
 
+          // Get user's identifier for this chat (phone number or Apple ID like "magicauditwa")
+          // This is what the user actually appears as in the conversation
+          const userAccountLogin = msg.chat_id ? chatAccountMap.get(msg.chat_id) : undefined;
+
           // Build participants JSON with actual chat members
+          // For outbound messages, use the user's actual identifier instead of "me"
           const participantsObj = {
-            from: msg.is_from_me === 1 ? "me" : sanitizedHandle,
-            to: msg.is_from_me === 1 ? [sanitizedHandle] : ["me"],
+            from: msg.is_from_me === 1 ? (userAccountLogin || "me") : sanitizedHandle,
+            to: msg.is_from_me === 1 ? [sanitizedHandle] : [(userAccountLogin || "me")],
             // Include actual chat members for group chats (more than 1 member)
             ...(chatMembers && chatMembers.length > 1 ? { chat_members: chatMembers } : {}),
           };
