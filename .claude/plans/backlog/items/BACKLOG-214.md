@@ -1,6 +1,6 @@
 # BACKLOG-214: Auto-Link Communications Not Working (TASK-1031 Regression)
 
-**Status:** Pending
+**Status:** Needs Verification
 **Priority:** HIGH
 **Category:** bug/regression
 **Created:** 2026-01-12
