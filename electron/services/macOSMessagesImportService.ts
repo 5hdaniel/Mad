@@ -1260,7 +1260,8 @@ class MacOSMessagesImportService {
     });
 
     // Delete attachments first (in one go - usually much fewer than messages)
-    const attachResult = db
+    // Delete by message_id for currently-linked attachments
+    const attachResult1 = db
       .prepare(
         `
       DELETE FROM attachments
@@ -1271,8 +1272,22 @@ class MacOSMessagesImportService {
       )
       .run(userId);
 
+    // Also delete orphaned attachments by external_message_id
+    // This catches attachments from previous imports where message_id is now stale
+    const attachResult2 = db
+      .prepare(
+        `
+      DELETE FROM attachments
+      WHERE external_message_id IN (
+        SELECT external_id FROM messages WHERE user_id = ? AND external_id IS NOT NULL
+      )
+    `
+      )
+      .run(userId);
+
+    const attachmentsDeleted = attachResult1.changes + attachResult2.changes;
     logService.info(
-      `Deleted ${attachResult.changes} attachments`,
+      `Deleted ${attachmentsDeleted} attachments (${attachResult1.changes} by message_id, ${attachResult2.changes} by external_id)`,
       MacOSMessagesImportService.SERVICE_NAME
     );
 
