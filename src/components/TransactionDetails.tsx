@@ -32,7 +32,6 @@ import {
   TransactionMessagesTab,
   TransactionAttachmentsTab,
   ExportSuccessMessage,
-  ArchivePromptModal,
   DeleteConfirmModal,
   UnlinkEmailModal,
   EmailViewModal,
@@ -148,7 +147,6 @@ function TransactionDetails({
   // Modal states
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
   const [exportSuccess, setExportSuccess] = useState<string | null>(null);
-  const [showArchivePrompt, setShowArchivePrompt] = useState<boolean>(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean>(false);
   const [showRejectReasonModal, setShowRejectReasonModal] = useState<boolean>(false);
   const [rejectReason, setRejectReason] = useState<string>("");
@@ -176,20 +174,7 @@ function TransactionDetails({
     } catch (err) {
       console.error("Failed to refresh transaction after export:", err);
     }
-
-    if (transaction.status === "active") {
-      setShowArchivePrompt(true);
-    }
-  };
-
-  const handleArchive = async (): Promise<void> => {
-    try {
-      await window.api.transactions.update(transaction.id, { status: "closed" });
-      setShowArchivePrompt(false);
-      onTransactionUpdated?.();
-    } catch (err) {
-      console.error("Failed to archive transaction:", err);
-    }
+    // Note: Close transaction prompt is now handled within ExportModal (step 4)
   };
 
   const handleDelete = async (): Promise<void> => {
@@ -378,14 +363,6 @@ function TransactionDetails({
           userId={transaction.user_id}
           onClose={() => setShowExportModal(false)}
           onExportComplete={handleExportComplete}
-        />
-      )}
-
-      {/* Archive Prompt */}
-      {showArchivePrompt && (
-        <ArchivePromptModal
-          onKeepActive={() => setShowArchivePrompt(false)}
-          onArchive={handleArchive}
         />
       )}
 
