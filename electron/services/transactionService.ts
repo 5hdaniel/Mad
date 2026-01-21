@@ -1504,8 +1504,9 @@ class TransactionService {
 
   /**
    * Get unlinked emails for a user
+   * Returns emails from communications table that have no transaction_id
    */
-  async getUnlinkedEmails(userId: string): Promise<Message[]> {
+  async getUnlinkedEmails(userId: string): Promise<Communication[]> {
     const emails = await databaseService.getUnlinkedEmails(userId);
 
     await logService.info(
