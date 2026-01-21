@@ -275,7 +275,7 @@ export function TransactionMessagesTab({
           {userId && transactionId && (
             <button
               onClick={handleAttachClick}
-              className="px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1.5"
+              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
               data-testid="attach-messages-button"
             >
               <svg
@@ -360,7 +360,7 @@ export function TransactionMessagesTab({
         {userId && transactionId && (
           <button
             onClick={handleAttachClick}
-            className="px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1.5"
+            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
             data-testid="attach-messages-button"
           >
             <svg
