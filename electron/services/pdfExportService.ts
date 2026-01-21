@@ -896,15 +896,15 @@ class PDFExportService {
         html += '<a name="thread-' + threadIdx + '"></a>';
         html += '<div class="header-row">';
         html += '<div>';
-        // Contact name in bold, with phone below
-        html += '<div class="subject-line">Conversation with ' + escapeHtml(contact.name || contact.phone);
+        // Group chats show "Group Chat", 1:1 shows "Conversation with [name]"
         if (isGroupChat) {
-          html += ' (Group Chat)';
-        }
-        html += '</div>';
-        // Show phone on separate line if we have a contact name
-        if (contact.name) {
-          html += '<div class="meta-info">' + escapeHtml(contact.phone) + '</div>';
+          html += '<div class="subject-line">Group Chat</div>';
+        } else {
+          html += '<div class="subject-line">Conversation with ' + escapeHtml(contact.name || contact.phone) + '</div>';
+          // Show phone on separate line if we have a contact name (1:1 only)
+          if (contact.name) {
+            html += '<div class="meta-info">' + escapeHtml(contact.phone) + '</div>';
+          }
         }
         html += '<div class="meta-info">' + msgs.length + ' message' + (msgs.length === 1 ? '' : 's') + '</div>';
         html += '</div>';

@@ -74,9 +74,18 @@ const DELETE_BATCH_SIZE = 5000; // Messages per delete batch (larger for efficie
 const YIELD_INTERVAL = 1; // Yield every N batches (reduced from 2 for better UI responsiveness)
 const QUERY_BATCH_SIZE = 10000; // Messages per query batch (for pagination)
 
-// Attachment constants (TASK-1012)
-const SUPPORTED_IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".gif", ".heic"];
-const MAX_ATTACHMENT_SIZE = 50 * 1024 * 1024; // 50MB max per attachment
+// Attachment constants (TASK-1012, expanded TASK-1122 to include videos)
+const SUPPORTED_IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".gif", ".heic", ".webp", ".bmp", ".tiff", ".tif"];
+const SUPPORTED_VIDEO_EXTENSIONS = [".mp4", ".mov", ".m4v", ".avi", ".mkv", ".webm"];
+const SUPPORTED_AUDIO_EXTENSIONS = [".mp3", ".m4a", ".aac", ".wav", ".caf"]; // caf = Core Audio Format (iOS voice messages)
+const SUPPORTED_DOCUMENT_EXTENSIONS = [".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".rtf"];
+const ALL_SUPPORTED_EXTENSIONS = [
+  ...SUPPORTED_IMAGE_EXTENSIONS,
+  ...SUPPORTED_VIDEO_EXTENSIONS,
+  ...SUPPORTED_AUDIO_EXTENSIONS,
+  ...SUPPORTED_DOCUMENT_EXTENSIONS,
+];
+const MAX_ATTACHMENT_SIZE = 100 * 1024 * 1024; // 100MB max per attachment (increased for videos)
 const ATTACHMENTS_DIR = "message-attachments"; // Directory name in app data
 
 /**
@@ -161,7 +170,17 @@ interface RawMacAttachment {
 }
 
 /**
- * Check if a file extension is a supported image type
+ * Check if a file extension is a supported media type
+ * TASK-1122: Expanded to include videos, audio, and documents
+ */
+function isSupportedMediaType(filename: string | null): boolean {
+  if (!filename) return false;
+  const ext = path.extname(filename).toLowerCase();
+  return ALL_SUPPORTED_EXTENSIONS.includes(ext);
+}
+
+/**
+ * Check if a file extension is a supported image type (for inline display)
  */
 function isSupportedImageType(filename: string | null): boolean {
   if (!filename) return false;
@@ -171,15 +190,44 @@ function isSupportedImageType(filename: string | null): boolean {
 
 /**
  * Get MIME type from filename
+ * TASK-1122: Expanded to support videos, audio, and documents
  */
 function getMimeTypeFromFilename(filename: string): string {
   const ext = path.extname(filename).toLowerCase();
   const mimeTypes: Record<string, string> = {
+    // Images
     ".jpg": "image/jpeg",
     ".jpeg": "image/jpeg",
     ".png": "image/png",
     ".gif": "image/gif",
     ".heic": "image/heic",
+    ".webp": "image/webp",
+    ".bmp": "image/bmp",
+    ".tiff": "image/tiff",
+    ".tif": "image/tiff",
+    // Videos
+    ".mp4": "video/mp4",
+    ".mov": "video/quicktime",
+    ".m4v": "video/x-m4v",
+    ".avi": "video/x-msvideo",
+    ".mkv": "video/x-matroska",
+    ".webm": "video/webm",
+    // Audio
+    ".mp3": "audio/mpeg",
+    ".m4a": "audio/mp4",
+    ".aac": "audio/aac",
+    ".wav": "audio/wav",
+    ".caf": "audio/x-caf",
+    // Documents
+    ".pdf": "application/pdf",
+    ".doc": "application/msword",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".xls": "application/vnd.ms-excel",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".ppt": "application/vnd.ms-powerpoint",
+    ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    ".txt": "text/plain",
+    ".rtf": "application/rtf",
   };
   return mimeTypes[ext] || "application/octet-stream";
 }
@@ -1029,9 +1077,9 @@ class MacOSMessagesImportService {
       }
 
       try {
-        // Skip non-image attachments
+        // Skip unsupported attachment types (TASK-1122: expanded to include videos, audio, documents)
         const filename = attachment.transfer_name || attachment.filename;
-        if (!isSupportedImageType(filename)) {
+        if (!isSupportedMediaType(filename)) {
           skipped++;
           processed++;
           continue;

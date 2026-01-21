@@ -1280,12 +1280,16 @@ class FolderExportService {
   <div class="header">
     <h1>${(() => {
       const threadId = String(threadIndex + 1).padStart(3, "0");
-      if (!contact.name && contact.phone.toLowerCase() === "unknown") {
-        return isGroupChat ? `Group Chat <span class="badge">#${threadId}</span>` : `Unknown Contact <span class="badge">#${threadId}</span>`;
+      // Group chats always show "Group Chat #XXX"
+      if (isGroupChat) {
+        return `Group Chat <span class="badge">#${threadId}</span>`;
       }
-      return `Conversation with ${this.escapeHtml(contact.name || contact.phone)} <span class="badge">#${threadId}</span>${isGroupChat ? '<span class="badge">Group Chat</span>' : ""}`;
+      if (!contact.name && contact.phone.toLowerCase() === "unknown") {
+        return `Unknown Contact <span class="badge">#${threadId}</span>`;
+      }
+      return `Conversation with ${this.escapeHtml(contact.name || contact.phone)} <span class="badge">#${threadId}</span>`;
     })()}</h1>
-    <div class="meta">${contact.name ? this.escapeHtml(contact.phone) + " | " : ""}${msgs.length} message${msgs.length === 1 ? "" : "s"}</div>
+    <div class="meta">${!isGroupChat && contact.name ? this.escapeHtml(contact.phone) + " | " : ""}${msgs.length} message${msgs.length === 1 ? "" : "s"}</div>
     ${isGroupChat && participants && participants.length > 0 ? `
     <div class="participants" style="margin-top: 12px; padding: 12px; background: #f7fafc; border-radius: 8px; font-size: 13px;">
       <div style="font-weight: 600; margin-bottom: 8px; color: #4a5568;">Participants (${participants.length}):</div>
@@ -1388,8 +1392,9 @@ class FolderExportService {
           attachmentHtml += `<div class="attachment-ref">[Image: ${this.escapeHtml(att.filename)}]</div>`;
         }
       } else {
-        // Non-image attachment - show reference
-        attachmentHtml += `<div class="attachment-ref">[Attachment: ${this.escapeHtml(att.filename)}]</div>`;
+        // Non-image attachment - show reference with specific type
+        const attachmentType = this.getAttachmentTypeLabel(att.mime_type, att.filename);
+        attachmentHtml += `<div class="attachment-ref">[${attachmentType}: ${this.escapeHtml(att.filename)}]</div>`;
       }
     }
 
@@ -1437,6 +1442,19 @@ class FolderExportService {
     const externalIds = communications
       .filter((comm) => (comm as any).external_id)
       .map((comm) => (comm as any).external_id) as string[];
+
+    // Debug logging
+    const commsWithAttachments = communications.filter((c) => c.has_attachments);
+    logService.info(
+      `[Folder Export] exportAttachments called`,
+      "FolderExport",
+      {
+        totalCommunications: communications.length,
+        withHasAttachments: commsWithAttachments.length,
+        messageIds: messageIds.length,
+        externalIds: externalIds.length,
+      }
+    );
 
     if (messageIds.length === 0) {
       // No linked messages, write empty manifest
@@ -1834,6 +1852,49 @@ class FolderExportService {
       "'": "&#39;",
     };
     return text.replace(/[&<>"']/g, (char) => htmlEscapes[char]);
+  }
+
+  /**
+   * Get a human-readable label for an attachment type
+   */
+  private getAttachmentTypeLabel(mimeType: string | null, filename: string): string {
+    // Check mime type first
+    if (mimeType) {
+      if (mimeType.startsWith("video/")) return "Video";
+      if (mimeType.startsWith("audio/")) return "Audio";
+      if (mimeType.startsWith("image/")) return "Image";
+      if (mimeType === "application/pdf") return "PDF";
+      if (mimeType.includes("word") || mimeType.includes("document")) return "Document";
+      if (mimeType.includes("excel") || mimeType.includes("spreadsheet")) return "Spreadsheet";
+      if (mimeType.includes("powerpoint") || mimeType.includes("presentation")) return "Presentation";
+    }
+
+    // Fall back to extension
+    const ext = filename.toLowerCase().split(".").pop() || "";
+    const extensionLabels: Record<string, string> = {
+      mp4: "Video",
+      mov: "Video",
+      m4v: "Video",
+      avi: "Video",
+      mkv: "Video",
+      webm: "Video",
+      mp3: "Audio",
+      m4a: "Audio",
+      aac: "Audio",
+      wav: "Audio",
+      caf: "Voice Message",
+      pdf: "PDF",
+      doc: "Document",
+      docx: "Document",
+      xls: "Spreadsheet",
+      xlsx: "Spreadsheet",
+      ppt: "Presentation",
+      pptx: "Presentation",
+      txt: "Text File",
+      rtf: "Document",
+    };
+
+    return extensionLabels[ext] || "Attachment";
   }
 
   /**

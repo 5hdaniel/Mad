@@ -88,6 +88,37 @@ function isDisplayableImage(mimeType: string | null): boolean {
 }
 
 /**
+ * Check if text is empty or only contains the object replacement character
+ * macOS uses U+FFFC (￼) as a placeholder for attachments in message text
+ */
+function isEmptyOrReplacementChar(text: string): boolean {
+  if (!text) return true;
+  // U+FFFC is the Object Replacement Character, U+FFFD is the Replacement Character
+  const cleaned = text.replace(/[\uFFFC\uFFFD\s]/g, "");
+  return cleaned.length === 0;
+}
+
+/**
+ * Get a human-readable label for an attachment MIME type
+ */
+function getAttachmentLabel(mimeType: string | null, filename: string): string {
+  if (mimeType?.startsWith("video/")) return "Video";
+  if (mimeType?.startsWith("audio/")) return "Audio";
+  if (mimeType?.startsWith("image/")) return "Image";
+  if (mimeType === "application/pdf") return "PDF";
+  if (mimeType?.includes("word") || mimeType?.includes("document")) return "Document";
+
+  // Fall back to extension
+  const ext = filename.toLowerCase().split(".").pop() || "";
+  const labels: Record<string, string> = {
+    mp4: "Video", mov: "Video", m4v: "Video",
+    mp3: "Audio", m4a: "Audio", caf: "Voice Message",
+    pdf: "PDF", doc: "Document", docx: "Document",
+  };
+  return labels[ext] || "Attachment";
+}
+
+/**
  * Attachment image component with loading state and error handling
  */
 function AttachmentImage({
@@ -163,62 +194,84 @@ export function ConversationViewModal({
     return dateA - dateB;
   });
 
-  // Check if this is a group chat (multiple unique senders)
+  // Collect unique participants from all sources (not just inbound senders)
   const uniqueSenders = new Set<string>();
   messages.forEach((msg) => {
-    const sender = getSenderPhone(msg);
-    if (sender) uniqueSenders.add(normalizePhoneForLookup(sender));
+    try {
+      if (msg.participants) {
+        const parsed =
+          typeof msg.participants === "string"
+            ? JSON.parse(msg.participants)
+            : msg.participants;
+
+        // Collect from chat_members (authoritative list of other participants)
+        if (parsed.chat_members && Array.isArray(parsed.chat_members)) {
+          parsed.chat_members.forEach((m: string) => {
+            if (m && m !== "unknown") uniqueSenders.add(normalizePhoneForLookup(m));
+          });
+        }
+
+        // Collect from inbound message sender
+        if (msg.direction === "inbound" && parsed.from) {
+          if (parsed.from !== "me" && parsed.from !== "unknown") {
+            uniqueSenders.add(normalizePhoneForLookup(parsed.from));
+          }
+        }
+
+        // Collect from outbound message recipients
+        if (msg.direction === "outbound" && parsed.to) {
+          const toList = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
+          toList.forEach((p: string) => {
+            if (p && p !== "me" && p !== "unknown") {
+              uniqueSenders.add(normalizePhoneForLookup(p));
+            }
+          });
+        }
+      }
+    } catch {
+      // Continue
+    }
   });
-  const isGroupChat = uniqueSenders.size > 1;
+
+  // Resolve senders to names and deduplicate
+  const resolveToName = (normalizedPhone: string): string => {
+    for (const [phone, name] of Object.entries(contactNames)) {
+      if (normalizePhoneForLookup(phone) === normalizedPhone) {
+        return name;
+      }
+    }
+    // Find original phone format for display
+    for (const msg of messages) {
+      const msgSender = getSenderPhone(msg);
+      if (msgSender && normalizePhoneForLookup(msgSender) === normalizedPhone) {
+        return msgSender;
+      }
+    }
+    return normalizedPhone;
+  };
+
+  // Get unique participant names (deduplicated by resolved name)
+  const uniqueParticipantNames = [...new Set(
+    Array.from(uniqueSenders).map(resolveToName)
+  )];
+
+  // Group chat = more than one unique participant (by resolved name)
+  const isGroupChat = uniqueParticipantNames.length > 1;
 
   /**
    * Get title for group chat header.
    * Shows participant names (up to 3) with "+X more" for larger groups.
    */
   const getGroupChatTitle = (): string => {
-    // Build participant list from contactNames or unique senders
-    const participants: string[] = [];
-
-    // First, try to get names from contactNames prop
-    for (const [phone, name] of Object.entries(contactNames)) {
-      const normalized = normalizePhoneForLookup(phone);
-      if (uniqueSenders.has(normalized)) {
-        participants.push(name || phone);
-      }
-    }
-
-    // Add any senders not in contactNames (show phone number)
-    for (const sender of uniqueSenders) {
-      const hasName = participants.some((p) => {
-        // Check if this sender already has a name in the list
-        return Object.entries(contactNames).some(([phone, name]) => {
-          const normalized = normalizePhoneForLookup(phone);
-          return normalized === sender && (name === p || phone === p);
-        });
-      });
-      if (!hasName) {
-        // Find the original phone format for this sender
-        let originalPhone = sender;
-        for (const msg of messages) {
-          const msgSender = getSenderPhone(msg);
-          if (msgSender && normalizePhoneForLookup(msgSender) === sender) {
-            originalPhone = msgSender;
-            break;
-          }
-        }
-        participants.push(originalPhone);
-      }
-    }
-
-    if (participants.length === 0) {
+    if (uniqueParticipantNames.length === 0) {
       return `Group (${uniqueSenders.size} participants)`;
     }
 
     // Show up to 3 names, then "+X more"
-    if (participants.length <= 3) {
-      return participants.join(", ");
+    if (uniqueParticipantNames.length <= 3) {
+      return uniqueParticipantNames.join(", ");
     }
-    return `${participants.slice(0, 3).join(", ")} +${participants.length - 3} more`;
+    return `${uniqueParticipantNames.slice(0, 3).join(", ")} +${uniqueParticipantNames.length - 3} more`;
   };
 
   // Load attachments for messages that have them (TASK-1012)
@@ -347,6 +400,12 @@ export function ConversationViewModal({
             const displayableAttachments = messageAttachments.filter((att) =>
               isDisplayableImage(att.mime_type)
             );
+            const nonDisplayableAttachments = messageAttachments.filter((att) =>
+              !isDisplayableImage(att.mime_type)
+            );
+
+            // Check if message text is empty or just replacement character
+            const hasRealText = !isEmptyOrReplacementChar(msgText);
 
             return (
               <div
@@ -368,7 +427,7 @@ export function ConversationViewModal({
                       {senderName}
                     </p>
                   )}
-                  {/* Display attachments (TASK-1012) */}
+                  {/* Display inline images (TASK-1012) */}
                   {displayableAttachments.length > 0 && (
                     <div className="mb-2 space-y-2">
                       {displayableAttachments.map((att) => (
@@ -380,9 +439,22 @@ export function ConversationViewModal({
                       ))}
                     </div>
                   )}
+                  {/* Show placeholders for non-displayable attachments (videos, documents, etc.) */}
+                  {nonDisplayableAttachments.length > 0 && (
+                    <div className="mb-2 space-y-1">
+                      {nonDisplayableAttachments.map((att) => (
+                        <div
+                          key={att.id}
+                          className={`text-xs italic ${isOutbound ? "text-green-100" : "text-gray-500"}`}
+                        >
+                          [{getAttachmentLabel(att.mime_type, att.filename)}: {att.filename}]
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   {/* Show placeholder for attachments still loading */}
                   {!!msg.has_attachments &&
-                    displayableAttachments.length === 0 &&
+                    messageAttachments.length === 0 &&
                     attachmentsLoading && (
                       <div
                         className={`text-xs italic mb-1 ${isOutbound ? "text-green-100" : "text-gray-400"}`}
@@ -390,21 +462,22 @@ export function ConversationViewModal({
                         Loading attachment...
                       </div>
                     )}
-                  {/* Show placeholder for unsupported attachments */}
+                  {/* Show generic placeholder when we know there's an attachment but can't load it */}
                   {!!msg.has_attachments &&
-                    displayableAttachments.length === 0 &&
-                    !attachmentsLoading &&
-                    messageAttachments.length === 0 && (
+                    messageAttachments.length === 0 &&
+                    !attachmentsLoading && (
                       <div
                         className={`text-xs italic mb-1 ${isOutbound ? "text-green-100" : "text-gray-400"}`}
-                        title={`message_id: ${msg.message_id || 'null'}, id: ${msg.id}`}
                       >
-                        [Attachment{!msg.message_id ? " - missing message_id" : ""}]
+                        [Attachment]
                       </div>
                     )}
-                  <p className="text-sm whitespace-pre-wrap break-words">
-                    {msgText || (displayableAttachments.length === 0 ? "(No content)" : "")}
-                  </p>
+                  {/* Show message text if it's not just a replacement character */}
+                  {hasRealText && (
+                    <p className="text-sm whitespace-pre-wrap break-words">
+                      {msgText}
+                    </p>
+                  )}
                   <p
                     className={`text-xs mt-1 ${
                       isOutbound ? "text-green-100" : "text-gray-400"
