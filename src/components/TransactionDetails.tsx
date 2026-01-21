@@ -378,6 +378,9 @@ function TransactionDetails({
               unlinkingCommId={unlinkingCommId}
               onViewEmail={setViewingEmail}
               onShowUnlinkConfirm={setShowUnlinkConfirm}
+              onSyncCommunications={handleSyncCommunications}
+              syncingCommunications={syncingCommunications}
+              hasContacts={contactAssignments.length > 0}
             />
           )}
 
