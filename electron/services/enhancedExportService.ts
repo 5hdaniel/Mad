@@ -62,12 +62,29 @@ class EnhancedExportService {
       const endDate = optionEndDate || (transaction.closed_at as string | undefined);
 
       const totalBefore = communications.length;
+
+      // DEBUG: Log text message counts before any filtering
+      const textsBeforeFilter = communications.filter(c => {
+        const t = c.communication_type?.toLowerCase();
+        return t === "sms" || t === "imessage" || t === "text";
+      });
+      console.log(`[Enhanced Export DEBUG] Starting with ${totalBefore} comms, ${textsBeforeFilter.length} are texts`);
+      console.log(`[Enhanced Export DEBUG] Text thread_ids:`, [...new Set(textsBeforeFilter.map(t => t.thread_id))]);
+
       let filteredComms = this._filterCommunicationsByDate(
         communications,
         startDate,
         endDate,
       );
       const afterDateFilter = filteredComms.length;
+
+      // DEBUG: Log after date filter
+      const textsAfterDate = filteredComms.filter(c => {
+        const t = c.communication_type?.toLowerCase();
+        return t === "sms" || t === "imessage" || t === "text";
+      });
+      console.log(`[Enhanced Export DEBUG] After date filter: ${afterDateFilter} comms, ${textsAfterDate.length} texts`);
+      console.log(`[Enhanced Export DEBUG] Date range: ${startDate || 'none'} to ${endDate || 'none'}`);
 
       if (startDate || endDate) {
         logService.info(
@@ -88,6 +105,14 @@ class EnhancedExportService {
         transaction.property_address,
       );
 
+      // DEBUG: Log after address filter
+      const textsAfterAddress = filteredComms.filter(c => {
+        const t = c.communication_type?.toLowerCase();
+        return t === "sms" || t === "imessage" || t === "text";
+      });
+      console.log(`[Enhanced Export DEBUG] After address filter: ${filteredComms.length} comms, ${textsAfterAddress.length} texts`);
+      console.log(`[Enhanced Export DEBUG] Text thread_ids after address filter:`, [...new Set(textsAfterAddress.map(t => t.thread_id))]);
+
       // Filter by content type
       filteredComms = this._filterByContentType(filteredComms, contentType);
 
@@ -102,6 +127,7 @@ class EnhancedExportService {
         `[Enhanced Export] Filtered to ${filteredComms.length} communications (verified address relevance)`,
         "EnhancedExport",
       );
+      console.log(`[Enhanced Export DEBUG] Final: ${filteredComms.length} comms`);
 
       // Export based on format
       let exportPath: string;
