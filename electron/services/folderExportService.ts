@@ -136,12 +136,14 @@ class FolderExportService {
       const allPhones = this.extractAllPhones(texts);
       const phoneNameMap = await this.getContactNamesByPhonesAsync(allPhones);
 
-      // Get user's name for "me" display in group chats
+      // Get user's name and email for "me" display in group chats
       let userName: string | undefined;
+      let userEmail: string | undefined;
       try {
         const user = await getUserById(transaction.user_id);
         if (user) {
           userName = user.display_name || user.first_name || user.email?.split("@")[0];
+          userEmail = user.email || undefined;
         }
       } catch {
         // Ignore - will fall back to "You"
@@ -187,7 +189,7 @@ class FolderExportService {
           message: "Exporting text conversations...",
         });
 
-        await this.exportTextConversations(texts, textsPath, phoneNameMap, userName);
+        await this.exportTextConversations(texts, textsPath, phoneNameMap, userName, userEmail);
 
         onProgress?.({
           stage: "texts",
@@ -688,7 +690,8 @@ class FolderExportService {
     texts: Communication[],
     outputPath: string,
     phoneNameMap?: Record<string, string>,
-    userName?: string
+    userName?: string,
+    userEmail?: string
   ): Promise<void> {
     // Use provided phoneNameMap or fall back to sync lookup
     const nameMap = phoneNameMap || this.getContactNamesByPhones(this.extractAllPhones(texts));
@@ -719,7 +722,7 @@ class FolderExportService {
     for (const [, msgs] of textThreads) {
       const contact = this.getThreadContact(msgs, nameMap);
       const isGroupChat = this._isGroupChat(msgs);
-      const participants = isGroupChat ? this.getGroupChatParticipants(msgs, nameMap, userName) : undefined;
+      const participants = isGroupChat ? this.getGroupChatParticipants(msgs, nameMap, userName, userEmail) : undefined;
       const html = this.generateTextThreadHTML(
         msgs,
         contact,
@@ -919,7 +922,8 @@ class FolderExportService {
   private getGroupChatParticipants(
     msgs: Communication[],
     phoneNameMap: Record<string, string>,
-    userName?: string
+    userName?: string,
+    userEmail?: string
   ): Array<{ phone: string; name: string | null }> {
     const participantPhones = new Set<string>();
 
@@ -949,6 +953,8 @@ class FolderExportService {
       .filter((phone) => {
         // Filter out empty/null values
         if (!phone || phone.trim() === "") return false;
+        // Filter out "unknown" - these are ghost participants with no real identity
+        if (phone.toLowerCase().trim() === "unknown") return false;
         return true;
       })
       .map((phone) => {
@@ -957,11 +963,6 @@ class FolderExportService {
         // Handle "me" - this is the user
         if (lowerPhone === "me") {
           return { phone: "", name: userName || "You" };
-        }
-
-        // Handle "unknown" - unidentified participant
-        if (lowerPhone === "unknown") {
-          return { phone: "", name: "Unknown Participant" };
         }
 
         // Check if it's a valid phone number (has digits)
@@ -973,8 +974,20 @@ class FolderExportService {
           return { phone, name };
         }
 
-        // If it's not "me", "unknown", or a phone number, it might be an email or other identifier
-        // Try to look it up, otherwise use it as the name
+        // If it's not "me" or a phone number, it might be an Apple ID/email (like "magicauditwa")
+        // Check if it matches the user's email identifier - if so, show their name
+        if (userName && userEmail) {
+          const emailPrefix = userEmail.split("@")[0].toLowerCase();
+          // Check if this identifier matches the user's email or email prefix
+          if (lowerPhone === userEmail.toLowerCase() ||
+              lowerPhone === emailPrefix ||
+              lowerPhone.includes(emailPrefix)) {
+            // This is the user's iMessage identifier
+            return { phone, name: userName };
+          }
+        }
+
+        // Try to look it up in contacts, otherwise use it as the display name
         const name = phoneNameMap[phone] || null;
         return { phone, name: name || phone };
       });
@@ -1704,12 +1717,14 @@ class FolderExportService {
       const allPhones = this.extractAllPhones(texts);
       const phoneNameMap = await this.getContactNamesByPhonesAsync(allPhones);
 
-      // Get user's name for "me" display in group chats
+      // Get user's name and email for "me" display in group chats
       let userName: string | undefined;
+      let userEmail: string | undefined;
       try {
         const user = await getUserById(transaction.user_id);
         if (user) {
           userName = user.display_name || user.first_name || user.email?.split("@")[0];
+          userEmail = user.email || undefined;
         }
       } catch {
         // Ignore - will fall back to "You"
@@ -1725,7 +1740,7 @@ class FolderExportService {
 
       // Generate text conversation PDFs
       if (texts.length > 0) {
-        await this.exportTextConversations(texts, textsPath, phoneNameMap, userName);
+        await this.exportTextConversations(texts, textsPath, phoneNameMap, userName, userEmail);
       }
 
       // Collect all PDF files in order: Summary, then emails, then texts
