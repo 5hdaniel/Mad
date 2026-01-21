@@ -1356,6 +1356,15 @@ class FolderExportService {
     const externalId = (msg as any).external_id;
     const attachments = messageId ? this.getAttachmentsForMessage(messageId, externalId) : [];
 
+    // Debug: Log attachment lookup for messages that should have attachments
+    if (msg.has_attachments) {
+      logService.info(
+        `[Folder Export] Message has_attachments=true, found ${attachments.length} attachments`,
+        "FolderExport",
+        { messageId, externalId, attachmentCount: attachments.length }
+      );
+    }
+
     // Generate attachment HTML
     let attachmentHtml = "";
     for (const att of attachments) {
