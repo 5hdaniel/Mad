@@ -9,7 +9,6 @@ interface UseTransactionTabsResult {
   activeTab: TransactionTab;
   setActiveTab: (tab: TransactionTab) => void;
   isDetailsTab: boolean;
-  isContactsTab: boolean;
 }
 
 /**
@@ -28,6 +27,5 @@ export function useTransactionTabs(
     activeTab,
     setActiveTab: handleSetActiveTab,
     isDetailsTab: activeTab === "overview",
-    isContactsTab: activeTab === "contacts",
   };
 }

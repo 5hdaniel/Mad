@@ -29,7 +29,6 @@ import {
   TransactionTabs,
   TransactionDetailsTab,
   TransactionEmailsTab,
-  TransactionContactsTab,
   TransactionMessagesTab,
   TransactionAttachmentsTab,
   ExportSuccessMessage,
@@ -38,6 +37,7 @@ import {
   EmailViewModal,
   RejectReasonModal,
   EditContactsModal,
+  groupMessagesByThread,
 } from "./transactionDetailsModule";
 import type { AutoLinkResult } from "./transactionDetailsModule/components/modals/EditContactsModal";
 
@@ -144,6 +144,12 @@ function TransactionDetails({
       return channel !== 'sms' && channel !== 'imessage';
     });
   }, [communications]);
+
+  // Calculate conversation count (number of threads, not individual messages)
+  const conversationCount = useMemo(() => {
+    if (textMessages.length === 0) return 0;
+    return groupMessagesByThread(textMessages).size;
+  }, [textMessages]);
 
   // Modal states
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
@@ -300,8 +306,7 @@ function TransactionDetails({
         {/* Tabs */}
         <TransactionTabs
           activeTab={activeTab}
-          contactCount={contactAssignments.length}
-          messageCount={textMessages.length}
+          conversationCount={conversationCount}
           emailCount={emailCommunications.length}
           attachmentCount={attachmentCount}
           onTabChange={setActiveTab}
@@ -315,6 +320,12 @@ function TransactionDetails({
               contactAssignments={contactAssignments}
               loading={loading}
               onEditContacts={() => setShowEditContactsModal(true)}
+              resolvedSuggestions={resolvedSuggestions}
+              processingContactId={processingContactId}
+              processingAll={processingAll}
+              onAcceptSuggestion={handleAcceptSuggestionWithCallbacks}
+              onRejectSuggestion={handleRejectSuggestionWithCallbacks}
+              onAcceptAll={handleAcceptAllWithCallbacks}
             />
           )}
 
@@ -328,19 +339,6 @@ function TransactionDetails({
             />
           )}
 
-          {activeTab === "contacts" && (
-            <TransactionContactsTab
-              resolvedSuggestions={resolvedSuggestions}
-              contactAssignments={contactAssignments}
-              loading={loading}
-              processingContactId={processingContactId}
-              processingAll={processingAll}
-              onAcceptSuggestion={handleAcceptSuggestionWithCallbacks}
-              onRejectSuggestion={handleRejectSuggestionWithCallbacks}
-              onAcceptAll={handleAcceptAllWithCallbacks}
-              onEditContacts={() => setShowEditContactsModal(true)}
-            />
-          )}
 
           {activeTab === "messages" && (
             <TransactionMessagesTab

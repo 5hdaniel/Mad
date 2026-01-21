@@ -1,17 +1,29 @@
 /**
  * TransactionDetailsTab Component (renamed to Overview)
- * Overview tab content showing audit period dates and key contacts summary.
+ * Overview tab content showing audit period dates, AI suggestions, and key contacts summary.
  * Email threads moved to TransactionEmailsTab as part of TASK-1152.
  */
 import React from "react";
 import type { Transaction } from "@/types";
-import type { ContactAssignment } from "../types";
+import type { ContactAssignment, ResolvedSuggestedContact } from "../types";
 
 interface TransactionDetailsTabProps {
   transaction: Transaction;
   contactAssignments: ContactAssignment[];
   loading: boolean;
   onEditContacts?: () => void;
+  /** AI suggested contacts to review */
+  resolvedSuggestions?: ResolvedSuggestedContact[];
+  /** ID of contact currently being processed */
+  processingContactId?: string | null;
+  /** Whether all suggestions are being processed */
+  processingAll?: boolean;
+  /** Callback when a suggestion is accepted */
+  onAcceptSuggestion?: (suggestion: ResolvedSuggestedContact) => void;
+  /** Callback when a suggestion is rejected */
+  onRejectSuggestion?: (suggestion: ResolvedSuggestedContact) => void;
+  /** Callback to accept all suggestions */
+  onAcceptAll?: () => void;
 }
 
 export function TransactionDetailsTab({
@@ -19,9 +31,78 @@ export function TransactionDetailsTab({
   contactAssignments,
   loading,
   onEditContacts,
+  resolvedSuggestions = [],
+  processingContactId,
+  processingAll = false,
+  onAcceptSuggestion,
+  onRejectSuggestion,
+  onAcceptAll,
 }: TransactionDetailsTabProps): React.ReactElement {
   return (
     <>
+      {/* AI Suggested Contacts Section - only show if there are suggestions */}
+      {resolvedSuggestions.length > 0 && onAcceptSuggestion && onRejectSuggestion && onAcceptAll && (
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <svg
+                className="w-5 h-5 text-purple-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+                />
+              </svg>
+              <h4 className="text-lg font-semibold text-gray-900">
+                AI Suggested Contacts
+              </h4>
+              <span className="inline-block px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded-full">
+                {resolvedSuggestions.length} suggestion{resolvedSuggestions.length !== 1 ? "s" : ""}
+              </span>
+            </div>
+            <button
+              onClick={onAcceptAll}
+              disabled={processingAll || !!processingContactId}
+              className="px-3 py-1.5 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+            >
+              {processingAll ? (
+                <>
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Accept All
+                </>
+              )}
+            </button>
+          </div>
+          <div className="space-y-3">
+            {resolvedSuggestions.map((suggestion) => (
+              <SuggestedContactCard
+                key={suggestion.contact_id}
+                suggestion={suggestion}
+                isProcessing={processingContactId === suggestion.contact_id}
+                isDisabled={processingAll}
+                onAccept={() => onAcceptSuggestion(suggestion)}
+                onReject={() => onRejectSuggestion(suggestion)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Audit Period Section */}
       <div className="mb-8">
         <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
@@ -130,7 +211,7 @@ export function TransactionDetailsTab({
             </svg>
             <p className="text-gray-600 mb-1">No contacts assigned</p>
             <p className="text-sm text-gray-500">
-              Go to the Roles & Contacts tab to add contacts
+              Click &quot;Edit Contacts&quot; to add contacts to this transaction
             </p>
           </div>
         ) : (
@@ -189,6 +270,89 @@ function ContactSummaryCard({
       <span className="inline-block px-3 py-1 bg-green-100 text-green-800 text-xs font-semibold rounded-full">
         {role}
       </span>
+    </div>
+  );
+}
+
+// Sub-component for AI suggested contact cards
+function SuggestedContactCard({
+  suggestion,
+  isProcessing,
+  isDisabled,
+  onAccept,
+  onReject,
+}: {
+  suggestion: ResolvedSuggestedContact;
+  isProcessing: boolean;
+  isDisabled: boolean;
+  onAccept: () => void;
+  onReject: () => void;
+}) {
+  const contact = suggestion.contact;
+  const displayName = contact?.display_name || contact?.name || "Unknown Contact";
+  const displayEmail = contact?.email || "";
+  const displayCompany = contact?.company || "";
+
+  return (
+    <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+      <div className="flex items-start justify-between">
+        <div className="flex-1">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="inline-block px-3 py-1 bg-purple-100 text-purple-800 text-xs font-semibold rounded-full">
+              {suggestion.role}
+            </span>
+            {suggestion.is_primary && (
+              <span className="inline-block px-2 py-1 bg-blue-100 text-blue-800 text-xs font-semibold rounded-full">
+                Primary
+              </span>
+            )}
+            <span className="inline-block px-2 py-0.5 bg-yellow-100 text-yellow-800 text-xs font-medium rounded-full">
+              AI Suggested
+            </span>
+          </div>
+          <h5 className="font-semibold text-gray-900">{displayName}</h5>
+          {displayEmail && (
+            <p className="text-sm text-gray-600 mt-1">{displayEmail}</p>
+          )}
+          {displayCompany && (
+            <p className="text-sm text-gray-500 mt-0.5">{displayCompany}</p>
+          )}
+          {suggestion.notes && (
+            <p className="text-sm text-gray-700 mt-2 italic">
+              Note: {suggestion.notes}
+            </p>
+          )}
+        </div>
+        <div className="flex items-center gap-2 ml-4">
+          <button
+            onClick={onAccept}
+            disabled={isProcessing || isDisabled}
+            className="p-2 text-green-600 hover:bg-green-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Accept suggestion"
+          >
+            {isProcessing ? (
+              <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            ) : (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            )}
+          </button>
+          <button
+            onClick={onReject}
+            disabled={isProcessing || isDisabled}
+            className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Reject suggestion"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

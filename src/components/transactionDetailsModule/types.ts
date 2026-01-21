@@ -56,13 +56,12 @@ export interface TransactionDetailsProps {
 
 /**
  * Tab types for transaction details view
- * - overview: Audit dates and contacts summary (default)
+ * - overview: Audit dates, AI suggestions, and contacts summary (default)
  * - messages: Text conversations
  * - emails: Email threads
- * - contacts: Detailed contact management
  * - attachments: File attachments (hidden)
  */
-export type TransactionTab = "overview" | "messages" | "emails" | "contacts" | "attachments";
+export type TransactionTab = "overview" | "messages" | "emails" | "attachments";
 
 /**
  * Communication type for local use
