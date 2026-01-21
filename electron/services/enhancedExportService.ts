@@ -20,6 +20,7 @@ interface ExportOptions {
   exportFormat?: "pdf" | "excel" | "csv" | "json" | "txt_eml";
   startDate?: string;
   endDate?: string;
+  summaryOnly?: boolean; // If true, only export summary + indexes (no full content)
 }
 
 class EnhancedExportService {
@@ -42,6 +43,7 @@ class EnhancedExportService {
       exportFormat = "pdf",
       startDate: optionStartDate,
       endDate: optionEndDate,
+      summaryOnly = false,
     } = options;
 
     try {
@@ -105,7 +107,7 @@ class EnhancedExportService {
       let exportPath: string;
       switch (exportFormat) {
         case "pdf":
-          exportPath = await this._exportPDF(transaction, filteredComms);
+          exportPath = await this._exportPDF(transaction, filteredComms, summaryOnly);
           break;
         case "excel":
         case "csv":
@@ -301,10 +303,12 @@ class EnhancedExportService {
   private async _exportPDF(
     transaction: Transaction,
     communications: Communication[],
+    summaryOnly: boolean = false,
   ): Promise<string> {
     const downloadsPath = app.getPath("downloads");
+    const suffix = summaryOnly ? "Summary" : "Full";
     const fileName = this._sanitizeFileName(
-      `Transaction_${transaction.property_address}_${Date.now()}.pdf`,
+      `Transaction_${suffix}_${transaction.property_address}_${Date.now()}.pdf`,
     );
     const outputPath = path.join(downloadsPath, fileName);
 
@@ -312,6 +316,7 @@ class EnhancedExportService {
       transaction,
       communications,
       outputPath,
+      summaryOnly,
     );
   }
 

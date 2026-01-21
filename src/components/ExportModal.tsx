@@ -153,13 +153,15 @@ function ExportModal({
       } else {
         // Use enhanced export for single-file formats
         // Pass dates to enable date range filtering for PDF exports
+        // summaryOnly: true for "pdf" format means only report + indexes (no full content)
         result = await window.api.transactions.exportEnhanced(
           transaction.id,
           {
             exportFormat,
             startDate,
             endDate,
-          },
+            summaryOnly: exportFormat === "pdf",
+          } as Parameters<typeof window.api.transactions.exportEnhanced>[1],
         );
       }
 
@@ -487,51 +489,6 @@ function ExportModal({
                       <span className="text-xs bg-gray-200 text-gray-500 px-2 py-0.5 rounded">Coming Soon</span>
                     </div>
                     <div className="text-xs opacity-80">Combined PDF with all content</div>
-                  </button>
-                  {/* Coming soon formats */}
-                  <button
-                    disabled
-                    className="px-4 py-3 rounded-lg font-medium text-left bg-gray-50 text-gray-400 cursor-not-allowed border border-gray-200"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold">Excel (.xlsx)</span>
-                      <span className="text-xs bg-gray-200 text-gray-500 px-2 py-0.5 rounded">Coming Soon</span>
-                    </div>
-                    <div className="text-xs opacity-80">Spreadsheet format</div>
-                  </button>
-                  <button
-                    disabled
-                    className="px-4 py-3 rounded-lg font-medium text-left bg-gray-50 text-gray-400 cursor-not-allowed border border-gray-200"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold">CSV</span>
-                      <span className="text-xs bg-gray-200 text-gray-500 px-2 py-0.5 rounded">Coming Soon</span>
-                    </div>
-                    <div className="text-xs opacity-80">
-                      Comma-separated values
-                    </div>
-                  </button>
-                  <button
-                    disabled
-                    className="px-4 py-3 rounded-lg font-medium text-left bg-gray-50 text-gray-400 cursor-not-allowed border border-gray-200"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold">JSON</span>
-                      <span className="text-xs bg-gray-200 text-gray-500 px-2 py-0.5 rounded">Coming Soon</span>
-                    </div>
-                    <div className="text-xs opacity-80">Structured data</div>
-                  </button>
-                  <button
-                    disabled
-                    className="px-4 py-3 rounded-lg font-medium text-left bg-gray-50 text-gray-400 cursor-not-allowed border border-gray-200"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold">TXT + EML Files</span>
-                      <span className="text-xs bg-gray-200 text-gray-500 px-2 py-0.5 rounded">Coming Soon</span>
-                    </div>
-                    <div className="text-xs opacity-80">
-                      Text files and email files
-                    </div>
                   </button>
                 </div>
                 {exportFormat === "folder" && (
