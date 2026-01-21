@@ -561,21 +561,7 @@ function ExportModal({
                   ? exportProgress.message
                   : "Creating your compliance audit export. This may take a moment."}
               </p>
-              {exportProgress && exportFormat === "folder" && (
-                <div className="mt-4 max-w-xs mx-auto">
-                  <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-purple-600 transition-all duration-300"
-                      style={{
-                        width: `${Math.round((exportProgress.current / exportProgress.total) * 100)}%`,
-                      }}
-                    />
-                  </div>
-                  <p className="text-xs text-gray-500 mt-2">
-                    {exportProgress.current} / {exportProgress.total}
-                  </p>
-                </div>
-              )}
+              {/* Progress bar removed for cleaner UX - spinner and message are sufficient */}
             </div>
           )}
 
