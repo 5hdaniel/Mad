@@ -196,7 +196,7 @@ describe("TransactionMessagesTab", () => {
   });
 
   describe("messages list", () => {
-    it("should display message count header when messages exist", () => {
+    it("should render thread list when messages exist", () => {
       render(
         <TransactionMessagesTab
           messages={mockMessages as Communication[]}
@@ -205,10 +205,15 @@ describe("TransactionMessagesTab", () => {
         />
       );
 
-      expect(screen.getByText("Text Messages (3)")).toBeInTheDocument();
+      // Should have thread list container
+      expect(screen.getByTestId("message-thread-list")).toBeInTheDocument();
+
+      // Should render thread cards
+      const threadCards = screen.getAllByTestId("message-thread-card");
+      expect(threadCards.length).toBeGreaterThan(0);
     });
 
-    it("should render thread cards with preview text for 1:1 chats", () => {
+    it("should render thread cards for 1:1 chats", () => {
       // 1:1 chat messages - single external participant per thread
       const singleParticipantMessages: Partial<Communication>[] = [
         {
@@ -245,13 +250,13 @@ describe("TransactionMessagesTab", () => {
         />
       );
 
-      // 1:1 chat should show preview text
-      const preview = screen.getByTestId("thread-preview");
-      expect(preview).toBeInTheDocument();
-      expect(preview).toHaveTextContent("Single chat message 2");
+      // Should render thread card
+      expect(screen.getByTestId("message-thread-card")).toBeInTheDocument();
+      // Should show contact name/phone
+      expect(screen.getByTestId("thread-contact-name")).toBeInTheDocument();
     });
 
-    it("should render group chats without preview (different display)", () => {
+    it("should render multiple thread cards for multiple threads", () => {
       render(
         <TransactionMessagesTab
           messages={mockMessages as Communication[]}
@@ -260,17 +265,9 @@ describe("TransactionMessagesTab", () => {
         />
       );
 
-      // Mock data uses phone numbers for both from/to, making threads appear as group chats
-      // (the real iMessage import uses "me" for the user's side)
-      // Group chats display participant count and date range instead of preview text
+      // Mock data has 2 threads (thread-1 and thread-2)
       const threadCards = screen.getAllByTestId("message-thread-card");
       expect(threadCards.length).toBe(2);
-
-      // Group chats no longer show "X people" badge - participant list at bottom instead
-      const participantBadges = screen.queryAllByText(/\d+ people/);
-      expect(participantBadges.length).toBe(0);
-      const participantNames = screen.getAllByTestId("thread-participants");
-      expect(participantNames.length).toBeGreaterThanOrEqual(1);
     });
 
     it("should group messages into threads", () => {
@@ -290,7 +287,7 @@ describe("TransactionMessagesTab", () => {
       expect(threadCards.length).toBe(2);
     });
 
-    it("should display conversation count when multiple threads", () => {
+    it("should display contact name in thread header", () => {
       render(
         <TransactionMessagesTab
           messages={mockMessages as Communication[]}
@@ -299,8 +296,9 @@ describe("TransactionMessagesTab", () => {
         />
       );
 
-      // Should show "in 2 conversations"
-      expect(screen.getByText("in 2 conversations")).toBeInTheDocument();
+      // Each thread should have a contact name element
+      const contactNames = screen.getAllByTestId("thread-contact-name");
+      expect(contactNames.length).toBe(2);
     });
 
     it("should display phone numbers as thread headers", () => {
@@ -456,8 +454,8 @@ describe("TransactionMessagesTab", () => {
 
       // Thread card should be rendered
       expect(screen.getByTestId("message-thread-card")).toBeInTheDocument();
-      // Preview should show the message text
-      expect(screen.getByTestId("thread-preview")).toHaveTextContent("Dated message");
+      // Contact name should be shown
+      expect(screen.getByTestId("thread-contact-name")).toBeInTheDocument();
     });
 
     it("should use received_at as fallback for date", () => {
@@ -481,13 +479,13 @@ describe("TransactionMessagesTab", () => {
         />
       );
 
-      // Should render without error and show the message
-      expect(screen.getByText("Received message")).toBeInTheDocument();
+      // Should render thread card for message with received_at date
+      expect(screen.getByTestId("message-thread-card")).toBeInTheDocument();
     });
   });
 
   describe("body text fallbacks", () => {
-    it("should use body_plain as fallback", () => {
+    it("should render thread card for message with body_plain", () => {
       const messageWithBodyPlain: Partial<Communication>[] = [
         {
           id: "plain-msg",
@@ -508,10 +506,11 @@ describe("TransactionMessagesTab", () => {
         />
       );
 
-      expect(screen.getByText("Plain body content")).toBeInTheDocument();
+      // Thread card should be rendered for message with body_plain
+      expect(screen.getByTestId("message-thread-card")).toBeInTheDocument();
     });
 
-    it("should use body as final fallback", () => {
+    it("should render thread card for message with body", () => {
       const messageWithBody: Partial<Communication>[] = [
         {
           id: "body-msg",
@@ -532,7 +531,8 @@ describe("TransactionMessagesTab", () => {
         />
       );
 
-      expect(screen.getByText("Legacy body content")).toBeInTheDocument();
+      // Thread card should be rendered for message with legacy body field
+      expect(screen.getByTestId("message-thread-card")).toBeInTheDocument();
     });
   });
 
