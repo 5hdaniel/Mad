@@ -404,44 +404,6 @@ function ExportModal({
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-3">
-                  Content Type
-                </label>
-                <div className="grid grid-cols-3 gap-3">
-                  <button
-                    onClick={() => setContentType("text")}
-                    className={`px-4 py-3 rounded-lg font-medium transition-all ${
-                      contentType === "text"
-                        ? "bg-purple-500 text-white shadow-md"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                    }`}
-                  >
-                    Text Only
-                  </button>
-                  <button
-                    onClick={() => setContentType("email")}
-                    className={`px-4 py-3 rounded-lg font-medium transition-all ${
-                      contentType === "email"
-                        ? "bg-purple-500 text-white shadow-md"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                    }`}
-                  >
-                    Email Only
-                  </button>
-                  <button
-                    onClick={() => setContentType("both")}
-                    className={`px-4 py-3 rounded-lg font-medium transition-all ${
-                      contentType === "both"
-                        ? "bg-purple-500 text-white shadow-md"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                    }`}
-                  >
-                    Both
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">
                   Export Format
                 </label>
                 <div className="grid grid-cols-2 gap-3">
