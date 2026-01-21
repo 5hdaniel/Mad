@@ -24,9 +24,13 @@ export interface ScanOptions {
  */
 export interface ExportEnhancedOptions {
   exportFormat?: "pdf" | "csv" | "json" | "txt_eml" | "excel";
+  contentType?: "text" | "email" | "both";
   includeContacts?: boolean;
   includeEmails?: boolean;
   includeSummary?: boolean;
+  startDate?: string;
+  endDate?: string;
+  summaryOnly?: boolean; // If true, only export summary + indexes (no full content)
 }
 
 /**

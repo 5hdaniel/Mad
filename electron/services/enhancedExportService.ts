@@ -20,6 +20,7 @@ interface ExportOptions {
   exportFormat?: "pdf" | "excel" | "csv" | "json" | "txt_eml";
   startDate?: string;
   endDate?: string;
+  summaryOnly?: boolean; // If true, only export summary + indexes (no full content)
 }
 
 class EnhancedExportService {
@@ -42,6 +43,7 @@ class EnhancedExportService {
       exportFormat = "pdf",
       startDate: optionStartDate,
       endDate: optionEndDate,
+      summaryOnly = false,
     } = options;
 
     try {
@@ -105,7 +107,7 @@ class EnhancedExportService {
       let exportPath: string;
       switch (exportFormat) {
         case "pdf":
-          exportPath = await this._exportPDF(transaction, filteredComms);
+          exportPath = await this._exportPDF(transaction, filteredComms, summaryOnly);
           break;
         case "excel":
         case "csv":
@@ -203,7 +205,16 @@ class EnhancedExportService {
     const addressParts = this._extractAddressParts(normalizedAddress);
 
     return communications.filter((comm) => {
-      // Check subject and body for address references
+      // IMPORTANT: Text messages are linked by contact relationship, not content matching
+      // They should always be included - the user explicitly linked these messages
+      // to this transaction via contact assignment, so address filtering doesn't apply
+      // Check for all text message types: sms, imessage, and legacy "text"
+      const commType = comm.communication_type?.toLowerCase();
+      if (commType === "sms" || commType === "imessage" || commType === "text") {
+        return true;
+      }
+
+      // For emails: Check subject and body for address references
       const subject = (comm.subject || "").toLowerCase();
       const body = (comm.body_plain || comm.body || "").toLowerCase();
       const combinedContent = `${subject} ${body}`;
@@ -301,10 +312,12 @@ class EnhancedExportService {
   private async _exportPDF(
     transaction: Transaction,
     communications: Communication[],
+    summaryOnly: boolean = false,
   ): Promise<string> {
     const downloadsPath = app.getPath("downloads");
+    const suffix = summaryOnly ? "Summary" : "Full";
     const fileName = this._sanitizeFileName(
-      `Transaction_${transaction.property_address}_${Date.now()}.pdf`,
+      `Transaction_${suffix}_${transaction.property_address}_${Date.now()}.pdf`,
     );
     const outputPath = path.join(downloadsPath, fileName);
 
@@ -312,6 +325,7 @@ class EnhancedExportService {
       transaction,
       communications,
       outputPath,
+      summaryOnly,
     );
   }
 
