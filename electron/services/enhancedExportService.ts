@@ -208,7 +208,9 @@ class EnhancedExportService {
       // IMPORTANT: Text messages are linked by contact relationship, not content matching
       // They should always be included - the user explicitly linked these messages
       // to this transaction via contact assignment, so address filtering doesn't apply
-      if (comm.communication_type === "text") {
+      // Check for all text message types: sms, imessage, and legacy "text"
+      const commType = comm.communication_type?.toLowerCase();
+      if (commType === "sms" || commType === "imessage" || commType === "text") {
         return true;
       }
 
