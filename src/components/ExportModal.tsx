@@ -18,7 +18,7 @@ function ExportModal({
   onClose,
   onExportComplete,
 }: ExportModalProps) {
-  const [step, setStep] = useState(1); // 1: Date Verification, 2: Export Options, 3: Exporting
+  const [step, setStep] = useState(1); // 1: Date Verification, 2: Export Options, 3: Exporting, 4: Close Prompt, 5: Success
 
   // Start Date (started_at) - when agent began working on transaction
   const [startDate, setStartDate] = useState(
@@ -57,6 +57,7 @@ function ExportModal({
     total: number;
     message: string;
   } | null>(null);
+  const [exportedPath, setExportedPath] = useState<string | null>(null);
 
   // Formats that are currently implemented
   const implementedFormats = ["pdf", "folder"];
@@ -163,7 +164,17 @@ function ExportModal({
       }
 
       if (result.success) {
-        onExportComplete(result);
+        // Store the exported path for the success screen
+        // Handle both 'path' (folder export) and 'filePath' (PDF export) response shapes
+        const exportPath = result.path || (result as { filePath?: string }).filePath || null;
+        setExportedPath(exportPath);
+
+        // Check if transaction is already closed - if so, skip to success
+        if (transaction.status === "closed") {
+          setStep(5); // Go directly to success
+        } else {
+          setStep(4); // Go to close prompt
+        }
       } else {
         setError(result.error || "Export failed");
         setStep(2);
@@ -176,6 +187,31 @@ function ExportModal({
       setExporting(false);
       setExportProgress(null);
     }
+  };
+
+  // Handle closing transaction after export
+  const handleCloseTransaction = async (shouldClose: boolean) => {
+    if (shouldClose) {
+      try {
+        await window.api.transactions.update(transaction.id, { status: "closed" });
+      } catch (err) {
+        console.error("Failed to close transaction:", err);
+        // Continue to success screen even if closing fails
+      }
+    }
+    setStep(5); // Move to success screen
+  };
+
+  // Handle opening the exported file in Finder
+  const handleOpenInFinder = () => {
+    if (exportedPath) {
+      window.api.shell.openFolder(exportedPath);
+    }
+  };
+
+  // Handle final dismissal - call onExportComplete and close
+  const handleDismissSuccess = () => {
+    onExportComplete({ success: true, path: exportedPath });
   };
 
   const formatConfidence = (confidence?: number) => {
@@ -542,10 +578,77 @@ function ExportModal({
               )}
             </div>
           )}
+
+          {/* Step 4: Close Transaction Prompt */}
+          {step === 4 && (
+            <div className="py-8 text-center">
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h4 className="text-lg font-semibold text-gray-900 mb-2">
+                Export Complete!
+              </h4>
+              <p className="text-sm text-gray-600 mb-6">
+                Would you like to mark this transaction as closed?
+              </p>
+              <div className="flex justify-center gap-4">
+                <button
+                  onClick={() => handleCloseTransaction(false)}
+                  className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-all"
+                >
+                  No, Keep Open
+                </button>
+                <button
+                  onClick={() => handleCloseTransaction(true)}
+                  className="px-6 py-2 bg-gradient-to-r from-purple-500 to-indigo-600 text-white rounded-lg font-semibold hover:from-purple-600 hover:to-indigo-700 shadow-md hover:shadow-lg transition-all"
+                >
+                  Yes, Close Transaction
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 5: Success with Finder Link */}
+          {step === 5 && (
+            <div className="py-8 text-center">
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h4 className="text-lg font-semibold text-gray-900 mb-2">
+                Export Complete!
+              </h4>
+              <p className="text-sm text-gray-600 mb-4">
+                Your {exportFormat === "folder" ? "Audit Package" : "export"} has been saved successfully.
+              </p>
+              {exportedPath && (
+                <button
+                  onClick={handleOpenInFinder}
+                  className="text-purple-600 hover:text-purple-800 hover:underline font-medium mb-6 inline-flex items-center gap-2"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
+                  </svg>
+                  Open in Finder
+                </button>
+              )}
+              <div className="mt-6">
+                <button
+                  onClick={handleDismissSuccess}
+                  className="px-8 py-2 bg-gradient-to-r from-purple-500 to-indigo-600 text-white rounded-lg font-semibold hover:from-purple-600 hover:to-indigo-700 shadow-md hover:shadow-lg transition-all"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Footer */}
-        {step !== 3 && (
+        {step !== 3 && step !== 4 && step !== 5 && (
           <div className="px-6 py-4 bg-gray-50 rounded-b-xl flex items-center justify-between">
             <button
               onClick={step === 1 ? onClose : () => setStep(1)}
