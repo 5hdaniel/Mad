@@ -48,7 +48,7 @@ function ExportModal({
   );
 
   const [contentType, setContentType] = useState("both"); // text, email, both
-  const [exportFormat, setExportFormat] = useState("pdf"); // pdf, excel, csv, json, txt_eml, folder
+  const [exportFormat, setExportFormat] = useState("folder"); // folder, pdf, excel, csv, json, txt_eml
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [exportProgress, setExportProgress] = useState<{
@@ -409,19 +409,6 @@ function ExportModal({
                 <div className="grid grid-cols-2 gap-3">
                   {/* Active export formats */}
                   <button
-                    onClick={() => setExportFormat("pdf")}
-                    className={`px-4 py-3 rounded-lg font-medium transition-all text-left ${
-                      exportFormat === "pdf"
-                        ? "bg-purple-500 text-white shadow-md"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                    }`}
-                  >
-                    <div className="font-semibold">PDF Report</div>
-                    <div className="text-xs opacity-80">
-                      Transaction report only
-                    </div>
-                  </button>
-                  <button
                     onClick={() => setExportFormat("folder")}
                     className={`px-4 py-3 rounded-lg font-medium transition-all text-left ${
                       exportFormat === "folder"
@@ -429,10 +416,41 @@ function ExportModal({
                         : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                     }`}
                   >
-                    <div className="font-semibold">Audit Package</div>
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold">Audit Package</span>
+                      <span className={`text-xs px-2 py-0.5 rounded ${
+                        exportFormat === "folder"
+                          ? "bg-purple-400 text-white"
+                          : "bg-green-100 text-green-700"
+                      }`}>Recommended</span>
+                    </div>
                     <div className="text-xs opacity-80">
                       Folder with individual PDFs
                     </div>
+                  </button>
+                  <button
+                    onClick={() => setExportFormat("pdf")}
+                    className={`px-4 py-3 rounded-lg font-medium transition-all text-left ${
+                      exportFormat === "pdf"
+                        ? "bg-purple-500 text-white shadow-md"
+                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    }`}
+                  >
+                    <div className="font-semibold">Summary PDF</div>
+                    <div className="text-xs opacity-80">
+                      Transaction report only
+                    </div>
+                  </button>
+                  {/* One PDF - Coming Soon */}
+                  <button
+                    disabled
+                    className="px-4 py-3 rounded-lg font-medium text-left bg-gray-50 text-gray-400 cursor-not-allowed border border-gray-200"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold">One PDF</span>
+                      <span className="text-xs bg-gray-200 text-gray-500 px-2 py-0.5 rounded">Coming Soon</span>
+                    </div>
+                    <div className="text-xs opacity-80">Combined PDF with all content</div>
                   </button>
                   {/* Coming soon formats */}
                   <button
