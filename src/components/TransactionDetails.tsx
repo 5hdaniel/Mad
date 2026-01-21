@@ -28,6 +28,7 @@ import {
   TransactionHeader,
   TransactionTabs,
   TransactionDetailsTab,
+  TransactionEmailsTab,
   TransactionContactsTab,
   TransactionMessagesTab,
   TransactionAttachmentsTab,
@@ -301,15 +302,23 @@ function TransactionDetails({
           activeTab={activeTab}
           contactCount={contactAssignments.length}
           messageCount={textMessages.length}
+          emailCount={emailCommunications.length}
           attachmentCount={attachmentCount}
           onTabChange={setActiveTab}
         />
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
-          {activeTab === "details" && (
+          {activeTab === "overview" && (
             <TransactionDetailsTab
               transaction={transaction}
+              contactAssignments={contactAssignments}
+              loading={loading}
+            />
+          )}
+
+          {activeTab === "emails" && (
+            <TransactionEmailsTab
               communications={emailCommunications}
               loading={loading}
               unlinkingCommId={unlinkingCommId}
@@ -343,6 +352,8 @@ function TransactionDetails({
               onMessagesChanged={refreshMessages}
               onShowSuccess={showSuccess}
               onShowError={showError}
+              auditStartDate={transaction.started_at}
+              auditEndDate={transaction.closed_at}
             />
           )}
 

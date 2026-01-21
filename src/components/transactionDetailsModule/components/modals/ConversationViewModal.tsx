@@ -3,7 +3,7 @@
  * Phone-style popup modal for viewing a full conversation thread.
  * Supports inline display of image/GIF attachments (TASK-1012).
  */
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useMemo } from "react";
 import type { MessageLike } from "../MessageThreadCard";
 
 /**
@@ -27,6 +27,10 @@ interface ConversationViewModalProps {
   phoneNumber: string;
   /** Map of phone -> name for group chat sender resolution */
   contactNames?: Record<string, string>;
+  /** Audit period start date for filtering */
+  auditStartDate?: Date | string | null;
+  /** Audit period end date for filtering */
+  auditEndDate?: Date | string | null;
   /** Callback to close the modal */
   onClose: () => void;
 }
@@ -173,11 +177,23 @@ function AttachmentImage({
   );
 }
 
+/**
+ * Format a date range for display in the toggle label
+ */
+function formatDateRangeLabel(startDate: Date | null, endDate: Date | null): string {
+  if (!startDate || !endDate) return "";
+  const formatDate = (d: Date) =>
+    d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return `${formatDate(startDate)} - ${formatDate(endDate)}`;
+}
+
 export function ConversationViewModal({
   messages,
   contactName,
   phoneNumber,
   contactNames = {},
+  auditStartDate,
+  auditEndDate,
   onClose,
 }: ConversationViewModalProps): React.ReactElement {
   // Attachments state (TASK-1012)
@@ -187,12 +203,36 @@ export function ConversationViewModal({
   const [attachmentsLoading, setAttachmentsLoading] = useState(false);
   const loadedAttachmentsKeyRef = useRef<string>("");
 
+  // TASK-1157: Audit date filtering state
+  // Parse audit dates
+  const parsedStartDate = auditStartDate ? new Date(auditStartDate) : null;
+  const parsedEndDate = auditEndDate ? new Date(auditEndDate) : null;
+  const hasAuditDates = !!(parsedStartDate && parsedEndDate);
+
+  // Default to showing audit period only when dates are available
+  const [showAuditPeriodOnly, setShowAuditPeriodOnly] = useState<boolean>(hasAuditDates);
+
   // Sort messages chronologically
   const sortedMessages = [...messages].sort((a, b) => {
     const dateA = new Date(a.sent_at || a.received_at || 0).getTime();
     const dateB = new Date(b.sent_at || b.received_at || 0).getTime();
     return dateA - dateB;
   });
+
+  // TASK-1157: Filter messages by audit date range
+  const filteredMessages = React.useMemo(() => {
+    if (!showAuditPeriodOnly || !parsedStartDate || !parsedEndDate) {
+      return sortedMessages;
+    }
+    // Set end date to end of day for inclusive comparison
+    const endOfDay = new Date(parsedEndDate);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    return sortedMessages.filter((msg) => {
+      const msgDate = new Date(msg.sent_at || msg.received_at || 0);
+      return msgDate >= parsedStartDate && msgDate <= endOfDay;
+    });
+  }, [sortedMessages, showAuditPeriodOnly, parsedStartDate, parsedEndDate]);
 
   // Collect unique participants from all sources (not just inbound senders)
   const uniqueSenders = new Set<string>();
@@ -350,14 +390,37 @@ export function ConversationViewModal({
               {isGroupChat ? getGroupChatTitle() : (contactName || phoneNumber)}
             </h4>
             <p className="text-green-100 text-xs">
-              {messages.length} message{messages.length !== 1 ? "s" : ""}
+              {filteredMessages.length} message{filteredMessages.length !== 1 ? "s" : ""}
+              {showAuditPeriodOnly && hasAuditDates && filteredMessages.length !== sortedMessages.length && (
+                <span className="ml-1">of {sortedMessages.length}</span>
+              )}
             </p>
           </div>
         </div>
 
+        {/* TASK-1157: Audit date filter toggle */}
+        {hasAuditDates && (
+          <div className="bg-gray-100 px-4 py-2 flex items-center justify-between border-b border-gray-200">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showAuditPeriodOnly}
+                onChange={(e) => setShowAuditPeriodOnly(e.target.checked)}
+                className="w-4 h-4 rounded border-gray-300 text-green-500 focus:ring-green-500"
+              />
+              <span className="text-sm text-gray-700">
+                Show audit period only ({formatDateRangeLabel(parsedStartDate, parsedEndDate)})
+              </span>
+            </label>
+            <span className="text-xs text-gray-500">
+              Showing {filteredMessages.length} of {sortedMessages.length}
+            </span>
+          </div>
+        )}
+
         {/* Messages list - phone style */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          {sortedMessages.map((msg, index) => {
+          {filteredMessages.map((msg, index) => {
             const isOutbound = msg.direction === "outbound";
             const rawText =
               msg.body_text ||
@@ -384,7 +447,7 @@ export function ConversationViewModal({
               if (index === 0) {
                 showSender = true;
               } else {
-                const prevSender = getSenderPhone(sortedMessages[index - 1]);
+                const prevSender = getSenderPhone(filteredMessages[index - 1]);
                 if (prevSender) {
                   const prevNormalized = normalizePhoneForLookup(prevSender);
                   showSender = normalized !== prevNormalized;

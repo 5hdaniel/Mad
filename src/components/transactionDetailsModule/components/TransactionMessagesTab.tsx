@@ -33,6 +33,10 @@ interface TransactionMessagesTabProps {
   onShowSuccess?: (message: string) => void;
   /** Toast handler for error messages */
   onShowError?: (message: string) => void;
+  /** Audit period start date for filtering (TASK-1157) */
+  auditStartDate?: Date | string | null;
+  /** Audit period end date for filtering (TASK-1157) */
+  auditEndDate?: Date | string | null;
 }
 
 /**
@@ -84,6 +88,8 @@ export function TransactionMessagesTab({
   onMessagesChanged,
   onShowSuccess,
   onShowError,
+  auditStartDate,
+  auditEndDate,
 }: TransactionMessagesTabProps): React.ReactElement {
   const [showAttachModal, setShowAttachModal] = useState(false);
   const [unlinkTarget, setUnlinkTarget] = useState<{
@@ -392,6 +398,8 @@ export function TransactionMessagesTab({
               contactName={contactName}
               contactNames={contactNames}
               onUnlink={userId && transactionId ? handleUnlinkClick : undefined}
+              auditStartDate={auditStartDate}
+              auditEndDate={auditEndDate}
             />
           );
         })}
