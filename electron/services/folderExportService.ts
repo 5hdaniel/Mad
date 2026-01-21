@@ -885,10 +885,10 @@ class FolderExportService {
 
   /**
    * Check if a thread is a group chat (has multiple unique participants)
+   * Uses chat_members (authoritative) when available, falls back to from/to parsing
    */
   private _isGroupChat(msgs: Communication[]): boolean {
-    const participants = new Set<string>();
-
+    // First check for chat_members (authoritative source)
     for (const msg of msgs) {
       try {
         if (msg.participants) {
@@ -897,13 +897,43 @@ class FolderExportService {
               ? JSON.parse(msg.participants)
               : msg.participants;
 
-          if (parsed.from)
-            participants.add(parsed.from.replace(/\D/g, "").slice(-10));
+          // chat_members is the authoritative list from Apple's chat_handle_join
+          if (parsed.chat_members && Array.isArray(parsed.chat_members)) {
+            // chat_members doesn't include "me", so 2+ members means group chat (3+ total with user)
+            return parsed.chat_members.length >= 2;
+          }
+        }
+      } catch {
+        // Continue
+      }
+    }
+
+    // Fallback: extract from from/to (less reliable)
+    const participants = new Set<string>();
+    for (const msg of msgs) {
+      try {
+        if (msg.participants) {
+          const parsed =
+            typeof msg.participants === "string"
+              ? JSON.parse(msg.participants)
+              : msg.participants;
+
+          if (parsed.from) {
+            const normalized = parsed.from.replace(/\D/g, "").slice(-10);
+            // Skip "unknown" ghost participants
+            if (normalized && parsed.from.toLowerCase() !== "unknown") {
+              participants.add(normalized);
+            }
+          }
           if (parsed.to) {
             const toList = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
-            toList.forEach((p: string) =>
-              participants.add(p.replace(/\D/g, "").slice(-10))
-            );
+            toList.forEach((p: string) => {
+              const normalized = p.replace(/\D/g, "").slice(-10);
+              // Skip "unknown" ghost participants
+              if (normalized && p.toLowerCase() !== "unknown") {
+                participants.add(normalized);
+              }
+            });
           }
         }
       } catch {
@@ -917,7 +947,8 @@ class FolderExportService {
 
   /**
    * Get all participants in a group chat with their names and phone numbers
-   * Handles special cases like "me" (user's messages) and "unknown"
+   * Uses chat_members (from Apple's chat_handle_join table) as the authoritative source
+   * Falls back to from/to extraction only if chat_members unavailable
    */
   private getGroupChatParticipants(
     msgs: Communication[],
@@ -926,7 +957,9 @@ class FolderExportService {
     userEmail?: string
   ): Array<{ phone: string; name: string | null }> {
     const participantPhones = new Set<string>();
+    let hasChatMembers = false;
 
+    // First pass: look for chat_members (authoritative source from Apple's chat_handle_join)
     for (const msg of msgs) {
       try {
         if (msg.participants) {
@@ -935,16 +968,41 @@ class FolderExportService {
               ? JSON.parse(msg.participants)
               : msg.participants;
 
-          if (parsed.from) {
-            participantPhones.add(parsed.from);
-          }
-          if (parsed.to) {
-            const toList = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
-            toList.forEach((p: string) => participantPhones.add(p));
+          // Use chat_members as authoritative source if available
+          if (parsed.chat_members && Array.isArray(parsed.chat_members) && parsed.chat_members.length > 0) {
+            hasChatMembers = true;
+            parsed.chat_members.forEach((member: string) => participantPhones.add(member));
+            // Add "me" since chat_members doesn't include the user
+            participantPhones.add("me");
+            break; // chat_members is consistent across all messages, so we only need it once
           }
         }
       } catch {
         // Continue
+      }
+    }
+
+    // Fallback: if no chat_members, extract from from/to (less reliable)
+    if (!hasChatMembers) {
+      for (const msg of msgs) {
+        try {
+          if (msg.participants) {
+            const parsed =
+              typeof msg.participants === "string"
+                ? JSON.parse(msg.participants)
+                : msg.participants;
+
+            if (parsed.from) {
+              participantPhones.add(parsed.from);
+            }
+            if (parsed.to) {
+              const toList = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
+              toList.forEach((p: string) => participantPhones.add(p));
+            }
+          }
+        } catch {
+          // Continue
+        }
       }
     }
 
@@ -953,7 +1011,7 @@ class FolderExportService {
       .filter((phone) => {
         // Filter out empty/null values
         if (!phone || phone.trim() === "") return false;
-        // Filter out "unknown" - these are ghost participants with no real identity
+        // Filter out "unknown" - ghost participants from NULL handles (only relevant in fallback path)
         if (phone.toLowerCase().trim() === "unknown") return false;
         return true;
       })
