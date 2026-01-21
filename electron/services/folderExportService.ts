@@ -958,8 +958,10 @@ class FolderExportService {
   ): Array<{ phone: string; name: string | null }> {
     const participantPhones = new Set<string>();
     let hasChatMembers = false;
+    let userIdentifier: string | null = null;
 
     // First pass: look for chat_members (authoritative source from Apple's chat_handle_join)
+    // Also extract the user's identifier from outbound messages
     for (const msg of msgs) {
       try {
         if (msg.participants) {
@@ -969,17 +971,25 @@ class FolderExportService {
               : msg.participants;
 
           // Use chat_members as authoritative source if available
-          if (parsed.chat_members && Array.isArray(parsed.chat_members) && parsed.chat_members.length > 0) {
+          if (!hasChatMembers && parsed.chat_members && Array.isArray(parsed.chat_members) && parsed.chat_members.length > 0) {
             hasChatMembers = true;
             parsed.chat_members.forEach((member: string) => participantPhones.add(member));
-            // Add "me" since chat_members doesn't include the user
-            participantPhones.add("me");
-            break; // chat_members is consistent across all messages, so we only need it once
+          }
+
+          // Extract user's identifier from outbound messages (from field when direction is outbound)
+          // The from field now contains the actual identifier (email or phone) instead of "me"
+          if (!userIdentifier && msg.direction === "outbound" && parsed.from) {
+            userIdentifier = parsed.from;
           }
         }
       } catch {
         // Continue
       }
+    }
+
+    // Add user's identifier (or fallback to "me" for old data)
+    if (hasChatMembers) {
+      participantPhones.add(userIdentifier || "me");
     }
 
     // Fallback: if no chat_members, extract from from/to (less reliable)
