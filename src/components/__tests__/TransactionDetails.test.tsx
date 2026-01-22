@@ -129,9 +129,9 @@ describe("TransactionDetails", () => {
       expect(screen.getByText("John Buyer")).toBeInTheDocument();
       expect(screen.getByText("Jane Lender")).toBeInTheDocument();
 
-      // Should show roles
-      expect(screen.getByText("buyer")).toBeInTheDocument();
-      expect(screen.getByText("lender")).toBeInTheDocument();
+      // Should show roles (formatted with title case)
+      expect(screen.getByText("Buyer")).toBeInTheDocument();
+      expect(screen.getByText("Lender")).toBeInTheDocument();
 
       // Should show Primary badge for first suggestion
       expect(screen.getByText("Primary")).toBeInTheDocument();

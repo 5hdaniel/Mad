@@ -6,6 +6,7 @@
 import React from "react";
 import type { Transaction } from "@/types";
 import type { ContactAssignment, ResolvedSuggestedContact } from "../types";
+import { formatRoleLabel } from "@/utils/transactionRoleUtils";
 
 interface TransactionDetailsTabProps {
   transaction: Transaction;
@@ -429,7 +430,7 @@ function ContactSummaryCard({
       </div>
       {/* Role badge */}
       <span className="inline-block px-3 py-1 bg-green-100 text-green-800 text-xs font-semibold rounded-full">
-        {role}
+        {formatRoleLabel(role)}
       </span>
     </div>
   );
@@ -460,7 +461,7 @@ function SuggestedContactCard({
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-2">
             <span className="inline-block px-3 py-1 bg-purple-100 text-purple-800 text-xs font-semibold rounded-full">
-              {suggestion.role}
+              {formatRoleLabel(suggestion.role)}
             </span>
             {suggestion.is_primary && (
               <span className="inline-block px-2 py-1 bg-blue-100 text-blue-800 text-xs font-semibold rounded-full">
