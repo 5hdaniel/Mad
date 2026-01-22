@@ -35,6 +35,10 @@ module.exports = {
     // Native database modules - must be mocked to avoid binding errors
     '^better-sqlite3-multiple-ciphers$': '<rootDir>/tests/__mocks__/better-sqlite3-multiple-ciphers.js',
     '^sqlite3$': '<rootDir>/tests/__mocks__/sqlite3.js',
+    // Path aliases from tsconfig
+    '^@/(.*)$': '<rootDir>/src/$1',
+    '^@electron/(.*)$': '<rootDir>/electron/$1',
+    '^@types/(.*)$': '<rootDir>/types/$1',
   },
 
   // Coverage configuration
