@@ -31,7 +31,6 @@ import {
   TransactionEmailsTab,
   TransactionMessagesTab,
   TransactionAttachmentsTab,
-  ExportSuccessMessage,
   DeleteConfirmModal,
   UnlinkEmailModal,
   EmailViewModal,
@@ -153,7 +152,6 @@ function TransactionDetails({
 
   // Modal states
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
-  const [exportSuccess, setExportSuccess] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean>(false);
   const [showRejectReasonModal, setShowRejectReasonModal] = useState<boolean>(false);
   const [rejectReason, setRejectReason] = useState<string>("");
@@ -165,11 +163,10 @@ function TransactionDetails({
   const isRejected = transaction.detection_status === "rejected";
 
   // Export handlers
-  const handleExportComplete = async (result: unknown): Promise<void> => {
-    const exportResult = result as { path?: string };
+  const handleExportComplete = async (_result: unknown): Promise<void> => {
     setShowExportModal(false);
-    setExportSuccess(exportResult.path || null);
-    setTimeout(() => setExportSuccess(null), 5000);
+    // The ExportModal now shows its own success screen (step 5) with buttons
+    // No need to show a separate success bar in TransactionDetails
 
     // Refresh transaction data to reflect any date changes made during export
     try {
@@ -339,9 +336,6 @@ function TransactionDetails({
           onShowExportModal={() => setShowExportModal(true)}
           onShowDeleteConfirm={() => setShowDeleteConfirm(true)}
         />
-
-        {/* Export Success Message */}
-        {exportSuccess && <ExportSuccessMessage message={exportSuccess} />}
 
         {/* Tabs */}
         <TransactionTabs
