@@ -152,7 +152,7 @@ BACKLOG-166,"Platform Detection Returns ""unknown"" in Renderer",service,Medium,
 BACKLOG-167,Restrict Status Options for Manual Transactions,feature,Low,Pending,SPRINT-049,~15K,-,-,[BACKLOG-167.md](BACKLOG-167.md)
 BACKLOG-168,Transaction Bulk Edit Multi-Select Modal,ui,Medium,Pending,-,~20K,-,-,[BACKLOG-168.md](BACKLOG-168.md)
 BACKLOG-169,Show in Folder Button for Exports,ui,Medium,Completed,SPRINT-028,~15K,-,"TASK-1008, PR #366",[BACKLOG-169.md](BACKLOG-169.md)
-BACKLOG-170,Messages Not Loading in Attach Modal,fix,Critical,Needs_Feature,-,~5K,-,-,[BACKLOG-170.md](BACKLOG-170.md)
+BACKLOG-170,Messages Not Loading in Attach Modal,fix,Critical,Deferred,-,~5K,-,-,[BACKLOG-170.md](BACKLOG-170.md)
 BACKLOG-171,Contacts Not Pre-Populated When Editing Transaction,fix,High,Obsolete,-,~25K,-,Superseded by BACKLOG-210,[BACKLOG-171.md](items/BACKLOG-171.md)
 BACKLOG-172,macOS Messages Import,feature,High,Pending,-,~25K,-,-,[BACKLOG-172.md](items/BACKLOG-172.md)
 BACKLOG-173,Contact-First AttachMessagesModal Interface,ui,High,Completed,-,~40K,-,"TASK-989, PR #353",[BACKLOG-173.md](BACKLOG-173.md)
@@ -216,7 +216,7 @@ BACKLOG-234,Fix Race Condition in Sync Orchestrator,service,Critical,Pending,-,~
 BACKLOG-235,Patch jsdiff DoS Vulnerability,security,Critical,Completed,-,~10K,-,npm audit vulnerability,PR #434
 BACKLOG-236,Fix Incomplete PII Masking in LLM Pipeline,security,Critical,Completed,-,~45K,-,Content sent to LLM may expose PII,PR #436
 BACKLOG-287,Dashboard Visible After Logout,security,Critical,Completed,-,~30K,-,Auth state not cleared on logout,PR #437
-BACKLOG-237,Reduce Transactions.tsx State Complexity (17 useState),refactor,Critical,In_Progress,TASK-1159,~60K,-,Extract to custom hooks/context,feature/BACKLOG-237-reduce-transactions-state
+BACKLOG-237,Reduce Transactions.tsx State Complexity (17 useState),refactor,Critical,In-Progress,TASK-1159,~60K,-,Extract to custom hooks/context,feature/BACKLOG-237-reduce-transactions-state
 BACKLOG-238,Break Down Oversized Flow Hooks,refactor,Critical,Pending,-,~100K,-,"useEmailHandlers 382 lines, useAuthFlow 233 lines",-
 BACKLOG-239,Reduce Direct Database Access Pattern,refactor,Critical,Pending,-,~120K,-,45 instances of const db = pattern,-
 BACKLOG-240,Implement Database Migration Rollback Strategy,infra,Critical,Pending,-,~60K,-,No rollback procedures exist,-
