@@ -1,6 +1,7 @@
-# BACKLOG-356: Redesign Text Conversation Cards (Date Range, No Preview)
+# BACKLOG-356: Text Conversation Card Design Refinements
 
 **Created**: 2026-01-21
+**Updated**: 2026-01-22
 **Priority**: Medium
 **Category**: UI
 **Status**: Pending
@@ -9,40 +10,55 @@
 
 ## Description
 
-Redesign the Text Conversation cards in the transaction details view to be cleaner and more informative:
+Refine the text conversation cards in transaction details for consistency.
 
-**Current:**
+## Current State
+
+Cards already show the compact format with date range. Just need consistency tweaks.
+
+## Required Changes
+
+### 1. 1:1 Chats - Consistent Phone Layout
+Put the phone number on its own line under the contact name (for design consistency):
+
 ```
 GianCarlo
 +14243335133
-75 messages
-"Last message preview text..."
-[View]
+Jan 1 - Jan 6                    View Full →
 ```
 
-**Expected:**
+(Currently it wraps to second line only if name is long - make it always on second line)
+
+### 2. Group Chats - Recipients Format
+- Remove the colon after "Group Chat" (or header)
+- Put all recipients on a new line
+- Use same font styling as phone number in 1:1 chats
+
 ```
-GianCarlo (+14243335133) Jan 1, 2026 - Jan 6, 2026    View Full →
+Group Chat
+John, Sarah, Mike
+Jan 1 - Jan 6                    View Full →
 ```
 
-## Changes
+NOT:
+```
+Group Chat: John, Sarah, Mike    (wrong - has colon)
+```
 
-1. **Remove**: Last message preview text
-2. **Remove**: Message count
-3. **Remove**: Phone number on separate line
-4. **Add**: Phone number inline with name in parentheses
-5. **Add**: Date range showing first to last message dates
-6. **Update**: "View" button to "View Full →"
+### 3. Prioritize Contact Names
+- Always show contact display name if available
+- Only show phone number if no contact name exists
+- For group chats, show all names (not phone numbers)
 
 ## Acceptance Criteria
 
-- [ ] Contact name with phone in parentheses on same line
-- [ ] Date range (first message - last message) displayed
-- [ ] No message preview text
-- [ ] No message count
-- [ ] "View Full →" button styling
+- [ ] 1:1 chats: Phone number always on separate line under name
+- [ ] Group chats: No colon, recipients on their own line
+- [ ] Group chat recipients use same font as 1:1 phone numbers
+- [ ] Contact names prioritized over phone numbers
+- [ ] Consistent styling between 1:1 and group chat cards
 
 ## Related
 
 - MessageThreadCard.tsx
-- TransactionDetailsTab.tsx
+- TransactionMessagesTab.tsx
