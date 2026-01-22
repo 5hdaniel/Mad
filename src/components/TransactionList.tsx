@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import type { Transaction, OAuthProvider } from "@/types";
+import type { TransactionTab } from "./transactionDetailsModule/types";
 import AuditTransactionModal from "./AuditTransactionModal";
 import ExportModal from "./ExportModal";
 import TransactionDetails from "./TransactionDetails";
@@ -89,6 +90,9 @@ function TransactionList({
   const [quickExportSuccess, setQuickExportSuccess] = useState<string | null>(
     null,
   );
+
+  // Initial tab state for TransactionDetails
+  const [initialTab, setInitialTab] = useState<TransactionTab>("overview");
 
   // Selection state for bulk operations
   const {
@@ -212,9 +216,38 @@ function TransactionList({
       toggleSelection(transaction.id);
     } else if (transaction.detection_status === "pending" || transaction.status === "pending") {
       // Pending transactions open in review mode with approve/reject/edit buttons
+      setInitialTab("overview");
       setPendingReviewTransaction(transaction);
     } else {
+      setInitialTab("overview");
       setSelectedTransaction(transaction);
+    }
+  };
+
+  // Create handlers that include the transaction context for communication count clicks
+  const createMessagesClickHandler = (transaction: Transaction) => (e: React.MouseEvent): void => {
+    e.stopPropagation();
+    if (!selectionMode) {
+      if (transaction.detection_status === "pending" || transaction.status === "pending") {
+        setInitialTab("messages");
+        setPendingReviewTransaction(transaction);
+      } else {
+        setInitialTab("messages");
+        setSelectedTransaction(transaction);
+      }
+    }
+  };
+
+  const createEmailsClickHandler = (transaction: Transaction) => (e: React.MouseEvent): void => {
+    e.stopPropagation();
+    if (!selectionMode) {
+      if (transaction.detection_status === "pending" || transaction.status === "pending") {
+        setInitialTab("emails");
+        setPendingReviewTransaction(transaction);
+      } else {
+        setInitialTab("emails");
+        setSelectedTransaction(transaction);
+      }
     }
   };
 
@@ -343,6 +376,8 @@ function TransactionList({
                     isSelected={isSelected(transaction.id)}
                     onTransactionClick={() => handleTransactionClick(transaction)}
                     onCheckboxClick={(e) => handleCheckboxClick(e, transaction.id)}
+                    onMessagesClick={createMessagesClickHandler(transaction)}
+                    onEmailsClick={createEmailsClickHandler(transaction)}
                     formatCurrency={formatCurrency}
                     formatDate={formatDate}
                   />
@@ -362,6 +397,7 @@ function TransactionList({
           userId={userId}
           onShowSuccess={showSuccess}
           onShowError={showError}
+          initialTab={initialTab}
         />
       )}
 
@@ -375,6 +411,7 @@ function TransactionList({
           userId={userId}
           onShowSuccess={showSuccess}
           onShowError={showError}
+          initialTab={initialTab}
         />
       )}
 
