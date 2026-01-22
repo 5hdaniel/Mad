@@ -1206,6 +1206,49 @@ interface MainAPI {
       overallProgress: number;
       currentItem?: string;
     }) => void) => () => void;
+
+    // ============================================
+    // SYNC METHODS (BACKLOG-395)
+    // ============================================
+
+    /**
+     * Trigger manual sync of submission statuses
+     */
+    syncSubmissions: () => Promise<{
+      success: boolean;
+      updated?: number;
+      failed?: number;
+      details?: Array<{
+        transactionId: string;
+        propertyAddress: string;
+        oldStatus: string;
+        newStatus: string;
+        reviewNotes?: string;
+      }>;
+      error?: string;
+    }>;
+
+    /**
+     * Sync a specific transaction's submission status
+     */
+    syncSubmission: (transactionId: string) => Promise<{
+      success: boolean;
+      updated?: boolean;
+      error?: string;
+    }>;
+
+    /**
+     * Listen for submission status change events
+     */
+    onSubmissionStatusChanged: (callback: (data: {
+      transactionId: string;
+      propertyAddress: string;
+      oldStatus: string;
+      newStatus: string;
+      reviewNotes?: string;
+      title: string;
+      message: string;
+    }) => void) => () => void;
   };
 
   // Transaction scan progress event

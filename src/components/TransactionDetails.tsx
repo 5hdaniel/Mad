@@ -38,6 +38,8 @@ import {
   EditContactsModal,
   groupMessagesByThread,
 } from "./transactionDetailsModule";
+// Import ReviewNotesPanel for displaying broker feedback (BACKLOG-395)
+import { ReviewNotesPanel } from "./transactionDetailsModule/components/ReviewNotesPanel";
 import type { AutoLinkResult } from "./transactionDetailsModule/components/modals/EditContactsModal";
 
 import type { TransactionTab } from "./transactionDetailsModule/types";
@@ -355,6 +357,17 @@ function TransactionDetails({
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
+          {/* Review Notes Panel - shown when broker requests changes (BACKLOG-395) */}
+          {transaction.submission_status === "needs_changes" && transaction.last_review_notes && (
+            <ReviewNotesPanel
+              reviewNotes={transaction.last_review_notes}
+              onResubmit={() => {
+                // Will be handled by TransactionHeader submit button
+                // This is just a visual shortcut
+              }}
+            />
+          )}
+
           {activeTab === "overview" && (
             <TransactionDetailsTab
               transaction={transaction}

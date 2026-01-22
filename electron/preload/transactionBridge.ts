@@ -404,4 +404,52 @@ export const transactionBridge = {
       ipcRenderer.removeListener("transactions:submit-progress", handler);
     };
   },
+
+  // ============================================
+  // SYNC METHODS (BACKLOG-395)
+  // ============================================
+
+  /**
+   * Trigger manual sync of submission statuses
+   * @returns Sync result with updated count
+   */
+  syncSubmissions: () =>
+    ipcRenderer.invoke("transactions:sync-submissions"),
+
+  /**
+   * Sync a specific transaction's submission status
+   * @param transactionId - Transaction ID to sync
+   * @returns Whether status was updated
+   */
+  syncSubmission: (transactionId: string) =>
+    ipcRenderer.invoke("transactions:sync-submission", transactionId),
+
+  /**
+   * Listen for submission status change events
+   * @param callback - Status change callback
+   * @returns Cleanup function
+   */
+  onSubmissionStatusChanged: (callback: (data: {
+    transactionId: string;
+    propertyAddress: string;
+    oldStatus: string;
+    newStatus: string;
+    reviewNotes?: string;
+    title: string;
+    message: string;
+  }) => void) => {
+    const handler = (_event: unknown, data: {
+      transactionId: string;
+      propertyAddress: string;
+      oldStatus: string;
+      newStatus: string;
+      reviewNotes?: string;
+      title: string;
+      message: string;
+    }) => callback(data);
+    ipcRenderer.on("submission-status-changed", handler);
+    return () => {
+      ipcRenderer.removeListener("submission-status-changed", handler);
+    };
+  },
 };

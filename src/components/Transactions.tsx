@@ -27,6 +27,7 @@ import {
 import { BulkSubmitModal } from "./BulkSubmitModal";
 import { useSelection } from "../hooks/useSelection";
 import { useBulkSubmit } from "../hooks/useBulkSubmit";
+import { useSubmissionSync } from "../hooks/useSubmissionSync";
 import { useAppStateMachine } from "../appCore";
 import { useToast } from "../hooks/useToast";
 import { ToastContainer } from "./Toast";
@@ -127,6 +128,15 @@ function Transactions({
     refetch,
     setError
   );
+
+  // Submission sync - listens for status changes from cloud (BACKLOG-395)
+  useSubmissionSync({
+    onStatusChange: () => {
+      // Refresh transaction list when status changes
+      refetch();
+    },
+    showToasts: true,
+  });
 
   // Modal states
   const {
