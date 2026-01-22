@@ -302,7 +302,7 @@ BACKLOG-327,PDF Export Show Rich HTML Emails,feature,Medium,Pending,-,~20K,-,-,2
 BACKLOG-329,Email Card Design Consistency with Message Cards,ui,Low,Pending,-,~8K,-,Includes View button,2026-01-17,,[BACKLOG-329.md](items/BACKLOG-329.md)
 BACKLOG-330,Sort Contacts by Most Recent Communication,ui,Medium,Pending,-,~8K,-,-,2026-01-17,,[BACKLOG-330.md](items/BACKLOG-330.md)
 BACKLOG-331,PDF Export Date Range Filtering,feature,Medium,Pending,-,-,-,-,2026-01-19,,[BACKLOG-331.md](BACKLOG-331.md)
-BACKLOG-332,Audit Package Missing Attachments and Text Messages,feature,High,Pending,SPRINT-049,-,-,-,2026-01-19,,[BACKLOG-332.md](BACKLOG-332.md)
+BACKLOG-332,Audit Package Missing Attachments and Text Messages,feature,High,Completed,SPRINT-049,-,-,-,2026-01-19,2026-01-22,[BACKLOG-332.md](BACKLOG-332.md)
 BACKLOG-333,Gray Out Unimplemented Export Options with Coming Soon Label,ui,Low,Pending,-,-,-,-,2026-01-19,,[BACKLOG-333.md](BACKLOG-333.md)
 BACKLOG-334,Export Settings - Persist Default Export Options and Format,feature,Medium,Pending,-,-,-,-,2026-01-19,,[BACKLOG-334.md](BACKLOG-334.md)
 BACKLOG-335,Enforce Transaction Start Date with Historical Message Filtering,service,High,Pending,SPRINT-049,-,-,-,2026-01-19,,[BACKLOG-335.md](BACKLOG-335.md)
