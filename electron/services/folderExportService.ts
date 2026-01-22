@@ -1336,10 +1336,13 @@ class FolderExportService {
         const resolvedName =
           phoneNameMap[normalized] || phoneNameMap[msg.sender];
         senderName = resolvedName || msg.sender;
+        // Show phone only in group chats to identify sender
         if (resolvedName) senderPhone = msg.sender;
       } else {
+        // For 1:1 chats, use thread contact info
         senderName = contact.name || contact.phone;
-        if (contact.name) senderPhone = contact.phone;
+        // Don't show phone under each message in 1:1 chats (it's redundant)
+        // Phone is already shown in thread header
       }
     }
 
@@ -1410,7 +1413,7 @@ class FolderExportService {
     <div class="message${isOutbound ? " outbound" : ""}">
       <span class="sender">${this.escapeHtml(senderName)}</span>
       <span class="time">${time}</span>
-      ${senderPhone ? `<span class="phone">${this.escapeHtml(senderPhone)}</span>` : ""}
+      ${senderPhone && isGroupChat ? `<span class="phone">${this.escapeHtml(senderPhone)}</span>` : ""}
       ${bodyContent ? `<div class="body">${bodyContent}</div>` : ""}
       ${attachmentHtml}
     </div>
