@@ -99,7 +99,7 @@ export function useNavigationFlow(
     );
   }
 
-  const { state } = machineState;
+  const { state, dispatch } = machineState;
 
   // Derive currentStep from state machine - pure derivation, no effects
   const currentStep = deriveAppStep(state);
@@ -116,8 +116,10 @@ export function useNavigationFlow(
   }, []);
 
   const goToEmailOnboarding = useCallback(() => {
-    // No-op: state machine drives navigation
-  }, []);
+    // Dispatch START_EMAIL_SETUP action to transition from ready to onboarding
+    // This allows users to connect their email from the dashboard after skipping initial setup
+    dispatch({ type: "START_EMAIL_SETUP" });
+  }, [dispatch]);
 
   // handleDismissSetupPrompt works - it's a UI-only concern
   const handleDismissSetupPrompt = useCallback((): void => {
