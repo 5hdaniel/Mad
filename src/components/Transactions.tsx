@@ -24,7 +24,9 @@ import {
   BulkDeleteConfirmModal,
   BulkExportModal,
 } from "./BulkActionBar";
+import { BulkSubmitModal } from "./BulkSubmitModal";
 import { useSelection } from "../hooks/useSelection";
+import { useBulkSubmit } from "../hooks/useBulkSubmit";
 import { useAppStateMachine } from "../appCore";
 import { useToast } from "../hooks/useToast";
 import { ToastContainer } from "./Toast";
@@ -181,6 +183,64 @@ function Transactions({
     closeBulkDeleteModal: closeBulkDeleteConfirm,
     closeBulkExportModal,
   });
+
+  // Bulk submit state (BACKLOG-392)
+  const [showBulkSubmitModal, setShowBulkSubmitModal] = useState(false);
+  const {
+    isSubmitting: isBulkSubmitting,
+    progress: bulkSubmitProgress,
+    startBulkSubmit,
+    cancelSubmission: cancelBulkSubmission,
+    reset: resetBulkSubmit,
+  } = useBulkSubmit();
+
+  // Get transactions eligible for submission
+  const getSubmittableTransactions = useCallback(() => {
+    return filteredTransactions.filter((t) => {
+      if (!selectedIds.has(t.id)) return false;
+      const status = t.submission_status;
+      return (
+        status === undefined ||
+        status === "not_submitted" ||
+        status === "needs_changes" ||
+        status === "rejected"
+      );
+    });
+  }, [filteredTransactions, selectedIds]);
+
+  // Handle opening bulk submit modal
+  const handleOpenBulkSubmitModal = useCallback(() => {
+    setShowBulkSubmitModal(true);
+  }, []);
+
+  // Handle closing bulk submit modal
+  const handleCloseBulkSubmitModal = useCallback(() => {
+    setShowBulkSubmitModal(false);
+    resetBulkSubmit();
+  }, [resetBulkSubmit]);
+
+  // Handle bulk submit
+  const handleBulkSubmit = useCallback(async () => {
+    const submittable = getSubmittableTransactions();
+    if (submittable.length === 0) return;
+
+    await startBulkSubmit(submittable.map((t) => ({
+      id: t.id,
+      property_address: t.property_address,
+      submission_status: t.submission_status,
+      message_count: t.message_count,
+      attachment_count: t.attachment_count,
+    })));
+
+    // Refresh transactions to get updated statuses
+    await refetch();
+  }, [getSubmittableTransactions, startBulkSubmit, refetch]);
+
+  // Handle closing after completion
+  const handleBulkSubmitComplete = useCallback(() => {
+    handleCloseBulkSubmitModal();
+    exitSelectionMode();
+  }, [handleCloseBulkSubmitModal, exitSelectionMode]);
 
   // DEFENSIVE CHECK: Return loading state if database not initialized
   // Should never trigger if AppShell gate works, but prevents errors if bypassed
@@ -444,10 +504,12 @@ function Transactions({
           onBulkDelete={openBulkDeleteConfirm}
           onBulkExport={openBulkExportModal}
           onBulkStatusChange={handleBulkStatusChange}
+          onBulkSubmit={handleOpenBulkSubmitModal}
           onClose={handleCloseBulkEdit}
           isDeleting={isBulkDeleting}
           isExporting={isBulkExporting}
           isUpdating={isBulkUpdating}
+          isSubmitting={isBulkSubmitting}
           selectedTransactions={filteredTransactions.filter((t) =>
             selectedIds.has(t.id)
           )}
@@ -471,6 +533,27 @@ function Transactions({
           onConfirm={handleBulkExport}
           onCancel={closeBulkExportModal}
           isExporting={isBulkExporting}
+        />
+      )}
+
+      {/* Bulk Submit Modal (BACKLOG-392) */}
+      {showBulkSubmitModal && (
+        <BulkSubmitModal
+          transactions={getSubmittableTransactions().map((t) => ({
+            id: t.id,
+            property_address: t.property_address,
+            submission_status: t.submission_status,
+            message_count: t.message_count,
+            attachment_count: t.attachment_count,
+            email_count: t.email_count,
+            text_count: t.text_count,
+          }))}
+          isSubmitting={isBulkSubmitting}
+          progress={bulkSubmitProgress}
+          onSubmit={handleBulkSubmit}
+          onCancel={handleCloseBulkSubmitModal}
+          onCancelRemaining={cancelBulkSubmission}
+          onClose={handleBulkSubmitComplete}
         />
       )}
 
