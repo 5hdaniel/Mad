@@ -124,7 +124,7 @@ export async function getTransactions(
                                    OR (c.message_id IS NULL AND c.thread_id IS NOT NULL AND c.thread_id = m.thread_id)
               WHERE c.transaction_id = t.id
               AND COALESCE(m.channel, c.communication_type) = 'email') as email_count,
-             (SELECT COUNT(DISTINCT COALESCE(c.thread_id, c.id)) FROM communications c
+             (SELECT COUNT(DISTINCT COALESCE(m.thread_id, c.thread_id, c.id)) FROM communications c
               LEFT JOIN messages m ON (c.message_id IS NOT NULL AND c.message_id = m.id)
                                    OR (c.message_id IS NULL AND c.thread_id IS NOT NULL AND c.thread_id = m.thread_id)
               WHERE c.transaction_id = t.id

@@ -413,7 +413,7 @@ export function TransactionMessagesTab({
       <div className="flex items-center justify-between mb-4">
         <div>
           <h3 className="text-lg font-medium text-gray-900">
-            Text Messages ({filteredMessageCount})
+            Texts ({filteredMessageCount})
             {showAuditPeriodOnly && hasAuditDates && filteredMessageCount !== totalMessageCount && (
               <span className="text-sm font-normal text-gray-500 ml-1">
                 of {totalMessageCount}

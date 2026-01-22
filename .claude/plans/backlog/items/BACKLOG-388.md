@@ -3,9 +3,9 @@
 **Created**: 2026-01-22
 **Priority**: Medium
 **Category**: Bug/UI
-**Status**: Closed
-**Closed**: 2026-01-22
-**Resolution**: Fixed via PR #519
+**Status**: Reopened
+**Reopened**: 2026-01-22
+**Note**: Original fix (PR #519) addressed label only. Real issue is count mismatch - see BACKLOG-390
 
 ---
 

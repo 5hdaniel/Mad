@@ -49,18 +49,18 @@ const EmailsIcon = (): React.ReactElement => (
  * Handles singular/plural grammar. Always shows both counts for design consistency.
  *
  * @example
- * formatCommunicationCounts(5, 0) // "5 email threads, 0 texts"
- * formatCommunicationCounts(0, 3) // "0 email threads, 3 texts"
- * formatCommunicationCounts(8, 4) // "8 email threads, 4 texts"
- * formatCommunicationCounts(1, 1) // "1 email thread, 1 text"
- * formatCommunicationCounts(0, 0) // "0 email threads, 0 texts"
+ * formatCommunicationCounts(5, 0) // "5 email threads, 0 Texts"
+ * formatCommunicationCounts(0, 3) // "0 email threads, 3 Texts"
+ * formatCommunicationCounts(8, 4) // "8 email threads, 4 Texts"
+ * formatCommunicationCounts(1, 1) // "1 email thread, 1 Text"
+ * formatCommunicationCounts(0, 0) // "0 email threads, 0 Texts"
  */
 export function formatCommunicationCounts(
   emailCount: number,
   textCount: number
 ): string {
   const emailPart = `${emailCount} ${emailCount === 1 ? "email thread" : "email threads"}`;
-  const textPart = `${textCount} ${textCount === 1 ? "text" : "texts"}`;
+  const textPart = `${textCount} ${textCount === 1 ? "Text" : "Texts"}`;
 
   return `${emailPart}, ${textPart}`;
 }
@@ -210,7 +210,7 @@ function TransactionCard({
               title="View messages"
             >
               <MessagesIcon />
-              <span>{textCount} {textCount === 1 ? "text" : "texts"}</span>
+              <span>{textCount} {textCount === 1 ? "Text" : "Texts"}</span>
             </button>
             {/* Emails count - clickable, RIGHT position */}
             <button
