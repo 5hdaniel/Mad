@@ -2,7 +2,54 @@
 -- B2B BROKER PORTAL SCHEMA
 -- Migration: 20260122_b2b_broker_portal
 -- Purpose: Organizations, submissions, broker review workflow
+-- Auth: Uses Supabase Auth (auth.users) as source of truth
 -- ============================================
+
+-- ============================================
+-- PROFILES TABLE (extends auth.users)
+-- ============================================
+-- Stores additional user data not in auth.users
+-- 1:1 relationship with auth.users
+CREATE TABLE IF NOT EXISTS profiles (
+  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+
+  -- Display Info (can differ from auth metadata)
+  display_name TEXT,
+  avatar_url TEXT,
+
+  -- Subscription (for standalone B2C users)
+  subscription_tier VARCHAR(50) DEFAULT 'free' CHECK (subscription_tier IN ('free', 'pro', 'enterprise')),
+  subscription_status VARCHAR(50) DEFAULT 'trial' CHECK (subscription_status IN ('trial', 'active', 'expired', 'cancelled')),
+  trial_ends_at TIMESTAMPTZ,
+
+  -- Usage Tracking
+  login_count INTEGER DEFAULT 0,
+  last_login_at TIMESTAMPTZ,
+  signup_source VARCHAR(50) DEFAULT 'desktop_app',
+
+  -- Timestamps
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Auto-create profile when user signs up
+CREATE OR REPLACE FUNCTION handle_new_user_profile()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO public.profiles (id, display_name, avatar_url, trial_ends_at)
+  VALUES (
+    NEW.id,
+    COALESCE(NEW.raw_user_meta_data ->> 'full_name', NEW.raw_user_meta_data ->> 'name'),
+    NEW.raw_user_meta_data ->> 'avatar_url',
+    NOW() + INTERVAL '14 days'
+  );
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION handle_new_user_profile();
 
 -- ============================================
 -- ORGANIZATIONS TABLE
@@ -36,7 +83,7 @@ CREATE TABLE IF NOT EXISTS organizations (
 CREATE TABLE IF NOT EXISTS organization_members (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-  user_id UUID REFERENCES users(id) ON DELETE CASCADE,  -- NULL until user accepts invite
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,  -- NULL until user accepts invite
 
   -- Role & Status
   role VARCHAR(50) NOT NULL CHECK (role IN ('agent', 'broker', 'admin', 'it_admin')),
@@ -46,7 +93,7 @@ CREATE TABLE IF NOT EXISTS organization_members (
   invited_email TEXT,  -- email invited (may differ from user's email)
   invitation_token TEXT UNIQUE,  -- for invitation links
   invitation_expires_at TIMESTAMPTZ,
-  invited_by UUID REFERENCES users(id),
+  invited_by UUID REFERENCES auth.users(id),
   invited_at TIMESTAMPTZ DEFAULT NOW(),
   joined_at TIMESTAMPTZ,  -- when user accepted invite
 
@@ -63,7 +110,7 @@ CREATE TABLE IF NOT EXISTS organization_members (
 CREATE TABLE IF NOT EXISTS transaction_submissions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-  submitted_by UUID NOT NULL REFERENCES users(id),  -- the agent
+  submitted_by UUID NOT NULL REFERENCES auth.users(id),  -- the agent
 
   -- Transaction Data (denormalized snapshot from desktop)
   local_transaction_id TEXT NOT NULL,  -- ID from desktop SQLite
@@ -86,7 +133,7 @@ CREATE TABLE IF NOT EXISTS transaction_submissions (
     'approved',     -- broker approved
     'rejected'      -- broker rejected
   )),
-  reviewed_by UUID REFERENCES users(id),  -- the broker
+  reviewed_by UUID REFERENCES auth.users(id),  -- the broker
   reviewed_at TIMESTAMPTZ,
   review_notes TEXT,  -- broker's feedback
 
@@ -163,7 +210,7 @@ CREATE TABLE IF NOT EXISTS submission_attachments (
 CREATE TABLE IF NOT EXISTS submission_comments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   submission_id UUID NOT NULL REFERENCES transaction_submissions(id) ON DELETE CASCADE,
-  user_id UUID NOT NULL REFERENCES users(id),
+  user_id UUID NOT NULL REFERENCES auth.users(id),
 
   -- Optional: Comment on specific item
   message_id UUID REFERENCES submission_messages(id) ON DELETE CASCADE,
@@ -179,6 +226,8 @@ CREATE TABLE IF NOT EXISTS submission_comments (
 -- ============================================
 -- INDEXES
 -- ============================================
+CREATE INDEX IF NOT EXISTS idx_profiles_id ON profiles(id);
+
 CREATE INDEX IF NOT EXISTS idx_organizations_slug ON organizations(slug);
 
 CREATE INDEX IF NOT EXISTS idx_org_members_org_id ON organization_members(organization_id);
@@ -203,12 +252,29 @@ CREATE INDEX IF NOT EXISTS idx_submission_comments_submission_id ON submission_c
 -- ============================================
 -- ROW LEVEL SECURITY
 -- ============================================
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE organizations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE organization_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE transaction_submissions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE submission_messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE submission_attachments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE submission_comments ENABLE ROW LEVEL SECURITY;
+
+-- ============================================
+-- RLS POLICIES - Profiles
+-- ============================================
+
+-- Users can read their own profile
+CREATE POLICY "users_can_read_own_profile" ON profiles
+  FOR SELECT USING (id = auth.uid());
+
+-- Users can update their own profile
+CREATE POLICY "users_can_update_own_profile" ON profiles
+  FOR UPDATE USING (id = auth.uid());
+
+-- Service role has full access
+CREATE POLICY "service_role_full_access_profiles" ON profiles
+  FOR ALL USING (auth.role() = 'service_role');
 
 -- ============================================
 -- RLS POLICIES - Organizations
@@ -263,7 +329,7 @@ CREATE POLICY "admins_can_manage_members" ON organization_members
 -- Users can update their own membership (accept invite)
 CREATE POLICY "users_can_accept_invite" ON organization_members
   FOR UPDATE USING (
-    invited_email = (SELECT email FROM users WHERE id = auth.uid())
+    invited_email = (SELECT email FROM auth.users WHERE id = auth.uid())
   );
 
 -- Service role has full access
@@ -435,6 +501,10 @@ CREATE POLICY "service_role_full_access_comments" ON submission_comments
 -- ============================================
 
 -- Auto-update updated_at
+CREATE TRIGGER update_profiles_updated_at
+  BEFORE UPDATE ON profiles
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 CREATE TRIGGER update_organizations_updated_at
   BEFORE UPDATE ON organizations
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
@@ -466,8 +536,10 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Note: This trigger should be attached to auth.users if using Supabase Auth
--- For now with custom auth, call this function manually after user creation
+-- Attach to auth.users so invitations are linked on signup
+CREATE TRIGGER on_auth_user_created_link_invitations
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION handle_new_user_invitation_link();
 
 -- ============================================
 -- STORAGE BUCKET (Run in Supabase Dashboard)
