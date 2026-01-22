@@ -289,18 +289,34 @@ class SubmissionService {
         throw new Error("User is not a member of any organization");
       }
 
-      // Check for existing submission and delete if exists (allows resubmission anytime)
+      // Check for existing submission
       const client = supabaseService.getClient();
       const { data: existingSubmission } = await client
         .from("transaction_submissions")
-        .select("id")
+        .select("id, status")
         .eq("organization_id", orgId)
         .eq("local_transaction_id", transactionId)
         .maybeSingle();
 
       if (existingSubmission) {
+        // Check if resubmission is allowed based on status
+        const blockedStatuses = ["under_review", "approved", "rejected"];
+        if (blockedStatuses.includes(existingSubmission.status)) {
+          const statusMessages: Record<string, string> = {
+            under_review:
+              "Cannot resubmit while broker is reviewing. Please wait for their decision.",
+            approved: "This submission has already been approved.",
+            rejected: "This submission has been rejected.",
+          };
+          throw new Error(
+            statusMessages[existingSubmission.status] ||
+              `Cannot resubmit with status: ${existingSubmission.status}`
+          );
+        }
+
+        // Allowed to resubmit (status is 'submitted', 'resubmitted', or 'needs_changes')
         logService.info(
-          `[Submission] Replacing existing submission ${existingSubmission.id}`,
+          `[Submission] Replacing existing submission ${existingSubmission.id} (status: ${existingSubmission.status})`,
           "SubmissionService"
         );
         // Delete old submission (cascades to messages and attachments)
