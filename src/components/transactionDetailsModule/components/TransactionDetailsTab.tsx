@@ -83,6 +83,9 @@ export function TransactionDetailsTab({
     ? `Through ${endDate}`
     : null;
 
+  // Format closing date for summary line
+  const closingDate = formatAuditDate(transaction.closing_deadline);
+
   // Get transaction type info
   const typeInfo = getTransactionTypeDisplay(transaction.transaction_type);
 
@@ -105,7 +108,7 @@ export function TransactionDetailsTab({
                 d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
               />
             </svg>
-            Transaction Overview
+            Summary
           </h4>
           {onEditDetails && (
             <button
@@ -161,7 +164,43 @@ export function TransactionDetailsTab({
                 </div>
               </>
             )}
+            {/* Closing Date */}
+            {closingDate && (
+              <>
+                <span className="text-gray-300">|</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-600">Closing:</span>
+                  <span className="text-sm font-medium text-gray-900">{closingDate}</span>
+                </div>
+              </>
+            )}
           </div>
+          {/* Address Row */}
+          {transaction.property_address && (
+            <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-200">
+              <svg
+                className="w-4 h-4 text-gray-500"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+                />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+                />
+              </svg>
+              <span className="text-sm text-gray-600">Address:</span>
+              <span className="text-sm font-medium text-gray-900">{transaction.property_address}</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -227,52 +266,6 @@ export function TransactionDetailsTab({
           </div>
         </div>
       )}
-
-      {/* Audit Period Section */}
-      <div className="mb-8">
-        <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-          <svg
-            className="w-5 h-5 text-green-600"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-            />
-          </svg>
-          Audit Period
-        </h4>
-        <div className="grid grid-cols-3 gap-4">
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <p className="text-sm text-gray-600 mb-1">Start Date</p>
-            <p className="text-xl font-bold text-gray-900">
-              {transaction.started_at
-                ? new Date(transaction.started_at).toLocaleDateString(undefined, { timeZone: "UTC" })
-                : "N/A"}
-            </p>
-          </div>
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <p className="text-sm text-gray-600 mb-1">Closing Date</p>
-            <p className="text-xl font-bold text-gray-900">
-              {transaction.closing_deadline
-                ? new Date(transaction.closing_deadline).toLocaleDateString(undefined, { timeZone: "UTC" })
-                : "N/A"}
-            </p>
-          </div>
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <p className="text-sm text-gray-600 mb-1">End Date</p>
-            <p className="text-xl font-bold text-gray-900">
-              {transaction.closed_at
-                ? new Date(transaction.closed_at).toLocaleDateString(undefined, { timeZone: "UTC" })
-                : "Ongoing"}
-            </p>
-          </div>
-        </div>
-      </div>
 
       {/* Key Contacts Section */}
       <div>
