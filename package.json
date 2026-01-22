@@ -6,7 +6,13 @@
   "engines": {
     "node": ">=20.0.0"
   },
+  "workspaces": [
+    "broker-portal"
+  ],
   "scripts": {
+    "portal:dev": "npm run dev -w broker-portal",
+    "portal:build": "npm run build -w broker-portal",
+    "portal:lint": "npm run lint -w broker-portal",
     "start": "npm run build:electron && npm run build:preload:dev && concurrently \"npm run dev:react\" \"npm run dev:electron\" \"npm run watch:electron\" \"npm run watch:preload\"",
     "predev": "node scripts/rebuild-native.js",
     "dev": "npm run build:electron && npm run build:preload:dev && concurrently \"npm run dev:react\" \"npm run dev:electron\" \"npm run watch:electron\" \"npm run watch:preload\"",
