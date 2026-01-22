@@ -2,9 +2,30 @@ import { createClient } from '@/lib/supabase/server';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { formatCurrency, formatDate, getStatusColor, formatStatus } from '@/lib/utils';
+import { MessageList } from '@/components/submission/MessageList';
 
 interface PageProps {
   params: Promise<{ id: string }>;
+}
+
+interface Message {
+  id: string;
+  channel: string;
+  direction: string;
+  subject: string | null;
+  body_text: string | null;
+  sent_at: string;
+  has_attachments: boolean;
+  attachment_count: number;
+}
+
+interface Attachment {
+  id: string;
+  filename: string;
+  mime_type: string | null;
+  file_size_bytes: number | null;
+  storage_path: string | null;
+  document_type: string | null;
 }
 
 async function getSubmission(id: string) {
@@ -23,14 +44,14 @@ async function getSubmission(id: string) {
   return data;
 }
 
-async function getMessages(submissionId: string) {
+async function getMessages(submissionId: string): Promise<Message[]> {
   const supabase = await createClient();
 
   const { data, error } = await supabase
     .from('submission_messages')
     .select('*')
     .eq('submission_id', submissionId)
-    .order('sent_at', { ascending: true });
+    .order('sent_at', { ascending: false });
 
   if (error) {
     console.error('Error fetching messages:', error);
@@ -40,7 +61,7 @@ async function getMessages(submissionId: string) {
   return data || [];
 }
 
-async function getAttachments(submissionId: string) {
+async function getAttachments(submissionId: string): Promise<Attachment[]> {
   const supabase = await createClient();
 
   const { data, error } = await supabase
@@ -86,9 +107,7 @@ export default async function SubmissionDetailPage({ params }: PageProps) {
         <div className="px-6 py-5 border-b border-gray-200">
           <div className="flex justify-between items-start">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">
-                {submission.property_address}
-              </h1>
+              <h1 className="text-2xl font-bold text-gray-900">{submission.property_address}</h1>
               <p className="mt-1 text-sm text-gray-500">
                 {submission.property_city}, {submission.property_state} {submission.property_zip}
               </p>
@@ -119,9 +138,7 @@ export default async function SubmissionDetailPage({ params }: PageProps) {
         {submission.review_notes && (
           <div className="px-6 py-5 border-t border-gray-200 bg-gray-50">
             <h3 className="text-sm font-medium text-gray-900 mb-2">Review Notes</h3>
-            <p className="text-sm text-gray-700 whitespace-pre-wrap">
-              {submission.review_notes}
-            </p>
+            <p className="text-sm text-gray-700 whitespace-pre-wrap">{submission.review_notes}</p>
           </div>
         )}
       </div>
@@ -131,19 +148,13 @@ export default async function SubmissionDetailPage({ params }: PageProps) {
         <div className="bg-white shadow rounded-lg p-6">
           <h2 className="text-lg font-medium text-gray-900 mb-4">Review Actions</h2>
           <div className="flex gap-3">
-            <button
-              className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
-            >
+            <button className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">
               Approve
             </button>
-            <button
-              className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
-            >
+            <button className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2">
               Request Changes
             </button>
-            <button
-              className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
-            >
+            <button className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2">
               Reject
             </button>
           </div>
@@ -153,90 +164,29 @@ export default async function SubmissionDetailPage({ params }: PageProps) {
         </div>
       )}
 
-      {/* Messages */}
-      <div className="bg-white shadow rounded-lg overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-medium text-gray-900">
-            Messages ({messages.length})
-          </h2>
-        </div>
-        {messages.length === 0 ? (
-          <div className="px-6 py-12 text-center text-gray-500">
-            No messages in this submission
-          </div>
-        ) : (
-          <ul className="divide-y divide-gray-200 max-h-96 overflow-y-auto">
-            {messages.map((message) => (
-              <li key={message.id} className="px-6 py-4">
-                <div className="flex items-start gap-3">
-                  <div
-                    className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium ${
-                      message.direction === 'outbound'
-                        ? 'bg-blue-100 text-blue-600'
-                        : 'bg-gray-100 text-gray-600'
-                    }`}
-                  >
-                    {message.direction === 'outbound' ? 'OUT' : 'IN'}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-gray-900">
-                        {message.subject || '(No subject)'}
-                      </span>
-                      <span className="text-xs text-gray-400 uppercase">
-                        {message.channel}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-sm text-gray-600 line-clamp-2">
-                      {message.body_text || '(No content)'}
-                    </p>
-                    <p className="mt-1 text-xs text-gray-400">
-                      {formatDate(message.sent_at)}
-                    </p>
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      {/* Messages with filter tabs */}
+      <MessageList messages={messages} />
 
       {/* Attachments */}
       <div className="bg-white shadow rounded-lg overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-medium text-gray-900">
-            Attachments ({attachments.length})
-          </h2>
+          <h2 className="text-lg font-medium text-gray-900">Attachments ({attachments.length})</h2>
         </div>
         {attachments.length === 0 ? (
           <div className="px-6 py-12 text-center text-gray-500">
             No attachments in this submission
           </div>
         ) : (
-          <ul className="divide-y divide-gray-200">
+          <div className="divide-y divide-gray-200">
             {attachments.map((attachment) => (
-              <li key={attachment.id} className="px-6 py-4">
+              <div key={attachment.id} className="px-6 py-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="flex-shrink-0 w-10 h-10 bg-gray-100 rounded flex items-center justify-center">
-                      <svg
-                        className="w-5 h-5 text-gray-400"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                        />
-                      </svg>
+                      <FileIcon mimeType={attachment.mime_type} />
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-900">
-                        {attachment.filename}
-                      </p>
+                      <p className="text-sm font-medium text-gray-900">{attachment.filename}</p>
                       <p className="text-xs text-gray-500">
                         {attachment.document_type && (
                           <span className="capitalize">{attachment.document_type} - </span>
@@ -248,15 +198,15 @@ export default async function SubmissionDetailPage({ params }: PageProps) {
                     </div>
                   </div>
                   <button
-                    className="text-sm text-primary-600 hover:text-primary-500"
+                    className="text-sm text-blue-600 hover:text-blue-500"
                     title="Download functionality in BACKLOG-401"
                   >
                     View
                   </button>
                 </div>
-              </li>
+              </div>
             ))}
-          </ul>
+          </div>
         )}
       </div>
     </div>
@@ -269,5 +219,46 @@ function DetailItem({ label, value }: { label: string; value: string | null }) {
       <dt className="text-sm font-medium text-gray-500">{label}</dt>
       <dd className="mt-1 text-sm text-gray-900 capitalize">{value || '-'}</dd>
     </div>
+  );
+}
+
+function FileIcon({ mimeType }: { mimeType: string | null }) {
+  // Different icon based on file type
+  const isPdf = mimeType?.includes('pdf');
+  const isImage = mimeType?.startsWith('image/');
+
+  if (isPdf) {
+    return (
+      <svg className="w-5 h-5 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+        <path
+          fillRule="evenodd"
+          d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z"
+          clipRule="evenodd"
+        />
+      </svg>
+    );
+  }
+
+  if (isImage) {
+    return (
+      <svg className="w-5 h-5 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+        <path
+          fillRule="evenodd"
+          d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z"
+          clipRule="evenodd"
+        />
+      </svg>
+    );
+  }
+
+  return (
+    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+      />
+    </svg>
   );
 }
