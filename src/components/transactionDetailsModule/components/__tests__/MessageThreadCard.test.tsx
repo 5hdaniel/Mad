@@ -310,9 +310,9 @@ describe("MessageThreadCard", () => {
         />
       );
 
-      // Group chat should show "Group: " prefix in contact name
+      // Group chat should show "Group Chat" label (without colon)
       const contactName = screen.getByTestId("thread-contact-name");
-      expect(contactName.textContent).toContain("Group: ");
+      expect(contactName.textContent).toContain("Group Chat");
     });
 
     it("should not display people badge for group chat (removed for cleaner layout)", () => {
@@ -330,7 +330,7 @@ describe("MessageThreadCard", () => {
       expect(screen.queryByText("3 people")).not.toBeInTheDocument();
     });
 
-    it("should display participant names inline with Group label", () => {
+    it("should display participant names on separate line below Group Chat label", () => {
       const messages = [createGroupMessage({ id: "msg-1" })];
 
       render(
@@ -341,11 +341,14 @@ describe("MessageThreadCard", () => {
         />
       );
 
-      // Contact name element should contain the participant info
+      // Contact name container should exist
       const contactName = screen.getByTestId("thread-contact-name");
       expect(contactName).toBeInTheDocument();
-      // Should have title attribute for tooltip with full participant list
-      expect(contactName).toHaveAttribute("title");
+      // Should show "Group Chat" header and participant names on separate lines
+      expect(contactName.textContent).toContain("Group Chat");
+      // Participant names are shown on a separate line with title for tooltip
+      const participantLine = contactName.querySelector('[title]');
+      expect(participantLine).toBeInTheDocument();
     });
   });
 
@@ -393,9 +396,9 @@ describe("MessageThreadCard", () => {
       ).toBeInTheDocument();
       expect(container.querySelector(".bg-purple-100")).not.toBeInTheDocument();
 
-      // Should NOT show "Group Chat:" label
+      // Should NOT show "Group Chat" label (it's a 1:1 chat)
       expect(screen.getByTestId("thread-contact-name")).not.toHaveTextContent(
-        "Group Chat:"
+        "Group Chat"
       );
     });
 
@@ -444,9 +447,9 @@ describe("MessageThreadCard", () => {
         container.querySelector(".bg-gradient-to-br.from-green-500.to-teal-600")
       ).not.toBeInTheDocument();
 
-      // Should show "Group: " label
+      // Should show "Group Chat" label
       expect(screen.getByTestId("thread-contact-name")).toHaveTextContent(
-        "Group: "
+        "Group Chat"
       );
     });
 
