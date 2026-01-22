@@ -47,6 +47,7 @@ describe("EditTransactionModal", () => {
     detection_status: "pending",
     created_at: "2024-01-01T00:00:00Z",
     updated_at: "2024-01-01T00:00:00Z",
+    started_at: "2024-01-01", // Required field - when representation began
   };
 
   const mockContacts = [
