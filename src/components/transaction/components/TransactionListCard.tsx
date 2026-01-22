@@ -207,7 +207,7 @@ export function TransactionListCard({
               title="View emails"
             >
               <EmailsIcon />
-              <span>{emailCount} {emailCount === 1 ? "email" : "emails"}</span>
+              <span>{emailCount} {emailCount === 1 ? "email thread" : "email threads"}</span>
             </button>
             {transaction.extraction_confidence && (
               <span className="flex items-center gap-1">
