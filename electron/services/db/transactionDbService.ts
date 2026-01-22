@@ -330,6 +330,11 @@ export async function updateTransaction(
     "key_dates",
     "message_count",
     "attachment_count",
+    // B2B Submission Tracking (BACKLOG-390)
+    "submission_status",
+    "submission_id",
+    "submitted_at",
+    "last_review_notes",
   ];
 
   // Validate status if it's being updated

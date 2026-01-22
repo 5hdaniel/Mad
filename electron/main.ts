@@ -21,7 +21,7 @@ import {
 
 // Import handler registration functions
 import { registerAuthHandlers } from "./auth-handlers";
-import { registerTransactionHandlers } from "./transaction-handlers";
+import { registerTransactionHandlers, cleanupTransactionHandlers } from "./transaction-handlers";
 import { registerContactHandlers } from "./contact-handlers";
 import { registerAddressHandlers } from "./address-handlers";
 import { registerFeedbackHandlers } from "./feedback-handlers";
@@ -256,6 +256,8 @@ app.on("before-quit", () => {
   cleanupDeviceHandlers();
   // Clean up sync handlers
   cleanupSyncHandlers();
+  // Clean up transaction handlers (submission sync)
+  cleanupTransactionHandlers();
 });
 
 app.on("activate", () => {

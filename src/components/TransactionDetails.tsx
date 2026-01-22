@@ -38,6 +38,11 @@ import {
   EditContactsModal,
   groupMessagesByThread,
 } from "./transactionDetailsModule";
+// Import ReviewNotesPanel for displaying broker feedback (BACKLOG-395)
+import { ReviewNotesPanel } from "./transactionDetailsModule/components/ReviewNotesPanel";
+// Import Submit for Review components (BACKLOG-391)
+import { SubmitForReviewModal } from "./transactionDetailsModule/components/modals/SubmitForReviewModal";
+import { useSubmitForReview } from "./transactionDetailsModule/hooks/useSubmitForReview";
 import type { AutoLinkResult } from "./transactionDetailsModule/components/modals/EditContactsModal";
 
 import type { TransactionTab } from "./transactionDetailsModule/types";
@@ -165,6 +170,29 @@ function TransactionDetails({
   const [showEditModal, setShowEditModal] = useState<boolean>(false);
   const [showEditContactsModal, setShowEditContactsModal] = useState<boolean>(false);
   const [syncingCommunications, setSyncingCommunications] = useState<boolean>(false);
+  const [showSubmitModal, setShowSubmitModal] = useState<boolean>(false);
+
+  // Submit for Review hook (BACKLOG-391)
+  const isResubmit = transaction.submission_status === "needs_changes";
+  const {
+    isSubmitting,
+    progress: submitProgress,
+    error: submitError,
+    submit: handleSubmitForReview,
+    reset: resetSubmit,
+  } = useSubmitForReview({
+    transactionId: transaction.id,
+    isResubmit,
+    onSuccess: (submissionId) => {
+      showSuccess(`Transaction submitted successfully! ID: ${submissionId.slice(0, 8)}...`);
+      // Refresh transaction data
+      loadDetails();
+      onTransactionUpdated?.();
+    },
+    onError: (error) => {
+      showError(`Submission failed: ${error}`);
+    },
+  });
 
   // Check if transaction was rejected
   const isRejected = transaction.detection_status === "rejected";
@@ -335,6 +363,7 @@ function TransactionDetails({
           isApproving={isApproving}
           isRejecting={isRejecting}
           isRestoring={isRestoring}
+          isSubmitting={isSubmitting}
           onClose={onClose}
           onShowRejectReasonModal={() => setShowRejectReasonModal(true)}
           onShowEditModal={() => setShowEditModal(true)}
@@ -342,6 +371,7 @@ function TransactionDetails({
           onRestore={handleRestore}
           onShowExportModal={() => setShowExportModal(true)}
           onShowDeleteConfirm={() => setShowDeleteConfirm(true)}
+          onShowSubmitModal={() => setShowSubmitModal(true)}
         />
 
         {/* Tabs */}
@@ -355,13 +385,23 @@ function TransactionDetails({
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
+          {/* Review Notes Panel - shown when broker requests changes (BACKLOG-395) */}
+          {transaction.submission_status === "needs_changes" && transaction.last_review_notes && (
+            <ReviewNotesPanel
+              reviewNotes={transaction.last_review_notes}
+              onResubmit={() => {
+                // Will be handled by TransactionHeader submit button
+                // This is just a visual shortcut
+              }}
+            />
+          )}
+
           {activeTab === "overview" && (
             <TransactionDetailsTab
               transaction={transaction}
               contactAssignments={contactAssignments}
               loading={loading}
               onEditContacts={() => setShowEditContactsModal(true)}
-              onEditDetails={() => setShowEditModal(true)}
               resolvedSuggestions={resolvedSuggestions}
               processingContactId={processingContactId}
               processingAll={processingAll}
@@ -525,6 +565,23 @@ function TransactionDetails({
               showSuccess("Contacts updated successfully");
             }
           }}
+        />
+      )}
+
+      {/* Submit for Review Modal (BACKLOG-391) */}
+      {showSubmitModal && (
+        <SubmitForReviewModal
+          transaction={transaction}
+          messageCount={emailCommunications.length + textMessages.length}
+          attachmentCount={attachmentCount}
+          isSubmitting={isSubmitting}
+          progress={submitProgress}
+          error={submitError}
+          onCancel={() => {
+            setShowSubmitModal(false);
+            resetSubmit();
+          }}
+          onSubmit={handleSubmitForReview}
         />
       )}
 

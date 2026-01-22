@@ -353,4 +353,103 @@ export const transactionBridge = {
    */
   linkEmails: (emailIds: string[], transactionId: string) =>
     ipcRenderer.invoke("transactions:link-emails", emailIds, transactionId),
+
+  // ============================================
+  // SUBMISSION METHODS (BACKLOG-391)
+  // ============================================
+
+  /**
+   * Submit transaction to broker portal for review
+   * @param transactionId - Transaction ID to submit
+   * @returns Submission result with cloud submission ID
+   */
+  submit: (transactionId: string) =>
+    ipcRenderer.invoke("transactions:submit", transactionId),
+
+  /**
+   * Resubmit transaction (creates new version)
+   * @param transactionId - Transaction ID to resubmit
+   * @returns Submission result with new submission ID
+   */
+  resubmit: (transactionId: string) =>
+    ipcRenderer.invoke("transactions:resubmit", transactionId),
+
+  /**
+   * Get submission status from cloud
+   * @param submissionId - Cloud submission ID
+   * @returns Current status and review info
+   */
+  getSubmissionStatus: (submissionId: string) =>
+    ipcRenderer.invoke("transactions:get-submission-status", submissionId),
+
+  /**
+   * Listen for submission progress updates
+   * @param callback - Progress callback
+   * @returns Cleanup function
+   */
+  onSubmitProgress: (callback: (progress: {
+    stage: string;
+    stageProgress: number;
+    overallProgress: number;
+    currentItem?: string;
+  }) => void) => {
+    const handler = (_event: unknown, progress: {
+      stage: string;
+      stageProgress: number;
+      overallProgress: number;
+      currentItem?: string;
+    }) => callback(progress);
+    ipcRenderer.on("transactions:submit-progress", handler);
+    return () => {
+      ipcRenderer.removeListener("transactions:submit-progress", handler);
+    };
+  },
+
+  // ============================================
+  // SYNC METHODS (BACKLOG-395)
+  // ============================================
+
+  /**
+   * Trigger manual sync of submission statuses
+   * @returns Sync result with updated count
+   */
+  syncSubmissions: () =>
+    ipcRenderer.invoke("transactions:sync-submissions"),
+
+  /**
+   * Sync a specific transaction's submission status
+   * @param transactionId - Transaction ID to sync
+   * @returns Whether status was updated
+   */
+  syncSubmission: (transactionId: string) =>
+    ipcRenderer.invoke("transactions:sync-submission", transactionId),
+
+  /**
+   * Listen for submission status change events
+   * @param callback - Status change callback
+   * @returns Cleanup function
+   */
+  onSubmissionStatusChanged: (callback: (data: {
+    transactionId: string;
+    propertyAddress: string;
+    oldStatus: string;
+    newStatus: string;
+    reviewNotes?: string;
+    title: string;
+    message: string;
+  }) => void) => {
+    const handler = (_event: unknown, data: {
+      transactionId: string;
+      propertyAddress: string;
+      oldStatus: string;
+      newStatus: string;
+      reviewNotes?: string;
+      title: string;
+      message: string;
+    }) => callback(data);
+    ipcRenderer.on("submission-status-changed", handler);
+    return () => {
+      ipcRenderer.removeListener("submission-status-changed", handler);
+    };
+  },
 };
