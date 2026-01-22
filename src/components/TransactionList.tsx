@@ -104,7 +104,6 @@ function TransactionList({
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const [showBulkExportModal, setShowBulkExportModal] = useState(false);
   const [showStatusInfo, setShowStatusInfo] = useState(false);
-  const [bulkActionSuccess, setBulkActionSuccess] = useState<string | null>(null);
   const [selectionMode, setSelectionMode] = useState(false);
 
   // Bulk action handlers via hook
@@ -117,15 +116,12 @@ function TransactionList({
     isBulkDeleting,
     isBulkExporting,
     isBulkUpdating,
+    bulkActionSuccess,
     handleBulkDelete,
     handleBulkExport,
     handleBulkStatusChange,
   } = useBulkActions(selectedIds, selectedCount, {
     onComplete: loadTransactions,
-    showSuccess: (msg) => {
-      setBulkActionSuccess(msg);
-      setTimeout(() => setBulkActionSuccess(null), 5000);
-    },
     showError: setError,
     exitSelectionMode: handleExitSelectionMode,
     closeBulkDeleteModal: () => setShowBulkDeleteConfirm(false),
