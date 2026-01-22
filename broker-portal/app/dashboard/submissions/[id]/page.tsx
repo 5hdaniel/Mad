@@ -20,6 +20,8 @@ interface Message {
   sent_at: string;
   has_attachments: boolean;
   attachment_count: number;
+  thread_id: string | null;
+  participants: { from?: string; to?: string | string[]; cc?: string[]; bcc?: string[] } | null;
 }
 
 interface Attachment {

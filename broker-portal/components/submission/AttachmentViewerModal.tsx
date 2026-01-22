@@ -69,7 +69,9 @@ export function AttachmentViewerModal({ attachment, open, onClose }: AttachmentV
 
   const isImage = attachment.mime_type?.startsWith('image/');
   const isPdf = attachment.mime_type === 'application/pdf';
-  const canPreview = isImage || isPdf;
+  const isVideo = attachment.mime_type?.startsWith('video/') ||
+    ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.m4v'].some(ext => attachment.filename.toLowerCase().endsWith(ext));
+  const canPreview = isImage || isPdf || isVideo;
 
   const handleDownload = () => {
     if (signedUrl) {
@@ -105,6 +107,10 @@ export function AttachmentViewerModal({ attachment, open, onClose }: AttachmentV
                     d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z"
                     clipRule="evenodd"
                   />
+                </svg>
+              ) : isVideo ? (
+                <svg className="w-5 h-5 text-purple-600" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M8 5v14l11-7z" />
                 </svg>
               ) : (
                 <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -228,6 +234,19 @@ export function AttachmentViewerModal({ attachment, open, onClose }: AttachmentV
                   className="w-full h-[70vh]"
                   title={attachment.filename}
                 />
+              )}
+
+              {/* Video preview */}
+              {isVideo && (
+                <div className="flex items-center justify-center p-4 min-h-[300px]">
+                  <video
+                    src={signedUrl}
+                    controls
+                    className="max-w-full max-h-[70vh]"
+                  >
+                    Your browser does not support the video tag.
+                  </video>
+                </div>
               )}
 
               {/* No preview available */}
