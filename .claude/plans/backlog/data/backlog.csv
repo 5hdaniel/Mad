@@ -345,3 +345,4 @@ BACKLOG-380,hasEmailConnected Returns False Despite Working Email Sync,fix,High,
 BACKLOG-381,Transaction Details Header Improvements (Audit Period + Type + Edit Button),ui,Medium,Pending,SPRINT-049,-,-,-,2026-01-22,,[BACKLOG-381.md](items/BACKLOG-381.md)
 BACKLOG-382,Persistent Export History in Transaction Details,feature,Medium,Pending,SPRINT-049,-,-,-,2026-01-22,,[BACKLOG-382.md](items/BACKLOG-382.md)
 BACKLOG-383,Format Role Pills with Human-Readable Labels,ui,Medium,Pending,SPRINT-049,-,-,-,2026-01-22,,[BACKLOG-383.md](items/BACKLOG-383.md)
+BACKLOG-384,AI-Extracted Date Verification Badges,feature,Low,Pending,-,-,-,-,2026-01-22,,[BACKLOG-384.md](items/BACKLOG-384.md)
