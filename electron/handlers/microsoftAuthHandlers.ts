@@ -16,6 +16,7 @@ import { app } from "electron";
 import databaseService from "../services/databaseService";
 import microsoftAuthService from "../services/microsoftAuthService";
 import supabaseService from "../services/supabaseService";
+import sessionService from "../services/sessionService";
 import rateLimitService from "../services/rateLimitService";
 import auditService from "../services/auditService";
 import logService from "../services/logService";
@@ -436,6 +437,15 @@ export async function handleMicrosoftLogin(
 
         // Create session
         const sessionToken = await databaseService.createSession(localUser.id);
+
+        // Save session to disk for persistence across app restarts
+        await sessionService.saveSession({
+          user: localUser,
+          sessionToken,
+          provider: "microsoft",
+          expiresAt: Date.now() + sessionService.getSessionExpirationMs(),
+          createdAt: Date.now(),
+        });
 
         // Register device
         const deviceInfo = {

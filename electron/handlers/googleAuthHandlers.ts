@@ -323,6 +323,15 @@ export async function handleGoogleLogin(
         // Create session
         const sessionToken = await databaseService.createSession(localUser.id);
 
+        // Save session to disk for persistence across app restarts
+        await sessionService.saveSession({
+          user: localUser,
+          sessionToken,
+          provider: "google",
+          expiresAt: Date.now() + sessionService.getSessionExpirationMs(),
+          createdAt: Date.now(),
+        });
+
         // Determine subscription status
         const subscription = {
           tier: cloudUser.subscription_tier || localUser.subscription_tier || "free",
@@ -517,6 +526,15 @@ export async function handleGoogleCompleteLogin(
 
     // Create session
     const sessionToken = await databaseService.createSession(localUser.id);
+
+    // Save session to disk for persistence across app restarts
+    await sessionService.saveSession({
+      user: localUser,
+      sessionToken,
+      provider: "google",
+      expiresAt: Date.now() + sessionService.getSessionExpirationMs(),
+      createdAt: Date.now(),
+    });
 
     // Validate subscription
     const subscription = await supabaseService.validateSubscription(
