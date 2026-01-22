@@ -135,12 +135,14 @@ function TransactionDetails({
   const { state: statusState, approve, reject, restore } = useTransactionStatusUpdate(userId);
   const { isApproving, isRejecting, isRestoring } = statusState;
 
-  // Filter emails only for Details tab (exclude SMS/iMessage)
+  // Filter emails only for Details tab
+  // Must explicitly check for 'email' to match the SQL count query
+  // which uses: communication_type = 'email'
   const emailCommunications = useMemo(() => {
     return communications.filter((comm) => {
       const channel = comm.channel || comm.communication_type;
-      // Exclude SMS and iMessage - only show emails
-      return channel !== 'sms' && channel !== 'imessage';
+      // Only include emails - exclude sms, imessage, text, and undefined
+      return channel === 'email';
     });
   }, [communications]);
 
