@@ -33,10 +33,6 @@ export interface UseTransactionModalsResult {
   openBulkExportModal: () => void;
   closeBulkExportModal: () => void;
 
-  // Bulk action success message
-  bulkActionSuccess: string | null;
-  setBulkActionSuccess: (message: string | null) => void;
-
   // Selected transaction for details modal
   selectedTransaction: Transaction | null;
   setSelectedTransaction: (transaction: Transaction | null) => void;
@@ -64,11 +60,6 @@ export function useTransactionModals(): UseTransactionModalsResult {
 
   // Bulk export modal
   const [showBulkExportModal, setShowBulkExportModal] = useState(false);
-
-  // Bulk action success message
-  const [bulkActionSuccess, setBulkActionSuccess] = useState<string | null>(
-    null
-  );
 
   // Selected transaction for details modal
   const [selectedTransaction, setSelectedTransaction] =
@@ -134,10 +125,6 @@ export function useTransactionModals(): UseTransactionModalsResult {
     showBulkExportModal,
     openBulkExportModal,
     closeBulkExportModal,
-
-    // Bulk action success
-    bulkActionSuccess,
-    setBulkActionSuccess,
 
     // Selected transaction
     selectedTransaction,

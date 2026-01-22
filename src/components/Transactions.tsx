@@ -141,8 +141,6 @@ function Transactions({
     showBulkExportModal,
     openBulkExportModal,
     closeBulkExportModal,
-    bulkActionSuccess,
-    setBulkActionSuccess,
     selectedTransaction,
     setSelectedTransaction,
   } = useTransactionModals();
@@ -163,17 +161,17 @@ function Transactions({
     setSelectionMode(false);
   }, [deselectAll]);
 
-  // Bulk actions
+  // Bulk actions (bulkActionSuccess auto-clears after 5 seconds)
   const {
     isBulkDeleting,
     isBulkExporting,
     isBulkUpdating,
+    bulkActionSuccess,
     handleBulkDelete,
     handleBulkExport,
     handleBulkStatusChange,
   } = useBulkActions(selectedIds, selectedCount, {
     onComplete: refetch,
-    showSuccess: setBulkActionSuccess,
     showError: setError,
     exitSelectionMode,
     closeBulkDeleteModal: closeBulkDeleteConfirm,
