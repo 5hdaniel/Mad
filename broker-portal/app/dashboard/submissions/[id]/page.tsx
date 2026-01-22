@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { formatCurrency, formatDate, getStatusColor, formatStatus } from '@/lib/utils';
 import { MessageList } from '@/components/submission/MessageList';
+import { ReviewActions } from '@/components/submission/ReviewActions';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -143,26 +144,15 @@ export default async function SubmissionDetailPage({ params }: PageProps) {
         )}
       </div>
 
-      {/* Review Actions (for submitted/under_review status) */}
-      {['submitted', 'under_review', 'resubmitted'].includes(submission.status) && (
-        <div className="bg-white shadow rounded-lg p-6">
-          <h2 className="text-lg font-medium text-gray-900 mb-4">Review Actions</h2>
-          <div className="flex gap-3">
-            <button className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">
-              Approve
-            </button>
-            <button className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2">
-              Request Changes
-            </button>
-            <button className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2">
-              Reject
-            </button>
-          </div>
-          <p className="mt-3 text-sm text-gray-500">
-            Review actions will be implemented in BACKLOG-400
-          </p>
-        </div>
-      )}
+      {/* Review Actions */}
+      <ReviewActions
+        submission={{
+          id: submission.id,
+          status: submission.status,
+          organization_id: submission.organization_id,
+        }}
+        disabled={submission.status === 'approved' || submission.status === 'rejected'}
+      />
 
       {/* Messages with filter tabs */}
       <MessageList messages={messages} />
