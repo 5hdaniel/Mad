@@ -1143,6 +1143,19 @@ interface MainAPI {
       success: boolean;
       error?: string;
     }>;
+    /**
+     * Re-syncs auto-link communications for all contacts on a transaction.
+     * Useful when contacts have been updated with new email/phone info.
+     */
+    resyncAutoLink: (transactionId: string) => Promise<{
+      success: boolean;
+      contactsProcessed?: number;
+      totalEmailsLinked?: number;
+      totalMessagesLinked?: number;
+      totalAlreadyLinked?: number;
+      totalErrors?: number;
+      error?: string;
+    }>;
   };
 
   // Transaction scan progress event

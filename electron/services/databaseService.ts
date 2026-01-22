@@ -1028,20 +1028,22 @@ class DatabaseService implements IDatabaseService {
   }
 
   /**
-   * Get unlinked emails from the messages table
+   * Get unlinked emails from the communications table
    * These are emails not yet attached to any transaction
+   * Note: Emails are stored in communications table, not messages table
    */
-  async getUnlinkedEmails(userId: string, limit = 500): Promise<Message[]> {
+  async getUnlinkedEmails(userId: string, limit = 500): Promise<Communication[]> {
     const db = this._ensureDb();
     const sql = `
-      SELECT * FROM messages
+      SELECT id, user_id, transaction_id, subject, sender, sent_at, body_plain as body_preview
+      FROM communications
       WHERE user_id = ?
         AND transaction_id IS NULL
-        AND channel = 'email'
+        AND (communication_type = 'email' OR communication_type IS NULL)
       ORDER BY sent_at DESC
       LIMIT ?
     `;
-    return db.prepare(sql).all(userId, limit) as Message[];
+    return db.prepare(sql).all(userId, limit) as Communication[];
   }
 
   /**

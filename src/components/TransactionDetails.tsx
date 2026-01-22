@@ -159,6 +159,7 @@ function TransactionDetails({
   const [rejectReason, setRejectReason] = useState<string>("");
   const [showEditModal, setShowEditModal] = useState<boolean>(false);
   const [showEditContactsModal, setShowEditContactsModal] = useState<boolean>(false);
+  const [syncingCommunications, setSyncingCommunications] = useState<boolean>(false);
 
   // Check if transaction was rejected
   const isRejected = transaction.detection_status === "rejected";
@@ -280,6 +281,45 @@ function TransactionDetails({
     });
   }, [handleAcceptAll, resolvedSuggestions, suggestionCallbacks, setResolvedSuggestions]);
 
+  // Sync communications handler - re-runs auto-link for all contacts
+  const handleSyncCommunications = useCallback(async () => {
+    setSyncingCommunications(true);
+    try {
+      // Cast to access resyncAutoLink - method is defined in preload but window.d.ts augmentation has issues with tsc
+      const result = await (window.api.transactions as typeof window.api.transactions & {
+        resyncAutoLink: (transactionId: string) => Promise<{
+          success: boolean;
+          contactsProcessed?: number;
+          totalEmailsLinked?: number;
+          totalMessagesLinked?: number;
+          totalAlreadyLinked?: number;
+          totalErrors?: number;
+          error?: string;
+        }>;
+      }).resyncAutoLink(transaction.id);
+      if (result.success) {
+        const totalLinked = (result.totalEmailsLinked || 0) + (result.totalMessagesLinked || 0);
+        if (totalLinked > 0) {
+          showSuccess(`Synced ${totalLinked} communication${totalLinked !== 1 ? "s" : ""} (${result.totalEmailsLinked || 0} emails, ${result.totalMessagesLinked || 0} message threads)`);
+          // Refresh to show newly linked communications
+          loadDetails();
+          refreshMessages();
+        } else if (result.totalAlreadyLinked && result.totalAlreadyLinked > 0) {
+          showSuccess(`All communications already linked (${result.totalAlreadyLinked} found)`);
+        } else {
+          showSuccess("No new communications found to link");
+        }
+      } else {
+        showError(result.error || "Failed to sync communications");
+      }
+    } catch (err) {
+      console.error("Failed to sync communications:", err);
+      showError("Failed to sync communications. Please try again.");
+    } finally {
+      setSyncingCommunications(false);
+    }
+  }, [transaction.id, showSuccess, showError, loadDetails, refreshMessages]);
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[60] p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl h-[70vh] max-h-[90vh] flex flex-col">
@@ -326,6 +366,8 @@ function TransactionDetails({
               onAcceptSuggestion={handleAcceptSuggestionWithCallbacks}
               onRejectSuggestion={handleRejectSuggestionWithCallbacks}
               onAcceptAll={handleAcceptAllWithCallbacks}
+              onSyncCommunications={handleSyncCommunications}
+              syncingCommunications={syncingCommunications}
             />
           )}
 
@@ -336,6 +378,14 @@ function TransactionDetails({
               unlinkingCommId={unlinkingCommId}
               onViewEmail={setViewingEmail}
               onShowUnlinkConfirm={setShowUnlinkConfirm}
+              onSyncCommunications={handleSyncCommunications}
+              syncingCommunications={syncingCommunications}
+              hasContacts={contactAssignments.length > 0}
+              userId={userId}
+              transactionId={transaction.id}
+              propertyAddress={transaction.property_address}
+              onEmailsChanged={loadDetails}
+              onShowSuccess={showSuccess}
             />
           )}
 

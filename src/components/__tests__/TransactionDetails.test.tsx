@@ -95,12 +95,12 @@ describe("TransactionDetails", () => {
       );
 
       // Switch to contacts tab
-      const contactsTab = screen.getByRole("button", { name: /Roles & Contacts/i });
-      await userEvent.click(contactsTab);
+      // Contacts are now shown in the Overview tab by default
+      // No need to click a separate tab
 
       // Wait for tab content to render
       await waitFor(() => {
-        expect(screen.getByText("Contact Assignments")).toBeInTheDocument();
+        expect(screen.getByText("Key Contacts")).toBeInTheDocument();
       });
 
       // Should not show AI Suggested Contacts section
@@ -117,8 +117,8 @@ describe("TransactionDetails", () => {
       );
 
       // Switch to contacts tab
-      const contactsTab = screen.getByRole("button", { name: /Roles & Contacts/i });
-      await userEvent.click(contactsTab);
+      // Contacts are now shown in the Overview tab by default
+      // No need to click a separate tab
 
       // Wait for suggested contacts to resolve and render
       await waitFor(() => {
@@ -150,8 +150,8 @@ describe("TransactionDetails", () => {
       );
 
       // Switch to contacts tab
-      const contactsTab = screen.getByRole("button", { name: /Roles & Contacts/i });
-      await userEvent.click(contactsTab);
+      // Contacts are now shown in the Overview tab by default
+      // No need to click a separate tab
 
       // Wait for suggestions to load
       await waitFor(() => {
@@ -169,8 +169,8 @@ describe("TransactionDetails", () => {
       );
 
       // Switch to contacts tab
-      const contactsTab = screen.getByRole("button", { name: /Roles & Contacts/i });
-      await userEvent.click(contactsTab);
+      // Contacts are now shown in the Overview tab by default
+      // No need to click a separate tab
 
       // Wait for suggestions to load
       await waitFor(() => {
@@ -196,8 +196,8 @@ describe("TransactionDetails", () => {
       );
 
       // Switch to contacts tab
-      const contactsTab = screen.getByRole("button", { name: /Roles & Contacts/i });
-      await user.click(contactsTab);
+      // Contacts are now shown in the Overview tab by default
+      // No need to switch tabs
 
       // Wait for suggestions to load
       await waitFor(() => {
@@ -252,8 +252,8 @@ describe("TransactionDetails", () => {
       );
 
       // Switch to contacts tab
-      const contactsTab = screen.getByRole("button", { name: /Roles & Contacts/i });
-      await user.click(contactsTab);
+      // Contacts are now shown in the Overview tab by default
+      // No need to switch tabs
 
       // Wait for suggestions to load
       await waitFor(() => {
@@ -287,8 +287,8 @@ describe("TransactionDetails", () => {
       );
 
       // Switch to contacts tab
-      const contactsTab = screen.getByRole("button", { name: /Roles & Contacts/i });
-      await user.click(contactsTab);
+      // Contacts are now shown in the Overview tab by default
+      // No need to switch tabs
 
       // Wait for suggestions to load
       await waitFor(() => {
@@ -328,8 +328,8 @@ describe("TransactionDetails", () => {
       );
 
       // Switch to contacts tab
-      const contactsTab = screen.getByRole("button", { name: /Roles & Contacts/i });
-      await user.click(contactsTab);
+      // Contacts are now shown in the Overview tab by default
+      // No need to switch tabs
 
       // Wait for suggestions to load
       await waitFor(() => {
@@ -360,8 +360,8 @@ describe("TransactionDetails", () => {
       );
 
       // Switch to contacts tab
-      const contactsTab = screen.getByRole("button", { name: /Roles & Contacts/i });
-      await user.click(contactsTab);
+      // Contacts are now shown in the Overview tab by default
+      // No need to switch tabs
 
       // Wait for suggestions to load
       await waitFor(() => {
@@ -413,8 +413,8 @@ describe("TransactionDetails", () => {
       );
 
       // Switch to contacts tab
-      const contactsTab = screen.getByRole("button", { name: /Roles & Contacts/i });
-      await user.click(contactsTab);
+      // Contacts are now shown in the Overview tab by default
+      // No need to switch tabs
 
       // Wait for suggestions to load
       await waitFor(() => {
@@ -443,8 +443,8 @@ describe("TransactionDetails", () => {
       );
 
       // Switch to contacts tab
-      const contactsTab = screen.getByRole("button", { name: /Roles & Contacts/i });
-      await user.click(contactsTab);
+      // Contacts are now shown in the Overview tab by default
+      // No need to switch tabs
 
       // Wait for suggestions to load
       await waitFor(() => {
@@ -478,12 +478,12 @@ describe("TransactionDetails", () => {
       );
 
       // Switch to contacts tab
-      const contactsTab = screen.getByRole("button", { name: /Roles & Contacts/i });
-      await userEvent.click(contactsTab);
+      // Contacts are now shown in the Overview tab by default
+      // No need to click a separate tab
 
       // Should not crash and should not show suggestions section
       await waitFor(() => {
-        expect(screen.getByText("Contact Assignments")).toBeInTheDocument();
+        expect(screen.getByText("Key Contacts")).toBeInTheDocument();
       });
 
       expect(screen.queryByText("AI Suggested Contacts")).not.toBeInTheDocument();
@@ -504,12 +504,12 @@ describe("TransactionDetails", () => {
       );
 
       // Switch to contacts tab
-      const contactsTab = screen.getByRole("button", { name: /Roles & Contacts/i });
-      await userEvent.click(contactsTab);
+      // Contacts are now shown in the Overview tab by default
+      // No need to click a separate tab
 
       // Should not show suggestions section for empty array
       await waitFor(() => {
-        expect(screen.getByText("Contact Assignments")).toBeInTheDocument();
+        expect(screen.getByText("Key Contacts")).toBeInTheDocument();
       });
 
       expect(screen.queryByText("AI Suggested Contacts")).not.toBeInTheDocument();
@@ -528,8 +528,8 @@ describe("TransactionDetails", () => {
       );
 
       // Switch to contacts tab
-      const contactsTab = screen.getByRole("button", { name: /Roles & Contacts/i });
-      await userEvent.click(contactsTab);
+      // Contacts are now shown in the Overview tab by default
+      // No need to click a separate tab
 
       // Should still show suggestions section (with "Unknown Contact")
       await waitFor(() => {
