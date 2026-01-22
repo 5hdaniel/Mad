@@ -344,7 +344,7 @@ describe("Transactions", () => {
         expect(screen.getByText("123 Main Street")).toBeInTheDocument();
       });
 
-      expect(screen.getByText(/25 emails/i)).toBeInTheDocument();
+      expect(screen.getByText(/25 email threads/i)).toBeInTheDocument();
     });
   });
 
