@@ -19,13 +19,18 @@
 │    └──────────┬──────────┘                                                  │
 │               │                                                             │
 │               ▼                                                             │
-│    ┌─────────────────────┐         ┌─────────────────────┐                 │
-│    │   BACKLOG-388       │         │   BACKLOG-389       │                 │
-│    │   RLS Policies +    │         │   Demo Seed Data    │                 │
-│    │   Storage Bucket    │         │   (org + users)     │                 │
-│    └──────────┬──────────┘         └──────────┬──────────┘                 │
-│               │                               │                             │
-│               └───────────────┬───────────────┘                             │
+│    ┌─────────────────────┐                                                  │
+│    │   BACKLOG-388       │                                                  │
+│    │   RLS Policies +    │                                                  │
+│    │   Storage Bucket    │                                                  │
+│    └──────────┬──────────┘                                                  │
+│               │                                                             │
+│               ▼                                                             │
+│    ┌─────────────────────┐                                                  │
+│    │   BACKLOG-389       │                                                  │
+│    │   Demo Seed Data    │                                                  │
+│    │   (org + users)     │                                                  │
+│    └──────────┬──────────┘                                                  │
 │                               │                                             │
 │                               ▼                                             │
 │                     ╔═════════════════╗                                    │
@@ -102,8 +107,8 @@
 | Backlog ID | Title | Depends On | Blocks |
 |------------|-------|------------|--------|
 | **BACKLOG-387** | Supabase Schema | *None* | 388, 389, 390, 393, 394, 396 |
-| **BACKLOG-388** | RLS Policies + Storage | 387 | 393 (storage upload) |
-| **BACKLOG-389** | Demo Seed Data | 387 | *None* (can run anytime) |
+| **BACKLOG-388** | RLS Policies + Storage | 387 | 389, 393 (storage upload) |
+| **BACKLOG-389** | Demo Seed Data | 387, 388 | *None* |
 | **BACKLOG-390** | Desktop Local Schema | 387 | 391, 392, 395 |
 | **BACKLOG-391** | Submit UI (Detail) | 390, 393, 394 | 395 |
 | **BACKLOG-392** | Bulk Submit UI | 390, 393, 394 | 395 |
