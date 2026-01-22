@@ -28,6 +28,8 @@ interface TokenData {
   refresh_token?: string;
   expires_at: string | null;
   scopes: string[];
+  /** BACKLOG-390: ID token for Supabase Auth signInWithIdToken */
+  id_token?: string;
 }
 
 interface UserInfo {
@@ -365,6 +367,8 @@ class GoogleAuthService {
             ? new Date(tokens.expiry_date).toISOString()
             : null,
           scopes: tokens.scope ? tokens.scope.split(" ") : [],
+          // BACKLOG-390: Include ID token for Supabase Auth
+          id_token: tokens.id_token ?? undefined,
         },
         userInfo,
       };
