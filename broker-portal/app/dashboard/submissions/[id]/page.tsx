@@ -59,6 +59,39 @@ async function getSubmission(id: string) {
   return data;
 }
 
+/**
+ * Mark submission as under_review when broker first opens it.
+ * This prevents agent from resubmitting while broker is reviewing.
+ */
+async function markAsUnderReview(submission: { id: string; status: string; status_history?: unknown[] }) {
+  // Only transition from 'submitted' or 'resubmitted' to 'under_review'
+  if (submission.status !== 'submitted' && submission.status !== 'resubmitted') {
+    return;
+  }
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  const now = new Date().toISOString();
+  const historyEntry = {
+    status: 'under_review',
+    changed_at: now,
+    changed_by: user?.email || 'Broker',
+    notes: 'Broker opened submission for review',
+  };
+
+  const existingHistory = Array.isArray(submission.status_history) ? submission.status_history : [];
+  const updatedHistory = [...existingHistory, historyEntry];
+
+  await supabase
+    .from('transaction_submissions')
+    .update({
+      status: 'under_review',
+      status_history: updatedHistory,
+    })
+    .eq('id', submission.id);
+}
+
 async function getMessages(submissionId: string): Promise<Message[]> {
   const supabase = await createClient();
 
@@ -103,6 +136,10 @@ export default async function SubmissionDetailPage({ params }: PageProps) {
   if (!submission) {
     notFound();
   }
+
+  // Mark as under_review when broker first opens (don't await - fire and forget)
+  // This prevents agent from resubmitting while broker is reviewing
+  markAsUnderReview(submission);
 
   return (
     <div className="space-y-6 pb-24">
