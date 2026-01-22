@@ -19,6 +19,8 @@ interface TransactionHeaderProps {
   onRestore: () => void;
   onShowExportModal: () => void;
   onShowDeleteConfirm: () => void;
+  onShowSubmitModal?: () => void;
+  isSubmitting?: boolean;
 }
 
 export function TransactionHeader({
@@ -35,6 +37,8 @@ export function TransactionHeader({
   onRestore,
   onShowExportModal,
   onShowDeleteConfirm,
+  onShowSubmitModal,
+  isSubmitting = false,
 }: TransactionHeaderProps): React.ReactElement {
   // Determine header style based on state
   const getHeaderStyle = () => {
@@ -127,10 +131,13 @@ export function TransactionHeader({
             />
           ) : (
             <ActiveActions
+              transaction={transaction}
               isRejecting={isRejecting}
+              isSubmitting={isSubmitting}
               onShowRejectReasonModal={onShowRejectReasonModal}
               onShowExportModal={onShowExportModal}
               onShowDeleteConfirm={onShowDeleteConfirm}
+              onShowSubmitModal={onShowSubmitModal}
             />
           )}
 
@@ -243,18 +250,48 @@ function RejectedActions({
 }
 
 function ActiveActions({
+  transaction,
   isRejecting,
+  isSubmitting,
   onShowRejectReasonModal,
   onShowExportModal,
   onShowDeleteConfirm,
+  onShowSubmitModal,
 }: {
+  transaction: Transaction;
   isRejecting: boolean;
+  isSubmitting: boolean;
   onShowRejectReasonModal: () => void;
   onShowExportModal: () => void;
   onShowDeleteConfirm: () => void;
+  onShowSubmitModal?: () => void;
 }) {
+  // Check if transaction can be submitted
+  const canSubmit = transaction.submission_status === "not_submitted" ||
+    transaction.submission_status === "needs_changes" ||
+    !transaction.submission_status;
+
+  const isResubmit = transaction.submission_status === "needs_changes";
+
   return (
     <>
+      {/* Submit for Review Button */}
+      {onShowSubmitModal && canSubmit && (
+        <button
+          onClick={onShowSubmitModal}
+          disabled={isSubmitting}
+          className="px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-blue-600 text-white hover:bg-blue-700 shadow-md hover:shadow-lg disabled:opacity-50"
+        >
+          {isSubmitting ? (
+            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          )}
+          {isResubmit ? "Resubmit" : "Submit for Review"}
+        </button>
+      )}
       {/* Reject Button */}
       <button
         onClick={onShowRejectReasonModal}

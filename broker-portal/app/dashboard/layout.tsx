@@ -1,11 +1,26 @@
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
+import UserMenu from '@/components/UserMenu';
 
-async function getUser() {
+async function getUserWithRole() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  return user;
+
+  if (!user) return null;
+
+  // Get user's role from organization_members
+  const { data: membership } = await supabase
+    .from('organization_members')
+    .select('role')
+    .eq('user_id', user.id)
+    .maybeSingle();
+
+  return {
+    ...user,
+    role: membership?.role || undefined,
+    name: user.user_metadata?.full_name || user.user_metadata?.name || undefined,
+  };
 }
 
 export default async function DashboardLayout({
@@ -13,7 +28,7 @@ export default async function DashboardLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const user = await getUser();
+  const user = await getUserWithRole();
 
   if (!user) {
     redirect('/login');
@@ -27,11 +42,11 @@ export default async function DashboardLayout({
           <div className="flex justify-between h-16">
             {/* Logo & Nav Links */}
             <div className="flex items-center">
-              <Link href="/dashboard" className="flex items-center">
-                <span className="text-xl font-bold text-gray-900">
+              <Link href="/dashboard" className="flex flex-col">
+                <span className="text-xl font-bold text-gray-900 leading-tight">
                   Magic Audit
                 </span>
-                <span className="ml-2 text-sm text-gray-500">
+                <span className="text-xs text-gray-500">
                   Broker Portal
                 </span>
               </Link>
@@ -52,14 +67,12 @@ export default async function DashboardLayout({
             </div>
 
             {/* User Menu */}
-            <div className="flex items-center gap-4">
-              <span className="text-sm text-gray-600">{user.email}</span>
-              <a
-                href="/auth/logout"
-                className="text-sm text-gray-500 hover:text-gray-700"
-              >
-                Sign out
-              </a>
+            <div className="flex items-center">
+              <UserMenu
+                email={user.email || ''}
+                name={user.name}
+                role={user.role}
+              />
             </div>
           </div>
         </div>
