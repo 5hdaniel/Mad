@@ -52,6 +52,8 @@ export interface TransactionDetailsProps {
   onShowSuccess?: (message: string) => void;
   /** Toast handler for error messages - if provided, uses parent's toast system */
   onShowError?: (message: string) => void;
+  /** Initial tab to display when opening TransactionDetails */
+  initialTab?: TransactionTab;
 }
 
 /**

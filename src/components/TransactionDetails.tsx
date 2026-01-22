@@ -40,6 +40,8 @@ import {
 } from "./transactionDetailsModule";
 import type { AutoLinkResult } from "./transactionDetailsModule/components/modals/EditContactsModal";
 
+import type { TransactionTab } from "./transactionDetailsModule/types";
+
 interface TransactionDetailsComponentProps {
   transaction: Transaction;
   onClose: () => void;
@@ -52,6 +54,8 @@ interface TransactionDetailsComponentProps {
   onShowSuccess?: (message: string) => void;
   /** Toast handler for error messages - if provided, uses parent's toast system */
   onShowError?: (message: string) => void;
+  /** Initial tab to display when opening TransactionDetails */
+  initialTab?: TransactionTab;
 }
 
 /**
@@ -66,6 +70,7 @@ function TransactionDetails({
   userId,
   onShowSuccess,
   onShowError,
+  initialTab = "overview",
 }: TransactionDetailsComponentProps) {
   // Local state to track transaction - allows updates from edit modal
   // without requiring parent to re-render
@@ -93,8 +98,8 @@ function TransactionDetails({
     updateSuggestedContacts,
   } = useTransactionDetails(transaction);
 
-  // Tab state hook
-  const { activeTab, setActiveTab } = useTransactionTabs();
+  // Tab state hook - use initialTab prop
+  const { activeTab, setActiveTab } = useTransactionTabs(initialTab);
 
   // Communications hook
   const {

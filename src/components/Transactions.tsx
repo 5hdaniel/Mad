@@ -41,6 +41,7 @@ import {
   type TransactionFilter,
 } from "./transaction/hooks";
 import type { Transaction } from "../../electron/types/models";
+import type { TransactionTab } from "./transactionDetailsModule/types";
 
 // ============================================
 // TYPES
@@ -145,6 +146,9 @@ function Transactions({
     setSelectedTransaction,
   } = useTransactionModals();
 
+  // Initial tab state for TransactionDetails
+  const [initialTab, setInitialTab] = useState<TransactionTab>("overview");
+
   // Selection state for bulk operations
   const {
     selectedIds,
@@ -213,6 +217,7 @@ function Transactions({
     if (selectionMode) {
       toggleSelection(transaction.id);
     } else {
+      setInitialTab("overview");
       setSelectedTransaction(transaction);
     }
   };
@@ -224,6 +229,23 @@ function Transactions({
 
   const handleSelectAll = () => {
     selectAll(filteredTransactions);
+  };
+
+  // Handlers for clicking on communication counts
+  const handleMessagesClick = (transaction: Transaction, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!selectionMode) {
+      setInitialTab("messages");
+      setSelectedTransaction(transaction);
+    }
+  };
+
+  const handleEmailsClick = (transaction: Transaction, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!selectionMode) {
+      setInitialTab("emails");
+      setSelectedTransaction(transaction);
+    }
   };
 
   // ============================================
@@ -367,6 +389,8 @@ function Transactions({
                 onTransactionClick={handleTransactionClick}
                 onCheckboxClick={handleCheckboxClick}
                 onQuickExport={handleQuickExport}
+                onMessagesClick={handleMessagesClick}
+                onEmailsClick={handleEmailsClick}
                 formatCurrency={formatCurrency}
                 formatDate={formatDate}
               />
@@ -383,6 +407,7 @@ function Transactions({
           onTransactionUpdated={refetch}
           onShowSuccess={showSuccess}
           onShowError={showError}
+          initialTab={initialTab}
         />
       )}
 
