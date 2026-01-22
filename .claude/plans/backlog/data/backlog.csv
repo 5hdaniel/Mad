@@ -149,7 +149,7 @@ BACKLOG-159,Delete Deprecated PermissionsScreen.tsx,refactor,Medium,Obsolete,-,~
 BACKLOG-160,Consolidate last_exported_at/on Column Naming,refactor,Low,Pending,-,~5K,-,-,2026-01-17,,-
 BACKLOG-165,Duplicate Contacts in Import Contacts Page,ui,Medium,Pending,-,~20K,-,-,2026-01-05,,[BACKLOG-165.md](BACKLOG-165.md)
 BACKLOG-166,"Platform Detection Returns ""unknown"" in Renderer",service,Medium,Pending,-,~15K,-,-,2026-01-05,,[BACKLOG-166.md](BACKLOG-166.md)
-BACKLOG-167,Restrict Status Options for Manual Transactions,feature,Low,Pending,SPRINT-049,~15K,-,-,2026-01-05,,[BACKLOG-167.md](BACKLOG-167.md)
+BACKLOG-167,Restrict Status Options for Manual Transactions,feature,Low,Completed,-,~15K,-,Already implemented in BulkActionBar.tsx,2026-01-05,2026-01-22,[BACKLOG-167.md](BACKLOG-167.md)
 BACKLOG-168,Transaction Bulk Edit Multi-Select Modal,ui,Medium,Pending,-,~20K,-,-,2026-01-05,,[BACKLOG-168.md](BACKLOG-168.md)
 BACKLOG-169,Show in Folder Button for Exports,ui,Medium,Completed,SPRINT-028,~15K,-,"TASK-1008, PR #366",2026-01-05,2026-01-10,[BACKLOG-169.md](BACKLOG-169.md)
 BACKLOG-170,Messages Not Loading in Attach Modal,fix,Critical,Deferred,-,~5K,-,-,2026-01-05,,[BACKLOG-170.md](BACKLOG-170.md)
@@ -288,7 +288,7 @@ BACKLOG-307,Contact Select Modal Missing Message-Derived Contacts,fix,High,Compl
 BACKLOG-309,Import Contact Flow - Auto-Select and Refresh Issues,fix,High,Completed,SPRINT-045,~25K,~25K,0%,2026-01-18,2026-01-19,PR #474
 BACKLOG-310,Remove Debug Console Logs from NotificationContext,refactor,Low,Pending,-,~3K,-,-,2026-01-19,,[BACKLOG-310.md](items/BACKLOG-310.md)
 BACKLOG-311,EditContactsModal Performance - Lift Contact Loading,performance,Medium,Completed,SPRINT-045,~15K,~25K,+67%,2026-01-19,2026-01-19,"PRs #477, #478"
-BACKLOG-317,Unified Contact Selection UX Refactor,ui,Medium,Pending,-,~50K,-,-,2026-01-17,,[BACKLOG-317.md](items/BACKLOG-317.md)
+BACKLOG-317,Unified Contact Selection UX Refactor,ui,Medium,Obsolete,-,~50K,-,-,2026-01-17,,[BACKLOG-317.md](items/BACKLOG-317.md)
 BACKLOG-318,Fix Loading State Layout Shift in EditContactsModal,ui,Low,Completed,SPRINT-045,~5K,~5K,0%,2026-01-19,2026-01-19,PR #484
 BACKLOG-319,Transaction Details Tab Restructuring,ui,Medium,Pending,-,~25K,-,-,2026-01-17,,[BACKLOG-319.md](items/BACKLOG-319.md)
 BACKLOG-320,Hide Sale Price Field,ui,Low,Pending,-,~3K,-,-,2026-01-17,,[BACKLOG-320.md](items/BACKLOG-320.md)
@@ -331,7 +331,7 @@ BACKLOG-359,Add Audit Date Range to Summary PDF Title,ui,Low,Pending,-,-,-,-,202
 BACKLOG-360,Default Export to Audit Package - One PDF as Coming Soon,ui,High,Pending,SPRINT-049,-,-,-,2026-01-21,,[BACKLOG-360.md](items/BACKLOG-360.md)
 BACKLOG-361,Remove Progress Bar from Audit Package Exporter,ui,Low,Pending,-,-,-,-,2026-01-21,,[BACKLOG-361.md](items/BACKLOG-361.md)
 BACKLOG-362,Increase Export Success Popup Visibility Duration,ui,Medium,Pending,SPRINT-049,-,-,-,2026-01-21,,[BACKLOG-362.md](items/BACKLOG-362.md)
-BACKLOG-363,Reorganize Transaction Details Tabs - Move Emails to Own Tab,ui,High,Pending,SPRINT-049,-,-,-,2026-01-21,,[BACKLOG-363.md](items/BACKLOG-363.md)
+BACKLOG-363,Reorganize Transaction Details Tabs - Move Emails to Own Tab,ui,High,Completed,-,-,-,Already implemented - TransactionEmailsTab.tsx exists,2026-01-21,2026-01-22,[BACKLOG-363.md](items/BACKLOG-363.md)
 BACKLOG-371,Contact Update Sync and Re-link Messages,feature,High,Pending,SPRINT-049,-,-,-,2026-01-21,,[BACKLOG-371.md](items/BACKLOG-371.md)
 BACKLOG-372,Switch Mac to iPhone Backup for Messages/Contacts,architecture,High,Pending,-,-,-,-,2026-01-21,,[BACKLOG-372.md](items/BACKLOG-372.md)
 BACKLOG-373,Android Device Support,feature,High,Pending,-,~150K,-,-,2026-01-21,,[BACKLOG-373.md](items/BACKLOG-373.md)
@@ -346,3 +346,5 @@ BACKLOG-381,Transaction Details Header Improvements (Audit Period + Type + Edit 
 BACKLOG-382,Persistent Export History in Transaction Details,feature,Medium,Obsolete,-,-,-,-,2026-01-22,,[BACKLOG-382.md](items/BACKLOG-382.md)
 BACKLOG-383,Format Role Pills with Human-Readable Labels,ui,Medium,Pending,SPRINT-049,-,-,-,2026-01-22,,[BACKLOG-383.md](items/BACKLOG-383.md)
 BACKLOG-384,AI-Extracted Date Verification Badges,feature,Low,Pending,-,-,-,-,2026-01-22,,[BACKLOG-384.md](items/BACKLOG-384.md)
+BACKLOG-385,Contact Email Missing Prompt,ux,High,Pending,SPRINT-050,-,-,-,2026-01-22,,[BACKLOG-385.md](items/BACKLOG-385.md)
+BACKLOG-386,Unified Contact Selection and Management UX,ux,High,Pending,SPRINT-050,-,-,-,2026-01-22,,[BACKLOG-386.md](items/BACKLOG-386.md)
