@@ -938,17 +938,15 @@ class PDFExportService {
               const senderNormalized = normalizePhone(msg.sender);
               const resolvedName = phoneNameMap[senderNormalized] || phoneNameMap[msg.sender];
               senderName = resolvedName || msg.sender;
-              // Show phone if we resolved to a name
+              // Show phone if we resolved to a name (group chats only)
               if (resolvedName) {
                 senderPhone = msg.sender;
               }
             } else {
               // Use thread contact info
               senderName = contact.name || contact.phone;
-              // Show phone if we have a contact name
-              if (contact.name) {
-                senderPhone = contact.phone;
-              }
+              // For 1:1 chats, don't show phone under each message (it's redundant)
+              // Phone is already shown in thread header
             }
           }
           const body = msg.body_text || msg.body_plain || '';
@@ -960,8 +958,8 @@ class PDFExportService {
           html += '<strong>' + escapeHtml(senderName) + '</strong>';
           html += ' <span style="color: #718096; font-size: 11px;">' + time + '</span>';
           html += '</div>';
-          // Phone number below name (if resolved to contact name)
-          if (senderPhone) {
+          // Phone number below name (only for group chats to identify sender)
+          if (senderPhone && isGroupChat) {
             html += '<div style="font-size: 11px; color: #718096; margin-bottom: 8px;">' + escapeHtml(senderPhone) + '</div>';
           }
           html += '<div>' + escapeHtml(body) + '</div>';
