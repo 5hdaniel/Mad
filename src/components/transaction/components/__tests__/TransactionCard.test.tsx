@@ -6,12 +6,12 @@ import { formatCommunicationCounts } from "../TransactionCard";
 
 describe("formatCommunicationCounts", () => {
   describe("email only", () => {
-    it("shows plural for multiple emails", () => {
-      expect(formatCommunicationCounts(5, 0)).toBe("5 emails");
+    it("shows plural for multiple email threads", () => {
+      expect(formatCommunicationCounts(5, 0)).toBe("5 email threads");
     });
 
-    it("shows singular for one email", () => {
-      expect(formatCommunicationCounts(1, 0)).toBe("1 email");
+    it("shows singular for one email thread", () => {
+      expect(formatCommunicationCounts(1, 0)).toBe("1 email thread");
     });
   });
 
@@ -27,16 +27,16 @@ describe("formatCommunicationCounts", () => {
 
   describe("both email and text", () => {
     it("shows both counts when both exist", () => {
-      expect(formatCommunicationCounts(8, 4)).toBe("8 emails, 4 texts");
+      expect(formatCommunicationCounts(8, 4)).toBe("8 email threads, 4 texts");
     });
 
     it("handles singular correctly for both", () => {
-      expect(formatCommunicationCounts(1, 1)).toBe("1 email, 1 text");
+      expect(formatCommunicationCounts(1, 1)).toBe("1 email thread, 1 text");
     });
 
     it("handles mixed singular/plural", () => {
-      expect(formatCommunicationCounts(1, 5)).toBe("1 email, 5 texts");
-      expect(formatCommunicationCounts(3, 1)).toBe("3 emails, 1 text");
+      expect(formatCommunicationCounts(1, 5)).toBe("1 email thread, 5 texts");
+      expect(formatCommunicationCounts(3, 1)).toBe("3 email threads, 1 text");
     });
   });
 
@@ -48,7 +48,7 @@ describe("formatCommunicationCounts", () => {
 
   describe("edge cases", () => {
     it("handles large numbers", () => {
-      expect(formatCommunicationCounts(100, 50)).toBe("100 emails, 50 texts");
+      expect(formatCommunicationCounts(100, 50)).toBe("100 email threads, 50 texts");
     });
   });
 });
