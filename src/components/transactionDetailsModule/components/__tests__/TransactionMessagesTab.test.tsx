@@ -822,6 +822,242 @@ describe("TransactionMessagesTab", () => {
     });
   });
 
+  describe("audit period filter (BACKLOG-357)", () => {
+    // Messages spanning different date ranges for filter testing
+    const messagesForDateFilter: Partial<Communication>[] = [
+      {
+        id: "msg-before",
+        user_id: "user-456",
+        channel: "sms",
+        body_text: "Message before audit period",
+        sent_at: "2024-01-01T10:00:00Z",
+        direction: "inbound",
+        thread_id: "thread-1",
+        participants: JSON.stringify({ from: "+14155550100", to: ["+14155550101"] }),
+        has_attachments: false,
+        is_false_positive: false,
+      },
+      {
+        id: "msg-during-1",
+        user_id: "user-456",
+        channel: "sms",
+        body_text: "Message during audit period 1",
+        sent_at: "2024-01-15T10:00:00Z",
+        direction: "inbound",
+        thread_id: "thread-1",
+        participants: JSON.stringify({ from: "+14155550100", to: ["+14155550101"] }),
+        has_attachments: false,
+        is_false_positive: false,
+      },
+      {
+        id: "msg-during-2",
+        user_id: "user-456",
+        channel: "sms",
+        body_text: "Message during audit period 2",
+        sent_at: "2024-01-20T10:00:00Z",
+        direction: "outbound",
+        thread_id: "thread-1",
+        participants: JSON.stringify({ from: "+14155550101", to: ["+14155550100"] }),
+        has_attachments: false,
+        is_false_positive: false,
+      },
+      {
+        id: "msg-after",
+        user_id: "user-456",
+        channel: "sms",
+        body_text: "Message after audit period",
+        sent_at: "2024-02-01T10:00:00Z",
+        direction: "inbound",
+        thread_id: "thread-1",
+        participants: JSON.stringify({ from: "+14155550100", to: ["+14155550101"] }),
+        has_attachments: false,
+        is_false_positive: false,
+      },
+      {
+        id: "msg-thread2-outside",
+        user_id: "user-456",
+        channel: "sms",
+        body_text: "Thread 2 message outside audit",
+        sent_at: "2024-02-15T10:00:00Z",
+        direction: "inbound",
+        thread_id: "thread-2",
+        participants: JSON.stringify({ from: "+14155550200", to: ["+14155550101"] }),
+        has_attachments: false,
+        is_false_positive: false,
+      },
+    ];
+
+    it("should show audit period filter toggle when audit dates are provided", () => {
+      render(
+        <TransactionMessagesTab
+          messages={messagesForDateFilter as Communication[]}
+          loading={false}
+          error={null}
+          auditStartDate="2024-01-10"
+          auditEndDate="2024-01-25"
+        />
+      );
+
+      expect(screen.getByTestId("audit-period-filter")).toBeInTheDocument();
+      expect(screen.getByTestId("audit-period-filter-checkbox")).toBeInTheDocument();
+    });
+
+    it("should not show audit period filter when no audit dates are provided", () => {
+      render(
+        <TransactionMessagesTab
+          messages={messagesForDateFilter as Communication[]}
+          loading={false}
+          error={null}
+        />
+      );
+
+      expect(screen.queryByTestId("audit-period-filter")).not.toBeInTheDocument();
+    });
+
+    it("should filter threads by audit date range when toggle is on (default)", () => {
+      render(
+        <TransactionMessagesTab
+          messages={messagesForDateFilter as Communication[]}
+          loading={false}
+          error={null}
+          auditStartDate="2024-01-10"
+          auditEndDate="2024-01-25"
+        />
+      );
+
+      // Toggle should be checked by default when audit dates are available
+      const checkbox = screen.getByTestId("audit-period-filter-checkbox");
+      expect(checkbox).toBeChecked();
+
+      // Should show filtered message count in header
+      expect(screen.getByText("Text Messages (2)")).toBeInTheDocument();
+
+      // The info line should indicate showing 2 of 5 messages
+      const infoLine = screen.getByTestId("audit-period-info");
+      expect(infoLine).toHaveTextContent(/Showing 2 of 5 messages/);
+
+      // Thread 2 (only has messages outside audit period) should be hidden
+      const threadCards = screen.getAllByTestId("message-thread-card");
+      expect(threadCards.length).toBe(1);
+    });
+
+    it("should show all threads when toggle is turned off", () => {
+      render(
+        <TransactionMessagesTab
+          messages={messagesForDateFilter as Communication[]}
+          loading={false}
+          error={null}
+          auditStartDate="2024-01-10"
+          auditEndDate="2024-01-25"
+        />
+      );
+
+      // Turn off the filter
+      const checkbox = screen.getByTestId("audit-period-filter-checkbox");
+      fireEvent.click(checkbox);
+
+      // Should show all messages
+      expect(screen.getByText("Text Messages (5)")).toBeInTheDocument();
+
+      // Both threads should be visible
+      const threadCards = screen.getAllByTestId("message-thread-card");
+      expect(threadCards.length).toBe(2);
+    });
+
+    it("should show audit period info line when filter is on", () => {
+      render(
+        <TransactionMessagesTab
+          messages={messagesForDateFilter as Communication[]}
+          loading={false}
+          error={null}
+          auditStartDate="2024-01-10"
+          auditEndDate="2024-01-25"
+        />
+      );
+
+      expect(screen.getByTestId("audit-period-info")).toBeInTheDocument();
+      expect(screen.getByTestId("audit-period-info")).toHaveTextContent(/Showing 2 of 5 messages/);
+    });
+
+    it("should show empty state when all messages are outside audit period", () => {
+      // All messages are outside Jan 10-11 range
+      render(
+        <TransactionMessagesTab
+          messages={messagesForDateFilter as Communication[]}
+          loading={false}
+          error={null}
+          auditStartDate="2024-01-10"
+          auditEndDate="2024-01-11"
+        />
+      );
+
+      // Should show empty filtered state with option to show all
+      expect(screen.getByText("No messages in audit period")).toBeInTheDocument();
+      expect(screen.getByText("Show all messages")).toBeInTheDocument();
+    });
+
+    it("should show all messages when clicking 'Show all messages' link", () => {
+      render(
+        <TransactionMessagesTab
+          messages={messagesForDateFilter as Communication[]}
+          loading={false}
+          error={null}
+          auditStartDate="2024-01-10"
+          auditEndDate="2024-01-11"
+        />
+      );
+
+      // Click show all messages
+      fireEvent.click(screen.getByText("Show all messages"));
+
+      // Toggle should be unchecked
+      expect(screen.getByTestId("audit-period-filter-checkbox")).not.toBeChecked();
+
+      // Should show all messages now
+      expect(screen.getByText("Text Messages (5)")).toBeInTheDocument();
+    });
+
+    it("should handle ongoing transaction with only start date", () => {
+      render(
+        <TransactionMessagesTab
+          messages={messagesForDateFilter as Communication[]}
+          loading={false}
+          error={null}
+          auditStartDate="2024-01-15"
+          auditEndDate={null}
+        />
+      );
+
+      // Filter should still be available
+      expect(screen.getByTestId("audit-period-filter")).toBeInTheDocument();
+
+      // Should show messages from Jan 15 onwards (4 messages)
+      expect(screen.getByText("Text Messages (4)")).toBeInTheDocument();
+    });
+
+    it("should update conversation count based on filter", () => {
+      render(
+        <TransactionMessagesTab
+          messages={messagesForDateFilter as Communication[]}
+          loading={false}
+          error={null}
+          auditStartDate="2024-01-10"
+          auditEndDate="2024-01-25"
+        />
+      );
+
+      // With filter on, only 1 conversation has messages in period
+      expect(screen.getByText(/in 1 conversation/)).toBeInTheDocument();
+      expect(screen.getByText(/of 2/)).toBeInTheDocument();
+
+      // Turn off filter
+      fireEvent.click(screen.getByTestId("audit-period-filter-checkbox"));
+
+      // Both conversations should show
+      expect(screen.getByText(/in 2 conversations/)).toBeInTheDocument();
+    });
+  });
+
   describe("attach flow", () => {
     it("should show Attach Messages button when userId and transactionId are provided", () => {
       render(
