@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import Link from 'next/link';
 import { formatCurrency, formatRelativeTime, getStatusColor, formatStatus } from '@/lib/utils';
+import { SubmissionListClient } from '@/components/submission/SubmissionListClient';
 
 interface Submission {
   id: string;
@@ -59,6 +60,7 @@ export default async function SubmissionsPage({ searchParams }: PageProps) {
   const currentStatus = status || 'all';
 
   return (
+    <SubmissionListClient>
     <div className="space-y-6">
       {/* Header */}
       <div className="flex justify-between items-center">
@@ -181,5 +183,6 @@ export default async function SubmissionsPage({ searchParams }: PageProps) {
         )}
       </div>
     </div>
+    </SubmissionListClient>
   );
 }

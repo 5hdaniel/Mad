@@ -1,18 +1,20 @@
 /**
  * Submission Sync Service (BACKLOG-395)
  *
- * Polls Supabase for status changes on submitted transactions and
- * updates local SQLite database. Emits events for UI notifications.
+ * Uses Supabase Realtime subscriptions for instant status updates,
+ * with polling as a fallback for missed events.
  *
  * Features:
- * - Periodic polling (configurable interval)
+ * - Realtime subscriptions for instant updates (primary)
+ * - Periodic polling as fallback
  * - Status change detection
  * - Review notes sync
- * - Event emission for UI updates
- * - Offline handling
+ * - Event emission for UI notifications
+ * - Offline handling with reconnection
  */
 
 import { BrowserWindow } from "electron";
+import { RealtimeChannel } from "@supabase/supabase-js";
 import supabaseService from "./supabaseService";
 import databaseService from "./databaseService";
 import logService from "./logService";
@@ -60,8 +62,9 @@ interface LocalSubmittedTransaction {
 // CONSTANTS
 // ============================================
 
-const DEFAULT_SYNC_INTERVAL_MS = 60000; // 1 minute
+const DEFAULT_SYNC_INTERVAL_MS = 60000; // 1 minute (fallback polling)
 const MIN_SYNC_INTERVAL_MS = 10000; // 10 seconds minimum
+const REALTIME_ENABLED = true; // Feature flag for realtime subscriptions
 
 // ============================================
 // SERVICE CLASS
@@ -72,12 +75,175 @@ class SubmissionSyncService {
   private syncIntervalMs: number = DEFAULT_SYNC_INTERVAL_MS;
   private isOnline: boolean = true;
   private mainWindow: BrowserWindow | null = null;
+  private realtimeChannel: RealtimeChannel | null = null;
+  private currentUserId: string | null = null;
 
   /**
    * Set the main window reference for sending events
    */
   setMainWindow(window: BrowserWindow | null): void {
     this.mainWindow = window;
+  }
+
+  /**
+   * Start realtime subscription for status changes
+   * @param userId - The user ID to filter submissions by
+   */
+  async startRealtimeSubscription(userId: string): Promise<void> {
+    if (!REALTIME_ENABLED) {
+      logService.info("[SyncService] Realtime disabled, using polling only", "SubmissionSyncService");
+      return;
+    }
+
+    // Clean up existing subscription if any
+    if (this.realtimeChannel) {
+      await this.stopRealtimeSubscription();
+    }
+
+    this.currentUserId = userId;
+
+    try {
+      const client = supabaseService.getClient();
+
+      this.realtimeChannel = client
+        .channel(`submission-changes-${userId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "transaction_submissions",
+            filter: `submitted_by=eq.${userId}`,
+          },
+          async (payload) => {
+            logService.info(
+              "[SyncService] Realtime update received",
+              "SubmissionSyncService",
+              { submissionId: payload.new?.id }
+            );
+            await this.handleRealtimeUpdate(payload.new as CloudSubmissionStatus);
+          }
+        )
+        .subscribe((status) => {
+          logService.info(
+            `[SyncService] Realtime subscription status: ${status}`,
+            "SubmissionSyncService"
+          );
+
+          if (status === "SUBSCRIBED") {
+            logService.info(
+              "[SyncService] Realtime subscription active",
+              "SubmissionSyncService"
+            );
+          } else if (status === "CHANNEL_ERROR") {
+            logService.error(
+              "[SyncService] Realtime channel error, falling back to polling",
+              "SubmissionSyncService"
+            );
+          }
+        });
+
+      logService.info(
+        `[SyncService] Started realtime subscription for user ${userId}`,
+        "SubmissionSyncService"
+      );
+    } catch (error) {
+      logService.error(
+        `[SyncService] Failed to start realtime subscription: ${error instanceof Error ? error.message : "Unknown error"}`,
+        "SubmissionSyncService"
+      );
+    }
+  }
+
+  /**
+   * Stop realtime subscription
+   */
+  async stopRealtimeSubscription(): Promise<void> {
+    if (this.realtimeChannel) {
+      try {
+        const client = supabaseService.getClient();
+        await client.removeChannel(this.realtimeChannel);
+        this.realtimeChannel = null;
+        this.currentUserId = null;
+        logService.info("[SyncService] Stopped realtime subscription", "SubmissionSyncService");
+      } catch (error) {
+        logService.error(
+          `[SyncService] Error stopping realtime subscription: ${error instanceof Error ? error.message : "Unknown error"}`,
+          "SubmissionSyncService"
+        );
+      }
+    }
+  }
+
+  /**
+   * Handle realtime update from Supabase
+   */
+  private async handleRealtimeUpdate(cloudStatus: CloudSubmissionStatus): Promise<void> {
+    if (!cloudStatus?.id) {
+      logService.warn("[SyncService] Received invalid realtime update", "SubmissionSyncService");
+      return;
+    }
+
+    try {
+      const db = databaseService.getRawDatabase();
+
+      // Find local transaction by submission_id
+      const localTransaction = db
+        .prepare(
+          `SELECT id, property_address, submission_id, submission_status, last_review_notes
+           FROM transactions
+           WHERE submission_id = ?`
+        )
+        .get(cloudStatus.id) as LocalSubmittedTransaction | undefined;
+
+      if (!localTransaction) {
+        logService.debug(
+          `[SyncService] No local transaction for submission ${cloudStatus.id}`,
+          "SubmissionSyncService"
+        );
+        return;
+      }
+
+      // Check if status or review notes changed
+      const statusChanged = cloudStatus.status !== localTransaction.submission_status;
+      const notesChanged = cloudStatus.review_notes !== localTransaction.last_review_notes;
+
+      if (statusChanged || notesChanged) {
+        await this.updateLocalTransaction(localTransaction.id, {
+          submission_status: cloudStatus.status as SubmissionStatus,
+          last_review_notes: cloudStatus.review_notes || null,
+        });
+
+        const detail: StatusChangeDetail = {
+          transactionId: localTransaction.id,
+          propertyAddress: localTransaction.property_address,
+          oldStatus: localTransaction.submission_status,
+          newStatus: cloudStatus.status as SubmissionStatus,
+          reviewNotes: cloudStatus.review_notes,
+        };
+
+        if (statusChanged) {
+          this.emitStatusChange(detail);
+        }
+
+        logService.info(
+          `[SyncService] Realtime update applied: ${localTransaction.property_address}: ${localTransaction.submission_status} -> ${cloudStatus.status}`,
+          "SubmissionSyncService"
+        );
+      }
+    } catch (error) {
+      logService.error(
+        `[SyncService] Failed to handle realtime update: ${error instanceof Error ? error.message : "Unknown error"}`,
+        "SubmissionSyncService"
+      );
+    }
+  }
+
+  /**
+   * Check if realtime subscription is active
+   */
+  isRealtimeActive(): boolean {
+    return this.realtimeChannel !== null;
   }
 
   /**
@@ -127,6 +293,15 @@ class SubmissionSyncService {
       this.syncInterval = null;
       logService.info("[SyncService] Stopped periodic sync", "SubmissionSyncService");
     }
+  }
+
+  /**
+   * Stop all sync operations (both realtime and polling)
+   */
+  async stopAllSync(): Promise<void> {
+    this.stopPeriodicSync();
+    await this.stopRealtimeSubscription();
+    logService.info("[SyncService] Stopped all sync operations", "SubmissionSyncService");
   }
 
   /**

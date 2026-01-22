@@ -5777,3 +5777,33 @@
   "started_at": "2026-01-22T09:03:22.662Z",
   "ended_at": "2026-01-22T09:31:05.166Z"
 }
+{
+  "timestamp": "2026-01-22T09:45:06Z",
+  "session_id": "92abd0cb-f4db-4e42-8f37-656e82762538",
+  "agent_id": "a3a4ffc",
+  "input_tokens": 3962,
+  "output_tokens": 30965,
+  "cache_read": 13510927,
+  "cache_create": 743610,
+  "billable_tokens": 774575,
+  "total_tokens": 14289464,
+  "api_calls": 168,
+  "duration_secs": 768,
+  "started_at": "2026-01-22T09:32:18.325Z",
+  "ended_at": "2026-01-22T09:45:06.132Z"
+}
+{
+  "timestamp": "2026-01-22T09:56:53Z",
+  "session_id": "92abd0cb-f4db-4e42-8f37-656e82762538",
+  "agent_id": "a175e50",
+  "input_tokens": 732,
+  "output_tokens": 13713,
+  "cache_read": 13868117,
+  "cache_create": 511303,
+  "billable_tokens": 525016,
+  "total_tokens": 14393865,
+  "api_calls": 146,
+  "duration_secs": 678,
+  "started_at": "2026-01-22T09:45:34.839Z",
+  "ended_at": "2026-01-22T09:56:52.892Z"
+}
