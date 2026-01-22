@@ -930,7 +930,7 @@ describe("TransactionMessagesTab", () => {
       expect(checkbox).toBeChecked();
 
       // Should show filtered message count in header
-      expect(screen.getByText("Text Messages (2)")).toBeInTheDocument();
+      expect(screen.getByText("Texts (2)")).toBeInTheDocument();
 
       // The info line should indicate showing 2 of 5 messages
       const infoLine = screen.getByTestId("audit-period-info");
@@ -957,7 +957,7 @@ describe("TransactionMessagesTab", () => {
       fireEvent.click(checkbox);
 
       // Should show all messages
-      expect(screen.getByText("Text Messages (5)")).toBeInTheDocument();
+      expect(screen.getByText("Texts (5)")).toBeInTheDocument();
 
       // Both threads should be visible
       const threadCards = screen.getAllByTestId("message-thread-card");
@@ -1014,7 +1014,7 @@ describe("TransactionMessagesTab", () => {
       expect(screen.getByTestId("audit-period-filter-checkbox")).not.toBeChecked();
 
       // Should show all messages now
-      expect(screen.getByText("Text Messages (5)")).toBeInTheDocument();
+      expect(screen.getByText("Texts (5)")).toBeInTheDocument();
     });
 
     it("should handle ongoing transaction with only start date", () => {
@@ -1032,7 +1032,7 @@ describe("TransactionMessagesTab", () => {
       expect(screen.getByTestId("audit-period-filter")).toBeInTheDocument();
 
       // Should show messages from Jan 15 onwards (4 messages)
-      expect(screen.getByText("Text Messages (4)")).toBeInTheDocument();
+      expect(screen.getByText("Texts (4)")).toBeInTheDocument();
     });
 
     it("should update conversation count based on filter", () => {
