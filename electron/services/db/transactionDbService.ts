@@ -116,6 +116,7 @@ export async function getTransactions(
   // BACKLOG-390: Count emails/texts using COALESCE to match frontend display logic
   // The frontend uses COALESCE(m.channel, c.communication_type) from getCommunicationsWithMessages
   // So we must use the same logic here for consistent counts
+  // BACKLOG-394: For texts, count unique thread_ids (conversations) not individual messages
   let sql = `SELECT t.*,
              (SELECT COUNT(*) FROM communications c WHERE c.transaction_id = t.id) as total_communications_count,
              (SELECT COUNT(*) FROM communications c
@@ -123,7 +124,7 @@ export async function getTransactions(
                                    OR (c.message_id IS NULL AND c.thread_id IS NOT NULL AND c.thread_id = m.thread_id)
               WHERE c.transaction_id = t.id
               AND COALESCE(m.channel, c.communication_type) = 'email') as email_count,
-             (SELECT COUNT(*) FROM communications c
+             (SELECT COUNT(DISTINCT COALESCE(c.thread_id, c.id)) FROM communications c
               LEFT JOIN messages m ON (c.message_id IS NOT NULL AND c.message_id = m.id)
                                    OR (c.message_id IS NULL AND c.thread_id IS NOT NULL AND c.thread_id = m.thread_id)
               WHERE c.transaction_id = t.id
