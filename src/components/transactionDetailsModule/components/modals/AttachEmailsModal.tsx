@@ -51,6 +51,10 @@ function formatSender(sender: string | null): string {
   return sender;
 }
 
+// Pagination constants to prevent UI freeze from rendering too many items
+const EMAILS_PER_PAGE = 50;
+const MAX_EMAILS = 500;
+
 export function AttachEmailsModal({
   userId,
   transactionId,
@@ -69,6 +73,9 @@ export function AttachEmailsModal({
   // UI state
   const [searchQuery, setSearchQuery] = useState("");
   const [attaching, setAttaching] = useState(false);
+
+  // Pagination state - only show EMAILS_PER_PAGE at a time to prevent UI freeze
+  const [displayCount, setDisplayCount] = useState(EMAILS_PER_PAGE);
 
   // Load unlinked emails on mount
   useEffect(() => {
@@ -111,6 +118,23 @@ export function AttachEmailsModal({
       (email.sender && email.sender.toLowerCase().includes(query))
     );
   }, [emails, searchQuery]);
+
+  // Paginated emails - only render displayCount items to prevent UI freeze
+  const displayedEmails = useMemo(() => {
+    return filteredEmails.slice(0, displayCount);
+  }, [filteredEmails, displayCount]);
+
+  // Check if there are more emails to load
+  const hasMoreEmails = displayCount < filteredEmails.length;
+
+  // Reset display count when search changes (to show first page of results)
+  useEffect(() => {
+    setDisplayCount(EMAILS_PER_PAGE);
+  }, [searchQuery]);
+
+  const handleLoadMore = () => {
+    setDisplayCount((prev) => Math.min(prev + EMAILS_PER_PAGE, MAX_EMAILS));
+  };
 
   const handleToggleEmail = (emailId: string) => {
     setSelectedEmailIds((prev) => {
@@ -209,7 +233,9 @@ export function AttachEmailsModal({
           {!loading && filteredEmails.length > 0 && (
             <div className="flex items-center justify-between mt-2">
               <p className="text-sm text-gray-600">
-                {filteredEmails.length} unlinked email{filteredEmails.length !== 1 ? "s" : ""}
+                {hasMoreEmails
+                  ? `Showing ${displayCount} of ${filteredEmails.length} unlinked emails`
+                  : `${filteredEmails.length} unlinked email${filteredEmails.length !== 1 ? "s" : ""}`}
               </p>
               <button
                 onClick={handleSelectAll}
@@ -259,10 +285,10 @@ export function AttachEmailsModal({
             </div>
           )}
 
-          {/* Email list */}
+          {/* Email list - using displayedEmails (paginated) to prevent UI freeze */}
           {!loading && !error && filteredEmails.length > 0 && (
             <div className="space-y-2">
-              {filteredEmails.map((email) => {
+              {displayedEmails.map((email) => {
                 const isSelected = selectedEmailIds.has(email.id);
                 return (
                   <div
@@ -320,6 +346,19 @@ export function AttachEmailsModal({
                   </div>
                 );
               })}
+
+              {/* Load More button */}
+              {hasMoreEmails && (
+                <div className="text-center pt-4">
+                  <button
+                    onClick={handleLoadMore}
+                    className="px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg font-medium transition-all"
+                    data-testid="load-more-button"
+                  >
+                    Load More ({filteredEmails.length - displayCount} remaining)
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
