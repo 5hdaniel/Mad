@@ -6,7 +6,7 @@
 import React from "react";
 import type { Transaction } from "@/types";
 import type { ContactAssignment, ResolvedSuggestedContact } from "../types";
-import { formatRoleLabel } from "@/utils/transactionRoleUtils";
+import { getRoleDisplayName, type TransactionType } from "@/utils/transactionRoleUtils";
 
 interface TransactionDetailsTabProps {
   transaction: Transaction;
@@ -257,6 +257,7 @@ export function TransactionDetailsTab({
               <SuggestedContactCard
                 key={suggestion.contact_id}
                 suggestion={suggestion}
+                transactionType={(transaction.transaction_type as TransactionType) || "other"}
                 isProcessing={processingContactId === suggestion.contact_id}
                 isDisabled={processingAll}
                 onAccept={() => onAcceptSuggestion(suggestion)}
@@ -372,7 +373,11 @@ export function TransactionDetailsTab({
         ) : (
           <div className="space-y-2">
             {contactAssignments.map((assignment) => (
-              <ContactSummaryCard key={assignment.id} assignment={assignment} />
+              <ContactSummaryCard
+                key={assignment.id}
+                assignment={assignment}
+                transactionType={(transaction.transaction_type as TransactionType) || "other"}
+              />
             ))}
           </div>
         )}
@@ -384,8 +389,10 @@ export function TransactionDetailsTab({
 // Sub-component for contact summary cards in Overview
 function ContactSummaryCard({
   assignment,
+  transactionType,
 }: {
   assignment: ContactAssignment;
+  transactionType: TransactionType;
 }) {
   const role = assignment.specific_role || assignment.role || "Unknown Role";
   const name = assignment.contact_name || "Unknown Contact";
@@ -423,7 +430,7 @@ function ContactSummaryCard({
       </div>
       {/* Role badge */}
       <span className="inline-block px-3 py-1 bg-green-100 text-green-800 text-xs font-semibold rounded-full">
-        {formatRoleLabel(role)}
+        {getRoleDisplayName(role, transactionType)}
       </span>
     </div>
   );
@@ -432,12 +439,14 @@ function ContactSummaryCard({
 // Sub-component for AI suggested contact cards
 function SuggestedContactCard({
   suggestion,
+  transactionType,
   isProcessing,
   isDisabled,
   onAccept,
   onReject,
 }: {
   suggestion: ResolvedSuggestedContact;
+  transactionType: TransactionType;
   isProcessing: boolean;
   isDisabled: boolean;
   onAccept: () => void;
@@ -454,7 +463,7 @@ function SuggestedContactCard({
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-2">
             <span className="inline-block px-3 py-1 bg-purple-100 text-purple-800 text-xs font-semibold rounded-full">
-              {formatRoleLabel(suggestion.role)}
+              {getRoleDisplayName(suggestion.role, transactionType)}
             </span>
             {suggestion.is_primary && (
               <span className="inline-block px-2 py-1 bg-blue-100 text-blue-800 text-xs font-semibold rounded-full">

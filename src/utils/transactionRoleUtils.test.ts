@@ -235,14 +235,14 @@ describe("transactionRoleUtils", () => {
   });
 
   describe("getRoleDisplayName", () => {
-    it('should return "Client (Buyer)" for CLIENT role in purchase transaction', () => {
+    it('should return "Buyer (Client)" for CLIENT role in purchase transaction', () => {
       const result = getRoleDisplayName(SPECIFIC_ROLES.CLIENT, "purchase");
-      expect(result).toBe("Client (Buyer)");
+      expect(result).toBe("Buyer (Client)");
     });
 
-    it('should return "Client (Seller)" for CLIENT role in sale transaction', () => {
+    it('should return "Seller (Client)" for CLIENT role in sale transaction', () => {
       const result = getRoleDisplayName(SPECIFIC_ROLES.CLIENT, "sale");
-      expect(result).toBe("Client (Seller)");
+      expect(result).toBe("Seller (Client)");
     });
 
     it("should return standard display name for non-CLIENT roles", () => {
@@ -270,10 +270,10 @@ describe("transactionRoleUtils", () => {
       expect(result).toBe("Client (Buyer/Seller)");
     });
 
-    it("should return the role string itself for unknown roles", () => {
+    it("should format unknown roles using formatRoleLabel", () => {
       const result = getRoleDisplayName("unknown_custom_role", "purchase");
-      // When role is not in ROLE_DISPLAY_NAMES, return the role string itself
-      expect(result).toBe("unknown_custom_role");
+      // When role is not in ROLE_DISPLAY_NAMES, format it using formatRoleLabel
+      expect(result).toBe("Unknown Custom Role");
     });
 
     it("should handle empty string role", () => {
