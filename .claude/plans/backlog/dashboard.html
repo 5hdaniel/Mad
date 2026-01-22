@@ -1164,6 +1164,21 @@
             const priority = normalize(item.priority);
             const status = normalize(item.status).replace(' ', '-');
 
+            // Format dates for display
+            const formatDate = (dateStr) => {
+                if (!dateStr || dateStr === '-') return '-';
+                try {
+                    const date = new Date(dateStr + 'T00:00:00');
+                    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+                } catch {
+                    return dateStr;
+                }
+            };
+
+            const createdAt = formatDate(item.created_at);
+            const completedAt = formatDate(item.completed_at);
+            const isCompleted = status === 'completed' || status === 'done';
+
             document.getElementById('modalBody').innerHTML = `
                 <div class="detail-row">
                     <div class="detail-label">Title</div>
@@ -1181,6 +1196,16 @@
                     <div class="detail-label">Status</div>
                     <div class="detail-value"><span class="status-badge status-${status}">${item.status || '-'}</span></div>
                 </div>
+                <div class="detail-row">
+                    <div class="detail-label">Created</div>
+                    <div class="detail-value">${createdAt}</div>
+                </div>
+                ${isCompleted ? `
+                <div class="detail-row">
+                    <div class="detail-label">Completed</div>
+                    <div class="detail-value">${completedAt}</div>
+                </div>
+                ` : ''}
                 <div class="detail-row">
                     <div class="detail-label">Sprint</div>
                     <div class="detail-value">${item.sprint && item.sprint !== '-' ? item.sprint : '-'}</div>
