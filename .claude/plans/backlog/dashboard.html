@@ -616,11 +616,7 @@
                 </div>
                 <div class="filter-group">
                     <label>Sprint</label>
-                    <select id="sprintFilter">
-                        <option value="">All</option>
-                        <option value="unassigned">Unassigned Only</option>
-                        <option value="assigned">Assigned Only</option>
-                    </select>
+                    <div class="multi-select" id="sprintFilter"></div>
                 </div>
             </div>
         </div>
@@ -704,7 +700,8 @@
         const multiSelectState = {
             status: [],
             priority: [],
-            category: []
+            category: [],
+            sprint: []
         };
 
         // Initialize
@@ -716,7 +713,6 @@
 
             // Event listeners
             document.getElementById('searchInput').addEventListener('input', applyFilters);
-            document.getElementById('sprintFilter').addEventListener('change', applyFilters);
 
             // Sort headers
             document.querySelectorAll('th[data-sort]').forEach(th => {
@@ -767,7 +763,10 @@
                 optDiv.addEventListener('click', (e) => {
                     e.stopPropagation();
                     const checkbox = optDiv.querySelector('input');
-                    checkbox.checked = !checkbox.checked;
+                    // Only toggle if click was not directly on the checkbox (browser already toggled it)
+                    if (e.target !== checkbox) {
+                        checkbox.checked = !checkbox.checked;
+                    }
                     optDiv.classList.toggle('selected', checkbox.checked);
 
                     if (checkbox.checked) {
@@ -824,7 +823,8 @@
             });
 
             const placeholder = stateKey === 'status' ? 'All Statuses' :
-                               stateKey === 'priority' ? 'All Priorities' : 'All Categories';
+                               stateKey === 'priority' ? 'All Priorities' :
+                               stateKey === 'category' ? 'All Categories' : 'All Sprints';
             updateMultiSelectDisplay(btn, stateKey, placeholder);
         }
 
@@ -833,9 +833,14 @@
             const priorities = ['critical', 'high', 'medium', 'low'];
             const categories = [...new Set(backlogData.map(i => normalize(i.category)))].filter(Boolean).sort();
 
+            // Get unique sprints, add "Unassigned" option
+            const sprints = [...new Set(backlogData.map(i => i.sprint).filter(s => s && s !== '-'))].sort();
+            const sprintOptions = ['unassigned', ...sprints];
+
             createMultiSelect('statusFilter', statuses, 'status', 'All Statuses');
             createMultiSelect('priorityFilter', priorities, 'priority', 'All Priorities');
             createMultiSelect('categoryFilter', categories, 'category', 'All Categories');
+            createMultiSelect('sprintFilter', sprintOptions, 'sprint', 'All Sprints');
         }
 
         function applyFilters() {
@@ -843,7 +848,7 @@
             const statuses = multiSelectState.status;
             const priorities = multiSelectState.priority;
             const categories = multiSelectState.category;
-            const sprint = document.getElementById('sprintFilter').value;
+            const sprints = multiSelectState.sprint;
 
             filteredData = backlogData.filter(item => {
                 if (search) {
@@ -853,13 +858,18 @@
                 if (statuses.length > 0 && !statuses.includes(normalize(item.status))) return false;
                 if (priorities.length > 0 && !priorities.includes(normalize(item.priority))) return false;
                 if (categories.length > 0 && !categories.includes(normalize(item.category))) return false;
-                if (sprint === 'unassigned' && item.sprint && item.sprint !== '-') return false;
-                if (sprint === 'assigned' && (!item.sprint || item.sprint === '-')) return false;
+
+                // Sprint filter logic
+                if (sprints.length > 0) {
+                    const itemSprint = item.sprint && item.sprint !== '-' ? item.sprint : 'unassigned';
+                    if (!sprints.includes(itemSprint)) return false;
+                }
+
                 return true;
             });
 
             // Update filter indicator
-            const hasFilters = search || statuses.length > 0 || priorities.length > 0 || categories.length > 0 || sprint;
+            const hasFilters = search || statuses.length > 0 || priorities.length > 0 || categories.length > 0 || sprints.length > 0;
             document.getElementById('filterIndicator').classList.toggle('active', hasFilters);
 
             renderTable();
@@ -867,13 +877,13 @@
 
         function resetFilters() {
             document.getElementById('searchInput').value = '';
-            document.getElementById('sprintFilter').value = '';
             document.getElementById('filterIndicator').classList.remove('active');
 
             // Reset multi-selects
             setMultiSelectValues('status', []);
             setMultiSelectValues('priority', []);
             setMultiSelectValues('category', []);
+            setMultiSelectValues('sprint', []);
 
             filteredData = [...backlogData];
             renderAll();
