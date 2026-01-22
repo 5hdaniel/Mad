@@ -190,6 +190,6 @@ export function getRoleDisplayName(
     }
   }
 
-  // For all other roles, use the standard display name
-  return ROLE_DISPLAY_NAMES[role] || role;
+  // For all other roles, use the standard display name or format the role string
+  return ROLE_DISPLAY_NAMES[role] || formatRoleLabel(role);
 }
