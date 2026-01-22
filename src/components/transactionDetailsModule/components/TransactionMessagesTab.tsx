@@ -17,10 +17,11 @@ import { AttachMessagesModal, UnlinkMessageModal } from "./modals";
 /**
  * Format a date range for display in the toggle label
  * Handles partial dates (only start, only end, or both)
+ * BACKLOG-393: Include year in date format for clarity
  */
 function formatDateRangeLabel(startDate: Date | null, endDate: Date | null): string {
   const formatDate = (d: Date) =>
-    d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 
   if (startDate && endDate) {
     return `${formatDate(startDate)} - ${formatDate(endDate)}`;
