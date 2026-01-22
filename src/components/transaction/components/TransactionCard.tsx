@@ -8,34 +8,23 @@ import { ManualEntryBadge } from "./TransactionStatusWrapper";
 
 /**
  * Formats email and text counts into a human-readable string.
- * Handles singular/plural grammar and omits zero counts.
+ * Handles singular/plural grammar. Always shows both counts for design consistency.
  *
  * @example
- * formatCommunicationCounts(5, 0) // "5 email threads"
- * formatCommunicationCounts(0, 3) // "3 texts"
+ * formatCommunicationCounts(5, 0) // "5 email threads, 0 texts"
+ * formatCommunicationCounts(0, 3) // "0 email threads, 3 texts"
  * formatCommunicationCounts(8, 4) // "8 email threads, 4 texts"
  * formatCommunicationCounts(1, 1) // "1 email thread, 1 text"
- * formatCommunicationCounts(0, 0) // "No communications"
+ * formatCommunicationCounts(0, 0) // "0 email threads, 0 texts"
  */
 export function formatCommunicationCounts(
   emailCount: number,
   textCount: number
 ): string {
-  const parts: string[] = [];
+  const emailPart = `${emailCount} ${emailCount === 1 ? "email thread" : "email threads"}`;
+  const textPart = `${textCount} ${textCount === 1 ? "text" : "texts"}`;
 
-  if (emailCount > 0) {
-    parts.push(`${emailCount} ${emailCount === 1 ? "email thread" : "email threads"}`);
-  }
-
-  if (textCount > 0) {
-    parts.push(`${textCount} ${textCount === 1 ? "text" : "texts"}`);
-  }
-
-  if (parts.length === 0) {
-    return "No communications";
-  }
-
-  return parts.join(", ");
+  return `${emailPart}, ${textPart}`;
 }
 
 // ============================================
