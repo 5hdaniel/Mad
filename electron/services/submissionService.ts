@@ -550,12 +550,13 @@ class SubmissionService {
     const userId = supabaseService.getAuthUserId();
     if (userId) return userId;
 
-    // Fallback for demo
+    // Fallback for demo - use the demo user ID from seed data
+    // This user must exist in auth.users for foreign key constraint
     logService.warn(
-      "[Submission] No Supabase auth user, using placeholder",
+      "[Submission] No Supabase auth user, using demo user ID",
       "SubmissionService"
     );
-    return "00000000-0000-0000-0000-000000000000";
+    return "d5283d52-f612-4ab4-9e85-f3a5adc01bea"; // Demo user: magicauditwa@gmail.com
   }
 
   // ============================================
