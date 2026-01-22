@@ -360,6 +360,7 @@ function TransactionDetails({
               contactAssignments={contactAssignments}
               loading={loading}
               onEditContacts={() => setShowEditContactsModal(true)}
+              onEditDetails={() => setShowEditModal(true)}
               resolvedSuggestions={resolvedSuggestions}
               processingContactId={processingContactId}
               processingAll={processingAll}
