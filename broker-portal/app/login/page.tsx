@@ -7,7 +7,7 @@
  * Displays error messages from auth callback
  */
 
-import { useState, Suspense } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 
 // Error messages for auth failure states
@@ -20,11 +20,24 @@ const ERROR_MESSAGES: Record<string, string> = {
 function LoginForm() {
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [hashError, setHashError] = useState<string | null>(null);
   const searchParams = useSearchParams();
+
+  // Parse error details from URL hash (Supabase puts detailed errors there)
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash) {
+      const params = new URLSearchParams(hash.substring(1));
+      const errorDesc = params.get('error_description');
+      if (errorDesc) {
+        setHashError(decodeURIComponent(errorDesc.replace(/\+/g, ' ')));
+      }
+    }
+  }, []);
 
   // Get error from URL params (set by auth callback)
   const urlError = searchParams.get('error');
-  const displayError = error || (urlError ? ERROR_MESSAGES[urlError] : null);
+  const displayError = error || hashError || (urlError ? ERROR_MESSAGES[urlError] : null);
 
   const handleOAuthLogin = async (provider: 'google' | 'azure') => {
     // Dynamic import to avoid SSR issues
