@@ -12,6 +12,8 @@ interface TransactionDetailsTabProps {
   contactAssignments: ContactAssignment[];
   loading: boolean;
   onEditContacts?: () => void;
+  /** Callback to open transaction edit modal */
+  onEditDetails?: () => void;
   /** AI suggested contacts to review */
   resolvedSuggestions?: ResolvedSuggestedContact[];
   /** ID of contact currently being processed */
@@ -30,11 +32,36 @@ interface TransactionDetailsTabProps {
   syncingCommunications?: boolean;
 }
 
+// Helper function to format date in readable format
+function formatAuditDate(date: Date | string | undefined | null): string | null {
+  if (!date) return null;
+  const d = typeof date === "string" ? new Date(date) : date;
+  return d.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC"
+  });
+}
+
+// Helper to get transaction type display text
+function getTransactionTypeDisplay(type: string | undefined): { label: string; color: string } {
+  switch (type) {
+    case "purchase":
+      return { label: "Purchase", color: "bg-blue-100 text-blue-800" };
+    case "sale":
+      return { label: "Sale", color: "bg-green-100 text-green-800" };
+    default:
+      return { label: "Other", color: "bg-gray-100 text-gray-700" };
+  }
+}
+
 export function TransactionDetailsTab({
   transaction,
   contactAssignments,
   loading,
   onEditContacts,
+  onEditDetails,
   resolvedSuggestions = [],
   processingContactId,
   processingAll = false,
@@ -44,8 +71,99 @@ export function TransactionDetailsTab({
   onSyncCommunications,
   syncingCommunications = false,
 }: TransactionDetailsTabProps): React.ReactElement {
+  // Format audit period
+  const startDate = formatAuditDate(transaction.started_at);
+  const endDate = formatAuditDate(transaction.closed_at);
+  const auditPeriodText = startDate && endDate
+    ? `${startDate} - ${endDate}`
+    : startDate
+    ? `${startDate} - Ongoing`
+    : endDate
+    ? `Through ${endDate}`
+    : null;
+
+  // Get transaction type info
+  const typeInfo = getTransactionTypeDisplay(transaction.transaction_type);
+
   return (
     <>
+      {/* Transaction Overview Section */}
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-4">
+          <h4 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+            <svg
+              className="w-5 h-5 text-indigo-600"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+              />
+            </svg>
+            Transaction Overview
+          </h4>
+          {onEditDetails && (
+            <button
+              onClick={onEditDetails}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-lg transition-colors"
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                />
+              </svg>
+              Edit Details
+            </button>
+          )}
+        </div>
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+          <div className="flex flex-wrap items-center gap-4">
+            {/* Transaction Type Badge */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">Type:</span>
+              <span className={`inline-block px-3 py-1 text-sm font-semibold rounded-full ${typeInfo.color}`}>
+                {typeInfo.label}
+              </span>
+            </div>
+            {/* Audit Period */}
+            {auditPeriodText && (
+              <>
+                <span className="text-gray-300">|</span>
+                <div className="flex items-center gap-2">
+                  <svg
+                    className="w-4 h-4 text-gray-500"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                    />
+                  </svg>
+                  <span className="text-sm text-gray-600">Audit Period:</span>
+                  <span className="text-sm font-medium text-gray-900">{auditPeriodText}</span>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* AI Suggested Contacts Section - only show if there are suggestions */}
       {resolvedSuggestions.length > 0 && onAcceptSuggestion && onRejectSuggestion && onAcceptAll && (
         <div className="mb-8">
