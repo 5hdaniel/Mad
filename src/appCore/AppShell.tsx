@@ -90,7 +90,7 @@ export function AppShell({ app, children }: AppShellProps) {
       )}
 
       {/* Scrollable Content Area */}
-      <div className="flex-1 overflow-y-auto relative">
+      <div className="flex-1 min-h-0 overflow-y-auto relative">
         {children}
 
         {/* Version Info Button - Bottom Left */}
