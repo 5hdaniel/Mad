@@ -11,10 +11,10 @@ import { ManualEntryBadge } from "./TransactionStatusWrapper";
  * Handles singular/plural grammar and omits zero counts.
  *
  * @example
- * formatCommunicationCounts(5, 0) // "5 emails"
+ * formatCommunicationCounts(5, 0) // "5 email threads"
  * formatCommunicationCounts(0, 3) // "3 texts"
- * formatCommunicationCounts(8, 4) // "8 emails, 4 texts"
- * formatCommunicationCounts(1, 1) // "1 email, 1 text"
+ * formatCommunicationCounts(8, 4) // "8 email threads, 4 texts"
+ * formatCommunicationCounts(1, 1) // "1 email thread, 1 text"
  * formatCommunicationCounts(0, 0) // "No communications"
  */
 export function formatCommunicationCounts(
@@ -24,7 +24,7 @@ export function formatCommunicationCounts(
   const parts: string[] = [];
 
   if (emailCount > 0) {
-    parts.push(`${emailCount} ${emailCount === 1 ? "email" : "emails"}`);
+    parts.push(`${emailCount} ${emailCount === 1 ? "email thread" : "email threads"}`);
   }
 
   if (textCount > 0) {
