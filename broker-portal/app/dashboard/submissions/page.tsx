@@ -17,13 +17,33 @@ interface Submission {
   reviewed_at: string | null;
 }
 
-async function getSubmissions(): Promise<Submission[]> {
+interface PageProps {
+  searchParams: Promise<{ status?: string; search?: string }>;
+}
+
+const STATUSES = [
+  { value: 'all', label: 'All' },
+  { value: 'submitted', label: 'Pending' },
+  { value: 'under_review', label: 'Under Review' },
+  { value: 'needs_changes', label: 'Needs Changes' },
+  { value: 'approved', label: 'Approved' },
+  { value: 'rejected', label: 'Rejected' },
+];
+
+async function getSubmissions(status?: string): Promise<Submission[]> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('transaction_submissions')
     .select('*')
     .order('created_at', { ascending: false });
+
+  // Apply status filter if provided and not 'all'
+  if (status && status !== 'all') {
+    query = query.eq('status', status);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     console.error('Error fetching submissions:', error);
@@ -33,8 +53,10 @@ async function getSubmissions(): Promise<Submission[]> {
   return data || [];
 }
 
-export default async function SubmissionsPage() {
-  const submissions = await getSubmissions();
+export default async function SubmissionsPage({ searchParams }: PageProps) {
+  const { status } = await searchParams;
+  const submissions = await getSubmissions(status);
+  const currentStatus = status || 'all';
 
   return (
     <div className="space-y-6">
@@ -43,11 +65,31 @@ export default async function SubmissionsPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Submissions</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Review transaction audit submissions from your agents
+            {submissions.length} submission{submissions.length !== 1 ? 's' : ''}
+            {currentStatus !== 'all' && ` with status "${formatStatus(currentStatus)}"`}
           </p>
         </div>
-        <div className="flex gap-2">
-          {/* Filter buttons would go here */}
+      </div>
+
+      {/* Status Filters */}
+      <div className="bg-white shadow rounded-lg p-4">
+        <div className="flex flex-wrap gap-2">
+          {STATUSES.map(({ value, label }) => {
+            const isActive = currentStatus === value;
+            return (
+              <Link
+                key={value}
+                href={value === 'all' ? '/dashboard/submissions' : `/dashboard/submissions?status=${value}`}
+                className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                  isActive
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                {label}
+              </Link>
+            );
+          })}
         </div>
       </div>
 
@@ -55,7 +97,9 @@ export default async function SubmissionsPage() {
       <div className="bg-white shadow rounded-lg overflow-hidden">
         {submissions.length === 0 ? (
           <div className="px-4 py-12 text-center text-gray-500">
-            No submissions yet
+            {currentStatus !== 'all'
+              ? `No submissions with status "${formatStatus(currentStatus)}"`
+              : 'No submissions yet'}
           </div>
         ) : (
           <table className="min-w-full divide-y divide-gray-200">
@@ -125,7 +169,7 @@ export default async function SubmissionsPage() {
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <Link
                       href={`/dashboard/submissions/${submission.id}`}
-                      className="text-primary-600 hover:text-primary-900"
+                      className="text-blue-600 hover:text-blue-900"
                     >
                       Review
                     </Link>

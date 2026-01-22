@@ -53,17 +53,13 @@ export default async function DashboardLayout({
 
             {/* User Menu */}
             <div className="flex items-center gap-4">
-              <span className="text-sm text-gray-600">
-                {user.email}
-              </span>
-              <form action="/auth/signout" method="POST">
-                <button
-                  type="submit"
-                  className="text-sm text-gray-500 hover:text-gray-700"
-                >
-                  Sign out
-                </button>
-              </form>
+              <span className="text-sm text-gray-600">{user.email}</span>
+              <a
+                href="/auth/logout"
+                className="text-sm text-gray-500 hover:text-gray-700"
+              >
+                Sign out
+              </a>
             </div>
           </div>
         </div>
