@@ -79,7 +79,6 @@ CREATE TABLE IF NOT EXISTS transaction_submissions (
 
   -- Review Workflow
   status VARCHAR(50) DEFAULT 'submitted' CHECK (status IN (
-    'draft',        -- agent started but not submitted
     'submitted',    -- agent submitted, waiting for review
     'under_review', -- broker started reviewing
     'needs_changes', -- broker requested changes
@@ -301,11 +300,11 @@ CREATE POLICY "agents_can_create_submissions" ON transaction_submissions
     )
   );
 
--- Agents can update their own draft/needs_changes submissions
+-- Agents can update their own submissions when broker requested changes
 CREATE POLICY "agents_can_update_own_submissions" ON transaction_submissions
   FOR UPDATE USING (
     submitted_by = auth.uid()
-    AND status IN ('draft', 'needs_changes')
+    AND status = 'needs_changes'
   );
 
 -- Brokers can update submission status (approve/reject)
