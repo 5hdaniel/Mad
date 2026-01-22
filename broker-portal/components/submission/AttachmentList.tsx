@@ -9,6 +9,7 @@
 
 import { useState } from 'react';
 import { AttachmentViewerModal } from './AttachmentViewerModal';
+import { EmptyAttachments } from '@/components/ui/EmptyState';
 
 interface Attachment {
   id: string;
@@ -35,20 +36,18 @@ export function AttachmentList({ attachments }: AttachmentListProps) {
 
   if (attachments.length === 0) {
     return (
-      <div className="bg-white shadow rounded-lg overflow-hidden">
+      <div className="bg-white shadow-sm border border-gray-200 rounded-lg overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200">
           <h2 className="text-lg font-medium text-gray-900">Attachments (0)</h2>
         </div>
-        <div className="px-6 py-12 text-center text-gray-500">
-          No attachments in this submission
-        </div>
+        <EmptyAttachments />
       </div>
     );
   }
 
   return (
     <>
-      <div className="bg-white shadow rounded-lg overflow-hidden">
+      <div className="bg-white shadow-sm border border-gray-200 rounded-lg overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200">
           <h2 className="text-lg font-medium text-gray-900">
             Attachments ({attachments.length})

@@ -10,6 +10,7 @@
 import { useState } from 'react';
 import { formatDate } from '@/lib/utils';
 import { MessageViewerModal } from './MessageViewerModal';
+import { EmptyMessages } from '@/components/ui/EmptyState';
 
 interface Message {
   id: string;
@@ -50,7 +51,7 @@ export function MessageList({ messages }: MessageListProps) {
 
   return (
     <>
-      <div className="bg-white shadow rounded-lg overflow-hidden">
+      <div className="bg-white shadow-sm border border-gray-200 rounded-lg overflow-hidden">
         {/* Header with tabs */}
         <div className="px-6 py-4 border-b border-gray-200">
           <div className="flex items-center justify-between">
@@ -76,9 +77,7 @@ export function MessageList({ messages }: MessageListProps) {
         {/* Message list */}
         <div className="max-h-[600px] overflow-y-auto">
           {filteredMessages.length === 0 ? (
-            <div className="px-6 py-12 text-center text-gray-500">
-              {filter === 'all' ? 'No messages in this submission' : `No ${filter}s in this submission`}
-            </div>
+            <EmptyMessages />
           ) : (
             <ul className="divide-y divide-gray-200">
               {filteredMessages.map((message) => {

@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import Link from 'next/link';
 import { formatCurrency, formatRelativeTime, getStatusColor, formatStatus } from '@/lib/utils';
 import { SubmissionListClient } from '@/components/submission/SubmissionListClient';
+import { EmptySubmissions } from '@/components/ui/EmptyState';
 
 interface Submission {
   id: string;
@@ -96,13 +97,9 @@ export default async function SubmissionsPage({ searchParams }: PageProps) {
       </div>
 
       {/* Submissions Table */}
-      <div className="bg-white shadow rounded-lg overflow-hidden">
+      <div className="bg-white shadow-sm border border-gray-200 rounded-lg overflow-hidden">
         {submissions.length === 0 ? (
-          <div className="px-4 py-12 text-center text-gray-500">
-            {currentStatus !== 'all'
-              ? `No submissions with status "${formatStatus(currentStatus)}"`
-              : 'No submissions yet'}
-          </div>
+          <EmptySubmissions filtered={currentStatus !== 'all'} />
         ) : (
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -132,7 +129,7 @@ export default async function SubmissionsPage({ searchParams }: PageProps) {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {submissions.map((submission) => (
-                <tr key={submission.id} className="hover:bg-gray-50">
+                <tr key={submission.id} className="hover:bg-blue-50/50 transition-colors cursor-pointer group">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm font-medium text-gray-900">
                       {submission.property_address}
@@ -171,9 +168,12 @@ export default async function SubmissionsPage({ searchParams }: PageProps) {
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <Link
                       href={`/dashboard/submissions/${submission.id}`}
-                      className="text-blue-600 hover:text-blue-900"
+                      className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-900 font-medium group-hover:underline"
                     >
                       Review
+                      <svg className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
                     </Link>
                   </td>
                 </tr>
