@@ -301,7 +301,7 @@ function Transactions({
       />
 
       {/* Transactions List */}
-      <div className="flex-1 overflow-y-auto p-6 max-w-7xl mx-auto w-full">
+      <div className="flex-1 min-h-0 overflow-y-auto p-6 max-w-7xl mx-auto w-full">
         {loading ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
