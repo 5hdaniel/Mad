@@ -343,6 +343,6 @@ BACKLOG-378,Call Log Support for Transaction Audits,feature,Medium,Pending,-,~60
 BACKLOG-379,Continue Setup Button No-Op (goToEmailOnboarding),fix,High,Pending,SPRINT-049,~15K,-,-,2026-01-21,,[BACKLOG-379.md](items/BACKLOG-379.md)
 BACKLOG-380,hasEmailConnected Returns False Despite Working Email Sync,fix,High,Pending,-,~20K,-,-,2026-01-21,,[BACKLOG-380.md](items/BACKLOG-380.md)
 BACKLOG-381,Transaction Details Header Improvements (Audit Period + Type + Edit Button),ui,Medium,Pending,SPRINT-049,-,-,-,2026-01-22,,[BACKLOG-381.md](items/BACKLOG-381.md)
-BACKLOG-382,Persistent Export History in Transaction Details,feature,Medium,Pending,SPRINT-049,-,-,-,2026-01-22,,[BACKLOG-382.md](items/BACKLOG-382.md)
+BACKLOG-382,Persistent Export History in Transaction Details,feature,Medium,Obsolete,-,-,-,-,2026-01-22,,[BACKLOG-382.md](items/BACKLOG-382.md)
 BACKLOG-383,Format Role Pills with Human-Readable Labels,ui,Medium,Pending,SPRINT-049,-,-,-,2026-01-22,,[BACKLOG-383.md](items/BACKLOG-383.md)
 BACKLOG-384,AI-Extracted Date Verification Badges,feature,Low,Pending,-,-,-,-,2026-01-22,,[BACKLOG-384.md](items/BACKLOG-384.md)
