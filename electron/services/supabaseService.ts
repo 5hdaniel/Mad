@@ -255,6 +255,16 @@ class SupabaseService {
   }
 
   /**
+   * Get the Supabase client (public access for storage service)
+   * BACKLOG-393: Needed by supabaseStorageService for file uploads
+   * @returns Initialized Supabase client
+   * @throws {Error} If client cannot be initialized
+   */
+  getClient(): SupabaseClient {
+    return this._ensureClient();
+  }
+
+  /**
    * Ensure client is initialized and return it
    * @private
    * @throws {Error} If client cannot be initialized
