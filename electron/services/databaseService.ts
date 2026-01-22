@@ -352,6 +352,8 @@ class DatabaseService implements IDatabaseService {
       { name: 'export_count', sql: `ALTER TABLE transactions ADD COLUMN export_count INTEGER DEFAULT 0` },
       { name: 'last_exported_at', sql: `ALTER TABLE transactions ADD COLUMN last_exported_at DATETIME` },
       { name: 'last_exported_on', sql: `ALTER TABLE transactions ADD COLUMN last_exported_on DATETIME` },
+      // BACKLOG-396: Stored thread count for consistent display
+      { name: 'text_thread_count', sql: `ALTER TABLE transactions ADD COLUMN text_thread_count INTEGER DEFAULT 0` },
     ]);
 
     await addMissingColumns('messages', [
@@ -592,6 +594,47 @@ class DatabaseService implements IDatabaseService {
     // Migration 13 (TASK-1110): Create index for attachments.external_message_id column
     // This supports stable attachment linking when message_id changes on re-import
     runSafe(`CREATE INDEX IF NOT EXISTS idx_attachments_external_message_id ON attachments(external_message_id)`);
+
+    // Migration 14 (BACKLOG-396): Backfill text_thread_count for existing transactions
+    // This only runs when the column is newly added (all values are 0)
+    // Uses a simplified SQL approach to count unique thread_ids per transaction
+    const needsBackfill = db.prepare(`
+      SELECT COUNT(*) as count FROM transactions
+      WHERE text_thread_count = 0
+      AND id IN (
+        SELECT DISTINCT c.transaction_id FROM communications c
+        INNER JOIN messages m ON (c.message_id IS NOT NULL AND c.message_id = m.id)
+                              OR (c.message_id IS NULL AND c.thread_id IS NOT NULL AND c.thread_id = m.thread_id)
+        WHERE m.channel IN ('text', 'sms', 'imessage')
+      )
+    `).get() as { count: number } | undefined;
+
+    if (needsBackfill && needsBackfill.count > 0) {
+      await logService.info(`BACKLOG-396: Backfilling text_thread_count for ${needsBackfill.count} transactions`, "DatabaseService");
+
+      // Use a SQL-only approach for efficiency
+      // This counts unique thread_ids using the same logic as groupMessagesByThread
+      runSafe(`
+        UPDATE transactions
+        SET text_thread_count = (
+          SELECT COUNT(DISTINCT COALESCE(m.thread_id, 'msg-' || m.id))
+          FROM communications c
+          INNER JOIN messages m ON (c.message_id IS NOT NULL AND c.message_id = m.id)
+                                OR (c.message_id IS NULL AND c.thread_id IS NOT NULL AND c.thread_id = m.thread_id)
+          WHERE c.transaction_id = transactions.id
+          AND m.channel IN ('text', 'sms', 'imessage')
+        )
+        WHERE text_thread_count = 0
+        AND id IN (
+          SELECT DISTINCT c.transaction_id FROM communications c
+          INNER JOIN messages m ON (c.message_id IS NOT NULL AND c.message_id = m.id)
+                                OR (c.message_id IS NULL AND c.thread_id IS NOT NULL AND c.thread_id = m.thread_id)
+          WHERE m.channel IN ('text', 'sms', 'imessage')
+        )
+      `);
+
+      await logService.info("BACKLOG-396: text_thread_count backfill completed", "DatabaseService");
+    }
 
     // Finalize schema version (create table if missing for backwards compatibility)
     const schemaVersionExists = db.prepare(

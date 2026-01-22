@@ -113,23 +113,16 @@ export async function createTransaction(
 export async function getTransactions(
   filters?: TransactionFilters,
 ): Promise<Transaction[]> {
-  // BACKLOG-390: Count emails/texts using COALESCE to match frontend display logic
-  // The frontend uses COALESCE(m.channel, c.communication_type) from getCommunicationsWithMessages
-  // So we must use the same logic here for consistent counts
-  // BACKLOG-394: For texts, count unique thread_ids (conversations) not individual messages
+  // BACKLOG-390: Count emails using subquery for accurate count
+  // BACKLOG-396: Use stored text_thread_count for texts (updated on link/unlink)
+  // This ensures consistency between card view and details page
   let sql = `SELECT t.*,
              (SELECT COUNT(*) FROM communications c WHERE c.transaction_id = t.id) as total_communications_count,
              (SELECT COUNT(*) FROM communications c
               LEFT JOIN messages m ON (c.message_id IS NOT NULL AND c.message_id = m.id)
                                    OR (c.message_id IS NULL AND c.thread_id IS NOT NULL AND c.thread_id = m.thread_id)
               WHERE c.transaction_id = t.id
-              AND COALESCE(m.channel, c.communication_type) = 'email') as email_count,
-             (SELECT COUNT(DISTINCT m.thread_id) FROM communications c
-              INNER JOIN messages m ON (c.message_id IS NOT NULL AND c.message_id = m.id)
-                                    OR (c.message_id IS NULL AND c.thread_id IS NOT NULL AND c.thread_id = m.thread_id)
-              WHERE c.transaction_id = t.id
-              AND m.channel IN ('text', 'sms', 'imessage')
-              AND m.thread_id IS NOT NULL) as text_count
+              AND COALESCE(m.channel, c.communication_type) = 'email') as email_count
              FROM transactions t WHERE 1=1`;
   const params: unknown[] = [];
 

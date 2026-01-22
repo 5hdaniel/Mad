@@ -464,11 +464,13 @@ export interface Transaction {
   // Stats
   message_count: number;
   attachment_count: number;
+  /** BACKLOG-396: Stored thread count for consistent display across card/details */
+  text_thread_count?: number;
 
   // Separate communication counts by type
   /** Count of email communications linked to this transaction */
   email_count?: number;
-  /** Count of text/iMessage communications linked to this transaction */
+  /** @deprecated Use text_thread_count for display. This is computed dynamically and may be incorrect. */
   text_count?: number;
 
   // Export Tracking

@@ -335,6 +335,7 @@ CREATE TABLE IF NOT EXISTS transactions (
   -- Stats
   message_count INTEGER DEFAULT 0,
   attachment_count INTEGER DEFAULT 0,
+  text_thread_count INTEGER DEFAULT 0,    -- BACKLOG-396: Stored thread count for consistent display
 
   -- Export Tracking
   export_status TEXT DEFAULT 'not_exported' CHECK (export_status IN ('not_exported', 'exported', 're_export_needed')),

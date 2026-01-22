@@ -114,7 +114,9 @@ function TransactionCard({
   formatCurrency,
   formatDate,
 }: TransactionCardProps): React.ReactElement {
-  const textCount = transaction.text_count || 0;
+  // BACKLOG-396: Use text_thread_count (stored) instead of text_count (computed dynamically)
+  // This ensures consistency between card view and details page
+  const textCount = transaction.text_thread_count || 0;
   const emailCount = transaction.email_count || 0;
   return (
     <div
