@@ -81,6 +81,15 @@ export async function createCommunication(
   if (!communication) {
     throw new DatabaseError("Failed to create communication");
   }
+
+  // BACKLOG-396: Update thread count if this is a text message linked to a transaction
+  if (communicationData.transaction_id &&
+      (communicationData.communication_type === 'text' ||
+       communicationData.communication_type === 'imessage' ||
+       communicationData.communication_type === 'sms')) {
+    updateTransactionThreadCount(communicationData.transaction_id);
+  }
+
   return communication;
 }
 
@@ -229,8 +238,22 @@ export async function updateCommunication(
  * Delete communication
  */
 export async function deleteCommunication(communicationId: string): Promise<void> {
+  // BACKLOG-396: Get the transaction ID before deleting so we can update thread count
+  const comm = dbGet<{ transaction_id: string | null; communication_type: string | null }>(
+    "SELECT transaction_id, communication_type FROM communications WHERE id = ?",
+    [communicationId]
+  );
+
   const sql = "DELETE FROM communications WHERE id = ?";
   dbRun(sql, [communicationId]);
+
+  // BACKLOG-396: Update thread count if this was a text message linked to a transaction
+  if (comm?.transaction_id &&
+      (comm.communication_type === 'text' ||
+       comm.communication_type === 'imessage' ||
+       comm.communication_type === 'sms')) {
+    updateTransactionThreadCount(comm.transaction_id);
+  }
 }
 
 /**
@@ -238,8 +261,22 @@ export async function deleteCommunication(communicationId: string): Promise<void
  * Used when unlinking messages from a transaction - removes the communications table reference
  */
 export async function deleteCommunicationByMessageId(messageId: string): Promise<void> {
+  // BACKLOG-396: Get the transaction ID before deleting so we can update thread count
+  const comm = dbGet<{ transaction_id: string | null; communication_type: string | null }>(
+    "SELECT transaction_id, communication_type FROM communications WHERE message_id = ?",
+    [messageId]
+  );
+
   const sql = "DELETE FROM communications WHERE message_id = ?";
   dbRun(sql, [messageId]);
+
+  // BACKLOG-396: Update thread count if this was a text message linked to a transaction
+  if (comm?.transaction_id &&
+      (comm.communication_type === 'text' ||
+       comm.communication_type === 'imessage' ||
+       comm.communication_type === 'sms')) {
+    updateTransactionThreadCount(comm.transaction_id);
+  }
 }
 
 /**
@@ -473,6 +510,17 @@ export async function createCommunicationReference(
   if (!communication) {
     throw new DatabaseError("Failed to create communication reference");
   }
+
+  // BACKLOG-396: Check if the linked message is a text and update thread count
+  const message = dbGet<{ channel: string | null }>(
+    "SELECT channel FROM messages WHERE id = ?",
+    [data.message_id]
+  );
+  if (message?.channel &&
+      (message.channel === 'text' || message.channel === 'sms' || message.channel === 'imessage')) {
+    updateTransactionThreadCount(data.transaction_id);
+  }
+
   return communication;
 }
 
@@ -640,6 +688,9 @@ export async function createThreadCommunicationReference(
 
   dbRun(sql, params);
 
+  // BACKLOG-396: Thread-based linking is always for text messages, update count
+  updateTransactionThreadCount(transactionId);
+
   return id;
 }
 
@@ -661,6 +712,9 @@ export async function deleteCommunicationByThread(
     WHERE thread_id = ? AND transaction_id = ?
   `;
   dbRun(sql, [threadId, transactionId]);
+
+  // BACKLOG-396: Thread-based unlinking is always for text messages, update count
+  updateTransactionThreadCount(transactionId);
 }
 
 /**
@@ -683,4 +737,147 @@ export async function isThreadLinkedToTransaction(
   `;
   const result = dbGet(sql, [threadId, transactionId]);
   return !!result;
+}
+
+// ============================================
+// BACKLOG-396: THREAD COUNT MANAGEMENT
+// ============================================
+
+/**
+ * Normalize a participant identifier for consistent grouping.
+ * Matches frontend logic in MessageThreadCard.tsx.
+ */
+function normalizeParticipant(participant: string): string {
+  if (!participant) return '';
+
+  // If it looks like a phone number, normalize to digits only
+  const digits = participant.replace(/\D/g, '');
+  if (digits.length >= 10) {
+    // Use last 10 digits to normalize +1 prefix variations
+    return digits.slice(-10);
+  }
+
+  // Otherwise return lowercase trimmed version
+  return participant.toLowerCase().trim();
+}
+
+/**
+ * Generate a key for grouping messages into threads.
+ * Matches frontend logic in MessageThreadCard.tsx getThreadKey().
+ */
+function getThreadKey(msg: { thread_id?: string | null; participants?: string | null; id: string }): string {
+  // FIRST: Use thread_id if available - this is the actual iMessage chat ID
+  if (msg.thread_id) {
+    return msg.thread_id;
+  }
+
+  // FALLBACK: Compute from participants if no thread_id
+  try {
+    if (msg.participants) {
+      const parsed = typeof msg.participants === 'string'
+        ? JSON.parse(msg.participants)
+        : msg.participants;
+
+      // Collect all participants
+      const allParticipants = new Set<string>();
+
+      if (parsed.from) {
+        allParticipants.add(normalizeParticipant(parsed.from));
+      }
+      if (parsed.to) {
+        const toList = Array.isArray(parsed.to) ? parsed.to : [parsed.to];
+        toList.forEach((p: string) => allParticipants.add(normalizeParticipant(p)));
+      }
+
+      // Remove "me" - we only care about external participants for grouping
+      allParticipants.delete('me');
+
+      // Sort and join to create a consistent key
+      if (allParticipants.size > 0) {
+        return `participants-${Array.from(allParticipants).sort().join('|')}`;
+      }
+    }
+  } catch {
+    // Fall through to default
+  }
+
+  // Last resort: use message id (each message is its own "thread")
+  return `msg-${msg.id}`;
+}
+
+/**
+ * Count unique threads for text communications linked to a transaction.
+ * Uses the same logic as frontend's groupMessagesByThread().
+ *
+ * BACKLOG-396: This is the source of truth for text thread counts.
+ */
+export function countTextThreadsForTransaction(transactionId: string): number {
+  // Get all text communications linked to this transaction
+  // This query matches getCommunicationsWithMessages but only for text messages
+  const sql = `
+    SELECT
+      COALESCE(m.id, c.id) as id,
+      m.thread_id as thread_id,
+      m.participants as participants
+    FROM communications c
+    LEFT JOIN messages m ON (
+      (c.message_id IS NOT NULL AND c.message_id = m.id)
+      OR
+      (c.message_id IS NULL AND c.thread_id IS NOT NULL AND c.thread_id = m.thread_id)
+    )
+    WHERE c.transaction_id = ?
+      AND COALESCE(m.channel, c.communication_type) IN ('text', 'sms', 'imessage')
+  `;
+
+  const messages = dbAll<{ id: string; thread_id: string | null; participants: string | null }>(
+    sql,
+    [transactionId]
+  );
+
+  // Group messages by thread using the same logic as frontend
+  const threads = new Set<string>();
+  for (const msg of messages) {
+    const threadKey = getThreadKey(msg);
+    threads.add(threadKey);
+  }
+
+  return threads.size;
+}
+
+/**
+ * Update the text_thread_count on a transaction.
+ * Call this after linking/unlinking messages to keep the count in sync.
+ *
+ * BACKLOG-396: Ensures TransactionCard displays the correct thread count.
+ */
+export function updateTransactionThreadCount(transactionId: string): void {
+  const threadCount = countTextThreadsForTransaction(transactionId);
+
+  const sql = `UPDATE transactions SET text_thread_count = ? WHERE id = ?`;
+  dbRun(sql, [threadCount, transactionId]);
+}
+
+/**
+ * Backfill text_thread_count for all transactions.
+ * Run this once to populate existing data.
+ *
+ * BACKLOG-396: Migration helper for existing transactions.
+ */
+export function backfillAllTransactionThreadCounts(): { updated: number; errors: number } {
+  // Get all transaction IDs
+  const transactions = dbAll<{ id: string }>(`SELECT id FROM transactions`);
+
+  let updated = 0;
+  let errors = 0;
+
+  for (const tx of transactions) {
+    try {
+      updateTransactionThreadCount(tx.id);
+      updated++;
+    } catch {
+      errors++;
+    }
+  }
+
+  return { updated, errors };
 }
