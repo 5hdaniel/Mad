@@ -274,28 +274,31 @@ export function MessageThreadCard({
               </div>
             )}
 
-            {/* Contact info: Name (Phone) */}
+            {/* Contact info: Name on first line, phone/recipients on second line */}
             <div className="min-w-0 flex-1">
               {isGroup ? (
-                <span
-                  className="font-semibold text-gray-900 truncate block"
-                  data-testid="thread-contact-name"
-                  title={formatParticipantNames(participants, contactNames, 999)}
-                >
-                  Group: {formatParticipantNames(participants, contactNames, 2)}
-                </span>
+                <div data-testid="thread-contact-name">
+                  <span className="font-semibold text-gray-900 block">
+                    Group Chat
+                  </span>
+                  <span
+                    className="font-normal text-gray-500 text-sm block truncate"
+                    title={formatParticipantNames(participants, contactNames, 999)}
+                  >
+                    {formatParticipantNames(participants, contactNames, 3)}
+                  </span>
+                </div>
               ) : (
-                <span
-                  className="font-semibold text-gray-900"
-                  data-testid="thread-contact-name"
-                >
-                  {contactName || phoneNumber}
+                <div data-testid="thread-contact-name">
+                  <span className="font-semibold text-gray-900 block">
+                    {contactName || phoneNumber}
+                  </span>
                   {contactName && phoneNumber && (
-                    <span className="font-normal text-gray-500 text-sm ml-1">
-                      ({phoneNumber})
+                    <span className="font-normal text-gray-500 text-sm block">
+                      {phoneNumber}
                     </span>
                   )}
-                </span>
+                </div>
               )}
             </div>
           </div>
