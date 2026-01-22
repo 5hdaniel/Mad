@@ -21,7 +21,17 @@ interface Message {
   has_attachments: boolean;
   attachment_count: number;
   thread_id: string | null;
-  participants: { from?: string; to?: string | string[]; cc?: string[]; bcc?: string[] } | null;
+  participants: {
+    from?: string;
+    to?: string | string[];
+    cc?: string[];
+    bcc?: string[];
+    chat_members?: string[];
+    // Resolved names from contact lookup
+    from_name?: string;
+    to_names?: Record<string, string>;
+    chat_member_names?: Record<string, string>;
+  } | null;
 }
 
 interface Attachment {
@@ -95,7 +105,7 @@ export default async function SubmissionDetailPage({ params }: PageProps) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-24">
       {/* Back Link */}
       <Link
         href="/dashboard/submissions"

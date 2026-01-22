@@ -22,7 +22,17 @@ interface Message {
   has_attachments: boolean;
   attachment_count: number;
   thread_id?: string | null;
-  participants?: { from?: string; to?: string | string[]; cc?: string[]; bcc?: string[] } | null;
+  participants?: {
+    from?: string;
+    to?: string | string[];
+    cc?: string[];
+    bcc?: string[];
+    chat_members?: string[];
+    // Resolved names from contact lookup
+    from_name?: string;
+    to_names?: Record<string, string>;
+    chat_member_names?: Record<string, string>;
+  } | null;
 }
 
 interface MessageListProps {
@@ -96,21 +106,39 @@ function getThreadKey(msg: Message): string {
 }
 
 /**
- * Extract display name for participants
+ * Extract display name for participants, preferring resolved contact names
  */
 function getParticipantDisplay(messages: Message[]): string {
   const participants = new Set<string>();
 
   for (const msg of messages) {
     if (msg.participants) {
+      // For inbound messages, use the sender
       if (msg.direction === 'inbound' && msg.participants.from) {
-        participants.add(msg.participants.from);
+        // Use resolved name if available, otherwise fall back to phone/email
+        const displayName = msg.participants.from_name || msg.participants.from;
+        participants.add(displayName);
       }
+      // For outbound messages, use the recipients
       if (msg.direction === 'outbound' && msg.participants.to) {
         const toList = Array.isArray(msg.participants.to)
           ? msg.participants.to
           : [msg.participants.to];
-        toList.forEach((p) => participants.add(p));
+        const toNames = msg.participants.to_names || {};
+        toList.forEach((p) => {
+          // Use resolved name if available
+          const displayName = toNames[p] || p;
+          participants.add(displayName);
+        });
+      }
+      // For group chats, add chat member names
+      if (msg.participants.chat_members && msg.participants.chat_member_names) {
+        const memberNames = msg.participants.chat_member_names;
+        msg.participants.chat_members.forEach((p) => {
+          if (p !== 'me' && memberNames[p]) {
+            participants.add(memberNames[p]);
+          }
+        });
       }
     }
   }

@@ -24,12 +24,16 @@ import supabaseStorageService, {
 } from "./supabaseStorageService";
 import databaseService from "./databaseService";
 import logService from "./logService";
+import { getContactNames } from "./contactsService";
 import type {
   Transaction,
   Message,
   Attachment,
   SubmissionStatus,
 } from "../types/models";
+
+/** Contact name map from phone/email to display name */
+type ContactMap = Record<string, string>;
 
 // ============================================
 // TYPES & INTERFACES
@@ -245,9 +249,41 @@ class SubmissionService {
       });
 
       const transaction = await this.loadTransaction(transactionId);
-      const messages = await this.loadTransactionMessages(transactionId);
+
+      // Parse audit period dates from transaction
+      const auditStartDate = transaction.started_at
+        ? new Date(transaction.started_at)
+        : null;
+      const auditEndDate = transaction.closed_at
+        ? new Date(transaction.closed_at)
+        : null;
+
+      // Load messages filtered by audit period
+      const messages = await this.loadTransactionMessages(
+        transactionId,
+        auditStartDate,
+        auditEndDate
+      );
       const attachments = await this.loadTransactionAttachments(transactionId);
       const orgId = await this.getUserOrganizationId();
+
+      // Load contact names for phone number resolution
+      let contactMap: ContactMap = {};
+      try {
+        const contactResult = await getContactNames();
+        if (contactResult.status.success) {
+          contactMap = contactResult.contactMap;
+          logService.info(
+            `[Submission] Loaded ${Object.keys(contactMap).length} contacts for name resolution`,
+            "SubmissionService"
+          );
+        }
+      } catch (err) {
+        logService.warn(
+          `[Submission] Could not load contacts: ${err instanceof Error ? err.message : "Unknown error"}`,
+          "SubmissionService"
+        );
+      }
 
       if (!orgId) {
         throw new Error("User is not a member of any organization");
@@ -344,7 +380,7 @@ class SubmissionService {
         });
 
         const messageRecords = messages.map((m) =>
-          this.mapToSubmissionMessage(m, submissionId)
+          this.mapToSubmissionMessage(m, submissionId, contactMap)
         );
 
         await this.insertMessagesBatched(
@@ -464,22 +500,48 @@ class SubmissionService {
   }
 
   private async loadTransactionMessages(
-    transactionId: string
+    transactionId: string,
+    auditStartDate?: Date | null,
+    auditEndDate?: Date | null
   ): Promise<Message[]> {
     // Get all messages linked to this transaction via communications junction table
     const db = databaseService.getRawDatabase();
 
-    const rows = db
-      .prepare(
-        `
+    // Build query with optional audit period filter
+    let sql = `
       SELECT DISTINCT m.*
       FROM messages m
       INNER JOIN communications c ON c.message_id = m.id
       WHERE c.transaction_id = ?
-      ORDER BY m.sent_at ASC
-    `
-      )
-      .all(transactionId) as Message[];
+    `;
+    const params: (string | number)[] = [transactionId];
+
+    // Filter by audit period if dates are provided
+    if (auditStartDate) {
+      sql += ` AND m.sent_at >= ?`;
+      params.push(auditStartDate.toISOString());
+    }
+    if (auditEndDate) {
+      // Use end of day for inclusive comparison
+      const endOfDay = new Date(auditEndDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      sql += ` AND m.sent_at <= ?`;
+      params.push(endOfDay.toISOString());
+    }
+
+    sql += ` ORDER BY m.sent_at ASC`;
+
+    const rows = db.prepare(sql).all(...params) as Message[];
+
+    logService.info(
+      `[Submission] Loaded ${rows.length} messages for audit period`,
+      "SubmissionService",
+      {
+        transactionId,
+        auditStart: auditStartDate?.toISOString(),
+        auditEnd: auditEndDate?.toISOString(),
+      }
+    );
 
     return rows;
   }
@@ -616,7 +678,8 @@ class SubmissionService {
 
   private mapToSubmissionMessage(
     message: Message,
-    submissionId: string
+    submissionId: string,
+    contactMap: ContactMap = {}
   ): SubmissionMessageRecord {
     // Parse participants JSON
     let participants: Record<string, unknown> = {};
@@ -628,6 +691,55 @@ class SubmissionService {
             : message.participants;
       } catch {
         participants = { from: "", to: [] };
+      }
+    }
+
+    // Resolve contact names and add to participants
+    const resolvePhone = (phone: string): string | undefined => {
+      if (!phone || phone === "me" || phone === "unknown") return undefined;
+      // Try direct lookup
+      if (contactMap[phone]) return contactMap[phone];
+      // Try normalized (last 10 digits)
+      const normalized = phone.replace(/\D/g, "").slice(-10);
+      if (normalized.length >= 7) {
+        for (const [p, name] of Object.entries(contactMap)) {
+          if (p.replace(/\D/g, "").slice(-10) === normalized) {
+            return name;
+          }
+        }
+      }
+      return undefined;
+    };
+
+    // Add resolved names to participants
+    if (participants.from && typeof participants.from === "string") {
+      const name = resolvePhone(participants.from);
+      if (name) participants.from_name = name;
+    }
+    if (participants.to) {
+      const toList = Array.isArray(participants.to)
+        ? participants.to
+        : [participants.to];
+      const toNames: Record<string, string> = {};
+      toList.forEach((phone: string) => {
+        const name = resolvePhone(phone);
+        if (name) toNames[phone] = name;
+      });
+      if (Object.keys(toNames).length > 0) {
+        participants.to_names = toNames;
+      }
+    }
+    if (
+      participants.chat_members &&
+      Array.isArray(participants.chat_members)
+    ) {
+      const memberNames: Record<string, string> = {};
+      participants.chat_members.forEach((phone: string) => {
+        const name = resolvePhone(phone);
+        if (name) memberNames[phone] = name;
+      });
+      if (Object.keys(memberNames).length > 0) {
+        participants.chat_member_names = memberNames;
       }
     }
 
