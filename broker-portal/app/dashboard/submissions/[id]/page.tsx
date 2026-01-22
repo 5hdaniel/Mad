@@ -5,6 +5,7 @@ import { formatCurrency, formatDate, getStatusColor, formatStatus } from '@/lib/
 import { MessageList } from '@/components/submission/MessageList';
 import { ReviewActions } from '@/components/submission/ReviewActions';
 import { AttachmentList } from '@/components/submission/AttachmentList';
+import { StatusHistory } from '@/components/submission/StatusHistory';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -105,7 +106,7 @@ export default async function SubmissionDetailPage({ params }: PageProps) {
       </Link>
 
       {/* Header */}
-      <div className="bg-white shadow rounded-lg overflow-hidden">
+      <div className="bg-white shadow-sm border border-gray-200 rounded-lg overflow-hidden">
         <div className="px-6 py-5 border-b border-gray-200">
           <div className="flex justify-between items-start">
             <div>
@@ -153,6 +154,14 @@ export default async function SubmissionDetailPage({ params }: PageProps) {
           organization_id: submission.organization_id,
         }}
         disabled={submission.status === 'approved' || submission.status === 'rejected'}
+      />
+
+      {/* Status History Timeline */}
+      <StatusHistory
+        history={submission.status_history || []}
+        currentStatus={submission.status}
+        submittedBy={submission.submitted_by_email}
+        submittedAt={submission.created_at}
       />
 
       {/* Messages with filter tabs */}
