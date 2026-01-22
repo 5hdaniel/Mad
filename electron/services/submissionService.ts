@@ -289,6 +289,27 @@ class SubmissionService {
         throw new Error("User is not a member of any organization");
       }
 
+      // Check for existing submission and delete if exists (allows resubmission anytime)
+      const client = supabaseService.getClient();
+      const { data: existingSubmission } = await client
+        .from("transaction_submissions")
+        .select("id")
+        .eq("organization_id", orgId)
+        .eq("local_transaction_id", transactionId)
+        .maybeSingle();
+
+      if (existingSubmission) {
+        logService.info(
+          `[Submission] Replacing existing submission ${existingSubmission.id}`,
+          "SubmissionService"
+        );
+        // Delete old submission (cascades to messages and attachments)
+        await client
+          .from("transaction_submissions")
+          .delete()
+          .eq("id", existingSubmission.id);
+      }
+
       onProgress?.({
         stage: "preparing",
         stageProgress: 100,
@@ -352,7 +373,6 @@ class SubmissionService {
         options
       );
 
-      const client = supabaseService.getClient();
       const { error: insertError } = await client
         .from("transaction_submissions")
         .insert(submissionRecord);
