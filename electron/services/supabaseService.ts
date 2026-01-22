@@ -76,9 +76,22 @@ interface TierLimits {
   enterprise: number;
 }
 
+/**
+ * Supabase Auth Session (BACKLOG-390)
+ * Stores the current authenticated session for RLS
+ */
+interface SupabaseAuthSession {
+  userId: string;
+  accessToken: string;
+  refreshToken?: string;
+  expiresAt?: Date;
+}
+
 class SupabaseService {
   private client: SupabaseClient | null = null;
   private initialized = false;
+  /** BACKLOG-390: Store Supabase Auth session for RLS-enabled queries */
+  private authSession: SupabaseAuthSession | null = null;
 
   /**
    * Initialize Supabase client
@@ -110,6 +123,145 @@ class SupabaseService {
 
     this.initialized = true;
     logService.debug("[Supabase] Initialized successfully", "Supabase");
+  }
+
+  // ============================================
+  // SUPABASE AUTH (BACKLOG-390: B2B Portal)
+  // ============================================
+
+  /**
+   * Sign in with ID token from direct OAuth (Google/Microsoft)
+   *
+   * BACKLOG-390: After existing OAuth completes, call this to create a Supabase
+   * Auth session so RLS policies work correctly with auth.uid().
+   *
+   * This method is "additive" - it doesn't change the existing OAuth flow,
+   * just tells Supabase about the authenticated user.
+   *
+   * @param provider - OAuth provider ('google' or 'azure' for Microsoft)
+   * @param idToken - The ID token from the OAuth flow
+   * @returns Session info or null if auth failed (graceful fallback)
+   */
+  async signInWithIdToken(
+    provider: "google" | "azure",
+    idToken: string
+  ): Promise<SupabaseAuthSession | null> {
+    const client = this._ensureClient();
+
+    try {
+      logService.info(
+        `[Supabase] Signing in with ID token (provider: ${provider})`,
+        "Supabase"
+      );
+
+      const { data, error } = await client.auth.signInWithIdToken({
+        provider,
+        token: idToken,
+      });
+
+      if (error) {
+        // Log but don't throw - graceful fallback to service key
+        logService.warn(
+          `[Supabase] signInWithIdToken failed: ${error.message}`,
+          "Supabase",
+          { provider, error: error.message }
+        );
+        return null;
+      }
+
+      if (!data.session || !data.user) {
+        logService.warn(
+          "[Supabase] signInWithIdToken returned no session/user",
+          "Supabase"
+        );
+        return null;
+      }
+
+      // Store session for RLS queries
+      this.authSession = {
+        userId: data.user.id,
+        accessToken: data.session.access_token,
+        refreshToken: data.session.refresh_token,
+        expiresAt: data.session.expires_at
+          ? new Date(data.session.expires_at * 1000)
+          : undefined,
+      };
+
+      logService.info(
+        "[Supabase] Successfully signed in with ID token",
+        "Supabase",
+        { userId: data.user.id, provider }
+      );
+
+      return this.authSession;
+    } catch (error) {
+      // Graceful fallback - log warning and continue with service key
+      logService.warn(
+        "[Supabase] signInWithIdToken exception (falling back to service key)",
+        "Supabase",
+        { error: error instanceof Error ? error.message : "Unknown error" }
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Sign out from Supabase Auth
+   * Clears the auth session (service key still works for admin operations)
+   */
+  async signOut(): Promise<void> {
+    const client = this._ensureClient();
+
+    try {
+      const { error } = await client.auth.signOut();
+      if (error) {
+        logService.warn(
+          `[Supabase] signOut failed: ${error.message}`,
+          "Supabase"
+        );
+      }
+      this.authSession = null;
+      logService.info("[Supabase] Signed out from Supabase Auth", "Supabase");
+    } catch (error) {
+      this.authSession = null;
+      logService.warn("[Supabase] signOut exception", "Supabase", {
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  }
+
+  /**
+   * Get current Supabase Auth session
+   * @returns The auth session or null if not authenticated
+   */
+  getAuthSession(): SupabaseAuthSession | null {
+    return this.authSession;
+  }
+
+  /**
+   * Get current authenticated user ID from Supabase Auth
+   * @returns User UUID or null if not authenticated
+   */
+  getAuthUserId(): string | null {
+    return this.authSession?.userId ?? null;
+  }
+
+  /**
+   * Check if authenticated with Supabase Auth (not just service key)
+   * @returns true if signed in with user credentials
+   */
+  isAuthenticated(): boolean {
+    return this.authSession !== null;
+  }
+
+  /**
+   * Get the Supabase client (public access for storage service)
+   * BACKLOG-393: Needed by supabaseStorageService for file uploads
+   * @returns Initialized Supabase client
+   * @throws {Error} If client cannot be initialized
+   */
+  getClient(): SupabaseClient {
+    return this._ensureClient();
   }
 
   /**

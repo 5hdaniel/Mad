@@ -28,6 +28,16 @@ export type FalsePositiveReason = "signature" | "promotional" | "unrelated" | "o
 // Transactions
 export type TransactionType = "purchase" | "sale" | "other";
 export type TransactionStatus = "pending" | "active" | "closed" | "archived" | "rejected";
+
+// B2B Submission Status (BACKLOG-390)
+export type SubmissionStatus =
+  | "not_submitted"
+  | "submitted"
+  | "under_review"
+  | "needs_changes"
+  | "resubmitted"
+  | "approved"
+  | "rejected";
 export type TransactionStage =
   | "intro"
   | "showing"
@@ -498,6 +508,16 @@ export interface Transaction {
   reviewed_at?: Date | string;
   /** Why user rejected (if detection_status='rejected') */
   rejection_reason?: string;
+
+  // ========== B2B Submission Tracking (BACKLOG-390) ==========
+  /** Broker review submission status */
+  submission_status?: SubmissionStatus;
+  /** UUID reference to transaction_submissions in Supabase cloud */
+  submission_id?: string | null;
+  /** ISO timestamp of last submission to broker portal */
+  submitted_at?: Date | string | null;
+  /** Most recent broker feedback (synced from cloud) */
+  last_review_notes?: string | null;
 
   // ========== Legacy Fields (backwards compatibility) ==========
   /** @deprecated Use status instead */

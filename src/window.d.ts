@@ -1156,6 +1156,99 @@ interface MainAPI {
       totalErrors?: number;
       error?: string;
     }>;
+
+    // ============================================
+    // SUBMISSION METHODS (BACKLOG-391)
+    // ============================================
+
+    /**
+     * Submit transaction to broker portal for review
+     */
+    submit: (transactionId: string) => Promise<{
+      success: boolean;
+      submissionId?: string;
+      messagesCount?: number;
+      attachmentsCount?: number;
+      attachmentsFailed?: number;
+      error?: string;
+    }>;
+
+    /**
+     * Resubmit transaction (creates new version)
+     */
+    resubmit: (transactionId: string) => Promise<{
+      success: boolean;
+      submissionId?: string;
+      messagesCount?: number;
+      attachmentsCount?: number;
+      attachmentsFailed?: number;
+      error?: string;
+    }>;
+
+    /**
+     * Get submission status from cloud
+     */
+    getSubmissionStatus: (submissionId: string) => Promise<{
+      success: boolean;
+      status?: string;
+      reviewNotes?: string;
+      reviewedBy?: string;
+      reviewedAt?: string;
+      error?: string;
+    }>;
+
+    /**
+     * Listen for submission progress updates
+     */
+    onSubmitProgress: (callback: (progress: {
+      stage: string;
+      stageProgress: number;
+      overallProgress: number;
+      currentItem?: string;
+    }) => void) => () => void;
+
+    // ============================================
+    // SYNC METHODS (BACKLOG-395)
+    // ============================================
+
+    /**
+     * Trigger manual sync of submission statuses
+     */
+    syncSubmissions: () => Promise<{
+      success: boolean;
+      updated?: number;
+      failed?: number;
+      details?: Array<{
+        transactionId: string;
+        propertyAddress: string;
+        oldStatus: string;
+        newStatus: string;
+        reviewNotes?: string;
+      }>;
+      error?: string;
+    }>;
+
+    /**
+     * Sync a specific transaction's submission status
+     */
+    syncSubmission: (transactionId: string) => Promise<{
+      success: boolean;
+      updated?: boolean;
+      error?: string;
+    }>;
+
+    /**
+     * Listen for submission status change events
+     */
+    onSubmissionStatusChanged: (callback: (data: {
+      transactionId: string;
+      propertyAddress: string;
+      oldStatus: string;
+      newStatus: string;
+      reviewNotes?: string;
+      title: string;
+      message: string;
+    }) => void) => () => void;
   };
 
   // Transaction scan progress event
